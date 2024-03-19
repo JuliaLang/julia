@@ -864,24 +864,28 @@ end
         @test !isnegative(-one(T))
     end
 
-    @test ispositive(true)
-    @test !isnegative(true)
-    @test !ispositive(false)
-    @test !isnegative(false)
+    @testset "Type Bool" begin
+        @test ispositive(true)
+        @test !isnegative(true)
+        @test !ispositive(false)
+        @test !isnegative(false)
+    end
 
-    @test ispositive(2//3)
-    @test !ispositive(-2//3)
-    @test !ispositive(0//1)
-    @test !ispositive(-0//1)
-    @test ispositive(1//0)
-    @test !ispositive(-1//0)
+    @testset "Type Rational" begin
+        @test ispositive(2//3)
+        @test !ispositive(-2//3)
+        @test !ispositive(0//1)
+        @test !ispositive(-0//1)
+        @test ispositive(1//0)
+        @test !ispositive(-1//0)
 
-    @test !isnegative(2//3)
-    @test isnegative(-2//3)
-    @test !isnegative(0//1)
-    @test !isnegative(-0//1)
-    @test !isnegative(1//0)
-    @test isnegative(-1//0)
+        @test !isnegative(2//3)
+        @test isnegative(-2//3)
+        @test !isnegative(0//1)
+        @test !isnegative(-0//1)
+        @test !isnegative(1//0)
+        @test isnegative(-1//0)
+    end
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
