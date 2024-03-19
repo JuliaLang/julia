@@ -321,7 +321,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
             t = @_gc_preserve_begin inferred_result
             relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
             @_gc_preserve_end t
-        elseif inferred_result === nothing
+        elseif !(inferred_result isa CodeInfo)
             relocatability = 0x1
         end
     end
