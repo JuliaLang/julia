@@ -3019,8 +3019,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_UNKNOWN, NoCallInfo())
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
-    matches = find_matching_methods(typeinf_lattice(interp), argtypes, atype, method_table(interp),
-        InferenceParams(interp).max_union_splitting, max_methods)
+    matches = find_method_matches(interp, argtypes, atype; max_methods)
     if isa(matches, FailedMethodMatch)
         rt = Bool # too many matches to analyze
     else
