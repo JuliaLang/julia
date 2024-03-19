@@ -993,12 +993,20 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
                 jl_error("llvmcall with integer pointers is deprecated, "
                          "use an actual pointer type instead.");
-            jl_printf(JL_STDERR,
-                      "WARNING: llvmcall with integer pointers is deprecated.\n"
-                      "Use actual pointers instead, replacing i32 or i64 with i8* or ptr");
-            if (jl_lineno != 0)
-                jl_printf(JL_STDERR, ", likely near %s:%d", jl_filename, jl_lineno);
-            jl_printf(JL_STDERR, "\n");
+
+            // ensure we only depwarn once per method
+            // TODO: lift this into a reusable codegen-level depwarn utility
+            static std::set<jl_method_t*> llvmcall_depwarns;
+            jl_method_t *m = ctx.linfo->def.method;
+            if (llvmcall_depwarns.find(m) == llvmcall_depwarns.end()) {
+                llvmcall_depwarns.insert(m);
+                jl_printf(JL_STDERR,
+                        "WARNING: llvmcall with integer pointers is deprecated.\n"
+                        "Use actual pointers instead, replacing i32 or i64 with i8* or ptr\n"
+                        "in ");
+                jl_static_show(JL_STDERR, (jl_value_t*) ctx.linfo->def.method);
+                jl_printf(JL_STDERR, " at %s\n", ctx.file.str().c_str());
+            }
         }
 
         // wrap the function, performing the necesary pointer conversion
