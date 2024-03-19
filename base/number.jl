@@ -139,7 +139,7 @@ signbit(x::Real) = x < 0
 """
     ispositive(x)
 
-Test whether `x` is positive. Falls back to [`isnan`](@ref), [`signbit`](@ref) and [`iszero`](@ref). See also [`isnegative`](@ref).
+Test whether `x > 0`. See also [`isnegative`](@ref).
 
 # Examples
 ```jldoctest
