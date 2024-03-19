@@ -1278,7 +1278,8 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     case add_ptr: {
         assert(nargs == 2);
-        if (!jl_is_cpointer_type(argv[0].typ) || argv[1].typ != (jl_value_t*)jl_ulong_type)
+        if (!jl_is_cpointer_type(argv[0].typ) || jl_has_free_typevars(argv[0].typ) ||
+            argv[1].typ != (jl_value_t*)jl_ulong_type)
             return emit_runtime_call(ctx, f, argv, nargs);
         Value *ptr = emit_unbox(ctx, ctx.types().T_ptr, argv[0], argv[0].typ);
         Value *off = emit_unbox(ctx, ctx.types().T_size, argv[1], argv[1].typ);
@@ -1287,7 +1288,8 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     }
     case sub_ptr: {
         assert(nargs == 2);
-        if (!jl_is_cpointer_type(argv[0].typ) || argv[1].typ != (jl_value_t*)jl_ulong_type)
+        if (!jl_is_cpointer_type(argv[0].typ) || jl_has_free_typevars(argv[0].typ) ||
+            argv[1].typ != (jl_value_t*)jl_ulong_type)
             return emit_runtime_call(ctx, f, argv, nargs);
         Value *ptr = emit_unbox(ctx, ctx.types().T_ptr, argv[0], argv[0].typ);
         Value *off = emit_unbox(ctx, ctx.types().T_size, argv[1], argv[1].typ);
