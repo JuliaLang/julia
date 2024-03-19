@@ -1551,8 +1551,7 @@ end
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13 --project nowhere ABJURER`) == "--cebwrpg abjurer NOWHERE "
 end
 
-@testset "subproject loading" begin
-   # subproject loading
+@testset "workspace loading" begin
    old_load_path = copy(LOAD_PATH)
    try
        empty!(LOAD_PATH)

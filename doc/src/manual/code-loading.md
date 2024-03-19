@@ -394,39 +394,27 @@ are stored in the manifest file in the section for that package. The dependency 
 a package are the same as for its "parent" except that the listed extension dependencies are also considered as
 dependencies.
 
-### [Subprojects](@id subprojects)
+### [Workspaces](@id workspaces)
 
-A project file can declare a set of "subprojects" by specifying a list of subfolders:
+A project file can define a workspace by giving a set of projects that is part of that workspace:
 
 ```toml
-subprojects = ["test", "benchmarks", "docs", "SomePackage"]
+[workspace]
+projects = ["test", "benchmarks", "docs", "SomePackage"]
 ```
 
-Each subfolder contains its own `Project.toml` file, which may include additional dependencies and compatibility constraints that are overlaid on the "base project". In such cases, the package manager gathers all dependency information from the base project and its subprojects, generating a single manifest file that combines the versions of all dependencies.
+Each subfolder contains its own `Project.toml` file, which may include additional dependencies and compatibility constraints. In such cases, the package manager gathers all dependency information from all the projects in the workspace generating a single manifest file that combines the versions of all dependencies.
 
-Furthermore, subprojects can be "nested", meaning a base project can also be a subproject of another project. In this scenario, a single manifest file is still utilized, stored alongside the "root base project" (the base project without a parent base project). An example file structure could look like this:
+Furthermore, workspaces can be "nested", meaning a project defining a workspace can also be part of another workspace. In this scenario, a single manifest file is still utilized, stored alongside the "root project" (the project that doesn't have another workspace including it). An example file structure could look like this:
 
 ```
-Project.toml # subprojects = ["MyPackage"]
+Project.toml # projects = ["MyPackage"]
 Manifest.toml
 MyPackage/
-    Project.toml # subprojects = ["test"]
+    Project.toml # projects = ["test"]
     test/
         Project.toml
 ```
-
-The rules for dependency loading are as follows:
-
-- Script files within a subproject can access the merged set of dependencies from both their own project file and the base project file.
-- A package can only load dependencies defined in its own project file.
-
-For convenience, the syntax:
-
-```toml
-subprojects = "*"
-```
-
-allows declaring all subfolders within the project as subprojects.
 
 ### [Package/Environment Preferences](@id preferences)
 

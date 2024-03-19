@@ -620,9 +620,9 @@ function base_project(project_file)
     if workspace === nothing
         return nothing
     end
-    subprojects = get(workspace, "subprojects", nothing)::Union{Vector{String}, Nothing, String}
-    subprojects === nothing && return nothing
-    if (subprojects isa String && subprojects == "*" )|| (subprojects isa Vector && basename(dirname(project_file)) in subprojects)
+    projects = get(workspace, "projects", nothing)::Union{Vector{String}, Nothing, String}
+    projects === nothing && return nothing
+    if projects isa Vector && basename(dirname(project_file)) in projects
         return base_project_file
     end
     return nothing
@@ -789,7 +789,7 @@ function project_file_path(project_file::String)
     joinpath(dirname(project_file), get(d, "path", "")::String)
 end
 
-function subproject_manifest(project_file)
+function workspace_manifest(project_file)
     base = base_project(project_file)
     if base !== nothing
         return project_file_manifest_path(base)
@@ -807,7 +807,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     end
     dir = abspath(dirname(project_file))
     d = parsed_toml(project_file)
-    base_manifest = subproject_manifest(project_file)
+    base_manifest = workspace_manifest(project_file)
     if base_manifest !== nothing
         return base_manifest
     end
