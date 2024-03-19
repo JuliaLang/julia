@@ -1387,3 +1387,13 @@ let; Base.Experimental.@force_compile; func52843(); end
 # https://github.com/JuliaLang/julia/issues/53508
 @test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (UnitRange{Int},Int)))
 @test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (Base.OneTo{Int},Int)))
+
+@noinline f53613() = @assert isdefined(@__MODULE__, :v53613)
+g53613() = f53613()
+@test !Core.Compiler.is_consistent(Base.infer_effects(f53613))
+@test_broken !Core.Compiler.is_consistent(Base.infer_effects(g53613))
+@test_throws AssertionError f53613()
+@test_throws AssertionError g53613()
+global v53613 = nothing
+@test f53613() === nothing
+@test g53613() === nothing
