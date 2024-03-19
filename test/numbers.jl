@@ -864,6 +864,11 @@ end
         @test !isnegative(-one(T))
     end
 
+    @test ispositive(true)
+    @test !isnegative(true)
+    @test !ispositive(false)
+    @test !isnegative(false)
+
     @test ispositive(2//3)
     @test !ispositive(-2//3)
     @test !ispositive(0//1)
