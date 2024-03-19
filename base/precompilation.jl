@@ -73,6 +73,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
         names[UUID(proj_uuid)] = proj_name
     end
 
+    #=
     if !project_is_package
         base_project_file = base_project(envpath)
         if base_project_file !== nothing
@@ -85,6 +86,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
             end
         end
     end
+    =#
 
     project_extensions = Dict{String, Vector{UUID}}()
     # Collect all extensions of the project
