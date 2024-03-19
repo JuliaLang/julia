@@ -1062,6 +1062,10 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 iszero(x::BigFloat) = x.exp == mpfr_special_exponent_zero
 isone(x::BigFloat) = x == Clong(1)
 
+# In theory, `!iszero(x) && !isnan(x)` should be the same as `x.exp > mpfr_special_exponent_nan`, but this is safer.
+ispositive(x::BigFloat) = !signbit(x) && !iszero(x) && !isnan(x)
+isnegative(x::BigFloat) = signbit(x) && !iszero(x) && !isnan(x)
+
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
