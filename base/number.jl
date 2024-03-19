@@ -158,7 +158,7 @@ ispositive(x) = x>0
 """
     isnegative(x)
 
-Test whether `x` is negative. Falls back to [`isnan`](@ref), [`signbit`](@ref) and [`iszero`](@ref). See also [`ispositive`](@ref).
+Test whether `x < 0`. See also [`ispositive`](@ref).
 
 # Examples
 ```jldoctest
