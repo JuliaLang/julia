@@ -19,7 +19,7 @@ import
         isone, big, _string_n, decompose, minmax, _precision_with_base_2,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
         uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
-        RawBigIntRoundingIncrementHelper, truncated, RawBigInt
+        RawBigIntRoundingIncrementHelper, truncated, RawBigInt, ispositive, isnegative
 
 
 using .Base.Libc
