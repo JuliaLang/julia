@@ -628,25 +628,10 @@ function base_project(project_file)
     return nothing
 end
 
-#=
-function base_project_deps_get(project_file::String, name::String)::Union{Nothing,UUID}
-    base = base_project(project_file)
-    if base !== nothing
-        return project_deps_get(base, name)
-    end
-    return nothing
-end
-=#
-
 function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
     project_file = env_project_file(env)
     if project_file isa String
         pkg_uuid = explicit_project_deps_get(project_file, name)
-        #=
-        if pkg_uuid === nothing
-            pkg_uuid = base_project_deps_get(project_file, name)
-        end
-        =#
         pkg_uuid === nothing || return PkgId(pkg_uuid, name)
     elseif project_file
         return implicit_project_deps_get(env, name)
@@ -722,16 +707,6 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file)
         end
-        #=
-        base_project_file = base_project(project_file)
-        if base_project_file !== nothing
-            base_proj = project_file_name_uuid(base_project_file, pkg.name)
-            if base_proj == pkg
-                # if `pkg` matches the project, return the project itself
-                return project_file_path(base_project_file)
-            end
-        end
-        =#
         mby_ext = project_file_ext_path(project_file, pkg.name)
         mby_ext === nothing || return mby_ext
         # look for manifest file and `where` stanza
