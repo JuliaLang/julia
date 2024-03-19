@@ -1,0 +1,29 @@
+name: "Update upstream branches"
+on:
+  schedule:
+    - cron: "0 0 * * *" # every night at midnight
+  workflow_dispatch:
+
+jobs:
+  PullUpstream:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # run all jobs in the matrix even if one fails
+      matrix:
+        branch:
+          - "master"
+          - "backports-release-1.10"
+          - "backports-release-1.9"
+    steps:
+      - name: Checkout RAI/julia
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ matrix.branch }}
+      - name: Update ${{ matrix.branch }}
+        run: |
+          git config --global user.email "julia-engineering@relational.ai"
+          git config --global user.name "RAI CI (GitHub Action Automation)"
+
+          git remote add upstream https://github.com/JuliaLang/julia
+          git pull upstream ${{ matrix.branch }}
+          git push origin ${{ matrix.branch }}
