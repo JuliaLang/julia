@@ -1556,6 +1556,10 @@ end
    try
        empty!(LOAD_PATH)
        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "sub"))
+       @test Base.get_preferences()["value"] == 1
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "sub"))
        id = Base.identify_package("Devved")
        @test isfile(Base.locate_package(id))
        @test Base.identify_package("Devved2") === nothing
@@ -1572,6 +1576,7 @@ end
        @test isfile(Base.locate_package(id_mypkg))
        id_dev = Base.identify_package(id_mypkg, "Devved")
        @test isfile(Base.locate_package(id_dev))
+       @test Base.get_preferences()["value"] == 2
 
        empty!(LOAD_PATH)
        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "PackageThatIsSub", "test"))
@@ -1584,6 +1589,7 @@ end
        @test isfile(Base.locate_package(id_mypkg))
        id_dev = Base.identify_package(id_mypkg, "Devved")
        @test isfile(Base.locate_package(id_dev))
+       @test Base.get_preferences()["value"] == 3
 
        empty!(LOAD_PATH)
        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "test"))
