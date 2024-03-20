@@ -660,7 +660,7 @@ function pointer_eltype(@nospecialize(ptr))
     return Any
 end
 
-@nospecs function ptrarith_tfunc(𝕃::AbstractLattice, ptr, offset)
+@nospecs function pointerarith_tfunc(𝕃::AbstractLattice, ptr, offset)
     return ptr
 end
 @nospecs function pointerref_tfunc(𝕃::AbstractLattice, a, i, align)
@@ -706,8 +706,8 @@ end
     end
     return ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
 end
-add_tfunc(add_ptr, 2, 2, ptrarith_tfunc, 1)
-add_tfunc(sub_ptr, 2, 2, ptrarith_tfunc, 1)
+add_tfunc(add_ptr, 2, 2, pointerarith_tfunc, 1)
+add_tfunc(sub_ptr, 2, 2, pointerarith_tfunc, 1)
 add_tfunc(pointerref, 3, 3, pointerref_tfunc, 4)
 add_tfunc(pointerset, 4, 4, pointerset_tfunc, 5)
 add_tfunc(atomic_fence, 1, 1, atomic_fence_tfunc, 4)

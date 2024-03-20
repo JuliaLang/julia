@@ -17,8 +17,7 @@ STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
 STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
 STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
 STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
-STATISTIC(Emitted_add_ptr, "Number of add_ptr calls emitted");
-STATISTIC(Emitted_sub_ptr, "Number of sub_ptr calls emitted");
+STATISTIC(Emitted_pointerarith, "Number of pointer arithmetic calls emitted");
 STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
 STATISTIC(Emitted_atomic_pointerref, "Number of atomic_pointerref calls emitted");
 STATISTIC(Emitted_atomic_pointerop, "Number of atomic_pointerop calls emitted");
@@ -860,6 +859,34 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
     return e;
 }
 
+// ptr + offset
+// ptr - offset
+static jl_cgval_t emit_pointerarith(jl_codectx_t &ctx, intrinsic f,
+                                    ArrayRef<jl_cgval_t> argv)
+{
+    jl_value_t *ptrtyp = argv[0].typ;
+    jl_value_t *offtyp = argv[1].typ;
+    if (!jl_is_cpointer_type(ptrtyp) || offtyp != (jl_value_t *)jl_ulong_type)
+        return emit_runtime_call(ctx, f, argv, argv.size());
+    assert(f == add_ptr || f == sub_ptr);
+
+    Value *ptr = emit_unbox(ctx, ctx.types().T_ptr, argv[0], ptrtyp);
+    Value *off = emit_unbox(ctx, ctx.types().T_size, argv[1], offtyp);
+    if (f == sub_ptr)
+        off = ctx.builder.CreateNeg(off);
+    Value *ans = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), ptr, off);
+
+    if (jl_is_concrete_type(ptrtyp)) {
+        return mark_julia_type(ctx, ans, false, ptrtyp);
+    }
+    else {
+        Value *box = emit_allocobj(ctx, (jl_datatype_t *)ptrtyp, true);
+        setName(ctx.emission_context, box, "ptr_box");
+        init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
+        return mark_julia_type(ctx, box, true, (jl_datatype_t *)ptrtyp);
+    }
+}
+
 static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     const jl_cgval_t &ord = argv[0];
@@ -1278,29 +1305,11 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         assert(nargs == 4);
         return emit_pointerset(ctx, argv);
 
-    case add_ptr: {
-        ++Emitted_add_ptr;
+    case add_ptr:
+    case sub_ptr:
+        ++Emitted_pointerarith;
         assert(nargs == 2);
-        if (!jl_is_cpointer_type(argv[0].typ) || jl_has_free_typevars(argv[0].typ) ||
-            argv[1].typ != (jl_value_t*)jl_ulong_type)
-            return emit_runtime_call(ctx, f, argv, nargs);
-        Value *ptr = emit_unbox(ctx, ctx.types().T_ptr, argv[0], argv[0].typ);
-        Value *off = emit_unbox(ctx, ctx.types().T_size, argv[1], argv[1].typ);
-        Value *ans = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), ptr, off);
-        return mark_julia_type(ctx, ans, false, argv[0].typ);
-    }
-    case sub_ptr: {
-        ++Emitted_sub_ptr;
-        assert(nargs == 2);
-        if (!jl_is_cpointer_type(argv[0].typ) || jl_has_free_typevars(argv[0].typ) ||
-            argv[1].typ != (jl_value_t*)jl_ulong_type)
-            return emit_runtime_call(ctx, f, argv, nargs);
-        Value *ptr = emit_unbox(ctx, ctx.types().T_ptr, argv[0], argv[0].typ);
-        Value *off = emit_unbox(ctx, ctx.types().T_size, argv[1], argv[1].typ);
-        Value *ans = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), ptr,
-                                           ctx.builder.CreateNeg(off));
-        return mark_julia_type(ctx, ans, false, argv[0].typ);
-    }
+        return emit_pointerarith(ctx, f, argv);
 
     case atomic_fence:
         ++Emitted_atomic_fence;
