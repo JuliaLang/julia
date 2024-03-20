@@ -2060,3 +2060,33 @@ end
     test_unsetindex(MyMatrixUnsetIndexCartInds)
     test_unsetindex(MyMatrixUnsetIndexLinInds)
 end
+
+@testset "reshape for offset arrays" begin
+    p = Base.IdentityUnitRange(3:4)
+    r = reshape(p, :, 1)
+    @test r[eachindex(r)] == UnitRange(p)
+    @test collect(r) == r
+
+    struct ZeroBasedArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+        a :: A
+        function ZeroBasedArray(a::AbstractArray)
+            Base.require_one_based_indexing(a)
+            new{eltype(a), ndims(a), typeof(a)}(a)
+        end
+    end
+    Base.parent(z::ZeroBasedArray) = z.a
+    Base.size(z::ZeroBasedArray) = size(parent(z))
+    Base.axes(z::ZeroBasedArray) = map(x -> Base.IdentityUnitRange(0:x - 1), size(parent(z)))
+    Base.getindex(z::ZeroBasedArray{<:Any, N}, i::Vararg{Int,N}) where {N} = parent(z)[map(x -> x + 1, i)...]
+    Base.setindex!(z::ZeroBasedArray{<:Any, N}, val, i::Vararg{Int,N}) where {N} = parent(z)[map(x -> x + 1, i)...] = val
+
+    z = ZeroBasedArray(collect(1:4))
+    r2 = reshape(z, :, 1)
+    @test r2[CartesianIndices(r2)] == r2[LinearIndices(r2)]
+    r2[firstindex(r2)] = 34
+    @test z[0] == 34
+    r2[eachindex(r2)] = r2 .* 2
+    for (i, j) in zip(eachindex(r2), eachindex(z))
+        @test r2[i] == z[j]
+    end
+end

@@ -323,7 +323,7 @@ mutable struct InferenceState
         exc_bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
 
-        insert_coverage = should_insert_coverage(mod, src)
+        insert_coverage = should_insert_coverage(mod, src.debuginfo)
         if insert_coverage
             ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
         end
@@ -474,25 +474,21 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
 end
 
 # check if coverage mode is enabled
-function should_insert_coverage(mod::Module, src::CodeInfo)
+function should_insert_coverage(mod::Module, debuginfo::DebugInfo)
     coverage_enabled(mod) && return true
     JLOptions().code_coverage == 3 || return false
     # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
-    linetable = src.linetable
-    if isa(linetable, Vector{Any})
-        for line in linetable
-            line = line::LineInfoNode
-            if is_file_tracked(line.file)
-                return true
-            end
-        end
-    elseif isa(linetable, Vector{LineInfoNode})
-        for line in linetable
-            if is_file_tracked(line.file)
-                return true
-            end
-        end
-    end
+    return _should_insert_coverage(debuginfo)
+end
+
+_should_insert_coverage(mod::Symbol) = is_file_tracked(mod)
+_should_insert_coverage(mod::Method) = _should_insert_coverage(mod.file)
+_should_insert_coverage(mod::MethodInstance) = _should_insert_coverage(mod.def)
+_should_insert_coverage(mod::Module) = false
+function _should_insert_coverage(info::DebugInfo)
+    linetable = info.linetable
+    linetable === nothing || (_should_insert_coverage(linetable) && return true)
+    _should_insert_coverage(info.def) && return true
     return false
 end
 

@@ -38,7 +38,6 @@ end
 #        false, false, false, false
 #    ))
 #
-#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), UInt32(0))
 #    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
@@ -113,8 +112,9 @@ let cfg = CFG(BasicBlock[
     make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
     make_bb([2, 3]    , []    ),
 ], Int[])
-    insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
-    ir = Compiler.IRCode(insts, cfg, Core.LineInfoNode[], Any[], Expr[], Compiler.VarState[])
+    insts = Compiler.InstructionStream([], [], Core.Compiler.CallInfo[], Int32[], UInt32[])
+    di = Compiler.DebugInfoStream(insts.line)
+    ir = Compiler.IRCode(insts, cfg, di, Any[], Expr[], Compiler.VarState[])
     compact = Compiler.IncrementalCompact(ir, true)
     @test length(compact.cfg_transform.result_bbs) == 4 && 0 in compact.cfg_transform.result_bbs[3].preds
 end
@@ -233,38 +233,93 @@ let code = Any[
 end
 
 # issue #37919
-let ci = code_lowered(()->@isdefined(_not_def_37919_), ())[1]
+let ci = only(code_lowered(()->@isdefined(_not_def_37919_), ()))
     ir = Core.Compiler.inflate_ir(ci)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 let code = Any[
         # block 1
-        GotoIfNot(Argument(2), 4),
+        GotoIfNot(Argument(2), 4)
         # block 2
-        GotoNode(3),
+        Expr(:call, throw, "potential throw")
+        ReturnNode() # unreachable
         # block 3
-        Expr(:call, throw, "potential throw"),
-        # block 4
-        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4)),
-        GotoNode(6),
-        # block 5
-        ReturnNode(SSAValue(4))
+        ReturnNode(Argument(3))
     ]
-    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
-    lazypostdomtree = Core.Compiler.LazyPostDomtree(ir)
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
     visited = BitSet()
-    @test !Core.Compiler.visit_conditional_successors(lazypostdomtree, ir, #=bb=#1) do succ::Int
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
         push!(visited, succ)
         return false
     end
     @test 2 ∈ visited
     @test 3 ∈ visited
-    @test 4 ∉ visited
-    @test 5 ∉ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(false, 1) == 1
+    @test_throws "potential throw" oc(true, 1)
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 3)
+        # block 2
+        ReturnNode(Argument(3))
+        # block 3
+        Expr(:call, throw, "potential throw")
+        ReturnNode() # unreachable
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(true, 1) == 1
+    @test_throws "potential throw" oc(false, 1)
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 5)
+        # block 2
+        GotoNode(3)
+        # block 3
+        Expr(:call, throw, "potential throw")
+        ReturnNode()
+        # block 4
+        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4))
+        GotoNode(7)
+        # block 5
+        ReturnNode(SSAValue(5))
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    @test 4 ∈ visited
+    @test 5 ∈ visited
     oc = Core.OpaqueClosure(ir)
     @test oc(false, 1, 1) == 2
     @test_throws "potential throw" oc(true, 1, 1)
+
+    let buf = IOBuffer()
+        oc = Core.OpaqueClosure(ir; slotnames=Symbol[:ocfunc, :x, :y, :z])
+        try
+            oc(true, 1, 1)
+        catch
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::$Int, z::$Int)", s)
+    end
 end
 
 # Test dynamic update of domtree with edge insertions and deletions in the

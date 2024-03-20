@@ -70,5 +70,6 @@ clangsa:
 clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
+	@$(MAKE) -C llvmpasses $@
 
 .PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) relocatedepot revise-relocatedepot embedding gcext clangsa clean

@@ -152,8 +152,13 @@ end
 
 function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
     inds = axes(bc)
-    if isstructurepreserving(bc) || (fzeropreserving(bc) && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
+    fzerobc = fzeropreserving(bc)
+    if isstructurepreserving(bc) || (fzerobc && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
         return structured_broadcast_alloc(bc, T, ElType, length(inds[1]))
+    elseif fzerobc && T <: UnitLowerTriangular
+        return similar(convert(Broadcasted{StructuredMatrixStyle{LowerTriangular}}, bc), ElType)
+    elseif fzerobc && T <: UnitUpperTriangular
+        return similar(convert(Broadcasted{StructuredMatrixStyle{UpperTriangular}}, bc), ElType)
     end
     return similar(convert(Broadcasted{DefaultArrayStyle{ndims(bc)}}, bc), ElType)
 end

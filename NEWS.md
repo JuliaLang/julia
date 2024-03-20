@@ -17,6 +17,12 @@ Language changes
    may pave the way for inference to be able to intelligently re-use the old
    results, once the new method is deleted. ([#53415])
 
+ - Macro expansion will no longer eargerly recurse into into `Expr(:toplevel)`
+   expressions returned from macros. Instead, macro expansion of `:toplevel`
+   expressions will be delayed until evaluation time. This allows a later
+   expression within a given `:toplevel` expression to make use of macros
+   defined earlier in the same `:toplevel` expression. ([#53515])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -37,6 +43,7 @@ New library functions
 
 * `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
+* `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
 
 New library features
 --------------------

@@ -794,14 +794,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     return;
 }
 
-static int is_anonfn_typename(char *name)
-{
-    if (name[0] != '#' || name[1] == '#')
-        return 0;
-    char *other = strrchr(name, '#');
-    return other > &name[1] && is10digit(other[1]);
-}
-
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_sym_t *name,
         jl_module_t *module,

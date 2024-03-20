@@ -1611,7 +1611,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == ctx.types().T_prjlvalue);
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        auto ct = track_pjlvalue(ctx, emit_bitcast(ctx, get_current_task(ctx), ctx.types().T_pjlvalue));
+        auto ct = track_pjlvalue(ctx, get_current_task(ctx));
         return mark_or_box_ccall_result(ctx, ct, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_set_next_task)) {

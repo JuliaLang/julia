@@ -20,6 +20,8 @@ Base
 """
 parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
+is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
+
 """
     moduleroot(m::Module) -> Module
 
