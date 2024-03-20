@@ -165,6 +165,8 @@ extern jl_mutex_t jl_uv_mutex;
 extern _Atomic(int) jl_uv_n_waiters;
 void JL_UV_LOCK(void);
 #define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
+void JL_UV_LOCK_NOGC(void) JL_NOTSAFEPOINT;
+void JL_UV_UNLOCK_NOGC(void) JL_NOTSAFEPOINT;
 extern _Atomic(unsigned) _threadedregion;
 extern _Atomic(uint16_t) io_loop_tid;
 

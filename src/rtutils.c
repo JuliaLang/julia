@@ -28,6 +28,10 @@
 extern "C" {
 #endif
 
+#ifdef __clang_gcanalyzer__
+    extern jl_binding_t* a_binding;
+    extern int binding_found;
+#endif
 // exceptions -----------------------------------------------------------------
 
 JL_DLLEXPORT void JL_NORETURN jl_error(const char *str)
@@ -41,7 +45,7 @@ JL_DLLEXPORT void JL_NORETURN jl_error(const char *str)
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
-extern int vasprintf(char **str, const char *fmt, va_list ap);
+extern int vasprintf(char **str, const char *fmt, va_list ap) JL_NOTSAFEPOINT;
 
 jl_value_t *jl_vexceptionf(jl_datatype_t *exception_type,
                            const char *fmt, va_list args)
@@ -552,7 +556,11 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL)
         return NULL;
+#ifndef __clang_gcanalyzer__ // The analyzer doesn't understand that alloc = 0 means no safepoint
     jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
+#else
+    jl_binding_t *stderr_obj = binding_found ? a_binding : NULL;
+#endif
     return stderr_obj ? jl_atomic_load_relaxed(&stderr_obj->value) : NULL;
 }
 
@@ -647,7 +655,11 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
 {
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     if (globname && dv->name->module) {
+#ifndef __clang_gcanalyzer__ // The analyzer doesn't understand that alloc = 0 means no safepoint
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
+#else
+        jl_binding_t *b = binding_found ? a_binding : NULL;
+#endif
         if (b && jl_atomic_load_relaxed(&b->owner) && b->constp) {
             jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
             // The `||` makes this function work for both function instances and function types.

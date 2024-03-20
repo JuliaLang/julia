@@ -496,7 +496,7 @@ SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xana
 SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.uninitialized.Assign;core.UndefinedBinaryOperatorResult"
 SA_EXCEPTIONS-codegen.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core"
  # these need to be annotated (and possibly fixed)
-SKIP_GC_CHECK := codegen.cpp rtutils.c
+SKIP_GC_CHECK :=
 
 # make sure LLVM's invariant information is not discarded with -DNDEBUG
 clang-sagc-%: JL_CXXFLAGS += -UNDEBUG

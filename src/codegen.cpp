@@ -376,13 +376,13 @@ struct jl_tbaacache_t {
                     tbaa_arrayselbyte(nullptr), tbaa_memoryptr(nullptr), tbaa_memorylen(nullptr), tbaa_memoryown(nullptr),
                     tbaa_const(nullptr), initialized(false) {}
 
-    auto tbaa_make_child(MDBuilder &mbuilder, const char *name, MDNode *parent = nullptr, bool isConstant = false) {
+    auto tbaa_make_child(MDBuilder &mbuilder, const char *name, MDNode *parent = nullptr, bool isConstant = false) JL_NOTSAFEPOINT {
         MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent ? parent : tbaa_root);
         MDNode *n = mbuilder.createTBAAStructTagNode(scalar, scalar, 0, isConstant);
         return std::make_pair(n, scalar);
     }
 
-    void initialize(llvm::LLVMContext &context) {
+    void initialize(llvm::LLVMContext &context) JL_NOTSAFEPOINT {
         if (initialized) {
             assert(&tbaa_root->getContext() == &context);
             return;
@@ -494,7 +494,7 @@ static bool type_is_ghost(Type *ty)
 }
 
 // should agree with `Core.Compiler.hasuniquerep`
-static bool type_has_unique_rep(jl_value_t *t)
+static bool type_has_unique_rep(jl_value_t *t) JL_NOTSAFEPOINT
 {
     if (t == (jl_value_t*)jl_typeofbottom_type)
         return false;
@@ -1654,7 +1654,7 @@ extern "C" {
 }
 
 
-static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) {
+static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) JL_NOTSAFEPOINT{
     jt = jl_unwrap_unionall(jt);
     if (jt == (jl_value_t*)jl_datatype_type ||
         (jl_is_type_type(jt) && jl_is_datatype(jl_tparam0(jt))))
@@ -1811,7 +1811,7 @@ struct jl_cgval_t {
         // whether this value is compatible with `data_pointer`
         return tbaa != nullptr;
     }
-    jl_cgval_t(Value *Vval, jl_value_t *typ, Value *tindex) : // general value constructor
+    jl_cgval_t(Value *Vval, jl_value_t *typ, Value *tindex) JL_NOTSAFEPOINT : // general value constructor
         V(Vval), // V is allowed to be NULL in a jl_varinfo_t context, but not during codegen contexts
         Vboxed(nullptr),
         TIndex(tindex),
@@ -1825,7 +1825,7 @@ struct jl_cgval_t {
     {
         assert(TIndex == NULL || TIndex->getType() == getInt8Ty(TIndex->getContext()));
     }
-    jl_cgval_t(Value *Vptr, bool isboxed, jl_value_t *typ, Value *tindex, MDNode *tbaa) : // general pointer constructor
+    jl_cgval_t(Value *Vptr, bool isboxed, jl_value_t *typ, Value *tindex, MDNode *tbaa) JL_NOTSAFEPOINT : // general pointer constructor
         V(Vptr),
         Vboxed(isboxed ? Vptr : nullptr),
         TIndex(tindex),
@@ -1843,7 +1843,7 @@ struct jl_cgval_t {
         assert(!(isboxed && TIndex != NULL));
         assert(TIndex == NULL || TIndex->getType() == getInt8Ty(TIndex->getContext()));
     }
-    explicit jl_cgval_t(jl_value_t *typ) : // ghost value constructor
+    explicit jl_cgval_t(jl_value_t *typ) JL_NOTSAFEPOINT : // ghost value constructor
         // mark explicit to avoid being used implicitly for conversion from NULL (use jl_cgval_t() instead)
         V(NULL),
         Vboxed(NULL),
@@ -1859,7 +1859,7 @@ struct jl_cgval_t {
         assert(jl_is_datatype(typ));
         assert(constant);
     }
-    jl_cgval_t(const jl_cgval_t &v, jl_value_t *typ, Value *tindex) : // copy constructor with new type
+    jl_cgval_t(const jl_cgval_t &v, jl_value_t *typ, Value *tindex) JL_NOTSAFEPOINT : // copy constructor with new type
         V(v.V),
         Vboxed(v.Vboxed),
         TIndex(tindex),
@@ -1882,7 +1882,7 @@ struct jl_cgval_t {
             assert(isboxed || v.typ == typ || tindex);
         }
     }
-    explicit jl_cgval_t() : // undef / unreachable constructor
+    explicit jl_cgval_t() JL_NOTSAFEPOINT : // undef / unreachable constructor
         V(NULL),
         Vboxed(NULL),
         TIndex(NULL),
@@ -1994,7 +1994,7 @@ public:
         return type_cache;
     }
 
-    jl_tbaacache_t &tbaa() {
+    jl_tbaacache_t &tbaa() JL_NOTSAFEPOINT {
         tbaa_cache.initialize(builder.getContext());
         return tbaa_cache;
     }
@@ -2277,7 +2277,7 @@ static bool valid_as_globalinit(const Value *v) {
 
 static Value *zext_struct(jl_codectx_t &ctx, Value *V);
 
-static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex)
+static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex) JL_NOTSAFEPOINT
 {
     Value *loc;
     v = zext_struct(ctx, v);
@@ -2291,7 +2291,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
     }
     return mark_julia_slot(loc, typ, tindex, ctx.tbaa().tbaa_stack);
 }
-static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v)
+static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v) JL_NOTSAFEPOINT
 {
     if (v.ispointer())
         return v;
@@ -9781,6 +9781,7 @@ void jl_compile_workqueue(
         // patch up the prototype we emitted earlier
         Module *mod = proto.decl->getParent();
         assert(proto.decl->isDeclaration());
+        assert(codeinst);
         if (proto.specsig) {
             // expected specsig
             if (!preal_specsig) {

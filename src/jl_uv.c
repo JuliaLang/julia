@@ -139,6 +139,24 @@ void JL_UV_LOCK(void)
     }
 }
 
+void JL_UV_LOCK_NOGC(void)
+{
+    if (jl_mutex_trylock_nogc(&jl_uv_mutex)) {
+    }
+    else {
+        jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, 1);
+        jl_fence(); // [^store_buffering_2]
+        jl_wake_libuv();
+        JL_LOCK_NOGC(&jl_uv_mutex);
+        jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, -1);
+    }
+}
+
+void JL_UV_UNLOCK_NOGC(void)
+{
+    JL_UNLOCK_NOGC(&jl_uv_mutex);
+}
+
 /**
  * @brief Begin an IO lock.
  */
@@ -745,10 +763,10 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
         buf[0].base = data;
         buf[0].len = n;
         req->data = NULL;
-        JL_UV_LOCK();
+        JL_UV_LOCK_NOGC();
         JL_SIGATOMIC_BEGIN();
         int status = uv_write(req, stream, buf, 1, (uv_write_cb)jl_uv_writecb);
-        JL_UV_UNLOCK();
+        JL_UV_UNLOCK_NOGC();
         JL_SIGATOMIC_END();
         if (status < 0) {
             jl_uv_writecb(req, status);
@@ -778,7 +796,7 @@ JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t c)
     jl_uv_puts(stream, s, n);
 }
 
-extern int vasprintf(char **str, const char *fmt, va_list ap);
+extern int vasprintf(char **str, const char *fmt, va_list ap) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 {

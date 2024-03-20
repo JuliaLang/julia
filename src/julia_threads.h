@@ -308,9 +308,8 @@ JL_DLLEXPORT void (jl_cpu_suspend)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 #ifdef __clang_gcanalyzer__
-// Note that the sigint safepoint can also trigger GC, albeit less likely
 void jl_gc_safepoint_(jl_ptls_t tls);
-void jl_sigint_safepoint(jl_ptls_t tls);
+void jl_sigint_safepoint(jl_ptls_t tls) JL_NOTSAFEPOINT;
 #else
 // gc safepoint and gc states
 // This triggers a SegFault when we are in GC

@@ -1967,7 +1967,7 @@ JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t 
 JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
-JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
+JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
 STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {
@@ -2157,11 +2157,11 @@ JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_value_t *cl, size_t p
 JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstline, jl_value_t *codelocs, size_t nstmts);
 JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_value_t *cl, size_t nstmts);
 
-JL_DLLEXPORT int jl_is_operator(const char *sym);
-JL_DLLEXPORT int jl_is_unary_operator(const char *sym);
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym);
-JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym);
-JL_DLLEXPORT int jl_operator_precedence(const char *sym);
+JL_DLLEXPORT int jl_is_operator(const char *sym) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_is_unary_operator(const char *sym) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_operator_precedence(const char *sym) JL_NOTSAFEPOINT;
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {
@@ -2306,7 +2306,7 @@ JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh) JL_NOTSAFEPOINT ;
 JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh);
 JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_pop_handler(jl_task_t *ct, int n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_pop_handler(jl_task_t *ct, int n);
 JL_DLLEXPORT void jl_pop_handler_noexcept(jl_task_t *ct, int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_excstack_state(jl_task_t *ct) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_restore_excstack(jl_task_t *ct, size_t state) JL_NOTSAFEPOINT;
@@ -2425,15 +2425,15 @@ typedef struct {
 
 #ifdef __GNUC__
 #define _JL_FORMAT_ATTR(type, str, arg) \
-    __attribute__((format(type, str, arg)))
+    __attribute__((format(JL_NOTSAFEPOINTtype, str, arg)))
 #else
 #define _JL_FORMAT_ATTR(type, str, arg)
 #endif
 
-JL_DLLEXPORT void jl_uv_puts(struct uv_stream_s *stream, const char *str, size_t n);
-JL_DLLEXPORT int jl_printf(struct uv_stream_s *s, const char *format, ...)
+JL_DLLEXPORT void jl_uv_puts(struct uv_stream_s *stream, const char *str, size_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_printf(struct uv_stream_s *s, const char *format, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 2, 3);
-JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list args)
+JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list args) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(printf, 1, 2);
@@ -2449,7 +2449,7 @@ JL_DLLEXPORT int jl_termios_size(void);
 
 // showing and std streams
 JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_stderr_obj(void); // This does a module lookup which can be a safepoint;
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT;

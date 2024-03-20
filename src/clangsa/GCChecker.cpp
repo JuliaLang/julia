@@ -916,6 +916,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
       else if (FD->getDeclName().isIdentifier() &&
                (FD->getName().startswith("uv_") ||
                 FD->getName().startswith("unw_") ||
+                FD->getName().startswith("u8") ||
                 FD->getName().startswith("_U")) &&
                FD->getName() != "uv_run")
         isCalleeSafepoint = false;
