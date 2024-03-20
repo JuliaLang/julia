@@ -1009,7 +1009,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             }
         }
 
-        // wrap the function, performing the necesary pointer conversion
+        // wrap the function, performing the necessary pointer conversion
 
         Function *inner = f;
         inner->setName(ir_name + ".inner");
