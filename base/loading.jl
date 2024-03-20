@@ -639,19 +639,6 @@ function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
     return nothing
 end
 
-function base_package_get(project_file::String, where::PkgId, name::String)
-    base = base_project(project_file)
-    if base !== nothing
-        pkg = package_get(base, where, name)
-        if pkg !== nothing
-            return pkg
-        else
-            return base_package_get(base, where, name)
-        end
-    end
-    return nothing
-end
-
 function package_get(project_file, where::PkgId, name::String)
     proj = project_file_name_uuid(project_file, where.name)
     if proj == where
@@ -668,8 +655,6 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
     project_file = env_project_file(env)
     if project_file isa String
         pkg = package_get(project_file, where, name)
-        pkg === nothing || return pkg
-        pkg = base_package_get(project_file, where, name)
         pkg === nothing || return pkg
         d = parsed_toml(project_file)
         exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
