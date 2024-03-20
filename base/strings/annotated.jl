@@ -108,8 +108,18 @@ AnnotatedChar(c::AbstractChar, annots::Vector{<:Pair{Symbol, <:Any}}) =
 
 # Constructors to avoid recursive wrapping
 
-AnnotatedString(s::AnnotatedString, annots::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}) =
-    AnnotatedString(s.string, vcat(s.annotations, annots))
+function AnnotatedString(s::AnnotatedString, annots::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}})
+    if isempty(s.annotations)
+        AnnotatedString{typeof(s)}(s, annots) # Add type to avoid infinite recursion
+    else # Apply `annots` with a lower priority than existing annotations.
+        snew = deepcopy(s)
+        for annot in annots
+            sortedindex = searchsortedfirst(snew.annotations, annot, by=_annot_sortkey)
+            insert!(snew.annotations, sortedindex, annot)
+        end
+        snew
+    end
+end
 
 AnnotatedChar(c::AnnotatedChar, annots::Vector{Pair{Symbol, Any}}) =
     AnnotatedChar(c.char, vcat(c.annotations, annots))
@@ -316,16 +326,27 @@ reverse(s::SubString{<:AnnotatedString}) = reverse(AnnotatedString(s))
 
 ## End AbstractString interface ##
 
+"""
+    _annot_sortkey(annot::Tuple{UnitRange{Int}, Any}) -> Tuple{Int, Int}
+Produce a sortable `Tuple` according to the estimated priority of `annot`.
+
+We want to maintain a logical, consistent order for annotations.
+Bearing in mind that the last annotation affecting a given region "wins",
+we will try to prioritise the more "specific" annotations by sorting annotations
+that start later and affect a narrower region later.
+"""
+const _annot_sortkey = (r -> (first(r), -last(r))) ∘ first
+
 function _annotate!(annlist::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any}))
     label, val = labelval
     if val === nothing
-        indices = searchsorted(annlist, (range,), by=first)
+        indices = searchsorted(annlist, (range,), by=_annot_sortkey)
         labelindex = filter(i -> first(annlist[i][2]) === label, indices)
         for index in Iterators.reverse(labelindex)
             deleteat!(annlist, index)
         end
     else
-        sortedindex = searchsortedlast(annlist, (range,), by=first) + 1
+        sortedindex = searchsortedlast(annlist, (range,), by=_annot_sortkey) + 1
         insert!(annlist, sortedindex, (range, Pair{Symbol, Any}(label, val)))
     end
 end
@@ -475,7 +496,7 @@ function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int},
         end
         # Insert any extra entries in the appropriate position
         for entry in extras
-            sortedindex = searchsortedlast(annotations, (first(entry),), by=first) + 1
+            sortedindex = searchsortedlast(annotations, (first(entry),), by=_annot_sortkey) + 1
             insert!(annotations, sortedindex, entry)
         end
     end
@@ -486,7 +507,7 @@ function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{U
     if !eof(io)
         for (region, annot) in annotations
             region = first(region)+offset:last(region)+offset
-            sortedindex = searchsortedlast(io.annotations, (region,), by=first) + 1
+            sortedindex = searchsortedlast(io.annotations, (region,), by=_annot_sortkey) + 1
             insert!(io.annotations, sortedindex, (region, annot))
         end
     else
