@@ -141,6 +141,9 @@ signbit(x::Real) = x < 0
 
 Test whether `x > 0`. See also [`isnegative`](@ref).
 
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
 # Examples
 ```jldoctest
 julia> ispositive(-4.0)
@@ -153,12 +156,16 @@ julia> ispositive(0.0)
 false
 ```
 """
-ispositive(x) = x>0
+ispositive(x) = x > zero(x) # generic fallback
+ispositive(x::Real) = x > 0
 
 """
     isnegative(x)
 
 Test whether `x < 0`. See also [`ispositive`](@ref).
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -172,7 +179,8 @@ julia> isnegative(-0.0)
 false
 ```
 """
-isnegative(x) = x<0
+isnegative(x) = x < zero(x) # generic fallback
+isnegative(x::Real) = x < 0
 
 """
     sign(x)
