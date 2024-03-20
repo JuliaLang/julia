@@ -3405,9 +3405,27 @@ function recursive_prefs_merge(base::Dict{String, Any}, overrides::Dict{String, 
     return new_base
 end
 
+function get_projects_workspace_to_root(project_file)
+    projects = String[project_file]
+    while true
+        project_file = base_project(project_file)
+        if project_file === nothing
+            return projects
+        end
+        push!(projects, project_file)
+    end
+end
+
 function get_preferences(uuid::Union{UUID,Nothing} = nothing)
     merged_prefs = Dict{String,Any}()
-    for env in reverse(load_path())
+    loadpath = load_path()
+    projects_to_merge_prefs = String[]
+    append!(projects_to_merge_prefs, Iterators.drop(loadpath, 1))
+    if length(loadpath) >= 1
+        prepend!(projects_to_merge_prefs, get_projects_workspace_to_root(first(loadpath)))
+    end
+
+    for env in reverse(projects_to_merge_prefs)
         project_toml = env_project_file(env)
         if !isa(project_toml, String)
             continue
