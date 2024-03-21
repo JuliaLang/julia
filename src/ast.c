@@ -250,7 +250,7 @@ static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, ui
         // to avoid the counter being 0 or 1, which are reserved
         ptrhash_put(mod_table, funcname, (void*)(uintptr_t)((nxt + 1) << 2 | 3));
         uv_mutex_unlock(&counter_table_lock);
-        snprintf(buf, sizeof(buf), "%s%d", funcname, nxt);
+        snprintf(buf, sizeof(buf), "<%s>%d", funcname, nxt);
     }
     else {
         snprintf(buf, sizeof(buf), "%d", jl_module_next_counter(ctx->module));
