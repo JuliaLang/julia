@@ -154,8 +154,7 @@ const _state_index = findfirst(==(:_state), fieldnames(Task))
 @eval function load_state_acquire(t)
     # TODO: Replace this by proper atomic operations when available
     @GC.preserve t llvmcall($("""
-        %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i8*
-        %rv = load atomic i8, i8* %ptr acquire, align 8
+        %rv = load atomic i8, i8* %0 acquire, align 8
         ret i8 %rv
         """), UInt8, Tuple{Ptr{UInt8}},
         Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
