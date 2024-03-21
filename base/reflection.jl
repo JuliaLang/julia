@@ -1324,9 +1324,12 @@ uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
                              error("Code for this Method is not available.")
 function _uncompressed_ir(m::Method)
     s = m.source
-    s isa String && (s = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s))
+    if s isa String
+        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
+    end
     return s::CodeInfo
 end
+
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
