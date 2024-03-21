@@ -141,8 +141,8 @@ signbit(x::Real) = x < 0
 
 Test whether `x > 0`. See also [`isnegative`](@ref).
 
-!!! compat "Julia 1.11"
-    This function requires at least Julia 1.11.
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
 
 # Examples
 ```jldoctest
