@@ -363,7 +363,7 @@ end
         jl_setaffinity = (tid, mask, cpumasksize) -> ccall(:jl_setaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
         @test jl_getaffinity(1, mask, cpumasksize) == 0
         fill!(mask, 0)
-        mask[begin:min(Sys.CPU_THREADS, end)] .= 1
+        mask[begin] = 1
         @test jl_setaffinity(1, mask, cpumasksize) == 0
     end
 end
