@@ -12,7 +12,7 @@ using .Main.OffsetArrays
 @testset "Base.Sort docstrings" begin
     undoc = Docs.undocumented_names(Base.Sort)
     @test_broken isempty(undoc)
-    @test undoc == [:Algorithm, :SMALL_ALGORITHM, :SMALL_THRESHOLD, :Sort]
+    @test undoc == [:Algorithm, :SMALL_THRESHOLD, :Sort]
 end
 
 @testset "Order" begin
