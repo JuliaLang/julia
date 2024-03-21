@@ -816,7 +816,7 @@ it is well-suited to small collections but should not be used for large ones.
 """
     SMALL_ALGORITHM
 
-Alias for Insertion sort algorithm ,witch is used for sorting small arreys.
+Default algorithm for small arreys
 
 """
 const InsertionSort = InsertionSortAlg()
