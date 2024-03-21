@@ -349,6 +349,7 @@ private:
     void ComputeLiveSets(State &S);
     SmallVector<int, 0> ColorRoots(const State &S);
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
+    void PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
     void PlaceGCFrameStores(State &S, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
     bool CleanupIR(Function &F, State *S, bool *CFGModified);
@@ -2668,6 +2669,18 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     }
     new StoreInst(Val, slotAddress, InsertBefore);
 }
+void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot,
+                                         ArrayRef<int> Colors, Value *GCFrame,
+                                         Instruction *InsertBefore) {
+    // Get the slot address.
+    auto slotAddress = CallInst::Create(
+        getOrDeclare(jl_intrinsics::getGCFrameSlot),
+        {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
+    // Reset the slot to NULL.
+    Value *Val = ConstantPointerNull::get(T_prjlvalue);
+    new StoreInst(Val, slotAddress, InsertBefore);
+}
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
                                           ArrayRef<int> Colors, Value *GCFrame)
@@ -2683,6 +2696,15 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
         for(auto rit = BBS.Safepoints.rbegin();
               rit != BBS.Safepoints.rend(); ++rit ) {
             const LargeSparseBitVector &NowLive = S.LiveSets[*rit];
+            // reset slots which are no longer alive
+            for (int Idx : *LastLive) {
+                if (!HasBitSet(NowLive, Idx)) {
+                    PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
+                      S.ReverseSafepointNumbering[*rit]);
+                }
+            }
+            // store values which are alive in this safepoint but
+            // haven't been stored in the GC frame before
             for (int Idx : NowLive) {
                 if (!HasBitSet(*LastLive, Idx)) {
                     PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
