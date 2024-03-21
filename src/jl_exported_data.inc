@@ -157,6 +157,5 @@
     XX(jl_options, jl_options_t) \
     XX(jl_task_gcstack_offset, int) \
     XX(jl_task_ptls_offset, int) \
-    XX(emitting_small_image, int) \
 
 // end of file

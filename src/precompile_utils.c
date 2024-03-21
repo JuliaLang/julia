@@ -328,7 +328,6 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
     return native_code;
 }
 
-extern JL_DLLIMPORT int emitting_small_image;
 static void *jl_precompile_small_image(void)
 {
     // array of MethodInstances and ccallable aliases to include in the output
@@ -351,10 +350,10 @@ static void *jl_precompile_small_image(void)
         jl_safe_printf("Precompiling %zu methods\n", jl_array_nrows(m));
         jl_(m);
     }
-    emitting_small_image = 0;
-    if (jl_options.no_dispatch_precompile)
-        emitting_small_image = 1;
-    void *native_code = jl_create_native(m, NULL, NULL, 0, 1, 0,
+
+    jl_cgparams_t params = jl_default_cgparams;
+    params.no_dynamic_dispatch = jl_options.no_dispatch_precompile;
+    void *native_code = jl_create_native(m, NULL, &params, 0, /* imaging */ 1, 0,
                                          jl_atomic_load_acquire(&jl_world_counter));
     JL_GC_POP();
     return native_code;
