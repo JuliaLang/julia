@@ -456,6 +456,13 @@ function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
     nb
 end
 
+# So that read/writes with `IOContext` (and any similar `AbstractPipe` wrappers)
+# work as expected.
+write(io::AbstractPipe, s::Union{AnnotatedString, SubString{<:AnnotatedString}}) =
+    write(pipe_writer(io), s)
+write(io::AbstractPipe, c::AnnotatedChar) = write(pipe_writer(io), c)
+read(io::AbstractPipe, T::Type{<:AnnotatedString}) = read(pipe_reader(io), T)
+
 function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, span::UnitRange{Int})
     # Clear out any overlapping pre-existing annotations.
     filter!(((region, _),) -> first(region) < first(span) || last(region) > last(span), annotations)
