@@ -811,15 +811,13 @@ Characteristics:
 * *quadratic performance* in the number of elements to be sorted:
 it is well-suited to small collections but should not be used for large ones.
 """
-
+const InsertionSort = InsertionSortAlg()
 
 """
     SMALL_ALGORITHM
 
-Default algorithm for small arreys
-
+Default algorithm for small arrays
 """
-const InsertionSort = InsertionSortAlg()
 const SMALL_ALGORITHM = InsertionSortAlg()
 
 function _sort!(v::AbstractVector, ::InsertionSortAlg, o::Ordering, kw)
