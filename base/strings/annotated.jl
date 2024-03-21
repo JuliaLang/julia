@@ -242,9 +242,12 @@ AnnotatedString(s::SubString{<:AnnotatedString}) = annotatedstring(s)
 """
     annotatedstring_optimize!(str::AnnotatedString)
 
-Merge contiguous identical annotations in `str`.
+Ensure that the annotations in `str` are well ordered, then merge contiguous
+identical annotations.
 """
 function annotatedstring_optimize!(s::AnnotatedString)
+    issorted(s.annotations, by=_annot_sortkey) ||
+        sort!(s.annotations, by=_annot_sortkey)
     last_seen = Dict{Pair{Symbol, Any}, Int}()
     i = 1
     while i <= length(s.annotations)
