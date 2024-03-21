@@ -5,10 +5,10 @@ Segment of raw words of bits interpreted as a big integer. Less
 significant words come first. Each word is in machine-native bit-order.
 """
 struct RawBigInt{T<:Unsigned}
-    d::String
+    d::Memory{T}
     word_count::Int
 
-    function RawBigInt{T}(d::String, word_count::Int) where {T<:Unsigned}
+    function RawBigInt{T}(d::Memory{T}, word_count::Int) where {T<:Unsigned}
         new{T}(d, word_count)
     end
 end
@@ -27,8 +27,7 @@ the less significant words.
 """
 function get_elem(x::RawBigInt{T}, i::Int, ::Val{:words}, ::Val{:ascending}) where {T}
     # `i` must be non-negative and less than `x.word_count`
-    d = x.d
-    (GC.@preserve d unsafe_load(Ptr{T}(pointer(d)), i + 1))::T
+    return x.d[i + 1]
 end
 
 function get_elem(x, i::Int, v::Val, ::Val{:descending})
