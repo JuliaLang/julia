@@ -212,6 +212,27 @@ const repl_ast_transforms = Any[softscope] # defaults for new REPL backends
 # to e.g. install packages on demand
 const install_packages_hooks = Any[]
 
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+# We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
+# code to run (and error).
+__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
+    ccall(:jl_expand_with_loc, Any, (Any, Any, Ptr{UInt8}, Cint), ast, mod, toplevel_file[], toplevel_line[])
+__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
+    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Cint}), mod, ast, 1, 1, toplevel_file, toplevel_line)
+
+function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
+    if !isexpr(ast, :toplevel)
+        ast = __repl_entry_lower_with_loc(mod, ast, toplevel_file, toplevel_line)
+        check_for_missing_packages_and_run_hooks(ast)
+        return __repl_entry_eval_expanded_with_loc(mod, ast, toplevel_file, toplevel_line)
+    end
+    local value=nothing
+    for i = 1:length(ast.args)
+        value = toplevel_eval_with_hooks(mod, ast.args[i], toplevel_file, toplevel_line)
+    end
+    return value
+end
+
 function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     lasterr = nothing
     Base.sigatomic_begin()
@@ -222,11 +243,10 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
             else
                 backend.in_eval = true
-                check_for_missing_packages_and_run_hooks(ast)
                 for xf in backend.ast_transforms
                     ast = Base.invokelatest(xf, ast)
                 end
-                value = Core.eval(mod, ast)
+                value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
                 setglobal!(Base.MainInclude, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
@@ -256,7 +276,7 @@ function check_for_missing_packages_and_run_hooks(ast)
     end
 end
 
-function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
+function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
     ast.head === :quote && return mods # don't search if it's not going to be run during this eval
     if ast.head === :using || ast.head === :import
         for arg in ast.args
@@ -271,12 +291,24 @@ function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
             end
         end
     end
-    for arg in ast.args
-        if isexpr(arg, (:block, :if, :using, :import))
-            modules_to_be_loaded(arg, mods)
+    if ast.head !== :thunk
+        for arg in ast.args
+            if isexpr(arg, (:block, :if, :using, :import))
+                _modules_to_be_loaded!(arg, mods)
+            end
+        end
+    else
+        code = ast.args[1]
+        for arg in code.code
+            isa(arg, Expr) || continue
+            _modules_to_be_loaded!(arg, mods)
         end
     end
-    filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
+end
+
+function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
+    _modules_to_be_loaded!(ast, mods)
+    filter!(mod::Symbol -> !in(mod, (:Base, :Main, :Core)), mods) # Exclude special non-package modules
     return unique(mods)
 end
 
