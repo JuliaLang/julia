@@ -9,7 +9,7 @@ A string containing the script name passed to Julia from the command line. Note 
 script name remains unchanged from within included files. Alternatively see
 [`@__FILE__`](@ref).
 """
-global PROGRAM_FILE::String = ""
+global PROGRAM_FILE = ""
 
 """
     ARGS
@@ -480,7 +480,7 @@ end
 
 ## hook for disabling threaded libraries ##
 
-library_threading_enabled::Bool = true
+library_threading_enabled = true
 const disable_library_threading_hooks = []
 
 function at_disable_library_threading(f)
