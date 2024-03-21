@@ -283,6 +283,7 @@ extern void _chkstk(void);
 
 // types
 struct jl_typecache_t {
+    Type *T_ptr;
     Type *T_size;
     Type *T_jlvalue;
     Type *T_pjlvalue;
@@ -304,7 +305,7 @@ struct jl_typecache_t {
     bool initialized;
 
     jl_typecache_t() :
-        T_jlvalue(nullptr), T_pjlvalue(nullptr), T_prjlvalue(nullptr),
+        T_ptr(nullptr), T_jlvalue(nullptr), T_pjlvalue(nullptr), T_prjlvalue(nullptr),
         T_ppjlvalue(nullptr), T_pprjlvalue(nullptr),
         T_jlgenericmemory(nullptr), T_jlarray(nullptr), T_pjlarray(nullptr),
         T_jlfunc(nullptr), T_jlfuncparams(nullptr), T_sigatomic(nullptr), T_ppint8(nullptr),
@@ -315,6 +316,7 @@ struct jl_typecache_t {
             return;
         }
         initialized = true;
+        T_ptr = getInt8PtrTy(context);
         T_ppint8 = PointerType::get(getInt8PtrTy(context), 0);
         T_sigatomic = Type::getIntNTy(context, sizeof(sig_atomic_t) * 8);
         T_size = DL.getIntPtrType(context);
