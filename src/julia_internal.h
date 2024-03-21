@@ -13,6 +13,7 @@
 #include "support/strtod.h"
 #include "gc-alloc-profiler.h"
 #include "support/rle.h"
+#include <ctype.h>
 #include <stdint.h>
 #include <uv.h>
 #include <llvm-c/Types.h>
@@ -847,7 +848,8 @@ STATIC_INLINE int is_anonfn_typename(char *name) JL_NOTSAFEPOINT
     if (name[0] != '#' || name[1] == '#')
         return 0;
     char *other = strrchr(name, '#');
-    return other > &name[1] && other[1] > '0' && other[1] <= '9';
+    // Check if the last character is a digit
+    return other > &name[1] && isdigit(name[strlen(name) - 1]);
 }
 
 // Each tuple can exist in one of 4 Vararg states:
