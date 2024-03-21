@@ -193,7 +193,7 @@ static DICompileUnit *getOrCreateJuliaCU(Module &M,
     return CU;
 }
 
-static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_debugcache_t &debuginfo, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed)
+static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_debugcache_t &debuginfo, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed) JL_NOTSAFEPOINT
 {
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (isboxed || !jl_is_datatype(jt) || !jdt->isconcretetype)
@@ -377,7 +377,7 @@ static llvm::SmallVector<llvm::Value*, 0> get_gc_roots_for(jl_codectx_t &ctx, co
 
 static inline Constant *literal_static_pointer_val(const void *p, Type *T);
 
-static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
+static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr) JL_NOTSAFEPOINT
 {
     // emit a GlobalVariable for a jl_value_t named "cname"
     // store the name given so we can reuse it (facilitating merging later)
@@ -410,7 +410,7 @@ static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     return gv;
 }
 
-static Constant *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr)
+static Constant *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr) JL_NOTSAFEPOINT
 {
     // emit a GlobalVariable for a jl_value_t, using the prefix, name, and module to
     // to create a readable name of the form prefixModA.ModB.name#
@@ -500,7 +500,6 @@ static unsigned julia_alignment(jl_value_t *jt)
         // and this is the guarantee we have for the GC bits
         return 16;
     }
-
     assert(jl_is_datatype(jt) && jl_struct_try_layout((jl_datatype_t*)jt));
     unsigned alignment = jl_datatype_align(jt);
     if (alignment > JL_HEAP_ALIGNMENT)
@@ -513,6 +512,7 @@ static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_
     B.addAttribute(Attribute::NonNull);
     B.addAttribute(Attribute::NoUndef);
     // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
+    JL_GC_PROMISE_ROOTED(jt);
     size_t size = dereferenceable_size(jt);
     if (size) {
         B.addDereferenceableAttr(size);
@@ -521,7 +521,7 @@ static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_
 }
 
 static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null,
-                                                           size_t size, size_t align)
+                                                           size_t size, size_t align) JL_NOTSAFEPOINT
 {
     if (isa<PointerType>(LI->getType())) {
         if (!can_be_null)
@@ -540,8 +540,9 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
     return LI;
 }
 
-static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null, jl_value_t *jt)
+static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null, jl_value_t *jt) JL_NOTSAFEPOINT
 {
+
     size_t size = dereferenceable_size(jt);
     unsigned alignment = 1;
     if (size > 0)
@@ -550,7 +551,7 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
 }
 
 // Returns ctx.types().T_pjlvalue
-static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
+static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p) JL_NOTSAFEPOINT
 {
     if (p == NULL)
         return Constant::getNullValue(ctx.types().T_pjlvalue);
@@ -564,7 +565,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
 }
 
 // Returns ctx.types().T_pjlvalue
-static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
+static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p) JL_NOTSAFEPOINT
 {
     // emit a pointer to any jl_value_t which will be valid across reloading code
     if (p == NULL)
@@ -934,7 +935,7 @@ static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
 static bool for_each_uniontype_small(
         llvm::function_ref<void(unsigned, jl_datatype_t*)> f,
         jl_value_t *ty,
-        unsigned &counter)
+        unsigned &counter) JL_NOTSAFEPOINT
 {
     if (counter > 127)
         return false;
@@ -959,7 +960,7 @@ static bool is_uniontype_allunboxed(jl_value_t *typ)
 static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool justtag, bool notag=false);
 static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull=false, bool justtag=false);
 
-static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
+static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut) JL_NOTSAFEPOINT
 {
     unsigned new_idx = 0;
     unsigned new_counter = 0;
@@ -977,7 +978,7 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 
 // --- generating various field accessors ---
 
-static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e);
+static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e) JL_NOTSAFEPOINT;
 
 static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
 {
@@ -1098,7 +1099,7 @@ static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst
     emit_memcpy_llvm(ctx, dst, dst_ai, data_pointer(ctx, src), src_ai, sz, align_dst, align_src, is_volatile);
 }
 
-static Value *emit_tagfrom(jl_codectx_t &ctx, jl_datatype_t *dt)
+static Value *emit_tagfrom(jl_codectx_t &ctx, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     if (dt->smalltag)
         return ConstantInt::get(ctx.types().T_size, dt->smalltag << 4);

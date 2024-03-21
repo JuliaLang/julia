@@ -99,63 +99,6 @@ static bool jl_floattemp_var_needed(const Triple &TT) {
     return TT.getArch() == Triple::x86;
 }
 
-//Drag some useful type functions into our namespace
-//to reduce verbosity of our code
-auto getInt1Ty(LLVMContext &ctxt) {
-    return Type::getInt1Ty(ctxt);
-}
-auto getInt8Ty(LLVMContext &ctxt) {
-    return Type::getInt8Ty(ctxt);
-}
-auto getInt16Ty(LLVMContext &ctxt) {
-    return Type::getInt16Ty(ctxt);
-}
-auto getInt32Ty(LLVMContext &ctxt) {
-    return Type::getInt32Ty(ctxt);
-}
-auto getInt64Ty(LLVMContext &ctxt) {
-    return Type::getInt64Ty(ctxt);
-}
-auto getHalfTy(LLVMContext &ctxt) {
-    return Type::getHalfTy(ctxt);
-}
-auto getFloatTy(LLVMContext &ctxt) {
-    return Type::getFloatTy(ctxt);
-}
-auto getDoubleTy(LLVMContext &ctxt) {
-    return Type::getDoubleTy(ctxt);
-}
-auto getBFloatTy(LLVMContext &ctxt) {
-    return Type::getBFloatTy(ctxt);
-}
-auto getFP128Ty(LLVMContext &ctxt) {
-    return Type::getFP128Ty(ctxt);
-}
-auto getVoidTy(LLVMContext &ctxt) {
-    return Type::getVoidTy(ctxt);
-}
-auto getCharTy(LLVMContext &ctxt) {
-    return getInt32Ty(ctxt);
-}
-auto getInt8PtrTy(LLVMContext &ctxt) {
-    return Type::getInt8PtrTy(ctxt);
-}
-auto getInt16PtrTy(LLVMContext &ctxt) {
-    return Type::getInt16PtrTy(ctxt);
-}
-auto getInt32PtrTy(LLVMContext &ctxt) {
-    return Type::getInt32PtrTy(ctxt);
-}
-auto getInt64PtrTy(LLVMContext &ctxt) {
-    return Type::getInt64PtrTy(ctxt);
-}
-auto getFloatPtrTy(LLVMContext &ctxt) {
-    return Type::getFloatPtrTy(ctxt);
-}
-auto getDoublePtrTy(LLVMContext &ctxt) {
-    return Type::getDoublePtrTy(ctxt);
-}
-
 typedef Instruction TerminatorInst;
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
@@ -165,6 +108,63 @@ typedef Instruction TerminatorInst;
 #include "jitlayers.h"
 #include "processor.h"
 #include "julia_assert.h"
+
+//Drag some useful type functions into our namespace
+//to reduce verbosity of our code
+auto getInt1Ty(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getInt1Ty(ctxt);
+}
+auto getInt8Ty(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getInt8Ty(ctxt);
+}
+auto getInt16Ty(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getInt16Ty(ctxt);
+}
+auto getInt32Ty(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getInt32Ty(ctxt);
+}
+auto getInt64Ty(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getInt64Ty(ctxt);
+}
+auto getHalfTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getHalfTy(ctxt);
+}
+auto getFloatTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getFloatTy(ctxt);
+}
+auto getDoubleTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getDoubleTy(ctxt);
+}
+auto getBFloatTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getBFloatTy(ctxt);
+}
+auto getFP128Ty(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getFP128Ty(ctxt);
+}
+auto getVoidTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getVoidTy(ctxt);
+}
+auto getCharTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return getInt32Ty(ctxt);
+}
+auto getInt8PtrTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getInt8PtrTy(ctxt);
+}
+auto getInt16PtrTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getInt16PtrTy(ctxt);
+}
+auto getInt32PtrTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getInt32PtrTy(ctxt);
+}
+auto getInt64PtrTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getInt64PtrTy(ctxt);
+}
+auto getFloatPtrTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getFloatPtrTy(ctxt);
+}
+auto getDoublePtrTy(LLVMContext &ctxt) JL_NOTSAFEPOINT {
+    return Type::getDoublePtrTy(ctxt);
+}
 
 #undef DEBUG_TYPE //LLVM occasionally likes to set DEBUG_TYPE in a header...
 #define DEBUG_TYPE "julia_irgen_codegen"
@@ -303,14 +303,14 @@ struct jl_typecache_t {
 
     bool initialized;
 
-    jl_typecache_t() :
+    jl_typecache_t() JL_NOTSAFEPOINT :
         T_jlvalue(nullptr), T_pjlvalue(nullptr), T_prjlvalue(nullptr),
         T_ppjlvalue(nullptr), T_pprjlvalue(nullptr),
         T_jlgenericmemory(nullptr), T_jlarray(nullptr), T_pjlarray(nullptr),
         T_jlfunc(nullptr), T_jlfuncparams(nullptr), T_sigatomic(nullptr), T_ppint8(nullptr),
         initialized(false) {}
 
-    void initialize(LLVMContext &context, const DataLayout &DL) {
+    void initialize(LLVMContext &context, const DataLayout &DL) JL_NOTSAFEPOINT {
         if (initialized) {
             return;
         }
@@ -368,7 +368,7 @@ struct jl_tbaacache_t {
     MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
     bool initialized;
 
-    jl_tbaacache_t(): tbaa_root(nullptr), tbaa_gcframe(nullptr), tbaa_stack(nullptr),
+    jl_tbaacache_t() JL_NOTSAFEPOINT : tbaa_root(nullptr), tbaa_gcframe(nullptr), tbaa_stack(nullptr),
                     tbaa_unionselbyte(nullptr), tbaa_data(nullptr), tbaa_binding(nullptr),
                     tbaa_value(nullptr), tbaa_mutab(nullptr), tbaa_datatype(nullptr),
                     tbaa_immut(nullptr), tbaa_ptrarraybuf(nullptr), tbaa_arraybuf(nullptr),
@@ -432,9 +432,9 @@ struct jl_noaliascache_t {
         MDNode *type_metadata;  // Non-user-accessible type metadata incl. union selectors, etc.
         MDNode *constant;       // Memory that is immutable by the time LLVM can see it
 
-        jl_regions_t(): gcframe(nullptr), stack(nullptr), data(nullptr), type_metadata(nullptr), constant(nullptr) {}
+        jl_regions_t() JL_NOTSAFEPOINT : gcframe(nullptr), stack(nullptr), data(nullptr), type_metadata(nullptr), constant(nullptr) {}
 
-        void initialize(llvm::LLVMContext &context) {
+        void initialize(llvm::LLVMContext &context) JL_NOTSAFEPOINT {
             MDBuilder mbuilder(context);
             MDNode *domain = mbuilder.createAliasScopeDomain("jnoalias");
 
@@ -450,17 +450,17 @@ struct jl_noaliascache_t {
     struct jl_aliasscope_t {
         MDNode *current;
 
-        jl_aliasscope_t(): current(nullptr) {}
+        jl_aliasscope_t() JL_NOTSAFEPOINT : current(nullptr) {}
 
         // No init required, this->current is only used to store the currently active aliasscope
-        void initialize(llvm::LLVMContext &context) {}
+        void initialize(llvm::LLVMContext &context) JL_NOTSAFEPOINT {}
     } aliasscope;
 
     bool initialized;
 
-    jl_noaliascache_t(): regions(), aliasscope(), initialized(false) {}
+    jl_noaliascache_t() JL_NOTSAFEPOINT : regions(), aliasscope(), initialized(false) {}
 
-    void initialize(llvm::LLVMContext &context) {
+    void initialize(llvm::LLVMContext &context) JL_NOTSAFEPOINT {
         if (initialized) {
             assert(&regions.constant->getContext() == &context);
             return;
@@ -483,7 +483,7 @@ struct jl_debugcache_t {
     : jl_pvalue_dillvmt(nullptr), jl_ppvalue_dillvmt(nullptr),
     jl_di_func_sig(nullptr), jl_di_func_null_sig(nullptr), initialized(false) {}
 
-    void initialize(Module *m);
+    void initialize(Module *m) JL_NOTSAFEPOINT;
 };
 
 
@@ -1672,12 +1672,12 @@ static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) JL_NOTSAFEP
 
 // tracks whether codegen is currently able to simply stack-allocate this type
 // note that this includes jl_isbits, although codegen should work regardless
-static bool jl_is_concrete_immutable(jl_value_t* t)
+static bool jl_is_concrete_immutable(jl_value_t* t) JL_NOTSAFEPOINT
 {
     return jl_is_immutable_datatype(t) && ((jl_datatype_t*)t)->isconcretetype;
 }
 
-static bool jl_is_pointerfree(jl_value_t* t)
+static bool jl_is_pointerfree(jl_value_t* t) JL_NOTSAFEPOINT
 {
     if (!jl_is_concrete_immutable(t))
         return 0;
@@ -1731,7 +1731,7 @@ struct jl_aliasinfo_t {
     // Add !tbaa, !tbaa.struct, !alias.scope, !noalias annotations to an instruction.
     //
     // Also adds `invariant.load` to load instructions in the constant !noalias scope.
-    Instruction *decorateInst(Instruction *inst) const {
+    Instruction *decorateInst(Instruction *inst) const JL_NOTSAFEPOINT {
 
         if (this->tbaa)
             inst->setMetadata(LLVMContext::MD_tbaa, this->tbaa);
@@ -1806,7 +1806,7 @@ struct jl_cgval_t {
     // to the promotion point. This is used for dominator analysis, since LLVM's
     // dominator analysis has algorithmic problems for large basic blocks.
     ssize_t promotion_ssa;
-    bool ispointer() const
+    bool ispointer() const JL_NOTSAFEPOINT
     {
         // whether this value is compatible with `data_pointer`
         return tbaa != nullptr;
@@ -1975,7 +1975,7 @@ public:
 
     SmallVector<std::unique_ptr<Module>, 0> llvmcall_modules;
 
-    jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params, size_t min_world, size_t max_world)
+    jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
       : builder(llvmctx),
         emission_context(params),
         call_targets(),
@@ -1986,10 +1986,10 @@ public:
         params(params.params) {
     }
 
-    jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params, jl_code_instance_t *ci) :
+    jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params, jl_code_instance_t *ci) JL_NOTSAFEPOINT :
         jl_codectx_t(llvmctx, params, jl_atomic_load_relaxed(&ci->min_world), jl_atomic_load_relaxed(&ci->max_world)) {}
 
-    jl_typecache_t &types() {
+    jl_typecache_t &types() JL_NOTSAFEPOINT {
         type_cache.initialize(builder.getContext(), emission_context.DL);
         return type_cache;
     }
@@ -1999,7 +1999,7 @@ public:
         return tbaa_cache;
     }
 
-    jl_noaliascache_t &noalias() {
+    jl_noaliascache_t &noalias() JL_NOTSAFEPOINT {
         aliasscope_cache.initialize(builder.getContext());
         return aliasscope_cache;
     }
@@ -2108,7 +2108,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayRef<jl_cgval_t> argv, size_t nargs, jl_value_t *rt);
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
-static unsigned julia_alignment(jl_value_t *jt);
+static unsigned julia_alignment(jl_value_t *jt) JL_NOTSAFEPOINT;
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
@@ -2146,10 +2146,10 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 
 // --- convenience functions for tagging llvm values with julia types ---
 
-static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, Align align, const Twine &name, Module &M)
+static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, Align align, const Twine &name, Module &M) JL_NOTSAFEPOINT
 {
     GlobalVariable *&gv = emission_context.mergedConstants[val];
-    auto get_gv = [&](const Twine &name) {
+    auto get_gv = [&](const Twine &name) JL_NOTSAFEPOINT {
         auto gv = new GlobalVariable(
                 M,
                 val->getType(),
@@ -2176,7 +2176,7 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
     return gv;
 }
 
-static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty)
+static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty) JL_NOTSAFEPOINT
 {
     ++EmittedAllocas;
     return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), "", /*InsertBefore=*/ctx.topalloca);
@@ -2254,14 +2254,15 @@ static inline jl_cgval_t mark_julia_const(jl_codectx_t &ctx, jl_value_t *jv)
 }
 
 
-static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa)
+static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, Value *tindex, MDNode *tbaa) JL_NOTSAFEPOINT
 {
     // this enables lazy-copying of immutable values and stack or argument slots
     jl_cgval_t tagval(v, false, typ, tindex, tbaa);
     return tagval;
 }
 
-static bool valid_as_globalinit(const Value *v) {
+static bool valid_as_globalinit(const Value *v) JL_NOTSAFEPOINT
+{
     if (isa<ConstantExpr>(v)) {
         // llvm can't handle all the things that could be inside a ConstantExpr
         // (such as addrspacecast), and we don't really mind losing this optimization
@@ -2275,7 +2276,7 @@ static bool valid_as_globalinit(const Value *v) {
     return isa<Constant>(v);
 }
 
-static Value *zext_struct(jl_codectx_t &ctx, Value *V);
+static Value *zext_struct(jl_codectx_t &ctx, Value *V) JL_NOTSAFEPOINT;
 
 static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex) JL_NOTSAFEPOINT
 {
@@ -2333,8 +2334,10 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
 {
     if (v.typ == jl_bottom_type || typ == (jl_value_t*)jl_any_type || jl_egal(v.typ, typ))
         return v; // fast-path
-    if (v.constant)
+    if (v.constant) {
+        JL_GC_PROMISE_ROOTED(v.constant);
         return jl_isa(v.constant, typ) ? v : jl_cgval_t();
+    }
     if (jl_is_concrete_type(v.typ) && !jl_is_kind(v.typ)) {
         if (jl_is_concrete_type(typ) && !jl_is_kind(typ)) {
             // type mismatch: changing from one leaftype to another

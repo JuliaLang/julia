@@ -176,7 +176,7 @@ static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
     return ctx.builder.CreateZExtOrTrunc(x, to);
 }
 
-static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_datatype_t *bt)
+static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_datatype_t *bt) JL_NOTSAFEPOINT
 {
     // assumes `jl_is_pointerfree(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
@@ -324,7 +324,7 @@ static Constant *undef_value_for_type(Type *T) {
 }
 
 // rebuild a struct type with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
-static Type *zext_struct_type(Type *T)
+static Type *zext_struct_type(Type *T) JL_NOTSAFEPOINT
 {
     if (auto *AT = dyn_cast<ArrayType>(T)) {
         return ArrayType::get(AT->getElementType(), AT->getNumElements());
@@ -348,7 +348,7 @@ static Type *zext_struct_type(Type *T)
 }
 
 // rebuild a struct with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
-static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2)
+static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2) JL_NOTSAFEPOINT
 {
     Type *T = V->getType();
     if (T == T2)
@@ -375,7 +375,7 @@ static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2)
     return V;
 }
 
-static Value *zext_struct(jl_codectx_t &ctx, Value *V)
+static Value *zext_struct(jl_codectx_t &ctx, Value *V) JL_NOTSAFEPOINT
 {
     return zext_struct_helper(ctx, V, zext_struct_type(V->getType()));
 }

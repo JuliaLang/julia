@@ -739,7 +739,7 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
 int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v);
-int jl_has_fixed_layout(jl_datatype_t *t);
+int jl_has_fixed_layout(jl_datatype_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_struct_try_layout(jl_datatype_t *dt);
 JL_DLLEXPORT int jl_type_mappable_to_c(jl_value_t *ty);
 jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);

@@ -49,7 +49,7 @@ static int typeenv_has_ne(jl_typeenv_t *env, jl_tvar_t *v) JL_NOTSAFEPOINT
 }
 
 
-static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
+static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     while (1) {
         if (jl_is_typevar(v))

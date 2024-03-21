@@ -392,14 +392,13 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
         Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
         return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
       } else {
-        PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
-            N->getLocationContext(), BRC.getSourceManager());
+        // TODO: Where is my annotation or why are tracking a decl with no annotation?
+        PathDiagnosticLocation Pos = PathDiagnosticLocation(D, BRC.getSourceManager());
         return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
       }
     } else if (NewSafepointDisabled == (unsigned)-1) {
-      PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
-          N->getLocationContext(), BRC.getSourceManager());
-      return MakePDP(Pos, "Safepoints re-enabled here");
+        PathDiagnosticLocation Pos = PathDiagnosticLocation(D, BRC.getSourceManager());
+        return MakePDP(Pos, "Safepoints re-enabled here");
     }
   }
   return nullptr;
