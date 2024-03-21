@@ -707,6 +707,8 @@ end
 @testset "code_llvm on opaque_closure" begin
     let ci = code_typed(+, (Int, Int))[1][1]
         ir = Core.Compiler.inflate_ir(ci)
+        @test ir.debuginfo.def === nothing
+        ir.debuginfo.def = Symbol(@__FILE__)
         oc = Core.OpaqueClosure(ir)
         @test (code_llvm(devnull, oc, Tuple{Int, Int}); true)
         let io = IOBuffer()

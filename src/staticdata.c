@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    188
+#define NUM_TAGS    189
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -213,6 +213,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_addrspace_type);
         INSERT_TAG(jl_addrspace_typename);
         INSERT_TAG(jl_addrspacecore_type);
+        INSERT_TAG(jl_debuginfo_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -2337,23 +2338,18 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
         jl_svecset(cache, ins++, jl_nothing);
 }
 
-static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
+static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_instance_t *codeinst, int orig)
 {
     jl_code_info_t *ci = NULL;
     JL_GC_PUSH1(&ci);
     int compressed = 0;
     if (!jl_is_code_info(ci_)) {
         compressed = 1;
-        ci = jl_uncompress_ir(m, NULL, (jl_value_t*)ci_);
+        ci = jl_uncompress_ir(m, codeinst, (jl_value_t*)ci_);
     }
     else {
         ci = (jl_code_info_t*)ci_;
     }
-    // leave codelocs length the same so the compiler can assume that; just zero it
-    memset(jl_array_data(ci->codelocs, int32_t), 0, jl_array_len(ci->codelocs)*sizeof(int32_t));
-    // empty linetable
-    if (jl_is_array(ci->linetable))
-        jl_array_del_end((jl_array_t*)ci->linetable, jl_array_len(ci->linetable));
     // replace slot names with `?`, except unused_sym since the compiler looks at it
     jl_sym_t *questionsym = jl_symbol("?");
     int i, l = jl_array_len(ci->slotnames);
@@ -2384,7 +2380,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
                 record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
-                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, 0);
+                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst, 0);
                 if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
                     jl_gc_wb(codeinst, stripped);
                 }
@@ -2422,7 +2418,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             }
         }
         if (jl_options.strip_metadata && !stripped_ir) {
-            m->source = strip_codeinfo_meta(m, m->source, 1);
+            m->source = strip_codeinfo_meta(m, m->source, NULL, 1);
             jl_gc_wb(m, m->source);
         }
     }

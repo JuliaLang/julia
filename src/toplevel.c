@@ -82,7 +82,7 @@ void jl_module_run_initializer(jl_module_t *m)
         }
         else {
             jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
-                                           jl_current_exception()));
+                                           jl_current_exception(ct)));
         }
     }
 }
@@ -1081,7 +1081,7 @@ finally:
             jl_rethrow();
         else
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, filename, result,
-                                           jl_current_exception()));
+                                           jl_current_exception(ct)));
     }
     JL_GC_POP();
     return result;

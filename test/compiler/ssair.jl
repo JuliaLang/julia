@@ -38,7 +38,6 @@ end
 #        false, false, false, false
 #    ))
 #
-#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), UInt32(0))
 #    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
@@ -73,8 +72,8 @@ let cfg = CFG(BasicBlock[
     @test dfs.from_pre[dfs.to_parent_pre[dfs.to_pre[5]]] == 4
     let correct_idoms = Compiler.naive_idoms(cfg.blocks),
         correct_pidoms = Compiler.naive_idoms(cfg.blocks, true)
-        @test Compiler.construct_domtree(cfg.blocks).idoms_bb == correct_idoms
-        @test Compiler.construct_postdomtree(cfg.blocks).idoms_bb == correct_pidoms
+        @test Compiler.construct_domtree(cfg).idoms_bb == correct_idoms
+        @test Compiler.construct_postdomtree(cfg).idoms_bb == correct_pidoms
         # For completeness, reverse the order of pred/succ in the CFG and verify
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
@@ -85,8 +84,8 @@ let cfg = CFG(BasicBlock[
                 c && (blocks[4] = make_bb(reverse(blocks[4].preds), blocks[4].succs))
                 d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
                 cfg′ = CFG(blocks, cfg.index)
-                @test Compiler.construct_domtree(cfg′.blocks).idoms_bb == correct_idoms
-                @test Compiler.construct_postdomtree(cfg′.blocks).idoms_bb == correct_pidoms
+                @test Compiler.construct_domtree(cfg′).idoms_bb == correct_idoms
+                @test Compiler.construct_postdomtree(cfg′).idoms_bb == correct_pidoms
             end
         end
     end
@@ -113,8 +112,9 @@ let cfg = CFG(BasicBlock[
     make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
     make_bb([2, 3]    , []    ),
 ], Int[])
-    insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
-    ir = Compiler.IRCode(insts, cfg, Core.LineInfoNode[], Any[], Expr[], Compiler.VarState[])
+    insts = Compiler.InstructionStream([], [], Core.Compiler.CallInfo[], Int32[], UInt32[])
+    di = Compiler.DebugInfoStream(insts.line)
+    ir = Compiler.IRCode(insts, cfg, di, Any[], Expr[], Compiler.VarState[])
     compact = Compiler.IncrementalCompact(ir, true)
     @test length(compact.cfg_transform.result_bbs) == 4 && 0 in compact.cfg_transform.result_bbs[3].preds
 end
@@ -233,38 +233,93 @@ let code = Any[
 end
 
 # issue #37919
-let ci = code_lowered(()->@isdefined(_not_def_37919_), ())[1]
+let ci = only(code_lowered(()->@isdefined(_not_def_37919_), ()))
     ir = Core.Compiler.inflate_ir(ci)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 let code = Any[
         # block 1
-        GotoIfNot(Argument(2), 4),
+        GotoIfNot(Argument(2), 4)
         # block 2
-        GotoNode(3),
+        Expr(:call, throw, "potential throw")
+        ReturnNode() # unreachable
         # block 3
-        Expr(:call, throw, "potential throw"),
-        # block 4
-        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4)),
-        GotoNode(6),
-        # block 5
-        ReturnNode(SSAValue(4))
+        ReturnNode(Argument(3))
     ]
-    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
-    lazypostdomtree = Core.Compiler.LazyPostDomtree(ir)
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
     visited = BitSet()
-    @test !Core.Compiler.visit_conditional_successors(lazypostdomtree, ir, #=bb=#1) do succ::Int
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
         push!(visited, succ)
         return false
     end
     @test 2 ∈ visited
     @test 3 ∈ visited
-    @test 4 ∉ visited
-    @test 5 ∉ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(false, 1) == 1
+    @test_throws "potential throw" oc(true, 1)
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 3)
+        # block 2
+        ReturnNode(Argument(3))
+        # block 3
+        Expr(:call, throw, "potential throw")
+        ReturnNode() # unreachable
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(true, 1) == 1
+    @test_throws "potential throw" oc(false, 1)
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 5)
+        # block 2
+        GotoNode(3)
+        # block 3
+        Expr(:call, throw, "potential throw")
+        ReturnNode()
+        # block 4
+        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4))
+        GotoNode(7)
+        # block 5
+        ReturnNode(SSAValue(5))
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    @test 4 ∈ visited
+    @test 5 ∈ visited
     oc = Core.OpaqueClosure(ir)
     @test oc(false, 1, 1) == 2
     @test_throws "potential throw" oc(true, 1, 1)
+
+    let buf = IOBuffer()
+        oc = Core.OpaqueClosure(ir; slotnames=Symbol[:ocfunc, :x, :y, :z])
+        try
+            oc(true, 1, 1)
+        catch
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::$Int, z::$Int)", s)
+    end
 end
 
 # Test dynamic update of domtree with edge insertions and deletions in the
@@ -292,7 +347,7 @@ let cfg = CFG(BasicBlock[
         make_bb([2, 6], []),
         make_bb([4],    [5, 3]),
     ], Int[])
-    domtree = Compiler.construct_domtree(cfg.blocks)
+    domtree = Compiler.construct_domtree(cfg)
     @test domtree.dfs_tree.to_pre == [1, 2, 4, 5, 3, 6]
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
@@ -486,7 +541,7 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
         end
     end
     # domination analysis
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     @test Core.Compiler.dominates(domtree, 1, 2)
     @test Core.Compiler.dominates(domtree, 1, 3)
     @test Core.Compiler.dominates(domtree, 1, 4)
@@ -497,7 +552,7 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
         end
     end
     # post domination analysis
-    post_domtree = Core.Compiler.construct_postdomtree(ir.cfg.blocks)
+    post_domtree = Core.Compiler.construct_postdomtree(ir)
     @test Core.Compiler.postdominates(post_domtree, 4, 1)
     @test Core.Compiler.postdominates(post_domtree, 4, 2)
     @test Core.Compiler.postdominates(post_domtree, 4, 3)

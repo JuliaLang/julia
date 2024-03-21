@@ -389,7 +389,7 @@ JL_UNUSED static uint32_t find_feature_bit(const FeatureName *features, size_t n
             return feature.bit;
         }
     }
-    return (uint32_t)-1;
+    return UINT32_MAX;
 }
 
 // This is how we save the target identification.
@@ -642,7 +642,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     jl_value_t* rejection_reason = nullptr;
     JL_GC_PUSH1(&rejection_reason);
     uint32_t target_idx = callback(ids, &rejection_reason);
-    if (target_idx == (uint32_t)-1) {
+    if (target_idx == UINT32_MAX) {
         jl_error(jl_string_ptr(rejection_reason));
     }
     JL_GC_POP();
@@ -856,7 +856,7 @@ static inline void check_cmdline(T &&cmdline, bool imaging)
 }
 
 struct SysimgMatch {
-    uint32_t best_idx{(uint32_t)-1};
+    uint32_t best_idx{UINT32_MAX};
     int vreg_size{0};
 };
 
@@ -911,7 +911,7 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
         feature_size = new_feature_size;
         rejection_reasons.push_back("Updating best match to this target\n");
     }
-    if (match.best_idx == (uint32_t)-1) {
+    if (match.best_idx == UINT32_MAX) {
         // Construct a nice error message for debugging purposes
         std::string error_msg = "Unable to find compatible target in cached code image.\n";
         for (size_t i = 0; i < rejection_reasons.size(); i++) {

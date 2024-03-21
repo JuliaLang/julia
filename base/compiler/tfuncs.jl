@@ -184,8 +184,6 @@ add_tfunc(sdiv_int, 2, 2, math_tfunc, 20)
 add_tfunc(udiv_int, 2, 2, math_tfunc, 20)
 add_tfunc(srem_int, 2, 2, math_tfunc, 20)
 add_tfunc(urem_int, 2, 2, math_tfunc, 20)
-add_tfunc(add_ptr, 2, 2, math_tfunc, 1)
-add_tfunc(sub_ptr, 2, 2, math_tfunc, 1)
 add_tfunc(neg_float, 1, 1, math_tfunc, 1)
 add_tfunc(add_float, 2, 2, math_tfunc, 2)
 add_tfunc(sub_float, 2, 2, math_tfunc, 2)
@@ -662,6 +660,9 @@ function pointer_eltype(@nospecialize(ptr))
     return Any
 end
 
+@nospecs function pointerarith_tfunc(𝕃::AbstractLattice, ptr, offset)
+    return ptr
+end
 @nospecs function pointerref_tfunc(𝕃::AbstractLattice, a, i, align)
     return pointer_eltype(a)
 end
@@ -705,6 +706,8 @@ end
     end
     return ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
 end
+add_tfunc(add_ptr, 2, 2, pointerarith_tfunc, 1)
+add_tfunc(sub_ptr, 2, 2, pointerarith_tfunc, 1)
 add_tfunc(pointerref, 3, 3, pointerref_tfunc, 4)
 add_tfunc(pointerset, 4, 4, pointerset_tfunc, 5)
 add_tfunc(atomic_fence, 1, 1, atomic_fence_tfunc, 4)
@@ -3019,8 +3022,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_UNKNOWN, NoCallInfo())
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
-    matches = find_matching_methods(typeinf_lattice(interp), argtypes, atype, method_table(interp),
-        InferenceParams(interp).max_union_splitting, max_methods)
+    matches = find_method_matches(interp, argtypes, atype; max_methods)
     if isa(matches, FailedMethodMatch)
         rt = Bool # too many matches to analyze
     else

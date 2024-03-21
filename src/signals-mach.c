@@ -115,7 +115,7 @@ static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
         // Eventually, we should probably release this signal to the original
         // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
         // triggers a SIGSEGV and gets handled by the usual codepath for unix.
-        int8_t gc_state = ptls2->gc_state;
+        int8_t gc_state = jl_atomic_load_acquire(&ptls2->gc_state);
         jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
         uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
         arraylist_push(&suspended_threads, (void*)item);
@@ -338,7 +338,7 @@ kern_return_t catch_mach_exception_raise(
     //     jl_throw_in_thread(ptls2, thread, jl_stackovf_exception);
     //     return KERN_SUCCESS;
     // }
-    if (ptls2->gc_state == JL_GC_STATE_WAITING)
+    if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING)
         return KERN_FAILURE;
     if (exception == EXC_ARITHMETIC) {
         jl_throw_in_thread(ptls2, thread, jl_diverror_exception);
@@ -363,7 +363,7 @@ kern_return_t catch_mach_exception_raise(
         }
         return KERN_SUCCESS;
     }
-    if (ptls2->current_task->eh == NULL)
+    if (jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL)
         return KERN_FAILURE;
     jl_value_t *excpt;
     if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {

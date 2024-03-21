@@ -174,6 +174,51 @@ function first_insert_for_bb(code::Vector{Any}, cfg::CFG, block::Int)
     return lastnonphiidx
 end
 
+# mutable version of the compressed DebugInfo
+mutable struct DebugInfoStream
+    def::Union{MethodInstance,Symbol,Nothing}
+    linetable::Union{Nothing,Core.DebugInfo}
+    edges::Vector{Any} # Vector{Core.DebugInfo}
+    firstline::Int32 # the starting line for this block (specified by having an index of 0)
+    codelocs::Vector{Int32} # for each statement:
+        # index into linetable (if defined), else a line number (in the file represented by def)
+        # then index into edges
+        # then index into edges[linetable]
+    function DebugInfoStream(codelocs::Vector{Int32})
+        return new(nothing, nothing, [], 0, codelocs)
+    end
+    #DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
+    #    if debuginfo_file1(di.def) === debuginfo_file1(di.def)
+    #        new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
+    #            ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
+    #    else
+    function DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int)
+        codelocs = zeros(Int32, nstmts * 3)
+        for i = 1:nstmts
+            codelocs[3i - 2] = i
+        end
+        return new(def, di, Vector{Any}(), 0, codelocs)
+    end
+    global copy(di::DebugInfoStream) = new(di.def, di.linetable, di.edges, di.firstline, di.codelocs)
+end
+
+Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
+    Core.DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
+        ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
+
+getdebugidx(debuginfo::Core.DebugInfo, pc::Int) = ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
+
+function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
+    if 3 <= 3pc <= length(debuginfo.codelocs)
+        return (debuginfo.codelocs[3pc - 2], debuginfo.codelocs[3pc - 1], debuginfo.codelocs[3pc - 0])
+    elseif pc == 0
+        return (Int32(debuginfo.firstline), Int32(0), Int32(0))
+    else
+        return (Int32(-1), Int32(0), Int32(0))
+    end
+end
+
+
 # SSA values that need renaming
 struct OldSSAValue
     id::Int
@@ -203,7 +248,6 @@ end
 
 const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 
-
 # SSA-indexed nodes
 struct InstructionStream
     stmt::Vector{Any}
@@ -211,13 +255,16 @@ struct InstructionStream
     info::Vector{CallInfo}
     line::Vector{Int32}
     flag::Vector{UInt32}
+    function InstructionStream(stmts::Vector{Any}, type::Vector{Any}, info::Vector{CallInfo}, line::Vector{Int32}, flag::Vector{UInt32})
+        return new(stmts, type, info, line, flag)
+    end
 end
 function InstructionStream(len::Int)
     stmts = Vector{Any}(undef, len)
     types = Vector{Any}(undef, len)
     info = Vector{CallInfo}(undef, len)
     fill!(info, NoCallInfo())
-    lines = fill(Int32(0), len)
+    lines = fill(Int32(0), 3len)
     flags = fill(IR_FLAG_NULL, len)
     return InstructionStream(stmts, types, info, lines, flags)
 end
@@ -242,10 +289,10 @@ function resize!(stmts::InstructionStream, len)
     resize!(stmts.stmt, len)
     resize!(stmts.type, len)
     resize!(stmts.info, len)
-    resize!(stmts.line, len)
+    resize!(stmts.line, 3len)
     resize!(stmts.flag, len)
     for i in (old_length + 1):len
-        stmts.line[i] = 0
+        stmts.line[3i-2], stmts.line[3i-1], stmts.line[3i] = NoLineUpdate
         stmts.flag[i] = IR_FLAG_NULL
         stmts.info[i] = NoCallInfo()
     end
@@ -261,11 +308,20 @@ Instruction(is::InstructionStream) = Instruction(is, add_new_idx!(is))
 @inline function getindex(node::Instruction, fld::Symbol)
     (fld === :inst) && (fld = :stmt) # deprecated
     isdefined(node, fld) && return getfield(node, fld)
-    return getfield(getfield(node, :data), fld)[getfield(node, :idx)]
+    fldarray = getfield(getfield(node, :data), fld)
+    fldidx = getfield(node, :idx)
+    (fld === :line) && return (fldarray[3fldidx-2], fldarray[3fldidx-1], fldarray[3fldidx-0])
+    return fldarray[fldidx]
 end
 @inline function setindex!(node::Instruction, @nospecialize(val), fld::Symbol)
     (fld === :inst) && (fld = :stmt) # deprecated
-    getfield(getfield(node, :data), fld)[getfield(node, :idx)] = val
+    fldarray = getfield(getfield(node, :data), fld)
+    fldidx = getfield(node, :idx)
+    if fld === :line
+        (fldarray[3fldidx-2], fldarray[3fldidx-1], fldarray[3fldidx-0]) = val::NTuple{3,Int32}
+    else
+        fldarray[fldidx] = val
+    end
     return node
 end
 
@@ -274,7 +330,7 @@ function setindex!(is::InstructionStream, newval::Instruction, idx::Int)
     is.stmt[idx] = newval[:stmt]
     is.type[idx] = newval[:type]
     is.info[idx] = newval[:info]
-    is.line[idx] = newval[:line]
+    (is.line[3idx-2], is.line[3idx-1], is.line[3idx-0]) = newval[:line]
     is.flag[idx] = newval[:flag]
     return is
 end
@@ -314,14 +370,15 @@ struct NewInstruction
     stmt::Any
     type::Any
     info::CallInfo
-    line::Union{Int32,Nothing} # if nothing, copy the line from previous statement in the insertion location
+    line::Union{NTuple{3,Int32},Nothing} # if nothing, copy the line from previous statement in the insertion location
     flag::Union{UInt32,Nothing} # if nothing, IR flags will be recomputed on insertion
     function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
-                            line::Union{Int32,Nothing}, flag::Union{UInt32,Nothing})
+                            line::Union{NTuple{3,Int32},Int32,Nothing}, flag::Union{UInt32,Nothing})
+        line isa Int32 && (line = (line, zero(Int32), zero(Int32)))
         return new(stmt, type, info, line, flag)
     end
 end
-function NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Int32,Nothing}=nothing)
+function NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{NTuple{3,Int32},Int32,Nothing}=nothing)
     return NewInstruction(stmt, type, NoCallInfo(), line, nothing)
 end
 @nospecialize
@@ -329,7 +386,7 @@ function NewInstruction(newinst::NewInstruction;
     stmt::Any=newinst.stmt,
     type::Any=newinst.type,
     info::CallInfo=newinst.info,
-    line::Union{Int32,Nothing}=newinst.line,
+    line::Union{NTuple{3,Int32},Int32,Nothing}=newinst.line,
     flag::Union{UInt32,Nothing}=newinst.flag)
     return NewInstruction(stmt, type, info, line, flag)
 end
@@ -337,7 +394,7 @@ function NewInstruction(inst::Instruction;
     stmt::Any=inst[:stmt],
     type::Any=inst[:type],
     info::CallInfo=inst[:info],
-    line::Union{Int32,Nothing}=inst[:line],
+    line::Union{NTuple{3,Int32},Int32,Nothing}=inst[:line],
     flag::Union{UInt32,Nothing}=inst[:flag])
     return NewInstruction(stmt, type, info, line, flag)
 end
@@ -366,19 +423,27 @@ struct IRCode
     stmts::InstructionStream
     argtypes::Vector{Any}
     sptypes::Vector{VarState}
-    linetable::Vector{LineInfoNode}
+    debuginfo::DebugInfoStream
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
-        return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
+    function IRCode(stmts::InstructionStream, cfg::CFG, debuginfo::DebugInfoStream, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
+        return new(stmts, argtypes, sptypes, debuginfo, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
-        return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
+        di = ir.debuginfo
+        @assert di.codelocs === stmts.line
+        return new(stmts, ir.argtypes, ir.sptypes, di, cfg, new_nodes, ir.meta)
     end
-    global copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
-        copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+    global function copy(ir::IRCode)
+        di = ir.debuginfo
+        stmts = copy(ir.stmts)
+        di = copy(di)
+        di.edges = copy(di.edges)
+        di.codelocs = stmts.line
+        return new(stmts, copy(ir.argtypes), copy(ir.sptypes), di, copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+    end
 end
 
 """
@@ -389,13 +454,22 @@ for debugging and unit testing of IRCode APIs. The compiler itself should genera
 from the frontend or one of the caches.
 """
 function IRCode()
-    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], VarState[])
+    stmts = InstructionStream(1)
+    debuginfo = DebugInfoStream(stmts.line)
+    stmts.line[1] = 1
+    ir = IRCode(stmts, CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), debuginfo, Any[], Expr[], VarState[])
     ir[SSAValue(1)][:stmt] = ReturnNode(nothing)
     ir[SSAValue(1)][:type] = Nothing
     ir[SSAValue(1)][:flag] = 0x00
-    ir[SSAValue(1)][:line] = Int32(0)
+    ir[SSAValue(1)][:line] = NoLineUpdate
     return ir
 end
+
+construct_domtree(ir::IRCode) = construct_domtree(ir.cfg)
+construct_domtree(cfg::CFG) = construct_domtree(cfg.blocks)
+
+construct_postdomtree(ir::IRCode) = construct_postdomtree(ir.cfg)
+construct_postdomtree(cfg::CFG) = construct_postdomtree(cfg.blocks)
 
 function block_for_inst(ir::IRCode, inst::Int)
     if inst > length(ir.stmts)
@@ -684,6 +758,7 @@ mutable struct IncrementalCompact
         perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
         new_len = length(code.stmts) + length(info)
         result = InstructionStream(new_len)
+        code.debuginfo.codelocs = result.line
         used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
         blocks = code.cfg.blocks
@@ -864,7 +939,7 @@ function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
 end
 
 function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
-    newline::Int32=newinst.line::Int32, newflag::UInt32=newinst.flag::UInt32)
+    newline::NTuple{3,Int32}=newinst.line::NTuple{3,Int32}, newflag::UInt32=newinst.flag::UInt32)
     node[:stmt] = newinst.stmt
     node[:type] = newinst.type
     node[:info] = newinst.info
@@ -954,7 +1029,7 @@ function maybe_reopen_bb!(compact)
 end
 
 function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction, reverse_affinity::Bool=false)
-    newline = newinst.line::Int32
+    newline = newinst.line::NTuple{3,Int32}
     refinish = false
     result_idx = compact.result_idx
     result_bbs = compact.cfg_transform.result_bbs
@@ -1596,6 +1671,8 @@ function resize!(compact::IncrementalCompact, nnewnodes::Int)
     return compact
 end
 
+const NoLineUpdate = (Int32(0), Int32(0), Int32(0))
+
 function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
                             old_result_idx::Int=compact.result_idx, unreachable::Bool=false)
     (;result_bbs, cfg_transforms_enabled, bb_rename_succ) = compact.cfg_transform
@@ -1612,9 +1689,9 @@ function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
             length(compact.result) < old_result_idx && resize!(compact, old_result_idx)
             node = compact.result[old_result_idx]
             if unreachable
-                node[:stmt], node[:type], node[:line] = ReturnNode(), Union{}, 0
+                node[:stmt], node[:type], node[:line] = ReturnNode(), Union{}, NoLineUpdate
             else
-                node[:stmt], node[:type], node[:line], node[:flag] = nothing, Nothing, 0, IR_FLAGS_EFFECTS
+                node[:stmt], node[:type], node[:line], node[:flag] = nothing, Nothing, NoLineUpdate, IR_FLAGS_EFFECTS
             end
             compact.result_idx = old_result_idx + 1
         elseif cfg_transforms_enabled && compact.result_idx - 1 == first(bb.stmts)
