@@ -831,60 +831,23 @@ end
     @test cmp(isless, NaN, NaN) == 0
 end
 @testset "ispositive/isnegative" begin
-    @testset "Type $(T)" for T in union(Base.uniontypes(Base.IEEEFloat), (BigFloat,))
-        @test ispositive(one(T))
-        @test !ispositive(zero(T))
-        @test !ispositive(-zero(T))
-        @test !ispositive(-one(T))
-        @test !isnegative(one(T))
-        @test !isnegative(zero(T))
-        @test !isnegative(-zero(T))
-        @test isnegative(-one(T))
-        @test ispositive(T(Inf))
-        @test !ispositive(T(-Inf))
-        @test !ispositive(T(NaN))
-        @test !ispositive(T(-NaN))
-    end
-
-    @testset "Type $(T)" for T in union(Base.BitSigned_types, (BigInt,))
-        @test ispositive(one(T))
-        @test !ispositive(zero(T))
-        @test !ispositive(-one(T))
-        @test !isnegative(one(T))
-        @test !isnegative(zero(T))
-        @test isnegative(-one(T))
-    end
-
-    @testset "Type $(T)" for T in Base.BitUnsigned_types
-        @test ispositive(one(T))
-        @test !ispositive(zero(T))
-        @test ispositive(-one(T))
-        @test !isnegative(one(T))
-        @test !isnegative(zero(T))
-        @test !isnegative(-one(T))
-    end
-
-    @testset "Type Bool" begin
-        @test ispositive(true)
-        @test !isnegative(true)
-        @test !ispositive(false)
-        @test !isnegative(false)
-    end
-
-    @testset "Type Rational" begin
-        @test ispositive(2//3)
-        @test !ispositive(-2//3)
-        @test !ispositive(0//1)
-        @test !ispositive(-0//1)
-        @test ispositive(1//0)
-        @test !ispositive(-1//0)
-
-        @test !isnegative(2//3)
-        @test isnegative(-2//3)
-        @test !isnegative(0//1)
-        @test !isnegative(-0//1)
-        @test !isnegative(1//0)
-        @test isnegative(-1//0)
+        for T in [Base.uniontypes(Base.BitInteger)..., Bool, Rational{Int}, BigInt, Base.uniontypes(Base.IEEEFloat)..., BigFloat, Missing]
+        values = T[zero(T), one(T)]
+        if T <: AbstractFloat
+            push!(values, Inf, NaN) # also check Infs and NaNs
+        elseif T <: Rational
+            push!(values, 1//0) # also check Infs
+        end
+        @testset "$T" begin
+            for value in values
+                @eval begin
+                    @test ispositive($value) === $value > 0
+                    @test ispositive(-$value) === -$value > 0
+                    @test isnegative($value) === $value < 0
+                    @test isnegative(-$value) === -$value < 0
+                end
+            end
+        end
     end
 end
 @testset "Float vs Integer comparison" begin
