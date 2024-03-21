@@ -811,6 +811,14 @@ Characteristics:
 * *quadratic performance* in the number of elements to be sorted:
 it is well-suited to small collections but should not be used for large ones.
 """
+
+
+"""
+    SMALL_ALGORITHM
+
+Alias for Insertion sort algorithm ,witch is used for sorting small arreys.
+
+"""
 const InsertionSort = InsertionSortAlg()
 const SMALL_ALGORITHM = InsertionSortAlg()
 
