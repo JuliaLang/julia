@@ -307,12 +307,29 @@ end
 xdisplayable(D::AbstractDisplay, @nospecialize args...) = applicable(display, D, args...)
 
 """
+    preferred_mime_types(x)
+
+Return a `Vector{MIME}`. When calling `display(x)`, the display system will
+attempt to display using these MIME types first, before passing control to the
+display stack. The first MIME type will be tried with all available displays
+in the order they appear in the display stack before a second MIME type is tried.
+If the `Vector` is empty, only the preferences of the displays on the stack will
+determine which MIME type is used.
+"""
+function preferred_mime_types(@nospecialize x)
+    MIME[]
+end
+
+"""
     display(x)
     display(d::AbstractDisplay, x)
     display(mime, x)
     display(d::AbstractDisplay, mime, x)
 
-Display `x` using the topmost applicable display in the display stack, typically using the
+Display `x`. First, determine if any `MIME` types are preferred using `preferred_mime_types(x)`.
+Each preferred MIME type will be tried with all displays on the stack before moving on to the next.
+If no MIME type is preferred, or no preferred MIME type could be displayed, proceed trying to
+`display(disp, x)` with each display `disp` on the display stack. Typically, this means using the
 richest supported multimedia output for `x`, with plain-text [`stdout`](@ref) output as a fallback.
 The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
 a [`MethodError`](@ref) if `d` cannot display objects of this type.
@@ -334,6 +351,20 @@ To customize how instances of a type are displayed, overload [`show`](@ref) rath
 as explained in the manual section on [custom pretty-printing](@ref man-custom-pretty-printing).
 """
 function display(@nospecialize x)
+    # If any MIME types are preferred, try to display them in order,
+    # once with each available display.
+    preferred_mimes = preferred_mime_types(x)::Vector{MIME}
+    for mime in preferred_mimes
+        try
+            return display(mime, x)
+        catch e
+            isa(e, MethodError) && (e.f === display || e.f === show) ||
+                    rethrow()
+        end
+    end
+
+    # If x could not be displayed using a preferred MIME type, try if any display
+    # on the stack can display x with any MIME type it supports.
     for i = length(displays):-1:1
         if xdisplayable(displays[i], x)
             try
