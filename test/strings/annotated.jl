@@ -209,4 +209,11 @@ end
         @test write(aio2, Base.AnnotatedChar('c', [:b => 2, :c => 3, :d => 4])) == 1
         @test Base.annotations(aio2) == [(1:2, :a => 1), (1:3, :b => 2), (3:3, :c => 3), (3:3, :d => 4)]
     end
+    # Working through an IOContext
+    aio = Base.AnnotatedIOBuffer()
+    wrapio = IOContext(aio)
+    @test write(wrapio, Base.AnnotatedString("hey", [(1:3, :x => 1)])) == 3
+    @test write(wrapio, Base.AnnotatedChar('a', [:y => 2])) == 1
+    @test read(seekstart(aio), Base.AnnotatedString) ==
+        Base.AnnotatedString("heya", [(1:3, :x => 1), (4:4, :y => 2)])
 end
