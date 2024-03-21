@@ -337,7 +337,37 @@ $(eval $(call bb-install,lld,LLD,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 
+install-llvm-tools:
+ifeq ($(OS), Darwin)
+ifneq ($(DARWIN_FRAMEWORK),1)
+	tools=$$(find $(build_depsbindir) -type f -exec file {} \; | grep Mach-O | awk -F: '{print $$1}'); \
+	for tool in $$tools; do \
+		install_name_tool -add_rpath '@loader_path/$(build_depsbindir_libdir_rel)' $$tool; \
+	done
+endif
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
+	tools=$$(find $(build_depsbindir) -type f -exec file {} \; | grep ELF | awk -F: '{print $$1}'); \
+	for tool in $$tools; do \
+		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(build_depsbindir_libdir_rel)' $$tool; \
+	done
+endif
+
+install-clang:
+ifeq ($(OS), Darwin)
+ifneq ($(DARWIN_FRAMEWORK),1)
+	tools=$$(find $(build_depsbindir) -type f -name "clang*" -exec file {} \; | grep Mach-O | awk -F: '{print $$1}'); \
+	for tool in $$tools; do \
+		install_name_tool -add_rpath '@loader_path/$(build_depsbindir_libdir_rel)' $$tool; \
+	done
+endif
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
+	tools=$$(find $(build_depsbindir) -type f -name "clang*" -exec file {} \; | grep ELF | awk -F: '{print $$1}'); \
+	for tool in $$tools; do \
+		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(build_depsbindir_libdir_rel)' $$tool; \
+	done
+endif
+
 endif # USE_BINARYBUILDER_LLVM
 
 get-lld: get-llvm
-install-lld install-clang install-llvm-tools: install-llvm
+install-lld install-clang install-llvm-tools: install-patchelf install-llvm
