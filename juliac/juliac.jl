@@ -112,11 +112,11 @@ end
 
 try
     if output_type == "--output-lib"
-        run(`cc $(allflags) -o ./$outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  -ljulia -ljulia-internal`)
+        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  -ljulia -ljulia-internal`)
     elseif output_type == "--output-sysimage"
-        run(`cc $(allflags) -o ./$outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             -ljulia -ljulia-internal`)
+        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             -ljulia -ljulia-internal`)
     else
-        run(`cc $(allflags) -o ./$outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path -ljulia -ljulia-internal`)
+        run(`cc $(allflags) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path -ljulia -ljulia-internal`)
     end
 catch
     println("\nCompilation failed.")

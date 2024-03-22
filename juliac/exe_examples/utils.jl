@@ -1,7 +1,4 @@
-#!/usr/bin/env -S julia --project=@scriptdir
-
-module Main2
-using LinearAlgebra
+# This fucntion takes a heap snapshot without dispatch.
 function take_heap_snapshot()
     flags = Base.open_flags(
         read = true,
@@ -32,33 +29,4 @@ function take_heap_snapshot()
     ccall(:ios_close, Cint, (Ptr{Cvoid},), strings.ios)
     ccall(:ios_close, Cint, (Ptr{Cvoid},), json.ios)
     return nothing
-end
-
-#Open a new julia session and run the following commands to get a chrome snapshot:
-#=
-open("lala.heapsnapshot", "w") do io
-Profile.HeapSnapshot.assemble_snapshot("lala", io)
-end
-=#
-
-Base.@ccallable function main() :: Cint
-    # println("Hello, world!")
-    a = rand(10)
-    b = sum(a)
-    ccall(:printf, Int32, (Ptr{UInt8},Float64...), "hello_world %lf", b)
-    ccall(:jl_,Cvoid, (Any,), lu(rand(10,10)))
-    take_heap_snapshot()
-    return 0
-end
-
-precompile(main, ())
-precompile(Base._str_sizehint, (String,))
-precompile(Base._str_sizehint, (UInt32,))
-precompile(print, (Base.GenericIOBuffer{Memory{UInt8}}, String))
-precompile(print, (Base.GenericIOBuffer{Memory{UInt8}}, UInt32))
-precompile(join , (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
-precompile(join , (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
-precompile(Base.showerror_nostdio, (Core.MissingCodeError, String))
-precompile(Base.VersionNumber, (UInt32, UInt32, UInt32, Tuple{}, Tuple{}))
-precompile(! ,(Bool,))
 end

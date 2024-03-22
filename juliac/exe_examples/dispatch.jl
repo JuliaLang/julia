@@ -24,14 +24,6 @@ function myrand()
 end
 
 Base.@ccallable function main() :: Cint
-    # println("Hello, world!")
-    task = current_task()
-    ccall(:srand, Cvoid, (UInt32,), ccall(:time, UInt32,(Ptr{Cvoid},), C_NULL))
-    task.rngState0 = myrand()
-    task.rngState1 = myrand()
-    task.rngState2 = myrand()
-    task.rngState3 = myrand()
-    task.rngState4 = myrand()
     a = rand()
     b = foo(a)
     ccall(:printf, Int32, (Ptr{UInt8},Float64...), "hello_world %lf %lf \n", b, a)
