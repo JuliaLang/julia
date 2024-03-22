@@ -3241,11 +3241,9 @@
                   (warn-var?! (cadr e) scope)
                   (= *scopewarn-opt* 1))
              (let* ((v    (cadr e))
-                    (loc  (extract-line-file loc))
-                    (line (if (= (car loc) 0) (julia-current-line) (car loc)))
-                    (file (if (eq? (cadr loc) 'none) (julia-current-file) (cadr loc))))
+                    (loc  (extract-line-file loc)))
                (lowering-warning
-                1000 'warn (symbol (string file line)) file line
+                1000 'warn (cadr loc) (car loc)
                 (string "Assignment to `" v "` in soft scope is ambiguous "
                         "because a global variable by the same name exists: "
                         "`" v "` will be treated as a new local. "
@@ -5131,7 +5129,7 @@ f(x) = yt(x)
             ((nospecialize-meta? e)
              ;; convert nospecialize vars to slot numbers
              `(meta ,(cadr e) ,@(map renumber-stuff (cddr e))))
-            ((or (atom? e) (quoted? e) (eq? (car e) 'global))
+            ((or (atom? e) (quoted? e) (eq? (car e) 'global) (eq? (car e) 'toplevel))
              e)
             ((ssavalue? e)
              (let ((idx (get ssavalue-table (cadr e) #f)))

@@ -339,6 +339,7 @@ end
     A = copy(reshape(1:120, 3, 5, 8))
     sA = view(A, 2:2, 1:5, :)
     @test @inferred(strides(sA)) == (1, 3, 15)
+    @test IndexStyle(sA) == IndexStyle(typeof(sA)) == IndexCartesian()
     @test parent(sA) == A
     @test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
     @test size(sA) == (1, 5, 8)

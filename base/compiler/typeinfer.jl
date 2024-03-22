@@ -230,13 +230,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
     if opt isa OptimizationState
         result.src = opt = ir_to_codeinf!(opt)
     end
-    if opt isa CodeInfo
-        caller.src = opt
-    else
-        # In this case `caller.src` is invalid for clients (such as `typeinf_ext`) to use
-        # but that is what's permitted by `caller.cache_mode`.
-        # This is hopefully unreachable from such clients using `NativeInterpreter`.
-    end
     return nothing
 end
 
@@ -277,7 +270,7 @@ function is_result_constabi_eligible(result::InferenceResult)
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
 function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
-        can_discard_trees::Bool=may_discard_trees(interp))
+                      can_discard_trees::Bool=may_discard_trees(interp))
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type === nothing || result_type isa LimitedAccuracy)
@@ -351,13 +344,13 @@ function transform_result_for_cache(interp::AbstractInterpreter,
     return result.src
 end
 
-function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo,
-        can_discard_trees::Bool=may_discard_trees(interp))
-    def = linfo.def
+function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo,
+                                 can_discard_trees::Bool=may_discard_trees(interp))
+    def = mi.def
     isa(def, Method) || return ci # don't compress toplevel code
     cache_the_tree = true
     if can_discard_trees
-        cache_the_tree = is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, linfo.sparam_vals, def)
+        cache_the_tree = is_inlineable(ci) || isa_compileable_sig(mi.specTypes, mi.sparam_vals, def)
     end
     if cache_the_tree
         if may_compress(interp)
@@ -576,13 +569,13 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         type_annotate!(interp, me)
-        doopt = (me.cache_mode != CACHE_MODE_NULL || me.parent !== nothing)
-        # Disable the optimizer if we've already determined that there's nothing for
-        # it to do.
-        if may_discard_trees(interp) && is_result_constabi_eligible(me.result)
-            doopt = false
-        end
-        if doopt && may_optimize(interp)
+        mayopt = may_optimize(interp)
+        doopt = mayopt &&
+                # disable optimization if we don't use this later
+                (me.cache_mode != CACHE_MODE_NULL || me.parent !== nothing) &&
+                # disable optimization if we've already obtained very accurate result
+                !result_is_constabi(interp, me.result, mayopt)
+        if doopt
             me.result.src = OptimizationState(me, interp)
         else
             me.result.src = me.src # for reflection etc.
@@ -952,7 +945,8 @@ function codeinstance_for_const_with_code(interp::AbstractInterpreter, code::Cod
         code.relocatability, src.debuginfo)
 end
 
-result_is_constabi(interp::AbstractInterpreter, run_optimizer::Bool, result::InferenceResult) =
+result_is_constabi(interp::AbstractInterpreter, result::InferenceResult,
+                   run_optimizer::Bool=may_optimize(interp)) =
     run_optimizer && may_discard_trees(interp) && is_result_constabi_eligible(result)
 
 # compute an inferred AST and return type
@@ -965,7 +959,7 @@ function typeinf_code(interp::AbstractInterpreter, mi::MethodInstance, run_optim
     frame = typeinf_frame(interp, mi, run_optimizer)
     frame === nothing && return nothing, Any
     is_inferred(frame) || return nothing, Any
-    if result_is_constabi(interp, run_optimizer, frame.result)
+    if result_is_constabi(interp, frame.result, run_optimizer)
         rt = frame.result.result::Const
         return codeinfo_for_const(interp, frame.linfo, rt.val), widenconst(rt)
     end
@@ -1095,7 +1089,8 @@ function ci_meets_requirement(code::CodeInstance, source_mode::UInt8, ci_is_cach
     return false
 end
 
-_uncompressed_ir(ci::Core.CodeInstance, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
+_uncompressed_ir(codeinst::CodeInstance, s::String) =
+    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
 
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
@@ -1143,9 +1138,10 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     # Inference result is not cacheable or is was cacheable, but we do not want to
     # store the source in the cache, but the caller wanted it anyway (e.g. for reflection).
     # We construct a new CodeInstance for it that is not part of the cache hierarchy.
-    code = CodeInstance(interp, result, can_discard_trees=(
-        source_mode != SOURCE_MODE_FORCE_SOURCE && source_mode != SOURCE_MODE_FORCE_SOURCE_UNCACHED &&
-        is_result_constabi_eligible(result)))
+    can_discard_trees = source_mode ≠ SOURCE_MODE_FORCE_SOURCE &&
+                        source_mode ≠ SOURCE_MODE_FORCE_SOURCE_UNCACHED &&
+                        is_result_constabi_eligible(result)
+    code = CodeInstance(interp, result; can_discard_trees)
 
     # If the caller cares about the code and this is constabi, still use our synthesis function
     # anyway, because we will have not finished inferring the code inside the CodeInstance once

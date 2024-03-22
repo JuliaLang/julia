@@ -2683,3 +2683,14 @@ end
 using .Issue49382
 (::Type{Issue49382.Type49382})() = 1
 @test sprint(show, methods(Issue49382.Type49382)) isa String
+
+# Showing of bad SlotNumber in Expr(:toplevel)
+let lowered = Meta.lower(Main, Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(x = 1)), :(y = 1))))
+    ci = lowered.args[1]
+    @assert isa(ci, Core.CodeInfo)
+    @test !isempty(ci.slotnames)
+    @assert ci.code[1].head === :toplevel
+    ci.code[1].args[1] = :($(Core.SlotNumber(1)) = 1)
+    # Check that this gets printed as `_1 = 1` not `y = 1`
+    @test contains(sprint(show, ci), "_1 = 1")
+end

@@ -17,8 +17,19 @@ Language changes
    may pave the way for inference to be able to intelligently re-use the old
    results, once the new method is deleted. ([#53415])
 
+ - Macro expansion will no longer eargerly recurse into into `Expr(:toplevel)`
+   expressions returned from macros. Instead, macro expansion of `:toplevel`
+   expressions will be delayed until evaluation time. This allows a later
+   expression within a given `:toplevel` expression to make use of macros
+   defined earlier in the same `:toplevel` expression. ([#53515])
+
 Compiler/Runtime improvements
 -----------------------------
+
+- Generated LLVM IR now uses actual pointer types instead of passing pointers as integers.
+  This affects `llvmcall`: Inline LLVM IR should be updated to use `i8*` or `ptr` instead of
+  `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
+  IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
 
 Command-line option changes
 ---------------------------

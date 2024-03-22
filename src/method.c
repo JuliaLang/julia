@@ -127,6 +127,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             }
             if (e->head == jl_cfunction_sym) {
                 JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
+                jl_task_t *ct = jl_current_task;
                 jl_value_t *typ = jl_exprarg(e, 0);
                 if (!jl_is_type(typ))
                     jl_error("first parameter to :cfunction must be a type");
@@ -143,7 +144,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
                             jl_error("could not evaluate cfunction return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -155,7 +156,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
                             jl_error("could not evaluate cfunction argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -169,6 +170,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             }
             if (e->head == jl_foreigncall_sym) {
                 JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects))
+                jl_task_t *ct = jl_current_task;
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
                 if (!jl_is_type(rt)) {
@@ -176,7 +178,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
                             jl_error("could not evaluate ccall return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -188,7 +190,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
                             jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -264,6 +266,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                                 val = jl_interpret_toplevel_expr_in(module, (jl_value_t*)e, NULL, sparam_vals);
                             }
                             JL_CATCH {
+                                val = NULL; // To make the analyzer happy see #define JL_TRY
                             }
                             if (val)
                                 return val;

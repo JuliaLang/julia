@@ -233,35 +233,79 @@ let code = Any[
 end
 
 # issue #37919
-let ci = code_lowered(()->@isdefined(_not_def_37919_), ())[1]
+let ci = only(code_lowered(()->@isdefined(_not_def_37919_), ()))
     ir = Core.Compiler.inflate_ir(ci)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 let code = Any[
         # block 1
-        GotoIfNot(Argument(2), 4),
+        GotoIfNot(Argument(2), 4)
         # block 2
-        GotoNode(3),
+        Expr(:call, throw, "potential throw")
+        ReturnNode() # unreachable
         # block 3
-        Expr(:call, throw, "potential throw"),
-        # block 4
-        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4)),
-        GotoNode(6),
-        # block 5
-        ReturnNode(SSAValue(4))
+        ReturnNode(Argument(3))
     ]
-    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
-    lazypostdomtree = Core.Compiler.LazyPostDomtree(ir)
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
     visited = BitSet()
-    @test !Core.Compiler.visit_conditional_successors(lazypostdomtree, ir, #=bb=#1) do succ::Int
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
         push!(visited, succ)
         return false
     end
     @test 2 ∈ visited
     @test 3 ∈ visited
-    @test 4 ∉ visited
-    @test 5 ∉ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(false, 1) == 1
+    @test_throws "potential throw" oc(true, 1)
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 3)
+        # block 2
+        ReturnNode(Argument(3))
+        # block 3
+        Expr(:call, throw, "potential throw")
+        ReturnNode() # unreachable
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int])
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(true, 1) == 1
+    @test_throws "potential throw" oc(false, 1)
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 5)
+        # block 2
+        GotoNode(3)
+        # block 3
+        Expr(:call, throw, "potential throw")
+        ReturnNode()
+        # block 4
+        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4))
+        GotoNode(7)
+        # block 5
+        ReturnNode(SSAValue(5))
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    @test 4 ∈ visited
+    @test 5 ∈ visited
     oc = Core.OpaqueClosure(ir)
     @test oc(false, 1, 1) == 2
     @test_throws "potential throw" oc(true, 1, 1)
