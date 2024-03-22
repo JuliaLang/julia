@@ -2205,6 +2205,7 @@ const explicit_loaded_modules = Dict{PkgId,Module}()
 const loaded_modules_order = Vector{Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse
 
+is_root_module(m::Module) = @lock require_lock haskey(module_keys, m)
 root_module_key(m::Module) = @lock require_lock module_keys[m]
 
 @constprop :none function register_root_module(m::Module)
@@ -3415,9 +3416,9 @@ function check_clone_targets(clone_targets)
 end
 
 # Set by FileWatching.__init__()
-global mkpidlock_hook::Any
-global trymkpidlock_hook::Any
-global parse_pidfile_hook::Any
+global mkpidlock_hook
+global trymkpidlock_hook
+global parse_pidfile_hook
 
 # The preferences hash is only known after precompilation so just assume no preferences.
 # Also ignore the active project, which means that if all other conditions are equal,
