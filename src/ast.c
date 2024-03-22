@@ -215,16 +215,6 @@ static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, ui
     return fixnum(jl_module_next_counter(ctx->module));
 }
 
-static value_t fl_julia_current_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
-{
-    return symbol(fl_ctx, jl_filename);
-}
-
-static value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
-{
-    return fixnum(jl_lineno);
-}
-
 static int jl_is_number(jl_value_t *v)
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
@@ -257,8 +247,6 @@ static const builtinspec_t julia_flisp_ast_ext[] = {
     { "nothrow-julia-global", fl_nothrow_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
-    { "julia-current-file", fl_julia_current_file },
-    { "julia-current-line", fl_julia_current_line },
     { NULL, NULL }
 };
 

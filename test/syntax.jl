@@ -2189,6 +2189,16 @@ end
 end
 @test z28789 == 42
 
+const warn28789 = "Assignment to `s28789` in soft scope is ambiguous because a global variable by the same name exists: "*
+    "`s28789` will be treated as a new local. Disambiguate by using `local s28789` to suppress this warning or "*
+    "`global s28789` to assign to the existing global variable."
+@test_logs (:warn, warn28789) @test_throws UndefVarError @eval begin
+    s28789 = 0
+    for i = 1:10
+        s28789 += i
+    end
+end
+
 # issue #38650, `struct` should always be a hard scope
 f38650() = 0
 @eval begin
