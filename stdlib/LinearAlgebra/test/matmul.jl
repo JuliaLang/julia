@@ -1058,7 +1058,8 @@ end
     end
 end
 
-@testset "Issue #46865: mul!() with non-const alpha, beta" begin
+#46865
+@testset "mul!() with non-const alpha, beta" begin
     f!(C,A,B,alphas,betas) = mul!(C, A, B, alphas[1], betas[1])
     alphas = [1.0]
     betas = [0.5]
@@ -1067,7 +1068,7 @@ end
         B = copy(A)
         C = copy(A)
         f!(C, A, B, alphas, betas)
-        @test_broken (@allocated f!(C, A, B, alphas, betas)) == 0
+        @test (@allocated f!(C, A, B, alphas, betas)) == 0
     end
 end
 
