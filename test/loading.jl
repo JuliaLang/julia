@@ -652,7 +652,7 @@ end
     exc = try; include("./notarealfile.jl"); "unexpectedly reached!"; catch exc; exc; end
     @test exc isa SystemError
     exc.prefix
-end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
+end == "opening file \"$(joinpath(@__DIR__, "notarealfile.jl"))\""
 
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
@@ -1542,7 +1542,7 @@ end
         end
 
         file = joinpath(depot, "dev", "non-existent.jl")
-        @test_throws SystemError("opening file $(repr(file))") include(file)
+        @test_throws SystemError("opening file \"$file\"") include(file)
     end
 end
 
