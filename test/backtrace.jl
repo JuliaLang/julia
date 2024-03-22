@@ -203,6 +203,15 @@ let trace = try
     @test trace[1].func === Symbol("top-level scope")
 end
 let trace = try
+        eval(Expr(:toplevel, LineNumberNode(3, :a_filename), Expr(:error, 1)))
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[1].func === Symbol("top-level scope")
+    @test trace[1].file === :a_filename
+    @test trace[1].line == 3
+end
+let trace = try
         include_string(@__MODULE__,
             """
 
