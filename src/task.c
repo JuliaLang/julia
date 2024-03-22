@@ -998,7 +998,7 @@ through. We replace addition with a highly non-linear, non-associative mixing
 function that includes the PCG output function. This allows us to continue to use
 the xoshiro state registers for mixing function accumulation as well as for its
 primary purpose. It also obviates the need for double finalization: it would
-have been disasterous to use LCG state directly as weights for a linear
+have been disastrous to use LCG state directly as weights for a linear
 construction like SplitMix, but using it as the input to a non-linear mixer that
 includes the strongest PCG output function is reasonable (and precisely what
 PCG-RXS-M-XS-64 does). Since the output of the mixing function is already
