@@ -341,3 +341,16 @@ end
 @testset "Base.Threads docstrings" begin
     @test isempty(Docs.undocumented_names(Threads))
 end
+
+@testset "wait failed task" begin
+    @testset "wait without throw keyword" begin
+        t = Threads.@spawn error("Error")
+        @test_throws TaskFailedException wait(t)
+    end
+
+    @testset "wait with throw=false" begin
+        t = Threads.@spawn error("Error")
+        wait(t; throw=false)
+        @test istaskfailed(t)
+    end
+end

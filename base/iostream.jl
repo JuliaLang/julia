@@ -292,12 +292,15 @@ function open(fname::String; lock = true,
     if !lock
         s._dolock = false
     end
-    systemerror("opening file $(repr(fname))",
-                ccall(:ios_file, Ptr{Cvoid},
-                      (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
+    if ccall(:ios_file, Ptr{Cvoid},
+             (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+             s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL
+        systemerror("opening file \"$fname\"")
+    end
     if flags.append
-        systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
+        if ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
+            systemerror("seeking to end of file \"$fname\"")
+        end
     end
     return s
 end

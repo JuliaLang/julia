@@ -184,7 +184,6 @@ Stacktrace:
    @ none:0
  [2] top-level scope
    @ none:1
-
 ```
 
 This error prevents accidentally adding methods to functions in other modules that you only intended to use.
@@ -196,17 +195,16 @@ julia> using .NiceStuff
 julia> struct Cat end
 
 julia> NiceStuff.nice(::Cat) = "nice 😸"
-
 ```
 
 Alternatively, you can `import` the specific function name:
 ```jldoctest module_manual
 julia> import .NiceStuff: nice
 
-julia> struct Cat end
+julia> struct Mouse end
 
-julia> nice(::Cat) = "nice 😸"
-nice (generic function with 2 methods)
+julia> nice(::Mouse) = "nice 🐭"
+nice (generic function with 3 methods)
 ```
 
 Which one you choose is a matter of style. The first form makes it clear that you are adding a

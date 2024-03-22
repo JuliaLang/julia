@@ -32,7 +32,7 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
         (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:uninferred, :cache, :precompiled]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
@@ -8063,10 +8063,6 @@ end
 @test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,)))
 @test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int)))
 
-let lin = Core.LineInfoNode(Base, first(methods(convert)), :foo, Int32(5), Int32(0))
-    @test convert(LineNumberNode, lin) == LineNumberNode(5, :foo)
-end
-
 # Test that a nothrow-globalref doesn't get outlined during lowering
 module WellKnownGlobal
     global well_known = 1
@@ -8127,3 +8123,12 @@ let M = @__MODULE__
     @test Core.set_binding_type!(M, :a_typed_global) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
 end
+
+@test Base.unsafe_convert(Ptr{Int}, [1]) !== C_NULL
+
+# Test that new macros are allowed to be defined inside Expr(:toplevel) returned by macros
+macro macroception()
+    Expr(:toplevel, :(macro foo() 1 end), :(@foo))
+end
+
+@test (@macroception()) === 1

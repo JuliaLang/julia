@@ -337,13 +337,15 @@ let world = Base.get_world_counter()
     match = Base._which(Tuple{typeof(sin), Int}; world)
     mi = Core.Compiler.specialize_method(match)
     lwr = Core.Compiler.retrieve_code_info(mi, world)
-    @test all(lin->lin.method === :sin, lwr.linetable)
+    nstmts = length(lwr.code)
+    di = Core.DebugInfo(Core.Compiler.DebugInfoStream(mi, lwr.debuginfo, nstmts), nstmts)
+    lwr.debuginfo = di
     @eval function sin_generated(a)
         $(Expr(:meta, :generated, Returns(lwr)))
         $(Expr(:meta, :generated_only))
     end
     src = only(code_lowered(sin_generated, (Int,)))
-    @test all(lin->lin.method === :sin, src.linetable)
+    @test src.debuginfo === di
     @test sin_generated(42) == sin(42)
 end
 
@@ -362,7 +364,7 @@ let
     nstmts = length(src.code)
     nslots = 1
     src.ssavaluetypes = nstmts
-    src.codelocs = fill(Int32(1), nstmts)
+    src.debuginfo = Core.DebugInfo(:f_unreachable_generated)
     src.ssaflags = fill(Int32(0), nstmts)
     src.slotflags = fill(0, nslots)
     src.slottypes = Any[Any]

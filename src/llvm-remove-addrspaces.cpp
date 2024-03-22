@@ -208,7 +208,14 @@ bool RemoveNoopAddrSpaceCasts(Function *F)
                 LLVM_DEBUG(
                         dbgs() << "Removing noop address space cast:\n"
                                << I << "\n");
-                ASC->replaceAllUsesWith(ASC->getOperand(0));
+                if (ASC->getType() == ASC->getOperand(0)->getType()) {
+                    ASC->replaceAllUsesWith(ASC->getOperand(0));
+                } else {
+                    // uncanonicalized addrspacecast; demote to bitcast
+                    llvm::IRBuilder<> builder(ASC);
+                    auto BC = builder.CreateBitCast(ASC->getOperand(0), ASC->getType());
+                    ASC->replaceAllUsesWith(BC);
+                }
                 NoopCasts.push_back(ASC);
             }
         }

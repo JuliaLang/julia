@@ -786,7 +786,7 @@ static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(v
 {
     auto feature_cb = [] (const char *str, size_t len, FeatureList<feature_sz> &list) {
         auto fbit = find_feature_bit(feature_names, nfeature_names, str, len);
-        if (fbit == (uint32_t)-1)
+        if (fbit == UINT32_MAX)
             return false;
         set_bit(list, fbit, true);
         return true;
@@ -880,7 +880,7 @@ static uint32_t sysimg_init_cb(const void *id, jl_value_t** rejection_reason)
                  "https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.");
     }
     auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
-    if (match.best_idx == (uint32_t)-1)
+    if (match.best_idx == UINT32_MAX)
         return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
@@ -1058,7 +1058,7 @@ JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
     JL_GC_PUSH1(&rejection_reason);
     uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
     JL_GC_POP();
-    if (match_idx == (uint32_t)-1)
+    if (match_idx == UINT32_MAX)
         return rejection_reason;
     return jl_nothing;
 }

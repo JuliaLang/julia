@@ -179,7 +179,7 @@ JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
     JL_GC_PUSH1(&rejection_reason);
     uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
     JL_GC_POP();
-    if (match_idx == (uint32_t)-1)
+    if (match_idx == UINT32_MAX)
         return rejection_reason;
     return jl_nothing;
 }

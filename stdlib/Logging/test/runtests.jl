@@ -7,8 +7,8 @@ import Logging: min_enabled_level, shouldlog, handle_message
 @noinline func1() = backtrace()
 
 # see "custom log macro" testset
-@create_log_macro CustomLog1 -500 :magenta
-@create_log_macro CustomLog2 1500 1
+CustomLog = LogLevel(-500)
+macro customlog(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., esc(CustomLog), exs...) end
 
 @testset "Logging" begin
 
@@ -289,24 +289,16 @@ end
 end
 
 @testset "custom log macro" begin
-    llevel = LogLevel(-500)
-
-    @test_logs (llevel, "foo") min_level=llevel @customlog1 "foo"
+    @test_logs (CustomLog, "a") min_level=CustomLog @customlog "a"
 
     buf = IOBuffer()
     io = IOContext(buf, :displaysize=>(30,80), :color=>false)
-    logger = ConsoleLogger(io, llevel)
+    logger = ConsoleLogger(io, CustomLog)
 
     with_logger(logger) do
-        @customlog1 "foo"
+        @customlog "a"
     end
-    @test occursin("CustomLog1: foo", String(take!(buf)))
-
-
-    with_logger(logger) do
-        @customlog2 "hello"
-    end
-    @test occursin("CustomLog2: hello", String(take!(buf)))
+    @test occursin("LogLevel(-500): a", String(take!(buf)))
 end
 
 @testset "Docstrings" begin

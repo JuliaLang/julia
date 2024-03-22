@@ -171,8 +171,8 @@ if is_primary_base_module
     Ref(x::AbstractArray, i::Integer) = RefArray(x, i)
 end
 
-cconvert(::Type{Ptr{P}}, a::Array{P}) where {P<:Union{Ptr,Cwstring,Cstring}} = getfield(a, :ref)
-cconvert(::Type{Ref{P}}, a::Array{P}) where {P<:Union{Ptr,Cwstring,Cstring}} = getfield(a, :ref)
+cconvert(::Type{Ptr{P}}, a::Array{<:Union{Ptr,Cwstring,Cstring}}) where {P<:Union{Ptr,Cwstring,Cstring}} = getfield(a, :ref)
+cconvert(::Type{Ref{P}}, a::Array{<:Union{Ptr,Cwstring,Cstring}}) where {P<:Union{Ptr,Cwstring,Cstring}} = getfield(a, :ref)
 cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 cconvert(::Type{Ref{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 

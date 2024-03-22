@@ -273,7 +273,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
@@ -317,7 +317,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                     assert(item);
                     uv_unref(item->h);
                     jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
-                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                     jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                     jlbacktrace(); // written to STDERR_FILENO
                     item = next_shutdown_queue_item(item);
@@ -372,7 +372,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\npostoutput hook threw an error: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }

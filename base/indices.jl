@@ -423,15 +423,57 @@ first(S::IdentityUnitRange) = first(S.indices)
 last(S::IdentityUnitRange) = last(S.indices)
 size(S::IdentityUnitRange) = (length(S.indices),)
 length(S::IdentityUnitRange) = length(S.indices)
-getindex(S::IdentityUnitRange, i::Int) = (@inline; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
+unsafe_length(S::IdentityUnitRange) = unsafe_length(S.indices)
+getindex(S::IdentityUnitRange, i::Integer) = (@inline; @boundscheck checkbounds(S, i); convert(eltype(S), i))
+getindex(S::IdentityUnitRange, i::Bool) = throw(ArgumentError("invalid index: $i of type Bool"))
+function getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer})
+    @inline
+    @boundscheck checkbounds(S, i)
+    return convert(AbstractUnitRange{eltype(S)}, i)
+end
+function getindex(S::IdentityUnitRange, i::AbstractUnitRange{Bool})
+    @inline
+    @boundscheck checkbounds(S, i)
+    range(first(i) ? first(S) : last(S), length = last(i))
+end
+function getindex(S::IdentityUnitRange, i::StepRange{<:Integer})
+    @inline
+    @boundscheck checkbounds(S, i)
+    return convert(AbstractRange{eltype(S)}, i)
+end
+function getindex(S::IdentityUnitRange, i::StepRange{Bool})
+    @inline
+    @boundscheck checkbounds(S, i)
+    range(first(i) ? first(S) : last(S), length = last(i), step = Int(step(i)))
+end
+# Indexing with offset ranges should preserve the axes of the indices
+# however, this is only really possible in general with OffsetArrays.
+# In some cases, though, we may obtain correct results using Base ranges
+# the following methods are added to allow OffsetArrays to dispatch on the first argument without ambiguities
+function getindex(S::IdentityUnitRange{<:AbstractUnitRange{<:Integer}},
+                    i::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
+    @inline
+    @boundscheck checkbounds(S, i)
+    return i
+end
+function getindex(S::Slice{<:AbstractUnitRange{<:Integer}},
+                    i::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
+    @inline
+    @boundscheck checkbounds(S, i)
+    return i
+end
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
 # For OneTo, the values and indices of the values are identical, so this may be defined in Base.
 # In general such an indexing operation would produce offset ranges
-getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}}) = (@inline; @boundscheck checkbounds(S, I); I)
+# This should also ideally return an AbstractUnitRange{eltype(S)}, but currently
+# we're restricted to eltype(::IdentityUnitRange) == Int by definition
+function getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}})
+    @inline
+    @boundscheck checkbounds(S, I)
+    return I
+end
 
 """
     LinearIndices(A::AbstractArray)

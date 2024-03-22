@@ -161,40 +161,6 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt::SlotNumber->true, stmt::SlotNumber->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(ci::CodeInfo, cfg::CFG, code::Vector{Any}, info::Vector{CallInfo})
-    # Remove `nothing`s at the end, we don't handle them well
-    # (we expect the last instruction to be a terminator)
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    (; codelocs, ssaflags) = ci
-    for i = length(code):-1:1
-        if code[i] !== nothing
-            resize!(code, i)
-            resize!(ssavaluetypes, i)
-            resize!(codelocs, i)
-            resize!(info, i)
-            resize!(ssaflags, i)
-            break
-        end
-    end
-    # If the last instruction is not a terminator, add one. This can
-    # happen for implicit return on dead branches.
-    term = code[end]
-    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
-        push!(code, ReturnNode())
-        push!(ssavaluetypes, Union{})
-        push!(codelocs, 0)
-        push!(info, NoCallInfo())
-        push!(ssaflags, IR_FLAG_NOTHROW)
-
-        # Update CFG to include appended terminator
-        old_range = cfg.blocks[end].stmts
-        new_range = StmtRange(first(old_range), last(old_range) + 1)
-        cfg.blocks[end] = BasicBlock(cfg.blocks[end], new_range)
-        (length(cfg.index) == length(cfg.blocks)) && (cfg.index[end] += 1)
-    end
-    nothing
-end
-
 # maybe use expr_type?
 function typ_for_val(@nospecialize(x), ci::CodeInfo, ir::IRCode, idx::Int, slottypes::Vector{Any})
     if isa(x, Expr)
@@ -464,7 +430,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node in the next basic block (we accounted for this above)
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
             end
             result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
@@ -475,7 +441,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
                 inst_range = first(inst_range):(last(inst_range) + 1)
             end
         end
@@ -504,6 +470,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
         new_node[:stmt] = renumber_ssa!(new_node_inst, inst_rename, true)
     end
+    ir.debuginfo.codelocs = result.line
     new_ir = IRCode(ir, result, cfg, new_new_nodes)
     return new_ir
 end

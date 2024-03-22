@@ -214,10 +214,6 @@ function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
 end
 
 # Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
-function view(r1::OneTo, r2::OneTo)
-    @_propagate_inbounds_meta
-    getindex(r1, r2)
-end
 function view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
@@ -412,25 +408,24 @@ end
 
 function _unsetindex!(V::FastSubArray, i::Int)
     @inline
-    @boundscheck checkbounds(Bool, V, i)
+    @boundscheck checkbounds(V, i)
     @inbounds _unsetindex!(V.parent, _reindexlinear(V, i))
     return V
 end
 function _unsetindex!(V::FastSubArray{<:Any,1}, i::Int)
     @inline
-    @boundscheck checkbounds(Bool, V, i)
+    @boundscheck checkbounds(V, i)
     @inbounds _unsetindex!(V.parent, _reindexlinear(V, i))
     return V
 end
 function _unsetindex!(V::SubArray{T,N}, i::Vararg{Int,N}) where {T,N}
     @inline
-    @boundscheck checkbounds(Bool, V, i...)
+    @boundscheck checkbounds(V, i...)
     @inbounds _unsetindex!(V.parent, reindex(V.indices, i)...)
     return V
 end
 
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
-IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 
 # Strides are the distance in memory between adjacent elements in a given dimension
 # which we determine from the strides of the parent

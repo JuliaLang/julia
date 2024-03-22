@@ -12,7 +12,8 @@
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SmallSet.h>
-#include "llvm/Analysis/CFG.h"
+#include <llvm/Analysis/CFG.h>
+#include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
@@ -455,7 +456,6 @@ SmallVector<SmallVector<unsigned, 0>, 0> TrackCompositeType(Type *T) {
 }
 
 
-
 // Walk through simple expressions to until we hit something that requires root numbering
 // If the input value is a scalar (pointer), we may return a composite value as base
 // in which case the second member of the pair is the index of the value in the vector.
@@ -616,12 +616,12 @@ Value *LateLowerGCFrame::MaybeExtractScalar(State &S, std::pair<Value*,int> ValE
                 V = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
             return V;
         }
+        IRBuilder<InstSimplifyFolder> foldbuilder(InsertBefore->getContext(), InstSimplifyFolder(InsertBefore->getModule()->getDataLayout()));
+        foldbuilder.SetInsertPoint(InsertBefore);
         if (Idxs.size() > IsVector)
-            V = ExtractValueInst::Create(V, IsVector ? IdxsNotVec : Idxs, "", InsertBefore);
+            V = foldbuilder.CreateExtractValue(V, IsVector ? IdxsNotVec : Idxs);
         if (IsVector)
-            V = ExtractElementInst::Create(V,
-                    ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()),
-                    "", InsertBefore);
+            V = foldbuilder.CreateExtractElement(V, ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()));
     }
     return V;
 }
@@ -1621,7 +1621,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                         callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
-                        callee == write_barrier_func || callee == gc_loaded_func ||
+                        callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
                         callee->getName() == "memcmp") {
                         continue;
                     }
@@ -1817,11 +1817,13 @@ static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> 
         auto IdxsNotVec = Idxs.slice(0, Idxs.size() - 1);
         Type *FinalT = ExtractValueInst::getIndexedType(V->getType(), IdxsNotVec);
         bool IsVector = isa<VectorType>(FinalT);
+        IRBuilder<InstSimplifyFolder> foldbuilder(irbuilder.getContext(), InstSimplifyFolder(irbuilder.GetInsertBlock()->getModule()->getDataLayout()));
+        foldbuilder.restoreIP(irbuilder.saveIP());
+        foldbuilder.SetCurrentDebugLocation(irbuilder.getCurrentDebugLocation());
         if (Idxs.size() > IsVector)
-            V = irbuilder.Insert(ExtractValueInst::Create(V, IsVector ? IdxsNotVec : Idxs));
+            V = foldbuilder.CreateExtractValue(V, IsVector ? IdxsNotVec : Idxs);
         if (IsVector)
-            V = irbuilder.Insert(ExtractElementInst::Create(V,
-                    ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back())));
+            V = foldbuilder.CreateExtractElement(V, ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()));
     }
     return V;
 }

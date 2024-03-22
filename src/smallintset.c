@@ -36,7 +36,7 @@ static inline size_t jl_intref(const jl_genericmemory_t *arr, size_t idx) JL_NOT
     else if (el == jl_memory_uint16_type)
         return ignore_tombstone(jl_atomic_load_relaxed(&((_Atomic(uint16_t)*)arr->ptr)[idx]), (uint16_t)-1);
     else if (el == jl_memory_uint32_type)
-        return ignore_tombstone(jl_atomic_load_relaxed(&((_Atomic(uint32_t)*)arr->ptr)[idx]), (uint32_t)-1);
+        return ignore_tombstone(jl_atomic_load_relaxed(&((_Atomic(uint32_t)*)arr->ptr)[idx]), UINT32_MAX);
     else
         abort();
 }
@@ -53,7 +53,7 @@ static inline size_t jl_intref_acquire(const jl_genericmemory_t *arr, size_t idx
     else if (el == jl_memory_uint16_type)
         return acquire_tombstone(jl_atomic_load_acquire(&((_Atomic(uint16_t)*)arr->ptr)[idx]), (uint16_t)-1);
     else if (el == jl_memory_uint32_type)
-        return acquire_tombstone(jl_atomic_load_acquire(&((_Atomic(uint32_t)*)arr->ptr)[idx]), (uint32_t)-1);
+        return acquire_tombstone(jl_atomic_load_acquire(&((_Atomic(uint32_t)*)arr->ptr)[idx]), UINT32_MAX);
     else
         abort();
 }

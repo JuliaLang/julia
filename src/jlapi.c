@@ -158,7 +158,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         r = NULL;
     }
     return r;
@@ -170,9 +170,9 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
  * @return A pointer to `jl_value_t` representing the current exception.
  *         Returns `NULL` if no exception is currently thrown.
  */
-JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_value_t *jl_current_exception(jl_task_t *ct) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
-    jl_excstack_t *s = jl_current_task->excstack;
+    jl_excstack_t *s = ct->excstack;
     return s && s->top != 0 ? jl_excstack_exception(s, s->top) : jl_nothing;
 }
 
@@ -300,7 +300,7 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t n
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -328,7 +328,7 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -360,7 +360,7 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -394,7 +394,7 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -431,7 +431,7 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -447,6 +447,7 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
 {
     jl_value_t *v;
+    jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t *s = (jl_value_t*)jl_symbol(fld);
         int i = jl_field_index((jl_datatype_t*)jl_typeof(o), (jl_sym_t*)s, 1);
@@ -454,7 +455,7 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
         jl_exception_clear();
     }
     JL_CATCH {
-        jl_current_task->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -852,6 +853,7 @@ JL_DLLEXPORT int jl_set_fenv_rounding(int i)
 
 static int exec_program(char *program)
 {
+    jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_load(jl_main_module, program);
     }
@@ -860,7 +862,7 @@ static int exec_program(char *program)
         //       printing directly to STDERR_FILENO.
         int shown_err = 0;
         jl_printf(JL_STDERR, "error during bootstrap:\n");
-        jl_value_t *exc = jl_current_exception();
+        jl_value_t *exc = jl_current_exception(ct);
         jl_value_t *showf = jl_base_module ? jl_get_function(jl_base_module, "show") : NULL;
         if (showf) {
             jl_value_t *errs = jl_stderr_obj();
@@ -889,8 +891,8 @@ static NOINLINE int true_main(int argc, char *argv[])
     jl_function_t *start_client = jl_base_module ?
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
+    jl_task_t *ct = jl_current_task;
     if (start_client) {
-        jl_task_t *ct = jl_current_task;
         int ret = 1;
         JL_TRY {
             size_t last_age = ct->world_age;
@@ -902,7 +904,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             ct->world_age = last_age;
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_current_exception(), ct);
+            jl_no_exc_handler(jl_current_exception(ct), ct);
         }
         return ret;
     }
@@ -946,7 +948,7 @@ static NOINLINE int true_main(int argc, char *argv[])
                 line = NULL;
             }
             jl_printf((JL_STREAM*)STDERR_FILENO, "\nparser error:\n");
-            jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+            jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
             jl_print_backtrace(); // written to STDERR_FILENO
         }

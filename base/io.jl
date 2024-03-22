@@ -131,6 +131,8 @@ data has already been buffered. The result is a `Vector{UInt8}`.
 """
 function readavailable end
 
+function isexecutable end
+
 """
     isreadable(io) -> Bool
 

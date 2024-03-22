@@ -43,10 +43,11 @@ JL_DLLEXPORT void jl_generate_fptr_for_unspecialized_fallback(jl_code_instance_t
     jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
 }
 
-JL_DLLEXPORT void jl_compile_codeinst_fallback(jl_code_instance_t *unspec)
+JL_DLLEXPORT int jl_compile_codeinst_fallback(jl_code_instance_t *unspec)
 {
     // Do nothing. The caller will notice that we failed to provide a an ->invoke and trigger
     // appropriate fallbacks.
+    return 0;
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)

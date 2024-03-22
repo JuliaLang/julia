@@ -23,8 +23,8 @@ Profiling support.
 module Profile
 
 global print
-public @profile,
-    clear,
+export @profile
+public clear,
     print,
     fetch,
     retrieve,
@@ -43,8 +43,6 @@ const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cyc
 
 # deprecated functions: use `getdict` instead
 lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
-
-export @profile
 
 """
     @profile

@@ -39,6 +39,7 @@ Base.eof
 Base.isreadonly
 Base.iswritable
 Base.isreadable
+Base.isexecutable
 Base.isopen
 Base.fd
 Base.redirect_stdio

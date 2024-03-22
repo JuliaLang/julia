@@ -1555,3 +1555,8 @@ end
         @test_throws ArgumentError("including $(repr(dir)): No such file or directory") include_dependency(dir)
     end
 end
+
+@testset "-m" begin
+    rot13proj = joinpath(@__DIR__, "project", "Rot13")
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13 --project nowhere ABJURER`) == "--cebwrpg abjurer NOWHERE "
+end

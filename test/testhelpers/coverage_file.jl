@@ -24,6 +24,6 @@ end
 
 success = code_coverage_test() == [1, 2, 3] &&
           short_form_func_coverage_test(2) == 4
-exit(success ?  0 : 1)
+exit(success ? 0 : 1)
 
 # end of file

@@ -29,7 +29,7 @@ let code = Any[
         ReturnNode(Core.SSAValue(10)),
     ]
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.stmt[3]
@@ -47,7 +47,7 @@ let code = Any[]
     push!(code, Expr(:call, :opaque))
     push!(code, ReturnNode(nothing))
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end
@@ -804,7 +804,7 @@ function each_stmt_a_bb(stmts, preds, succs)
     append!(ir.stmts.stmt, stmts)
     empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
     empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
-    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
+    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:3length(stmts)])
     empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
     empty!(ir.cfg.blocks); append!(ir.cfg.blocks, [BasicBlock(StmtRange(i, i), preds[i], succs[i]) for i = 1:length(stmts)])
     empty!(ir.cfg.index);  append!(ir.cfg.index,  [i for i = 2:length(stmts)])
@@ -1801,3 +1801,22 @@ let n = 1000
     end
 end
 @test f_1000_blocks() == 0
+
+# https://github.com/JuliaLang/julia/issues/53521
+# Incorrect scope counting in :leave
+using Base.ScopedValues
+function f53521()
+    VALUE = ScopedValue(1)
+    @with VALUE => 2 begin
+        for i = 1
+            @with VALUE => 3 begin
+                try
+                    foo()
+                catch
+                    nothing
+                end
+            end
+        end
+    end
+end
+@test code_typed(f53521)[1][2] === Nothing

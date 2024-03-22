@@ -1,16 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    inflate_ir!(ci::CodeInfo, linfo::MethodInstance) -> ir::IRCode
+    inflate_ir!(ci::CodeInfo, mi::MethodInstance) -> ir::IRCode
     inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
 
 Inflates `ci::CodeInfo`-IR to `ir::IRCode`-format.
 This should be used with caution as it is a in-place transformation where the fields of
 the original `ci::CodeInfo` are modified.
 """
-function inflate_ir!(ci::CodeInfo, linfo::MethodInstance)
-    sptypes = sptypes_from_meth_instance(linfo)
-    argtypes, _ = matching_cache_argtypes(fallback_lattice, linfo)
+function inflate_ir!(ci::CodeInfo, mi::MethodInstance)
+    sptypes = sptypes_from_meth_instance(mi)
+    argtypes, _ = matching_cache_argtypes(fallback_lattice, mi)
     return inflate_ir!(ci, sptypes, argtypes)
 end
 function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any})
@@ -35,24 +35,23 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
         ssavaluetypes = Any[ Any for i = 1:ssavaluetypes::Int ]
     end
     info = CallInfo[NoCallInfo() for i = 1:nstmts]
-    stmts = InstructionStream(code, ssavaluetypes, info, ci.codelocs, ci.ssaflags)
-    linetable = ci.linetable
-    if !isa(linetable, Vector{LineInfoNode})
-        linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
-    end
+    di = DebugInfoStream(nothing, ci.debuginfo, nstmts)
+    stmts = InstructionStream(code, ssavaluetypes, info, di.codelocs, ci.ssaflags)
     meta = Expr[]
-    return IRCode(stmts, cfg, linetable, argtypes, meta, sptypes)
+    return IRCode(stmts, cfg, di, argtypes, meta, sptypes)
 end
 
 """
-    inflate_ir(ci::CodeInfo, linfo::MethodInstance) -> ir::IRCode
-    inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
     inflate_ir(ci::CodeInfo) -> ir::IRCode
+    inflate_ir(ci::CodeInfo, mi::MethodInstance) -> ir::IRCode
+    inflate_ir(ci::CodeInfo, argtypes::Vector{Any}) -> ir::IRCode
+    inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
 
 Non-destructive version of `inflate_ir!`.
 Mainly used for testing or interactive use.
 """
-inflate_ir(ci::CodeInfo, linfo::MethodInstance) = inflate_ir!(copy(ci), linfo)
+inflate_ir(ci::CodeInfo, mi::MethodInstance) = inflate_ir!(copy(ci), mi)
+inflate_ir(ci::CodeInfo, argtypes::Vector{Any}) = inflate_ir(ci, VarState[], argtypes)
 inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
 function inflate_ir(ci::CodeInfo)
     parent = ci.parent
@@ -73,15 +72,17 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
     stmts = ir.stmts
     code = ci.code = stmts.stmt
     ssavaluetypes = ci.ssavaluetypes = stmts.type
-    codelocs = ci.codelocs = stmts.line
+    codelocs = stmts.line
     ssaflags = ci.ssaflags = stmts.flag
-    linetable = ci.linetable = ir.linetable
+    debuginfo = ir.debuginfo
     for metanode in ir.meta
         push!(code, metanode)
-        push!(codelocs, 1)
+        push!(codelocs, 1, 0, 0)
         push!(ssavaluetypes, Any)
         push!(ssaflags, IR_FLAG_NULL)
     end
+    @assert debuginfo.codelocs === stmts.line "line table not from debuginfo"
+    ci.debuginfo = DebugInfo(debuginfo, length(code))
     # Translate BB Edges to statement edges
     # (and undo normalization for now)
     for i = 1:length(code)

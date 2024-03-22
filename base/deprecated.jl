@@ -29,11 +29,11 @@ To prevent `old` from being exported, set `export_old` to `false`.
 
 # Examples
 ```jldoctest
-julia> @deprecate old(x) new(x)
-old (generic function with 1 method)
+julia> @deprecate old_export(x) new(x)
+old_export (generic function with 1 method)
 
-julia> @deprecate old(x) new(x) false
-old (generic function with 1 method)
+julia> @deprecate old_public(x) new(x) false
+old_public (generic function with 1 method)
 ```
 
 Calls to `@deprecate` without explicit type-annotations will define

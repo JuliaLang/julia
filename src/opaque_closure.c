@@ -105,7 +105,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         jl_method_instance_t *mi_generic = jl_specializations_get_linfo(jl_opaque_closure_method, sigtype, jl_emptysvec);
 
         // OC wrapper methods are not world dependent
-        ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0);
+        ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL);
         if (!jl_atomic_load_acquire(&ci->invoke))
             jl_compile_codeinst(ci);
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
@@ -139,7 +139,7 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     JL_GC_PUSH3(&root, &sigtype, &inst);
     root = jl_box_long(lineno);
     root = jl_new_struct(jl_linenumbernode_type, root, file);
-    jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, isinferred ? jl_nothing : (jl_value_t*)ci, isva);
+    jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, ci, isva, isinferred);
     root = (jl_value_t*)meth;
     size_t world = jl_current_task->world_age;
     // these are only legal in the current world since they are not in any tables
@@ -150,7 +150,7 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
         sigtype = jl_argtype_with_function(env, (jl_value_t*)argt);
         jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)root, sigtype, jl_emptysvec);
         inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
-            0, world, world, 0, 0, jl_nothing, 0);
+            0, world, world, 0, 0, jl_nothing, 0, ci->debuginfo);
         jl_mi_cache_insert(mi, inst);
     }
 

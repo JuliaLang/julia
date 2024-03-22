@@ -43,14 +43,16 @@ module MiniCassette
         end
     end
 
-    function transform!(ci::CodeInfo, nargs::Int, sparams::Core.SimpleVector)
+    function transform!(mi::MethodInstance, ci::CodeInfo, nargs::Int, sparams::Core.SimpleVector)
         code = ci.code
+        di = Core.Compiler.DebugInfoStream(mi, ci.debuginfo, length(code))
         ci.slotnames = Symbol[Symbol("#self#"), :ctx, :f, :args, ci.slotnames[nargs+1:end]...]
         ci.slotflags = UInt8[(0x00 for i = 1:4)..., ci.slotflags[nargs+1:end]...]
         # Insert one SSAValue for every argument statement
         prepend!(code, Any[Expr(:call, getfield, SlotNumber(4), i) for i = 1:nargs])
-        prepend!(ci.codelocs, fill(0, nargs))
+        prepend!(di.codelocs, fill(Int32(0), 3nargs))
         prepend!(ci.ssaflags, fill(0x00, nargs))
+        ci.debuginfo = Core.DebugInfo(di, length(code))
         ci.ssavaluetypes += nargs
         function map_slot_number(slot::Int)
             if slot == 1
@@ -88,7 +90,7 @@ module MiniCassette
         code_info = copy(code_info)
         @assert code_info.edges === nothing
         code_info.edges = MethodInstance[mi]
-        transform!(code_info, length(args), match.sparams)
+        transform!(mi, code_info, length(args), match.sparams)
         # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
         # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
         return code_info

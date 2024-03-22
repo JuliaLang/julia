@@ -345,10 +345,7 @@ function SNCA!(domtree::GenericDomTree{IsPostDom}, blocks::Vector{BasicBlock}, m
     ancestors = copy(D.to_parent_pre)
     relevant_blocks = IsPostDom ? (1:max_pre) : (2:max_pre)
     for w::PreNumber in reverse(relevant_blocks)
-        # LLVM initializes this to the parent, the paper initializes this to
-        # `w`, but it doesn't really matter (the parent is a predecessor, so at
-        # worst we'll discover it below). Save a memory reference here.
-        semi_w = typemax(PreNumber)
+        semi_w = ancestors[w]
         last_linked = PreNumber(w + 1)
         for v ∈ dom_edges(domtree, blocks, D.from_pre[w])
             # For the purpose of the domtree, ignore virtual predecessors into

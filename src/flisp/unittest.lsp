@@ -267,4 +267,23 @@
 (assert (equal? `(a `(b c)) '(a (quasiquote (b c)))))
 (assert (equal? ````x '```x))
 
+;; make many initialized tables large enough not to be stored in-line
+(for 1 100
+     (lambda (i)
+       (table eq?      2      eqv?     2
+              equal?   2      atom?    1
+              not      1      null?    1
+              boolean? 1      symbol?  1
+              number?  1      bound?   1
+              pair?    1      builtin? 1
+              vector?  1      fixnum?  1
+              cons     2      car      1
+              cdr      1      set-car! 2
+              set-cdr! 2      =        2
+              <        2      compare  2
+              aref     2      aset!    3
+              div0     2)))
+;; now allocate enough to trigger GC
+(for 1 8000000 (lambda (i) (cons 1 2)))
+
 #t

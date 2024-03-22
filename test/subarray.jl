@@ -339,6 +339,7 @@ end
     A = copy(reshape(1:120, 3, 5, 8))
     sA = view(A, 2:2, 1:5, :)
     @test @inferred(strides(sA)) == (1, 3, 15)
+    @test IndexStyle(sA) == IndexStyle(typeof(sA)) == IndexCartesian()
     @test parent(sA) == A
     @test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
     @test size(sA) == (1, 5, 8)
@@ -1062,6 +1063,8 @@ end
             for i in eachindex(A)
                 @test !isassigned(A, i)
             end
+            inds = eachindex(A)
+            @test_throws BoundsError Base._unsetindex!(A, last(inds) + oneunit(eltype(inds)))
         end
         @testset "dest IndexLinear, src IndexLinear" begin
             for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])

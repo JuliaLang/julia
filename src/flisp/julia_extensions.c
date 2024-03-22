@@ -405,7 +405,7 @@ value_t fl_string_only_julia_char(fl_context_t *fl_ctx, value_t *args, uint32_t 
     uint8_t *s = (uint8_t*)cvalue_data(args[0]);
     size_t len = cv_len((cvalue_t*)ptr(args[0]));
     uint32_t u = _string_only_julia_char(s, len);
-    if (u == (uint32_t)-1)
+    if (u == UINT32_MAX)
         return fl_ctx->F;
     return fl_list2(fl_ctx, fl_ctx->jl_char_sym, mk_uint32(fl_ctx, u));
 }
