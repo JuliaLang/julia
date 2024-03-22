@@ -57,6 +57,7 @@ struct JLOptions
     strip_ir::Int8
     permalloc_pkgimg::Int8
     heap_size_hint::UInt64
+    safe_crash_log_file::Ptr{UInt8}
 end
 
 # This runs early in the sysimage != is not defined yet

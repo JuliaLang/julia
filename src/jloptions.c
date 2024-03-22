@@ -90,6 +90,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-ir
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
+                        NULL, // safe_crash_log_file
     };
     jl_options_initialized = 1;
 }
@@ -258,7 +259,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_ir,
            opt_heap_size_hint,
            opt_gc_threads,
-           opt_permalloc_pkgimg
+           opt_permalloc_pkgimg,
+           opt_safe_crash_log_file,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -320,6 +322,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "safe-crash-log-file",   required_argument, 0, opt_safe_crash_log_file },
         { 0, 0, 0, 0 }
     };
 
@@ -849,6 +852,11 @@ restart_switch:
                 jl_options.permalloc_pkgimg = 0;
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
+            break;
+        case opt_safe_crash_log_file:
+            jl_options.safe_crash_log_file = strdup(optarg);
+            if (jl_options.safe_crash_log_file == NULL)
+                jl_error("julia: failed to allocate memory for --safe-crash-log-file");
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

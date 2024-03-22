@@ -38,7 +38,7 @@
 // 8M signal stack, same as default stack size and enough
 // for reasonable finalizers.
 // Should also be enough for parallel GC when we have it =)
-#define sig_stack_size (8 * 1024 * 1024)
+const size_t sig_stack_size = (8 * 1024 * 1024);
 
 #include "julia_assert.h"
 
@@ -89,13 +89,6 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
     // TODO Add support for PowerPC(64)?
     return 0;
 #endif
-}
-
-static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
-{
-    // One guard page for signal_stack.
-    return !((char*)ptr < (char*)ptls->signal_stack - jl_page_size ||
-             (char*)ptr > (char*)ptls->signal_stack + sig_stack_size);
 }
 
 // Modify signal context `_ctx` so that `fptr` will execute when the signal
