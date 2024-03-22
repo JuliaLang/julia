@@ -68,6 +68,7 @@ typedef struct {
     int8_t trim;
     int8_t task_metrics;
     int16_t timeout_for_safepoint_straggler_s;
+    const char *safe_crash_log_file;
 } jl_options_t;
 
 #endif

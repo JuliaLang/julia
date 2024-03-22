@@ -15,6 +15,7 @@
 #include "errno.h"
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #endif
 
 #include "julia.h"
@@ -813,6 +814,56 @@ JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
     return c;
 }
 
+STATIC_INLINE void print_error_msg_as_json(char *buf) JL_NOTSAFEPOINT
+{
+    // Our telemetry on SPCS expects a JSON object per line
+    // The following lines prepare the timestamp string and the JSON object
+    struct timeval tv;
+    struct tm* tm_info;
+    char timestamp_buffer[50];
+    // Get current time
+    gettimeofday(&tv, NULL);
+    tm_info = gmtime(&tv.tv_sec);
+    // Format time
+    int offset = strftime(timestamp_buffer, 25, "%Y-%m-%dT%H:%M:%S", tm_info);
+    // Append milliseconds
+    snprintf(timestamp_buffer + offset, 25, ".%03d", tv.tv_usec / 1000);
+    const char *json_preamble_p1 = "\n{\"level\":\"Error\", \"timestamp\":\"";
+    const char *json_preamble_p2 = "\", \"message\": \"";
+    const char *json_postamble = "\"}\n";
+    // Ignore write failures because there is nothing we can do
+    write(jl_sig_fd, json_preamble_p1, strlen(json_preamble_p1));
+    write(jl_sig_fd, timestamp_buffer, strlen(timestamp_buffer));
+    write(jl_sig_fd, json_preamble_p2, strlen(json_preamble_p2));
+    // JSON escape the input string
+    for(size_t i = 0; i < strlen(buf); i += 1) {
+        switch (buf[i]) {
+            case '"':
+                write(jl_sig_fd, "\\\"", 2);
+                break;
+            case '\b':
+                write(jl_sig_fd, "\\b", 2);
+                break;
+            case '\n':
+                write(jl_sig_fd, "\\n", 2);
+                break;
+            case '\r':
+                write(jl_sig_fd, "\\r", 2);
+                break;
+            case '\t':
+                write(jl_sig_fd, "\\t", 2);
+                break;
+            case '\\':
+                write(jl_sig_fd, "\\\\", 2);
+                break;
+            default:
+                write(jl_sig_fd, buf + i, 1);
+        }
+    }
+    write(jl_sig_fd, json_postamble, strlen(json_postamble));
+    fdatasync(jl_sig_fd);
+}
+
 JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 {
     static char buf[1000];
@@ -829,6 +880,9 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
     va_end(args);
 
     buf[999] = '\0';
+    if (jl_inside_signal_handler() && jl_sig_fd != 0) {
+        print_error_msg_as_json(buf);
+    }
     if (write(STDERR_FILENO, buf, strlen(buf)) < 0) {
         // nothing we can do; ignore the failure
     }

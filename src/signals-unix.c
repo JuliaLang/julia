@@ -42,7 +42,7 @@
 #endif
 
 // 8M signal stack, same as default stack size (though we barely use this)
-static const size_t sig_stack_size = 8 * 1024 * 1024;
+const size_t sig_stack_size = 8 * 1024 * 1024;
 
 #include "julia_assert.h"
 
@@ -100,14 +100,6 @@ static inline uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
     // TODO Add support for PowerPC(64)?
     return 0;
 #endif
-}
-
-static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr) JL_NOTSAFEPOINT
-{
-    // One guard page for signal_stack.
-    return ptls->signal_stack == NULL ||
-           ((char*)ptr >= (char*)ptls->signal_stack - jl_page_size &&
-            (char*)ptr <= (char*)ptls->signal_stack + (ptls->signal_stack_size ? ptls->signal_stack_size : sig_stack_size));
 }
 
 // Modify signal context `_ctx` so that `fptr` will execute when the signal returns

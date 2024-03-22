@@ -782,6 +782,32 @@ JL_CALLABLE(jl_f_tuple);
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
 void jl_install_thread_signal_handler(jl_ptls_t ptls);
+extern const size_t sig_stack_size;
+STATIC_INLINE int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
+{
+    // One guard page for signal_stack.
+    return !((char*)ptr < (char*)ptls->signal_stack - jl_page_size ||
+             (char*)ptr > (char*)ptls->signal_stack + sig_stack_size);
+}
+STATIC_INLINE int jl_inside_signal_handler(void)
+{
+#if (defined(_OS_LINUX_) && defined(_CPU_X86_64_)) || (defined(_OS_DARWIN_) && defined(_CPU_AARCH64_))
+    // Read the stack pointer
+    size_t sp;
+#if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
+    __asm__ __volatile__("movq %%rsp, %0" : "=r"(sp));
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    __asm__ __volatile__("mov %0, sp" : "=r"(sp));
+#endif
+    // Check if the stack pointer is within the signal stack
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return is_addr_on_sigstack(ptls, (void*)sp);
+#else
+    return 0;
+#endif
+}
+// File-descriptor for safe logging on signal handling
+extern int jl_sig_fd;
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream);

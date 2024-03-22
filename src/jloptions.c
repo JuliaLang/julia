@@ -155,6 +155,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         JL_TRIM_NO, // trim
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
+                        NULL, // safe_crash_log_file
     };
     jl_options_initialized = 1;
 }
@@ -384,6 +385,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_permalloc_pkgimg,
            opt_trim,
            opt_experimental_features,
+           opt_safe_crash_log_file,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -452,6 +454,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
         { "trim",  optional_argument, 0, opt_trim },
+        { "safe-crash-log-file",   required_argument, 0, opt_safe_crash_log_file },
         { 0, 0, 0, 0 }
     };
 
@@ -1011,6 +1014,10 @@ restart_switch:
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
             else
                 jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
+        case opt_safe_crash_log_file:
+            jl_options.safe_crash_log_file = strdup(optarg);
+            if (jl_options.safe_crash_log_file == NULL)
+                jl_error("julia: failed to allocate memory for --safe-crash-log-file");
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
