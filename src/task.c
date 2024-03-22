@@ -995,7 +995,7 @@ the xoshiro256 state. There are two problems with that fix, however:
 We avoid both problems by recognizing that the mixing function can be much less
 simple while still allowing the essential collision resistance proof to go
 through. We replace addition with a highly non-linear, non-associative mixing
-function that includes the PCG ouput function. This allows us to continue to use
+function that includes the PCG output function. This allows us to continue to use
 the xoshiro state registers for mixing function accumulation as well as for its
 primary purpose. It also obviates the need for double finalization: it would
 have been disasterous to use LCG state directly as weights for a linear
