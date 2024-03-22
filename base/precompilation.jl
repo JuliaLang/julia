@@ -73,21 +73,6 @@ function ExplicitEnv(envpath::String=Base.active_project())
         names[UUID(proj_uuid)] = proj_name
     end
 
-    #=
-    if !project_is_package
-        base_project_file = base_project(envpath)
-        if base_project_file !== nothing
-            base_project_d = parsed_toml(base_project_file)
-            for (name, _uuid) in get(Dict{String, Any}, base_project_d, "deps")::Dict{String, Any}
-                uuid = UUID(_uuid)
-                project_deps[name] = uuid
-                names[UUID(uuid)] = name
-                project_uuid_to_name[name] = UUID(uuid)
-            end
-        end
-    end
-    =#
-
     project_extensions = Dict{String, Vector{UUID}}()
     # Collect all extensions of the project
     for (name, triggers::Union{String, Vector{String}}) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
@@ -574,11 +559,14 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         target = "manifest"
     end
 
-    nconfig = length(configs)
-    if nconfig > 1
-        target *= " for $nconfig compilation configurations..."
-    else
+    nconfigs = length(configs)
+    if nconfigs == 1
+        if !isempty(only(configs)[1])
+            target *= " for configuration $(join(only(configs)[1], " "))"
+        end
         target *= "..."
+    else
+        target *= " for $nconfigs compilation configurations..."
     end
     @debug "precompile: packages filtered"
 
