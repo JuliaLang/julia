@@ -366,7 +366,66 @@ function div(x::T, y::T, ::typeof(RoundUp)) where T<:Integer
     return d + (((x > 0) == (y > 0)) & (d * y != x))
 end
 
-# Real
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = convert(T, round((x - rem(x, y, r)) / y))
+function mw_div(x::NTuple{2,T}, y::T) where {T<:AbstractFloat}
+    (x_hi, x_lo) = x
+
+    # "DWDivFP3" AKA "Algorithm 15" from a paper by Joldes, Muller and
+    # Popescu: https://doi.org/10.1145/3121432
+    hi = x_hi / y
+    π = Base.Math.two_mul(hi, y)
+    δ_hi = x_hi - first(π)  # exact operation
+    δ_t = δ_hi - last(π)    # exact operation
+    δ = δ_t + x_lo
+    lo = δ / y
+    canonicalize2(hi, lo)
+end
+
+div_impl4(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} =
+    T(div_impl(widen(x), widen(y), r))
+
+div_impl3(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} =
+    round(x / y, r)
+
+div_impl2(x::NTuple{2,T}, y::T) where {T<:AbstractFloat} =
+    round(first(mw_div(x, y)), RoundNearest)
+
+# Approximately rounded x (with respect to y and r)
+frac_round(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} =
+    add12(x, -rem(x, y, r))
+
+div_impl1(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} =
+    div_impl2(frac_round(x, y, r), y)
+
+div_impl0(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} =
+    ifelse(
+        isfinite(abs(x) + abs(y)),
+        div_impl1(x, y, r),
+        div_impl3(x, y, r),  # try to avoid overflow
+    )
+
+# Other rounding modes are assumed not to have `rem`.
+const RoundingModesWithRem = Union{
+    RoundingMode{:Nearest},
+    RoundingMode{:Up},
+    RoundingMode{:Down},
+    RoundingMode{:FromZero},
+    RoundingMode{:ToZero},
+}
+
+div_impl(x::T, y::T, r::RoundingModesWithRem) where {T<:AbstractFloat} =
+    div_impl0(x, y, r)
+div_impl(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} =
+    div_impl3(x, y, r)
+
+# The only way to achieve close-to-perfect results with `Float16` seems
+# to be to widen to `Float32`.
+div_impl(x::Float16, y::Float16, r::RoundingModesWithRem) =
+    div_impl4(x, y, r)
+div_impl(x::Float16, y::Float16, r::RoundingMode) =
+    div_impl4(x, y, r)
+
+function div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat}
+    isnan(x) && (return x)
+    isnan(y) && (return y)
+    div_impl(x, y, r)
+end
