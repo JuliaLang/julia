@@ -79,7 +79,7 @@ function _sym_to_tpid(tp::Symbol)
     elseif tp == :foreign
         return Int8(-1)
     else
-        throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
+        throw(ArgumentError("Unrecognized threadpool name `$tp`"))
     end
 end
 
