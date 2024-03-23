@@ -237,6 +237,71 @@ macro assert(ex, msgs...)
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
+# Copied from `macro assert` above for bootstrapping reasons
+function prepare_error(ex, msgs...)
+    msg = isempty(msgs) ? ex : msgs[1]
+    if isa(msg, AbstractString)
+        msg = msg # pass-through
+    elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
+        # message is an expression needing evaluating
+        msg = :(Main.Base.string($(esc(msg))))
+    elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
+        msg = Main.Base.string(msg)
+    else
+        # string() might not be defined during bootstrap
+        msg = quote
+            msg = $(Expr(:quote,msg))
+            isdefined(Main, :Base) ? Main.Base.string(msg) :
+                (Core.println(msg); "Error during bootstrap. See stdout.")
+        end
+    end
+    return msg
+end
+
+"""
+    CheckError([msg])
+
+The checked condition did not evaluate to `true`.
+Optional argument `msg` is a descriptive error string.
+
+# Examples
+```jldoctest
+julia> @check false "this is not true"
+ERROR: CheckError: this is not true
+```
+
+`CheckError` is usually thrown from [`@check`](@ref).
+"""
+struct CheckError <: Exception
+    msg::AbstractString
+end
+CheckError() = CheckError("")
+
+"""
+    @check cond [text]
+
+Throw an [`CheckError`](@ref) if `cond` is `false`.
+Message `text` is optionally displayed upon check failure.
+
+Similar to [`@assert`](@ref), except `@check` is never disabled.
+
+# Examples
+```jldoctest
+julia> @check iseven(3) "3 is an odd number!"
+ERROR: CheckError: 3 is an odd number!
+
+julia> @check isodd(3) "What even are numbers?"
+```
+
+!!! compat "Julia 1.8"
+    This macro was added in Julia 1.8.
+
+"""
+macro check(ex, msgs...)
+    msg = prepare_error(ex, msgs...)
+    return :($(esc(ex)) ? $(nothing) : throw(CheckError($msg)))
+end
+
 struct ExponentialBackOff
     n::Int
     first_delay::Float64

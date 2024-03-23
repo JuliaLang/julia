@@ -129,6 +129,7 @@ export
 # Exceptions
     CanonicalIndexError,
     CapturedException,
+    CheckError,
     CompositeException,
     DimensionMismatch,
     EOFError,
@@ -1064,6 +1065,7 @@ export
     @polly,
 
     @assert,
+    @check,
     @atomic,
     @atomicswap,
     @atomicreplace,

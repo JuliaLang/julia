@@ -45,6 +45,8 @@ Build system changes
 
 New library functions
 ---------------------
+* `@check cond [msg]` can be used to check if a condition holds and to error otherwise ([#41342])
+
 
 * `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
