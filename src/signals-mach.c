@@ -662,10 +662,16 @@ void *mach_profile_listener(void *arg)
         for (int idx = nthreads; idx-- > 0; ) {
             // Stop the threads in the random or reverse round-robin order.
             int i = randperm[idx];
-            // if there is no space left, break early
             if (jl_profile_is_buffer_full()) {
-                jl_profile_stop_timer();
-                break;
+                if (jl_profile_continuous) {
+                    // Wrap around to the beginning
+                    bt_size_cur = 0;
+                } else {
+                    // Buffer full: Delete the timer
+                    jl_profile_stop_timer();
+                    // if there is no space left, break early
+                    break;
+                }
             }
 
             if (_dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
