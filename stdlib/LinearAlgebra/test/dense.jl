@@ -85,7 +85,8 @@ bimg  = randn(n,2)/2
                 @test_throws DimensionMismatch b'\b
                 @test_throws DimensionMismatch b\b'
                 @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
-                @test zeros(eltya,n)\fill(eltya(1),n) ≈ (zeros(eltya,n,1)\fill(eltya(1),n,1))[1,1]
+                temp = @test_deprecated zeros(eltya,n)\fill(eltya(1),n)
+                @test temp ≈ (zeros(eltya,n,1)\fill(eltya(1),n,1))[1,1]
             end
 
             @testset "Test nullspace" begin
@@ -1136,6 +1137,22 @@ end
     end
 end
 
+function test_rdiv_pinv_consistency_dep(a, b)
+    temp1 = @test_deprecated /(a*b,b)
+    temp2 = @test_deprecated b/b
+    @test temp1 ≈ (a*temp2) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
+    @test typeof(temp1) == a*(typeof(temp2)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
+end
+function test_ldiv_pinv_consistency_dep(a, b)
+    temp1 = @test_deprecated \(a,a*b)
+    temp2 = @test_deprecated \(a,a)
+    @test temp1 ≈ temp2*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
+    @test typeof(temp1) == typeof((temp2*b)) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
+end
+function test_div_pinv_consistency_dep(a, b)
+    test_rdiv_pinv_consistency_dep(a, b)
+    test_ldiv_pinv_consistency_dep(a, b)
+end
 function test_rdiv_pinv_consistency(a, b)
     @test (a*b)/b ≈ a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
     @test typeof((a*b)/b) == typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
@@ -1156,13 +1173,15 @@ end
         cm = rand(elty, 5, 1)
         rm = rand(elty, 1, 5)
         @testset "dot products" begin
-            test_div_pinv_consistency(r, c)
-            test_div_pinv_consistency(rm, c)
-            test_div_pinv_consistency(r, cm)
+            test_div_pinv_consistency_dep(r, c)
+            test_rdiv_pinv_consistency_dep(rm, c)
+            test_ldiv_pinv_consistency(rm, c)
+            test_rdiv_pinv_consistency(r, cm)
+            test_ldiv_pinv_consistency_dep(r, cm)
             test_div_pinv_consistency(rm, cm)
         end
         @testset "outer products" begin
-            test_div_pinv_consistency(c, r)
+            test_div_pinv_consistency_dep(c, r)
             test_div_pinv_consistency(cm, rm)
         end
         @testset "matrix/vector" begin
