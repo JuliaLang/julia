@@ -2080,7 +2080,8 @@ function __require(into::Module, mod::Symbol)
                 hint_message = hint ? ", maybe you meant `import/using $(dots)$(mod)`" : ""
                 install_message = if mod != :Pkg
                     start_sentence = hint ? "Otherwise, run" : "Run"
-                    "\n- $start_sentence `import Pkg; Pkg.add($(repr(String(mod))))` to install the $mod package."
+                    pkg_cmd = isinteractive() ? "pkg> add $mod" : "import Pkg; Pkg.add(\"$mod\")"
+                    "\n- $start_sentence `$pkg_cmd` to install the $mod package."
                 else  # for some reason Pkg itself isn't availability so do not tell them to use Pkg to install it.
                     ""
                 end
