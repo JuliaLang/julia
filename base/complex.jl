@@ -351,7 +351,7 @@ muladd(z::Complex, w::Complex, x::Real) =
     Complex(muladd(real(z), real(w), -muladd(imag(z), imag(w), -x)),
             muladd(real(z), imag(w), imag(z) * real(w)))
 
-/(a::R, z::S) where {R<:Real,S<:Complex} = (T = promote_type(R,S); a*inv(T(z)))
+/(a::R, z::S) where {R<:Real, S<:Complex} = (T = promote_type(R,S); a*inv(T(z)))
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
 
 function /(a::Complex{T}, b::Complex{T}) where T<:Real
