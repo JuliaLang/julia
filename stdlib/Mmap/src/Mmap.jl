@@ -54,6 +54,7 @@ if Sys.isunix()
 
 const PROT_READ     = Cint(1)
 const PROT_WRITE    = Cint(2)
+const PROT_EXEC     = Cint(4)
 const MAP_SHARED    = Cint(1)
 const MAP_PRIVATE   = Cint(2)
 const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
@@ -62,7 +63,7 @@ const F_GETFL       = Cint(3)
 gethandle(io::IO) = RawFD(fd(io))
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
-function settings(s::RawFD, shared::Bool)
+function settings(s::RawFD, shared::Bool, exec::Bool)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
     if s == INVALID_OS_HANDLE
         flags |= MAP_ANONYMOUS
@@ -75,6 +76,14 @@ function settings(s::RawFD, shared::Bool)
         if prot & PROT_READ == 0
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end
+    end
+    if exec
+       prot |= PROT_EXEC
+       @static if Sys.isapple()
+          MAP_JIT = Cint(0x0800)
+          # Bypassing W^X protections requires the MAP_JIT permission
+          ((prot & PROT_WRITE) > 0) && (flags |= MAP_JIT)
+       end
     end
     return prot, flags, (prot & PROT_WRITE) > 0
 end
@@ -125,8 +134,9 @@ end # os-test
 # core implementation of mmap
 
 """
-    mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
-    mmap(type::Type{Array{T,N}}, dims)
+    mmap(io::Union{IOStream,AbstractString}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+    mmap(io::Anonymous[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true, exec::Bool=false)
+    mmap(type::Type{Array{T,N}}, dims; shared::Bool=true, exec::Bool=false)
 
 Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
 convenient way of working with data too large to fit in the computer's memory.
@@ -154,6 +164,13 @@ privileges are required to grow the file.
 
 The `shared` keyword argument specifies whether the resulting `Array` and changes made to it
 will be visible to other processes mapping the same file.
+
+The `exec` keyword argument specifies whether the underlying mmap data will be executable.
+Warning: on most CPUs, you must call a platform-specific function after creating this region and after writing to it, before executing it, or risk unpredictable behavior and corruption.
+
+!!! note
+    On MacOS `exec=true` implies `shared=false`.
+
 
 For example, the following code
 
@@ -184,12 +201,34 @@ information in the header. In practice, consider encoding binary data using stan
 like HDF5 (which can be used with memory-mapping).
 """
 function mmap(io::IO,
-              ::Type{Array{T,N}}=Vector{UInt8},
+              type::Type{Array{T,N}}=Vector{UInt8},
               dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
+    _mmap(io, type, dims, offset; grow, shared)
+end
+function mmap(io::Anonymous,
+              type::Type{Array{T,N}}=Vector{UInt8},
+              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true,
+              exec::Bool=false) where {T,N}
+    _mmap(io, type, dims, offset; grow, shared, exec)
+end
+
+
+function _mmap(io::IO,
+              ::Type{Array{T,N}}=Vector{UInt8},
+              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true,
+              exec::Bool=false) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
+    @static if Sys.isapple()
+       # on MacOS exec=true requires the MAP_JIT flag to bypass W^X protections
+       # but combining MAP_JIT with MAP_SHARED is disallowed on MacOS, although its undocumented
+       # https://github.com/apple-oss-distributions/xnu/blob/1031c584a5e37aff177559b9f69dbd3c8c3fd30a/bsd/kern/kern_mman.c#L328-L337
+       exec && (shared = false)
+    end
 
     len = sizeof(T)
     for l in dims
@@ -217,7 +256,7 @@ function mmap(io::IO,
     end
     # platform-specific mmapping
     @static if Sys.isunix()
-        prot, flags, iswrite = settings(file_desc, shared)
+        prot, flags, iswrite = settings(file_desc, shared, exec)
         if requestedSizeLarger
             if iswrite
                 if grow
@@ -245,13 +284,16 @@ function mmap(io::IO,
                 throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
             end
         end
+        page_flag = exec ? (readonly ? PAGE_EXECUTE_READ : PAGE_EXECUTE_READWRITE) : (readonly ? PAGE_READONLY : PAGE_READWRITE)
+        file_flag = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
+        exec && (file_flag |= FILE_MAP_EXECUTE)
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
-                                file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
+                                file_desc, C_NULL, page_flag, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
-                                readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
+                                file_flag, true, name)
         Base.windowserror(:mmap, handle == C_NULL)
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
-                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
+                    handle, file_flag, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
         Base.windowserror(:mmap, ptr == C_NULL)
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
@@ -281,8 +323,8 @@ mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); gr
     open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)}
 
 # constructors for non-file-backed (anonymous) mmaps
-mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:Array,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
-mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:Array} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
+mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true, exec::Bool=false) where {T<:Array,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared, exec=exec)
+mmap(::Type{T}, i::Integer...; shared::Bool=true, exec::Bool=false) where {T<:Array} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared, exec=exec)
 
 """
     mmap(io, BitArray, [dims, offset])
@@ -352,8 +394,8 @@ mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); gr
     open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::BitVector
 
 # constructors for non-file-backed (anonymous) mmaps
-mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:BitArray,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
-mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:BitArray} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
+mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true, exec::Bool=false) where {T<:BitArray,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared, exec=exec)
+mmap(::Type{T}, i::Integer...; shared::Bool=true, exec::Bool=false) where {T<:BitArray} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared, exec=exec)
 
 # msync flags for unix
 const MS_ASYNC = 1

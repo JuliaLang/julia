@@ -291,7 +291,10 @@ m = mmap(Vector{UInt8}, 12)
 m[1] = 0x0a
 Mmap.sync!(m)
 @test m[1] === 0x0a
-m = mmap(Vector{UInt8}, 12; shared=false)
+m = mmap(Vector{UInt8}, 12; shared=false, exec=false)
+m = mmap(Vector{UInt8}, 12; shared=true,  exec=false)
+m = mmap(Vector{UInt8}, 12; shared=false, exec=true)
+m = mmap(Vector{UInt8}, 12; shared=true,  exec=true)
 m = mmap(Vector{Int}, 12)
 @test length(m) == 12
 @test all(m .== 0)
