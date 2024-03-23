@@ -1,7 +1,8 @@
 module Precompilation
 
 using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
-            project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive
+            project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
+            base_project
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -59,6 +60,19 @@ function ExplicitEnv(envpath::String=Base.active_project())
         delete!(project_deps, name)
     end
 
+    # This project might be a package, in that case, that is also a "dependency"
+    # of the project.
+    proj_name = get(project_d, "name", nothing)::Union{String, Nothing}
+    _proj_uuid = get(project_d, "uuid", nothing)::Union{String, Nothing}
+    proj_uuid = _proj_uuid === nothing ? nothing : UUID(_proj_uuid)
+
+    project_is_package = proj_name !== nothing && proj_uuid !== nothing
+    if project_is_package
+        # TODO: Error on missing uuid?
+        project_deps[proj_name] = UUID(proj_uuid)
+        names[UUID(proj_uuid)] = proj_name
+    end
+
     project_extensions = Dict{String, Vector{UUID}}()
     # Collect all extensions of the project
     for (name, triggers::Union{String, Vector{String}}) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
@@ -74,18 +88,6 @@ function ExplicitEnv(envpath::String=Base.active_project())
             push!(uuids, uuid)
         end
         project_extensions[name] = uuids
-    end
-
-    # This project might be a package, in that case, that is also a "dependency"
-    # of the project.
-    proj_name = get(project_d, "name", nothing)::Union{String, Nothing}
-    _proj_uuid = get(project_d, "uuid", nothing)::Union{String, Nothing}
-    proj_uuid = _proj_uuid === nothing ? nothing : UUID(_proj_uuid)
-
-    if proj_name !== nothing && proj_uuid !== nothing
-        # TODO: Error on missing uuid?
-        project_deps[proj_name] = UUID(proj_uuid)
-        names[UUID(proj_uuid)] = proj_name
     end
 
     manifest = project_file_manifest_path(envpath)
@@ -355,8 +357,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
                         io::IO=stderr,
                         # asking for timing disables fancy mode, as timing is shown in non-fancy mode
-                        fancyprint::Bool = can_fancyprint(io) && !timing
-                    )
+                        fancyprint::Bool = can_fancyprint(io) && !timing,
+                        manifest::Bool=false,)
 
     configs = configs isa Config ? [configs] : configs
 
@@ -512,9 +514,15 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     end
     @debug "precompile: circular dep check done"
 
-    # if a list of packages is given, restrict to dependencies of given packages
-    if !isempty(pkgs)
-         function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
+    if !manifest
+        if isempty(pkgs)
+            pkgs = [pkg.name for pkg in direct_deps]
+            target = "all packages"
+        else
+            target = join(pkgs, ", ")
+        end
+        # restrict to dependencies of given packages
+        function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
             for _dep in depsmap[dep]
                 if !(_dep in alldeps)
                     push!(alldeps, _dep)
@@ -544,13 +552,13 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                 # TODO: actually handle packages from other envs in the stack
                 return
             else
-                error("No direct dependencies outside of the sysimage found matching $(repr(pkgs))")
+                return
             end
         end
-        target = join(pkgs, ", ")
     else
-        target = "project"
+        target = "manifest"
     end
+
     nconfigs = length(configs)
     if nconfigs == 1
         if !isempty(only(configs)[1])
