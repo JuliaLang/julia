@@ -1122,7 +1122,7 @@ so that the left-hand side is updated in-place.
 
 Since adding dots to many operations and function calls in an expression
 can be tedious and lead to code that is difficult to read, the macro
-[`@.`](@ref @__dot__) is provided to convert *every* function call,
+[`@.`](@ref @__dot__) is provided to convert every function call,
 operation, and assignment in an expression into the "dotted" version.
 
 ```jldoctest
