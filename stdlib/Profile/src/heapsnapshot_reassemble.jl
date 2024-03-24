@@ -204,6 +204,19 @@ function assemble_snapshot(in_prefix, io::IO)
     return nothing
 end
 
+"""
+    cleanup_streamed_files(prefix::AbstractString)
+
+Remove files streamed during `take_heap_snapshot` in streaming mode.
+"""
+function cleanup_streamed_files(prefix::AbstractString)
+    rm(string(prefix, ".metadata.json"))
+    rm(string(prefix, ".nodes"))
+    rm(string(prefix, ".edges"))
+    rm(string(prefix, ".strings"))
+    return nothing
+end
+
 function print_str_escape_json(stream::IO, s::AbstractString)
     print(stream, '"')
     for c in s
