@@ -163,6 +163,7 @@ let fails = @testset NoThrowTestSet begin
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
         @test_throws ["BoundsError", "aquire", "1-element", "at index [2]"] [1][2]
+        @test_throws Union{} error("I have errored")
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -298,6 +299,10 @@ let fails = @testset NoThrowTestSet begin
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
 
+    let str = sprint(show, fails[27])
+        @test occursin("Expected: No exception thrown", str)
+        @test occursin("Thrown: ErrorException", str)
+    end
 end
 
 struct BadError <: Exception end
