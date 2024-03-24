@@ -110,8 +110,8 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     if n === nothing && delay === nothing
         return n_cur, delay_cur
     end
-    nnew = (n === nothing) ? n_cur : n
-    delaynew = (delay === nothing) ? delay_cur : delay
+    nnew = (n === nothing) ? (n_cur != 0 ? n_cur : DEFAULT_N) : n
+    delaynew = (delay === nothing) ? (delay_cur != 0 ? delay_cur : DEFAULT_DELAY) : delay
     init(nnew, delaynew; limitwarn)
 end
 
@@ -130,21 +130,21 @@ function init(n::Integer, delay::Real; limitwarn::Bool = true)
     end
 end
 
+# Use a max size of 10M profile samples, and fire timer every 1ms
+# (that should typically give around 100 seconds of record)
+if Sys.iswindows() && Sys.WORD_SIZE == 32
+    # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
+    # so we don't want to slow the program down by quite that much
+    const DEFAULT_N = 1_000_000
+    const DEFAULT_DELAY = 0.01
+else
+    # Keep these values synchronized with trigger_profile_peek
+    const DEFAULT_N = 10_000_000
+    const DEFAULT_DELAY = 0.001
+end
 function default_init()
     # init with default values
-    # Use a max size of 10M profile samples, and fire timer every 1ms
-    # (that should typically give around 100 seconds of record)
-    @static if Sys.iswindows() && Sys.WORD_SIZE == 32
-        # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
-        # so we don't want to slow the program down by quite that much
-        n = 1_000_000
-        delay = 0.01
-    else
-        # Keep these values synchronized with trigger_profile_peek
-        n = 10_000_000
-        delay = 0.001
-    end
-    init(n, delay, limitwarn = false)
+    init(DEFAULT_N, DEFAULT_DELAY, limitwarn = false)
 end
 
 # Checks whether the profile buffer has been initialized. If not, initializes it with the default size.
