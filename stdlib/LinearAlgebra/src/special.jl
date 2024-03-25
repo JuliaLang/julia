@@ -291,6 +291,13 @@ function fill!(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     not be filled with $x, since some of its entries are constrained."))
 end
 
+# Zero(::ArrayWrapper) forwards to parent
+for func in [:zero]
+    for Wrapper in [:Symmetric, :Hermitian, :Adjoint, :LowerTriangular, :Transpose, :UpperHessenberg, :UpperTriangular]
+        @eval Base.$func(M::$Wrapper) = $Wrapper($func(parent(M)))
+    end
+end
+
 one(D::Diagonal) = Diagonal(one.(D.diag))
 one(A::Bidiagonal{T}) where T = Bidiagonal(fill!(similar(A.dv, typeof(one(T))), one(T)), fill!(similar(A.ev, typeof(one(T))), zero(one(T))), A.uplo)
 one(A::Tridiagonal{T}) where T = Tridiagonal(fill!(similar(A.du, typeof(one(T))), zero(one(T))), fill!(similar(A.d, typeof(one(T))), one(T)), fill!(similar(A.dl, typeof(one(T))), zero(one(T))))

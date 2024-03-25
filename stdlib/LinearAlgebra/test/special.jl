@@ -2,7 +2,7 @@
 
 module TestSpecial
 
-using Test, LinearAlgebra, Random
+using Test, LinearAlgebra, Random, StaticArrays
 using LinearAlgebra: rmul!
 
 n= 10 #Size of matrix to test
@@ -175,6 +175,23 @@ end
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
             end
         end
+    end
+end
+
+@testset "zero(::ArrayWrapper) should forward to the parent" begin
+    # Github Issue #53014
+    Stat_mat = SA[1 2; 2 3]
+    S_z = Symmetric(Stat_mat)
+    H_z = Hermitian(Stat_mat)
+    A_z = Adjoint(Stat_mat)
+    L_t_z = LowerTriangular(Stat_mat)
+    T_z = Transpose(Stat_mat)
+    U_h_z = UpperHessenberg(Stat_mat)
+    U_t_z = UpperTriangular(Stat_mat)
+
+    mats = Any[S_z, H_z, A_z, L_t_z, T_z, U_h_z, U_t_z]
+    for A in mats
+        @test typeof(zero(A)) == typeof(A)
     end
 end
 
