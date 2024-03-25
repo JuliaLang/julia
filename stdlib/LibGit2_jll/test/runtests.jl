@@ -7,5 +7,5 @@ using Test, Libdl, LibGit2_jll
     minor = Ref{Cint}(0)
     patch = Ref{Cint}(0)
     @test ccall((:git_libgit2_version, libgit2), Cint, (Ref{Cint}, Ref{Cint}, Ref{Cint}), major, minor, patch) == 0
-    @test VersionNumber(major[], minor[], patch[]) == v"1.7.2"
+    @test VersionNumber(major[], minor[], patch[]) == v"1.8.0"
 end
