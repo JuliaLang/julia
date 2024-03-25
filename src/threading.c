@@ -708,14 +708,9 @@ void jl_init_threading(void)
         }
         else {
             // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
-            // set the number of mark threads to half of compute threads
+            // set the number of mark threads to the number of compute threads
             // and number of sweep threads to 0
-            if (nthreads <= 1) {
-                jl_n_markthreads = 0;
-            }
-            else {
-                jl_n_markthreads = (nthreads / 2) - 1;
-            }
+            jl_n_markthreads = nthreads - 1; // -1 for the master (mutator) thread which may also do marking
             // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
             // cap the number of threads that may run the mark phase to
             // the number of CPU cores

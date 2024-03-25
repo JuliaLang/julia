@@ -140,7 +140,8 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
+    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize,
+    isexecutable, isreadable, iswritable
 
 import .Base.RefValue
 
@@ -364,6 +365,86 @@ function touch(f::File)
     end
     f
 end
+
+"""
+    isexecutable(path::String)
+
+Return `true` if the given `path` has executable permissions.
+
+!!! note
+    This permission may change before the user executes `path`,
+    so it is recommended to execute the file and handle the error if that fails,
+    rather than calling `isexecutable` first.
+
+!!! note
+    Prior to Julia 1.6, this did not correctly interrogate filesystem
+    ACLs on Windows, therefore it would return `true` for any
+    file.  From Julia 1.6 on, it correctly determines whether the
+    file is marked as executable or not.
+
+See also [`ispath`](@ref), [`isreadable`](@ref), [`iswritable`](@ref).
+"""
+function isexecutable(path::String)
+    # We use `access()` and `X_OK` to determine if a given path is
+    # executable by the current user.  `X_OK` comes from `unistd.h`.
+    X_OK = 0x01
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, X_OK) == 0
+end
+isexecutable(path::AbstractString) = isexecutable(String(path))
+
+"""
+    isreadable(path::String)
+
+Return `true` if the access permissions for the given `path` permitted reading by the current user.
+
+!!! note
+    This permission may change before the user calls `open`,
+    so it is recommended to just call `open` alone and handle the error if that fails,
+    rather than calling `isreadable` first.
+
+!!! note
+    Currently this function does not correctly interrogate filesystem
+    ACLs on Windows, therefore it can return wrong results.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also [`ispath`](@ref), [`isexecutable`](@ref), [`iswritable`](@ref).
+"""
+function isreadable(path::String)
+    # We use `access()` and `R_OK` to determine if a given path is
+    # readable by the current user.  `R_OK` comes from `unistd.h`.
+    R_OK = 0x04
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, R_OK) == 0
+end
+isreadable(path::AbstractString) = isreadable(String(path))
+
+"""
+    iswritable(path::String)
+
+Return `true` if the access permissions for the given `path` permitted writing by the current user.
+
+!!! note
+    This permission may change before the user calls `open`,
+    so it is recommended to just call `open` alone and handle the error if that fails,
+    rather than calling `iswritable` first.
+
+!!! note
+    Currently this function does not correctly interrogate filesystem
+    ACLs on Windows, therefore it can return wrong results.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also [`ispath`](@ref), [`isexecutable`](@ref), [`isreadable`](@ref).
+"""
+function iswritable(path::String)
+    # We use `access()` and `W_OK` to determine if a given path is
+    # writeable by the current user.  `W_OK` comes from `unistd.h`.
+    W_OK = 0x02
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
+end
+iswritable(path::AbstractString) = iswritable(String(path))
 
 
 end

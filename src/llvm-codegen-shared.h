@@ -222,7 +222,7 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
     auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
     const int ptls_offset = offsetof(jl_task_t, ptls);
     llvm::Value *pptls = builder.CreateInBoundsGEP(
-            T_pjlvalue, current_task,
+            T_pjlvalue, emit_bitcast_with_builder(builder, current_task, T_ppjlvalue),
             ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
             "ptls_field");
     LoadInst *ptls_load = builder.CreateAlignedLoad(T_pjlvalue,

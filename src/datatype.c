@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdalign.h>
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
@@ -793,14 +794,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     return;
 }
 
-static int is_anonfn_typename(char *name)
-{
-    if (name[0] != '#' || name[1] == '#')
-        return 0;
-    char *other = strrchr(name, '#');
-    return other > &name[1] && is10digit(other[1]);
-}
-
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_sym_t *name,
         jl_module_t *module,
@@ -1012,7 +1005,7 @@ JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt)
 
 #if MAX_POINTERATOMIC_SIZE >= 16
 typedef struct _jl_uint128_t {
-    uint64_t a;
+    alignas(16) uint64_t a;
     uint64_t b;
 } jl_uint128_t;
 #endif
@@ -1356,7 +1349,7 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
 #endif
 #if MAX_POINTERATOMIC_SIZE >= 16
     else if (nb <= 16) {
-        jl_uint128_t y128 = 0;
+        jl_uint128_t y128 = {0};
         jl_uint128_t z128 = zext_read128(src, nb);
         while (1) {
             success = jl_atomic_cmpswap((_Atomic(jl_uint128_t)*)dst, &y128, z128);

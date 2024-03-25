@@ -13,7 +13,6 @@ using Base, Libdl, Base.BinaryPlatforms
 # using CompilerSupportLibraries_jll
 # Because of this however, we have to manually load the libraries we
 # _do_ care about, namely libgfortran
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
