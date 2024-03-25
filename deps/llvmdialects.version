@@ -1,0 +1,7 @@
+# -*- makefile -*-
+## jll artifact
+LLVMDIALECTS_JLL_NAME := LLVMDialects
+
+## source build
+LLVMDIALECTS_BRANCH=f00b5759ea2ee194a77e1c577464ccb737950bfe
+LLVMDIALECTS_SHA1=f00b5759ea2ee194a77e1c577464ccb737950bfe
