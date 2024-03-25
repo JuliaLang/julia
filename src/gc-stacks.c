@@ -187,6 +187,68 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     return stk;
 }
 
+size_t total_stack_nbytes(void) JL_NOTSAFEPOINT
+{
+#if defined(_OS_LINUX_) || defined(_OS_DARWIN_)
+    size_t n_stack_bytes = 0;
+    const size_t max_stack_size = pool_sizes[JL_N_STACK_POOLS - 1];
+#ifdef _OS_LINUX_
+    unsigned char mincore_mask[max_stack_size / jl_page_size + 1];
+#else
+    char mincore_mask[max_stack_size / jl_page_size + 1];
+#endif
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL) {
+            continue;
+        }
+        // walk over all the free stacks and count the number of resident pages
+        for (int p = 0; p < JL_N_STACK_POOLS; p++) {
+            small_arraylist_t *al = &ptls2->heap.free_stacks[p];
+            void **lst = al->items;
+            for (size_t n = 0; n < al->len; n++) {
+                void *stk = lst[n];
+                memset(mincore_mask, 0, sizeof(mincore_mask));
+                int rc = mincore(stk, pool_sizes[p], mincore_mask);
+                if (rc == -1) {
+                    jl_safe_printf("mincore failed: %s\n", strerror(errno));
+                    abort();
+                }
+                size_t n_resident = 0;
+                for (size_t i = 0; i < sizeof(mincore_mask); i++) {
+                    n_resident += __builtin_popcount((unsigned char)mincore_mask[i]);
+                }
+                n_stack_bytes += n_resident * jl_page_size;
+            }
+        }
+        // walk over all the live tasks and count the number of resident pages
+        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        void **lst = live_tasks->items;
+        for (size_t i = 0; i < live_tasks->len; i++) {
+            jl_task_t *t = (jl_task_t*)lst[i];
+            if (t->stkbuf == NULL) {
+                continue;
+            }
+            memset(mincore_mask, 0, sizeof(mincore_mask));
+            int rc = mincore(t->stkbuf, t->bufsz, mincore_mask);
+            if (rc == -1) {
+                jl_safe_printf("mincore failed: %s\n", strerror(errno));
+                abort();
+            }
+            size_t n_resident = 0;
+            for (size_t i = 0; i < sizeof(mincore_mask); i++) {
+                n_resident += __builtin_popcount((unsigned char)mincore_mask[i]);
+            }
+            n_stack_bytes += n_resident * jl_page_size;
+        }
+    }
+    return n_stack_bytes;
+#else
+    return 0;
+#endif
+}
+
 void sweep_stack_pools(void)
 {
     // Stack sweeping algorithm:

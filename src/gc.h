@@ -522,6 +522,7 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
 void gc_sweep_pool_parallel(jl_ptls_t ptls);
 void gc_free_pages(void);
 void sweep_stack_pools(void);
+size_t total_stack_nbytes(void) JL_NOTSAFEPOINT;
 void jl_gc_debug_init(void);
 
 // GC pages
