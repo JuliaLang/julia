@@ -20,6 +20,7 @@ gc_page_profiler_serializer_t gc_page_serializer_create(void) JL_NOTSAFEPOINT
     gc_page_profiler_serializer_t serializer;
     if (__unlikely(page_profile_enabled)) {
         arraylist_new(&serializer.typestrs, GC_PAGE_SZ);
+        serializer.buffers = (char *)malloc_s(GC_SERIALIZER_CAPACITY * GC_TYPE_STR_MAXLEN);
     }
     else {
         serializer.typestrs.len = 0;
@@ -34,6 +35,7 @@ void gc_page_serializer_init(gc_page_profiler_serializer_t *serializer,
         serializer->typestrs.len = 0;
         serializer->data = (char *)pg->data;
         serializer->osize = pg->osize;
+        serializer->next_buffer = 0;
     }
 }
 
@@ -41,6 +43,7 @@ void gc_page_serializer_destroy(gc_page_profiler_serializer_t *serializer) JL_NO
 {
     if (__unlikely(page_profile_enabled)) {
         arraylist_free(&serializer->typestrs);
+        free(serializer->buffers);
     }
 }
 
