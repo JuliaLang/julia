@@ -102,9 +102,8 @@ function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
     elseif expr.head === :call && expr.args[1] === :^
-        lim = -(typemin(Int) ÷ 4)
         ea = expr.args
-        if length(ea) >= 3 && isa(ea[3], Int) && (-lim <= ea[3] < lim)
+        if length(ea) >= 3 && isa(ea[3], Integer)
             # mimic Julia's literal_pow lowering of literal integer powers
             return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(ea[2]), Val(ea[3]))
         end
