@@ -218,7 +218,6 @@ function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     end
 end
 
-
 # SSA values that need renaming
 struct OldSSAValue
     id::Int

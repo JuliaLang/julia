@@ -7,9 +7,8 @@ module MiniCassette
     # A minimal demonstration of the cassette mechanism. Doesn't support all the
     # fancy features, but sufficient to exercise this code path in the compiler.
 
-    using Core.Compiler: retrieve_code_info, CodeInfo,
-        MethodInstance, SSAValue, GotoNode, GotoIfNot, ReturnNode, SlotNumber, quoted,
-        signature_type, anymap
+    using Core.IR
+    using Core.Compiler: retrieve_code_info, quoted, signature_type, anymap
     using Base: _methods_by_ftype
     using Base.Meta: isexpr
     using Test

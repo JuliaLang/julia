@@ -1021,6 +1021,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
     m->line = jl_linenode_line(functionloc);
     if (isinferred) {
+        m->source = (jl_value_t*)ci;
         m->slot_syms = jl_compress_argnames(ci->slotnames);
         jl_gc_wb(m, m->slot_syms);
     } else {
