@@ -467,6 +467,28 @@ end
                 @test dot(symblockml, symblockml) ≈ dot(msymblockml, msymblockml)
             end
         end
+
+        @testset "kronecker product of symmetric and Hermitian matrices" begin
+            for mtype in (Symmetric, Hermitian)
+                symau = mtype(a, :U)
+                symal = mtype(a, :L)
+                msymau = Matrix(symau)
+                msymal = Matrix(symal)
+                for eltyc in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
+                    creal = randn(n, n)/2
+                    cimag = randn(n, n)/2
+                    c = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(creal, cimag) : creal)
+                    symcu = mtype(c, :U)
+                    symcl = mtype(c, :L)
+                    msymcu = Matrix(symcu)
+                    msymcl = Matrix(symcl)
+                    @test kron(symau, symcu) ≈ kron(msymau, msymcu)
+                    @test kron(symau, symcl) ≈ kron(msymau, msymcl)
+                    @test kron(symal, symcu) ≈ kron(msymal, msymcu)
+                    @test kron(symal, symcl) ≈ kron(msymal, msymcl)
+                end
+            end
+        end
     end
 end
 
@@ -487,6 +509,7 @@ end
         @test S - S == MS - MS
         @test S*2 == 2*S == 2*MS
         @test S/2 == MS/2
+        @test kron(S,S) == kron(MS,MS)
     end
     @testset "mixed uplo" begin
         Mu = Matrix{Complex{BigFloat}}(undef,2,2)
@@ -502,6 +525,8 @@ end
             MSl = Matrix(Sl)
             @test Su + Sl == Sl + Su == MSu + MSl
             @test Su - Sl == -(Sl - Su) == MSu - MSl
+            @test kron(Su,Sl) == kron(MSu,MSl)
+            @test kron(Sl,Su) == kron(MSl,MSu)
         end
     end
 end
@@ -515,6 +540,16 @@ end
     A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + transpose(t) for i in 1:2]
     @test A == Symmetric(A) && B == Symmetric(B)
     @test dot(A, B) ≈ dot(Symmetric(A), Symmetric(B))
+end
+
+# let's make sure the analogous bug will not show up with kronecker products
+@testset "kron Hermitian quaternion #52318" begin
+    A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + t' for i in 1:2]
+    @test A == Hermitian(A) && B == Hermitian(B)
+    @test kron(A, B) ≈ kron(Hermitian(A), Hermitian(B))
+    A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + transpose(t) for i in 1:2]
+    @test A == Symmetric(A) && B == Symmetric(B)
+    @test kron(A, B) ≈ kron(Symmetric(A), Symmetric(B))
 end
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.

@@ -359,6 +359,7 @@ debug && println("Test basic type functionality")
                 # Binary operations
                 @test A1 + A2 == M1 + M2
                 @test A1 - A2 == M1 - M2
+                @test kron(A1,A2) == kron(M1,M2)
 
                 # Triangular-Triangular multiplication and division
                 @test A1*A2 ≈ M1*M2
@@ -1014,6 +1015,7 @@ end
             @test 2\L == 2\B
             @test real(L) == real(B)
             @test imag(L) == imag(B)
+            @test kron(L,L) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(L) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(L) broken=!(A isa Matrix)
         end
@@ -1035,6 +1037,7 @@ end
             @test 2\U == 2\B
             @test real(U) == real(B)
             @test imag(U) == imag(B)
+            @test kron(U,U) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(U) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(U) broken=!(A isa Matrix)
         end
