@@ -251,7 +251,7 @@ let c = Ref(0),
     @test c[] == 100
 end
 
-@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+@test_throws ConcurrencyViolationError("deadlock detected: cannot wait on current task") wait(current_task())
 
 # issue #41347
 let t = @async 1
