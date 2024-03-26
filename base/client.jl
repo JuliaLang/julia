@@ -108,7 +108,6 @@ istrivialerror(stack::ExceptionStack) =
     # frame 1 = top level; assumes already went through scrub_repl_backtrace; MethodError see #50803
 
 function display_error(io::IO, stack::ExceptionStack)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     show_exception_stack(IOContext(io, :limit => true), stack)
     println(io)
 end
@@ -116,7 +115,6 @@ display_error(stack::ExceptionStack) = display_error(stderr, stack)
 
 # these forms are depended on by packages outside Julia
 function display_error(io::IO, er, bt)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
     showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
     println(io)
 end
