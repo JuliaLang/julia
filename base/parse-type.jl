@@ -1,13 +1,21 @@
 # Parses a string into a Julia type object, e.g. `Int`, `Array{Int, 2}`, etc.
 """
-    Base.parse(Type, string;    module_context=Main)
-    Base.parse(Type{T}, string; module_context=Main)
+    Base.parse(Type, str;    module_context=Main)
+    Base.parse(Type{T}, str; module_context=Main)
 
-Parse a string into a Julia type object, which must be a subtype of `Type{T}`.
+Parse a string into a Julia type object, which must be a subtype of `Type{T}`. Parsing a
+string directly into a Type object is faster and safer than using eval (since it prevents
+arbitrary code execution).
 
-For example, `parse(Type{<:Number}, str)` could return `Int`, `Float64`, or any other
-subtype of `Number`. Throws an `ArgumentError` if parsing fails.
-The parsing occurs in the context of the `module_context`, which defaults to `Main`.
+The provided `str` should be a valid julia type expression, e.g. `parse(Type, "Int")`,
+`parse(Type, "Vector{Any}")`, etc, which parses as a subtype of the provided `Type{T}`.
+Throws an `ArgumentError` if parsing fails.
+
+A more specific `Type{T}` can be used to restrict the parsed type to match a provided
+supertype. For example, `parse(Type{<:Number}, str)` could return `Int`, `Float64`, or any
+other subtype of `Number`.
+
+The parsing uses the context of the `module_context`, which defaults to `Main`.
 
 # Examples
 ```julia
