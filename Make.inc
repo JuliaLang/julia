@@ -492,6 +492,8 @@ MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
+COMPRESS_DEBUG_FLAGS := -gz
+
 JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
 JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
@@ -549,6 +551,9 @@ FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 endif
 endif
+
+# Always add compression flags, if any
+SHIPFLAGS += $(COMPRESS_DEBUG_FLAGS)
 
 JLDFLAGS :=
 
