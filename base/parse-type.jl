@@ -154,22 +154,8 @@ function _try_parse_qualified_type(module_context, sym::Symbol, raise::Bool, typ
             return v_if_found
         end
     end
-    #@show type_vars
 
-    # Otherwise, this is a top-level name.
-
-    # If it is a module name (e.g. `Core` or `Pkg`), in order for us to parse a type from a
-    # top-level module, the module would have to be loaded. So we look to the loaded_modules
-    # to find it.
-    for mod in values(Base.loaded_modules)
-        if sym == nameof(mod)
-            return mod
-        end
-    end
-
-    # Finally, we can assume that this is a name defined in Main, since if it was in a
-    # module other than Main, it should have been qualified. These would include names like
-    # `Int` or `Dict`. So we look these up directly.
+    # Otherwise, this should be a top-level name in the provided module.
 
     if !raise  # Skip the isdefined check if !raise, since getglobal will throw anyway.
         !isdefined(module_context, sym) && return nothing

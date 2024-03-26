@@ -370,18 +370,6 @@ end
         @test parse(Type, "TestModule.Inner.X{TestModule.Inner.X{Int,Int,Int}, AbstractString, Dict{Int,Int}}") ===
                            TestModule.Inner.X{TestModule.Inner.X{Int,Int,Int}, AbstractString, Dict{Int,Int}}
     end
-    @testset "loaded modules" begin
-        @test parse(Type, "Test.Result") === Test.Result
-        # Here, we know the Random module is loaded because it's an indirect dependency
-        # loaded through Test. However, `Random` is not imported here, so in order for this
-        # to parse, it has to look up the top-level module name in the loaded modules.
-        # TODO(PR): *Should* it do this? This is maybe a bit too fancy? Would it be better
-        # to just require that the module be imported to Main or the current module in order
-        # to parse this?
-        @assert !@isdefined(Random)
-        @test parse(Type, "Random.UInt10Raw") === Test.Random.UInt10Raw
-    end
-
     @testset "UnionAlls" begin
         @test parse(Type, "Vector") === Vector == Vector{<:Any}
 
