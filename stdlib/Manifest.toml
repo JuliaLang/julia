@@ -272,7 +272,7 @@ version = "1.11.0"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.2.13+1"
+version = "1.3.1+0"
 
 [[deps.dSFMT_jll]]
 deps = ["Artifacts", "Libdl"]
