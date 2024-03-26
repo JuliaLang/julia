@@ -54,7 +54,7 @@ void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2)
     for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
-        int8_t gc_state = (int8_t)(item >> 8);
+        int8_t gc_state = (int8_t)(item >> 16);
         if (tid != tid2)
             continue;
         jl_atomic_store_release(&ptls2->gc_state, gc_state);
@@ -72,7 +72,7 @@ void jl_mach_gc_end(void)
     for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
-        int8_t gc_state = (int8_t)(item >> 8);
+        int8_t gc_state = (int8_t)(item >> 16);
         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
         uv_mutex_lock(&ptls2->sleep_lock);
         if (jl_atomic_load_relaxed(&ptls2->suspend_count) == 0) {
