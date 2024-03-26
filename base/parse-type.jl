@@ -1,7 +1,38 @@
 # Parses a string into a Julia type object, e.g. `Int`, `Array{Int, 2}`, etc.
-function Base.parse(::Type{T}, str::AbstractString) where T<:Type
+"""
+    Base.parse(Type, string;    module_context=Main)
+    Base.parse(Type{T}, string; module_context=Main)
+
+Parse a string into a Julia type object, which must be a subtype of `Type{T}`.
+
+For example, `parse(Type{<:Number}, str)` could return `Int`, `Float64`, or any other
+subtype of `Number`. Throws an `ArgumentError` if parsing fails.
+The parsing occurs in the context of the `module_context`, which defaults to `Main`.
+
+# Examples
+```julia
+julia> parse(Type, "Int")
+Int64
+
+julia> parse(Type{<:Vector{<:Integer}}, "Vector{Int}")
+Vector{Int64}
+
+julia> parse(Type{<:Integer}, "Int")
+Int64
+
+julia> parse(Type{Integer}, "Int")
+ERROR: TypeError: in typeassert, expected Type{Integer}, got Type{Int64}
+
+julia> parse(Type{<:Integer}, "Float32")
+ERROR: TypeError: in typeassert, expected Type{<:Integer}, got Type{Float32}
+
+julia> parse(Type, "CustomSet{Int}", module_context=CustomSets)
+CustomSets.CustomSet{Int64}
+```
+"""
+function Base.parse(::Type{T}, str::AbstractString; module_context=Main) where T<:Type
     # tryparse(Type) instead of (T), so we only have to do the type check once.
-    v = Base.tryparse(Type, str)
+    v = Base.tryparse(Type, str; module_context)
     if v === nothing
         throw(ArgumentError("invalid type expression: $str"))
     end
@@ -9,14 +40,14 @@ function Base.parse(::Type{T}, str::AbstractString) where T<:Type
     T === Type && return v
     return v::T
 end
-function Base.tryparse(::Type{T}, str::AbstractString) where {T<:Type}
+function Base.tryparse(::Type{T}, str::AbstractString; module_context=Main) where {T<:Type}
     ast = Meta.parse(str, raise=false)
     # (This only needs to be checked once, so it's checked here, rather than in
     # _try_parse_type, since _try_parse_type is self-recursive.)
     if ast isa Expr && ast.head === :incomplete
         return nothing
     end
-    v = _try_parse_type(ast, false)
+    v = _try_parse_type(module_context, ast, false)
     v === nothing && return nothing
     # Don't pay for the type check if not needed (~2 μs)
     T === Type && return v
@@ -36,12 +67,12 @@ end
 # NOTE: This pattern is a hard-coded part of types: unnamed type variables start with `#s`.
 _unnamed_type_var() = Symbol("#s$(gensym())")
 
-function _try_parse_type(ast, raise::Bool, type_vars = nothing)
+function _try_parse_type(module_context, ast, raise::Bool, type_vars = nothing)
     if ast isa Expr && ast.head == :curly
         # If the type expression has type parameters, iterate the params, evaluating them
         # recursively, and finally construct the output type with the evaluated params.
 
-        @_or_nothing typ = _try_parse_qualified_type(ast.args[1], raise, type_vars)
+        @_or_nothing typ = _try_parse_qualified_type(module_context, ast.args[1], raise, type_vars)
         length(ast.args) == 1 && return typ
         # If any of the type parameters are unnamed type restrictions, like `<:Number`, we
         # will construct new anonymous type variables for them, and wrap the returned type
@@ -52,11 +83,11 @@ function _try_parse_type(ast, raise::Bool, type_vars = nothing)
             arg = ast.args[i]
             if arg isa Expr && arg.head === :(<:) && length(arg.args) == 1
                 # Change `Vector{<:Number}` to `Vector{#s#27} where #s#27<:Number`
-                type_var = TypeVar(_unnamed_type_var(), @_or_nothing(_try_parse_type(arg.args[1], raise, type_vars)))
+                type_var = TypeVar(_unnamed_type_var(), @_or_nothing(_try_parse_type(module_context, arg.args[1], raise, type_vars)))
                 push!(new_type_vars, type_var)
                 ast.args[i] = type_var
             else
-                @_or_nothing ast.args[i] = _try_parse_type(ast.args[i], raise, type_vars)
+                @_or_nothing ast.args[i] = _try_parse_type(module_context, ast.args[i], raise, type_vars)
             end
         end
         # PERF: Drop the first element, instead of args[2:end], to avoid a new sub-vector
@@ -81,41 +112,41 @@ function _try_parse_type(ast, raise::Bool, type_vars = nothing)
         new_type_vars = TypeVar[]
         type_vars = Dict{Symbol, TypeVar}()
         for i in 2:length(ast.args)
-            @_or_nothing type_var = _try_parse_type_var(ast.args[i], raise, type_vars)
+            @_or_nothing type_var = _try_parse_type_var(module_context, ast.args[i], raise, type_vars)
             type_var::TypeVar
             type_vars[type_var.name] = type_var
             push!(new_type_vars, type_var)
         end
         # Then evaluate the body in the context of those type vars
-        @_or_nothing body = _try_parse_type(ast.args[1], raise, type_vars)
+        @_or_nothing body = _try_parse_type(module_context, ast.args[1], raise, type_vars)
         # Now work backwards through the new type vars and construct our wrapper UnionAlls:
         for type_var in Iterators.reverse(new_type_vars)
             body = UnionAll(type_var, body)
         end
         return body
     elseif ast isa Expr && ast.head == :call && ast.args[1] === :typeof
-        return typeof(@_or_nothing _try_parse_type(ast.args[2], raise, type_vars))
+        return typeof(@_or_nothing _try_parse_type(module_context, ast.args[2], raise, type_vars))
     elseif ast isa Expr && ast.head == :call
-        return @_or_nothing _try_parse_isbits_constructor(ast, raise, type_vars)
+        return @_or_nothing _try_parse_isbits_constructor(module_context, ast, raise, type_vars)
     else
-        return @_or_nothing _try_parse_qualified_type(ast, raise, type_vars)
+        return @_or_nothing _try_parse_qualified_type(module_context, ast, raise, type_vars)
     end
 end
-_try_parse_qualified_type(val, _, _) = val
-function _try_parse_qualified_type(ast::Expr, raise::Bool, type_vars)
+_try_parse_qualified_type(module_context, val, _, _) = val
+function _try_parse_qualified_type(module_context, ast::Expr, raise::Bool, type_vars)
     if ast.head !== :(.)
         raise && throw(ArgumentError("Failed to parse type expression. Expected a \
                 qualified type, e.g. `Base.Dict`, got: `$ast`"))
         return nothing
     end
-    @_or_nothing mod = _try_parse_qualified_type(ast.args[1], raise, type_vars)
+    @_or_nothing mod = _try_parse_qualified_type(module_context, ast.args[1], raise, type_vars)
     value = ast.args[2]
     if value isa QuoteNode
         value = value.value
     end
     return getglobal(mod, value)
 end
-function _try_parse_qualified_type(sym::Symbol, raise::Bool, type_vars)
+function _try_parse_qualified_type(module_context, sym::Symbol, raise::Bool, type_vars)
     # First try to look up the symbol in the type vars
     if type_vars !== nothing
         v_if_found = get(type_vars, sym, :not_found)
@@ -141,37 +172,37 @@ function _try_parse_qualified_type(sym::Symbol, raise::Bool, type_vars)
     # `Int` or `Dict`. So we look these up directly.
 
     if !raise  # Skip the isdefined check if !raise, since getglobal will throw anyway.
-        !isdefined(Main, sym) && return nothing
+        !isdefined(module_context, sym) && return nothing
     end
-    getglobal(Main, sym)
+    getglobal(module_context, sym)
 end
 
 # Parses constant isbits constructor expressions, like `Int32(10)` or `Point(0,0)`, as used in type
 # parameters like `Val{10}()` or `DefaultDict{Point(0,0)}`.
-function _try_parse_isbits_constructor(ast, raise::Bool, type_vars)
-    @_or_nothing typ = _try_parse_type(ast.args[1], raise, type_vars)
+function _try_parse_isbits_constructor(module_context, ast, raise::Bool, type_vars)
+    @_or_nothing typ = _try_parse_type(module_context, ast.args[1], raise, type_vars)
     # PERF: Reuse the args vector when parsing the type values.
     popfirst!(ast.args)
     for i in 1:length(ast.args)
-        @_or_nothing ast.args[i] = _try_parse_type(ast.args[i], raise, type_vars)
+        @_or_nothing ast.args[i] = _try_parse_type(module_context, ast.args[i], raise, type_vars)
     end
     # We use reinterpret to avoid evaluating code, which may have side effects.
     return reinterpret(typ, Tuple(ast.args))
 end
 
-_try_parse_type_var(ast::Symbol, raise::Bool, _type_vars) = Core.TypeVar(ast)
-function _try_parse_type_var(ast::Expr, raise, type_vars)
+_try_parse_type_var(module_context, ast::Symbol, raise::Bool, _type_vars) = Core.TypeVar(ast)
+function _try_parse_type_var(module_context, ast::Expr, raise, type_vars)
     if ast.head === :(<:)
-        return Core.TypeVar(ast.args[1]::Symbol, @_or_nothing _try_parse_type(ast.args[2], raise, type_vars))
+        return Core.TypeVar(ast.args[1]::Symbol, @_or_nothing _try_parse_type(module_context, ast.args[2], raise, type_vars))
     elseif ast.head === :(>:)
-        return Core.TypeVar(ast.args[2]::Symbol, @_or_nothing _try_parse_type(ast.args[1], raise, type_vars))
+        return Core.TypeVar(ast.args[2]::Symbol, @_or_nothing _try_parse_type(module_context, ast.args[1], raise, type_vars))
     elseif ast.head === :comparison
         if ast.args[2] === :(<:)
             @assert ast.args[4] === :(<:) "invalid bounds in \"where\": $ast"
-            return Core.TypeVar(ast.args[3]::Symbol, @_or_nothing(_try_parse_type(ast.args[1], raise, type_vars)), @_or_nothing(_try_parse_type(ast.args[5], raise, type_vars)))
+            return Core.TypeVar(ast.args[3]::Symbol, @_or_nothing(_try_parse_type(module_context, ast.args[1], raise, type_vars)), @_or_nothing(_try_parse_type(module_context, ast.args[5], raise, type_vars)))
         else
             @assert ast.args[2] === ast.args[4] === :(>:) "invalid bounds in \"where\": $ast"
-            return Core.TypeVar(ast.args[3]::Symbol, @_or_nothing(_try_parse_type(ast.args[5], raise, type_vars)), @_or_nothing(_try_parse_type(ast.args[1], raise, type_vars)))
+            return Core.TypeVar(ast.args[3]::Symbol, @_or_nothing(_try_parse_type(module_context, ast.args[5], raise, type_vars)), @_or_nothing(_try_parse_type(module_context, ast.args[1], raise, type_vars)))
         end
     else
         @assert false "invalid bounds in \"where\": $ast"

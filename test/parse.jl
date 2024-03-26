@@ -432,4 +432,22 @@ end
         @test_broken parse(Type, string(T)) == T
         @test_broken parse(Type{T}, string(T)) == T
     end
+
+    @eval module InnerModule
+        abstract type Abstract end
+        struct A <: Abstract end
+        struct B{T} <: Abstract end
+    end
+    @eval @test parse(Type, "InnerModule.Abstract") === InnerModule.Abstract
+    @eval @test parse(Type, "Abstract", module_context=InnerModule) === InnerModule.Abstract
+    @eval @test parse(Type, "A", module_context=InnerModule) === InnerModule.A
+    @eval @test parse(Type, "InnerModule.A") === InnerModule.A
+    @eval @test parse(Type{<:InnerModule.Abstract}, "InnerModule.A") === InnerModule.A
+    @eval @test parse(Type{InnerModule.A}, "InnerModule.A") === InnerModule.A
+    @eval @test parse(Type, "B{Int}", module_context=InnerModule) === InnerModule.B{Int}
+    @eval @test parse(Type, "InnerModule.B{Int}") === InnerModule.B{Int}
+    @eval @test parse(Type{<:InnerModule.Abstract}, "InnerModule.B{Int}") === InnerModule.B{Int}
+    @eval @test parse(Type{<:InnerModule.B}, "InnerModule.B{Int}") === InnerModule.B{Int}
+    @eval @test parse(Type{<:InnerModule.B{<:Number}}, "InnerModule.B{Int}") === InnerModule.B{Int}
+    @eval @test parse(Type{InnerModule.B{Int}}, "InnerModule.B{Int}") === InnerModule.B{Int}
 end
