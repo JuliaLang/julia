@@ -281,14 +281,28 @@ mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Int
     mapreduce(f, op, itrs...; [init])
 
 Apply function `f` to each element(s) in `itrs`, and then reduce the result using the binary
-function `op`. If provided, `init` must be a neutral element for `op` that will be returned
-for empty collections. It is unspecified whether `init` is used for non-empty collections.
-In general, it will be necessary to provide `init` to work with empty collections.
+function `op`.
+
+The order of function evaluations and the associativity of the reduction is unspecified. Some
+implementations may reuse the return value of `f` for elements that appear multiple times in
+`itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) for
+strict left or right associativity and guaranteed invocation of `f` for every value.
+
+If provided, `init` serves as the return value for empty `itrs`. For non-empty iterators,
+it is included in the reduction exactly once and ensures that every element in `itrs` is
+used as an argument to `op`. Like the reduction itself, the exact order and associativity
+of how `init` is included is not specified. It is generally an error to call `mapreduce`
+with empty collections without specifying an `init` value, but in unambiguous cases the
+identity value may be returned; see [`Base.reduce_empty`](@ref) for more details.
 
 [`mapreduce`](@ref) is functionally equivalent to calling
-`reduce(op, map(f, itr); init=init)`, but will in general execute faster since no
+`reduce(op, map(f, itrs...)...; init=init)`, but will in general execute faster since no
 intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
 [`map`](@ref).
+
+Some commonly-used operators may have special implementations of a mapped reduction, and
+should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
+[`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
 
 !!! compat "Julia 1.2"
     `mapreduce` with multiple iterators requires Julia 1.2 or later.
@@ -298,11 +312,6 @@ intermediate collection needs to be created. See documentation for [`reduce`](@r
 julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
 14
 ```
-
-The associativity of the reduction is implementation-dependent. Additionally, some
-implementations may reuse the return value of `f` for elements that appear multiple times in
-`itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
-guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
 mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
@@ -452,13 +461,20 @@ _mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f,
 """
     reduce(op, itr; [init])
 
-Reduce the given collection `itr` with the given binary operator `op`. If provided, the
-initial value `init` must be a neutral element for `op` that will be returned for empty
-collections. It is unspecified whether `init` is used for non-empty collections.
+Reduce the given collection `itr` with the given binary operator `op`.
 
-For empty collections, providing `init` will be necessary, except for some special cases
-(e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can determine the
-neutral element of `op`.
+The order of evaluations and the associativity of the reduction is unspecified.
+This means that you shouldn't
+use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
+will be evaluated as `(1-2)-3` or `1-(2-3)`. Use
+[`foldl`](@ref) or [`foldr`](@ref) for guaranteed left or right associativity.
+
+If provided, `init` serves as the return value for empty `itrs`. For non-empty iterators,
+it is included in the reduction exactly once and ensures that every element in `itrs` is
+used as an argument to `op`. Like the reduction itself, the exact order and associativity
+of how `init` is included is not specified. It is generally an error to call `mapreduce`
+with empty collections without specifying an `init` value, but in unambiguous cases the
+identity value may be returned; see [`Base.reduce_empty`](@ref) for more details.
 
 Reductions for certain commonly-used operators may have special implementations, and
 should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
@@ -466,14 +482,8 @@ should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`su
 There are efficient methods for concatenating certain arrays of arrays
 by calling `reduce(`[`vcat`](@ref)`, arr)` or `reduce(`[`hcat`](@ref)`, arr)`.
 
-The associativity of the reduction is implementation dependent. This means that you can't
-use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
-should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](@ref) or
-[`foldr`](@ref) instead for guaranteed left or right associativity.
-
 Some operations accumulate error. Parallelism will be easier if the reduction can be
-executed in groups. Future versions of Julia might change the algorithm. Note that the
-elements are not reordered if you use an ordered collection.
+executed in groups. Future versions of Julia might change the algorithm.
 
 # Examples
 ```jldoctest
