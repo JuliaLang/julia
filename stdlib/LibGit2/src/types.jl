@@ -678,6 +678,8 @@ The fields represent:
      for more information.
   * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
      Extra headers needed for the push operation.
+  * `remote_push_options`: only relevant if the LibGit2 version is greater than or equal to `1.8.0`.
+     "Push options" to deliver to the remote.
 """
 @kwdef struct PushOptions
     version::Cuint                     = Cuint(1)
@@ -691,6 +693,9 @@ The fields represent:
     end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct = StrArrayStruct()
+    end
+    @static if LibGit2.VERSION >= v"1.8.0"
+        remote_push_options::StrArrayStruct = StrArrayStruct()
     end
 end
 @assert Base.allocatedinline(PushOptions)
@@ -913,10 +918,17 @@ Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_conf
 struct ConfigEntry
     name::Cstring
     value::Cstring
+    @static if LibGit2.VERSION >= v"1.8.0"
+        backend_type::Cstring
+        origin_path::Cstring
+    end
     include_depth::Cuint
     level::GIT_CONFIG
     free::Ptr{Cvoid}
-    payload::Ptr{Cvoid} # User is not permitted to read or write this field
+    @static if LibGit2.VERSION < v"1.8.0"
+        # In 1.8.0, the unused payload value has been removed
+        payload::Ptr{Cvoid}
+    end
 end
 @assert Base.allocatedinline(ConfigEntry)
 
