@@ -73,21 +73,25 @@ function _try_parse_type(module_context, ast, raise::Bool, type_vars = nothing)
         # recursively, and finally construct the output type with the evaluated params.
 
         @_bail_if_nothing typ = _try_parse_qualified_type(module_context, ast.args[1], raise, type_vars)
-        length(ast.args) == 1 && return typ
+
+        # Parse the type parameters, if there are any.
+
         # If any of the type parameters are unnamed type restrictions, like `<:Number`, we
         # will construct new anonymous type variables for them, and wrap the returned type
         # in a UnionAll.
         new_type_vars = Vector{TypeVar}()
-        # PERF: Reuse the vector to save allocations
-        for i in 2:length(ast.args)
-            arg = ast.args[i]
-            if arg isa Expr && arg.head === :(<:) && length(arg.args) == 1
-                # Change `Vector{<:Number}` to `Vector{#s#27} where #s#27<:Number`
-                type_var = TypeVar(_unnamed_type_var(), @_bail_if_nothing(_try_parse_type(module_context, arg.args[1], raise, type_vars)))
-                push!(new_type_vars, type_var)
-                ast.args[i] = type_var
-            else
-                @_bail_if_nothing ast.args[i] = _try_parse_type(module_context, ast.args[i], raise, type_vars)
+        if length(ast.args) > 1
+            # PERF: Reuse the vector to save allocations
+            for i in 2:length(ast.args)
+                arg = ast.args[i]
+                if arg isa Expr && arg.head === :(<:) && length(arg.args) == 1
+                    # Change `Vector{<:Number}` to `Vector{#s#27} where #s#27<:Number`
+                    type_var = TypeVar(_unnamed_type_var(), @_bail_if_nothing(_try_parse_type(module_context, arg.args[1], raise, type_vars)))
+                    push!(new_type_vars, type_var)
+                    ast.args[i] = type_var
+                else
+                    @_bail_if_nothing ast.args[i] = _try_parse_type(module_context, ast.args[i], raise, type_vars)
+                end
             end
         end
         # PERF: Drop the first element, instead of args[2:end], to avoid a new sub-vector

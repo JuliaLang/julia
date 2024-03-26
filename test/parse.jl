@@ -408,17 +408,14 @@ end
         Union{Int,Float64},
         Union{NTuple{<:Any, Union{Nothing, Int}}, Tuple{Int,Float64}},
         Union{NTuple{N, Union{Nothing, Int}}, Tuple{Int,Val{N}}} where N,
-    ]
-    broken_types = [
         Union{}, Tuple{},
+        Tuple{Int,Union{Int,Float64}}, Tuple{String,Vararg{Int}}, NTuple{3,Int},
+        Type, Union, Tuple, Any,
+        Type{<:Type{<:Type}}, Type{<:Type{<:Type{Type}}},
     ]
     @testset for T in types
         @test parse(Type, string(T)) == T
         @test parse(Type{T}, string(T)) == T
-    end
-    @testset for T in broken_types
-        @test_broken parse(Type, string(T)) == T
-        @test_broken parse(Type{T}, string(T)) == T
     end
 
     @eval module InnerModule
