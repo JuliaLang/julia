@@ -333,6 +333,8 @@ struct PkgPrecompileError <: Exception
     msg::String
 end
 Base.showerror(io::IO, err::PkgPrecompileError) = print(io, err.msg)
+Base.showerror(io::IO, err::PkgPrecompileError, bt; kw...) = Base.showerror(io, err) # hide stacktrace
+
 # This needs a show method to make `julia> err` show nicely
 Base.show(io::IO, err::PkgPrecompileError) = print(io, "PkgPrecompileError: ", err.msg)
 
@@ -943,7 +945,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                 end
             else
                 println(io)
-                error(err_msg)
+                throw(PkgPrecompileError(err_msg))
             end
         end
     end
