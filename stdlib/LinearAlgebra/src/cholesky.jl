@@ -861,3 +861,7 @@ function diag(C::Cholesky{T}, k::Int = 0) where {T}
     end
     return z
 end
+
+function tr(C::Cholesky{T}) where {T}
+    return sum(diag(C))
+end
