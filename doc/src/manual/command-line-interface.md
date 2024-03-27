@@ -173,7 +173,7 @@ The following is a complete list of command-line switches available when launchi
 |`--handle-signals={yes*\|no}`          |Enable or disable Julia's default signal handlers|
 |`--sysimage-native-code={yes*\|no}`    |Use native code from system image if available|
 |`--compiled-modules={yes*\|no\|existing\|strict}` |Enable or disable incremental precompilation of modules. The `existing` option allows use of existing compiled modules that were previously precompiled, but disallows creation of new precompile files. The `strict` option is similar, but will error if no precompile file is found. |
-|`--pkgimages={yes*\|no\|existing}`                |Enable or disable usage of native code caching in the form of pkgimages. The `existing` option allows use of existing pkgimages but disallows creation of new ones|
+|`--pkgimages={yes*\|no\|existing}`     |Enable or disable usage of native code caching in the form of pkgimages. The `existing` option allows use of existing pkgimages but disallows creation of new ones|
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-m`, `--module <Package> [args]`      |Run entry point of `Package` (`@main` function) with `args'|
@@ -191,9 +191,9 @@ The following is a complete list of command-line switches available when launchi
 |`--warn-overwrite={yes\|no*}`          |Enable or disable method overwrite warnings|
 |`--warn-scope={yes*\|no}`              |Enable or disable warning for ambiguous top-level scope|
 |`-C`, `--cpu-target <target>`          |Limit usage of CPU features up to `<target>`; set to `help` to see the available options|
-|`-O`, `--optimize={0,1,2*,3}`          |Set the optimization level (level is 3 if `-O` is used without a level) ($)|
-|`--min-optlevel={0*,1,2,3}`            |Set the lower bound on per-module optimization|
-|`-g`, `--debug-info={0,1*,2}`          |Set the level of debug info generation (level is 2 if `-g` is used without a level) ($)|
+|`-O`, `--optimize={0\|1\|2*\|3}`       |Set the optimization level (level is 3 if `-O` is used without a level) ($)|
+|`--min-optlevel={0*\|1\|2\|3}`         |Set the lower bound on per-module optimization|
+|`-g`, `--debug-info={0\|1*\|2}`        |Set the level of debug info generation (level is 2 if `-g` is used without a level) ($)|
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
 |`--math-mode={ieee\|user*}`            |Always follow `ieee` floating point semantics or respect `@fastmath` declarations|
@@ -214,7 +214,7 @@ The following is a complete list of command-line switches available when launchi
 |`--output-bc <name>`                   |Generate LLVM bitcode (.bc)|
 |`--output-asm <name>`                  |Generate an assembly file (.s)|
 |`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
-|`--trace-compile={stderr,name}`        |Print precompile statements for methods compiled during execution or save to a path|
+|`--trace-compile={stderr\|name}`       |Print precompile statements for methods compiled during execution or save to a path|
 |`--image-codegen`                      |Force generate code in imaging mode|
 |`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
 

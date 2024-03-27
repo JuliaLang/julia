@@ -183,11 +183,11 @@ Enable or disable warning for ambiguous top-level scope
 Limit usage of CPU features up to <target>; set to `help` to see the available options
 
 .TP
--O, --optimize={0,1,2*,3}
+-O, --optimize={0|1|2*|3}
 Set the optimization level (level 3 if `-O` is used without a level)
 
 .TP
---min-optlevel={0*,1,2,3}
+--min-optlevel={0*|1|2|3}
 Set a lower bound on the optimization level
 
 .TP
@@ -282,7 +282,7 @@ Generate an assembly file (.s)
 Generate an incremental output file (rather than complete)
 
 .TP
---trace-compile={stderr,name}
+--trace-compile={stderr|name}
 Print precompile statements for methods compiled during execution or save to a path
 
 .TP

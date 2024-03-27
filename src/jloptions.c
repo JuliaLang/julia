@@ -170,12 +170,12 @@ static const char opts[]  =
 
     // code generation options
     " -C, --cpu-target <target>  Limit usage of CPU features up to <target>; set to `help` to see the available options\n"
-    " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level) ($)\n"
-    " --min-optlevel={0*,1,2,3}  Set a lower bound on the optimization level\n"
+    " -O, --optimize={0|1|2*|3}  Set the optimization level (level 3 if `-O` is used without a level) ($)\n"
+    " --min-optlevel={0*|1|2|3}  Set a lower bound on the optimization level\n"
 #ifdef JL_DEBUG_BUILD
-        " -g, --debug-info=[{0,1,2*}] Set the level of debug info generation in the julia-debug build ($)\n"
+        " -g, --debug-info=[{0|1|2*}] Set the level of debug info generation in the julia-debug build ($)\n"
 #else
-        " -g, --debug-info=[{0,1*,2}] Set the level of debug info generation (level 2 if `-g` is used without a level) ($)\n"
+        " -g, --debug-info=[{0|1*|2}] Set the level of debug info generation (level 2 if `-g` is used without a level) ($)\n"
 #endif
     " --inline={yes*|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
     " --check-bounds={yes|no|auto*}\n"
@@ -229,7 +229,7 @@ static const char opts_hidden[]  =
     " --output-asm <name>      Generate an assembly file (.s)\n"
     " --output-incremental={yes|no*}\n"
     "                          Generate an incremental output file (rather than complete)\n"
-    " --trace-compile={stderr,name}\n"
+    " --trace-compile={stderr|name}\n"
     "                          Print precompile statements for methods compiled during execution or save to a path\n"
     " --image-codegen          Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*} Copy the data section of package images into memory\n"
