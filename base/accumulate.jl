@@ -444,21 +444,39 @@ end
 
 # Internal function used to identify the widest possible eltype required for accumulate results
 function _accumulate_promote_op(op, v; init=nothing)
-    # Nested mock function that applies the `op` to each element of `v` which is necessary
-    # to find the widest return eltype.
+    # Nested mock functions used to infer the widest necessary eltype
     # NOTE: We are just passing this to promote_op for inference and should never be run.
+
+    # Initialization function used to identify initial type of `r`
+    # NOTE: reduce_first may have a different return type than calling `op`
     function f(op, v, init)
         val = first(something(iterate(v)))
-        r = isnothing(init) ? Base.reduce_first(op, val) : op(init, val)
-        # first compute `k`, the type of the cumsum with just `r`
+        return isnothing(init) ? Base.reduce_first(op, val) : op(init, val)
+    end
+
+    # Infer iteration type independent of the initialization type
+    # If `op` fails then this will return `Union{}` as `k` will be undefined.
+    # Returning `Union{}` is desirable as it won't break the `promote_type` call in the
+    # outer scope below
+    function g(op, v, r)
+        local k
+        for val in v
+            k = op(r, val)
+        end
+        return k
+    end
+
+    # Finally loop again with the two types promoted together
+    # If the `op` fails and reduce_first was used then then this will still just
+    # return the initial type, allowing the `op` to error during execution.
+    function h(op, v, r)
         for val in v
             r = op(r, val)
         end
         return r
     end
 
-    T = Base.promote_op(f, typeof(op), typeof(v), typeof(init))
-
-    # Simplify any union types before returning
-    return Base.promote_union(T)
+    R = Base.promote_op(f, typeof(op), typeof(v), typeof(init))
+    K = Base.promote_op(g, typeof(op), typeof(v), R)
+    return Base.promote_op(h, typeof(op), typeof(v), Base.promote_type(R, K))
 end

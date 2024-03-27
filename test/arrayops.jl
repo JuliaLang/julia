@@ -2871,7 +2871,7 @@ end
         foo(x::ComplexF64, y::Int)::String = string(x, "+", y)
 
         v = collect(1:5)
-        @test Base._accumulate_promote_op(foo, v; init=true) === Base._accumulate_promote_op(foo, v) == Any
+        @test Base._accumulate_promote_op(foo, v; init=true) === Base._accumulate_promote_op(foo, v) == Union{Float64, String, ComplexF64}
         @test Base._accumulate_promote_op(/, v) === Base._accumulate_promote_op(/, v; init=0) == Float64
         @test Base._accumulate_promote_op(+, v) === Base._accumulate_promote_op(+, v; init=0) === Int
         @test Base._accumulate_promote_op(+, v; init=0.0) === Float64
