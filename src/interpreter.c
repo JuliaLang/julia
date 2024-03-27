@@ -760,7 +760,19 @@ JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
-    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
+    jl_code_info_t *code = NULL;
+    if (source->source) {
+        code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
+    }
+    else {
+        // OC constructed from optimized IR. It'll have a single specialization with optimized code
+        // in it that we'll try to interpret.
+        jl_svec_t *specializations = (jl_svec_t*)jl_atomic_load_relaxed(&source->specializations);
+        assert(jl_is_method_instance(specializations));
+        jl_method_instance_t *mi = (jl_method_instance_t *)specializations;
+        jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+        code = jl_uncompress_ir(source, ci, jl_atomic_load_relaxed(&ci->inferred));
+    }
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
     jl_task_t *ct = jl_current_task;

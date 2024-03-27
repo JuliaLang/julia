@@ -358,3 +358,8 @@ let ir = first(only(Base.code_ircode(sin, (Int,))))
     oc = Core.OpaqueClosure(ir)
     @test (Base.show_method(IOBuffer(), oc.source::Method); true)
 end
+
+let ir = first(only(Base.code_ircode(sin, (Int,))))
+    oc = Core.OpaqueClosure(ir; do_compile=false)
+    @test oc(1) == sin(1)
+end
