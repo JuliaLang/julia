@@ -114,7 +114,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-# These are integration tests. If you want to unit test test e.g. completion, or
+# These are integration tests. If you want to unit test e.g. completion, or
 # exact LineEdit behavior, put them in the appropriate test files.
 # Furthermore since we are emulating an entire terminal, there may be control characters
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically

@@ -528,7 +528,7 @@ no scratch space is present.
 
 A returned scratch space will be a `Vector{T}` where `T` is usually the eltype of `v`. There
 are some exceptions, for example if `eltype(v) == Union{Missing, T}` then the scratch space
-may be be a `Vector{T}` due to `MissingOptimization` changing the eltype of `v` to `T`.
+may be a `Vector{T}` due to `MissingOptimization` changing the eltype of `v` to `T`.
 
 `t` is an appropriate scratch space for the algorithm at hand, to be accessed as
 `t[i + offset]`. `t` is used for an algorithm to pass a scratch space back to itself in
