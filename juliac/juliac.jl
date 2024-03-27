@@ -57,6 +57,7 @@ init_path = joinpath(tmpdir, "init.a")
 img_path = joinpath(tmpdir, "img.a")
 bc_path = joinpath(tmpdir, "img-bc.a")
 tmp,io = mktemp(tmpdir, cleanup=false)
+julia_libs = Base.shell_split(Base.isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : "-ljulia -ljulia-internal")
 write(io, """
     Sys.__init__()
     copy!(LOAD_PATH, ["."]) # Only allow loading packages from current project
@@ -88,6 +89,41 @@ write(io, """
         JuliaSyntax.enable_in_core!() = nothing
         set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
         disable_library_threading() = nothing
+        @inline function invokelatest(f::F, args...; kwargs...) where F
+            return f(args...; kwargs...)
+        end
+    end
+    @eval Base.GMP begin
+
+        function __init__()
+            try
+                ccall((:__gmp_set_memory_functions, libgmp), Cvoid,
+                    (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}),
+                    cglobal(:jl_gc_counted_malloc),
+                    cglobal(:jl_gc_counted_realloc_with_old_size),
+                    cglobal(:jl_gc_counted_free_with_size))
+                ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
+                ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
+            catch ex
+                Base.showerror_nostdio(ex, "WARNING: Error during initialization of module GMP")
+            end
+            # This only works with a patched version of GMP, ignore otherwise
+            try
+                ccall((:__gmp_set_alloc_overflow_function, libgmp), Cvoid,
+                    (Ptr{Cvoid},),
+                    cglobal(:jl_throw_out_of_memory_error))
+                ALLOC_OVERFLOW_FUNCTION[] = true
+            catch ex
+                # ErrorException("ccall: could not find function...")
+                if typeof(ex) != ErrorException
+                    rethrow()
+                end
+            end
+        end
+    end
+    using LinearAlgebra
+    @eval LinearAlgebra.BLAS begin
+        check() = nothing #TODO: this might be unsafe but needs logging macro fixes
     end
 """)
 close(io)
@@ -112,11 +148,11 @@ end
 
 try
     if output_type == "--output-lib"
-        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  -ljulia -ljulia-internal`)
+        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  $(julia_libs)`)
     elseif output_type == "--output-sysimage"
-        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             -ljulia -ljulia-internal`)
+        run(`cc $(allflags) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             $(julia_libs)`)
     else
-        run(`cc $(allflags) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path -ljulia -ljulia-internal`)
+        run(`cc $(allflags) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path $(julia_libs)`)
     end
 catch
     println("\nCompilation failed.")

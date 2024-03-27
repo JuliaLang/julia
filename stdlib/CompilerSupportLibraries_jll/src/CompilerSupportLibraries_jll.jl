@@ -4,7 +4,6 @@
 
 baremodule CompilerSupportLibraries_jll
 using Base, Libdl, Base.BinaryPlatforms
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -14,6 +13,8 @@ export libgfortran, libstdcxx, libgomp
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
+libgcc_s_handle::Ptr{Cvoid} = C_NULL
+libgcc_s_path::String = ""
 artifact_dir::String = ""
 libgfortran_handle::Ptr{Cvoid} = C_NULL
 libgfortran_path::String = ""
