@@ -4839,7 +4839,7 @@ f(x) = yt(x)
                          (set! global-const-error current-loc))
                      (emit e))))
             ((atomic) (error "misplaced atomic declaration"))
-            ((isdefined) (if tail (emit-return tail e) e))
+            ((isdefined throw_undef_if_not) (if tail (emit-return tail e) e))
             ((boundscheck) (if tail (emit-return tail e) e))
 
             ((method)

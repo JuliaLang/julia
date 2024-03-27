@@ -5640,6 +5640,13 @@ end
 @test issue53590(false, false) == Float64
 @test issue53590(false, true) == Real
 
+# Expr(:throw_undef_if_not) handling
+@eval function has_tuin()
+    $(Expr(:throw_undef_if_not, :x, false))
+end
+@test Core.Compiler.return_type(has_tuin, Tuple{}) === Union{}
+@test_throws UndefVarError has_tuin()
+
 # issue #53585
 let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
     @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
