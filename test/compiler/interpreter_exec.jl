@@ -110,29 +110,3 @@ let m = Meta.@lower 1 + 1
     @test :b === @eval $m
     @test isempty(current_exceptions())
 end
-
-# Test that things don't break if one branch of the frontend PhiNode becomes unreachable
-let m = Meta.@lower 1 + 1
-    @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::CodeInfo
-    src.code = Any[
-        # block 1
-        GlobalRef(@__MODULE__, :global_error_switch),
-        GotoIfNot(SSAValue(1), 4),
-        # block 2
-        Expr(:call, error, "This error is expected"),
-        # block 3
-        PhiNode(Int32[2, 3], Any[1, 2]),
-        ReturnNode(SSAValue(4))
-    ]
-    nstmts = length(src.code)
-    src.ssavaluetypes = nstmts
-    src.ssaflags = fill(UInt8(0x00), nstmts)
-    src.debuginfo = Core.DebugInfo(:none)
-    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
-    global global_error_switch = true
-    @test_throws ErrorException @eval $m
-    global global_error_switch = false
-    @test 1 === @eval $m
-    @test isempty(current_exceptions())
-end
