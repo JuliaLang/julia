@@ -180,12 +180,10 @@ static const char opts[]  =
     " --inline={yes*|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
     " --check-bounds={yes|no|auto*}\n"
     "                            Emit bounds checks always, never, or respect @inbounds declarations ($)\n"
-    " --math-mode={ieee|user|fast}\n"
-    "                            Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n"
+    " --math-mode={ieee|user*}   Always follow `ieee` floating point semantics or respect `@fastmath` declarations\n\n"
 #ifdef USE_POLLY
     " --polly={yes*|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
-    " --math-mode={ieee|user*}   Always follow `ieee` floating point semantics or respect `@fastmath` declarations\n\n"
 
     // instrumentation options
     " --code-coverage[={none*|user|all}]\n"
