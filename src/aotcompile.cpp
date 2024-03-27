@@ -4,6 +4,7 @@
 #include "platform.h"
 
 // target support
+#include "llvm/Support/CodeGen.h"
 #include <llvm/ADT/Triple.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -1492,16 +1493,23 @@ void jl_dump_native_impl(void *native_code,
         TheTriple.setObjectFormat(Triple::COFF);
     } else if (TheTriple.isOSDarwin()) {
         TheTriple.setObjectFormat(Triple::MachO);
-        TheTriple.setOS(llvm::Triple::MacOSX);
+        SmallString<16> Str;
+        Str += "macosx";
+        if (TheTriple.isAArch64())
+            Str += "11.0.0"; // Update this if MACOSX_VERSION_MIN changes
+        else
+            Str += "10.14.0";
+        TheTriple.setOSName(Str);
     }
     Optional<Reloc::Model> RelocModel;
     if (TheTriple.isOSLinux() || TheTriple.isOSFreeBSD()) {
         RelocModel = Reloc::PIC_;
     }
+
     CodeModel::Model CMModel = CodeModel::Small;
-    if (TheTriple.isPPC()) {
-        // On PPC the small model is limited to 16bit offsets
-        CMModel = CodeModel::Medium;
+    if (TheTriple.isPPC() || (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())) {
+        // On PPC the small model is limited to 16bit offsets. For very large images the small code model
+        CMModel = CodeModel::Medium; //  isn't good enough on x86 so use Medium, it has no cost because only the image goes in .ldata
     }
     std::unique_ptr<TargetMachine> SourceTM(
         jl_ExecutionEngine->getTarget().createTargetMachine(
@@ -1541,6 +1549,12 @@ void jl_dump_native_impl(void *native_code,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data");
         sysdata->setAlignment(Align(64));
+#if JL_LLVM_VERSION >= 180000
+        sysdata->setCodeModel(CodeModel::Large);
+#else
+        if (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())
+            sysdata->setSection(".ldata");
+#endif
         addComdat(sysdata, TheTriple);
         Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), z->size);
         addComdat(new GlobalVariable(sysimgM, len->getType(), true,

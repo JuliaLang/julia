@@ -38,7 +38,7 @@ JL_DLLEXPORT void jl_register_fptrs_fallback(uint64_t image_base, const struct _
     (void)image_base; (void)fptrs; (void)linfos; (void)n;
 }
 
-JL_DLLEXPORT jl_code_instance_t *jl_generate_fptr_fallback(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
+JL_DLLEXPORT jl_code_instance_t *jl_generate_fptr_fallback(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world, int *did_compile)
 {
     return NULL;
 }

@@ -149,7 +149,7 @@ function record(ts::DefaultTestSet, t::LogTestFailure)
     if TESTSET_PRINT_ENABLE[]
         printstyled(ts.description, ": ", color=:white)
         print(t)
-        Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
+        Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
         println()
     end
     # Hack: convert to `Fail` so that test summarization works correctly
