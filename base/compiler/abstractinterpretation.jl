@@ -2625,7 +2625,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             effects = EFFECTS_UNKNOWN
         end
     elseif ehead === :throw_undef_if_not
-        condt = argextype(stmt.args[2], ir)
+        condt = abstract_eval_value(interp, e.args[2], vtypes, sv)
         condval = maybe_extract_const_bool(condt)
         t = Nothing
         exct = UndefVarError

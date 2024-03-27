@@ -185,6 +185,7 @@ static const char opts[]  =
 #ifdef USE_POLLY
     " --polly={yes*|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
+    " --math-mode={ieee|user*}   Always follow `ieee` floating point semantics or respect `@fastmath` declarations\n\n"
 
     // instrumentation options
     " --code-coverage[={none*|user|all}]\n"
@@ -790,7 +791,7 @@ restart_switch:
             else if (!strcmp(optarg,"user"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
             else
-                jl_errorf("julia: invalid argument to --math-mode (%s)", optarg);
+                jl_errorf("julia: invalid argument to --math-mode={ieee|user} (%s)", optarg);
             break;
         case opt_worker:
             jl_options.worker = 1;
