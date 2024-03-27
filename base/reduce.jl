@@ -296,7 +296,7 @@ with empty collections without specifying an `init` value, but in unambiguous ca
 identity value may be returned; see [`Base.reduce_empty`](@ref) for more details.
 
 [`mapreduce`](@ref) is functionally equivalent to calling
-`reduce(op, map(f, itrs...)...; init=init)`, but will in general execute faster since no
+`reduce(op, map(f, itrs...); init=init)`, but will in general execute faster since no
 intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
 [`map`](@ref).
 
