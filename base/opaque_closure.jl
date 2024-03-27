@@ -59,7 +59,7 @@ end
 function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
                             isva::Bool = false,
                             slotnames::Union{Nothing,Vector{Symbol}}=nothing,
-                            do_compile::Bool = true)
+                            kwargs...)
     # NOTE: we need ir.argtypes[1] == typeof(env)
     ir = Core.Compiler.copy(ir)
     # if the user didn't specify a definition MethodInstance or filename Symbol to use for the debuginfo, set a filename now
@@ -78,11 +78,11 @@ function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
     src.slotflags = fill(zero(UInt8), nargtypes)
     src.slottypes = copy(ir.argtypes)
     src = Core.Compiler.ir_to_codeinf!(src, ir)
-    return generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; do_compile)
+    return generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; kwargs...)
 end
 
-function Core.OpaqueClosure(src::CodeInfo, @nospecialize env...; rettype, sig, nargs, isva=false)
-    return generate_opaque_closure(sig, Union{}, rettype, src, nargs, isva, env...)
+function Core.OpaqueClosure(src::CodeInfo, @nospecialize env...; rettype, sig, nargs, isva=false, kwargs...)
+    return generate_opaque_closure(sig, Union{}, rettype, src, nargs, isva, env...; kwargs...)
 end
 
 function generate_opaque_closure(@nospecialize(sig), @nospecialize(rt_lb), @nospecialize(rt_ub),
@@ -90,8 +90,8 @@ function generate_opaque_closure(@nospecialize(sig), @nospecialize(rt_lb), @nosp
                                  mod::Module=@__MODULE__,
                                  lineno::Int=0,
                                  file::Union{Nothing,Symbol}=nothing,
-                                 isinferred::Bool=true,
-                                 do_compile::Bool=true)
+                                 do_compile::Bool=true,
+                                 isinferred::Bool=true)
     return ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint, Cint),
         sig, rt_lb, rt_ub, mod, src, lineno, file, nargs, isva, env, do_compile, isinferred)
 end
