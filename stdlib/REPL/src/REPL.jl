@@ -1379,7 +1379,7 @@ function setup_interface(
                     # execute the statement
                     terminal = LineEdit.terminal(s) # This is slightly ugly but ok for now
                     raw!(terminal, false) && disable_bracketed_paste(terminal)
-                    LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
+                    @invokelatest LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
                     raw!(terminal, true) && enable_bracketed_paste(terminal)
                     LineEdit.push_undo(s) # when the last line is incomplete
                 end
