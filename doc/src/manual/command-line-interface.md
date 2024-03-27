@@ -173,12 +173,12 @@ The following is a complete list of command-line switches available when launchi
 |`--handle-signals={yes*\|no}`          |Enable or disable Julia's default signal handlers|
 |`--sysimage-native-code={yes*\|no}`    |Use native code from system image if available|
 |`--compiled-modules={yes*\|no\|existing\|strict}` |Enable or disable incremental precompilation of modules. The `existing` option allows use of existing compiled modules that were previously precompiled, but disallows creation of new precompile files. The `strict` option is similar, but will error if no precompile file is found. |
-|`--pkgimages={yes*\|no\|existing}`               |Enable or disable usage of native code caching in the form of pkgimages. The `existing` option allows use of existing pkgimages but disallows creation of new ones|
+|`--pkgimages={yes*\|no\|existing}`                |Enable or disable usage of native code caching in the form of pkgimages. The `existing` option allows use of existing pkgimages but disallows creation of new ones|
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-m`, `--module <Package> [args]`      |Run entry point of `Package` (`@main` function) with `args'|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
-|`-t`, `--threads {auto\|N[,auto\|M]}`    |Enable N[+M] threads; N threads are assigned to the `default` threadpool, and if M is specified, M threads are assigned to the `interactive` threadpool; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future. Currently sets N to the number of CPUs assigned to this Julia process based on the OS-specific affinity assignment interface if supported (Linux and Windows) or to the number of CPU threads if not supported (MacOS) or if process affinity is not configured, and sets M to 1.|
+|`-t`, `--threads {auto\|N[,auto\|M]}`  |Enable N[+M] threads; N threads are assigned to the `default` threadpool, and if M is specified, M threads are assigned to the `interactive` threadpool; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future. Currently sets N to the number of CPUs assigned to this Julia process based on the OS-specific affinity assignment interface if supported (Linux and Windows) or to the number of CPU threads if not supported (MacOS) or if process affinity is not configured, and sets M to 1.|
 | `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to half of the number of compute threads and M is set to 0 if unspecified.|
 |`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
@@ -197,7 +197,7 @@ The following is a complete list of command-line switches available when launchi
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
 |`--math-mode={ieee,user,fast}`         |Disallow or enable unsafe floating point optimizations (overrides `@fastmath` declaration)|
-|`--polly={yes*\|no}`                    |Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)|
+|`--polly={yes*\|no}`                   |Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)|
 |`--code-coverage[={none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
 |`--code-coverage=@<path>`              |Count executions but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
@@ -216,7 +216,7 @@ The following is a complete list of command-line switches available when launchi
 |`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
 |`--trace-compile={stderr,name}`        |Print precompile statements for methods compiled during execution or save to a path|
 |`--image-codegen`                      |Force generate code in imaging mode|
-|`--permalloc-pkgimg={yes\|no*}`         |Copy the data section of package images into memory|
+|`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
 
 
 !!! compat "Julia 1.1"
