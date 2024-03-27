@@ -1108,8 +1108,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 new_edges = Int32[]
                 new_vals = Any[]
                 for j = 1:length(expr.edges)
-                    (expr.edges[j] in sv.unreachable) && continue
-                    push!(new_edges, expr.edges[j])
+                    edge = expr.edges[j]
+                    (edge in sv.unreachable || ssavaluetypes[edge] === Union{}) && continue
+                    push!(new_edges, edge)
                     if isassigned(expr.values, j)
                         push!(new_vals, expr.values[j])
                     else

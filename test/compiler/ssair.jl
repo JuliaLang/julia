@@ -755,6 +755,7 @@ end
 end
 
 # Test that things don't break if one branch of the frontend PhiNode becomes unreachable
+global global_error_switch::Bool = true
 function gen_unreachable_phinode_edge(world::UInt, source, _)
     ci = make_codeinfo(Any[
         # block 1
@@ -774,7 +775,9 @@ end
     $(Expr(:meta, :generated_only))
     #= no body =#
 end
-global global_error_switch = true
+let ir = first(only(Base.code_ircode(f_unreachable_phinode_edge)))
+    @test !any(@nospecialize(x)->isa(x,PhiNode), ir.stmts.stmt)
+end
 @test_throws ErrorException f_unreachable_phinode_edge()
 global global_error_switch = false
 @test f_unreachable_phinode_edge() == 1
