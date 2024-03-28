@@ -272,29 +272,60 @@ mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Int
 """
     mapreduce(f, op, itrs...; [init])
 
-Apply function `f` to each element(s) in `itrs`, and then reduce the result using the binary
-function `op`. If provided, `init` must be a neutral element for `op` that will be returned
-for empty collections. It is unspecified whether `init` is used for non-empty collections.
-In general, it will be necessary to provide `init` to work with empty collections.
+Apply function `f` to each element(s) in `itrs`, and then repeatedly call the 2 argument
+function `op` with those results or results from previous `op` evaluations until a single value is returned.
+
+If provided, `init` is included exactly once as the left-most argument to `op`
+for non-empty `itrs` and serves as the return value for empty `itrs`. It is
+not transformed by the mapping function `f`. It is generally an error to call `mapreduce`
+with empty collections without specifying an `init` value, but in unambiguous cases an
+identity value for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
+
+In contrast with [`mapfoldl`](@ref) and [`mapfoldr`](@ref), the sequence of
+function evaluations and the associativity of the reduction is not specified
+and may vary between different methods and Julia versions.
+For example, `mapreduce(√, +, [1, 4, 9])` may be evaluated as either
+`(√1+√4)+√9` (left-associative) _or_ `√1+(√4+√9)` (right-associative).
+The return value for non-associative `op` functions may vary between
+different methods and between Julia versions. For example, `-` is not
+associative and thus `mapreduce(√, -, [1, 4, 9])` may return either
+`-4.0` or `2.0` depending upon the exact method or version of Julia.
+This is also true of some floating point operations that are typically
+associative, for example `mapreduce(identity, +, [.1, .2, .3])` may return
+either `0.6` or `0.6000000000000001`.
+
+While the associativity of the reduction is not defined, `mapreduce` does preserve
+the ordering of the iterator for ordered collections.  For example,
+`mapreduce(uppercase, string, ['j','u','l','i','a'])` is guaranteed to always
+return the properly-spelled `"JULIA"` because `Array`s are ordered collections;
+the returned ordering is not guaranteed with an unordered collection like `Set`.
 
 [`mapreduce`](@ref) is functionally equivalent to calling
-`reduce(op, map(f, itr); init=init)`, but will in general execute faster since no
+`reduce(op, map(f, itrs...); init=init)`, but will in general execute faster since no
 intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
 [`map`](@ref).
+
+Some commonly-used operators may have special implementations of a mapped reduction, and
+should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
+[`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
 
 !!! compat "Julia 1.2"
     `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
-julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
-14
-```
+julia> mapreduce(√, +, [1, 4, 9])
+6.0
 
-The associativity of the reduction is implementation-dependent. Additionally, some
-implementations may reuse the return value of `f` for elements that appear multiple times in
-`itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
-guaranteed left or right associativity and invocation of `f` for every value.
+julia> mapreduce(identity, +, [.1, .2, .3]) ≈ 0.6
+true
+
+julia> mapreduce(uppercase, string, ['j','u','l','i','a'])
+"JULIA"
+
+julia> mapreduce(uppercase, string, ['j','u','l','i','a'], init="Hello ")
+"Hello JULIA"
+```
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
 mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
@@ -444,36 +475,49 @@ _mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f,
 """
     reduce(op, itr; [init])
 
-Reduce the given collection `itr` with the given binary operator `op`. If provided, the
-initial value `init` must be a neutral element for `op` that will be returned for empty
-collections. It is unspecified whether `init` is used for non-empty collections.
+Repeatedly call the 2 argument function `op` with the element(s) in `itr`
+or results from previous `op` evaluations until a single value is returned.
 
-For empty collections, providing `init` will be necessary, except for some special cases
-(e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can determine the
-neutral element of `op`.
+If provided, `init` is included exactly once as the left-most argument to `op`
+for non-empty `itrs` and serves as the return value for empty `itrs`. It is generally an error to call `reduce`
+with empty collections without specifying an `init` value, but in unambiguous cases an
+identity value for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
 
-Reductions for certain commonly-used operators may have special implementations, and
+In contrast with [`foldl`](@ref) and [`foldr`](@ref), the associativity of the reduction is not specified
+and may vary between different methods and Julia versions.
+For example, `reduce(+, [1, 2, 3])` may be evaluated as either
+`(1+2)+3` (left-associative) _or_ `1+(2+3)` (right-associative).
+The return value for non-associative `op` functions may vary between
+different methods and between Julia versions. For example, `-` is not
+associative and thus `reduce(-, [1, 2, 3])` may return either
+`-4` or `2` depending upon the exact method or version of Julia.
+This is also true of some floating point operations that are typically
+associative, for example `reduce(+, [.1, .2, .3])` may return
+either `0.6` or `0.6000000000000001`.
+
+While the associativity of the reduction is not defined, `reduce` does preserve
+the ordering of the iterator for ordered collections.  For example,
+`reduce(string, ['J','u','l','i','a'])` is guaranteed to always
+return the properly-spelled `"Julia"` because `Array`s are ordered collections;
+the returned ordering is not guaranteed with an unordered collection like `Set`.
+
+Some commonly-used operators may have special implementations of a reduction, and
 should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
 [`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
-There are efficient methods for concatenating certain arrays of arrays
-by calling `reduce(`[`vcat`](@ref)`, arr)` or `reduce(`[`hcat`](@ref)`, arr)`.
-
-The associativity of the reduction is implementation dependent. This means that you can't
-use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
-should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](@ref) or
-[`foldr`](@ref) instead for guaranteed left or right associativity.
-
-Some operations accumulate error. Parallelism will be easier if the reduction can be
-executed in groups. Future versions of Julia might change the algorithm. Note that the
-elements are not reordered if you use an ordered collection.
 
 # Examples
 ```jldoctest
-julia> reduce(*, [2; 3; 4])
-24
+julia> reduce(+, [1, 2, 3])
+6
 
-julia> reduce(*, [2; 3; 4]; init=-1)
--24
+julia> reduce(+, [.1, .2, .3]) ≈ 0.6
+true
+
+julia> reduce(string, ['J','u','l','i','a'])
+"Julia"
+
+julia> reduce(string, ['J','u','l','i','a'], init="Hello ")
+"Hello Julia"
 ```
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
