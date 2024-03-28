@@ -1107,49 +1107,58 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::StepRangeLen) = StepRangeLen
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::LinRange) = LinRange(-r.start, -r.stop, length(r))
 
 # For #18336 we need to prevent promotion of the step type:
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractRange, x::Number) = range(first(r) + x, step=step(r), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::AbstractRange) = range(x + first(r), step=step(r), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::OrdinalRange, x::Integer) = range(first(r) + x, last(r) + x, step=step(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Integer, r::OrdinalRange) = range(x + first(r), x + last(r), step=step(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Integer) = range(first(r) + x, last(r) + x)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Integer, r::AbstractUnitRange) = range(x + first(r), x + last(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractUnitRange, x::Real) = range(first(r) + x, length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Real, r::AbstractUnitRange) = range(x + first(r), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::StepRangeLen{T}, x::Number) where T =
+# we add a level of indirection to avoid ambiguities in broadcasted
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::AbstractRange, x::Number) = broadcasted_plus(r, x)
+broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::AbstractRange) = broadcasted_plus(x, r)
+broadcasted_plus(r::AbstractRange, x::Number) = range(first(r) + x, step=step(r), length=length(r))
+broadcasted_plus(x::Number, r::AbstractRange) = range(x + first(r), step=step(r), length=length(r))
+broadcasted_plus(r::OrdinalRange, x::Integer) = range(first(r) + x, last(r) + x, step=step(r))
+broadcasted_plus(x::Integer, r::OrdinalRange) = range(x + first(r), x + last(r), step=step(r))
+broadcasted_plus(r::AbstractUnitRange, x::Integer) = range(first(r) + x, last(r) + x)
+broadcasted_plus(x::Integer, r::AbstractUnitRange) = range(x + first(r), x + last(r))
+broadcasted_plus(r::AbstractUnitRange, x::Real) = range(first(r) + x, length=length(r))
+broadcasted_plus(x::Real, r::AbstractUnitRange) = range(x + first(r), length=length(r))
+broadcasted_plus(r::StepRangeLen{T}, x::Number) where T =
     StepRangeLen{typeof(T(r.ref)+x)}(r.ref + x, r.step, length(r), r.offset)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::StepRangeLen{T}) where T =
+broadcasted_plus(x::Number, r::StepRangeLen{T}) where T =
     StepRangeLen{typeof(x+T(r.ref))}(x + r.ref, r.step, length(r), r.offset)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r::LinRange, x::Number) = LinRange(r.start + x, r.stop + x, length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::LinRange) = LinRange(x + r.start, x + r.stop, length(r))
+broadcasted_plus(::DefaultArrayStyle{1}, ::typeof(+), r::LinRange, x::Number) = LinRange(r.start + x, r.stop + x, length(r))
+broadcasted_plus(::DefaultArrayStyle{1}, ::typeof(+), x::Number, r::LinRange) = LinRange(x + r.start, x + r.stop, length(r))
+
 broadcasted(::DefaultArrayStyle{1}, ::typeof(+), r1::AbstractRange, r2::AbstractRange) = r1 + r2
 
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractRange, x::Number) = range(first(r) - x, step=step(r), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::AbstractRange) = range(x - first(r), step=negate(step(r)), length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::OrdinalRange, x::Integer) = range(first(r) - x, last(r) - x, step=step(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Integer, r::OrdinalRange) = range(x - first(r), x - last(r), step=negate(step(r)))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractUnitRange, x::Integer) = range(first(r) - x, last(r) - x)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractUnitRange, x::Real) = range(first(r) - x, length=length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::StepRangeLen{T}, x::Number) where T =
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::AbstractRange, x::Number) = broadcasted_minus(r, x)
+broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::AbstractRange) = broadcasted_minus(x, r)
+broadcasted_minus(r::AbstractRange, x::Number) = range(first(r) - x, step=step(r), length=length(r))
+broadcasted_minus(x::Number, r::AbstractRange) = range(x - first(r), step=negate(step(r)), length=length(r))
+broadcasted_minus(r::OrdinalRange, x::Integer) = range(first(r) - x, last(r) - x, step=step(r))
+broadcasted_minus(x::Integer, r::OrdinalRange) = range(x - first(r), x - last(r), step=negate(step(r)))
+broadcasted_minus(r::AbstractUnitRange, x::Integer) = range(first(r) - x, last(r) - x)
+broadcasted_minus(r::AbstractUnitRange, x::Real) = range(first(r) - x, length=length(r))
+broadcasted_minus(r::StepRangeLen{T}, x::Number) where T =
     StepRangeLen{typeof(T(r.ref)-x)}(r.ref - x, r.step, length(r), r.offset)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::StepRangeLen{T}) where T =
+broadcasted_minus(x::Number, r::StepRangeLen{T}) where T =
     StepRangeLen{typeof(x-T(r.ref))}(x - r.ref, negate(r.step), length(r), r.offset)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r::LinRange, x::Number) = LinRange(r.start - x, r.stop - x, length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(-), x::Number, r::LinRange) = LinRange(x - r.start, x - r.stop, length(r))
+broadcasted_minus(r::LinRange, x::Number) = LinRange(r.start - x, r.stop - x, length(r))
+broadcasted_minus(x::Number, r::LinRange) = LinRange(x - r.start, x - r.stop, length(r))
+
 broadcasted(::DefaultArrayStyle{1}, ::typeof(-), r1::AbstractRange, r2::AbstractRange) = r1 - r2
 
+broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::AbstractRange) = broadcasted_times(x, r)
 # at present Base.range_start_step_length(1,0,5) is an error, so for 0 .* (-2:2) we explicitly construct StepRangeLen:
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::AbstractRange) = StepRangeLen(x*first(r), x*step(r), length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::StepRangeLen{T}) where {T} =
+broadcasted_times(x::Number, r::AbstractRange) = StepRangeLen(x*first(r), x*step(r), length(r))
+broadcasted_times(x::Number, r::StepRangeLen{T}) where {T} =
     StepRangeLen{typeof(x*T(r.ref))}(x*r.ref, x*r.step, length(r), r.offset)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::Number, r::LinRange) = LinRange(x * r.start, x * r.stop, r.len)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), x::AbstractFloat, r::OrdinalRange) =
+broadcasted_times(x::Number, r::LinRange) = LinRange(x * r.start, x * r.stop, r.len)
+broadcasted_times(x::AbstractFloat, r::OrdinalRange) =
     Base.range_start_step_length(x*first(r), x*step(r), length(r))  # 0.2 .* (-2:2) needs TwicePrecision
 # separate in case of noncommutative multiplication:
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::AbstractRange, x::Number) = StepRangeLen(first(r)*x, step(r)*x, length(r))
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::StepRangeLen{T}, x::Number) where {T} =
+broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::AbstractRange, x::Number) = broadcasted_times(r, x)
+broadcasted_times(r::AbstractRange, x::Number) = StepRangeLen(first(r)*x, step(r)*x, length(r))
+broadcasted_times(r::StepRangeLen{T}, x::Number) where {T} =
     StepRangeLen{typeof(T(r.ref)*x)}(r.ref*x, r.step*x, length(r), r.offset)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::LinRange, x::Number) = LinRange(r.start * x, r.stop * x, r.len)
-broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::OrdinalRange, x::AbstractFloat) =
+broadcasted_times(r::LinRange, x::Number) = LinRange(r.start * x, r.stop * x, r.len)
+broadcasted_times(r::OrdinalRange, x::AbstractFloat) =
     Base.range_start_step_length(first(r)*x, step(r)*x, length(r))
 
 #broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::AbstractRange, x::Number) = range(first(r)/x, last(r)/x, length=length(r))

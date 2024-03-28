@@ -2719,3 +2719,35 @@ end
     @test Base._log_twice64_unchecked(NaN).lo isa Float64
     @test Base._log_twice64_unchecked(Inf).lo isa Float64
 end
+
+@testset "Ambiguity in broadcasting" begin
+    struct RangeWrapper{T, A<:AbstractRange{T}} <: AbstractRange{T}
+        p :: A
+    end
+    Base.size(r::RangeWrapper) = size(r.p)
+    Base.getindex(r::RangeWrapper, i::Int) = getindex(r.p, i)
+    Base.first(r::RangeWrapper) = first(r.p)
+    Base.last(r::RangeWrapper) = last(r.p)
+    Base.step(r::RangeWrapper) = step(r.p)
+    Base.length(r::RangeWrapper) = length(r.p)
+    Base.show(io::IO, r::RangeWrapper) = print(io, RangeWrapper, "(", r.p, ")")
+    for op in (:+, :-, :*)
+        @eval begin
+            function Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{1}, ::typeof($op), x::Number, r::RangeWrapper)
+                RangeWrapper(($op).(x, r.p))
+            end
+            function Broadcast.broadcasted(::Broadcast.DefaultArrayStyle{1}, ::typeof($op), r::RangeWrapper, x::Number)
+                RangeWrapper(($op).(r.p, x))
+            end
+        end
+    end
+    for p in (4:5, 2:3:8, 1.2:1.2:6.0, LinRange(2, 3, 4))
+        r = RangeWrapper(p)
+        for num in (2, 2.0)
+            @test r .+ num === num .+ r === RangeWrapper(p .+ num)
+            @test r .* num === num .* r === RangeWrapper(p .* num)
+            @test r .- num === RangeWrapper(p .- num)
+            @test num .- r === RangeWrapper(num .- p)
+        end
+    end
+end
