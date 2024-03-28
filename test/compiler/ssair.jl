@@ -755,8 +755,52 @@ end
 end
 
 # Test that things don't break if one branch of the frontend PhiNode becomes unreachable
+const global_error_switch_const1::Bool = false
+function gen_unreachable_phinode_edge1(world::UInt, source, args...)
+    ci = make_codeinfo(Any[
+        # block 1
+        GlobalRef(@__MODULE__, :global_error_switch_const1),
+        GotoIfNot(SSAValue(1), 4),
+        # block 2
+        Expr(:call, identity, Argument(3)),
+        # block 3
+        PhiNode(Int32[2, 3], Any[Argument(2), SSAValue(3)]),
+        ReturnNode(SSAValue(4))
+    ]; slottypes=Any[Any,Int,Int])
+    ci.slotnames = Symbol[:var"#self#", :x, :y]
+    return ci
+end
+@eval function f_unreachable_phinode_edge1(x, y)
+    $(Expr(:meta, :generated, gen_unreachable_phinode_edge1))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+@test f_unreachable_phinode_edge1(1, 2) == 1
+
+const global_error_switch_const2::Bool = true
+function gen_unreachable_phinode_edge2(world::UInt, source, args...)
+    ci = make_codeinfo(Any[
+        # block 1
+        GlobalRef(@__MODULE__, :global_error_switch_const2),
+        GotoIfNot(SSAValue(1), 4),
+        # block 2
+        Expr(:call, identity, Argument(3)),
+        # block 3
+        PhiNode(Int32[2, 3], Any[Argument(2), SSAValue(3)]),
+        ReturnNode(SSAValue(4))
+    ]; slottypes=Any[Any,Int,Int])
+    ci.slotnames = Symbol[:var"#self#", :x, :y]
+    return ci
+end
+@eval function f_unreachable_phinode_edge2(x, y)
+    $(Expr(:meta, :generated, gen_unreachable_phinode_edge2))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+@test f_unreachable_phinode_edge2(1, 2) == 2
+
 global global_error_switch::Bool = true
-function gen_unreachable_phinode_edge(world::UInt, source, _)
+function gen_must_throw_phinode_edge(world::UInt, source, _)
     ci = make_codeinfo(Any[
         # block 1
         GlobalRef(@__MODULE__, :global_error_switch),
@@ -770,14 +814,14 @@ function gen_unreachable_phinode_edge(world::UInt, source, _)
     ci.slotnames = Symbol[:var"#self#"]
     return ci
 end
-@eval function f_unreachable_phinode_edge()
-    $(Expr(:meta, :generated, gen_unreachable_phinode_edge))
+@eval function f_must_throw_phinode_edge()
+    $(Expr(:meta, :generated, gen_must_throw_phinode_edge))
     $(Expr(:meta, :generated_only))
     #= no body =#
 end
-let ir = first(only(Base.code_ircode(f_unreachable_phinode_edge)))
+let ir = first(only(Base.code_ircode(f_must_throw_phinode_edge)))
     @test !any(@nospecialize(x)->isa(x,PhiNode), ir.stmts.stmt)
 end
-@test_throws ErrorException f_unreachable_phinode_edge()
+@test_throws ErrorException f_must_throw_phinode_edge()
 global global_error_switch = false
-@test f_unreachable_phinode_edge() == 1
+@test f_must_throw_phinode_edge() == 1
