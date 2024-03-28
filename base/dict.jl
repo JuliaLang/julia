@@ -978,53 +978,57 @@ end
 
 eltype(::PersistentDict{K,V}) where {K,V} = Pair{K,V}
 
+# XXX: This type is not legal to store in a PersistentDict
+struct NoEntry end
+const noentry = NoEntry()
+
 function in(key_val::Pair{K,V}, dict::PersistentDict{K,V}, valcmp=(==)) where {K,V}
     key, val = key_val
     found = KeyValue.get(dict, key)
-    found === nothing && return false
+    found === noentry && return false
     return valcmp(val, only(found))
 end
 
 function haskey(dict::PersistentDict{K}, key::K) where K
-    return KeyValue.get(dict, key) !== nothing
+    return KeyValue.get(dict, key) !== noentry
 end
 
 function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
     found = KeyValue.get(dict, key)
-    found === nothing && throw(KeyError(key))
-    return only(found)
+    found === noentry && throw(KeyError(key))
+    return found
 end
 
 function get(dict::PersistentDict{K,V}, key::K, default) where {K,V}
     found = KeyValue.get(dict, key)
-    found === nothing && return default
-    return only(found)
+    found === noentry && return default
+    return found
 end
 
 @noinline function KeyValue.get(dict::PersistentDict{K, V}, key) where {K, V}
     trie = dict.trie
     if HAMT.islevel_empty(trie)
-        return nothing
+        return noentry
     end
     h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
-        return (leaf.val,)
+        return leaf.val
     end
-    return nothing
+    return noentry
 end
 
 @noinline function KeyValue.get(default, dict::PersistentDict, key)
     found = KeyValue.get(dict, key)
-    found === nothing && return default()
-    return only(found)
+    found === noentry && return default()
+    return found
 end
 
 function get(default::Callable, dict::PersistentDict{K,V}, key::K) where {K,V}
     found = KeyValue.get(dict, key)
-    found === nothing && return default()
-    return only(found)
+    found === noentry && return default()
+    return found
 end
 
 function delete(dict::PersistentDict{K}, key::K) where K
