@@ -691,10 +691,7 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)
                 usebb = block_for_inst(frame.cfg, r)
-                # We're guaranteed to visit the statement if it's in the current
-                # basic block, since SSA values can only ever appear after their
-                # def.
-                if usebb != frame.currbb
+                if usebb != frame.currbb || r < ssa_id
                     push!(W, usebb)
                 end
             end
@@ -803,18 +800,18 @@ mutable struct IRInterpretationState
 end
 
 function IRInterpretationState(interp::AbstractInterpreter,
-    code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
-    @assert code.def === mi
-    src = @atomic :monotonic code.inferred
+    codeinst::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
+    @assert codeinst.def === mi "method instance is not synced with code instance"
+    src = @atomic :monotonic codeinst.inferred
     if isa(src, String)
-        src = _uncompressed_ir(code, src)
+        src = _uncompressed_ir(codeinst, src)
     else
         isa(src, CodeInfo) || return nothing
     end
     method_info = MethodInfo(src)
     ir = inflate_ir(src, mi)
     return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
-                                 code.min_world, code.max_world)
+                                 codeinst.min_world, codeinst.max_world)
 end
 
 # AbsIntState

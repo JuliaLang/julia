@@ -95,7 +95,7 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
         jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: tracer callback function threw an error:\n");
-        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
     }
@@ -393,7 +393,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int fo
         ci = (jl_code_instance_t*)jl_apply(fargs, 4);
     }
     JL_CATCH {
-        jl_value_t *e = jl_current_exception();
+        jl_value_t *e = jl_current_exception(ct);
         jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: during type inference of\n");
         jl_static_show_func_sig((JL_STREAM*)STDERR_FILENO, (jl_value_t*)mi->specTypes);
         jl_printf((JL_STREAM*)STDERR_FILENO, "\nEncountered ");
@@ -1558,14 +1558,6 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m)
     }
 }
 
-static int is_anonfn_typename(char *name)
-{
-    if (name[0] != '#' || name[1] == '#')
-        return 0;
-    char *other = strrchr(name, '#');
-    return other > &name[1] && other[1] > '0' && other[1] <= '9';
-}
-
 static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue)
 {
     // method overwritten
@@ -2576,12 +2568,12 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
 
         JL_GC_PUSH1(&codeinst);
-        jl_compile_codeinst(codeinst);
+        int did_compile = jl_compile_codeinst(codeinst);
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
             // Something went wrong. Bail to the fallback path.
             codeinst = NULL;
-        } else {
+        } else if (did_compile) {
             record_precompile_statement(mi);
         }
         JL_GC_POP();

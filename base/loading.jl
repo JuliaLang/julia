@@ -611,6 +611,23 @@ function env_project_file(env::String)::Union{Bool,String}
     end
 end
 
+function base_project(project_file)
+    base_dir = abspath(joinpath(dirname(project_file), ".."))
+    base_project_file = env_project_file(base_dir)
+    base_project_file isa String || return nothing
+    d = parsed_toml(base_project_file)
+    workspace = get(d, "workspace", nothing)::Union{Dict{String, Any}, Nothing}
+    if workspace === nothing
+        return nothing
+    end
+    projects = get(workspace, "projects", nothing)::Union{Vector{String}, Nothing, String}
+    projects === nothing && return nothing
+    if projects isa Vector && basename(dirname(project_file)) in projects
+        return base_project_file
+    end
+    return nothing
+end
+
 function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
     project_file = env_project_file(env)
     if project_file isa String
@@ -622,21 +639,27 @@ function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
     return nothing
 end
 
+function package_get(project_file, where::PkgId, name::String)
+    proj = project_file_name_uuid(project_file, where.name)
+    if proj == where
+        # if `where` matches the project, use [deps] section as manifest, and stop searching
+        pkg_uuid = explicit_project_deps_get(project_file, name)
+        return PkgId(pkg_uuid, name)
+    end
+    return nothing
+end
+
 function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     uuid = where.uuid
     @assert uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
-        # first check if `where` names the Project itself
-        proj = project_file_name_uuid(project_file, where.name)
-        if proj == where
-            # if `where` matches the project, use [deps] section as manifest, and stop searching
-            pkg_uuid = explicit_project_deps_get(project_file, name)
-            return PkgId(pkg_uuid, name)
-        end
+        pkg = package_get(project_file, where, name)
+        pkg === nothing || return pkg
         d = parsed_toml(project_file)
         exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
         if exts !== nothing
+            proj = project_file_name_uuid(project_file, where.name)
             # Check if `where` is an extension of the project
             if where.name in keys(exts) && where.uuid == uuid5(proj.uuid::UUID, where.name)
                 # Extensions can load weak deps...
@@ -726,6 +749,14 @@ function project_file_path(project_file::String)
     joinpath(dirname(project_file), get(d, "path", "")::String)
 end
 
+function workspace_manifest(project_file)
+    base = base_project(project_file)
+    if base !== nothing
+        return project_file_manifest_path(base)
+    end
+    return nothing
+end
+
 # find project file's corresponding manifest file
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     @lock require_lock begin
@@ -736,6 +767,10 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     end
     dir = abspath(dirname(project_file))
     d = parsed_toml(project_file)
+    base_manifest = workspace_manifest(project_file)
+    if base_manifest !== nothing
+        return base_manifest
+    end
     explicit_manifest = get(d, "manifest", nothing)::Union{String, Nothing}
     manifest_path = nothing
     if explicit_manifest !== nothing
@@ -2205,7 +2240,6 @@ const explicit_loaded_modules = Dict{PkgId,Module}()
 const loaded_modules_order = Vector{Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse
 
-is_root_module(m::Module) = @lock require_lock haskey(module_keys, m)
 root_module_key(m::Module) = @lock require_lock module_keys[m]
 
 @constprop :none function register_root_module(m::Module)
@@ -3356,9 +3390,27 @@ function recursive_prefs_merge(base::Dict{String, Any}, overrides::Dict{String, 
     return new_base
 end
 
+function get_projects_workspace_to_root(project_file)
+    projects = String[project_file]
+    while true
+        project_file = base_project(project_file)
+        if project_file === nothing
+            return projects
+        end
+        push!(projects, project_file)
+    end
+end
+
 function get_preferences(uuid::Union{UUID,Nothing} = nothing)
     merged_prefs = Dict{String,Any}()
-    for env in reverse(load_path())
+    loadpath = load_path()
+    projects_to_merge_prefs = String[]
+    append!(projects_to_merge_prefs, Iterators.drop(loadpath, 1))
+    if length(loadpath) >= 1
+        prepend!(projects_to_merge_prefs, get_projects_workspace_to_root(first(loadpath)))
+    end
+
+    for env in reverse(projects_to_merge_prefs)
         project_toml = env_project_file(env)
         if !isa(project_toml, String)
             continue
@@ -3416,9 +3468,9 @@ function check_clone_targets(clone_targets)
 end
 
 # Set by FileWatching.__init__()
-global mkpidlock_hook
-global trymkpidlock_hook
-global parse_pidfile_hook
+global mkpidlock_hook::Any
+global trymkpidlock_hook::Any
+global parse_pidfile_hook::Any
 
 # The preferences hash is only known after precompilation so just assume no preferences.
 # Also ignore the active project, which means that if all other conditions are equal,
@@ -3770,7 +3822,7 @@ function precompile(@nospecialize(argt::Type), m::Method)
     return precompile(mi)
 end
 
-@assert precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
-@assert precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String))
-@assert precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), Cmd, IO, IO))
-@assert precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), Cmd, IO, IO))
+precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing)) || @assert false
+precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String)) || @assert false
+precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), Cmd, IO, IO)) || @assert false
+precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), Cmd, IO, IO)) || @assert false

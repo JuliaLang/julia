@@ -39,6 +39,17 @@ precompile(Base.unsafe_string, (Ptr{Int8},))
 # loading.jl
 precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
 precompile(Base._require, (Base.PkgId, Nothing))
+precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
+precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+
+# Pkg loading
+precompile(Tuple{typeof(Base.Filesystem.normpath), String, String, Vararg{String}})
+precompile(Tuple{typeof(Base.append!), Array{String, 1}, Array{String, 1}})
+precompile(Tuple{typeof(Base.join), Array{String, 1}, Char})
+precompile(Tuple{typeof(Base.getindex), Base.Dict{Any, Any}, Char})
+precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, Char})
+precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Base.Dict{String, String}}}, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Array{String, 1}}}, Base.Dict{String, Any}})
 
 # REPL
 precompile(isequal, (String, String))
@@ -67,6 +78,10 @@ precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
 precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
 precompile(Tuple{typeof(push!), Vector{Function}, Function})
 
+# preferences
+precompile(Base.get_preferences, (Base.UUID,))
+precompile(Base.record_compiletime_preference, (Base.UUID, String))
+
 # miscellaneous
 precompile(Tuple{typeof(Base.exit)})
 precompile(Tuple{typeof(Base.require), Base.PkgId})
@@ -84,6 +99,23 @@ precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, 
 precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
 precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 precompile(Tuple{typeof(Base.run_module_init), Module, Int})
+
+# precompilepkgs
+precompile(Tuple{typeof(Base.get), Type{Array{String, 1}}, Base.Dict{String, Any}, String})
+precompile(Tuple{typeof(Base.get), Type{Base.Dict{String, Any}}, Base.Dict{String, Any}, String})
+precompile(Tuple{typeof(Base.haskey), Base.Dict{String, Any}, String})
+precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Base.TTY, Bool}, Int, Int})
+precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Base.TTY, Bool}, Int})
+precompile(Tuple{typeof(Base.open), Base.CmdRedirect, String, Base.TTY})
+precompile(Tuple{typeof(Base.Precompilation.precompilepkgs)})
+precompile(Tuple{typeof(Base.Precompilation.printpkgstyle), Base.TTY, Symbol, String})
+precompile(Tuple{typeof(Base.rawhandle), Base.TTY})
+precompile(Tuple{typeof(Base.setindex!), Base.Dict{String, Array{String, 1}}, Array{String, 1}, String})
+precompile(Tuple{typeof(Base.setindex!), GenericMemory{:not_atomic, Union{Base.Libc.RawFD, Base.SyncCloseFD, IO}, Core.AddrSpace{Core}(0x00)}, Base.TTY, Int})
+precompile(Tuple{typeof(Base.setup_stdio), Base.TTY, Bool})
+precompile(Tuple{typeof(Base.spawn_opts_inherit), Base.DevNull, Base.TTY, Base.TTY})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:context,), Tuple{Base.TTY}}, typeof(Base.sprint), Function})
+precompile(Tuple{Type{Base.UUID}, Base.UUID})
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
@@ -131,16 +163,16 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     push!(Expr[], Expr(:return, false))
     vcat(String[], String[])
     k, v = (:hello => nothing)
-    precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
-    precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+
     # Preferences uses these
-    precompile(Base.get_preferences, (Base.UUID,))
-    precompile(Base.record_compiletime_preference, (Base.UUID, String))
     get(Dict{String,Any}(), "missing", nothing)
     delete!(Dict{String,Any}(), "missing")
     for (k, v) in Dict{String,Any}()
         println(k)
     end
+
+    # interactive statup uses this
+    write(IOBuffer(), "")
 
     break   # only actually need to do this once
 end
@@ -223,10 +255,10 @@ ansi_disablecursor = "\e[?25l"
 blackhole = Sys.isunix() ? "/dev/null" : "nul"
 procenv = Dict{String,Any}(
         "JULIA_HISTORY" => blackhole,
-        "JULIA_PROJECT" => nothing, # remove from environment
-        "JULIA_LOAD_PATH" => "@stdlib",
+        "JULIA_LOAD_PATH" => "@$(Sys.iswindows() ? ";" : ":")@stdlib",
         "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
         "TERM" => "",
+        # "JULIA_DEBUG" => "precompilation",
         "JULIA_FALLBACK_REPL" => "true")
 
 generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
@@ -263,24 +295,32 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         print_state("step1" => "R")
         # Also precompile a package here
         pkgname = "__PackagePrecompilationStatementModule"
-        mkpath(joinpath(prec_path, pkgname, "src"))
-        path = joinpath(prec_path, pkgname, "src", "$pkgname.jl")
-        write(path,
-              """
-              module $pkgname
-              end
-              """)
+        pkguuid = "824efdaf-a0e9-431c-8ee7-3d356b2531c2"
+        pkgpath = joinpath(prec_path, pkgname)
+        mkpath(joinpath(pkgpath, "src"))
+        write(joinpath(pkgpath, "src", "$pkgname.jl"),
+            """
+            module $pkgname
+            println("Precompiling $pkgname")
+            end
+            """)
+        write(joinpath(pkgpath, "Project.toml"),
+            """
+            name = "$pkgname"
+            uuid = "$pkguuid"
+            """)
+        touch(joinpath(pkgpath, "Manifest.toml"))
         tmp_prec = tempname(prec_path)
         tmp_proc = tempname(prec_path)
         s = """
-            pushfirst!(DEPOT_PATH, $(repr(prec_path)));
+            pushfirst!(DEPOT_PATH, $(repr(joinpath(prec_path,"depot"))));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
-            Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
+            Base.Precompilation.precompilepkgs(;fancyprint=true);
             $precompile_script
             """
         p = run(pipeline(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_proc --sysimage $sysimg
-                --cpu-target=native --startup-file=no --color=yes`, procenv),
-                 stdin=IOBuffer(s), stdout=debug_output))
+                --cpu-target=native --startup-file=no --color=yes --project=$(pkgpath)`, procenv),
+                 stdin=IOBuffer(s), stderr=debug_output, stdout=debug_output))
         n_step1 = 0
         for f in (tmp_prec, tmp_proc)
             isfile(f) || continue
@@ -334,9 +374,8 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             yield() # Make clock spinning
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
-            @show backtrace()
             # See #28808
-            @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
+            @warn "Failed to precompile expression" form=statement exception=(ex,catch_backtrace()) _module=nothing _file=nothing _line=0
         end
     end
     wait(clock) # Stop asynchronous printing

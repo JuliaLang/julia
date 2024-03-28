@@ -527,6 +527,8 @@ function any_stmt_may_throw(ir::IRCode, bb::Int)
     return false
 end
 
+visit_conditional_successors(callback, ir::IRCode, bb::Int) = # used for test
+    visit_conditional_successors(callback, LazyPostDomtree(ir), ir, bb)
 function visit_conditional_successors(callback, lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
     visited = BitSet((bb,))
     worklist = Int[bb]
@@ -1102,6 +1104,20 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                         code[i] = nothing
                     end
                 end
+            elseif isa(expr, PhiNode)
+                new_edges = Int32[]
+                new_vals = Any[]
+                for j = 1:length(expr.edges)
+                    edge = expr.edges[j]
+                    (edge in sv.unreachable || (ssavaluetypes[edge] === Union{} && !isa(code[edge], PhiNode))) && continue
+                    push!(new_edges, edge)
+                    if isassigned(expr.values, j)
+                        push!(new_vals, expr.values[j])
+                    else
+                        resize!(new_vals, length(new_edges))
+                    end
+                end
+                code[i] = PhiNode(new_edges, new_vals)
             end
         end
     end

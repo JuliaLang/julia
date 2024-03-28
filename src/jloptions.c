@@ -177,6 +177,7 @@ static const char opts[]  =
 #ifdef USE_POLLY
     " --polly={yes*|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
+    " --math-mode={ieee|user*}   Always follow `ieee` floating point semantics or respect `@fastmath` declarations\n\n"
 
     // instrumentation options
     " --code-coverage[={none*|user|all}]\n"
@@ -782,7 +783,7 @@ restart_switch:
             else if (!strcmp(optarg,"user"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
             else
-                jl_errorf("julia: invalid argument to --math-mode (%s)", optarg);
+                jl_errorf("julia: invalid argument to --math-mode={ieee|user} (%s)", optarg);
             break;
         case opt_worker:
             jl_options.worker = 1;
@@ -859,7 +860,8 @@ restart_switch:
                 if (isnan(sz) || sz < 0) {
                     jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                 }
-                jl_options.heap_size_hint = sz < UINT64_MAX ? (uint64_t)sz : UINT64_MAX;
+                const long double limit = ldexpl(1.0, 64); // UINT64_MAX + 1
+                jl_options.heap_size_hint = sz < limit ? (uint64_t)sz : UINT64_MAX;
             }
             if (jl_options.heap_size_hint == 0)
                 jl_errorf("julia: invalid memory size specified in --heap-size-hint");
