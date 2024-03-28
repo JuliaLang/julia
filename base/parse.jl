@@ -14,6 +14,8 @@ of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"`
 used instead of `"im"`, and `"R"` or `"Iim"` are also permitted.
 If the string does not contain a valid number, an error is raised.
 
+A character can be used in place of a string for `Integer` types.
+
 !!! compat "Julia 1.1"
     `parse(Bool, str)` requires at least Julia 1.1.
 
@@ -38,13 +40,31 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 parse(T::Type, str; base = Int)
 parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
+"""
+    tryparse(type, str; base)
+
+Like [`parse`](@ref), but returns either a value of the requested type,
+or [`nothing`](@ref) if the string does not contain a valid number.
+"""
+tryparse(T::Type, str; base = Int)
+
 function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
-    2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+    check_valid_base(base)
     d = '0' <= c <= '9' ? c-'0'    :
         'A' <= c <= 'Z' ? c-'A'+10 :
         'a' <= c <= 'z' ? c-'a'+a  : throw(ArgumentError("invalid digit: $(repr(c))"))
     d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
+    convert(T, d)
+end
+
+function tryparse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
+    a::Int = (base <= 36 ? 10 : 36)
+    check_valid_base(base)
+    d = '0' <= c <= '9' ? c-'0'    :
+        'A' <= c <= 'Z' ? c-'A'+10 :
+        'a' <= c <= 'z' ? c-'a'+a  : return nothing
+    d < base || return nothing
     convert(T, d)
 end
 
@@ -239,12 +259,6 @@ end
     throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 end
 
-"""
-    tryparse(type, str; base)
-
-Like [`parse`](@ref), but returns either a value of the requested type,
-or [`nothing`](@ref) if the string does not contain a valid number.
-"""
 function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
     # Zero base means, "figure it out"
     tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
