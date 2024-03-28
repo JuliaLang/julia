@@ -65,7 +65,7 @@ precompile(Tuple{typeof(Base._typeddict), Base.Dict{String, Any}, Base.Dict{Stri
 precompile(Tuple{typeof(Base.promoteK), Type, Base.Dict{String, Any}, Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.promoteK), Type, Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.promoteV), Type, Base.Dict{String, Any}, Base.Dict{String, Any}})
-precompile(Tuple{typeof(Base.eval_user_input), Base.PipeEndpoint, Any, Bool})
+precompile(Tuple{typeof(Base.eval_user_input), Base.PipeEndpoint, Any, Bool, String})
 precompile(Tuple{typeof(Base.get), Base.PipeEndpoint, Symbol, Bool})
 
 # used by Revise.jl
