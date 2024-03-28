@@ -2593,7 +2593,7 @@ typedef struct {
     jl_codeinstance_lookup_t lookup;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
-
+extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 typedef struct {
     int emit_metadata;
 } jl_emission_params_t;
