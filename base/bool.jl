@@ -154,6 +154,7 @@ abs(x::Bool) = x
 abs2(x::Bool) = x
 iszero(x::Bool) = !x
 isone(x::Bool) = x
+ispositive(x::Bool) = x
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x
