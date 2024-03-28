@@ -73,6 +73,7 @@
 # hashing implications
 @test hash(Some(0x1)) != hash(0x1)
 @test hash(Some(0x1)) == hash(Some(1))
+@test hash((Some(1),)) != hash((1, Some))
 
 @testset "something" begin
     @test_throws ArgumentError something()

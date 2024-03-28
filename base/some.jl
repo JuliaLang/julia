@@ -148,4 +148,5 @@ end
 
 ==(a::Some, b::Some) = a.value == b.value
 isequal(a::Some, b::Some)::Bool = isequal(a.value, b.value)
-hash(s::Some, h::UInt) = hash(s.value, hash(Some, h))
+const hash_some_seed = UInt == UInt64 ? 0xde5c997007a4ca3a : 0x78c29c09
+hash(s::Some, h::UInt) = hash(s.value, hash_some_seed + h)
