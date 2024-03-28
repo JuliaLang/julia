@@ -100,3 +100,14 @@ end
 function is_file_tracked(file::Symbol)
     return ccall(:jl_is_file_tracked, Cint, (Any,), file) == 1
 end
+
+function colored_text(opts::JLOptions)
+    if !isempty(get(ENV, "FORCE_COLOR", ""))
+        color = true
+    elseif !isempty(get(ENV, "NO_COLOR", "")) && opts.color == 0  # `--color=auto`
+        color = false
+    else
+        color = (opts.color != 0) ? (opts.color == 1) : nothing
+    end
+    return color
+end
