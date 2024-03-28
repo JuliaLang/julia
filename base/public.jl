@@ -94,6 +94,7 @@ public
     # functions
     reseteof,
     link_pipe!,
+    dup,
 
 # misc
     notnothing,
