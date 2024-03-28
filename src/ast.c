@@ -717,8 +717,20 @@ static int julia_to_scm_noalloc1(fl_context_t *fl_ctx, jl_value_t *v, value_t *r
 
 static value_t julia_to_scm_noalloc2(fl_context_t *fl_ctx, jl_value_t *v, int check_valid) JL_NOTSAFEPOINT
 {
-    if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
-        return fixnum(jl_unbox_long(v));
+    if (jl_is_long(v)) {
+        if (fits_fixnum(jl_unbox_long(v))) {
+            return fixnum(jl_unbox_long(v));
+        } else {
+#ifdef _P64
+            value_t prim = cprim(fl_ctx, fl_ctx->int64type, sizeof(int64_t));
+            *((int64_t*)cp_data((cprim_t*)ptr(prim))) = jl_unbox_long(v);
+#else
+            value_t prim = cprim(fl_ctx, fl_ctx->int32type, sizeof(int32_t));
+            *((int32_t*)cp_data((cprim_t*)ptr(prim))) = jl_unbox_long(v);
+#endif
+            return prim;
+        }
+    }
     if (check_valid) {
         if (jl_is_ssavalue(v))
             lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");
