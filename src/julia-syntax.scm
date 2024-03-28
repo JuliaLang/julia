@@ -2370,7 +2370,7 @@
                 (= ,lhs ,(car rr))))
       `(= ,lhs ,rhs)))
 
-(define (expand-forms e)
+(define (expand-forms- e)
   (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
@@ -2378,6 +2378,14 @@
             (ex e)
             (cons (car e)
                   (map expand-forms (cdr e)))))))
+
+;; wrapper for `cl-convert-`
+(define (expand-forms e)
+  (let ((pushed (julia-push-closure-expr e)))
+    (let ((res (expand-forms- e)))
+      (if pushed
+          (julia-pop-closure-expr))
+      res)))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
@@ -3888,7 +3896,7 @@ f(x) = yt(x)
             (list-tail (car (lam:vinfo lam)) (length (lam:args lam))))
   (lambda-optimize-vars! lam))
 
-(define (cl-convert e fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
+(define (cl-convert- e fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
   (if (and (not lam)
            (not (and (pair? e) (memq (car e) '(lambda method macro opaque_closure)))))
       (if (atom? e) e
@@ -4242,6 +4250,14 @@ f(x) = yt(x)
           (else
            (cons (car e)
                  (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals locals))))))))
+
+;; wrapper for `cl-convert-`
+(define (cl-convert e fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
+  (let ((pushed (julia-push-closure-expr e)))
+    (let ((res (cl-convert- e fname lam namemap defined toplevel interp opaq globals locals)))
+      (if pushed
+          (julia-pop-closure-expr))
+      res)))
 
 (define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))
 
