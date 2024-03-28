@@ -1329,7 +1329,7 @@ end
     if isodd(n)
         if n < 0
             y = inv(x)
-            ynlo = -fma(x, y, -1.0) * y
+            ynlo = fma(-x, y, 1.0) * y
         else
             y = x
         end
@@ -1341,7 +1341,7 @@ end
         n == -2 && return rx #keep compatibility with literal_pow
         !isfinite(rx) && return isodd(n) ? copysign(rx, x0) : rx
         if isfinite(x)
-            xnlo = -(xnlo * rx + fma(x, rx, -1.0)) * rx
+            xnlo = (fma(-x, rx, 1.0) - xnlo * rx) * rx
         end
         x = rx
         m = -m
