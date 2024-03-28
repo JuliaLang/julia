@@ -130,7 +130,12 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     end
     stream::IO = logger.stream
     if !(isopen(stream)::Bool)
-        stream = stderr
+        if isdefined(Base, :active_repl)
+            repl_ioc = Base.active_repl.options.iocontext
+            stream = IOContext(stderr, repl_ioc...)
+        else
+            stream = stderr
+        end
     end
     dsize = displaysize(stream)::Tuple{Int,Int}
     nkwargs = length(kwargs)::Int
