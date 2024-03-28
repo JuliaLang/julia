@@ -337,7 +337,7 @@
 
 ;; construct the (method ...) expression for one primitive method definition,
 ;; assuming optional and keyword args are already handled
-(define (method-def-expr- name sparams argl body (rett '(core Any)))
+(define (method-def-expr- name sparams argl argl-stmts body (rett '(core Any)))
   (if
    (any kwarg? argl)
    ;; has optional positional args
@@ -356,7 +356,7 @@
             (dfl  (map caddr kws)))
         (receive
          (vararg req) (separate vararg? argl)
-         (optional-positional-defs name sparams req opt dfl body
+         (optional-positional-defs name sparams req opt dfl argl-stmts body
                                    (append req opt vararg) rett)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
@@ -442,7 +442,7 @@
     ,@(map make-assignment names vals)
     ,expr))
 
-(define (keywords-method-def-expr name sparams argl body rett)
+(define (keywords-method-def-expr name sparams argl argl-stmts body rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (cadr (caddr a)))))
                            (filter nospecialize-meta? kargl)))
@@ -530,6 +530,7 @@
             ;; strip type off function self argument if not needed for a static param.
             ;; then it is ok for cl-convert to move this definition above the original def.
             ,@not-optional ,@vararg)
+          argl-stmts
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
@@ -538,9 +539,10 @@
 
         ;; call with no keyword args
         ,(method-def-expr-
-          name positional-sparams pargl-all
+          name positional-sparams pargl-all argl-stmts
           `(block
             ,@(keep-first linenum? (without-generated prologue))
+            ,@(filter identity argl-stmts)
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
                    (ret `(return (call ,mangled
                                        ,@(if ordered-defaults keynames vals)
@@ -558,6 +560,7 @@
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? `(,@pargl ,@vararg)) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) ,kwdecl ,@pargl ,@vararg)
+          argl-stmts
           `(block
             ;; propagate method metadata to keyword sorter
             ,@(map propagate-method-meta (filter meta? prologue))
@@ -571,6 +574,7 @@
                      `(meta ,(cadr m) ,@(filter (lambda (v) (not (memq v keynames)))
                                                 (cddr m))))
                    (filter nospecialize-meta? prologue))
+            ,@(filter identity argl-stmts)
             ;; If not using slots for the keyword argument values, still declare them
             ;; for reflection purposes.
             ,@(if ssa-keyvars?
@@ -655,15 +659,25 @@
           (else
            (loop filtered (cdr params))))))
 
-(define (optional-positional-defs name sparams req opt dfl body overall-argl rett)
+;; Get the list of all symbols introduced either by the `args` or by any
+;; destructuring expression for that arg in `argl-stmts`.
+(define (arg-introduced-syms args argl-stmts)
+  (apply append! (map
+    (lambda (arg stmt)
+      (if stmt (find-assigned-vars stmt) (list arg)))
+      args argl-stmts)))
+
+(define (optional-positional-defs name sparams req opt dfl argl-stmts body overall-argl rett)
   (let ((prologue (without-generated (extract-method-prologue body))))
     `(block
       ,@(map (lambda (n)
                (let* ((passed (append req (list-head opt n)))
                       ;; only keep static parameters used by these arguments
-                      (sp     (filter-sparams (cons 'list passed) sparams))
-                      (vals   (list-tail dfl n))
-                      (absent (list-tail opt n)) ;; absent arguments
+                      (sp           (filter-sparams (cons 'list passed) sparams))
+                      (vals         (list-tail dfl n))
+                      (absent       (list-tail opt n)) ;; absent arguments
+                      (absent-syms  (arg-introduced-syms absent (list-tail argl-stmts n)))
+                      (passed-stmts (list-head argl-stmts (+ (length req) n)))
                       (body
                        (if (any vararg? (butlast vals))
                          ;; Forbid splat in all but the final default value
@@ -674,23 +688,27 @@
                                               ;; contain "e" such that...
                                               (any (lambda (a)
                                                      ;; "e" is in an absent arg
+                                                     ;; (or other symbol introduced
+                                                     ;; by destructuring an absent arg)
                                                      (contains (lambda (u)
                                                                  (eq? u e))
                                                                a))
-                                                   absent))
+                                                   absent-syms))
                                             defaultv))
                                 vals)
                            ;; then add only one next argument
                            `(block
                              ,@prologue
+                             ,@(filter identity passed-stmts)
                              (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
                            ;; otherwise add all
                            `(block
                              ,@prologue
+                             ,@(filter identity passed-stmts)
                              (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
-                 (method-def-expr- name sp passed body)))
+                 (method-def-expr- name sp passed argl-stmts body)))
              (iota (length opt)))
-      ,(method-def-expr- name sparams overall-argl body rett))))
+      ,(method-def-expr- name sparams overall-argl argl-stmts body rett))))
 
 ;; strip empty (parameters ...), normalizing `f(x;)` to `f(x)`.
 (define (remove-empty-parameters argl)
@@ -729,14 +747,14 @@
 ;; definitions without keyword arguments are passed to method-def-expr-,
 ;; which handles optional positional arguments by adding the needed small
 ;; boilerplate definitions.
-(define (method-def-expr name sparams argl body rett)
+(define (method-def-expr name sparams argl argl-stmts body rett)
   (let ((argl (throw-unassigned-kw-args (remove-empty-parameters argl))))
     (if (has-parameters? argl)
         ;; has keywords
         (begin (check-kw-args (cdar argl))
-               (keywords-method-def-expr name sparams argl body rett))
+               (keywords-method-def-expr name sparams argl argl-stmts body rett))
         ;; no keywords
-        (method-def-expr- name sparams argl body rett))))
+        (method-def-expr- name sparams argl argl-stmts body rett))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -1184,7 +1202,7 @@
                                  (reverse (cons '(null) stmts))))
         (let ((a (transform-arg (car argl))))
           (loop (cdr argl) (cons (car a) newa)
-                (if (cdr a) (cons (cdr a) stmts) stmts))))))
+                (cons (cdr a) stmts))))))
 
 (define (expand-function-def- e)
   (let* ((name  (cadr e))
@@ -1226,7 +1244,7 @@
                   (farg    (if (decl? argname)
                                (adj-decl argname)
                                `(|::| |#self#| (call (core Typeof) ,argname))))
-                  (body       (insert-after-meta body (cdr argl-stmts)))
+                  (body    (insert-after-meta body (filter identity (cdr argl-stmts))))
                   (argl    (cdr argl))
                   (argl    (fix-arglist
                             (arglist-unshift argl farg)
@@ -1236,7 +1254,7 @@
                   (name    (if (or (decl? name) (and (pair? name) (memq (car name) '(curly where))))
                                #f name)))
              (expand-forms
-              (method-def-expr name sparams argl body rett))))
+              (method-def-expr name sparams argl (cdr argl-stmts) body rett))))
           (else
            (error (string "invalid assignment location \"" (deparse name) "\""))))))
 
