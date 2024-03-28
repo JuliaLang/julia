@@ -803,8 +803,8 @@ namedtup = (;a=1, b=2, c=3)
 # some basic equivalence handling tests for Union{} appearing in Tuple Vararg parameters
 @test Tuple{} <: Tuple{Vararg{Union{}}}
 @test Tuple{Int} <: Tuple{Int, Vararg{Union{}}}
-@test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Int, Vararg{Union{},1}}
-@test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Vararg{Union{},1}}
+@test Tuple{Int, Vararg{Union{},1}} === Union{}
+@test Tuple{Vararg{Union{},1}} === Union{}
 @test Tuple{} <: Tuple{Vararg{Union{},N}} where N
 @test !(Tuple{} >: Tuple{Vararg{Union{},N}} where N)
 
