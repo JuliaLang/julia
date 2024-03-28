@@ -269,6 +269,76 @@ end
 mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
+# repeat expr n times in a block
+macro _repeat(n::Int, expr)
+    Expr(:block, fill(esc(expr), n)...)
+end
+
+# the following mapreduce_impl is called by mapreduce for non-array iterators,
+# and implements an index-free in-order pairwise strategy:
+function mapreduce_impl(f, op, ::_InitialValue, itr)
+    it = iterate(itr)
+    it === nothing && return mapreduce_empty_iter(f, op, itr)
+    a1, state = it
+    it = iterate(itr, state)
+    it === nothing && return mapreduce_first(f, op, a1)
+    a2, state = it
+    v = op(f(a1), f(a2))
+    # unroll a few iterations to reduce overhead for small iterators:
+    @_repeat 14 begin
+        it = iterate(itr, state)
+        it === nothing && return v
+        a, state = it
+        v = op(v, f(a))
+    end
+    n = max(2, pairwise_blocksize(f, op))
+    v, state = _mapreduce_impl(f, op, itr, v, state, n-16)
+    while state !== nothing
+        v, state = _mapreduce_impl(f, op, itr, v, state, n)
+        n *= 2
+    end
+    return v
+end
+
+# apply reduction to at most ≈ n elements of itr, in a pairwise recursive fashion,
+# returning op(nt, ...n elements...), state --- state=nothing if itr ended
+function _mapreduce_impl(f, op, itr, nt, state, n)
+    # for the pairwise algorithm we want to reduce this block
+    # separately *before* combining it with nt, so we peel
+    # off the first element to initialize the block reduction:
+    it = iterate(itr, state)
+    it === nothing && return nt, nothing
+    a1, state = it
+    it = iterate(itr, state)
+    it === nothing && return op(nt, f(a1)), nothing
+    a2, state = it
+    v = op(f(a1), f(a2))
+
+    if n ≤ max(2, pairwise_blocksize(f, op)) # coarsened base case
+        @simd for _ = 3:n
+            it = iterate(itr, state)
+            it === nothing && return op(nt, v), nothing
+            a, state = it
+            v = op(v, f(a))
+        end
+        return op(nt, v), state
+    else
+        n >>= 1
+        v, state = _mapreduce_impl(f, op, itr, v, state, n-2)
+        state === nothing && return op(nt, v), nothing
+        v, state = _mapreduce_impl(f, op, itr, v, state, n)
+        # break return statement into two cases to help type inference
+        return state === nothing ? (op(nt, v), nothing) : (op(nt, v), state)
+    end
+end
+
+# for an arbitrary initial value, we need to call foldl,
+# because op(nt, itr[i]) may have a different type than op(nt, itr[j]))
+# … it's not clear how to reliably do this without foldl associativity.
+mapreduce_impl(f, op, nt, itr) = mapfoldl_impl(f, op, nt, itr)
+
+
+
 """
     mapreduce(f, op, itrs...; [init])
 
@@ -296,8 +366,10 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
+mapreduce(f, op, itr; init=_InitialValue()) = mapreduce_impl(f, op, init, itr)
 mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
+
+mapreduce(f, op, itr::Union{Tuple,NamedTuple}; kw...) = mapfoldl(f, op, itr; kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -365,15 +437,15 @@ mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
 mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
+mapreduce_empty_iter(f::F, op::OP, itr) where {F,OP} = reduce_empty_iter(_xfadjoint(op, Generator(f, itr))...)
+
 # For backward compatibility:
 mapreduce_empty_iter(f, op, itr, ItrEltype) =
     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
 @inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
-reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
-    reducing over an empty collection of unknown element type is not allowed.
-    You may be able to prevent this error by supplying an `init` value to the reducer."""))
+reduce_empty_iter(op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 
 # handling of single-element iterators
@@ -418,7 +490,7 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     inds = LinearIndices(A)
     n = length(inds)
     if n == 0
-        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
+        return mapreduce_empty_iter(f, op, A)
     elseif n == 1
         @inbounds a1 = A[first(inds)]
         return mapreduce_first(f, op, a1)
@@ -439,7 +511,7 @@ end
 
 mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f, op, A)
+_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapreduce_impl(f, op, _InitialValue(), itr)
 
 """
     reduce(op, itr; [init])
