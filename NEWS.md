@@ -33,6 +33,7 @@ Compiler/Runtime improvements
 
 Command-line option changes
 ---------------------------
+* `--project=@temp` starts Julia with a temporary environment.
 
 * The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
   This `main` function should be declared using `@main` to indicate that it is an entry point.
