@@ -25,6 +25,9 @@
 #  include <sys/types.h>
 #  include <sys/resource.h>
 #endif
+#ifdef _OS_OPENBSD_
+#  include <sys/resource.h>
+#endif
 #include "julia_assert.h"
 
 namespace {

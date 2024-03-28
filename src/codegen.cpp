@@ -86,7 +86,7 @@ static bool jl_fpo_disabled(const Triple &TT) {
     // MSAN doesn't support FPO
     return true;
 #endif
-    if (TT.isOSLinux() || TT.isOSWindows() || TT.isOSFreeBSD()) {
+    if (TT.isOSLinux() || TT.isOSWindows() || TT.isOSFreeBSD() || TT.isOSOpenBSD()) {
         return true;
     }
     return false;

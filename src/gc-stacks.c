@@ -50,6 +50,16 @@ static void free_stack(void *stkbuf, size_t bufsz)
 
 #else
 
+# ifdef _OS_OPENBSD_
+static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
+{
+    void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    if (stk == MAP_FAILED)
+        return MAP_FAILED;
+    jl_atomic_fetch_add(&num_stack_mappings, 1);
+    return stk;
+}
+# else
 static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
     void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -65,6 +75,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
+# endif
 
 static void free_stack(void *stkbuf, size_t bufsz)
 {

@@ -474,6 +474,8 @@ $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG
 ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc
 ifeq ($(OS),Darwin)
 ANALYSIS_DEPS += llvmunwind
+else ifeq ($(OS),OpenBSD)
+ANALYSIS_DEPS += llvmunwind
 else ifneq ($(OS),WINNT)
 ANALYSIS_DEPS += unwind
 endif

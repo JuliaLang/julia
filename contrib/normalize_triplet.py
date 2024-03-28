@@ -19,6 +19,7 @@ arch_mapping = {
 platform_mapping = {
     'darwin': "-apple-darwin[\\d\\.]*",
     'freebsd': "-(.*-)?freebsd[\\d\\.]*",
+    'openbsd': "-(.*-)?openbsd[\\d\\.]*",
     'windows': "-w64-mingw32",
     'linux': "-(.*-)?linux",
 }
@@ -96,6 +97,7 @@ def p(x):
         'darwin': 'apple-darwin',
         'windows': 'w64-mingw32',
         'freebsd': 'unknown-freebsd',
+        'openbsd': 'unknown-openbsd',
     }
     x = r(x)
     if x:
