@@ -970,6 +970,19 @@ end
     end
 end
 
+@testset "some limited functions preserve precision" begin
+    for prec in (10, 100, 1000)
+        for val in ("3.1", pi, "-1.3", -3.1, 1//10)
+            x = BigFloat(val, precision = prec)
+            for f in ((-), abs, nextfloat, prevfloat)
+                @test precision(f(x)) == precision(x) == prec
+            end
+            @test nextfloat(prevfloat(x)) == x
+            @test -(-x) == x
+        end
+    end
+end
+
 # issue #22758
 if MPFR.version() > v"3.1.5" || "r11590" in MPFR.patches()
     setprecision(2_000_000) do
