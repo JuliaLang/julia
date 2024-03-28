@@ -195,6 +195,7 @@ end
         @test gcdx(T(-5), T(12)) === (T(1), T(-5), T(-2))
         @test gcdx(T(-5), T(-12)) === (T(1), T(-5), T(2))
         @test gcdx(T(-25), T(-4)) === (T(1), T(-1), T(6))
+        @test gcdx(T(0), T(0)) === (T(0), T(0), T(0))
     end
     x, y = Int8(-12), UInt(100)
     d, u, v = gcdx(x, y)

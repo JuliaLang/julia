@@ -198,6 +198,7 @@ julia> gcdx(240, 46)
 """
 Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
     T = promote_type(typeof(a), typeof(b))
+    a == b == 0 && return (zero(T), zero(T), zero(T))
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
