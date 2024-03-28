@@ -1637,24 +1637,6 @@ static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
 
 // --- code generation ---
 
-extern "C" {
-    jl_cgparams_t jl_default_cgparams = {
-        /* track_allocations */ 1,
-        /* code_coverage */ 1,
-        /* prefer_specsig */ 0,
-#ifdef _OS_WINDOWS_
-        /* gnu_pubnames */ 0,
-#else
-        /* gnu_pubnames */ 1,
-#endif
-        /* debug_info_kind */ (int) DICompileUnit::DebugEmissionKind::FullDebug,
-        /* debug_line_info */ 1,
-        /* safepoint_on_entry */ 1,
-        /* gcstack_arg */ 1,
-        /* use_jlplt*/ 1,
-        /* lookup */ jl_rettype_inferred_addr };
-}
-
 
 static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) {
     jt = jl_unwrap_unionall(jt);
@@ -2111,6 +2093,29 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static unsigned julia_alignment(jl_value_t *jt);
+
+static void print_stack_crumbs(jl_codectx_t &ctx) {
+    errs() << "\n";
+    errs() << "Stacktrace:\n";
+    jl_method_instance_t *caller = ctx.linfo;
+    jl_((jl_value_t*)caller);
+    while (true) {
+        auto it = ctx.emission_context.enqueuers.find(caller);
+        if (it != ctx.emission_context.enqueuers.end()) {
+            caller = it->second;
+        } else {
+            break;
+        }
+        if (caller) {
+            if (jl_is_method_instance(caller))
+                jl_((jl_value_t*)caller);
+        }
+        else
+            break;
+    }
+    abort();
+}
+
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
@@ -4011,9 +4016,18 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 #ifdef _P64
                 nva = ctx.builder.CreateTrunc(nva, getInt32Ty(ctx.builder.getContext()));
 #endif
+
                 Value *theArgs = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
+                if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
+                    errs() << "Tried emitting dynamic dispatch from ";
+                    jl_(ctx.linfo);
+                    errs() << "in module ";
+                    jl_(ctx.linfo->def.method->module);
+                    errs() << "for call to Core._apply_iterate\n";
+                    print_stack_crumbs(ctx);
+                }
                 return true;
             }
         }
@@ -5096,12 +5110,27 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
                         ctx.call_targets[codeinst] = {cc, return_roots, trampoline_decl, specsig};
+                        if (ctx.params->no_dynamic_dispatch)
+                            ctx.emission_context.enqueuers[mi] = ctx.linfo;
                     }
                 }
             }
         }
     }
     if (!handled) {
+        if (0 && ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
+            errs() << "Tried emitting dynamic dispatch from ";
+            jl_(ctx.linfo);
+            errs() << "in module ";
+            jl_(ctx.linfo->def.method->module);
+            errs() << "for call to ";
+            if (lival.constant)
+                jl_(lival.constant);
+            else
+                errs() << "unknown";
+
+            print_stack_crumbs(ctx);
+        }
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
         result = mark_julia_type(ctx, r, true, rt);
     }
@@ -5157,7 +5186,15 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
             return mark_julia_type(ctx, oldnew, true, rt);
         }
     }
-
+    if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
+        errs() << "Tried emitting dynamic dispatch from ";
+        jl_(ctx.linfo);
+        errs() << "in module ";
+        jl_(ctx.linfo->def.method->module);
+        errs() << "for call to ";
+        jl_(args[0]);
+        print_stack_crumbs(ctx);
+    }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
     return mark_julia_type(ctx, callval, true, rt);
@@ -5269,7 +5306,15 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             }
         }
     }
-
+    if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
+        errs() << "Tried emitting dynamic dispatch from ";
+        jl_(ctx.linfo);
+        errs() << "in module ";
+        jl_(ctx.linfo->def.method->module);
+        errs() << "for call to ";
+        jl_(args[0]);
+        print_stack_crumbs(ctx);
+    }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, n_generic_args, julia_call);
     return mark_julia_type(ctx, callval, true, rt);
@@ -9983,6 +10028,7 @@ extern "C" void jl_init_llvm(void)
         /* safepoint_on_entry */ 1,
         /* gcstack_arg */ 1,
         /* use_jlplt*/ 1,
+        /* no_dynamic_dispatch */ 0,
         /* lookup */ jl_rettype_inferred_addr };
 
     jl_page_size = jl_getpagesize();

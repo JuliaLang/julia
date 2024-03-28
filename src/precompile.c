@@ -116,8 +116,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
             int setting = jl_get_module_compile((jl_module_t*)m);
-            if (setting != JL_OPTIONS_COMPILE_OFF &&
-                setting != JL_OPTIONS_COMPILE_MIN) {
+            if ((setting != JL_OPTIONS_COMPILE_OFF && (jl_options.small_image ||
+                (setting != JL_OPTIONS_COMPILE_MIN)))) {
                 // TODO: this would be better handled if moved entirely to jl_precompile
                 // since it's a slightly duplication of effort
                 jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
@@ -189,6 +189,10 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         }
     }
     JL_GC_POP();
+    if (jl_options.small_image){
+        exit(0); // Some finalizers need to run and we've blown up the bindings table
+        // TODO: Is this still needed
+    }
     jl_gc_enable_finalizers(ct, 1);
 }
 

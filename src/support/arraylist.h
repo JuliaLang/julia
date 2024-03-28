@@ -23,7 +23,7 @@ typedef struct {
 arraylist_t *arraylist_new(arraylist_t *a, size_t size) JL_NOTSAFEPOINT;
 void arraylist_free(arraylist_t *a) JL_NOTSAFEPOINT;
 
-void arraylist_push(arraylist_t *a, void *elt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void arraylist_push(arraylist_t *a, void *elt) JL_NOTSAFEPOINT;
 void *arraylist_pop(arraylist_t *a) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void arraylist_grow(arraylist_t *a, size_t n) JL_NOTSAFEPOINT;
 
