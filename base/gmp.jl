@@ -28,11 +28,13 @@ elseif Sys.isapple()
 else
     const libgmp = "libgmp.so.10"
 end
-
-version() = VersionNumber(unsafe_string(unsafe_load(cglobal((:__gmp_version, libgmp), Ptr{Cchar}))))
+_version() = unsafe_string(unsafe_load(cglobal((:__gmp_version, libgmp), Ptr{Cchar})))
+version() = VersionNumber(_version())
+major_version() = _version()[1]
 bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, libgmp), Cint)))
 
 const VERSION = version()
+const MAJOR_VERSION = major_version()
 const BITS_PER_LIMB = bits_per_limb()
 
 # GMP's mp_limb_t is by default a typedef of `unsigned long`, but can also be configured to be either
