@@ -215,7 +215,7 @@ function InferenceParams(
         #=tuple_complexity_limit_depth::Int=# 3,
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
-        #=unoptimize_throw_blocks::Bool=# true,
+        #=unoptimize_throw_blocks::Bool=# false, #TODO: figure out way to only do this in juliac
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false);
     max_methods::Int = params.max_methods,

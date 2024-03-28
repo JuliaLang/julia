@@ -165,7 +165,7 @@ end
 # without pulling in anything unnecessary like `CPU_NAME`
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
-    vers = "v$(VERSION.major).$(VERSION.minor)"
+    vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
     global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
