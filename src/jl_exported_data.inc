@@ -107,6 +107,7 @@
     XX(jl_pinode_type) \
     XX(jl_pointer_type) \
     XX(jl_pointer_typename) \
+    XX(jl_profile_continuous) \
     XX(jl_quotenode_type) \
     XX(jl_readonlymemory_exception) \
     XX(jl_ref_type) \

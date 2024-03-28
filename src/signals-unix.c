@@ -893,8 +893,13 @@ static void *signal_listener(void *arg)
                 // do backtrace for profiler
                 if (profile && running) {
                     if (jl_profile_is_buffer_full()) {
-                        // Buffer full: Delete the timer
-                        jl_profile_stop_timer();
+                        if (jl_profile_continuous) {
+                            // Wrap around to the beginning
+                            bt_size_cur = 0;
+                        } else {
+                            // Buffer full: Delete the timer
+                            jl_profile_stop_timer();
+                        }
                     }
                     else {
                         // unwinding can fail, so keep track of the current state

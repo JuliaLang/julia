@@ -91,15 +91,20 @@ set_peek_duration(t::Float64) = ccall(:jl_set_profile_peek_duration, Cvoid, (Flo
 ####
 
 """
-    init(; n::Integer, delay::Real)
+    init(; n::Integer, delay::Real, continuous::Bool)
 
-Configure the `delay` between backtraces (measured in seconds), and the number `n` of instruction pointers that may be
-stored per thread. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long
-list of instruction pointers. Note that 6 spaces for instruction pointers per backtrace are used to store metadata and two
-NULL end markers. Current settings can be obtained by calling this function with no arguments, and each can be set independently
+Configure the `delay` between backtraces (measured in seconds), and the number
+`n` of instruction pointers that may be stored per thread. If `continuous` is
+`false`, then profiling will terminate once no more space exists for
+instruction pointers; if `continuous` is `true`, then profiling will continue
+indefinitely until stopped. Each instruction pointer corresponds to a single
+line of code; backtraces generally consist of a long list of instruction
+pointers. Note that 6 spaces for instruction pointers per backtrace are used to
+store metadata and two NULL end markers. Current settings can be obtained by
+calling this function with no arguments, and each can be set independently
 using keywords or in the order `(n, delay)`.
 """
-function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
+function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true, continuous::Union{Bool,Nothing} = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     if n_cur == 0 && isnothing(n) && isnothing(delay)
         # indicates that the buffer hasn't been initialized at all, so set the default
@@ -107,15 +112,16 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
         n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     end
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
-    if n === nothing && delay === nothing
+    if n === nothing && delay === nothing && continuous === nothing
         return n_cur, delay_cur
     end
-    nnew = (n === nothing) ? n_cur : n
-    delaynew = (delay === nothing) ? delay_cur : delay
-    init(nnew, delaynew; limitwarn)
+    nnew = (n === nothing) ? (n_cur != 0 ? n_cur : DEFAULT_N) : n
+    delaynew = (delay === nothing) ? (delay_cur != 0 ? delay_cur : DEFAULT_DELAY) : delay
+    continuous = (continuous === nothing) ? is_continuous() : continuous
+    init(nnew, delaynew; limitwarn, continuous)
 end
 
-function init(n::Integer, delay::Real; limitwarn::Bool = true)
+function init(n::Integer, delay::Real; limitwarn::Bool = true, continuous::Bool = false)
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
     buffer_samples = n
     buffer_size_bytes = buffer_samples * sample_size_bytes
@@ -124,27 +130,28 @@ function init(n::Integer, delay::Real; limitwarn::Bool = true)
         buffer_size_bytes = buffer_samples * sample_size_bytes
         limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples) given that this system is 32-bit"
     end
+    unsafe_store!(cglobal(:jl_profile_continuous, Bool), continuous)
     status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64, 10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers ($(Base.format_bytes(buffer_size_bytes)))")
     end
 end
 
+# Use a max size of 10M profile samples, and fire timer every 1ms
+# (that should typically give around 100 seconds of record)
+if Sys.iswindows() && Sys.WORD_SIZE == 32
+    # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
+    # so we don't want to slow the program down by quite that much
+    const DEFAULT_N = 1_000_000
+    const DEFAULT_DELAY = 0.01
+else
+    # Keep these values synchronized with trigger_profile_peek
+    const DEFAULT_N = 10_000_000
+    const DEFAULT_DELAY = 0.001
+end
 function default_init()
     # init with default values
-    # Use a max size of 10M profile samples, and fire timer every 1ms
-    # (that should typically give around 100 seconds of record)
-    @static if Sys.iswindows() && Sys.WORD_SIZE == 32
-        # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
-        # so we don't want to slow the program down by quite that much
-        n = 1_000_000
-        delay = 0.01
-    else
-        # Keep these values synchronized with trigger_profile_peek
-        n = 10_000_000
-        delay = 0.001
-    end
-    init(n, delay, limitwarn = false)
+    init(DEFAULT_N, DEFAULT_DELAY, limitwarn = false)
 end
 
 # Checks whether the profile buffer has been initialized. If not, initializes it with the default size.
@@ -154,6 +161,10 @@ function check_init()
         default_init()
     end
 end
+
+# Returns whether the profiler is in continuous profiling mode
+is_continuous() =
+    unsafe_load(cglobal(:jl_profile_continuous, Bool))
 
 """
     clear()
@@ -634,14 +645,36 @@ function fetch(;include_meta = true, limitwarn = true)
     if maxlen == 0
         error("The profiling data buffer is not initialized. A profile has not been requested this session.")
     end
-    len = len_data()
-    if limitwarn && is_buffer_full()
-        @warn """The profile data buffer is full; profiling probably terminated
-                 before your program finished. To profile for longer runs, call
-                 `Profile.init()` with a larger buffer and/or larger delay."""
+    if is_continuous()
+        data = Vector{UInt}(undef, maxlen)
+        ccall(:jl_profile_read, Cvoid, (Ptr{UInt8},), data)
+        if maxlen >= 6
+            # Find the last valid frame and trim the buffer to that point
+            last_frame_end_idx = nothing
+            for idx in maxlen:-1:nmeta
+                if is_block_end(data, idx)
+                    last_frame_end_idx = idx
+                    break
+                end
+            end
+            if last_frame_end_idx === nothing
+                # Empty buffer
+                resize!(data, 0)
+            elseif last_frame_end_idx < maxlen
+                # Shrink out the unused part of the buffer
+                resize!(data, last_frame_end_idx)
+            end
+        end
+    else
+        len = len_data()
+        if limitwarn && is_buffer_full()
+            @warn """The profile data buffer is full; profiling probably terminated
+                     before your program finished. To profile for longer runs, call
+                     `Profile.init()` with a larger buffer and/or larger delay."""
+        end
+        data = Vector{UInt}(undef, len)
+        GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
     end
-    data = Vector{UInt}(undef, len)
-    GC.@preserve data unsafe_copyto!(pointer(data), get_data_pointer(), len)
     if include_meta || isempty(data)
         return data
     end
