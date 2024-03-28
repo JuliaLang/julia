@@ -504,7 +504,7 @@ function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{T}}) where {T <: Abs
         annots = [(UnitRange{Int}(max(1, first(region) - start), last(region)-start), val)
                   for (region, val) in io.annotations if last(region) > start]
         AnnotatedString(read(io.io, T), annots)
-    end
+    end |> annotatedstring_optimize!
 end
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{AbstractString}}) = read(io, AnnotatedString{String})
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString}) = read(io, AnnotatedString{String})
