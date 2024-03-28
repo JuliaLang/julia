@@ -7,6 +7,17 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
+
+#ifdef _WIN32
+#  ifdef _WIN64
+#    define PRI_SIZET PRIu64
+#  else
+#    define PRI_SIZET PRIu32
+#  endif
+#else
+#  define PRI_SIZET "zu"
+#endif
 
 #ifdef _OS_WINDOWS_
 #include <ws2tcpip.h>
@@ -56,7 +67,7 @@ static void walk_print_cb(uv_handle_t *h, void *arg)
     if (resource_id == -1)
         jl_safe_printf(" %s   %s%p->%p\n", type,             pad, (void*)h, (void*)h->data);
     else
-        jl_safe_printf(" %s[%zd] %s%p->%p\n", type, resource_id, pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s[%" PRI_SIZET "] %s%p->%p\n", type, resource_id, pad, (void*)h, (void*)h->data);
 }
 
 static void wait_empty_func(uv_timer_t *t)
@@ -65,7 +76,7 @@ static void wait_empty_func(uv_timer_t *t)
     uv_unref((uv_handle_t*)&signal_async);
     if (!uv_loop_alive(t->loop))
         return;
-    jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
+    jl_safe_printf("\n[pid %" PRI_SIZET "] waiting for IO to finish:\n"
                    " Handle type        uv_handle_t->data\n",
                    (size_t)uv_os_getpid());
     uv_walk(jl_io_loop, walk_print_cb, NULL);
