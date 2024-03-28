@@ -1109,7 +1109,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 new_vals = Any[]
                 for j = 1:length(expr.edges)
                     edge = expr.edges[j]
-                    (edge in sv.unreachable || ssavaluetypes[edge] === Union{}) && continue
+                    (edge in sv.unreachable || (ssavaluetypes[edge] === Union{} && !isa(code[edge], PhiNode))) && continue
                     push!(new_edges, edge)
                     if isassigned(expr.values, j)
                         push!(new_vals, expr.values[j])
