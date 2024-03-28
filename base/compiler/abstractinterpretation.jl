@@ -2731,7 +2731,8 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, vtypes::Un
         val = phi.values[i]
         # N.B.: Phi arguments are restricted to not have effects, so we can drop
         # them here safely.
-        rt = tmerge(typeinf_lattice(interp), rt, abstract_eval_special_value(interp, val, vtypes, sv).rt)
+        thisval = abstract_eval_special_value(interp, val, vtypes, sv).rt
+        rt = tmerge(typeinf_lattice(interp), rt, thisval)
     end
     return rt
 end
@@ -2745,7 +2746,14 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     if !isa(e, Expr)
         if isa(e, PhiNode)
             add_curr_ssaflag!(sv, IR_FLAGS_REMOVABLE)
-            return RTEffects(abstract_eval_phi(interp, e, vtypes, sv), Union{}, EFFECTS_TOTAL)
+            # Implement convergence for PhiNodes. In particular, PhiNodes need to tmerge over
+            # the incoming values from all iterations, but `abstract_eval_phi` will only tmerge
+            # over the first and last iterations. By tmerging in the current old_rt, we ensure that
+            # we will not lose an intermediate value.
+            rt = abstract_eval_phi(interp, e, vtypes, sv)
+            old_rt = sv.ssavaluetypes[sv.currpc]
+            rt = old_rt === NOT_FOUND ? rt : tmerge(typeinf_lattice(interp), old_rt, rt)
+            return RTEffects(rt, Union{}, EFFECTS_TOTAL)
         end
         (; rt, exct, effects) = abstract_eval_special_value(interp, e, vtypes, sv)
     else
