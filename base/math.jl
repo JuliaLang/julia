@@ -1327,7 +1327,12 @@ end
     x0 = x
     n == 3 && return x*x*x # keep compatibility with literal_pow
     if isodd(n)
-        y = n < 0 ? inv(x) : x
+        if n < 0
+            y = inv(x)
+            ynlo = -fma(x, y, -1.0) * y
+        else
+            y = x
+        end
     end
     x, xnlo = two_mul(x, x)
     m = n ÷ 2
