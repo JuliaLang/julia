@@ -613,3 +613,22 @@ relpath(path::AbstractString, startpath::AbstractString) =
 for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
     @eval $f(path::AbstractString) = $f(String(path))
 end
+
+"""
+    uripath(path::AbstractString)
+
+Encode `path` as a URI as per RFC1738, RFC3986, and the
+[Freedesktop File URI spec](https://www.freedesktop.org/wiki/Specifications/file-uri-spec/).
+"""
+function uripath(path::String)
+    percent_escape(s) =
+        '%' * join(map(b -> string(b, base=16), codeunits(s)), '%')
+    encode_uri_component(s) = replace(
+        s, r"[^A-Za-z0-9\-_.~]+" => percent_escape)
+    string("file://", gethostname(), '/',
+           join(map(encode_uri_component,
+                    split(path, path_separator_re, keepempty=false)),
+                '/'))
+end
+
+uripath(path::AbstractString) = uripath(String(path))
