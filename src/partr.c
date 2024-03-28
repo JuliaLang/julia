@@ -125,7 +125,11 @@ void jl_parallel_gc_threadfun(void *arg)
 
     // initialize this thread (set tid and create heap)
     jl_ptls_t ptls = jl_init_threadtls(targ->tid);
-
+    void *stack_lo, *stack_hi;
+    jl_init_stack_limits(0, &stack_lo, &stack_hi);
+    // warning: this changes `jl_current_task`, so be careful not to call that from this function
+    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+    JL_GC_PROMISE_ROOTED(ct);
     // wait for all threads
     jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
     uv_barrier_wait(targ->barrier);
@@ -156,7 +160,11 @@ void jl_concurrent_gc_threadfun(void *arg)
 
     // initialize this thread (set tid and create heap)
     jl_ptls_t ptls = jl_init_threadtls(targ->tid);
-
+    void *stack_lo, *stack_hi;
+    jl_init_stack_limits(0, &stack_lo, &stack_hi);
+    // warning: this changes `jl_current_task`, so be careful not to call that from this function
+    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+    JL_GC_PROMISE_ROOTED(ct);
     // wait for all threads
     jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
     uv_barrier_wait(targ->barrier);
