@@ -1148,7 +1148,8 @@ end
         @testset "avoid circular precompilation deadlock through extensions" begin
             testenv = joinpath(@__DIR__, "extensions", "circular")
             s = read(`$(Base.julia_cmd()) --startup-file=no --project=$testenv -e 'using A'`, String)
-            @test !occursin("Error during loading of extension", s)
+            @test occursin("Dependency cycle detected in extension precompilation", s)
+            @test occursin("Error during loading of extension", s) # TODO: avoid the error? https://github.com/JuliaLang/julia/pull/53112
         end
     finally
         try

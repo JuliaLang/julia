@@ -1485,11 +1485,10 @@ function run_extension_callbacks(pkgid::PkgId)
     extids === nothing && return
     for extid in extids
         if in(extid.id, precompilation_stack)
-            @debug """
+            @warn """
             Dependency cycle detected in extension precompilation: $(precompilation_stack_list()) > $(extid.id.name)
-            $(extid.id.name) will not be loaded here.
+            Loading $(extid.id.name) here will likely fail.
             """
-            continue
         end
         if extid.ntriggers > 0
             # indicate pkgid is loaded
