@@ -298,15 +298,17 @@ The return value for non-associative `op` functions may vary between
 different methods and between Julia versions. For example, `-` is not
 associative and thus `mapreduce(√, -, [1, 4, 9])` may return either
 `-4.0` or `2.0` depending upon the exact method or version of Julia.
-This is also true of some floating point operations that are typically
-associative, for example `mapreduce(identity, +, [.1, .2, .3])` may return
+Because floating-point roundoff errors typically break associativity,
+even for operations like + that are associative in exact arithmetic,
+this also means that the floating-point errors incurred by mapreduce
+are implementation-defined; for example `mapreduce(identity, +, [.1, .2, .3])` may return
 either `0.6` or `0.6000000000000001`.
 
 While the associativity of the reduction is not defined, `mapreduce` does preserve
-the ordering of the iterator for ordered collections.  For example,
-`mapreduce(uppercase, string, ['j','u','l','i','a'])` is guaranteed to always
+the ordering of the iterator for ordered collections, so that the result does *not* require `op` to be commutative.  For example,
+`mapreduce(uppercase, *, ['j','u','l','i','a'])` is guaranteed to always
 return the properly-spelled `"JULIA"` because `Array`s are ordered collections;
-the returned ordering is not guaranteed with an unordered collection like `Set`.
+in contrast, the operand ordering is not guaranteed with an unordered collection like `Set`.
 
 [`mapreduce`](@ref) is functionally equivalent to calling
 `reduce(op, map(f, itrs...); init=init)`, but will in general execute faster since no
@@ -314,7 +316,7 @@ intermediate collection needs to be created. See documentation for [`reduce`](@r
 [`map`](@ref).
 
 Some commonly-used operators may have special implementations of a mapped reduction, and
-should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
+are recommended instead of `mapreduce`: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
 [`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
 
 !!! compat "Julia 1.2"
@@ -328,10 +330,10 @@ julia> mapreduce(√, +, [1, 4, 9])
 julia> mapreduce(identity, +, [.1, .2, .3]) ≈ 0.6
 true
 
-julia> mapreduce(uppercase, string, ['j','u','l','i','a'])
+julia> mapreduce(uppercase, *, ['j','u','l','i','a'])
 "JULIA"
 
-julia> mapreduce(uppercase, string, ['j','u','l','i','a'], init="Hello ")
+julia> mapreduce(uppercase, *, ['j','u','l','i','a'], init="Hello ")
 "Hello JULIA"
 ```
 """
