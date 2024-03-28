@@ -728,18 +728,28 @@ Return the largest element in a collection.
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
 other element) as it is unspecified whether `init` is used
-for non-empty collections.
+for non-empty collections. If `init > maximum(itr)`, return `init`.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
-julia> maximum(-20.5:10)
+julia> x = -20.5:10
+-20.5:1.0:9.5
+
+julia> maximum(x)
 9.5
 
-julia> maximum([1,2,3])
+julia> y = [1 2 3]
+1×3 Matrix{Int64}:
+ 1  2  3
+
+julia> maximum(y)
 3
+
+julia> maximum(y, init=maximum(x)) == maximum(x ∪ y) == 9.5
+true
 
 julia> maximum(())
 ERROR: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
@@ -760,18 +770,28 @@ Return the smallest element in a collection.
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
 other element) as it is unspecified whether `init` is used
-for non-empty collections.
+for non-empty collections. If `init < minimum(itr)`, return `init`.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
-julia> minimum(-20.5:10)
+julia> x = -20.5:10
+-20.5:1.0:9.5
+
+julia> minimum(x)
 -20.5
 
-julia> minimum([1,2,3])
+julia> y = [1 2 3]
+1×3 Matrix{Int64}:
+ 1  2  3
+
+julia> minimum(y)
 1
+
+julia> minimum(y, init=minimum(x)) == minimum(x ∪ y) == -20.5
+true
 
 julia> minimum([])
 ERROR: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
@@ -793,19 +813,34 @@ as a 2-tuple.
 The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
 first and second elements are neutral elements for `min` and `max` respectively
 (i.e. which are greater/less than or equal to any other element). As a consequence, when
-`itr` is empty the returned `(mn, mx)` tuple will satisfy `mn ≥ mx`. When `init` is
-specified it may be used even for non-empty `itr`.
+`itr` is empty the returned `(mn, mx)` tuple will satisfy `mn ≥ mx`. If the `init` contains
+a non-neutral element, this element is returned as appropriate. (If `init[1] < minimum(itr)`,
+`mn == init[1]`. If `init[2] > maximum(itr)`, `mx == init[2]`.) When `init` is specified it
+may be used even for non-empty `itr`.
 
 !!! compat "Julia 1.8"
     Keyword argument `init` requires Julia 1.8 or later.
 
 # Examples
 ```jldoctest
-julia> extrema(2:10)
-(2, 10)
+julia> x = 1:5
+1:5
 
-julia> extrema([9,pi,4.5])
+julia> extrema(x)
+(1, 5)
+
+julia> y = [9 pi 4.5]
+1×3 Matrix{Float64}:
+ 9.0  3.14159  4.5
+
+julia> extrema(x)
+(1, 5)
+
+julia> extrema(y)
 (3.141592653589793, 9.0)
+
+julia> extrema(y, init=extrema(x)) == extrema(x ∪ y) == (1.0, 9.0)
+true
 
 julia> extrema([]; init = (Inf, -Inf))
 (Inf, -Inf)
