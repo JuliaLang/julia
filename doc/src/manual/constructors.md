@@ -83,6 +83,9 @@ is like an outer constructor method, except for two differences:
 2. It has access to a special locally existent function called [`new`](@ref) that creates objects of the
    block's type.
 
+The semantics of `new` include implicit `convert` operations to convert each argument to the declared type
+of the corresponding field.
+
 For example, suppose one wants to declare a type that holds a pair of real numbers, subject to
 the constraint that the first number is not greater than the second one. One could declare it
 like this:
@@ -119,10 +122,18 @@ existence by a call to one of the inner constructor methods provided with the ty
 some degree of enforcement of a type's invariants.
 
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
-that you have supplied yourself with all the inner constructors you need. The default constructor
-is equivalent to writing your own inner constructor method that takes all of the object's fields
-as parameters (constrained to be of the correct type, if the corresponding field has a type),
-and passes them to `new`, returning the resulting object:
+that you have supplied yourself with all the inner constructors you need.
+
+The default constructor is equivalent to writing one or two of your own
+constructor methods that take all of the object's fields as arguments.
+One is an inner constructor method that has the methods's arguments constrained to the corresponding field types.
+This method simply passes the arguments to `new` and returns the result.
+The other is an outer constructor method that is provided only if there are any type constraints on fields other than `Any`.
+This methods calls `convert` to convert each argument to the type of the constraint on the corresponding field, and
+calls the inner constructor to compute the returned result.
+
+If the type is parametric, see the section [Parametric Constructors](@ref) for an additional default
+constructor provided.
 
 ```jldoctest
 julia> struct Foo
@@ -130,12 +141,11 @@ julia> struct Foo
            baz
            Foo(bar,baz) = new(bar,baz)
        end
-
 ```
 
 This declaration has the same effect as the earlier definition of the `Foo` type without an explicit
 inner constructor method. The following two types are equivalent -- one with a default constructor,
-the other with an explicit constructor:
+the other with explicit constructors:
 
 ```jldoctest
 julia> struct T1
@@ -144,8 +154,10 @@ julia> struct T1
 
 julia> struct T2
            x::Int64
-           T2(x) = new(x)
+           T2(x::Int64) = new(x)
        end
+
+julia> T2(x) = T(convert(Int64, x)::Int64)
 
 julia> T1(1)
 T1(1)
@@ -332,16 +344,22 @@ This automatic provision of constructors is equivalent to the following explicit
 julia> struct Point{T<:Real}
            x::T
            y::T
-           Point{T}(x,y) where {T<:Real} = new(x,y)
+           Point{T}(x::T, y::T) where {T<:Real} = new(x, y)
        end
+
+julia> Point{T}(x, y) where {T<:Real} = Point{T}(convert(T, x), convert(T, y));
 
 julia> Point(x::T, y::T) where {T<:Real} = Point{T}(x,y);
 ```
 
 Notice that each definition looks like the form of constructor call that it handles.
-The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x,y)` inside the
+The call `Point{Int64}(1,2)` will invoke the definition `Point{T}(x::T, y::T)` inside the
 `struct` block.
-The outer constructor declaration, on the other hand, defines a
+
+The first outer constructor declaration handles cases like `Point{Int64}(1.0, 2.0)` by calling
+`convert` to convert the arguments to the types of the fields.
+
+The latter outer constructor declaration, on the other hand, defines a
 method for the general `Point` constructor which only applies to pairs of values of the same real
 type. This declaration makes constructor calls without explicit type parameters, like `Point(1,2)`
 and `Point(1.0,2.5)`, work. Since the method declaration restricts the arguments to being of the
