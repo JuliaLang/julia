@@ -940,7 +940,8 @@ string(b::Bool) = b ? "true" : "false"
 """
     bitstring(n)
 
-A string giving the literal bit representation of a primitive type.
+A string giving the literal bit representation of a primitive type
+(in bigendian order, i.e. most-significant bit first).
 
 See also [`count_ones`](@ref), [`count_zeros`](@ref), [`digits`](@ref).
 
