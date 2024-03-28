@@ -1,3 +1,4 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 # Parses a string into a Julia type object, e.g. `Int`, `Array{Int, 2}`, etc.
 """
     Base.parse(Type, str;    module_context=Main)
