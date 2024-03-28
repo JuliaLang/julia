@@ -1459,6 +1459,13 @@ end
     # two cases where we have observed > 1 ULP in the past
     @test 0.0013653274095082324^-97.60372292227069 == 4.088393948750035e279
     @test 8.758520413376658e-5^70.55863059215994 == 5.052076767078296e-287
+
+    # issue #53881
+    @test 2.0 ^ typemin(Int) == 0.0
+    @test (-1.0) ^ typemin(Int) == 1.0
+    @test prevfloat(1.0) ^ (-2^54) ≈ 7.38905609893065
+    @test prevfloat(1.0) ^ (-2^62) ≈ 2.2844135865231613e222
+    @test prevfloat(1.0) ^ (-2^63) == Inf
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.

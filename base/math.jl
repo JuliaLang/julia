@@ -1316,17 +1316,34 @@ end
 
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
-    xnlo = ynlo = 0.0
+    xnlo = ynlo = err = 0.0
+    if iszero(n)
+        return y
+    elseif n == 1
+        return x
+    elseif n == -1
+        return inv(x)
+    end
+    x0 = x
     n == 3 && return x*x*x # keep compatibility with literal_pow
+    if isodd(n)
+        y = n < 0 ? inv(x) : x
+    end
+    x, xnlo = two_mul(x, x)
+    m = n ÷ 2
     if n < 0
         rx = inv(x)
-        n==-2 && return rx*rx #keep compatibility with literal_pow
-        isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
+        n == -2 && return rx #keep compatibility with literal_pow
+        !isfinite(rx) && return isodd(n) ? copysign(rx, x0) : rx
+        if isfinite(x)
+            xnlo = -(xnlo * rx + fma(x, rx, -1.0)) * rx
+        end
         x = rx
-        n = -n
+        m = -m
     end
+    n = m
     while n > 1
-        if n&1 > 0
+        if isodd(n)
             err = muladd(y, xnlo, x*ynlo)
             y, ynlo = two_mul(x,y)
             ynlo += err
