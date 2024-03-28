@@ -125,10 +125,17 @@ not_const = 1
 # For curmod_*
 include("testenv.jl")
 
+module TestMod36529
+    x36529 = 0
+    y36529 = 1
+    export y36529
+end
+
 module TestMod7648
 using Test
 import Base.convert
 import ..curmod_name, ..curmod
+using ..TestMod36529: x36529   # doesn't import TestMod36529 or y36529, even though it's exported
 export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
 
 const c7648 = 8
@@ -177,9 +184,59 @@ let
                                                       :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
                                                       :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include"),
                                                       :convert, :curmod_name, :curmod])
+    @test Set(names(TestMod7648, usings = true)) == Set([:x36529, :Test,  Symbol("@inferred"), Symbol("@test"), Symbol("@test_broken"),
+                                        Symbol("@test_deprecated"), Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"),
+                                        Symbol("@test_throws"), Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict,
+                                        :GenericOrder, :GenericSet, :GenericString, :Test, :TestSetException, :detect_ambiguities, :detect_unbound_args,
+                                        :TestMod7648, :TestModSub9475, :TestMod7648, :a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods, :Foo7648])
+    @test Set(names(TestMod7648, all = true, usings = true)) == Set([:x36529, :Test,  Symbol("@inferred"), Symbol("@test"), Symbol("@test_broken"),
+                                        Symbol("@test_deprecated"), Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"),
+                                        Symbol("@test_throws"), Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict,
+                                        :GenericOrder, :GenericSet, :GenericString, :Test, :TestSetException, :detect_ambiguities, :detect_unbound_args,
+                                        :TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
+                                        :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
+                                        :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include")])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
+
+module TestMod42092
+module M1
+    const m1_x = 1
+    export m1_x
+end
+module M2
+    const m2_x = 1
+    export m2_x
+end
+module A
+    module B
+        f(x) = 1
+        secret = 1
+        module Inner2 end
+    end
+    module C
+        x = 1
+        y = 2
+        export y
+    end
+    using .B: f
+    using .C
+    using ..M1
+    import ..M2
+end
+end # module TestMod42092
+
+let
+    @test Set(names(TestMod42092.A)) == Set([:A])
+    @test Set(names(TestMod42092.A, imported = true)) == Set([:A, :M2])
+    @test Set(names(TestMod42092.A, usings = true)) == Set([:A, :f, :C, :y, :M1, :m1_x])
+    @test Set(names(TestMod42092.A, all = true)) == Set([:A, :B, :C, :eval, :include, Symbol("#eval"), Symbol("#include")])
+    @test Set(names(TestMod42092.A, all = true, usings = true)) == Set([:A, :B, :C, :f, :y, :M1, :m1_x, :eval, :include, Symbol("#eval"), Symbol("#include")])
+    @test Set(names(TestMod42092.A, imported = true, usings = true)) == Set([:A, :M2, :f, :C, :y, :M1, :m1_x])
+    @test Set(names(TestMod42092.A, all=true, imported = true, usings = true)) == Set([:A, :B, :C, :M2, :f, :y, :M1, :m1_x, :eval, :include, Symbol("#eval"), Symbol("#include")])
+end
+
 
 let
     using .TestMod7648
