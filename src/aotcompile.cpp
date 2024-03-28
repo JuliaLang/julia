@@ -327,7 +327,13 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
         }
         else {
-            *ci_out = jl_type_infer(mi, world, 0, SOURCE_MODE_ABI);
+            codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_ABI);
+            *src_out = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
+            jl_method_t *def = codeinst->def->def.method;
+            if ((jl_value_t*)*src_out == jl_nothing)
+                *src_out = NULL;
+            if (*src_out && jl_is_method(def))
+                *src_out = jl_uncompress_ir(def, (jl_value_t*)*src_out);
         }
     }
     *ci_out = codeinst;
