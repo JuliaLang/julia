@@ -1523,14 +1523,15 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     ssa_rename = Vector{Any}(undef, length(src.stmts))
     for idx′ = 1:length(src.stmts)
         inst = src[SSAValue(idx′)]
-        stmt′ = inst[:stmt]
-        isa(stmt′, ReturnNode) && continue
-        stmt′ = ssamap(stmt′) do ssa::SSAValue
+        stmt = inst[:stmt]
+        isa(stmt, ReturnNode) && continue
+        stmt = ssamap(stmt) do ssa::SSAValue
             ssa_rename[ssa.id]
         end
-        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, ssa_substitute)
+        stmt = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt, ssa_substitute)
+        line = DebugCodeLoc(ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], idx′)
         ssa_rename[idx′] = insert_node!(ir, idx,
-            NewInstruction(inst; stmt=stmt′, line=(ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(idx′))),
+            NewInstruction(inst; stmt, line),
             attach_after)
     end
 

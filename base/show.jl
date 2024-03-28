@@ -2838,6 +2838,8 @@ module IRShow
     Base.iterate(is::Compiler.InstructionStream, st::Int=1) = (st <= Compiler.length(is)) ? (is[st], st + 1) : nothing
     Base.getindex(is::Compiler.InstructionStream, idx::Int) = Compiler.getindex(is, idx)
     Base.getindex(node::Compiler.Instruction, fld::Symbol) = Compiler.getindex(node, fld)
+    Base.getindex(dcl::Compiler.DebugCodeLoc, idx::Int) = Compiler.getindex(dcl, idx)
+    Base.iterate(dcl::Compiler.DebugCodeLoc, s::Int=1) = Compiler.iterate(dcl, s)
     Base.getindex(ir::IRCode, ssa::SSAValue) = Compiler.getindex(ir, ssa)
     include("compiler/ssair/show.jl")
 

@@ -321,7 +321,7 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
     debuginfo = inline_target isa IRCode ? inline_target.debuginfo : inline_target.ir.debuginfo
 
     linetable_offset = ir_inline_linetable!(debuginfo, di, mi)
-    topline = (inlined_at, linetable_offset, Int32(0))
+    topline = DebugCodeLoc(inlined_at, linetable_offset, Int32(0))
     if should_insert_coverage(def.module, di)
         insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, topline))
     end
@@ -340,8 +340,9 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
     if def.is_for_opaque_closure
         # Replace the first argument by a load of the capture environment
         argexprs[1] = insert_node!(
-            NewInstruction(Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
-            ir.argtypes[1], topline))
+            NewInstruction(
+                Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
+                ir.argtypes[1], topline))
     end
     return SSASubstitute(mi, argexprs, spvals_ssa, (inlined_at, linetable_offset))
 end
@@ -379,7 +380,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             # something better eventually.
             inline_compact[idx′] = nothing
             # alter the line number information for InsertBefore to point to the current instruction in the new linetable
-            inline_compact[SSAValue(idx′)][:line] = (ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(lineidx))
+            inline_compact[SSAValue(idx′)][:line] = DebugCodeLoc(ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], lineidx)
             insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
             stmt′ = ssa_substitute_op!(insert_node!, inline_compact[SSAValue(idx′)], stmt′, ssa_substitute)
             if isa(stmt′, ReturnNode)
@@ -411,7 +412,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         @assert isempty(inline_compact.perm) && isempty(inline_compact.pending_perm) "linetable not in canonical form (missing compact call)"
         for ((lineidx, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
-            inline_compact[SSAValue(idx′)][:line] = (ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(lineidx))
+            inline_compact[SSAValue(idx′)][:line] = DebugCodeLoc(ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], lineidx)
             insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
             stmt′ = ssa_substitute_op!(insert_node!, inline_compact[SSAValue(idx′)], stmt′, ssa_substitute)
             if isa(stmt′, ReturnNode)
@@ -449,7 +450,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
 end
 
 function fix_va_argexprs!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
-    argexprs::Vector{Any}, nargs_def::Int, line_idx::NTuple{3,Int32})
+    argexprs::Vector{Any}, nargs_def::Int, line_idx::DebugCodeLoc)
     newargexprs = argexprs[1:(nargs_def-1)]
     tuple_call = Expr(:call, TOP_TUPLE)
     tuple_typs = Any[]

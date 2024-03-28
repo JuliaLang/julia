@@ -2694,3 +2694,13 @@ let lowered = Meta.lower(Main, Expr(:let, Expr(:block), Expr(:block, Expr(:tople
     # Check that this gets printed as `_1 = 1` not `y = 1`
     @test contains(sprint(show, ci), "_1 = 1")
 end
+
+# exercise DILineInfoPrinter
+test_DILineInfoPrinter(x) = @inline sin(x)
+test_DILineInfoPrinter(42) # ensure we have code instance cache for `test_DILineInfoPrinter(::Int)`
+let io = IOContext(IOBuffer(), :color=>true)
+    mi = only(methods(test_DILineInfoPrinter, (Int,))).specializations
+    src = Core.Compiler._uncompressed_ir(mi.cache, mi.cache.inferred::String)
+    Base.IRShow.show_ir(io, src, Base.IRShow.IRShowConfig(Base.IRShow.DILineInfoPrinter(src.debuginfo, :var"unknown scope")));
+    Base.IRShow.show_ir(io, src, Base.IRShow.IRShowConfig(Base.IRShow.DILineInfoPrinter(src.debuginfo, :var"unknown scope", true)));
+end

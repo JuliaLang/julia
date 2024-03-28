@@ -189,7 +189,7 @@ mutable struct DebugInfoStream
     end
     #DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
     #    if debuginfo_file1(di.def) === debuginfo_file1(di.def)
-    #        new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
+    #        new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0)[1],
     #            ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
     #    else
     function DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int)
@@ -206,15 +206,37 @@ Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
     Core.DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
-getdebugidx(debuginfo::Core.DebugInfo, pc::Int) = ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
+struct DebugCodeLoc
+    line::Int32
+    edge::Int32
+    edge_line::Int32
+end
+function getindex(dcl::DebugCodeLoc, idx::Int)
+    if idx == 1
+        return dcl.line
+    elseif idx == 2
+        return dcl.edge
+    elseif idx == 3
+        return dcl.edge_line
+    else
+        throw(BoundsError(dcl, idx))
+    end
+end
+function iterate(dcl::DebugCodeLoc, i::Int=1)
+    i > 3 && return nothing
+    return getfield(dcl, i), i+1
+end
+
+getdebugidx(debuginfo::Core.DebugInfo, pc::Int) = DebugCodeLoc(
+    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)...)
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     if 3 <= 3pc <= length(debuginfo.codelocs)
-        return (debuginfo.codelocs[3pc - 2], debuginfo.codelocs[3pc - 1], debuginfo.codelocs[3pc - 0])
+        return DebugCodeLoc(debuginfo.codelocs[3pc - 2], debuginfo.codelocs[3pc - 1], debuginfo.codelocs[3pc - 0])
     elseif pc == 0
-        return (Int32(debuginfo.firstline), Int32(0), Int32(0))
+        return DebugCodeLoc(debuginfo.firstline, 0, 0)
     else
-        return (Int32(-1), Int32(0), Int32(0))
+        return DebugCodeLoc(-1, 0, 0)
     end
 end
 
@@ -310,7 +332,7 @@ Instruction(is::InstructionStream) = Instruction(is, add_new_idx!(is))
     isdefined(node, fld) && return getfield(node, fld)
     fldarray = getfield(getfield(node, :data), fld)
     fldidx = getfield(node, :idx)
-    (fld === :line) && return (fldarray[3fldidx-2], fldarray[3fldidx-1], fldarray[3fldidx-0])
+    (fld === :line) && return DebugCodeLoc(fldarray[3fldidx-2], fldarray[3fldidx-1], fldarray[3fldidx-0])
     return fldarray[fldidx]
 end
 @inline function setindex!(node::Instruction, @nospecialize(val), fld::Symbol)
@@ -318,7 +340,7 @@ end
     fldarray = getfield(getfield(node, :data), fld)
     fldidx = getfield(node, :idx)
     if fld === :line
-        (fldarray[3fldidx-2], fldarray[3fldidx-1], fldarray[3fldidx-0]) = val::NTuple{3,Int32}
+        (fldarray[3fldidx-2], fldarray[3fldidx-1], fldarray[3fldidx-0]) = val::DebugCodeLoc
     else
         fldarray[fldidx] = val
     end
@@ -370,15 +392,15 @@ struct NewInstruction
     stmt::Any
     type::Any
     info::CallInfo
-    line::Union{NTuple{3,Int32},Nothing} # if nothing, copy the line from previous statement in the insertion location
+    line::Union{DebugCodeLoc,Nothing} # if nothing, copy the line from previous statement in the insertion location
     flag::Union{UInt32,Nothing} # if nothing, IR flags will be recomputed on insertion
     function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
-                            line::Union{NTuple{3,Int32},Int32,Nothing}, flag::Union{UInt32,Nothing})
-        line isa Int32 && (line = (line, zero(Int32), zero(Int32)))
+                            line::Union{DebugCodeLoc,Int32,Nothing}, flag::Union{UInt32,Nothing})
+        line isa Int32 && (line = DebugCodeLoc(line, 0, 0))
         return new(stmt, type, info, line, flag)
     end
 end
-function NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{NTuple{3,Int32},Int32,Nothing}=nothing)
+function NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{DebugCodeLoc,Int32,Nothing}=nothing)
     return NewInstruction(stmt, type, NoCallInfo(), line, nothing)
 end
 @nospecialize
@@ -386,7 +408,7 @@ function NewInstruction(newinst::NewInstruction;
     stmt::Any=newinst.stmt,
     type::Any=newinst.type,
     info::CallInfo=newinst.info,
-    line::Union{NTuple{3,Int32},Int32,Nothing}=newinst.line,
+    line::Union{DebugCodeLoc,Int32,Nothing}=newinst.line,
     flag::Union{UInt32,Nothing}=newinst.flag)
     return NewInstruction(stmt, type, info, line, flag)
 end
@@ -394,7 +416,7 @@ function NewInstruction(inst::Instruction;
     stmt::Any=inst[:stmt],
     type::Any=inst[:type],
     info::CallInfo=inst[:info],
-    line::Union{NTuple{3,Int32},Int32,Nothing}=inst[:line],
+    line::Union{DebugCodeLoc,Int32,Nothing}=inst[:line],
     flag::Union{UInt32,Nothing}=inst[:flag])
     return NewInstruction(stmt, type, info, line, flag)
 end
@@ -939,7 +961,7 @@ function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
 end
 
 function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
-    newline::NTuple{3,Int32}=newinst.line::NTuple{3,Int32}, newflag::UInt32=newinst.flag::UInt32)
+    newline::DebugCodeLoc=newinst.line::DebugCodeLoc, newflag::UInt32=newinst.flag::UInt32)
     node[:stmt] = newinst.stmt
     node[:type] = newinst.type
     node[:info] = newinst.info
@@ -1029,7 +1051,7 @@ function maybe_reopen_bb!(compact)
 end
 
 function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction, reverse_affinity::Bool=false)
-    newline = newinst.line::NTuple{3,Int32}
+    newline = newinst.line::DebugCodeLoc
     refinish = false
     result_idx = compact.result_idx
     result_bbs = compact.cfg_transform.result_bbs
@@ -1671,7 +1693,7 @@ function resize!(compact::IncrementalCompact, nnewnodes::Int)
     return compact
 end
 
-const NoLineUpdate = (Int32(0), Int32(0), Int32(0))
+const NoLineUpdate = DebugCodeLoc(0, 0, 0)
 
 function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
                             old_result_idx::Int=compact.result_idx, unreachable::Bool=false)

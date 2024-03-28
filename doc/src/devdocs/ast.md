@@ -769,7 +769,7 @@ Boolean properties:
     See the documentation of `Base.@assume_effects` for more details.
 
 
-How to interpret line numbers in a `CodeInfo` object:
+#### How to interpret line numbers in a `CodeInfo` object:
 
 There are 2 common forms for this data: one used internally that compresses the data somewhat and one used in the compiler.
 They contain the same basic info, but the compiler version is all mutable while the version used internally is not.
@@ -780,7 +780,7 @@ Many consumers may be able to call `Base.IRShow.buildLineInfoNode`,
 
 The definitions of each of these are:
 
-```
+```julia
 struct Core.DebugInfo
     @noinline
     def::Union{Method,MethodInstance,Symbol}
@@ -801,11 +801,11 @@ end
 ```
 
 
-  * `def` : where this DebugInfo was defined (the Method, MethodInstance, or file scope, for example)
+  * `def` : where this `DebugInfo` was defined (the `Method`, `MethodInstance`, or `Symbol` of file scope, for example)
 
   * `linetable`
 
-    Another debuginfo that this was derived from, which contains the actual line numbers,
+    Another `DebugInfo` that this was derived from, which contains the actual line numbers,
     such that this DebugInfo contains only the indexes into it. This avoids making copies,
     as well as makes it possible to track how each individual statement transformed from
     source to optimized, not just the separate line numbers. If `def` is not a Symbol, then
@@ -820,9 +820,9 @@ end
   * `firstline` (when uncompressed to DebugInfoStream)
 
     The line number associated with the `begin` statement (or other keyword such as
-    `function` or `quote`) that delinated where this code definition "starts".
+    `function` or `quote`) that delineates where this code definition "starts".
 
-  * `codelocs` (when uncompressed to DebugInfoStream)
+  * `codelocs` (when uncompressed to `DebugInfoStream`)
 
     A vector of indices, with 3 values for each statement in the IR plus one for the
     starting point of the block, that describe the stacktrace from that point:
@@ -830,17 +830,22 @@ end
         original location associated with each statement (including its syntactic edges),
         or zero indicating no change to the line number from the previously
         executed statement (which is not necessarily syntactic or lexical prior).
-       or
-       the line number itself if the `linetable` field is `nothing`
-     2. the integer index into edges, giving the DebugInfo inlined there (or zero if there
+        or
+        the line number itself if the `linetable` field is `nothing`
+     2. the integer index into `edges`, giving the `DebugInfo` inlined there (or zero if there
         are no edges).
-     3. (if entry 2 is non-zero) the integer index into edges[].codelocs, to interpret
+     3. (if entry 2 is non-zero) the integer index into `edges[].codelocs`, to interpret
         recursively for each function in the inlining stack, or zero indicating to use
         `edges[].firstline` as the line number.
 
    Special codes include:
-     - (zero, zero, *) : no change to the line number or edges from the previous statement
-       (you may choose to interpret this either syntactically or lexically). The inlining
-       depth also might have changed, though most callers should ignore that.
-     - (zero, non-zero, *) : no line number, just edges (usually because of macro-expansion into
-       top-level code)
+    - (zero, zero, *) : no change to the line number or edges from the previous statement
+      (you may choose to interpret this either syntactically or lexically). The inlining
+      depth also might have changed, though most callers should ignore that.
+    - (zero, non-zero, *) : no line number, just edges (usually because of macro-expansion into
+      top-level code)
+
+   `Core.Compiler` has a bunch of utility types and functions for handling this data.
+   The `Core.Compiler.DebugCodeLoc` object represents the 3 values. And there's a handy
+   utility function, `Core.Compiler.getdebugidx(debuginfo::Union{Core.DebugInfo,Core.Compiler.DebugInfoStream}, idx::Int)`,
+   that gives you the `DebugCodeLoc` matching a specific statement index (`idx`).
