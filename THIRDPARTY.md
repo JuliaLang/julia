@@ -40,6 +40,7 @@ Julia's `stdlib` uses the following external libraries, which have their own lic
 - [MBEDTLS](https://github.com/ARMmbed/mbedtls/blob/development/LICENSE) [Apache 2.0]
 - [MPFR](https://www.mpfr.org/mpfr-current/mpfr.html#Copying) [LGPL3+]
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE) [BSD-3]
+- [OPENSSL](https://www.openssl.org/source/license.html) [Apache 2.0]
 - [LAPACK](https://netlib.org/lapack/LICENSE.txt) [BSD-3]
 - [PCRE](https://www.pcre.org/licence.txt) [BSD-3]
 - [SUITESPARSE](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/LICENSE.txt) [mix of LGPL2+ and GPL2+; see individual module licenses]
