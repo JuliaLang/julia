@@ -194,6 +194,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[libgit2]**              — Git linkable library, used by Julia's package manager.
 - **[curl]**                 — libcurl provides download and proxy support.
 - **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
+- **[OpenSSL]**              — library used for cryptography and transport layer security, used by libssh2.
 - **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
@@ -229,6 +230,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 [utf8proc]:     https://julialang.org/utf8proc/
 [libunwind]:    https://www.nongnu.org/libunwind
 [libssh2]:      https://www.libssh2.org
+[OpenSSL]:      https://www.openssl.org/
 [mbedtls]:      https://tls.mbed.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 [powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
