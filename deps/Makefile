@@ -139,6 +139,10 @@ endif
 DEP_LIBS += libgit2
 endif # USE_SYSTEM_LIBGIT2
 
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+DEP_LIBS += mbedtls
+endif
+
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
 endif
