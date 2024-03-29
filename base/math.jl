@@ -1331,7 +1331,7 @@ end
     if isodd(n)
         if n < 0
             y = inv(x)
-            ynlo = muladd(-x, y, 1.0) * y
+            ynlo = fma(-x, y, 1.0) * y
         else
             y = x
         end
@@ -1346,7 +1346,7 @@ end
         rx = inv(x)
         !isfinite(rx) && return isodd(n) ? copysign(rx, xx) : rx
         if isfinite(x)
-            xnlo = muladd(-xnlo, rx, (muladd(-x, rx, 1.0))) * rx
+            xnlo = fma(-xnlo, rx, (fma(-x, rx, 1.0))) * rx
         end
         x = rx
         m = -m
