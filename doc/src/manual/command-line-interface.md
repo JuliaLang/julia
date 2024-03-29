@@ -195,7 +195,7 @@ The following is a complete list of command-line switches available when launchi
 |`-g`, `--debug-info={0,1*,2}`          |Set the level of debug info generation (level is 2 if `-g` is used without a level) ($)|
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
-|`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides `@fastmath` declaration)|
+|`--math-mode={ieee\|user*}`            |Always follow `ieee` floating point semantics or respect `@fastmath` declarations|
 |`--code-coverage[={none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
 |`--code-coverage=@<path>`              |Count executions but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
