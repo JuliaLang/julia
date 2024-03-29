@@ -178,6 +178,10 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
     return crc32c_sse42(crc, buf, len);
 }
 #  else
+#ifdef JL_CRC32C_USE_IFUNC && _COMPILER_CLANG_
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
 static crc32c_func_t crc32c_dispatch(void)
 {
     // When used in ifunc, we cannot call external functions (i.e. jl_cpuid)
@@ -199,6 +203,9 @@ static crc32c_func_t crc32c_dispatch(void)
         return crc32c_sse42;
     return jl_crc32c_sw;
 }
+#if JL_CRC32C_USE_IFUNC && _COMPILER_CLANG_
+#pragma clang diagnostic pop
+#endif
 // For ifdef detection below
 #    define crc32c_dispatch crc32c_dispatch
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
