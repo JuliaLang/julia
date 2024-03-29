@@ -3201,6 +3201,8 @@ end
     @test view(mem, 1:2)::Vector{Int} == 11:12
     @test view(mem, 1:10)::Vector{Int} == 11:20
     @test view(mem, 3:8)::Vector{Int} == 13:18
+    @test view(mem, 20:19)::Vector{Int} == []
+    @test view(mem, -5:-7)::Vector{Int} == []
     @test reshape(mem, 5, 2)::Matrix{Int} == reshape(11:20, 5, 2)
 
     empty_mem = Memory{Module}(undef, 0)
