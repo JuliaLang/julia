@@ -1,0 +1,5 @@
+## jll artifact
+OPENSSL_JLL_NAME := OpenSSL
+
+## source build
+OPENSSL_VER := 3.0.13
