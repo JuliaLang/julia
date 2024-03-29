@@ -1316,7 +1316,7 @@ end
 
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
-    xnlo = ynlo = err = 0.0
+    xnlo = ynlo = 0.0
     if iszero(n)
         return y
     elseif n == 1
@@ -1337,8 +1337,11 @@ end
     x, xnlo = two_mul(x, x)
     m = n ÷ 2
     if n < 0
+        if n == -2
+            rx = inv(x0)
+            return rx * rx #keep compatibility with literal_pow
+        end
         rx = inv(x)
-        n == -2 && return rx #keep compatibility with literal_pow
         !isfinite(rx) && return isodd(n) ? copysign(rx, x0) : rx
         if isfinite(x)
             xnlo = fma(-xnlo, rx, (fma(-x, rx, 1.0))) * rx
@@ -1353,9 +1356,11 @@ end
             y, ynlo = two_mul(x,y)
             ynlo += err
         end
-        err = x*2*xnlo
-        x, xnlo = two_mul(x, x)
+        err = (xnlo + xnlo) * x
+        xx, xnlo = two_mul(x, x)
         xnlo += err
+        x = xx + xnlo
+        xnlo -= x - xx
         n >>>= 1
     end
     err = muladd(y, xnlo, x*ynlo)
