@@ -4,14 +4,6 @@
 
 ###### Generic (map)reduce functions ######
 
-if Int === Int32
-    const SmallSigned = Union{Int8,Int16}
-    const SmallUnsigned = Union{UInt8,UInt16}
-else
-    const SmallSigned = Union{Int8,Int16,Int32}
-    const SmallUnsigned = Union{UInt8,UInt16,UInt32}
-end
-
 abstract type AbstractBroadcasted end
 const AbstractArrayOrBroadcasted = Union{AbstractArray, AbstractBroadcasted}
 
@@ -22,8 +14,8 @@ The reduction operator used in `sum`. The main difference from [`+`](@ref) is th
 integers are promoted to `Int`/`UInt`.
 """
 add_sum(x, y) = x + y
-add_sum(x::SmallSigned, y::SmallSigned) = Int(x) + Int(y)
-add_sum(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x::BitSignedSmall, y::BitSignedSmall) = Int(x) + Int(y)
+add_sum(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) + UInt(y)
 add_sum(x::Real, y::Real)::Real = x + y
 
 """
@@ -33,8 +25,8 @@ The reduction operator used in `prod`. The main difference from [`*`](@ref) is t
 integers are promoted to `Int`/`UInt`.
 """
 mul_prod(x, y) = x * y
-mul_prod(x::SmallSigned, y::SmallSigned) = Int(x) * Int(y)
-mul_prod(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x::BitSignedSmall, y::BitSignedSmall) = Int(x) * Int(y)
+mul_prod(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
@@ -348,11 +340,11 @@ reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitSignedSmall}  = zero(Int)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitUnsignedSmall} = zero(UInt)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitSignedSmall}  = one(Int)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitUnsignedSmall} = one(UInt)
 
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
@@ -402,11 +394,11 @@ reduce_first(::typeof(+), x::Bool) = Int(x)
 reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(add_sum), x::BitSignedSmall)   = Int(x)
+reduce_first(::typeof(add_sum), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
-reduce_first(::typeof(mul_prod), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
+reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
 
 """
     Base.mapreduce_first(f, op, x)
