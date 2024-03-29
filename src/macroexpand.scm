@@ -386,6 +386,9 @@
       (cdr ranges)
       (list ranges))))
 
+(define (just-line? ex)
+  (and (pair? ex) (eq? (car ex) 'line) (atom? (cadr ex)) (or (atom? (caddr ex)) (nothing? (caddr ex)))))
+
 (define (resolve-expansion-vars- e env m lno parent-scope inarg)
   (cond ((or (eq? e 'begin) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal) (underscore-symbol? e))
          e)
@@ -417,11 +420,15 @@
            ((toplevel) ; re-wrap Expr(:toplevel) in the current hygienic-scope(s)
             `(toplevel
                ,@(map (lambda (arg)
-                       (let loop ((parent-scope parent-scope) (m m) (lno lno) (arg arg))
-                        (let ((wrapped `(hygienic-scope ,arg ,m ,@lno)))
-                          (if (null? parent-scope) wrapped
-                            (loop (cdr parent-scope) (cadar parent-scope) (caddar parent-scope) wrapped)))))
-                      (cdr e))))
+                       ;; Minor optimization: A lot of toplevel exprs have just bare line numbers in them.
+                       ;; don't bother with the full rewrapping in that case (even though
+                       ;; this would be semantically legal) - lowering won't touch them anyways.
+                       (if (just-line? arg) arg
+                        (let loop ((parent-scope parent-scope) (m m) (lno lno) (arg arg))
+                          (let ((wrapped `(hygienic-scope ,arg ,m ,@lno)))
+                            (if (null? parent-scope) wrapped
+                              (loop (cdr parent-scope) (cadar parent-scope) (caddar parent-scope) wrapped))))))
+                        (cdr e))))
            ((using import export meta line inbounds boundscheck loopinfo inline noinline purity) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
