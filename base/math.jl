@@ -1324,7 +1324,7 @@ end
     elseif n == -1
         return inv(x)
     end
-    x0 = x
+    xx = x
     n == 3 && return x*x*x # keep compatibility with literal_pow
     if isodd(n)
         if n < 0
@@ -1338,11 +1338,11 @@ end
     m = n ÷ 2
     if n < 0
         if n == -2
-            rx = inv(x0)
+            rx = inv(xx)
             return rx * rx #keep compatibility with literal_pow
         end
         rx = inv(x)
-        !isfinite(rx) && return isodd(n) ? copysign(rx, x0) : rx
+        !isfinite(rx) && return isodd(n) ? copysign(rx, xx) : rx
         if isfinite(x)
             xnlo = fma(-xnlo, rx, (fma(-x, rx, 1.0))) * rx
         end
@@ -1364,7 +1364,7 @@ end
         n >>>= 1
     end
     err = muladd(y, xnlo, x*ynlo)
-    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
+    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), xx * y)
 end
 
 function ^(x::Float32, n::Integer)
