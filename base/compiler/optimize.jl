@@ -1035,20 +1035,22 @@ end
 function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
     while true
         next = getdebugidx(di, codeloc)
-        next[1] < 0 && return false # invalid info
-        next[1] == 0 && next[2] == 0 && return false # no new info
+        line = next[1]
+        line < 0 && return false # invalid info
+        line == 0 && next[2] == 0 && return false # no new info
         prevloc <= 0 && return true # no old info
         prev = getdebugidx(di, prevloc)
         next === prev && return false # exactly identical
-        prev[1] < 0 && return true # previous invalid info, now valid
+        prevline = prev[1]
+        prevline < 0 && return true # previous invalid info, now valid
         edge = next[2]
         edge === prev[2] || return true # change to this edge
         linetable = di.linetable
         # check for change to line number here
-        if linetable === nothing || next[1] == 0
-            next[1] == prev[1] || return true
+        if linetable === nothing || line == 0
+            line == prevline || return true
         else
-            changed_lineinfo(linetable, next[1], prev[1]) && return true
+            changed_lineinfo(linetable::DebugInfo, Int(line), Int(prevline)) && return true
         end
         # check for change to edge here
         edge == 0 && return false # no edge here
