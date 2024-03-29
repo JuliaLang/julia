@@ -1337,9 +1337,9 @@ end
     x, xnlo = two_mul(x, x)
     m = n ÷ 2
     if n < 0
+        xx = inv(xx)
         if n == -2
-            rx = inv(xx)
-            return rx * rx #keep compatibility with literal_pow
+            return xx * xx #keep compatibility with literal_pow
         end
         rx = inv(x)
         !isfinite(rx) && return isodd(n) ? copysign(rx, xx) : rx
@@ -1361,6 +1361,7 @@ end
         xnlo += err
         x = xx + xnlo
         xnlo -= x - xx
+        isfinite(x) || break
         n >>>= 1
     end
     err = muladd(y, xnlo, x*ynlo)
