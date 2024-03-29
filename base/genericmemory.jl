@@ -290,9 +290,6 @@ function indcopy(sz::Dims, I::GenericMemory)
 end
 
 # Wrapping a memory region in an Array
-
-# TODO: maybe delete jl_genericmemory_slice
-
 @eval function reshape(m::GenericMemory{M, T}, dims::Vararg{Int, N}) where {M, T, N}
     len = Core.checked_dims(dims...)
     length(m) == len || throw(DimensionMismatch("parent has $(length(m)) elements, which is incompatible with size $(dims)"))
