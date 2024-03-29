@@ -1314,6 +1314,8 @@ end
     return pow_body(x, n)
 end
 
+# high accuracy implementation of power by squaring
+# calculations are effectively in double precision using fma
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0
@@ -1329,7 +1331,7 @@ end
     if isodd(n)
         if n < 0
             y = inv(x)
-            ynlo = fma(-x, y, 1.0) * y
+            ynlo = muladd(-x, y, 1.0) * y
         else
             y = x
         end
@@ -1344,7 +1346,7 @@ end
         rx = inv(x)
         !isfinite(rx) && return isodd(n) ? copysign(rx, xx) : rx
         if isfinite(x)
-            xnlo = fma(-xnlo, rx, (fma(-x, rx, 1.0))) * rx
+            xnlo = muladd(-xnlo, rx, (muladd(-x, rx, 1.0))) * rx
         end
         x = rx
         m = -m

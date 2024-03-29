@@ -1463,9 +1463,11 @@ end
     # issue #53881
     @test 2.0 ^ typemin(Int) == 0.0
     @test (-1.0) ^ typemin(Int) == 1.0
-    @test prevfloat(1.0) ^ (-2^54) ≈ 7.38905609893065
-    @test prevfloat(1.0) ^ (-2^62) ≈ 2.2844135865231613e222
-    @test prevfloat(1.0) ^ (-2^63) == Inf
+    Z = Int64(2)
+    @test prevfloat(1.0) ^ (-Z^54) ≈ 7.38905609893065
+    @test prevfloat(1.0) ^ (-Z^62) ≈ 2.2844135865231613e222
+    @test prevfloat(1.0) ^ (-Z^63) == Inf
+    @test prevfloat(1.0) ^ (Z^62) * prevfloat(1.0) ^ (-Z^62) == 1.0
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
