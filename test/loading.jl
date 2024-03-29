@@ -1337,7 +1337,10 @@ end
 
 @testset "relocatable upgrades #51989" begin
     mktempdir() do depot
-        project_path = joinpath(depot, "project")
+        # realpath is needed because Pkg is used for one of the precompile paths below, and Pkg calls realpath on the
+        # project path so the cache file slug will be different if the tempdir is given as a symlink
+        # (which it often is on MacOS) which would break the test.
+        project_path = joinpath(realpath(depot), "project")
         mkpath(project_path)
 
         # Create fake `Foo.jl` package with two files:
