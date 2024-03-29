@@ -178,7 +178,7 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
     return crc32c_sse42(crc, buf, len);
 }
 #  else
-#ifdef JL_CRC32C_USE_IFUNC && _COMPILER_CLANG_
+#if JL_CRC32C_USE_IFUNC && _COMPILER_CLANG_
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
 #endif
