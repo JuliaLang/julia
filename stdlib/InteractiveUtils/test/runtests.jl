@@ -297,22 +297,22 @@ let w = Vector{Any}(undef, 9)
         w[8] = @which big(2.0)^1
         w[9] = @which big(2.0)^-1
         @test all(getproperty.(w, :name) .=== :literal_pow)
-        @test length(Set(w)) == length(w)
+        @test length(Set(w)) == length(w) # all methods distinct
     end
 end
 
 if Int === Int64
-    # literal_pow only for exponents x: -2^61 <= x < 2^61
-    @test (@which 2^-2305843009213693953).name === :^
-    @test (@which 2^-2305843009213693952).name === :literal_pow
-    @test (@which 2^2305843009213693951).name === :literal_pow
-    @test (@which 2^2305843009213693952).name === :^
+    # literal_pow only for exponents x: -2^63 <= x < 2^63 #53860 (all Int)
+    @test (@which 2^-9223372036854775809).name === :^
+    @test (@which 2^-9223372036854775808).name === :literal_pow
+    @test (@which 2^9223372036854775807).name === :literal_pow
+    @test (@which 2^9223372036854775808).name === :^
 else
-    # literal_pow only for exponents x: -2^29 <= x < 2^29
-    @test (@which 2^-536870913).name === :^
-    @test (@which 2^-536870912).name === :literal_pow
-    @test (@which 2^536870911).name === :literal_pow
-    @test (@which 2^536870912).name === :^
+    # literal_pow only for exponents x: -2^31 <= x < 2^31 #53860 (all Int)
+    @test (@which 2^-2147483649).name === :^
+    @test (@which 2^-2147483648).name === :literal_pow
+    @test (@which 2^-2147483647).name === :literal_pow
+    @test (@which 2^-2147483648).name === :^
 end
 
 # issue #13464
