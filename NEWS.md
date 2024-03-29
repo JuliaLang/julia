@@ -79,7 +79,7 @@ Standard library changes
 
 * The `init` keyword for `reduce` and other reduction functions without guaranteed
   associativity (`mapreduce`, `maximum`, `minimum`, `sum`, `prod`, `any`, and `all`)
-  now provides greater gaurantees on how its value is incorporated into the reduction:
+  now provides greater guarantees on how its value is incorporated into the reduction:
   it is used exactly once as the left-most argument for all non-empty collections,
   and it is no longer required to be a "neutral" operand for the reduction.
   Previously, its semantics for non-empty collections was explicitly not specified, allowing
