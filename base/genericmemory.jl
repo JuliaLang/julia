@@ -288,3 +288,22 @@ function indcopy(sz::Dims, I::GenericMemory)
     src = eltype(I)[I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))] for i = 1:n]
     dst, src
 end
+
+# Wrapping a memory region in an Array
+
+# TODO: delete wrap
+# TODO: maybe delete jl_genericmemory_slice
+
+@eval function reshape(m::GenericMemory{M, T}, dims::Vararg{Int, N}) where {M, T, N}
+    len = Core.checked_dims(dims...)
+    length(m) == len || throw(DimensionMismatch("parent has $(length(m)) elements, which is incompatible with size $(dims)"))
+    ref = MemoryRef(m)
+    $(Expr(:new, :(Array{T, N}), :ref, :dims))
+end
+
+@eval function view(m::GenericMemory{M, T}, inds::AbstractUnitRange) where {M, T}
+    @boundscheck checkbounds(m, inds)
+    ref = @inbounds MemoryRef(m, first(inds)) # @inbounds is needed to allow view(Memory{T}(undef, 0), 1:0)
+    dims = (length(inds),)
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+end
