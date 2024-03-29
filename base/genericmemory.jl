@@ -291,7 +291,6 @@ end
 
 # Wrapping a memory region in an Array
 
-# TODO: delete wrap
 # TODO: maybe delete jl_genericmemory_slice
 
 @eval function reshape(m::GenericMemory{M, T}, dims::Vararg{Int, N}) where {M, T, N}
