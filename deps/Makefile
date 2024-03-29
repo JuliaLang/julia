@@ -22,7 +22,7 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
+# autoconf configure-driven scripts: pcre unwind gmp mpfr openssl patchelf libuv curl
 # custom Makefile rules: openlibm dsfmt libsuitesparse lapack blastrampoline openblas utf8proc objconv libwhich
 # CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls libtracyclient
 #
@@ -143,6 +143,10 @@ ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
 endif
 
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+DEP_LIBS += openssl
+endif
+
 ifeq ($(USE_GPL_LIBS), 1)
 ifeq ($(USE_SYSTEM_LIBSUITESPARSE), 0)
 DEP_LIBS += libsuitesparse
@@ -192,7 +196,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
-	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
+	openlibm dsfmt blastrampoline openblas lapack gmp mpfr openssl patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi JuliaSyntax
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
@@ -245,6 +249,7 @@ include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
+include $(SRCDIR)/openssl.mk
 include $(SRCDIR)/patchelf.mk
 include $(SRCDIR)/mbedtls.mk
 include $(SRCDIR)/libssh2.mk
