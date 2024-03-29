@@ -120,8 +120,8 @@ DEP_LIBS += gmp
 endif
 
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-DEP_LIBS += mbedtls
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+DEP_LIBS += openssl
 endif
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
