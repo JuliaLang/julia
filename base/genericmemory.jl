@@ -298,8 +298,9 @@ end
 end
 
 @eval function view(m::GenericMemory{M, T}, inds::AbstractUnitRange) where {M, T}
+    isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
     @boundscheck checkbounds(m, inds)
-    ref = @inbounds MemoryRef(m, first(inds)) # @inbounds is needed to allow view(Memory{T}(undef, 0), 1:0)
+    ref = MemoryRef(m, first(inds)) # @inbounds here is not safe on view(Memory{T}(undef, 0), 2:1)
     dims = (length(inds),)
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
