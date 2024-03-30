@@ -3215,6 +3215,9 @@ end
     @test view(empty_mem, 1:0)::Vector{Module} == []
     @test view(empty_mem, 10:3)::Vector{Module} == []
     @test isempty(reshape(empty_mem, 0, 7, 1)::Array{Module, 3})
+
+    offset_inds = OffsetArrays.IdOffsetRange(values=3:6, indices=53:56)
+    @test view(collect(mem), offset_inds) == view(mem, offset_inds)
 end
 
 @testset "Memory size" begin

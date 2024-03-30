@@ -297,8 +297,8 @@ end
     $(Expr(:new, :(Array{T, N}), :ref, :dims))
 end
 
-@eval function view(m::GenericMemory{M, T}, inds::AbstractUnitRange) where {M, T}
-    isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
+@eval function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
+    !(inds isa OneTo) && isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
     @boundscheck checkbounds(m, inds)
     ref = MemoryRef(m, first(inds)) # @inbounds here is not safe on view(Memory{T}(undef, 0), 2:1)
     dims = (length(inds),)
