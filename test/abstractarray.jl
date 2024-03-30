@@ -332,6 +332,13 @@ end
     end
 end
 
+@testset "copy for LinearIndices/CartesianIndices" begin
+    C = CartesianIndices((1:2, 1:4))
+    @test copy(C) === C
+    L = LinearIndices((1:2, 1:4))
+    @test copy(L) === L
+end
+
 # token type on which to dispatch testing methods in order to avoid potential
 # name conflicts elsewhere in the base test suite
 mutable struct TestAbstractArray end

@@ -565,6 +565,7 @@ function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
     @boundscheck checkbounds(iter, i)
     @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
 end
+copy(iter::LinearIndices) = iter
 # More efficient iteration — predominantly for non-vector LinearIndices
 # but one-dimensional LinearIndices must be special-cased to support OffsetArrays
 iterate(iter::LinearIndices{1}, s...) = iterate(axes1(iter.indices[1]), s...)
