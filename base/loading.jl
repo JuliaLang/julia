@@ -3255,12 +3255,15 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
             inc.filename = restore_depot_path(inc.filename, srcdepot)
         end
     end
+
+    # unlike include() files, we allow each relocatable include_dependency() file to resolve
+    # to a separate depot, #52161
     for inc in includes_depfiles
         depot = resolve_depot(inc.filename)
         if depot === :no_depot_found
-            @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", srcfiles, _group=:relocatable)
+            @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", _group=:relocatable)
         elseif depot === :not_relocatable
-            @debug("include_dependency() file $(inc.filename) from $cachefile is not relocatable", srcfiles, _group=:relocatable)
+            @debug("include_dependency() file $(inc.filename) from $cachefile is not relocatable", _group=:relocatable)
         else
             inc.filename = restore_depot_path(inc.filename, depot)
         end
