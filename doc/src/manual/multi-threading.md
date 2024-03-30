@@ -525,13 +525,15 @@ There are a few approaches to dealing with this problem:
 
 3. A related third strategy is to use a yield-free queue. We don't currently
    have a lock-free queue implemented in Base, but
-   `Base.IntrusiveLinkedListSynchronized{T}` is suitable. This can frequently be a
-   good strategy to use for code with event loops. For example, this strategy is
-   employed by `Gtk.jl` to manage lifetime ref-counting. In this approach, we
-   don't do any explicit work inside the `finalizer`, and instead add it to a queue
-   to run at a safer time. In fact, Julia's task scheduler already uses this, so
-   defining the finalizer as `x -> @spawn do_cleanup(x)` is one example of this
-   approach. Note however that this doesn't control which thread `do_cleanup`
-   runs on, so `do_cleanup` would still need to acquire a lock. That
-   doesn't need to be true if you implement your own queue, as you can explicitly
-   only drain that queue from your thread.
+   `Base.IntrusiveLinkedListSynchronized{T}` is suitable. This is a non public
+   implementation and might change between Julia versions. Using a yield-free
+   queue can frequently be a good strategy to use for code with event loops.
+   For example, this strategy is employed by `Gtk.jl` to manage lifetime
+   ref-counting. In this approach, we don't do any explicit work inside the
+   `finalizer`, and instead add it to a queue to run at a safer time. In fact,
+   Julia's task scheduler already uses this, so defining the finalizer as
+   `x -> @spawn do_cleanup(x)` is one example of this approach. Note however
+   that this doesn't control which thread `do_cleanup` runs on, so `do_cleanup`
+   would still need to acquire a lock. That doesn't need to be true if you
+   implement your own queue, as you can explicitly only drain that queue from
+   your thread.
