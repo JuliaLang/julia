@@ -179,8 +179,7 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
 }
 #  else
 #if defined(JL_CRC32C_USE_IFUNC) && defined(_COMPILER_CLANG_)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-function"
+JL_UNUSED
 #endif
 static crc32c_func_t crc32c_dispatch(void)
 {
@@ -203,9 +202,6 @@ static crc32c_func_t crc32c_dispatch(void)
         return crc32c_sse42;
     return jl_crc32c_sw;
 }
-#if defined(JL_CRC32C_USE_IFUNC) && defined(_COMPILER_CLANG_)
-#pragma clang diagnostic pop
-#endif
 // For ifdef detection below
 #    define crc32c_dispatch crc32c_dispatch
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
