@@ -258,8 +258,9 @@ end
     @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
     # Issue #53817
     # Note that exponent -2^63 fails testing because of issue #53881
-    # Therefore we test with -(2^63-1)
-    if Int == Int64
+    # Therefore we test with -(2^63-1). For Int == Int32 there is the same restriction.
+    # on the length of integer constants. See #53860.
+    if Int == Int64 || Int == Int32
         @test @fastmath(2^-9223372036854775807) === 0.0
         @test_throws DomainError @fastmath(2^-9223372036854775809)
         @test @fastmath(1^-9223372036854775807) isa Float64
