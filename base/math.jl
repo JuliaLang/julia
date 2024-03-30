@@ -1318,57 +1318,55 @@ end
 # calculations are effectively in double precision using fma
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
+    n == 0 && return y
+    isnan(x) && return x
     xnlo = ynlo = 0.0
-    if iszero(n)
-        return y
-    elseif n == 1
-        return x
-    elseif n == -1
-        return inv(x)
-    end
-    xx = x
     n == 3 && return x*x*x # keep compatibility with literal_pow
-    if isodd(n)
-        if n < 0
-            y = inv(x)
-            ynlo = fma(-x, y, 1.0) * y
-        else
-            y = x
-        end
-    end
-    x, xnlo = two_mul(x, x)
-    m = n ÷ 2
+    negate = false
+    invert = n < 0
     if n < 0
-        xx = inv(xx)
         if n == -2
-            return xx * xx #keep compatibility with literal_pow
+            rx = inv(x)
+            return rx * rx #keep compatibility with literal_pow
         end
-        rx = inv(x)
-        !isfinite(rx) && return isodd(n) ? copysign(rx, xx) : rx
-        if isfinite(x)
-            xnlo = fma(-xnlo, rx, (fma(-x, rx, 1.0))) * rx
-        end
-        x = rx
-        m = -m
+        negate = n & 1 > 0
+        n = -n
     end
-    n = m
-    while n > 1
-        if isodd(n)
-            err = muladd(y, xnlo, x*ynlo)
-            y, ynlo = two_mul(x,y)
-            ynlo += err
+    y, ynlo = pow_loop(x, xnlo, y, ynlo, n)
+    if isfinite(y) && !iszero(y)
+        if invert
+            x = inv(y)
+            err = fma(x, y, -1.0)
+            y = (- ynlo * x + err) * x + x
         end
-        err = (xnlo + xnlo) * x
-        xx, xnlo = two_mul(x, x)
-        xnlo += err
-        x = xx + xnlo
-        xnlo -= x - xx
-        isfinite(x) || break
-        n >>>= 1
+    else
+        y = invert == iszero(y) ? Inf : 0.0
     end
-    err = muladd(y, xnlo, x*ynlo)
-    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), xx * y)
+    return copysign(y, negate)
 end
+
+function pow_loop(x, xnlo, y, ynlo, n)
+    for i = 1:sizeof(n)*8
+        if n & 1 > 0
+            err = y * xnlo + x * ynlo
+            xx = y
+            y = x * xx
+            ynlo = fma(x, xx, -y) + err
+        end
+        n >>>= 1
+        n == 0 && break
+        xx = x * x
+        xnlo = fma(x, x, -xx) + x * 2 * xnlo
+        if i == 30
+            x = xx + xnlo
+            xnlo -= x - xx
+        else
+            x = xx
+        end
+    end
+    y, ynlo
+end
+
 
 function ^(x::Float32, n::Integer)
     n == -2 && return (i=inv(x); i*i)
