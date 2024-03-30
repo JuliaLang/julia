@@ -64,13 +64,15 @@ ifeq ($(OS), Linux)
 DEP_LIBS += unwind
 else ifeq ($(OS), FreeBSD)
 DEP_LIBS += unwind
+else ifeq ($(OS), OpenBSD)
+DEP_LIBS += llvmunwind
 else ifeq ($(OS), Darwin)
 DEP_LIBS += llvmunwind
 endif
 endif
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
