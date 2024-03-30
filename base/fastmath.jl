@@ -367,6 +367,10 @@ for f in (:^, :atan, :hypot, :log)
         # fall-back implementation that applies after promotion
         $f_fast(x::T, y::T) where {T<:Number} = $f(x, y)
     end
+    # Issue 53886 - avoid promotion of Int128 etc to be consistent with non-fastmath
+    if f === :^
+        @eval $f_fast(x::Number, y::Integer) = $f(x, y)
+    end
 end
 
 # Reductions

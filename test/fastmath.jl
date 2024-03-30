@@ -257,16 +257,18 @@ end
 @testset "literal powers" begin
     @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
     # Issue #53817
+    # Note that exponent -2^63 fails testing because of issue #53881
+    # Therefore we test with -(2^63-1)
     if Int == Int64
-        @test @fastmath(2^-2305843009213693952) === 0.0
-        @test_throws DomainError @fastmath(2^-2305843009213693953)
-        @test @fastmath(1^-2305843009213693952) isa Float64
-        @test @fastmath(1^-2305843009213693953) isa Int
+        @test @fastmath(2^-9223372036854775807) === 0.0
+        @test_throws DomainError @fastmath(2^-9223372036854775809)
+        @test @fastmath(1^-9223372036854775807) isa Float64
+        @test @fastmath(1^-9223372036854775809) isa Int
     else
-        @test @fastmath(2^-536870912) === 0.0
-        @test_throws DomainError @fastmath(2^-536870913)
-        @test @fastmath(1^-536870912) isa Float64
-        @test @fastmath(1^-536870913) isa Int
+        @test @fastmath(2^-2147483647) === 0.0
+        @test_throws DomainError @fastmath(2^-2147483649)
+        @test @fastmath(1^-2147483647) isa Float64
+        @test @fastmath(1^-2147483649) isa Int
     end
     @test_throws MethodError @fastmath(^(2))
 end
