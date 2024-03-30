@@ -5,7 +5,7 @@
     Base.IntrusiveLinkedList{T}
 
 Is used like this Base.IntrusiveLinkedList{Base.LinkedListItem{T}} as LinkedList{T}.
-Holds the first (head) and the last (tail) `Base.LinkedListItem{T}` in the list. 
+Holds the first (head) and the last (tail) `Base.LinkedListItem{T}` in the list.
 Ensuring O(1) access to the those elements.
 """
 mutable struct IntrusiveLinkedList{T}
@@ -133,9 +133,9 @@ end
 mutable struct LinkedListItem{T}
     # Adapter class to use any `T` in a LinkedList
     next::Union{LinkedListItem{T}, Nothing}
-    # queue is a reference to linked list making use of this LinkedListItem. 
+    # queue is a reference to linked list making use of this LinkedListItem.
     # Might seem redundant but is used by scheduling which uses IntrusiveLinkedList{Task}
-    queue::Union{IntrusiveLinkedList{LinkedListItem{T}}, Nothing} 
+    queue::Union{IntrusiveLinkedList{LinkedListItem{T}}, Nothing}
     value::T
     LinkedListItem{T}(value::T) where {T} = new{T}(nothing, nothing, value)
 end
