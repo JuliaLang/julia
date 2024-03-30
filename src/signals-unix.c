@@ -24,10 +24,12 @@
 #endif
 
 // Figure out the best signals/timers to use for this platform
-#ifdef __APPLE__ // Darwin's mach ports allow signal-free thread management
+#if defined(__APPLE__) // Darwin's mach ports allow signal-free thread management
 #define HAVE_MACH
 #define HAVE_KEVENT
-#else // generic Linux or BSD
+#elif defined(__OpenBSD__)
+#define HAVE_KEVENT
+#else // generic Linux or FreeBSD
 #define HAVE_TIMER
 #endif
 
@@ -83,6 +85,9 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.mc_rsp;
+#elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
+    const struct sigcontext *ctx = (const struct sigcontext *)_ctx;
+    return ctx->sc_rsp;
 #else
     // TODO Add support for PowerPC(64)?
     return 0;
@@ -145,6 +150,11 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     rsp -= sizeof(void*);
     ctx->uc_mcontext.mc_esp = rsp;
     ctx->uc_mcontext.mc_eip = (uintptr_t)fptr;
+#elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
+    struct sigcontext *ctx = (struct sigcontext *)_ctx;
+    rsp -= sizeof(void*);
+    ctx->sc_rsp = rsp;
+    ctx->sc_rip = fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     ctx->uc_mcontext.sp = rsp;
@@ -237,8 +247,12 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
         info->si_code == SI_KERNEL ||
 #endif
         info->si_code == SI_QUEUE ||
+#ifdef SI_MESGQ
         info->si_code == SI_MESGQ ||
+#endif
+#ifdef SI_ASYNCIO
         info->si_code == SI_ASYNCIO ||
+#endif
 #ifdef SI_SIGIO
         info->si_code == SI_SIGIO ||
 #endif
@@ -335,6 +349,11 @@ int is_write_fault(void *context) {
 int is_write_fault(void *context) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
+}
+#elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
+int is_write_fault(void *context) {
+    struct sigcontext *ctx = (struct sigcontext *)context;
+    return exc_reg_is_write_fault(ctx->sc_err);
 }
 #else
 #pragma message("Implement this query for consistent PROT_NONE handling")
@@ -615,6 +634,17 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     }
 }
 
+#elif defined(__OpenBSD__)
+
+JL_DLLEXPORT int jl_profile_start_timer(void)
+{
+    return -1;
+}
+
+JL_DLLEXPORT void jl_profile_stop_timer(void)
+{
+}
+
 #else
 
 #error no profile tools available
@@ -653,6 +683,9 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     ss.ss_flags = 0;
     ss.ss_size = ssize;
     assert(ssize != 0);
+
+#ifndef _OS_OPENBSD_
+    /* fallback to malloc(), but it isn't possible on OpenBSD */
     if (signal_stack == NULL) {
         signal_stack = malloc(ssize);
         ssize = 0;
@@ -661,6 +694,8 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
         else
             jl_safe_printf("\nwarning: julia signal stack allocated without guard page (launch foreign threads earlier to avoid this warning).\n");
     }
+#endif
+
     if (signal_stack != NULL) {
         ss.ss_sp = signal_stack;
         if (sigaltstack(&ss, NULL) < 0)
