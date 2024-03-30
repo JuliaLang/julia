@@ -3199,7 +3199,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
 
     includes_srcfiles = CacheHeaderIncludes[]
     includes_depfiles = CacheHeaderIncludes[]
-    for (i, inc) in enumerate(includes)
+    for inc in includes
         if inc.filename ∈ srcfiles
             push!(includes_srcfiles, inc)
         else
