@@ -36,6 +36,7 @@ import .Base:
     popfirst!, isdone, peek, intersect
 
 export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
+public accumulate, filter, map, peel, reverse, Stateful
 
 if Base !== Core.Compiler
 export partition
