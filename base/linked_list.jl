@@ -1,7 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+
+"""
+    Base.IntrusiveLinkedList{T}
+
+Is used like this Base.IntrusiveLinkedList{Base.LinkedListItem{T}} as LinkedList{T}.
+Holds the first (head) and the last (tail) `Base.LinkedListItem{T}` in the list. 
+Ensuring O(1) access to the those elements.
+"""
 mutable struct IntrusiveLinkedList{T}
-    # Invasive list requires that T have a field `.next >: U{T, Nothing}` and `.queue >: U{ILL{T}, Nothing}`
+    # Intrusive list requires that T have a field `.next >: U{T, Nothing}` and `.queue >: U{ILL{T}, Nothing}`
     head::Union{T, Nothing}
     tail::Union{T, Nothing}
     IntrusiveLinkedList{T}() where {T} = new{T}(nothing, nothing)
@@ -77,7 +85,7 @@ end
 
 function pop!(q::IntrusiveLinkedList{T}) where {T}
     val = q.tail::T
-    list_deletefirst!(q, val) # expensive!
+    list_deletefirst!(q, val) # expensive as entire list is traversed!
     return val
 end
 
@@ -125,7 +133,9 @@ end
 mutable struct LinkedListItem{T}
     # Adapter class to use any `T` in a LinkedList
     next::Union{LinkedListItem{T}, Nothing}
-    queue::Union{IntrusiveLinkedList{LinkedListItem{T}}, Nothing}
+    # queue is a reference to linked list making use of this LinkedListItem. 
+    # Might seem redundant but is used by scheduling which uses IntrusiveLinkedList{Task}
+    queue::Union{IntrusiveLinkedList{LinkedListItem{T}}, Nothing} 
     value::T
     LinkedListItem{T}(value::T) where {T} = new{T}(nothing, nothing, value)
 end
