@@ -37,7 +37,7 @@ checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 # Disable....almost everything
 CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
 	--without-gnutls --without-libidn2 --without-librtmp \
-	--without-nss --without-libpsl --without-libgsasl --without-fish-functions-dir \
+	--without-libpsl --without-libgsasl --without-fish-functions-dir \
 	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static \
 	--without-gssapi --without-brotli
 # A few things we actually enable
