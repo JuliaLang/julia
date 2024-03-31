@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibSSH2_jll.jl
 
 baremodule LibSSH2_jll
-using Base, Libdl, MbedTLS_jll
+using Base, Libdl, OpenSSL_jll
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

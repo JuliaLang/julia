@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl
 
 baremodule LibGit2_jll
-using Base, Libdl, MbedTLS_jll, LibSSH2_jll
+using Base, Libdl, OpenSSL_jll, LibSSH2_jll
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
