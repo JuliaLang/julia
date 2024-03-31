@@ -1,3 +1,4 @@
+# -*- makefile -*-
 ## jll artifact
 OPENSSL_JLL_NAME := OpenSSL
 
