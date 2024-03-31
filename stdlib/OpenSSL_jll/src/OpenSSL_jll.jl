@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenSSL_jll.jl
 
 baremodule OpenSSL_jll
-using Base, Libdl
+using Base, Libdl, Base.BinaryPlatforms
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -20,8 +20,13 @@ libssl_handle::Ptr{Cvoid} = C_NULL
 libssl_path::String = ""
 
 if Sys.iswindows()
-    const libcrypto = "libcrypto.dll"
-    const libssl = "libssl.dll"
+    if arch(HostPlatform()) == "x86_64"
+        const libcrypto = "libcrypto-3-x64.dll"
+        const libssl = "libssl-3-x64.dll"
+    else
+        const libcrypto = "libcrypto-3.dll"
+        const libssl = "libssl-3.dll"
+    end
 elseif Sys.isapple()
     const libcrypto = "@rpath/libcrypto.3.dylib"
     const libssl = "@rpath/libssl.3.dylib"
