@@ -267,10 +267,10 @@ const PAGES = [
     "Julia Documentation" => "index.md",
     # hide("NEWS.md"),
     "Manual" => Manual,
-    # "Base" => BaseDocs,
-    # "Standard Library" => StdlibDocs,
-    # "Tutorials" => Tutorials,
-    # "Developer Documentation" => DevDocs,
+    "Base" => BaseDocs,
+    "Standard Library" => StdlibDocs,
+    "Tutorials" => Tutorials,
+    "Developer Documentation" => DevDocs,
 ]
 end
 
