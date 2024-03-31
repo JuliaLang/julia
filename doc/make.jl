@@ -6,9 +6,11 @@ empty!(DEPOT_PATH)
 push!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
 push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
 using Pkg
+Pkg.resolve()
 Pkg.instantiate()
 
 using Documenter
+using DocumenterVitepress
 import LibGit2
 
 baremodule GenStdLib end
@@ -263,12 +265,12 @@ const PAGES = [
 else
 const PAGES = [
     "Julia Documentation" => "index.md",
-    hide("NEWS.md"),
+    # hide("NEWS.md"),
     "Manual" => Manual,
-    "Base" => BaseDocs,
-    "Standard Library" => StdlibDocs,
-    "Tutorials" => Tutorials,
-    "Developer Documentation" => DevDocs,
+    # "Base" => BaseDocs,
+    # "Standard Library" => StdlibDocs,
+    # "Tutorials" => Tutorials,
+    # "Developer Documentation" => DevDocs,
 ]
 end
 
@@ -353,21 +355,26 @@ const format = if render_pdf
         platform = "texplatform=docker" in ARGS ? "docker" : "native"
     )
 else
-    Documenter.HTML(
-        prettyurls = ("deploy" in ARGS),
-        canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
-        assets = [
-            "assets/julia-manual.css",
-            "assets/julia.ico",
-        ],
-        analytics = "UA-28835595-6",
-        collapselevel = 1,
-        sidebar_sitename = false,
-        ansicolor = true,
-        size_threshold = 800 * 2^10, # 800 KiB
-        size_threshold_warn = 200 * 2^10, # the manual has quite a few large pages, so we warn at 200+ KiB only
-        inventory_version = VERSION,
-    )
+    DocumenterVitepress.MarkdownVitepress(
+        repo = "github.com/JuliaLang/docs.julialang.org.git", # this must be the full URL!
+        devbranch = "master",
+        devurl = "dev";
+        )
+    # Documenter.HTML(
+    #     prettyurls = ("deploy" in ARGS),
+    #     canonical = ("deploy" in ARGS) ? "https://docs.julialang.org/en/v1/" : nothing,
+    #     assets = [
+    #         "assets/julia-manual.css",
+    #         "assets/julia.ico",
+    #     ],
+    #     analytics = "UA-28835595-6",
+    #     collapselevel = 1,
+    #     sidebar_sitename = false,
+    #     ansicolor = true,
+    #     size_threshold = 800 * 2^10, # 800 KiB
+    #     size_threshold_warn = 200 * 2^10, # the manual has quite a few large pages, so we warn at 200+ KiB only
+    #     inventory_version = VERSION,
+    # )
 end
 
 const output_path = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en")
