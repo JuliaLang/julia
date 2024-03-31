@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibCURL_jll.jl
 
 baremodule LibCURL_jll
-using Base, Libdl, nghttp2_jll
+using Base, Libdl, nghttp2_jll, LibSSH2_jll, OpenSSL_jll, Zlib_jll
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
