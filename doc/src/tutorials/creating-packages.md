@@ -563,10 +563,10 @@ duplicated into `[extras]`. This is an unfortunate duplication, but without
 doing this the project verifier under older Julia versions will throw an error
 if it finds packages under `[compat]` that is not listed in `[extras]`.
 
-## Package naming guidelines
+## Package naming rules
 
 Package names should be sensible to most Julia users, *even to those who are not domain experts*.
-The following guidelines apply to the `General` registry but may be useful for other package
+The following rules apply to the `General` registry but may be useful for other package
 registries as well.
 
 Since the `General` registry belongs to the entire community, people may have opinions about
@@ -601,7 +601,7 @@ may fit your package better.
        and other packages each implement a unique approach based on a particular design philosophy.
      * In contrast, `SortingAlgorithms` provides a consistent interface to use many well-established
        sorting algorithms.
-6. Packages that wrap external libraries or programs should be named after those libraries or programs.
+6. Packages that wrap external libraries or programs can be named after those libraries or programs.
 
      * `CPLEX.jl` wraps the `CPLEX` library, which can be identified easily in a web search.
      * `MATLAB.jl` provides an interface to call the MATLAB engine from within Julia.

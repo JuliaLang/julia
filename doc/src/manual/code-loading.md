@@ -394,6 +394,28 @@ are stored in the manifest file in the section for that package. The dependency 
 a package are the same as for its "parent" except that the listed extension dependencies are also considered as
 dependencies.
 
+### [Workspaces](@id workspaces)
+
+A project file can define a workspace by giving a set of projects that is part of that workspace:
+
+```toml
+[workspace]
+projects = ["test", "benchmarks", "docs", "SomePackage"]
+```
+
+Each subfolder contains its own `Project.toml` file, which may include additional dependencies and compatibility constraints. In such cases, the package manager gathers all dependency information from all the projects in the workspace generating a single manifest file that combines the versions of all dependencies.
+
+Furthermore, workspaces can be "nested", meaning a project defining a workspace can also be part of another workspace. In this scenario, a single manifest file is still utilized, stored alongside the "root project" (the project that doesn't have another workspace including it). An example file structure could look like this:
+
+```
+Project.toml # projects = ["MyPackage"]
+Manifest.toml
+MyPackage/
+    Project.toml # projects = ["test"]
+    test/
+        Project.toml
+```
+
 ### [Package/Environment Preferences](@id preferences)
 
 Preferences are dictionaries of metadata that influence package behavior within an environment.

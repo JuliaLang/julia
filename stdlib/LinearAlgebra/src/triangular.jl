@@ -2663,7 +2663,7 @@ end
             Bᵢⱼ⁽¹⁾ = M_Bᵢⱼ⁽¹⁾[1:s₁, 1:s₂]
             # Compute Bᵢⱼ⁽⁰⁾ and Bᵢⱼ⁽¹⁾
             mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂])
-            # Retreive Rᵢ,ᵢ₊ₖ as A[i+k,i]'
+            # Retrieve Rᵢ,ᵢ₊ₖ as A[i+k,i]'
             mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]')
             # Solve Uᵢ,ᵢ₊ₖ using Reference [1, (4.10)]
             kron!(L₀, Δ[1:s₂,1:s₂], S[1:s₁,i₁:i₂])

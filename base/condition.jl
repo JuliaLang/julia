@@ -113,7 +113,9 @@ Block the current task until some event occurs, depending on the type of the arg
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
 * [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, a
-  `TaskFailedException` (which wraps the failed task) is thrown.
+  `TaskFailedException` (which wraps the failed task) is thrown.  Waiting on a task
+  additionally allows passing `throw=false` which prevents throwing a `TaskFailedException`
+  when the task fails.
 * [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be

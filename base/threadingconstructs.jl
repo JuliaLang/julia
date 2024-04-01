@@ -79,7 +79,7 @@ function _sym_to_tpid(tp::Symbol)
     elseif tp == :foreign
         return Int8(-1)
     else
-        throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
+        throw(ArgumentError("Unrecognized threadpool name `$tp`"))
     end
 end
 
@@ -158,7 +158,8 @@ function threading_run(fun, static)
         else
             # TODO: this should be the current pool (except interactive) if there
             # are ever more than two pools.
-            @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default)) == 1
+            _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+            @assert _result == 1
         end
         tasks[i] = t
         schedule(t)
@@ -410,7 +411,8 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
     if tpid == -1 || _nthreads_in_pool(tpid) == 0
         tpid = _sym_to_tpid(:default)
     end
-    @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid) == 1
+    _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    @assert _result == 1
     nothing
 end
 

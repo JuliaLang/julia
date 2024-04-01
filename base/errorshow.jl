@@ -327,10 +327,11 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     if ex.world == typemax(UInt) || hasmethod(f, arg_types, world=ex.world)
+        if !isempty(kwargs)
+            print(io, "\nThis method does not support all of the given keyword arguments (and may not support any).")
+        end
         if ex.world == typemax(UInt) || isempty(kwargs)
             print(io, "\nThis error has been manually thrown, explicitly, so the method may exist but be intentionally marked as unimplemented.")
-        else
-            print(io, "\nThis method may not support any keyword arguments.")
         end
     elseif hasmethod(f, arg_types) && !hasmethod(f, arg_types, world=ex.world)
         curworld = get_world_counter()
@@ -399,7 +400,7 @@ end
 
 #Show an error by directly calling jl_printf.
 #Useful in Base submodule __init__ functions where stderr isn't defined yet.
-function showerror_nostdio(err, msg::AbstractString)
+function showerror_nostdio(@nospecialize(err), msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, msg)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, ":\n")

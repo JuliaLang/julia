@@ -1934,3 +1934,6 @@ end
     end
     @test_throws "could not load symbol \"test\"" somefunction_not_found_libc()
 end
+
+# issue #52025
+@test Base.unsafe_convert(Ptr{Ptr{Cchar}}, Base.cconvert(Ptr{Ptr{Cchar}}, map(pointer, ["ab"]))) isa Ptr{Ptr{Cchar}}
