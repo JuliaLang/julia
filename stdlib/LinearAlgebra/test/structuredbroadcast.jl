@@ -308,54 +308,44 @@ end
 end
 
 @testset "broadcast over structured matrices with matrix elements" begin
-    @testset "Diagonal" begin
-        A = [1 3; 2 4]
-        D = Diagonal([A, A])
-        M = [D[i,j] for i in axes(D,1), j in axes(D,2)]
+    function standardbroadcastingtests(D, T)
+        M = [x for x in D]
         Dsum = D .+ D
-        @test Dsum isa Diagonal
-        @test Dsum == Diagonal(fill(2A, 2))
+        @test Dsum isa T
+        @test Dsum == M .+ M
         Dcopy = copy.(D)
-        @test Dcopy isa Diagonal
-        @test Dcopy == D
-        @test cos.(D) == cos.(M)
-
-        D = Diagonal([ones(3,3), fill(3.0,2,2)])
-        M = reshape([ones(3,3), zeros(2,3), zeros(3,2), fill(3.0,2,2)], 2, 2)
-        Dsum = D .+ D
-        @test Dsum isa Diagonal
-        @test Dsum == Diagonal([fill(2.0, 3,3), fill(6.0,2,2)])
-        Dcopy = copy.(D)
-        @test Dcopy isa Diagonal
+        @test Dcopy isa T
         @test Dcopy == D
         @test (x -> (x,)).(D) == (x -> (x,)).(M)
+    end
+    @testset "Diagonal" begin
+        @testset "square" begin
+            A = [1 3; 2 4]
+            D = Diagonal([A, A])
+            standardbroadcastingtests(D, Diagonal)
+            M = [x for x in D]
+            @test cos.(D) == cos.(M)
+        end
+
+        @testset "different-sized square blocks" begin
+            D = Diagonal([ones(3,3), fill(3.0,2,2)])
+            standardbroadcastingtests(D, Diagonal)
+        end
+
+        @testset "rectangular blocks" begin
+            D = Diagonal([ones(Bool,3,4), ones(Bool,2,3)])
+            standardbroadcastingtests(D, Diagonal)
+        end
     end
     @testset "Bidiagonal" begin
         A = [1 3; 2 4]
         B = Bidiagonal(fill(A,3), fill(A,2), :U)
-        M = [B[i,j] for i in axes(B,1), j in axes(B,2)]
-        Bsum = B .+ B
-        @test Bsum isa Bidiagonal
-        @test Bsum == Bidiagonal(fill(2A,3), fill(2A,2), :U)
-        Bcopy = copy.(B)
-        @test Bcopy isa Bidiagonal
-        @test Bcopy == B
-        @test (x -> (x,)).(B) == (x -> (x,)).(M)
+        standardbroadcastingtests(B, Bidiagonal)
     end
     @testset "UpperTriangular" begin
         A = [1 3; 2 4]
         U = UpperTriangular([(i+j)*A for i in 1:3, j in 1:3])
-        M = [U[i,j] for i in axes(U,1), j in axes(U,2)]
-        Usum = U .+ U
-        @test Usum isa UpperTriangular
-        @test Usum == 2M
-        Usum = U .+ 2 .* U
-        @test Usum isa UpperTriangular
-        @test Usum == 3M
-        Ucopy = copy.(U)
-        @test Ucopy isa UpperTriangular
-        @test Ucopy == copy.(M)
-        @test (x -> (x,)).(U) == (x -> (x,)).(M)
+        standardbroadcastingtests(U, UpperTriangular)
     end
 end
 
