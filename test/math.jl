@@ -1454,7 +1454,7 @@ end
         @test nextfloat(T(-1))^floatmax(T) === T(0.0)
     end
     # test for large negative exponent where error compensation matters
-    @test prevfloat(1.0) ^ -2^62 == 2.2844135865398217e222
+    @test prevfloat(1.0) ^ -Int64(2)^62 == 2.2844135865398217e222
     @test 3e18^20 == Inf
     # two cases where we have observed > 1 ULP in the past
     @test 0.0013653274095082324^-97.60372292227069 == 4.088393948750035e279
