@@ -19,24 +19,15 @@ https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/var
 
 /* Fonts */
 
- :root {
+:root {
   /* Typography */
   --vp-font-family-base: "Barlow", "Inter var experimental", "Inter var",
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
     Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
 
   /* Code Snippet font */
-  --vp-font-family-mono: "Space Mono", Menlo, Monaco, Consolas, "Courier New",
+  --vp-font-family-mono: "Fira Code", Menlo, Monaco, Consolas, "Courier New",
     monospace;
-}
-
-.mono {
-  /* 
-  Disable contextual alternates (kind of like ligatures but different) in monospace, 
-  which turns `/>` to an up arrow and `|>` (the Julia pipe symbol) to an up arrow as well.  
-  This is pretty bad for Julia folks reading even though copy+paste retains the same text.
-  */
-  font-feature-settings: 'calt' 0;
 }
 
 /* Colors */
@@ -47,13 +38,18 @@ https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/var
   --julia-red: #CB3C33;
   --julia-green: #389826;
 
-  --vp-c-brand: #389826;
-  --vp-c-brand-light: #3dd027;
-  --vp-c-brand-lighter: #9499ff;
+--c-white-dark: #f8f8f8;
+  --c-black-darker: #0d121b;
+  --c-black: #151B2D;
+  --c-black-light: #161f32;
+  --c-black-lighter: #262a44;
+  --vp-c-brand: #646cff;
+  --vp-c-brand-light: #747bff;
+  --vp-c-brand-lighter: #3d6692;
   --vp-c-brand-lightest: #bcc0ff;
   --vp-c-brand-dark: #535bf2;
   --vp-c-brand-darker: #454ce1;
-  --vp-c-brand-dimm: #212425;
+  --vp-c-brand-dimm: rgba(100, 108, 255, 0.08);
 }
 
  /* Component: Button */
@@ -159,21 +155,33 @@ mjx-container > svg {
 }
 
 /**
+/**
  * Colors links
  * -------------------------------------------------------------------------- */
 
  :root {
-  --vp-c-brand-1: #CB3C33;
-  --vp-c-brand-2: #CB3C33;
-  --vp-c-brand-3: #CB3C33;
-  --vp-c-sponsor: #ca2971;
+  --vp-c-brand-1: #0087d7;
+  --vp-c-brand-2: #0773b2;
+  --vp-c-brand-3: #347090;
+  --vp-c-sponsor: #ee4e95;
   --vitest-c-sponsor-hover: #c13071;
 }
 
 .dark {
-  --vp-c-brand-1: #91dd33;
-  --vp-c-brand-2: #91dd33;
-  --vp-c-brand-3: #91dd33;
-  --vp-c-sponsor: #91dd33;
+  --vp-c-bg: var(--c-black);
+  --vp-c-bg-soft: var(--c-black-light);
+  --vp-c-bg-soft-up: var(--c-black-lighter);
+  --vp-c-bg-mute: var(--c-black-light);
+  --vp-c-bg-soft-mute: var(--c-black-lighter);
+  --vp-c-bg-alt: #0d121b;
+  --vp-c-bg-elv: var(--vp-c-bg-soft);
+  --vp-c-bg-elv-mute: var(--vp-c-bg-soft-mute);
+  --vp-c-mute: var(--vp-c-bg-mute);
+  --vp-c-mute-dark: var(--c-black-lighter);
+  --vp-c-mute-darker: var(--c-black-darker);
+  --vp-c-brand-1: #FFA566;
+  --vp-c-brand-2: #FFA566;
+  --vp-c-brand-3: #FFA566;
+  --vp-c-sponsor: #FFA566;
   --vitest-c-sponsor-hover: #e51370;
 }
