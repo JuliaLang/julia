@@ -1319,17 +1319,26 @@ end
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     isnan(x) && return x
-    xnlo = ynlo = 0.0
     n == 3 && return x*x*x # keep compatibility with literal_pow
-    negate = false
-    invert = n < 0
+    xnlo = ynlo = 0.0
+    negate = signbit(x) && n & 1 > 0
+    xa = abs(x)
+    toinf = xa > 1
+    invert = false
     if n < 0
         if n == -2
             rx = inv(x)
             return rx * rx #keep compatibility with literal_pow
         end
-        negate = n & 1 > 0
+        if toinf
+            xx = inv(x)
+            xnlo = fma(-xx, x, 1.0) * xx
+            x = xx
+        else
+            invert = true
+        end
         n = -n
+        toinf = !toinf
     end
     while n != 0
         xx, xnlo, yy, ynlo, n = pow_loop(x, xnlo, y, ynlo, n, 16)
@@ -1342,13 +1351,11 @@ end
             err = fma(x, y, -1.0)
             y = (-ynlo * x + err) * x + x
         end
-    else
-        y = invert == iszero(y) ? Inf : 0.0
     end
-    return copysign(y, negate)
+    return isfinite(y) && !iszero(y) ? y : flipsign(toinf ? Inf : 0.0, -negate)
 end
 
-@inline function pow_loop(x, xnlo, y, ynlo, n, maxi)
+@assume_effects :terminates_locally @inline function pow_loop(x, xnlo, y, ynlo, n, maxi)
     for i = 1:maxi
         if n & 1 > 0
             err = y * xnlo + x * ynlo
