@@ -1318,7 +1318,6 @@ end
 # calculations are effectively in double precision using fma
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
-    n == 0 && return y
     isnan(x) && return x
     xnlo = ynlo = 0.0
     n == 3 && return x*x*x # keep compatibility with literal_pow
@@ -1332,12 +1331,16 @@ end
         negate = n & 1 > 0
         n = -n
     end
-    y, ynlo = pow_loop(x, xnlo, y, ynlo, n)
+    while n != 0
+        xx, xnlo, yy, ynlo, n = pow_loop(x, xnlo, y, ynlo, n, 16)
+        x = xx + xnlo; xnlo -= x - xx
+        y = yy + ynlo; ynlo -= y - yy
+    end
     if isfinite(y) && !iszero(y)
         if invert
             x = inv(y)
             err = fma(x, y, -1.0)
-            y = (- ynlo * x + err) * x + x
+            y = (-ynlo * x + err) * x + x
         end
     else
         y = invert == iszero(y) ? Inf : 0.0
@@ -1345,8 +1348,8 @@ end
     return copysign(y, negate)
 end
 
-function pow_loop(x, xnlo, y, ynlo, n)
-    for i = 1:sizeof(n)*8
+@inline function pow_loop(x, xnlo, y, ynlo, n, maxi)
+    for i = 1:maxi
         if n & 1 > 0
             err = y * xnlo + x * ynlo
             xx = y
@@ -1357,14 +1360,9 @@ function pow_loop(x, xnlo, y, ynlo, n)
         n == 0 && break
         xx = x * x
         xnlo = fma(x, x, -xx) + x * 2 * xnlo
-        if i == 30
-            x = xx + xnlo
-            xnlo -= x - xx
-        else
-            x = xx
-        end
+        x = xx
     end
-    y, ynlo
+    x, xnlo, y, ynlo, n
 end
 
 
