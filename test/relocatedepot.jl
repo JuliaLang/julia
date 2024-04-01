@@ -137,8 +137,10 @@ if !test_relocated_depot
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
             @test Base.isprecompiled(pkg) == false
+            @test Base.isrelocatable(pkg) == false # because not precompiled
             Base.require(pkg)
             @test Base.isprecompiled(pkg, ignore_loaded=true) == true
+            @test Base.isrelocatable(pkg) == false
         end
     end
 
@@ -285,6 +287,7 @@ else
             pkg = Base.identify_package(pkgname)
             # precompiled but not relocatable
             @test Base.isprecompiled(pkg) == true
+            @test Base.isrelocatable(pkg) == false
         end
     end
 
