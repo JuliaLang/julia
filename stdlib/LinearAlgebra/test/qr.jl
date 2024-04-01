@@ -511,7 +511,7 @@ end
     # if both matrix dimensions are positive.
 
     for dimA in (0, 1, 2, 4)
-        for F in (Float32, Float64, ComplexF32, ComplexF64)
+        for F in (Float32, Float64, ComplexF32, ComplexF64, BigFloat)
             # this should have worked before, Q is square, and R is 0 × 0:
             A_zero_cols = rand(F, dimA, 0)
             qr_zero_cols = qr(A_zero_cols)
