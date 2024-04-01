@@ -456,7 +456,7 @@ function take!(io::IOBuffer)
         if nbytes == 0 || io.reinit
             data = StringVector(0)
         elseif io.writable
-            data = view(io.data, io.offset+1:nbytes+io.offset+1)
+            data = view(io.data, io.offset+1:nbytes+io.offset)
         else
             data = copyto!(StringVector(io.size), 1, io.data, io.offset + 1, nbytes)
         end
@@ -465,7 +465,7 @@ function take!(io::IOBuffer)
         if nbytes == 0
             data = StringVector(0)
         elseif io.writable
-            data = view(io.data, io.ptr:io.ptr+nbytes)
+            data = view(io.data, io.ptr:io.ptr+nbytes-1)
         else
             data = read!(io, data)
         end
