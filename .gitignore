@@ -47,3 +47,5 @@ repo_key
 
 # Buildkite: Ignore any agent keys (public or private) we have stored
 agent_key*
+doc/node_modules
+doc/package-lock.json

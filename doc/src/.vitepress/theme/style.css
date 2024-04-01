@@ -1,0 +1,179 @@
+@import url(https://fonts.googleapis.com/css?family=Space+Mono:regular,italic,700,700italic);
+@import url(https://fonts.googleapis.com/css?family=Space+Grotesk:regular,italic,700,700italic);
+
+/* Customize default theme styling by overriding CSS variables:
+https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/vars.css
+ */
+
+  /* Layouts */
+
+/* 
+ :root {
+  --vp-layout-max-width: 1440px;
+} */
+
+.VPHero .clip {
+  white-space: pre;
+  max-width: 500px;
+}
+
+/* Fonts */
+
+ :root {
+  /* Typography */
+  --vp-font-family-base: "Barlow", "Inter var experimental", "Inter var",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+
+  /* Code Snippet font */
+  --vp-font-family-mono: "Space Mono", Menlo, Monaco, Consolas, "Courier New",
+    monospace;
+}
+
+.mono {
+  /* 
+  Disable contextual alternates (kind of like ligatures but different) in monospace, 
+  which turns `/>` to an up arrow and `|>` (the Julia pipe symbol) to an up arrow as well.  
+  This is pretty bad for Julia folks reading even though copy+paste retains the same text.
+  */
+  font-feature-settings: 'calt' 0;
+}
+
+/* Colors */
+
+:root {
+  --julia-blue: #4063D8;
+  --julia-purple: #9558B2;
+  --julia-red: #CB3C33;
+  --julia-green: #389826;
+
+  --vp-c-brand: #389826;
+  --vp-c-brand-light: #3dd027;
+  --vp-c-brand-lighter: #9499ff;
+  --vp-c-brand-lightest: #bcc0ff;
+  --vp-c-brand-dark: #535bf2;
+  --vp-c-brand-darker: #454ce1;
+  --vp-c-brand-dimm: #212425;
+}
+
+ /* Component: Button */
+
+:root {
+  --vp-button-brand-border: var(--vp-c-brand-light);
+  --vp-button-brand-text: var(--vp-c-white);
+  --vp-button-brand-bg: var(--vp-c-brand);
+  --vp-button-brand-hover-border: var(--vp-c-brand-light);
+  --vp-button-brand-hover-text: var(--vp-c-white);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-light);
+  --vp-button-brand-active-border: var(--vp-c-brand-light);
+  --vp-button-brand-active-text: var(--vp-c-white);
+  --vp-button-brand-active-bg: var(--vp-button-brand-bg);
+}
+
+/* Component: Home */
+
+:root {
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(
+    120deg,
+    #9558B2 30%,
+    #CB3C33
+  );
+
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    #9558B2 30%,
+    #389826 30%,
+    #CB3C33 
+  );
+  --vp-home-hero-image-filter: blur(40px);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --vp-home-hero-image-filter: blur(56px);
+  }
+}
+
+@media (min-width: 960px) {
+  :root {
+    --vp-home-hero-image-filter: blur(72px);
+  }
+}
+
+/* Component: Custom Block */
+
+:root.dark {
+  --vp-custom-block-tip-border: var(--vp-c-brand);
+  --vp-custom-block-tip-text: var(--vp-c-brand-lightest);
+  --vp-custom-block-tip-bg: var(--vp-c-brand-dimm);
+
+    /* // Tweak the color palette for blacks and dark grays */
+    --vp-c-black: hsl(220 20% 9%);
+    --vp-c-black-pure: hsl(220, 24%, 4%);
+    --vp-c-black-soft: hsl(220 16% 13%);
+    --vp-c-black-mute: hsl(220 14% 17%);
+    --vp-c-gray: hsl(220 8% 56%);
+    --vp-c-gray-dark-1: hsl(220 10% 39%);
+    --vp-c-gray-dark-2: hsl(220 12% 28%);
+    --vp-c-gray-dark-3: hsl(220 12% 23%);
+    --vp-c-gray-dark-4: hsl(220 14% 17%);
+    --vp-c-gray-dark-5: hsl(220 16% 13%);
+  
+    /* // Backgrounds */
+    /* --vp-c-bg: hsl(240, 2%, 11%); */
+    --vp-custom-block-info-bg: hsl(220 14% 17%);
+    /* --vp-c-gutter: hsl(220 20% 9%);
+
+    --vp-c-bg-alt: hsl(220 20% 9%);
+    --vp-c-bg-soft: hsl(220 14% 17%);
+    --vp-c-bg-mute: hsl(220 12% 23%);
+     */
+}
+
+ /* Component: Algolia */
+
+.DocSearch {
+  --docsearch-primary-color: var(--vp-c-brand) !important;
+}
+
+/* Component: MathJax */
+
+mjx-container > svg {
+  display: block;
+  margin: auto;
+}
+
+mjx-container {
+  padding: 0.5rem 0;
+}
+
+mjx-container {
+  display: inline-block;
+  margin: auto 2px -2px;
+}
+
+mjx-container > svg {
+  margin: auto;
+  display: inline-block;
+}
+
+/**
+ * Colors links
+ * -------------------------------------------------------------------------- */
+
+ :root {
+  --vp-c-brand-1: #CB3C33;
+  --vp-c-brand-2: #CB3C33;
+  --vp-c-brand-3: #CB3C33;
+  --vp-c-sponsor: #ca2971;
+  --vitest-c-sponsor-hover: #c13071;
+}
+
+.dark {
+  --vp-c-brand-1: #91dd33;
+  --vp-c-brand-2: #91dd33;
+  --vp-c-brand-3: #91dd33;
+  --vp-c-sponsor: #91dd33;
+  --vitest-c-sponsor-hover: #e51370;
+}
