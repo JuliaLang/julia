@@ -40,11 +40,11 @@ https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/var
 
 --c-white-dark: #f8f8f8;
   --c-black-darker: #0d121b;
-  --c-black: #151B2D;
+  --c-black: #111827;
   --c-black-light: #161f32;
   --c-black-lighter: #262a44;
-  --vp-c-brand: #646cff;
-  --vp-c-brand-light: #747bff;
+  --vp-c-brand: #4063D8;
+  --vp-c-brand-light: #4063D8;
   --vp-c-brand-lighter: #3d6692;
   --vp-c-brand-lightest: #bcc0ff;
   --vp-c-brand-dark: #535bf2;
@@ -79,8 +79,8 @@ https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/var
   --vp-home-hero-image-background-image: linear-gradient(
     -45deg,
     #9558B2 30%,
-    #389826 30%,
-    #CB3C33 
+    #CB3C33 30%,
+    #389826
   );
   --vp-home-hero-image-filter: blur(40px);
 }

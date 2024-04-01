@@ -7,6 +7,7 @@ push!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
 push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
 using Pkg
 Pkg.resolve()
+Pkg.add(PackageSpec(url="https://github.com/LuxDL/DocumenterVitepress.jl", rev="master"))
 Pkg.instantiate()
 
 using Documenter

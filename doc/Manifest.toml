@@ -51,9 +51,11 @@ version = "1.3.0"
 
 [[deps.DocumenterVitepress]]
 deps = ["ANSIColoredPrinters", "Base64", "DocStringExtensions", "Documenter", "IOCapture", "Markdown", "NodeJS_20_jll", "REPL"]
-git-tree-sha1 = "b6daec20ff6562e06c28bbb9a8fb5e2f17460dc8"
+git-tree-sha1 = "8c7cf7ea2136fe6c1d0fc285b6d3ec190676620b"
+repo-rev = "master"
+repo-url = "https://github.com/LuxDL/DocumenterVitepress.jl"
 uuid = "4710194d-e776-4893-9690-8d956a29c365"
-version = "0.0.14"
+version = "0.0.15"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
