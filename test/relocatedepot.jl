@@ -78,8 +78,10 @@ if !test_relocated_depot
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
             @test Base.isprecompiled(pkg) == false
+            @test Base.isrelocatable(pkg) == false # because not precompiled
             Base.require(pkg)
             @test Base.isprecompiled(pkg, ignore_loaded=true) == true
+            @test Base.isrelocatable(pkg) == true
         end
     end
 
@@ -93,10 +95,12 @@ if !test_relocated_depot
             rm.(cachefiles, force=true)
             rm(joinpath(@__DIR__, pkgname, "src", "foodir"), force=true, recursive=true)
             @test Base.isprecompiled(pkg) == false
+            @test Base.isrelocatable(pkg) == false # because not precompiled
             touch(joinpath(@__DIR__, pkgname, "src", "foo.txt"))
             mkdir(joinpath(@__DIR__, pkgname, "src", "foodir"))
             Base.require(pkg)
             @test Base.isprecompiled(pkg, ignore_loaded=true) == true
+            @test Base.isrelocatable(pkg) == false # because tracked by mtime
         end
     end
 
@@ -110,10 +114,12 @@ if !test_relocated_depot
             rm.(cachefiles, force=true)
             rm(joinpath(@__DIR__, pkgname, "src", "bardir"), force=true, recursive=true)
             @test Base.isprecompiled(pkg) == false
+            @test Base.isrelocatable(pkg) == false # because not precompiled
             touch(joinpath(@__DIR__, pkgname, "src", "bar.txt"))
             mkdir(joinpath(@__DIR__, pkgname, "src", "bardir"))
             Base.require(pkg)
             @test Base.isprecompiled(pkg, ignore_loaded=true) == true
+            @test Base.isrelocatable(pkg) == true
         end
     end
 
@@ -202,6 +208,7 @@ else
             # stdlib should be already precompiled
             pkg = Base.identify_package("DelimitedFiles")
             @test Base.isprecompiled(pkg) == true
+            @test Base.isrelocatable(pkg) == true
         end
     end
 
@@ -213,6 +220,7 @@ else
             push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
             pkg = Base.identify_package(pkgname)
             @test Base.isprecompiled(pkg) == true
+            @test Base.isrelocatable(pkg) == true
         end
     end
 
@@ -224,10 +232,13 @@ else
             push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
             pkg = Base.identify_package(pkgname)
             @test Base.isprecompiled(pkg) == false # moving depot changes mtime of include_dependency
+            @test Base.isrelocatable(pkg) == false # because not precompiled
             Base.require(pkg)
             @test Base.isprecompiled(pkg) == true
+            @test Base.isrelocatable(pkg) == false # because tracked by mtime
             touch(joinpath(@__DIR__, "relocatedepot", "RelocationTestPkg2", "src", "foodir", "foofoo"))
             @test Base.isprecompiled(pkg) == false
+            @test Base.isrelocatable(pkg) == false # because tracked by mtime
         end
     end
 
@@ -239,8 +250,10 @@ else
             push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
             pkg = Base.identify_package(pkgname)
             @test Base.isprecompiled(pkg) == true
+            @test Base.isrelocatable(pkg) == true
             touch(joinpath(@__DIR__, "relocatedepot", "RelocationTestPkg3", "src", "bardir", "barbar"))
             @test Base.isprecompiled(pkg) == false
+            @test Base.isrelocatable(pkg) == false # because not precompiled
         end
     end
 

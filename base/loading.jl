@@ -1678,25 +1678,13 @@ end
 # should sync with the types of arguments of `stale_cachefile`
 const StaleCacheKey = Tuple{Base.PkgId, UInt128, String, String}
 
-"""
-    Base.isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
-
-Returns whether a given PkgId within the active project is precompiled.
-
-By default this check observes the same approach that code loading takes
-with respect to when different versions of dependencies are currently loaded
-to that which is expected. To ignore loaded modules and answer as if in a
-fresh julia session specify `ignore_loaded=true`.
-
-!!! compat "Julia 1.10"
-    This function requires at least Julia 1.10.
-"""
-function isprecompiled(pkg::PkgId;
+function compilecache_path(pkg::PkgId;
         ignore_loaded::Bool=false,
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
         cachepaths::Vector{String}=Base.find_all_in_cache_path(pkg),
         sourcepath::Union{String,Nothing}=Base.locate_package(pkg),
         flags::CacheFlags=CacheFlags())
+    path = nothing
     isnothing(sourcepath) && error("Cannot locate source for $(repr("text/plain", pkg))")
     for path_to_try in cachepaths
         staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true, requested_flags=flags)
@@ -1728,10 +1716,64 @@ function isprecompiled(pkg::PkgId;
             # file might be read-only and then we fail to update timestamp, which is fine
             ex isa IOError || rethrow()
         end
-        return true
+        path = path_to_try
+        break
         @label check_next_path
     end
-    return false
+    return path
+end
+
+"""
+    Base.isprecompiled(pkg::PkgId; ignore_loaded::Bool=false)
+
+Returns whether a given PkgId within the active project is precompiled.
+
+By default this check observes the same approach that code loading takes
+with respect to when different versions of dependencies are currently loaded
+to that which is expected. To ignore loaded modules and answer as if in a
+fresh julia session specify `ignore_loaded=true`.
+
+!!! compat "Julia 1.10"
+    This function requires at least Julia 1.10.
+"""
+function isprecompiled(pkg::PkgId;
+        ignore_loaded::Bool=false,
+        stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
+        cachepaths::Vector{String}=Base.find_all_in_cache_path(pkg),
+        sourcepath::Union{String,Nothing}=Base.locate_package(pkg),
+        flags::CacheFlags=CacheFlags())
+    path = compilecache_path(pkg; ignore_loaded, stale_cache, cachepaths, sourcepath, flags)
+    return !isnothing(path)
+end
+
+"""
+    Base.isrelocatable(pkg::PkgId)
+
+Returns whether a given PkgId within the active project is precompiled and the
+associated cache is relocatable.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+"""
+function isrelocatable(pkg::PkgId)
+    path = compilecache_path(pkg)
+    isnothing(path) && return false
+    io = open(path, "r")
+    try
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        _, (includes, includes_srcfiles, _), _... = _parse_cache_header(io, path)
+        for inc in includes
+            !startswith(inc.filename, "@depot") && return false
+            if inc ∉ includes_srcfiles
+                # its an include_dependency
+                track_content = inc.mtime == -1.0
+                track_content || return false
+            end
+        end
+    finally
+        close(io)
+    end
+    return true
 end
 
 # search for a precompile cache file to load, after some various checks
@@ -3064,7 +3106,7 @@ function resolve_depot(inc::AbstractString)
 end
 
 
-function parse_cache_header(f::IO, cachefile::AbstractString)
+function _parse_cache_header(f::IO, cachefile::AbstractString)
     flags = read(f, UInt8)
     modules = Vector{Pair{PkgId, UInt64}}()
     while true
@@ -3147,6 +3189,13 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     clone_targets = read(f, l)
 
     srcfiles = srctext_files(f, srctextpos, includes)
+
+    return modules, (includes, srcfiles, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags
+end
+
+function parse_cache_header(f::IO, cachefile::AbstractString)
+    modules, (includes, srcfiles, requires), required_modules,
+        srctextpos, prefs, prefs_hash, clone_targets, flags = _parse_cache_header(f, cachefile)
 
     includes_srcfiles = CacheHeaderIncludes[]
     includes_depfiles = CacheHeaderIncludes[]
