@@ -113,6 +113,8 @@ Random.seed!(1)
         Base.convert(::Type{TypeWithZero}, ::TypeWithoutZero) = TypeWithZero()
         Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
         LinearAlgebra.symmetric(::TypeWithoutZero, ::Symbol) = TypeWithoutZero()
+        LinearAlgebra.symmetric_type(::Type{TypeWithoutZero}) = TypeWithoutZero
+        Base.copy(A::TypeWithoutZero) = A
         Base.transpose(::TypeWithoutZero) = TypeWithoutZero()
         d  = fill(TypeWithoutZero(), 3)
         du = fill(TypeWithoutZero(), 2)
