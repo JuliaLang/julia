@@ -317,7 +317,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_copy_ast(eval_value(args[0], s));
     }
     else if (head == jl_exc_sym) {
-        return jl_current_exception();
+        return jl_current_exception(jl_current_task);
     }
     else if (head == jl_boundscheck_sym) {
         return jl_true;
@@ -490,7 +490,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             s->locals[jl_source_nslots(s->src) + id] = val;
         }
         else if (jl_is_enternode(stmt)) {
-            jl_enter_handler(&__eh);
+            jl_enter_handler(ct, &__eh);
             // This is a bit tricky, but supports the implementation of PhiC nodes.
             // They are conceptually slots, but the slot to store to doesn't get explicitly
             // mentioned in the store (aka the "UpsilonNode") (this makes them integrate more
@@ -521,7 +521,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 }
                 // store current top of exception stack for restore in pop_exception.
             }
-            s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state());
+            s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state(ct));
             if (jl_enternode_scope(stmt)) {
                 jl_value_t *old_scope = ct->scope;
                 JL_GC_PUSH1(&old_scope);
@@ -540,13 +540,15 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     jl_unreachable();
                 }
             }
-            jl_eh_restore_state(&__eh);
+
             if (s->continue_at) { // means we reached a :leave expression
+                jl_eh_restore_state_noexcept(ct, &__eh);
                 ip = s->continue_at;
                 s->continue_at = 0;
                 continue;
             }
             else { // a real exception
+                jl_eh_restore_state(ct, &__eh);
                 ip = catch_ip;
                 assert(jl_enternode_catch_dest(stmt) != 0);
                 continue;
@@ -609,7 +611,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else if (head == jl_pop_exception_sym) {
                 size_t prev_state = jl_unbox_ulong(eval_value(jl_exprarg(stmt, 0), s));
-                jl_restore_excstack(prev_state);
+                jl_restore_excstack(ct, prev_state);
             }
             else if (toplevel) {
                 if (head == jl_method_sym && jl_expr_nargs(stmt) > 1) {
@@ -758,7 +760,19 @@ JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
-    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
+    jl_code_info_t *code = NULL;
+    if (source->source) {
+        code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
+    }
+    else {
+        // OC constructed from optimized IR. It'll have a single specialization with optimized code
+        // in it that we'll try to interpret.
+        jl_svec_t *specializations = (jl_svec_t*)jl_atomic_load_relaxed(&source->specializations);
+        assert(jl_is_method_instance(specializations));
+        jl_method_instance_t *mi = (jl_method_instance_t *)specializations;
+        jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+        code = jl_uncompress_ir(source, ci, jl_atomic_load_relaxed(&ci->inferred));
+    }
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
     jl_task_t *ct = jl_current_task;

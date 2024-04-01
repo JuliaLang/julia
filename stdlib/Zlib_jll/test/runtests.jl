@@ -3,5 +3,5 @@
 using Test, Zlib_jll
 
 @testset "Zlib_jll" begin
-    @test VersionNumber(unsafe_string(ccall((:zlibVersion, libz), Cstring, ()))) == v"1.2.13"
+    @test VersionNumber(unsafe_string(ccall((:zlibVersion, libz), Cstring, ()))) == v"1.3.1"
 end

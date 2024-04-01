@@ -184,11 +184,7 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
-    if commutative
-        @test r == Core.Compiler.tuplemerge(b, a)
-    else
-        @test_broken r == Core.Compiler.tuplemerge(b, a)
-    end
+    @test r == Core.Compiler.tuplemerge(b, a) broken=!commutative
 end
 tuplemerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
 tuplemerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
@@ -5631,3 +5627,56 @@ end
 
 # Issue #52613
 @test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar
+
+# https://github.com/JuliaLang/julia/issues/53590
+func53590(b) = b ? Int : Float64
+function issue53590(b1, b2)
+    T1 = func53590(b1)
+    T2 = func53590(b2)
+    return typejoin(T1, T2)
+end
+@test issue53590(true, true) == Int
+@test issue53590(true, false) == Real
+@test issue53590(false, false) == Float64
+@test issue53590(false, true) == Real
+
+# Expr(:throw_undef_if_not) handling
+@eval function has_tuin()
+    $(Expr(:throw_undef_if_not, :x, false))
+end
+@test Core.Compiler.return_type(has_tuin, Tuple{}) === Union{}
+@test_throws UndefVarError has_tuin()
+
+# issue #53585
+let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
+    @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
+    @test only(Base.return_types(vcat, t)) == Vector{Float64}
+end
+
+# Infinite loop in inference on SSA assignment
+const stop_infinite_loop::Base.Threads.Atomic{Bool} = Base.Threads.Atomic{Bool}(false)
+function gen_infinite_loop_ssa_generator(world::UInt, source, _)
+    ci = make_codeinfo(Any[
+        # Block 1
+        (),
+        # Block 2
+        PhiNode(Int32[1, 5], Any[SSAValue(1), SSAValue(3)]),
+        Expr(:call, tuple, SSAValue(2)),
+        Expr(:call, getindex, GlobalRef(@__MODULE__, :stop_infinite_loop)),
+        GotoIfNot(SSAValue(4), 2),
+        # Block 3
+        ReturnNode(SSAValue(2))
+    ]; slottypes=Any[Any])
+    ci.slotnames = Symbol[:var"#self#"]
+    ci
+end
+
+@eval function gen_infinite_loop_ssa()
+    $(Expr(:meta, :generated, gen_infinite_loop_ssa_generator))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+
+# We want to make sure that both this returns `Tuple` and that
+# it doesn't infinite loop inside inference.
+@test Core.Compiler.return_type(gen_infinite_loop_ssa, Tuple{}) === Tuple

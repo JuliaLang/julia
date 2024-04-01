@@ -6,8 +6,7 @@ import ..REPL
 using REPL: AbstractREPL, Options
 
 using ..Terminals
-import ..Terminals: raw!, width, height, cmove, getX,
-                       getY, clear_line, beep
+import ..Terminals: raw!, width, height, clear_line, beep
 
 import Base: ensureroom, show, AnyDict, position
 using Base: something
@@ -480,14 +479,12 @@ prompt_string(f::Function) = Base.invokelatest(f)
 function maybe_show_hint(s::PromptState)
     isa(s.hint, String) || return nothing
     # The hint being "" then nothing is used to first clear a previous hint, then skip printing the hint
-    # the clear line cannot be printed each time because it breaks column movement
     if isempty(s.hint)
-        print(terminal(s), "\e[0K") # clear remainder of line which had a hint
         s.hint = nothing
     else
         Base.printstyled(terminal(s), s.hint, color=:light_black)
         cmove_left(terminal(s), textwidth(s.hint))
-        s.hint = "" # being "" signals to do one clear line remainder to clear the hint next time if still empty
+        s.hint = "" # being "" signals to do one clear line remainder to clear the hint next time the screen is refreshed
     end
     return nothing
 end
@@ -497,8 +494,13 @@ function refresh_multi_line(s::PromptState; kw...)
         close(s.refresh_wait)
         s.refresh_wait = nothing
     end
+    if s.hint isa String
+        # clear remainder of line which is unknown here if it had a hint before unbeknownst to refresh_multi_line
+        # the clear line cannot be printed each time because it would break column movement
+        print(terminal(s), "\e[0K")
+    end
     r = refresh_multi_line(terminal(s), s; kw...)
-    maybe_show_hint(s)
+    maybe_show_hint(s) # now maybe write the hint back to the screen
     return r
 end
 refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)

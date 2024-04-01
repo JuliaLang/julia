@@ -36,7 +36,7 @@ else
 LIBSUITESPARSE_CMAKE_FLAGS += -DSUITESPARSE_USE_64BIT_BLAS=NO
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBSUITESPARSE_CMAKE_FLAGS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
@@ -59,8 +59,8 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
 	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
-	make -C $(dir $<)
-	make -C $(dir $<) install
+	$(MAKE) -C $(dir $<)
+	$(MAKE) -C $(dir $<) install
 	echo 1 > $@
 
 ifeq ($(OS),WINNT)

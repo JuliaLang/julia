@@ -26,7 +26,7 @@ endif
 JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 ifeq ($(USECLANG),1)
-FLAGS += -Wno-return-type-c-linkage
+FLAGS += -Wno-return-type-c-linkage -Wno-atomic-alignment
 endif
 
 FLAGS += -DJL_BUILD_ARCH='"$(ARCH)"'
@@ -473,6 +473,8 @@ $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG
 #   make -C src install-analysis-deps
 ANALYSIS_DEPS := llvm clang llvm-tools libuv utf8proc
 ifeq ($(OS),Darwin)
+ANALYSIS_DEPS += llvmunwind
+else ifeq ($(OS),OpenBSD)
 ANALYSIS_DEPS += llvmunwind
 else ifneq ($(OS),WINNT)
 ANALYSIS_DEPS += unwind

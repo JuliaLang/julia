@@ -670,7 +670,7 @@ JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
 endif
 endif
 
-ifeq ($(OS), FreeBSD)
+ifneq ($(findstring $(OS),FreeBSD OpenBSD),)
 LOCALBASE ?= /usr/local
 else
 LOCALBASE ?= /usr
@@ -726,7 +726,7 @@ SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
-ifneq ($(findstring $(OS),Linux FreeBSD),)
+ifneq ($(findstring $(OS),Linux FreeBSD OpenBSD),)
 SANITIZE_LDFLAGS += -Wl,--warn-unresolved-symbols
 endif # OS Linux or FreeBSD
 endif # SANITIZE_MEMORY=1
@@ -1069,7 +1069,7 @@ JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
-ifeq ($(OS),Darwin)
+ifneq ($(findstring $(OS),Darwin OpenBSD),)
 LIBUNWIND:=-lunwind
 JCPPFLAGS+=-DLLVMLIBUNWIND
 else
@@ -1380,6 +1380,19 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expma
 	$(NO_WHOLE_ARCHIVE)
 endif
 
+ifeq ($(OS), OpenBSD)
+JLDFLAGS += -Wl,--Bdynamic
+ifneq ($(SANITIZE),1)
+JLDFLAGS += -Wl,-no-undefined
+endif
+
+JLIBLDFLAGS += -Wl,-Bsymbolic-functions
+
+OSLIBS += -Wl,--no-as-needed -lpthread -lm -lc++abi -lc
+OSLIBS += -Wl,--whole-archive -lcompiler_rt -Wl,--no-whole-archive
+OSLIBS += -Wl,--export-dynamic,--as-needed,--version-script=$(BUILDROOT)/src/julia.expmap
+endif
+
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
@@ -1487,7 +1500,7 @@ endif
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
-CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+ CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path -sdk macosx)
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix

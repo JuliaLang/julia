@@ -1225,10 +1225,21 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             bb = compact.active_result_bb - 1
             bbs = scope_mapping[bb]
             if isexpr(stmt, :leave) && bbs != SSAValue(0)
-                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, bbs)])
-            else
-                update_scope_mapping!(scope_mapping, bb+1, bbs)
+                # Here we want to count the number of scopes that we're leaving,
+                # which is the same as the number of EnterNodes being referenced
+                # by `stmt.args`. Which have :scope set. In practice, the frontend
+                # does emit these in order, so we could simply go to the last one,
+                # but we want to avoid making that semantic assumption.
+                for i = 1:length(stmt.args)
+                    scope = stmt.args[i]
+                    scope === nothing && continue
+                    enter = compact[scope][:inst]
+                    @assert isa(enter, EnterNode)
+                    isdefined(enter, :scope) || continue
+                    bbs = scope_mapping[block_for_inst(compact, bbs)]
+                end
             end
+            update_scope_mapping!(scope_mapping, bb+1, bbs)
         end
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         is_setfield = is_isdefined = is_finalizer = is_keyvalue_get = false
@@ -1496,7 +1507,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     end
 
     src_inlining_policy(inlining.interp, src, info, IR_FLAG_NULL) || return false
-    src = retrieve_ir_for_inlining(code, src)
+    src, di = retrieve_ir_for_inlining(code, src)
 
     # For now: Require finalizer to only have one basic block
     length(src.cfg.blocks) == 1 || return false
@@ -1505,8 +1516,8 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     add_inlining_backedge!(et, mi)
 
     # TODO: Should there be a special line number node for inlined finalizers?
-    inlined_at = ir[SSAValue(idx)][:line]
-    ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, mi, inlined_at, argexprs)
+    inline_at = ir[SSAValue(idx)][:line][1]
+    ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, di, mi, inline_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
     ssa_rename = Vector{Any}(undef, length(src.stmts))
@@ -1518,12 +1529,8 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
             ssa_rename[ssa.id]
         end
         stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, ssa_substitute)
-        newline = inst[:line]
-        if newline != 0
-            newline += ssa_substitute.linetable_offset
-        end
         ssa_rename[idx′] = insert_node!(ir, idx,
-            NewInstruction(inst; stmt=stmt′, line=newline),
+            NewInstruction(inst; stmt=stmt′, line=(ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(idx′))),
             attach_after)
     end
 

@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    188
+#define NUM_TAGS    189
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -213,6 +213,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_addrspace_type);
         INSERT_TAG(jl_addrspace_typename);
         INSERT_TAG(jl_addrspacecore_type);
+        INSERT_TAG(jl_debuginfo_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -2337,23 +2338,18 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
         jl_svecset(cache, ins++, jl_nothing);
 }
 
-static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
+static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_instance_t *codeinst, int orig)
 {
     jl_code_info_t *ci = NULL;
     JL_GC_PUSH1(&ci);
     int compressed = 0;
     if (!jl_is_code_info(ci_)) {
         compressed = 1;
-        ci = jl_uncompress_ir(m, NULL, (jl_value_t*)ci_);
+        ci = jl_uncompress_ir(m, codeinst, (jl_value_t*)ci_);
     }
     else {
         ci = (jl_code_info_t*)ci_;
     }
-    // leave codelocs length the same so the compiler can assume that; just zero it
-    memset(jl_array_data(ci->codelocs, int32_t), 0, jl_array_len(ci->codelocs)*sizeof(int32_t));
-    // empty linetable
-    if (jl_is_array(ci->linetable))
-        jl_array_del_end((jl_array_t*)ci->linetable, jl_array_len(ci->linetable));
     // replace slot names with `?`, except unused_sym since the compiler looks at it
     jl_sym_t *questionsym = jl_symbol("?");
     int i, l = jl_array_len(ci->slotnames);
@@ -2384,7 +2380,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
                 record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
-                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, 0);
+                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst, 0);
                 if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
                     jl_gc_wb(codeinst, stripped);
                 }
@@ -2422,7 +2418,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             }
         }
         if (jl_options.strip_metadata && !stripped_ir) {
-            m->source = strip_codeinfo_meta(m, m->source, 1);
+            m->source = strip_codeinfo_meta(m, m->source, NULL, 1);
             jl_gc_wb(m, m->source);
         }
     }
@@ -3066,6 +3062,11 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 extern void rebuild_image_blob_tree(void);
 extern void export_jl_small_typeof(void);
 
+// When an image is loaded with ignore_native, all subsequent image loads must ignore
+// native code in the cache-file since we can't gurantuee that there are no call edges
+// into the native code of the image. See https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
+int IMAGE_NATIVE_CODE_TAINTED = 0;
+
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods, jl_array_t **internal_methods,
@@ -3092,9 +3093,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 
     // in --build mode only use sysimg data, not precompiled native code
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
-    if (imaging_mode || jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
+    if (imaging_mode || jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES || IMAGE_NATIVE_CODE_TAINTED) {
         memset(&image->fptrs, 0, sizeof(image->fptrs));
         image->gvars_base = NULL;
+        IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
     // step 1: read section map
@@ -3772,7 +3774,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
         // Must disable using native code in possible downstream users of this code:
         // https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
         // The easiest way to do that is to disable it in all of them.
-        jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO;
+        IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
     jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, 0);

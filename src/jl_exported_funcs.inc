@@ -109,6 +109,7 @@
     XX(jl_egal__bits) \
     XX(jl_egal__bitstag) \
     XX(jl_eh_restore_state) \
+    XX(jl_eh_restore_state_noexcept) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
     XX(jl_environ) \
@@ -366,6 +367,7 @@
     XX(jl_pointerref) \
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
+    XX(jl_pop_handler_noexcept) \
     XX(jl_preload_sysimg_so) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \
@@ -479,7 +481,7 @@
     XX(jl_type_intersection) \
     XX(jl_type_intersection_with_env) \
     XX(jl_type_morespecific) \
-    XX(jl_type_morespecific_no_subtype) \
+    XX(jl_method_morespecific) \
     XX(jl_type_union) \
     XX(jl_type_unionall) \
     XX(jl_unbox_bool) \

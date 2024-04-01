@@ -128,6 +128,8 @@ static const char opts[]  =
     // actions
     " -e, --eval <expr>          Evaluate <expr>\n"
     " -E, --print <expr>         Evaluate <expr> and display the result\n"
+    " -m, --module <Package> [args]\n"
+    "                            Run entry point of `Package` (`@main` function) with `args'.\n"
     " -L, --load <file>          Load <file> immediately on all processors\n\n"
 
     // parallel options
@@ -175,6 +177,7 @@ static const char opts[]  =
 #ifdef USE_POLLY
     " --polly={yes*|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
+    " --math-mode={ieee|user*}   Always follow `ieee` floating point semantics or respect `@fastmath` declarations\n\n"
 
     // instrumentation options
     " --code-coverage[={none*|user|all}]\n"
@@ -271,7 +274,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_gc_threads,
            opt_permalloc_pkgimg
     };
-    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
+    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -284,6 +287,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "banner",          required_argument, 0, opt_banner },
         { "home",            required_argument, 0, 'H' },
         { "eval",            required_argument, 0, 'e' },
+        { "module",          required_argument, 0, 'm' },
         { "print",           required_argument, 0, 'E' },
         { "load",            required_argument, 0, 'L' },
         { "bug-report",      required_argument, 0, opt_bug_report },
@@ -421,6 +425,7 @@ restart_switch:
         case 'e': // eval
         case 'E': // print
         case 'L': // load
+        case 'm': // module
         case opt_bug_report: // bug
         {
             size_t sz = strlen(optarg) + 1;
@@ -434,6 +439,10 @@ restart_switch:
             ncmds++;
             cmds[ncmds] = 0;
             jl_options.cmds = cmds;
+            if (c == 'm') {
+                optind -= 1;
+                goto parsing_args_done;
+            }
             break;
         }
         case 'J': // sysimage
@@ -774,7 +783,7 @@ restart_switch:
             else if (!strcmp(optarg,"user"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
             else
-                jl_errorf("julia: invalid argument to --math-mode (%s)", optarg);
+                jl_errorf("julia: invalid argument to --math-mode={ieee|user} (%s)", optarg);
             break;
         case opt_worker:
             jl_options.worker = 1;
@@ -851,7 +860,8 @@ restart_switch:
                 if (isnan(sz) || sz < 0) {
                     jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                 }
-                jl_options.heap_size_hint = sz < UINT64_MAX ? (uint64_t)sz : UINT64_MAX;
+                const long double limit = ldexpl(1.0, 64); // UINT64_MAX + 1
+                jl_options.heap_size_hint = sz < limit ? (uint64_t)sz : UINT64_MAX;
             }
             if (jl_options.heap_size_hint == 0)
                 jl_errorf("julia: invalid memory size specified in --heap-size-hint");
@@ -886,6 +896,7 @@ restart_switch:
                       "This is a bug, please report it.", c);
         }
     }
+    parsing_args_done:
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
     int proc_args = *argcp < optind ? *argcp : optind;

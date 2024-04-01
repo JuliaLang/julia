@@ -16,7 +16,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     permutedims, permuterows!, power_by_squaring, promote_rule, real, sec, sech, setindex!,
     show, similar, sin, sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc,
     typed_hcat, vec, view, zero
-using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
+using Base: IndexLinear, promote_eltype, promote_op, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted
@@ -576,11 +576,14 @@ _droplast!(A) = deleteat!(A, lastindex(A))
 matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
 matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
 matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+# diagonal is special, as it does not change the structure of the other matrix
+# we call similar without a size to preserve the type of the matrix wherever possible
 matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
 matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
 matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
-matprod_dest(A::HermOrSym, B::Diagonal, TS) = similar(A, TS, size(A))
-matprod_dest(A::Diagonal, B::HermOrSym, TS) = similar(B, TS, size(B))
+
+# Special handling for adj/trans vec
+matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
 
 # TODO: remove once not used anymore in SparseArrays.jl
 # some trait like this would be cool

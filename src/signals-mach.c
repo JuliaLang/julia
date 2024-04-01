@@ -9,6 +9,7 @@
 #include <mach/task.h>
 #include <mach/mig_errors.h>
 #include <AvailabilityMacros.h>
+#include <stdint.h>
 #include "mach_excServer.c"
 
 #ifdef MAC_OS_X_VERSION_10_9
@@ -47,14 +48,31 @@ static arraylist_t suspended_threads;
 extern uv_mutex_t safepoint_lock;
 extern uv_cond_t safepoint_cond_begin;
 
+#define GC_STATE_SHIFT 8*sizeof(int16_t)
+static inline int8_t decode_gc_state(uintptr_t item)
+{
+    return (int8_t)(item >> GC_STATE_SHIFT);
+}
+
+static inline int16_t decode_tid(uintptr_t item)
+{
+    return (int16_t)item;
+}
+
+static inline uintptr_t encode_item(int16_t tid, int8_t gc_state)
+{
+    return (uintptr_t)tid | ((uintptr_t)gc_state << GC_STATE_SHIFT);
+}
+
 // see jl_safepoint_wait_thread_resume
 void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2)
 {
     // must be called with uv_mutex_lock(&safepoint_lock) and uv_mutex_lock(&ptls2->sleep_lock) held (in that order)
     for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
-        int16_t tid = (int16_t)item;
-        int8_t gc_state = (int8_t)(item >> 8);
+
+        int16_t tid = decode_tid(item);
+        int8_t gc_state = decode_gc_state(item);
         if (tid != tid2)
             continue;
         jl_atomic_store_release(&ptls2->gc_state, gc_state);
@@ -71,8 +89,8 @@ void jl_mach_gc_end(void)
     size_t j = 0;
     for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
-        int16_t tid = (int16_t)item;
-        int8_t gc_state = (int8_t)(item >> 8);
+        int16_t tid = decode_tid(item);
+        int8_t gc_state = decode_gc_state(item);
         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
         uv_mutex_lock(&ptls2->sleep_lock);
         if (jl_atomic_load_relaxed(&ptls2->suspend_count) == 0) {
@@ -115,9 +133,9 @@ static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
         // Eventually, we should probably release this signal to the original
         // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
         // triggers a SIGSEGV and gets handled by the usual codepath for unix.
-        int8_t gc_state = ptls2->gc_state;
+        int8_t gc_state = jl_atomic_load_acquire(&ptls2->gc_state);
         jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
-        uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
+        uintptr_t item = encode_item(tid, gc_state);
         arraylist_push(&suspended_threads, (void*)item);
         thread_suspend(thread);
     }
@@ -338,7 +356,7 @@ kern_return_t catch_mach_exception_raise(
     //     jl_throw_in_thread(ptls2, thread, jl_stackovf_exception);
     //     return KERN_SUCCESS;
     // }
-    if (ptls2->gc_state == JL_GC_STATE_WAITING)
+    if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING)
         return KERN_FAILURE;
     if (exception == EXC_ARITHMETIC) {
         jl_throw_in_thread(ptls2, thread, jl_diverror_exception);
@@ -363,7 +381,7 @@ kern_return_t catch_mach_exception_raise(
         }
         return KERN_SUCCESS;
     }
-    if (ptls2->current_task->eh == NULL)
+    if (jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL)
         return KERN_FAILURE;
     jl_value_t *excpt;
     if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {

@@ -107,6 +107,11 @@ Enable or disable usage of native code caching in the form of pkgimages
 Evaluate <expr>
 
 .TP
+-m, --module <Package> [args]
+Run entry point of `Package` (`@main` function) with `args'.
+
+
+.TP
 -E, --print <expr>
 Evaluate <expr> and display the result
 
@@ -195,8 +200,8 @@ Control whether inlining is permitted, including overriding @inline declarations
 Emit bounds checks always, never, or respect @inbounds declarations
 
 .TP
---math-mode={ieee|user}
-Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)
+--math-mode={ieee|user*}
+Always follow `ieee` floating point semantics or respect `@fastmath` declarations
 
 .TP
 --code-coverage[={none*|user|all}]

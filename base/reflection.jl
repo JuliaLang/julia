@@ -20,6 +20,8 @@ Base
 """
 parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
+is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
+
 """
     moduleroot(m::Module) -> Module
 
@@ -887,6 +889,7 @@ A special case where exact behavior is guaranteed: when `T <: S`,
 typeintersect(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_intersection, Any, (Any, Any), a::Type, b::Type))
 
 morespecific(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_morespecific, Cint, (Any, Any), a::Type, b::Type) != 0)
+morespecific(a::Method, b::Method) = ccall(:jl_method_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
     fieldoffset(type, i)
@@ -1321,9 +1324,12 @@ uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
                              error("Code for this Method is not available.")
 function _uncompressed_ir(m::Method)
     s = m.source
-    s isa String && (s = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s))
+    if s isa String
+        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
+    end
     return s::CodeInfo
 end
+
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
@@ -2492,7 +2498,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             for match in ms
                 m = match.method
                 match.fully_covers || continue
-                if minmax === nothing || morespecific(m.sig, minmax.sig)
+                if minmax === nothing || morespecific(m, minmax)
                     minmax = m
                 end
             end
@@ -2502,8 +2508,8 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             for match in ms
                 m = match.method
                 m === minmax && continue
-                if !morespecific(minmax.sig, m.sig)
-                    if match.fully_covers || !morespecific(m.sig, minmax.sig)
+                if !morespecific(minmax, m)
+                    if match.fully_covers || !morespecific(m, minmax)
                         return true
                     end
                 end
