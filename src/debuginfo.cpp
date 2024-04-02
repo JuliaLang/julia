@@ -93,11 +93,11 @@ void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t
     (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
 }
 
-jl_method_instance_t *JITDebugInfoRegistry::lookupLinfo(size_t pointer)
+jl_code_instance_t *JITDebugInfoRegistry::lookupLinfo(size_t pointer)
 {
     jl_lock_profile();
     auto region = linfomap.lower_bound(pointer);
-    jl_method_instance_t *linfo = NULL;
+    jl_code_instance_t *linfo = NULL;
     if (region != linfomap.end() && pointer < region->first + region->second.first)
         linfo = region->second.second;
     jl_unlock_profile();
@@ -372,19 +372,17 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                 codeinst_in_flight.erase(codeinst_it);
             }
         }
-        jl_method_instance_t *mi = NULL;
         if (codeinst) {
             JL_GC_PROMISE_ROOTED(codeinst);
-            mi = codeinst->def;
             // Non-opaque-closure MethodInstances are considered globally rooted
             // through their methods, but for OC, we need to create a global root
             // here.
-            if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi, 1);
+            if (jl_is_method(codeinst->def->def.value) && codeinst->def->def.method->is_for_opaque_closure)
+                codeinst = (jl_code_instance_t*)jl_as_global_root((jl_value_t*)codeinst, 1);
         }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
-            if (mi)
-                linfomap[Addr] = std::make_pair(Size, mi);
+            if (codeinst)
+                linfomap[Addr] = std::make_pair(Size, codeinst);
             if (first) {
                 objectmap[SectionLoadAddr] = {&Object,
                     (size_t)SectionSize,
@@ -699,7 +697,7 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info) JL_NOTSAFEPO
 }
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_register_fptrs_impl(uint64_t image_base, const jl_image_fptrs_t *fptrs,
-    jl_method_instance_t **linfos, size_t n)
+    jl_code_instance_t **linfos, size_t n)
 {
     getJITDebugRegistry().add_image_info({(uintptr_t) image_base, *fptrs, linfos, n});
 }
@@ -1249,7 +1247,7 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
 
 extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p) JL_NOTSAFEPOINT
 {
-    return getJITDebugRegistry().lookupLinfo((size_t)p);
+    return getJITDebugRegistry().lookupLinfo((size_t)p)->def;
 }
 
 #if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)

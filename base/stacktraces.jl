@@ -106,7 +106,7 @@ up stack frame context information. Returns an array of frame information for al
 inlined at that point, innermost function first.
 """
 Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
-    infos = ccall(:jl_lookup_code_address, Any, (Ptr{Cvoid}, Cint), pointer, false)::Core.SimpleVector
+    infos = @ccall jl_lookup_code_address(pointer::Ptr{Cvoid}, false::Cint)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
     res = Vector{StackFrame}(undef, length(infos))
@@ -117,6 +117,9 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
         file = info[2]::Symbol
         linenum = info[3]::Int
         linfo = info[4]
+        if linfo isa Core.CodeInstance
+            linfo = linfo.def
+        end
         res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer)
     end
     return res
