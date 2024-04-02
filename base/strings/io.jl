@@ -252,8 +252,8 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 """
     repr(x; context=nothing)
 
-Create a string from any value using the [`show`](@ref) function.
-You should not add methods to `repr`; define a `show` method instead.
+Create a string from any value using the 2-argument [`show`](@ref) function.
+You should not add methods to `repr`; define a `show(io, x)` method instead.
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
 tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
@@ -262,7 +262,7 @@ attributes are used for the I/O stream passed to `show`.
 Note that `repr(x)` is usually similar to how the value of `x` would
 be entered in Julia.  See also [`repr(MIME("text/plain"), x)`](@ref) to instead
 return a "pretty-printed" version of `x` designed more for human consumption,
-equivalent to the REPL display of `x`.
+equivalent to the REPL display of `x`, using the 3-argument `show(io, mime, x)`.
 
 !!! compat "Julia 1.7"
     Passing a tuple to keyword `context` requires Julia 1.7 or later.
