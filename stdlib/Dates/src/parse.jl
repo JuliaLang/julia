@@ -161,6 +161,13 @@ end
     min_pos = min_width <= 0 ? i : i + min_width - 1
     max_pos = max_width <= 0 ? len : min(i + max_width - 1, len)
     d::Int64 = 0
+    c, neg = iterate(str, i)::Tuple{Char, Int}
+    if c == '-'
+        i = neg
+        neg = -1
+    else
+        neg = 1
+    end
     @inbounds while i <= max_pos
         c, ii = iterate(str, i)::Tuple{Char, Int}
         if '0' <= c <= '9'
@@ -173,7 +180,7 @@ end
     if i <= min_pos
         return nothing
     else
-        return d, i
+        return d * neg, i
     end
 end
 
