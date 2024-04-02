@@ -1222,7 +1222,7 @@ any(f, itr) = _any(f, itr, :)
 for ItrT = (Tuple,Any)
     # define a generic method and a specialized version for `Tuple`,
     # whose method bodies are identical, while giving better effects to the later
-    @eval function _any(f, itr::$ItrT, ::Colon)
+    @eval function _any(f::Function, itr::$ItrT, ::Colon)
         $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
         anymissing = false
         for x in itr
@@ -1295,7 +1295,7 @@ all(f, itr) = _all(f, itr, :)
 for ItrT = (Tuple,Any)
     # define a generic method and a specialized version for `Tuple`,
     # whose method bodies are identical, while giving better effects to the later
-    @eval function _all(f, itr::$ItrT, ::Colon)
+    @eval function _all(f::Function, itr::$ItrT, ::Colon)
         $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
         anymissing = false
         for x in itr
