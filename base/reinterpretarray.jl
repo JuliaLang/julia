@@ -46,6 +46,23 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
      3 + 4im
      5 + 6im
     ```
+
+    If the location of padding bits does not line up between `T` and `eltype(A)`, the resulting array will be
+    read-only or write-only, to prevent invalid bits from being written to or read from, respectively.
+
+    ```jldoctest
+    julia> a = reinterpret(Tuple{UInt8, UInt32}, UInt32[1, 2])
+    1-element reinterpret(Tuple{UInt8, UInt32}, ::Vector{UInt32}):
+     (0x01, 0x00000002)
+
+    julia> a[1] = 3
+    ERROR: Padding of type Tuple{UInt8, UInt32} is not compatible with type UInt32.
+
+    julia> b = reinterpret(UInt32, Tuple{UInt8, UInt32}[(0x01, 0x00000002)]); # showing will error
+
+    julia> b[1]
+    ERROR: Padding of type UInt32 is not compatible with type Tuple{UInt8, UInt32}.
+    ```
     """
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
         function thrownonint(S::Type, T::Type, dim)
@@ -368,6 +385,10 @@ check_ptr_indexable(a::Memory, sz) = true
 check_ptr_indexable(a::AbstractArray, sz) = false
 
 @propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
+
+@propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) && (check_ptr_indexable(a) || _isassigned_ra(a, inds...))
+@propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
+@propagate_inbounds _isassigned_ra(a::ReinterpretArray, inds...) = true # that is not entirely true, but computing exactly which indexes will be accessed in the parent requires a lot of duplication from the _getindex_ra code
 
 @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
     check_readable(a)

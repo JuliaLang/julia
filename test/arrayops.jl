@@ -797,6 +797,14 @@ end
     oa = OffsetVector(copy(a), -1)
     @test circshift!(oa, 1) === oa
     @test oa == circshift(OffsetVector(a, -1), 1)
+
+    # 1d circshift! (#53554)
+    a = []
+    @test circshift!(a, 1) === a
+    @test circshift!(a, 1) == []
+    a = [1:5;]
+    @test circshift!(a, 10) === a
+    @test circshift!(a, 10) == 1:5
 end
 
 @testset "circcopy" begin
@@ -2612,7 +2620,7 @@ end
 end
 
 @testset "sign, conj[!], ~" begin
-    local A, B, C
+    local A, B, C, D, E
     A = [-10,0,3]
     B = [-10.0,0.0,3.0]
     C = [1,im,0]
@@ -2629,6 +2637,11 @@ end
     @test typeof(conj(A)) == Vector{Int}
     @test typeof(conj(B)) == Vector{Float64}
     @test typeof(conj(C)) == Vector{Complex{Int}}
+    D = [C copy(C); copy(C) copy(C)]
+    @test conj(D) == conj!(copy(D))
+    E = [D, copy(D)]
+    @test conj(E) == conj!(copy(E))
+    @test (@allocations conj!(E)) == 0
 
     @test .~A == [9,-1,-4]
     @test typeof(.~A) == Vector{Int}
@@ -3191,4 +3204,13 @@ end
     @test wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
     @test_throws DimensionMismatch wrap(Array, memref2, 9)
     @test_throws DimensionMismatch wrap(Array, memref2, 10)
+end
+
+@testset "Memory size" begin
+    len = 5
+    mem = Memory{Int}(undef, len)
+    @test size(mem, 1) == len
+    @test size(mem, 0x1) == len
+    @test size(mem, 2) == 1
+    @test size(mem, 0x2) == 1
 end

@@ -4,10 +4,11 @@ module REPLCompletions
 
 export completions, shell_completions, bslash_completions, completion_text
 
-using Core: CodeInfo, MethodInstance, CodeInstance, Const
+using Core: Const
 const CC = Core.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
+using Base.Filesystem: _readdirx
 
 abstract type Completion end
 
@@ -190,11 +191,14 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
             append!(suggestions, filtered_mod_names(p, mod, name, true, false))
         end
     elseif val !== nothing # looking for a property of an instance
-        for property in propertynames(val, false)
-            # TODO: support integer arguments (#36872)
-            if property isa Symbol && startswith(string(property), name)
-                push!(suggestions, PropertyCompletion(val, property))
+        try
+            for property in propertynames(val, false)
+                # TODO: support integer arguments (#36872)
+                if property isa Symbol && startswith(string(property), name)
+                    push!(suggestions, PropertyCompletion(val, property))
+                end
             end
+        catch
         end
     elseif field_completion_eligible(t)
         # Looking for a member of a type
@@ -314,8 +318,8 @@ function cache_PATH()
             continue
         end
 
-        filesinpath = try
-            readdir(pathdir)
+        path_entries = try
+            _readdirx(pathdir)
         catch e
             # Bash allows dirs in PATH that can't be read, so we should as well.
             if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -325,13 +329,13 @@ function cache_PATH()
                 rethrow()
             end
         end
-        for file in filesinpath
+        for entry in path_entries
             # In a perfect world, we would filter on whether the file is executable
             # here, or even on whether the current user can execute the file in question.
             try
-                if isfile(joinpath(pathdir, file))
-                    @lock PATH_cache_lock push!(PATH_cache, file)
-                    push!(this_PATH_cache, file)
+                if isfile(entry)
+                    @lock PATH_cache_lock push!(PATH_cache, entry.name)
+                    push!(this_PATH_cache, entry.name)
                 end
             catch e
                 # `isfile()` can throw in rare cases such as when probing a
@@ -375,11 +379,11 @@ function complete_path(path::AbstractString;
     else
         dir, prefix = splitdir(path)
     end
-    files = try
+    entries = try
         if isempty(dir)
-            readdir()
+            _readdirx()
         elseif isdir(dir)
-            readdir(dir)
+            _readdirx(dir)
         else
             return Completion[], dir, false
         end
@@ -389,11 +393,10 @@ function complete_path(path::AbstractString;
     end
 
     matches = Set{String}()
-    for file in files
-        if startswith(file, prefix)
-            p = joinpath(dir, file)
-            is_dir = try isdir(p) catch ex; ex isa Base.IOError ? false : rethrow() end
-            push!(matches, is_dir ? file * "/" : file)
+    for entry in entries
+        if startswith(entry.name, prefix)
+            is_dir = try isdir(entry) catch ex; ex isa Base.IOError ? false : rethrow() end
+            push!(matches, is_dir ? entry.name * "/" : entry.name)
         end
     end
 
@@ -524,25 +527,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     return (startind:lastindex(s), method_name_end)
 end
 
-struct REPLInterpreterCache
-    dict::IdDict{MethodInstance,CodeInstance}
-end
-REPLInterpreterCache() = REPLInterpreterCache(IdDict{MethodInstance,CodeInstance}())
-const REPL_INTERPRETER_CACHE = REPLInterpreterCache()
-
-function get_code_cache()
-    # XXX Avoid storing analysis results into the cache that persists across precompilation,
-    #     as [sys|pkg]image currently doesn't support serializing externally created `CodeInstance`.
-    #     Otherwise, `CodeInstance`s created by `REPLInterpreter`, that are much less optimized
-    #     that those produced by `NativeInterpreter`, will leak into the native code cache,
-    #     potentially causing runtime slowdown.
-    #     (see https://github.com/JuliaLang/julia/issues/48453).
-    if Base.generating_output()
-        return REPLInterpreterCache()
-    else
-        return REPL_INTERPRETER_CACHE
-    end
-end
+struct REPLCacheToken end
 
 struct REPLInterpreter <: CC.AbstractInterpreter
     limit_aggressive_inference::Bool
@@ -550,32 +535,21 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
-    code_cache::REPLInterpreterCache
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
                                  aggressive_constant_propagation=true,
                                  unoptimize_throw_blocks=false),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
-                             code_cache::REPLInterpreterCache = get_code_cache())
-        return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache, code_cache)
+                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+        return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
     end
 end
 CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
 CC.OptimizationParams(interp::REPLInterpreter) = interp.opt_params
-CC.get_world_counter(interp::REPLInterpreter) = interp.world
+CC.get_inference_world(interp::REPLInterpreter) = interp.world
 CC.get_inference_cache(interp::REPLInterpreter) = interp.inf_cache
-CC.code_cache(interp::REPLInterpreter) = CC.WorldView(interp.code_cache, CC.WorldRange(interp.world))
-CC.get(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
-CC.getindex(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
-CC.haskey(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-function CC.setindex!(wvc::CC.WorldView{REPLInterpreterCache}, ci::CodeInstance, mi::MethodInstance)
-    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
-        delete!(wvc.cache.dict, replaced)
-    end
-    return setindex!(wvc.cache.dict, ci, mi)
-end
+CC.cache_owner(::REPLInterpreter) = REPLCacheToken()
 
 # REPLInterpreter is only used for type analysis, so it should disable optimization entirely
 CC.may_optimize(::REPLInterpreter) = false
@@ -1162,7 +1136,7 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
                         if ex === nothing
                             ex = arg
                         else
-                            ex = Expr(:., out, QuoteNode(arg))
+                            ex = Expr(:., ex, QuoteNode(arg))
                         end
                     else # invalid expression
                         ex = nothing
@@ -1375,14 +1349,15 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                     append!(suggestions, project_deps_get_completion_candidates(s, dir))
                 end
                 isdir(dir) || continue
-                for pname in readdir(dir)
+                for entry in _readdirx(dir)
+                    pname = entry.name
                     if pname[1] != '.' && pname != "METADATA" &&
                         pname != "REQUIRE" && startswith(pname, s)
                         # Valid file paths are
                         #   <Mod>.jl
                         #   <Mod>/src/<Mod>.jl
                         #   <Mod>.jl/src/<Mod>.jl
-                        if isfile(joinpath(dir, pname))
+                        if isfile(entry)
                             endswith(pname, ".jl") && push!(suggestions,
                                                             PackageCompletion(pname[1:prevind(pname, end-2)]))
                         else
@@ -1391,7 +1366,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                             else
                                 pname
                             end
-                            if isfile(joinpath(dir, pname, "src",
+                            if isfile(joinpath(entry, "src",
                                                "$mod_name.jl"))
                                 push!(suggestions, PackageCompletion(mod_name))
                             end

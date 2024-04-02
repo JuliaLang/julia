@@ -596,7 +596,7 @@ end
     @test @coalesce(missing) === missing
 
     @test @coalesce(1, error("failed")) === 1
-    @test_throws ErrorException @coalesce(missing, error("failed"))
+    @test_throws ErrorException("failed") @coalesce(missing, error("failed"))
 end
 
 mutable struct Obj; x; end
@@ -615,8 +615,7 @@ mutable struct Obj; x; end
 end
 
 @testset "showerror missing function" begin
-    me = try missing(1) catch e e end
-    @test sprint(showerror, me) == "MethodError: objects of type Missing are not callable"
+    @test_throws "MethodError: objects of type Missing are not callable" missing(1)
 end
 
 @testset "sort and sortperm with $(eltype(X))" for (X, P, RP) in

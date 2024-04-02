@@ -110,10 +110,11 @@ const ParserError = Internals.ParserError
 
 
 """
-    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
+    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity, inline_tables::IdSet{<:AbstractDict})
 
 Write `data` as TOML syntax to the stream `io`. If the keyword argument `sorted` is set to `true`,
-sort tables according to the function given by the keyword argument `by`.
+sort tables according to the function given by the keyword argument `by`. If the keyword argument
+`inline_tables` is given, it should be a set of tables that should be printed "inline".
 
 The following data types are supported: `AbstractDict`, `AbstractVector`, `AbstractString`, `Integer`, `AbstractFloat`, `Bool`,
 `Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats

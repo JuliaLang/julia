@@ -22,8 +22,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     argtypes = arginfo.argtypes
-    matches = find_matching_methods(𝕃ᵢ, argtypes, atype, method_table(interp),
-        InferenceParams(interp).max_union_splitting, max_methods)
+    matches = find_method_matches(interp, argtypes, atype; max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return CallMeta(Any, Any, Effects(), NoCallInfo())
@@ -255,73 +254,79 @@ struct UnionSplitMethodMatches
 end
 any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
 
-function find_matching_methods(𝕃::AbstractLattice,
-                               argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
-                               max_union_splitting::Int, max_methods::Int)
-    # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-    if 1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
-        split_argtypes = switchtupleunion(𝕃, argtypes)
-        infos = MethodMatchInfo[]
-        applicable = Any[]
-        applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
-        valid_worlds = WorldRange()
-        mts = MethodTable[]
-        fullmatches = Bool[]
-        for i in 1:length(split_argtypes)
-            arg_n = split_argtypes[i]::Vector{Any}
-            sig_n = argtypes_to_type(arg_n)
-            mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
-            mt === nothing && return FailedMethodMatch("Could not identify method table for call")
-            mt = mt::MethodTable
-            matches = findall(sig_n, method_table; limit = max_methods)
-            if matches === nothing
-                return FailedMethodMatch("For one of the union split cases, too many methods matched")
-            end
-            push!(infos, MethodMatchInfo(matches))
-            for m in matches
-                push!(applicable, m)
-                push!(applicable_argtypes, arg_n)
-            end
-            valid_worlds = intersect(valid_worlds, matches.valid_worlds)
-            thisfullmatch = any(match::MethodMatch->match.fully_covers, matches)
-            found = false
-            for (i, mt′) in enumerate(mts)
-                if mt′ === mt
-                    fullmatches[i] &= thisfullmatch
-                    found = true
-                    break
-                end
-            end
-            if !found
-                push!(mts, mt)
-                push!(fullmatches, thisfullmatch)
-            end
-        end
-        return UnionSplitMethodMatches(applicable,
-                                       applicable_argtypes,
-                                       UnionSplitInfo(infos),
-                                       valid_worlds,
-                                       mts,
-                                       fullmatches)
-    else
-        mt = ccall(:jl_method_table_for, Any, (Any,), atype)
-        if mt === nothing
-            return FailedMethodMatch("Could not identify method table for call")
-        end
-        mt = mt::MethodTable
-        matches = findall(atype, method_table; limit = max_methods)
-        if matches === nothing
-            # this means too many methods matched
-            # (assume this will always be true, so we don't compute / update valid age in this case)
-            return FailedMethodMatch("Too many methods matched")
-        end
-        fullmatch = any(match::MethodMatch->match.fully_covers, matches)
-        return MethodMatches(matches.matches,
-                             MethodMatchInfo(matches),
-                             matches.valid_worlds,
-                             mt,
-                             fullmatch)
+function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
+                             max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
+                             max_methods::Int = InferenceParams(interp).max_methods)
+    if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting)
+        return find_union_split_method_matches(interp, argtypes, atype, max_methods)
     end
+    return find_simple_method_matches(interp, atype, max_methods)
+end
+
+# NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
+is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_splitting::Int) =
+    1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
+
+function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any},
+                                         @nospecialize(atype), max_methods::Int)
+    split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes)
+    infos = MethodMatchInfo[]
+    applicable = Any[]
+    applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
+    valid_worlds = WorldRange()
+    mts = MethodTable[]
+    fullmatches = Bool[]
+    for i in 1:length(split_argtypes)
+        arg_n = split_argtypes[i]::Vector{Any}
+        sig_n = argtypes_to_type(arg_n)
+        mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
+        mt === nothing && return FailedMethodMatch("Could not identify method table for call")
+        mt = mt::MethodTable
+        matches = findall(sig_n, method_table(interp); limit = max_methods)
+        if matches === nothing
+            return FailedMethodMatch("For one of the union split cases, too many methods matched")
+        end
+        push!(infos, MethodMatchInfo(matches))
+        for m in matches
+            push!(applicable, m)
+            push!(applicable_argtypes, arg_n)
+        end
+        valid_worlds = intersect(valid_worlds, matches.valid_worlds)
+        thisfullmatch = any(match::MethodMatch->match.fully_covers, matches)
+        found = false
+        for (i, mt′) in enumerate(mts)
+            if mt′ === mt
+                fullmatches[i] &= thisfullmatch
+                found = true
+                break
+            end
+        end
+        if !found
+            push!(mts, mt)
+            push!(fullmatches, thisfullmatch)
+        end
+    end
+    info = UnionSplitInfo(infos)
+    return UnionSplitMethodMatches(
+        applicable, applicable_argtypes, info, valid_worlds, mts, fullmatches)
+end
+
+function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int)
+    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    if mt === nothing
+        return FailedMethodMatch("Could not identify method table for call")
+    end
+    mt = mt::MethodTable
+    matches = findall(atype, method_table(interp); limit = max_methods)
+    if matches === nothing
+        # this means too many methods matched
+        # (assume this will always be true, so we don't compute / update valid age in this case)
+        return FailedMethodMatch("Too many methods matched")
+    end
+    info = MethodMatchInfo(matches)
+    fullmatch = any(match::MethodMatch->match.fully_covers, matches)
+    return MethodMatches(
+        matches.matches, info, matches.valid_worlds, mt, fullmatch)
 end
 
 """
@@ -681,12 +686,16 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
-    world = get_world_counter(interp)
+    world = get_inference_world(interp)
     callee_method2 = method_for_inference_heuristics(method, sig, sparams, world) # Union{Method, Nothing}
 
     inf_method2 = method_for_inference_limit_heuristics(frame) # limit only if user token match
     inf_method2 isa Method || (inf_method2 = nothing)
     if callee_method2 !== inf_method2
+        return false
+    end
+    if isa(frame, InferenceState) && cache_owner(frame.interp) !== cache_owner(interp)
+        # Don't assume that frames in different interpreters are the same
         return false
     end
     if !hardlimit || InferenceParams(interp).ignore_recursion_hardlimit
@@ -897,7 +906,12 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Concrete eval disabled for overlayed methods")
         end
         if !any_conditional(arginfo)
-            return :semi_concrete_eval
+            if may_optimize(interp)
+                return :semi_concrete_eval
+            else
+                # disable irinterp if optimization is disabled, since it requires optimized IR
+                add_remark!(interp, sv, "[constprop] Semi-concrete interpretation disabled for non-optimizing interpreter")
+            end
         end
     end
     return :none
@@ -935,7 +949,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
         pushfirst!(args, f, invokecall.types)
         f = invoke
     end
-    world = get_world_counter(interp)
+    world = get_inference_world(interp)
     edge = result.edge::MethodInstance
     value = try
         Core._call_in_world_total(world, f, args...)
@@ -1113,12 +1127,12 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
                 if !still_nothrow || ismutabletype(arrty)
                     return false
                 end
-            elseif ⊑(𝕃ᵢ, arrty, Array)
+            elseif ⊑(𝕃ᵢ, arrty, Array) || ⊑(𝕃ᵢ, arrty, GenericMemory)
                 return false
             end
         elseif istopfunction(f, :iterate)
             itrty = argtypes[2]
-            if ⊑(𝕃ᵢ, itrty, Array)
+            if ⊑(𝕃ᵢ, itrty, Array) || ⊑(𝕃ᵢ, itrty, GenericMemory)
                 return false
             end
         end
@@ -1181,7 +1195,7 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         if isa(code, CodeInstance)
             inferred = @atomic :monotonic code.inferred
             # TODO propagate a specific `CallInfo` that conveys information about this call
-            if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL) !== nothing
+            if src_inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL)
                 return true
             end
         end
@@ -1221,45 +1235,53 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
     return nothing
 end
 
+const_prop_result(inf_result::InferenceResult) =
+    ConstCallResults(inf_result.result, inf_result.exc_result, ConstPropResult(inf_result),
+                     inf_result.ipo_effects, inf_result.linfo)
+
+# return cached constant analysis result
+return_cached_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
+    const_prop_result(inf_result)
+
 function const_prop_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
     concrete_eval_result::Union{Nothing, ConstCallResults}=nothing)
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
     inf_result = cache_lookup(𝕃ᵢ, mi, arginfo.argtypes, inf_cache)
-    if inf_result === nothing
-        # fresh constant prop'
-        argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-        inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
-        if !any(inf_result.overridden_by_const)
-            add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
-            return nothing
-        end
-        frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
-        if frame === nothing
-            add_remark!(interp, sv, "[constprop] Could not retrieve the source")
-            return nothing # this is probably a bad generated function (unsound), but just ignore it
-        end
-        frame.parent = sv
-        if !typeinf(interp, frame)
-            add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
-            return nothing
-        end
-        @assert inf_result.result !== nothing
-        if concrete_eval_result !== nothing
-            # override return type and effects with concrete evaluation result if available
-            inf_result.result = concrete_eval_result.rt
-            inf_result.ipo_effects = concrete_eval_result.effects
-        end
-    else
+    if inf_result !== nothing
         # found the cache for this constant prop'
         if inf_result.result === nothing
             add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
             return nothing
         end
+        @assert inf_result.linfo === mi "MethodInstance for cached inference result does not match"
+        return return_cached_result(interp, inf_result, sv)
     end
-    return ConstCallResults(inf_result.result, inf_result.exc_result,
-        ConstPropResult(inf_result), inf_result.ipo_effects, mi)
+    # perform fresh constant prop'
+    argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+    inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
+    if !any(inf_result.overridden_by_const)
+        add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
+        return nothing
+    end
+    frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
+    if frame === nothing
+        add_remark!(interp, sv, "[constprop] Could not retrieve the source")
+        return nothing # this is probably a bad generated function (unsound), but just ignore it
+    end
+    frame.parent = sv
+    if !typeinf(interp, frame)
+        add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
+        return nothing
+    end
+    @assert inf_result.result !== nothing
+    if concrete_eval_result !== nothing
+        # override return type and effects with concrete evaluation result if available
+        inf_result.result = concrete_eval_result.rt
+        inf_result.ipo_effects = concrete_eval_result.effects
+    end
+    return const_prop_result(inf_result)
 end
 
 # TODO implement MustAlias forwarding
@@ -1501,7 +1523,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
-    # TODO: this doesn't realize that Array, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
+    # TODO: this doesn't realize that Array, GenericMemory, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
     stateordonet === Bottom && return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, Any, call.effects, info)], true))
     valtype = statetype = Bottom
     ret = Any[]
@@ -2076,8 +2098,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_apply(interp, argtypes, si, sv, max_methods)
         elseif f === invoke
             return abstract_invoke(interp, arginfo, si, sv)
-        elseif f === modifyfield!
-            return abstract_modifyfield!(interp, argtypes, si, sv)
+        elseif f === modifyfield! || f === Core.modifyglobal! || f === Core.memoryrefmodify! || f === atomic_pointermodify
+            return abstract_modifyop!(interp, f, argtypes, si, sv)
         elseif f === Core.finalizer
             return abstract_finalizer(interp, argtypes, sv)
         elseif f === applicable
@@ -2603,7 +2625,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             effects = EFFECTS_UNKNOWN
         end
     elseif ehead === :throw_undef_if_not
-        condt = argextype(stmt.args[2], ir)
+        condt = abstract_eval_value(interp, e.args[2], vtypes, sv)
         condval = maybe_extract_const_bool(condt)
         t = Nothing
         exct = UndefVarError
@@ -2678,7 +2700,7 @@ function refine_partial_type(@nospecialize t)
         # if the first/second parameter of `NamedTuple` is known to be empty,
         # the second/first argument should also be empty tuple type,
         # so refine it here
-        return Const(NamedTuple())
+        return Const((;))
     end
     return t
 end
@@ -2709,7 +2731,8 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, vtypes::Un
         val = phi.values[i]
         # N.B.: Phi arguments are restricted to not have effects, so we can drop
         # them here safely.
-        rt = tmerge(typeinf_lattice(interp), rt, abstract_eval_special_value(interp, val, vtypes, sv).rt)
+        thisval = abstract_eval_special_value(interp, val, vtypes, sv).rt
+        rt = tmerge(typeinf_lattice(interp), rt, thisval)
     end
     return rt
 end
@@ -2723,7 +2746,14 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     if !isa(e, Expr)
         if isa(e, PhiNode)
             add_curr_ssaflag!(sv, IR_FLAGS_REMOVABLE)
-            return RTEffects(abstract_eval_phi(interp, e, vtypes, sv), Union{}, EFFECTS_TOTAL)
+            # Implement convergence for PhiNodes. In particular, PhiNodes need to tmerge over
+            # the incoming values from all iterations, but `abstract_eval_phi` will only tmerge
+            # over the first and last iterations. By tmerging in the current old_rt, we ensure that
+            # we will not lose an intermediate value.
+            rt = abstract_eval_phi(interp, e, vtypes, sv)
+            old_rt = sv.ssavaluetypes[sv.currpc]
+            rt = old_rt === NOT_FOUND ? rt : tmerge(typeinf_lattice(interp), old_rt, rt)
+            return RTEffects(rt, Union{}, EFFECTS_TOTAL)
         end
         (; rt, exct, effects) = abstract_eval_special_value(interp, e, vtypes, sv)
     else
@@ -3304,6 +3334,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
             if rt === Bottom
                 ssavaluetypes[currpc] = Bottom
+                # Special case: Bottom-typed PhiNodes do not error (but must also be unused)
+                if isa(stmt, PhiNode)
+                    continue
+                end
                 @goto find_next_bb
             end
             if changes !== nothing

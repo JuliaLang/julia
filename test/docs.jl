@@ -1465,7 +1465,7 @@ end
 end
 
 struct t_docs_abc end
-@test "t_docs_abc" in accessible(@__MODULE__)
+@test "t_docs_abc" in string.(accessible(@__MODULE__))
 
 # Call overloading issues #20087 and #44889
 """
@@ -1562,3 +1562,15 @@ Base.@ccallable c51586_long()::Int = 3
     @test_broken isempty(undoc)
     @test undoc == [Symbol("@var")]
 end
+
+# Docing the macroception macro
+macro docmacroception()
+    Expr(:toplevel, macroexpand(__module__, :(@Base.__doc__ macro docmacrofoo() 1 end); recursive=false), :(@docmacrofoo))
+end
+
+"""
+This docmacroception has a docstring
+"""
+@docmacroception()
+
+@test Docs.hasdoc(@__MODULE__, :var"@docmacrofoo")

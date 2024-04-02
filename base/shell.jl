@@ -4,7 +4,19 @@
 
 const shell_special = "#{}()[]<>|&*?~;"
 
-# strips the end but respects the space when the string ends with "\\ "
+(@doc raw"""
+    rstrip_shell(s::AbstractString)
+
+Strip trailing whitespace from a shell command string, while respecting a trailing backslash followed by a space ("\\ ").
+
+```jldoctest
+julia> Base.rstrip_shell("echo 'Hello World' \\ ")
+"echo 'Hello World' \\ "
+
+julia> Base.rstrip_shell("echo 'Hello World'    ")
+"echo 'Hello World'"
+```
+"""
 function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
@@ -14,7 +26,7 @@ function rstrip_shell(s::AbstractString)
         c_old = c
     end
     SubString(s, 1, 0)
-end
+end)
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="", filename="none")
@@ -140,6 +152,21 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     return ex, last_arg
 end
 
+"""
+    shell_split(command::AbstractString)
+
+Split a shell command string into its individual components.
+
+# Examples
+```jldoctest
+julia> Base.shell_split("git commit -m 'Initial commit'")
+4-element Vector{String}:
+ "git"
+ "commit"
+ "-m"
+ "Initial commit"
+```
+"""
 function shell_split(s::AbstractString)
     parsed = shell_parse(s, false)[1]
     args = String[]
@@ -389,7 +416,7 @@ rather than returned as a string.
 
 See also [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> Base.shell_escape_wincmd("a^\\"^o\\"^u\\"")
 "a^^\\"^o\\"^^u^\\""

@@ -6,8 +6,7 @@ import ..REPL
 using REPL: AbstractREPL, Options
 
 using ..Terminals
-import ..Terminals: raw!, width, height, cmove, getX,
-                       getY, clear_line, beep
+import ..Terminals: raw!, width, height, clear_line, beep
 
 import Base: ensureroom, show, AnyDict, position
 using Base: something
@@ -480,14 +479,12 @@ prompt_string(f::Function) = Base.invokelatest(f)
 function maybe_show_hint(s::PromptState)
     isa(s.hint, String) || return nothing
     # The hint being "" then nothing is used to first clear a previous hint, then skip printing the hint
-    # the clear line cannot be printed each time because it breaks column movement
     if isempty(s.hint)
-        print(terminal(s), "\e[0K") # clear remainder of line which had a hint
         s.hint = nothing
     else
         Base.printstyled(terminal(s), s.hint, color=:light_black)
         cmove_left(terminal(s), textwidth(s.hint))
-        s.hint = "" # being "" signals to do one clear line remainder to clear the hint next time if still empty
+        s.hint = "" # being "" signals to do one clear line remainder to clear the hint next time the screen is refreshed
     end
     return nothing
 end
@@ -497,8 +494,13 @@ function refresh_multi_line(s::PromptState; kw...)
         close(s.refresh_wait)
         s.refresh_wait = nothing
     end
+    if s.hint isa String
+        # clear remainder of line which is unknown here if it had a hint before unbeknownst to refresh_multi_line
+        # the clear line cannot be printed each time because it would break column movement
+        print(terminal(s), "\e[0K")
+    end
     r = refresh_multi_line(terminal(s), s; kw...)
-    maybe_show_hint(s)
+    maybe_show_hint(s) # now maybe write the hint back to the screen
     return r
 end
 refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
@@ -813,9 +815,9 @@ end
 # returns the removed portion as a String
 function edit_splice!(s::BufferLike, r::Region=region(s), ins::String = ""; rigid_mark::Bool=true)
     A, B = first(r), last(r)
-    A >= B && isempty(ins) && return String(ins)
+    A >= B && isempty(ins) && return ins
     buf = buffer(s)
-    pos = position(buf)
+    pos = position(buf) # n.b. position(), etc, are 0-indexed
     adjust_pos = true
     if A <= pos < B
         seek(buf, A)
@@ -824,18 +826,29 @@ function edit_splice!(s::BufferLike, r::Region=region(s), ins::String = ""; rigi
     else
         adjust_pos = false
     end
-    if A < buf.mark  < B || A == buf.mark == B
-        # rigid_mark is used only if the mark is strictly "inside"
-        # the region, or the region is empty and the mark is at the boundary
-        buf.mark = rigid_mark ? A : A + sizeof(ins)
-    elseif buf.mark >= B
-        buf.mark += sizeof(ins) - B + A
+    mark = buf.mark
+    if mark != -1
+        if A < mark < B || A == mark == B
+            # rigid_mark is used only if the mark is strictly "inside"
+            # the region, or the region is empty and the mark is at the boundary
+            mark = rigid_mark ? A : A + sizeof(ins)
+        elseif mark >= B
+            mark += sizeof(ins) - B + A
+        end
+        buf.mark = -1
     end
-    ensureroom(buf, B) # handle !buf.reinit from take!
-    ret = splice!(buf.data, A+1:B, codeunits(String(ins))) # position(), etc, are 0-indexed
-    buf.size = buf.size + sizeof(ins) - B + A
-    adjust_pos && seek(buf, position(buf) + sizeof(ins))
-    return String(copy(ret))
+    # Implement ret = splice!(buf.data, A+1:B, codeunits(ins)) for a stream
+    pos = position(buf)
+    seek(buf, A)
+    ret = read(buf, A >= B ? 0 : B - A)
+    trail = read(buf)
+    seek(buf, A)
+    write(buf, ins)
+    write(buf, trail)
+    truncate(buf, position(buf))
+    seek(buf, pos + (adjust_pos ? sizeof(ins) : 0))
+    buf.mark = mark
+    return String(ret)
 end
 
 edit_splice!(s::MIState, ins::AbstractString) = edit_splice!(s, region(s), ins)

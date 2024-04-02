@@ -33,9 +33,6 @@ macro gensym(names...)
     return blk
 end
 
-## line numbers ##
-convert(::Type{LineNumberNode}, lin::Core.LineInfoNode) = LineNumberNode(Int(lin.line), lin.file)
-
 ## expressions ##
 
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
@@ -79,10 +76,8 @@ function copy(c::CodeInfo)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
     if cnew.slottypes !== nothing
-        cnew.slottypes = copy(cnew.slottypes)
+        cnew.slottypes = copy(cnew.slottypes::Vector{Any})
     end
-    cnew.codelocs  = copy(cnew.codelocs)
-    cnew.linetable = copy(cnew.linetable::Union{Vector{Any},Vector{Core.LineInfoNode}})
     cnew.ssaflags  = copy(cnew.ssaflags)
     cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges::Vector)
     ssavaluetypes  = cnew.ssavaluetypes
@@ -831,7 +826,7 @@ end
 Tells the compiler to infer `f` using the declared types of `@nospecialize`d arguments.
 This can be used to limit the number of compiler-generated specializations during inference.
 
-# Example
+# Examples
 
 ```julia
 julia> f(A::AbstractArray) = g(A)
@@ -1016,17 +1011,11 @@ function remove_linenums!(@nospecialize ex)
         for subex in ex.args
             subex isa Expr && remove_linenums!(subex)
         end
-        return ex
     elseif ex isa CodeInfo
-        ex.codelocs .= 0
-        length(ex.linetable) > 1 && resize!(ex.linetable, 1)
-        return ex
-    else
-        return ex
+        ex.debuginfo = Core.DebugInfo(ex.debuginfo.def) # TODO: filter partially, but keep edges
     end
+    return ex
 end
-
-public remove_linenums!
 
 replace_linenums!(ex, ln::LineNumberNode) = ex
 function replace_linenums!(ex::Expr, ln::LineNumberNode)
@@ -1332,4 +1321,61 @@ function make_atomicreplace(success_order, fail_order, ex, old_new)
         old_new = esc(old_new)
         return :(replaceproperty!($ll, $lr, $old_new::Pair..., $success_order, $fail_order))
     end
+end
+
+"""
+    @atomiconce a.b.x = value
+    @atomiconce :sequentially_consistent a.b.x = value
+    @atomiconce :sequentially_consistent :monotonic a.b.x = value
+
+Perform the conditional assignment of value atomically if it was previously
+unset, returning the value `success::Bool`. Where `success` indicates whether
+the assignment was completed.
+
+This operation translates to a `setpropertyonce!(a.b, :x, value)` call.
+
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
+
+# Examples
+```jldoctest
+julia> mutable struct AtomicOnce
+           @atomic x
+           AtomicOnce() = new()
+       end
+
+julia> a = AtomicOnce()
+AtomicOnce(#undef)
+
+julia> @atomiconce a.x = 1 # set field x of a to 1, if unset, with sequential consistency
+true
+
+julia> @atomic a.x # fetch field x of a, with sequential consistency
+1
+
+julia> @atomiconce a.x = 1 # set field x of a to 1, if unset, with sequential consistency
+false
+```
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
+macro atomiconce(success_order, fail_order, ex)
+    fail_order isa QuoteNode || (fail_order = esc(fail_order))
+    success_order isa QuoteNode || (success_order = esc(success_order))
+    return make_atomiconce(success_order, fail_order, ex)
+end
+macro atomiconce(order, ex)
+    order isa QuoteNode || (order = esc(order))
+    return make_atomiconce(order, order, ex)
+end
+macro atomiconce(ex)
+    return make_atomiconce(QuoteNode(:sequentially_consistent), QuoteNode(:sequentially_consistent), ex)
+end
+function make_atomiconce(success_order, fail_order, ex)
+    @nospecialize
+    is_expr(ex, :(=), 2) || error("@atomiconce expression missing assignment")
+    l, val = ex.args[1], esc(ex.args[2])
+    is_expr(l, :., 2) || error("@atomiconce expression missing field access")
+    ll, lr = esc(l.args[1]), esc(l.args[2])
+    return :(setpropertyonce!($ll, $lr, $val, $success_order, $fail_order))
 end

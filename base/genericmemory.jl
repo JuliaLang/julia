@@ -3,17 +3,35 @@
 ## genericmemory.jl: Managed Memory
 
 """
-    GenericMemory{kind::Symbol, T, addrspace::Int} <: AbstractVector{T}
+    GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: AbstractVector{T}
 
 One-dimensional dense array with elements of type `T`.
+
+!!! compat "Julia 1.11"
+    This type requires Julia 1.11 or later.
 """
 GenericMemory
+
 """
     Memory{T} == GenericMemory{:not_atomic, T, Core.CPU}
 
 One-dimensional dense array with elements of type `T`.
+
+!!! compat "Julia 1.11"
+    This type requires Julia 1.11 or later.
 """
 Memory
+
+"""
+    AtomicMemory{T} == GenericMemory{:atomic, T, Core.CPU}
+
+One-dimensional dense array with elements of type `T`, where each element is
+independently atomic when accessed, and cannot be set non-atomically.
+
+!!! compat "Julia 1.11"
+    This type requires Julia 1.11 or later.
+"""
+AtomicMemory
 
 ## Basic functions ##
 
@@ -23,7 +41,7 @@ size(a::GenericMemory, d::Int) =
     d < 1 ? error("dimension out of range") :
     d == 1 ? length(a) :
     1
-size(a::GenericMemory, d::Integer) =  size(a, convert(d, Int))
+size(a::GenericMemory, d::Integer) =  size(a, convert(Int, d))
 size(a::GenericMemory) = (length(a),)
 
 IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
@@ -48,6 +66,7 @@ function _unsetindex!(A::MemoryRef{T}) where T
     elseif arrayelem != isunion
         if !datatype_pointerfree(T::DataType)
             for j = 1:Core.sizeof(Ptr{Cvoid}):elsz
+                # XXX: this violates memory ordering, since it writes more than one C_NULL to each
                 Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
             end
         end
@@ -56,17 +75,17 @@ function _unsetindex!(A::MemoryRef{T}) where T
     return A
 end
 
-elsize(@nospecialize _::Type{A}) where {T,A<:GenericMemory{<:Any,T}} = aligned_sizeof(T)
+elsize(@nospecialize _::Type{A}) where {T,A<:GenericMemory{<:Any,T}} = aligned_sizeof(T) # XXX: probably supposed to be the stride?
 sizeof(a::GenericMemory) = Core.sizeof(a)
 
 # multi arg case will be overwritten later. This is needed for bootstrapping
-function isassigned(a::Memory, i::Int)
+function isassigned(a::GenericMemory, i::Int)
     @inline
     @boundscheck (i - 1)%UInt < length(a)%UInt || return false
-    return @inbounds memoryref_isassigned(GenericMemoryRef(a, i), :not_atomic, false)
+    return @inbounds memoryref_isassigned(GenericMemoryRef(a, i), default_access_order(a), false)
 end
 
-isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, :not_atomic, @_boundscheck)
+isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, default_access_order(a), @_boundscheck)
 
 ## copy ##
 function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
@@ -128,11 +147,16 @@ end
 
 ## Constructors ##
 
-similar(a::Memory{T}) where {T}                   = Memory{T}(undef, length(a))
-similar(a::Memory{T}, S::Type) where {T}          = Memory{S}(undef, length(a))
-similar(a::Memory{T}, m::Int) where {T}           = Memory{T}(undef, m)
-similar(a::Memory, T::Type, dims::Dims{1})        = Memory{T}(undef, dims[1])
-similar(a::Memory{T}, dims::Dims{1}) where {T}    = Memory{T}(undef, dims[1])
+similar(a::GenericMemory) =
+    typeof(a)(undef, length(a))
+similar(a::GenericMemory{kind,<:Any,AS}, T::Type) where {kind,AS} =
+    GenericMemory{kind,T,AS}(undef, length(a))
+similar(a::GenericMemory, m::Int) =
+    typeof(a)(undef, m)
+similar(a::GenericMemory{kind,<:Any,AS}, T::Type, dims::Dims{1}) where {kind,AS} =
+    GenericMemory{kind,T,AS}(undef, dims[1])
+similar(a::GenericMemory, dims::Dims{1}) =
+    typeof(a)(undef, dims[1])
 
 function fill!(a::Union{Memory{UInt8}, Memory{Int8}}, x::Integer)
     t = @_gc_preserve_begin a
@@ -145,10 +169,9 @@ end
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:GenericMemory} = a isa T ? a : T(a)::T
+convert(::Type{T}, a::AbstractArray) where {T<:Memory} = a isa T ? a : T(a)::T
 
 promote_rule(a::Type{Memory{T}}, b::Type{Memory{S}}) where {T,S} = el_same(promote_type(T,S), a, b)
-promote_rule(a::Type{GenericMemory{:atomic,T,Core.CPU}}, b::Type{GenericMemory{:atomic,S,Core.CPU}}) where {T,S} = el_same(promote_type(T,S), a, b)
 
 ## Constructors ##
 

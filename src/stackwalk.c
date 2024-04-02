@@ -652,6 +652,80 @@ void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
     free(frames);
 }
 
+const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
+{
+    jl_value_t *def = debuginfo->def;
+    if (jl_is_method_instance(def))
+        def = ((jl_method_instance_t*)def)->def.value;
+    if (jl_is_method(def))
+        def = (jl_value_t*)((jl_method_t*)def)->file;
+    if (jl_is_symbol(def))
+        return jl_symbol_name((jl_sym_t*)def);
+    return "<unknown>";
+}
+
+const char *jl_debuginfo_file(jl_debuginfo_t *debuginfo)
+{
+    jl_debuginfo_t *linetable = debuginfo->linetable;
+    while ((jl_value_t*)linetable != jl_nothing) {
+        debuginfo = linetable;
+        linetable = debuginfo->linetable;
+    }
+    return jl_debuginfo_file1(debuginfo);
+}
+
+jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def)
+{
+    if (jl_is_method_instance(debuginfo_def))
+        debuginfo_def = ((jl_method_instance_t*)debuginfo_def)->def.value;
+    if (jl_is_method(debuginfo_def))
+        debuginfo_def = (jl_value_t*)((jl_method_t*)debuginfo_def)->module;
+    if (jl_is_module(debuginfo_def))
+        return (jl_module_t*)debuginfo_def;
+    return NULL;
+}
+
+const char *jl_debuginfo_name(jl_value_t *func)
+{
+    if (func == NULL)
+        return "macro expansion";
+    if (jl_is_method_instance(func))
+        func = ((jl_method_instance_t*)func)->def.value;
+    if (jl_is_method(func))
+        func = (jl_value_t*)((jl_method_t*)func)->name;
+    if (jl_is_symbol(func))
+        return jl_symbol_name((jl_sym_t*)func);
+    if (jl_is_module(func))
+        return "top-level scope";
+    return "<unknown>";
+}
+
+// func == module : top-level
+// func == NULL : macro expansion
+static void jl_print_debugloc(jl_debuginfo_t *debuginfo, jl_value_t *func, size_t ip, int inlined) JL_NOTSAFEPOINT
+{
+    if (!jl_is_symbol(debuginfo->def)) // this is a path or
+        func = debuginfo->def; // this is inlined code
+    struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo->codelocs, ip);
+    intptr_t edges_idx = stmt.to;
+    if (edges_idx) {
+        jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, edges_idx - 1);
+        assert(jl_typetagis(edge, jl_debuginfo_type));
+        jl_print_debugloc(edge, NULL, stmt.pc, 1);
+    }
+    intptr_t ip2 = stmt.line;
+    if (ip2 >= 0 && ip > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
+        jl_print_debugloc(debuginfo->linetable, func, ip2, 0);
+    }
+    else {
+        if (ip2 < 0) // set broken debug info to ignored
+            ip2 = 0;
+        const char *func_name = jl_debuginfo_name(func);
+        const char *file = jl_debuginfo_file(debuginfo);
+        jl_safe_print_codeloc(func_name, file, ip2, inlined);
+    }
+}
+
 // Print code location for backtrace buffer entry at *bt_entry
 void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
 {
@@ -659,33 +733,18 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         jl_print_native_codeloc(bt_entry[0].uintptr);
     }
     else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
-        size_t ip = jl_bt_entry_header(bt_entry);
+        size_t ip = jl_bt_entry_header(bt_entry); // zero-indexed
         jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
+        jl_value_t *def = (jl_value_t*)jl_core_module; // just used as a token here that isa Module
         if (jl_is_method_instance(code)) {
+            def = code;
             // When interpreting a method instance, need to unwrap to find the code info
             code = jl_atomic_load_relaxed(&((jl_method_instance_t*)code)->uninferred);
         }
         if (jl_is_code_info(code)) {
             jl_code_info_t *src = (jl_code_info_t*)code;
             // See also the debug info handling in codegen.cpp.
-            // NB: debuginfoloc is 1-based!
-            intptr_t debuginfoloc = jl_array_data(src->codelocs, int32_t)[ip];
-            while (debuginfoloc != 0) {
-                jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
-                    jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
-                assert(jl_typetagis(locinfo, jl_lineinfonode_type));
-                const char *func_name = "Unknown";
-                jl_value_t *method = locinfo->method;
-                if (jl_is_method_instance(method))
-                    method = ((jl_method_instance_t*)method)->def.value;
-                if (jl_is_method(method))
-                    method = (jl_value_t*)((jl_method_t*)method)->name;
-                if (jl_is_symbol(method))
-                    func_name = jl_symbol_name((jl_sym_t*)method);
-                jl_safe_print_codeloc(func_name, jl_symbol_name(locinfo->file),
-                                      locinfo->line, locinfo->inlined_at);
-                debuginfoloc = locinfo->inlined_at;
-            }
+            jl_print_debugloc(src->debuginfo, def, ip + 1, 0);
         }
         else {
             // If we're using this function something bad has already happened;
@@ -1087,8 +1146,6 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
       (void)c;
      #endif
-#elif defined(JL_HAVE_ASYNCIFY)
-     #pragma message("jl_rec_backtrace not defined for ASYNCIFY")
 #elif defined(JL_HAVE_SIGALTSTACK)
      #pragma message("jl_rec_backtrace not defined for SIGALTSTACK")
 #else

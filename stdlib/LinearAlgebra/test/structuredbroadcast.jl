@@ -59,6 +59,43 @@ using Test, LinearAlgebra
             @test broadcast!(*, Z, X, Y) == broadcast(*, fX, fY)
         end
     end
+    UU = UnitUpperTriangular(rand(N,N))
+    UL = UnitLowerTriangular(rand(N,N))
+    unittriangulars = (UU, UL)
+    Ttris = typeof.((UpperTriangular(parent(UU)), LowerTriangular(parent(UU))))
+    funittriangulars = map(Array, unittriangulars)
+    for (X, fX, Ttri) in zip(unittriangulars, funittriangulars, Ttris)
+        @test (Q = broadcast(sin, X); typeof(Q) == Ttri && Q == broadcast(sin, fX))
+        @test broadcast!(sin, Z, X) == broadcast(sin, fX)
+        @test (Q = broadcast(cos, X); Q isa Matrix && Q == broadcast(cos, fX))
+        @test broadcast!(cos, Z, X) == broadcast(cos, fX)
+        @test (Q = broadcast(*, s, X); typeof(Q) == Ttri && Q == broadcast(*, s, fX))
+        @test broadcast!(*, Z, s, X) == broadcast(*, s, fX)
+        @test (Q = broadcast(+, fV, fA, X); Q isa Matrix && Q == broadcast(+, fV, fA, fX))
+        @test broadcast!(+, Z, fV, fA, X) == broadcast(+, fV, fA, fX)
+        @test (Q = broadcast(*, s, fV, fA, X); Q isa Matrix && Q == broadcast(*, s, fV, fA, fX))
+        @test broadcast!(*, Z, s, fV, fA, X) == broadcast(*, s, fV, fA, fX)
+
+        @test X .* 2.0 == X .* (2.0,) == fX .* 2.0
+        @test X .* 2.0 isa Ttri
+        @test X .* (2.0,) isa Ttri
+        @test isequal(X .* Inf, fX .* Inf)
+
+        two = 2
+        @test X .^ 2 ==  X .^ (2,) == fX .^ 2 == X .^ two
+        @test X .^ 2 isa typeof(X) # special cased, as isstructurepreserving
+        @test X .^ (2,) isa Ttri
+        @test X .^ two isa Ttri
+        @test X .^ 0 == fX .^ 0
+        @test X .^ -1 == fX .^ -1
+
+        for (Y, fY) in zip(unittriangulars, funittriangulars)
+            @test broadcast(+, X, Y) == broadcast(+, fX, fY)
+            @test broadcast!(+, Z, X, Y) == broadcast(+, fX, fY)
+            @test broadcast(*, X, Y) == broadcast(*, fX, fY)
+            @test broadcast!(*, Z, X, Y) == broadcast(*, fX, fY)
+        end
+    end
 end
 
 @testset "broadcast! where the destination is a structured matrix" begin
@@ -142,6 +179,11 @@ end
             @test map!(*, Z, X, Y) == broadcast(*, fX, fY)
         end
     end
+    # these would be valid for broadcast, but not for map
+    @test_throws DimensionMismatch map(+, D, Diagonal(rand(1)))
+    @test_throws DimensionMismatch map(+, D, Diagonal(rand(1)), D)
+    @test_throws DimensionMismatch map(+, D, D, Diagonal(rand(1)))
+    @test_throws DimensionMismatch map(+, Diagonal(rand(1)), D, D)
 end
 
 @testset "Issue #33397" begin

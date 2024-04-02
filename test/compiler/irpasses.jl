@@ -29,7 +29,7 @@ let code = Any[
         ReturnNode(Core.SSAValue(10)),
     ]
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.stmt[3]
@@ -47,7 +47,7 @@ let code = Any[]
     push!(code, Expr(:call, :opaque))
     push!(code, ReturnNode(nothing))
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end
@@ -804,7 +804,7 @@ function each_stmt_a_bb(stmts, preds, succs)
     append!(ir.stmts.stmt, stmts)
     empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
     empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
-    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
+    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:3length(stmts)])
     empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
     empty!(ir.cfg.blocks); append!(ir.cfg.blocks, [BasicBlock(StmtRange(i, i), preds[i], succs[i]) for i = 1:length(stmts)])
     empty!(ir.cfg.index);  append!(ir.cfg.index,  [i for i = 2:length(stmts)])
@@ -1386,15 +1386,21 @@ end
 # ifelse folding
 @test Core.Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
 @test !Core.Compiler.is_inlineable(code_typed1(exp, (Float64,)))
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))
 end
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(true, x, exp(x)) # the optimization should be applied to post-inlining IR too
 end
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(isa(x, Float64), x, exp(x))
 end
+func_coreifelse(c, x) = Core.ifelse(c, x, x)
+func_ifelse(c, x) = ifelse(c, x, x)
+@test fully_eliminated(func_coreifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_coreifelse, (Any,Float64))
+@test fully_eliminated(func_ifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_ifelse, (Any,Float64))
 
 # PhiC fixup of compact! with cfg modification
 @inline function big_dead_throw_catch()
@@ -1781,3 +1787,36 @@ let code = Any[
     @test !any(iscall((ir, getfield)), ir.stmts.stmt)
     @test length(ir.cfg.blocks[end].stmts) == 1
 end
+
+# https://github.com/JuliaLang/julia/issues/47065
+# `Core.Compiler.sort!` should be able to handle a big list
+let n = 1000
+    ex = :(return 1)
+    for _ in 1:n
+        ex = :(rand() < .1 && $(ex))
+    end
+    @eval global function f_1000_blocks()
+        $ex
+        return 0
+    end
+end
+@test f_1000_blocks() == 0
+
+# https://github.com/JuliaLang/julia/issues/53521
+# Incorrect scope counting in :leave
+using Base.ScopedValues
+function f53521()
+    VALUE = ScopedValue(1)
+    @with VALUE => 2 begin
+        for i = 1
+            @with VALUE => 3 begin
+                try
+                    foo()
+                catch
+                    nothing
+                end
+            end
+        end
+    end
+end
+@test code_typed(f53521)[1][2] === Nothing

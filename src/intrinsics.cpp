@@ -17,6 +17,7 @@ STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
 STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
 STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
 STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
+STATISTIC(Emitted_pointerarith, "Number of pointer arithmetic calls emitted");
 STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
 STATISTIC(Emitted_atomic_pointerref, "Number of atomic_pointerref calls emitted");
 STATISTIC(Emitted_atomic_pointerop, "Number of atomic_pointerop calls emitted");
@@ -535,7 +536,7 @@ static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
     return NULL;
 }
 
-static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs)
+static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayRef<jl_cgval_t> argv, size_t nargs)
 {
     Function *func = prepare_call(runtime_func()[f]);
     SmallVector<Value *, 0> argvalues(nargs);
@@ -547,7 +548,7 @@ static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const 
 }
 
 // put a bits type tag on some value (despite the name, this doesn't necessarily actually change anything about the value however)
-static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
+static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     // Give the arguments names //
     const jl_cgval_t &bt_value = argv[0];
@@ -625,10 +626,14 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
             vx = ctx.builder.CreateZExt(vx, llvmt);
         } else if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
             vx = ctx.builder.CreatePtrToInt(vx, llvmt);
-            setName(ctx.emission_context, vx, "bitcast_coercion");
+            if (isa<Instruction>(vx) && !vx->hasName())
+                // CreatePtrToInt may undo an IntToPtr
+                setName(ctx.emission_context, vx, "bitcast_coercion");
         } else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
             vx = emit_inttoptr(ctx, vx, llvmt);
-            setName(ctx.emission_context, vx, "bitcast_coercion");
+            if (isa<Instruction>(vx) && !vx->hasName())
+                // emit_inttoptr may undo an PtrToInt
+                setName(ctx.emission_context, vx, "bitcast_coercion");
         } else {
             vx = emit_bitcast(ctx, vx, llvmt);
             setName(ctx.emission_context, vx, "bitcast_coercion");
@@ -650,7 +655,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
 static jl_cgval_t generic_cast(
         jl_codectx_t &ctx,
         intrinsic f, Instruction::CastOps Op,
-        const jl_cgval_t *argv, bool toint, bool fromint)
+        ArrayRef<jl_cgval_t> argv, bool toint, bool fromint)
 {
     auto &TT = ctx.emission_context.TargetTriple;
     auto &DL = ctx.emission_context.DL;
@@ -707,12 +712,12 @@ static jl_cgval_t generic_cast(
     }
 }
 
-static jl_cgval_t emit_runtime_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
+static jl_cgval_t emit_runtime_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     return emit_runtime_call(ctx, pointerref, argv, 3);
 }
 
-static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
+static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &i = argv[1];
@@ -741,7 +746,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 
     if (ety == (jl_value_t*)jl_any_type) {
         Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e, e.typ);
-        setName(ctx.emission_context, thePtr, "unbox_any_ptr");
+        if (isa<Instruction>(thePtr) && !thePtr->hasName())
+            setName(ctx.emission_context, thePtr, "unbox_any_ptr");
         LoadInst *load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, thePtr, im1), Align(align_nb));
         setName(ctx.emission_context, load, "any_unbox");
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
@@ -769,7 +775,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            auto load = typed_load(ctx, thePtr, im1, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, false, align_nb);
+            thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
+            auto load = typed_load(ctx, thePtr, nullptr, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, false, align_nb);
             setName(ctx.emission_context, load.V, "pointerref");
             return load;
         }
@@ -779,13 +786,13 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     }
 }
 
-static jl_cgval_t emit_runtime_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
+static jl_cgval_t emit_runtime_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     return emit_runtime_call(ctx, pointerset, argv, 4);
 }
 
 // e[i] = x
-static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
+static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &x = argv[1];
@@ -844,14 +851,43 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            typed_store(ctx, thePtr, im1, x, jl_cgval_t(), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
-                        AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, false, true, false, false, false, false, nullptr, "");
+            thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
+            typed_store(ctx, thePtr, x, jl_cgval_t(), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
+                        AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, nullptr, true, false, false, false, false, false, nullptr, "atomic_pointerset", nullptr, nullptr);
         }
     }
     return e;
 }
 
-static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, jl_cgval_t *argv)
+// ptr + offset
+// ptr - offset
+static jl_cgval_t emit_pointerarith(jl_codectx_t &ctx, intrinsic f,
+                                    ArrayRef<jl_cgval_t> argv)
+{
+    jl_value_t *ptrtyp = argv[0].typ;
+    jl_value_t *offtyp = argv[1].typ;
+    if (!jl_is_cpointer_type(ptrtyp) || offtyp != (jl_value_t *)jl_ulong_type)
+        return emit_runtime_call(ctx, f, argv, argv.size());
+    assert(f == add_ptr || f == sub_ptr);
+
+    Value *ptr = emit_unbox(ctx, ctx.types().T_ptr, argv[0], ptrtyp);
+    Value *off = emit_unbox(ctx, ctx.types().T_size, argv[1], offtyp);
+    if (f == sub_ptr)
+        off = ctx.builder.CreateNeg(off);
+    Value *ans = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), ptr, off);
+
+    if (jl_is_concrete_type(ptrtyp)) {
+        return mark_julia_type(ctx, ans, false, ptrtyp);
+    }
+    else {
+        Value *box = emit_allocobj(ctx, (jl_datatype_t *)ptrtyp, true);
+        setName(ctx.emission_context, box, "ptr_box");
+        init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
+        return mark_julia_type(ctx, box, true, (jl_datatype_t *)ptrtyp);
+    }
+}
+
+static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     const jl_cgval_t &ord = argv[0];
     if (ord.constant && jl_is_symbol(ord.constant)) {
@@ -867,7 +903,7 @@ static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, jl_cgval_t *argv)
     return emit_runtime_call(ctx, atomic_fence, argv, 1);
 }
 
-static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
+static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &ord = argv[1];
@@ -945,7 +981,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 // e[i] <= x (swap)
 // e[i] y => x (replace)
 // x(e[i], y) (modify)
-static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl_cgval_t *argv, int nargs, const jl_cgval_t *modifyop)
+static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef<jl_cgval_t> argv, int nargs, const jl_cgval_t *modifyop)
 {
     bool issetfield = f == atomic_pointerset;
     bool isreplacefield = f == atomic_pointerreplace;
@@ -982,8 +1018,8 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         // n.b.: the expected value (y) must be rooted, but not the others
         Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e, e.typ);
         bool isboxed = true;
-        jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
-                    llvm_order, llvm_failorder, sizeof(jl_value_t*), false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, modifyop, "atomic_pointermodify");
+        jl_cgval_t ret = typed_store(ctx, thePtr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
+                    llvm_order, llvm_failorder, sizeof(jl_value_t*), nullptr, issetfield, isreplacefield, isswapfield, ismodifyfield, false, false, modifyop, "atomic_pointermodify", nullptr, nullptr);
         if (issetfield)
             ret = e;
         return ret;
@@ -1021,8 +1057,8 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
             thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
         else
             thePtr = nullptr; // could use any value here, since typed_store will not use it
-        jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
-                    llvm_order, llvm_failorder, nb, false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, modifyop, "atomic_pointermodify");
+        jl_cgval_t ret = typed_store(ctx, thePtr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
+                    llvm_order, llvm_failorder, nb, nullptr, issetfield, isreplacefield, isswapfield, ismodifyfield, false, false, modifyop, "atomic_pointermodify", nullptr, nullptr);
         if (issetfield)
             ret = e;
         return ret;
@@ -1082,7 +1118,7 @@ struct math_builder {
     }
 };
 
-static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **argvalues, size_t nargs,
+static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Value*> argvalues, size_t nargs,
                                      jl_datatype_t **newtyp, jl_value_t *xtyp);
 
 
@@ -1263,72 +1299,79 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     case pointerref:
         ++Emitted_pointerref;
         assert(nargs == 3);
-        return emit_pointerref(ctx, argv.data());
+        return emit_pointerref(ctx, argv);
     case pointerset:
         ++Emitted_pointerset;
         assert(nargs == 4);
-        return emit_pointerset(ctx, argv.data());
+        return emit_pointerset(ctx, argv);
+
+    case add_ptr:
+    case sub_ptr:
+        ++Emitted_pointerarith;
+        assert(nargs == 2);
+        return emit_pointerarith(ctx, f, argv);
+
     case atomic_fence:
         ++Emitted_atomic_fence;
         assert(nargs == 1);
-        return emit_atomicfence(ctx, argv.data());
+        return emit_atomicfence(ctx, argv);
     case atomic_pointerref:
         ++Emitted_atomic_pointerref;
         assert(nargs == 2);
-        return emit_atomic_pointerref(ctx, argv.data());
+        return emit_atomic_pointerref(ctx, argv);
     case atomic_pointerset:
     case atomic_pointerswap:
     case atomic_pointermodify:
     case atomic_pointerreplace:
         ++Emitted_atomic_pointerop;
-        return emit_atomic_pointerop(ctx, f, argv.data(), nargs, nullptr);
+        return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
     case bitcast:
         ++Emitted_bitcast;
         assert(nargs == 2);
-        return generic_bitcast(ctx, argv.data());
+        return generic_bitcast(ctx, argv);
     case trunc_int:
         ++Emitted_trunc_int;
         assert(nargs == 2);
-        return generic_cast(ctx, f, Instruction::Trunc, argv.data(), true, true);
+        return generic_cast(ctx, f, Instruction::Trunc, argv, true, true);
     case sext_int:
         ++Emitted_sext_int;
         assert(nargs == 2);
-        return generic_cast(ctx, f, Instruction::SExt, argv.data(), true, true);
+        return generic_cast(ctx, f, Instruction::SExt, argv, true, true);
     case zext_int:
         ++Emitted_zext_int;
         assert(nargs == 2);
-        return generic_cast(ctx, f, Instruction::ZExt, argv.data(), true, true);
+        return generic_cast(ctx, f, Instruction::ZExt, argv, true, true);
     case uitofp:
         ++Emitted_uitofp;
         assert(nargs == 2);
-        return generic_cast(ctx, f, Instruction::UIToFP, argv.data(), false, true);
+        return generic_cast(ctx, f, Instruction::UIToFP, argv, false, true);
     case sitofp:
         ++Emitted_sitofp;
         assert(nargs == 2);
-        return generic_cast(ctx, f, Instruction::SIToFP, argv.data(), false, true);
+        return generic_cast(ctx, f, Instruction::SIToFP, argv, false, true);
     case fptoui:
         ++Emitted_fptoui;
         assert(nargs == 2);
-        return generic_cast(ctx, f, Instruction::FPToUI, argv.data(), true, false);
+        return generic_cast(ctx, f, Instruction::FPToUI, argv, true, false);
     case fptosi:
         ++Emitted_fptosi;
         assert(nargs == 2);
-        return generic_cast(ctx, f, Instruction::FPToSI, argv.data(), true, false);
+        return generic_cast(ctx, f, Instruction::FPToSI, argv, true, false);
     case fptrunc:
         ++Emitted_fptrunc;
         assert(nargs == 2);
-        return generic_cast(ctx, f, Instruction::FPTrunc, argv.data(), false, false);
+        return generic_cast(ctx, f, Instruction::FPTrunc, argv, false, false);
     case fpext:
         ++Emitted_fpext;
         assert(nargs == 2);
-        return generic_cast(ctx, f, Instruction::FPExt, argv.data(), false, false);
+        return generic_cast(ctx, f, Instruction::FPExt, argv, false, false);
 
     case not_int: {
         ++Emitted_not_int;
         assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         if (!jl_is_primitivetype(x.typ))
-            return emit_runtime_call(ctx, f, argv.data(), nargs);
+            return emit_runtime_call(ctx, f, argv, nargs);
         Type *xt = INTT(bitstype_to_llvm(x.typ, ctx.builder.getContext(), true), DL);
         Value *from = emit_unbox(ctx, xt, x, x.typ);
         Value *ans = ctx.builder.CreateNot(from);
@@ -1340,7 +1383,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         if (!x.constant || !jl_is_datatype(x.constant))
-            return emit_runtime_call(ctx, f, argv.data(), nargs);
+            return emit_runtime_call(ctx, f, argv, nargs);
         jl_datatype_t *dt = (jl_datatype_t*) x.constant;
 
         // select the appropriated overloaded intrinsic
@@ -1350,7 +1393,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         else if (dt == jl_float64_type)
             intr_name += "f64";
         else
-            return emit_runtime_call(ctx, f, argv.data(), nargs);
+            return emit_runtime_call(ctx, f, argv, nargs);
 
         FunctionCallee intr = jl_Module->getOrInsertFunction(intr_name, getInt1Ty(ctx.builder.getContext()));
         auto ret = ctx.builder.CreateCall(intr);
@@ -1363,14 +1406,14 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
         // verify argument types
         if (!jl_is_primitivetype(xinfo.typ))
-            return emit_runtime_call(ctx, f, argv.data(), nargs);
+            return emit_runtime_call(ctx, f, argv, nargs);
         Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext(), true);
         if (float_func()[f])
             xtyp = FLOATT(xtyp);
         else
             xtyp = INTT(xtyp, DL);
         if (!xtyp)
-            return emit_runtime_call(ctx, f, argv.data(), nargs);
+            return emit_runtime_call(ctx, f, argv, nargs);
         ////Bool are required to be in the range [0,1]
         ////so while they are represented as i8,
         ////the operations need to be done in mod 1
@@ -1386,13 +1429,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
         if (f == shl_int || f == lshr_int || f == ashr_int) {
             if (!jl_is_primitivetype(argv[1].typ))
-                return emit_runtime_call(ctx, f, argv.data(), nargs);
+                return emit_runtime_call(ctx, f, argv, nargs);
             argt[1] = INTT(bitstype_to_llvm(argv[1].typ, ctx.builder.getContext(), true), DL);
         }
         else {
             for (size_t i = 1; i < nargs; ++i) {
                 if (xinfo.typ != argv[i].typ)
-                    return emit_runtime_call(ctx, f, argv.data(), nargs);
+                    return emit_runtime_call(ctx, f, argv, nargs);
                 argt[i] = xtyp;
             }
         }
@@ -1405,7 +1448,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
         // call the intrinsic
         jl_value_t *newtyp = xinfo.typ;
-        Value *r = emit_untyped_intrinsic(ctx, f, argvalues.data(), nargs, (jl_datatype_t**)&newtyp, xinfo.typ);
+        Value *r = emit_untyped_intrinsic(ctx, f, argvalues, nargs, (jl_datatype_t**)&newtyp, xinfo.typ);
         // Turn Bool operations into mod 1 now, if needed
         if (newtyp == (jl_value_t*)jl_bool_type && !r->getType()->isIntegerTy(1))
             r = ctx.builder.CreateTrunc(r, getInt1Ty(ctx.builder.getContext()));
@@ -1415,7 +1458,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     assert(0 && "unreachable");
 }
 
-static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **argvalues, size_t nargs,
+static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Value*> argvalues, size_t nargs,
                                      jl_datatype_t **newtyp, jl_value_t *xtyp)
 {
     ++EmittedUntypedIntrinsics;
@@ -1434,26 +1477,6 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case udiv_int: return ctx.builder.CreateUDiv(x, y);
     case srem_int: return ctx.builder.CreateSRem(x, y);
     case urem_int: return ctx.builder.CreateURem(x, y);
-
-    // LLVM will not fold ptrtoint+arithmetic+inttoptr to GEP. The reason for this
-    // has to do with alias analysis. When adding two integers, either one of them
-    // could be the pointer base. With getelementptr, it is clear which of the
-    // operands is the pointer base. We also have this information at the julia
-    // level. Thus, to not lose information, we need to have a separate intrinsic
-    // for pointer arithmetic which lowers to getelementptr.
-    case add_ptr: {
-        return ctx.builder.CreatePtrToInt(
-            ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()),
-                emit_inttoptr(ctx, x, getInt8PtrTy(ctx.builder.getContext())), y), t);
-
-    }
-
-    case sub_ptr: {
-        return ctx.builder.CreatePtrToInt(
-            ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()),
-                emit_inttoptr(ctx, x, getInt8PtrTy(ctx.builder.getContext())), ctx.builder.CreateNeg(y)), t);
-
-    }
 
     case neg_float: return math_builder(ctx)().CreateFNeg(x);
     case neg_float_fast: return math_builder(ctx, true)().CreateFNeg(x);

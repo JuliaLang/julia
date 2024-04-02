@@ -115,7 +115,7 @@ function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
                 xi = deepcopy_internal(xi, stackdict)::typeof(xi)
             end
             di = Core.memoryref(dr, i, false)
-            di = Core.memoryrefset!(di, xi, :not_atomic, false)
+            Core.memoryrefset!(di, xi, :not_atomic, false)
         end
     end
     return dest

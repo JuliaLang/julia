@@ -873,6 +873,16 @@ end
     @test Xv1' * Xv3' ≈ XcXc
 end
 
+@testset "copyto! for matrices of matrices" begin
+    A = [randn(ComplexF64, 2,3) for _ in 1:2, _ in 1:3]
+    for (tfun, tM) in ((identity, 'N'), (transpose, 'T'), (adjoint, 'C'))
+        At = copy(tfun(A))
+        B = zero.(At)
+        copyto!(B, axes(B, 1), axes(B, 2), tM, A, axes(A, tM == 'N' ? 1 : 2), axes(A, tM == 'N' ? 2 : 1))
+        @test B == At
+    end
+end
+
 @testset "method ambiguity" begin
     # Ambiguity test is run inside a clean process.
     # https://github.com/JuliaLang/julia/issues/28804

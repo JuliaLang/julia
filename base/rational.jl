@@ -30,16 +30,27 @@ checked_den(num::Integer, den::Integer) = checked_den(promote(num, den)...)
 @noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
 function Rational{T}(num::Integer, den::Integer) where T<:Integer
     iszero(den) && iszero(num) && __throw_rational_argerror_zero(T)
-    num, den = divgcd(num, den)
-    return checked_den(T, T(num), T(den))
+    if T <: Union{Unsigned, Bool}
+        # Throw InexactError if the result is negative.
+        if !iszero(num) && (signbit(den) ⊻ signbit(num))
+            throw(InexactError(:Rational, Rational{T}, num, den))
+        end
+        unum = uabs(num)
+        uden = uabs(den)
+        r_unum, r_uden = divgcd(unum, uden)
+        return unsafe_rational(T, promote(T(r_unum), T(r_uden))...)
+    else
+        r_num, r_den = divgcd(num, den)
+        return checked_den(T, promote(T(r_num), T(r_den))...)
+    end
 end
 
 Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
 Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
-function divgcd(x::Integer,y::Integer)
-    g = gcd(x,y)
+function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
+    g = gcd(uabs(x), uabs(y))
     div(x,g), div(y,g)
 end
 
@@ -130,7 +141,7 @@ function Rational{T}(x::Rational) where T<:Integer
     unsafe_rational(T, convert(T, x.num), convert(T, x.den))
 end
 function Rational{T}(x::Integer) where T<:Integer
-    unsafe_rational(T, convert(T, x), one(T))
+    unsafe_rational(T, T(x), T(one(x)))
 end
 
 Rational(x::Rational) = x
@@ -145,6 +156,14 @@ function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
     convert(T, convert(P,x.num)/convert(P,x.den))::T
 end
+ # avoid spurious overflow (#52394).  (Needed for UInt16 or larger;
+ # we also include Int16 for consistency of accuracy.)
+Float16(x::Rational{<:Union{Int16,Int32,Int64,UInt16,UInt32,UInt64}}) =
+    Float16(Float32(x))
+Float16(x::Rational{<:Union{Int128,UInt128}}) =
+    Float16(Float64(x)) # UInt128 overflows Float32, include Int128 for consistency
+Float32(x::Rational{<:Union{Int128,UInt128}}) =
+    Float32(Float64(x)) # UInt128 overflows Float32, include Int128 for consistency
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
@@ -296,8 +315,6 @@ denominator(x::Rational) = x.den
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
-copysign(x::Rational, y::Real) = unsafe_rational(copysign(x.num, y), x.den)
-copysign(x::Rational, y::Rational) = unsafe_rational(copysign(x.num, y.num), x.den)
 
 abs(x::Rational) = unsafe_rational(checked_abs(x.num), x.den)
 

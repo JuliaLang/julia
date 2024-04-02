@@ -263,7 +263,5 @@ end
 end
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(Artifacts)
-    @test_broken isempty(undoc)
-    @test undoc == [:Artifacts]
+    @test isempty(Docs.undocumented_names(Artifacts))
 end

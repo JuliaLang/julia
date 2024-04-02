@@ -112,7 +112,7 @@ julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink j
                                       julia-libccalllazyfoo julia-libccalllazybar julia-libllvmcalltest julia-base-cache
 
 stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk all-$*
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk $*
 
 debug release : % : julia-% stdlibs-cache-%
 
@@ -289,6 +289,7 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 	-$(INSTALL_M) $(build_libdir)/libjulia-internal-debug.dll.a $(DESTDIR)$(libdir)/
 endif
 	-$(INSTALL_M) $(wildcard $(build_private_libdir)/*.a) $(DESTDIR)$(private_libdir)/
+	-rm -f $(DESTDIR)$(private_libdir)/sys-o.a
 
 	# We have a single exception; we want 7z.dll to live in private_libexecdir,
 	# not bindir, so that 7z.exe can find it.
@@ -587,6 +588,7 @@ clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/cli clean
 	@-$(MAKE) -C $(BUILDROOT)/test clean
 	@-$(MAKE) -C $(BUILDROOT)/stdlib clean
+	@-$(MAKE) -C $(BUILDROOT) -f pkgimage.mk clean
 	-rm -f $(BUILDROOT)/julia
 	-rm -f $(BUILDROOT)/*.tar.gz
 	-rm -f $(build_depsbindir)/stringreplace \
@@ -651,7 +653,7 @@ win-extras:
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_SIZE := llvm-size$(EXE)
 else
-LLVM_SIZE := $(build_depsbindir)/llvm-size$(EXE)
+LLVM_SIZE := PATH=$(build_bindir):$$PATH; $(build_depsbindir)/llvm-size$(EXE)
 endif
 build-stats:
 ifeq ($(USE_BINARYBUILDER_LLVM),1)

@@ -70,7 +70,6 @@ end
 A finalizer may be registered at object construction. In the following example note that
 we implicitly rely on the finalizer returning the newly created mutable struct `x`.
 
-# Example
 ```julia
 mutable struct MyMutableStruct
     bar

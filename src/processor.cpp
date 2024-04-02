@@ -6,6 +6,8 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringMap.h>
+#include <llvm/Support/Host.h>
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -387,7 +389,7 @@ JL_UNUSED static uint32_t find_feature_bit(const FeatureName *features, size_t n
             return feature.bit;
         }
     }
-    return (uint32_t)-1;
+    return UINT32_MAX;
 }
 
 // This is how we save the target identification.
@@ -640,7 +642,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     jl_value_t* rejection_reason = nullptr;
     JL_GC_PUSH1(&rejection_reason);
     uint32_t target_idx = callback(ids, &rejection_reason);
-    if (target_idx == (uint32_t)-1) {
+    if (target_idx == UINT32_MAX) {
         jl_error(jl_string_ptr(rejection_reason));
     }
     JL_GC_POP();
@@ -854,7 +856,7 @@ static inline void check_cmdline(T &&cmdline, bool imaging)
 }
 
 struct SysimgMatch {
-    uint32_t best_idx{(uint32_t)-1};
+    uint32_t best_idx{UINT32_MAX};
     int vreg_size{0};
 };
 
@@ -909,7 +911,7 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
         feature_size = new_feature_size;
         rejection_reasons.push_back("Updating best match to this target\n");
     }
-    if (match.best_idx == (uint32_t)-1) {
+    if (match.best_idx == UINT32_MAX) {
         // Construct a nice error message for debugging purposes
         std::string error_msg = "Unable to find compatible target in cached code image.\n";
         for (size_t i = 0; i < rejection_reasons.size(); i++) {
@@ -961,6 +963,43 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 
 }
 
+static std::string jl_get_cpu_name_llvm(void)
+{
+    return llvm::sys::getHostCPUName().str();
+}
+
+static std::string jl_get_cpu_features_llvm(void)
+{
+    llvm::StringMap<bool> HostFeatures;
+    llvm::sys::getHostCPUFeatures(HostFeatures);
+    std::string attr;
+    for (auto &ele: HostFeatures) {
+        if (ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",+");
+            }
+            else {
+                attr.append("+");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    // Explicitly disabled features need to be added at the end so that
+    // they are not re-enabled by other features that implies them by default.
+    for (auto &ele: HostFeatures) {
+        if (!ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",-");
+            }
+            else {
+                attr.append("-");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    return attr;
+}
+
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 
 #include "processor_x86.cpp"
@@ -974,6 +1013,16 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 #include "processor_fallback.cpp"
 
 #endif
+
+JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
+{
+    return jl_cstr_to_string(host_cpu_name().c_str());
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
+{
+    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
 
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
     auto specs = jl_get_llvm_clone_targets();

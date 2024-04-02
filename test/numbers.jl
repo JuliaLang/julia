@@ -679,6 +679,9 @@ end
     @test copysign(big(-1), 0x02) == 1
     @test copysign(big(-1.0), 0x02) == 1.0
     @test copysign(-1//2, 0x01) == 1//2
+
+    # Verify overflow is checked with rational
+    @test_throws OverflowError copysign(typemin(Int)//1, 1)
 end
 
 @testset "isnan/isinf/isfinite" begin
@@ -2773,6 +2776,20 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     @test [2,4,8].^-2 == [0.25, 0.0625, 0.015625]
     @test [2, 4, 8].^-2 .* 4 == [1.0, 0.25, 0.0625] # nested literal_pow
     @test ℯ^-2 == exp(-2) ≈ inv(ℯ^2) ≈ (ℯ^-1)^2 ≈ sqrt(ℯ^-4)
+
+    if Int === Int32
+        p = 2147483647
+        @test x^p == 1
+        @test x^2147483647 == 2
+        @test (@fastmath x^p) == 1
+        @test (@fastmath x^2147483647) == 2
+    elseif Int === Int64
+        p = 9223372036854775807
+        @test x^p == 1
+        @test x^9223372036854775807 == 2
+        @test (@fastmath x^p) == 1
+        @test (@fastmath x^9223372036854775807) == 2
+    end
 end
 module M20889 # do we get the expected behavior without importing Base.^?
     using Test
@@ -3162,5 +3179,11 @@ end
                 @test_throws MethodError precision(Union{S,T}, base = 3)
             end
         end
+    end
+end
+
+@testset "irrational special values" begin
+    for v ∈ (π, ℯ, γ, catalan, φ)
+        @test v === typemin(v) === typemax(v)
     end
 end

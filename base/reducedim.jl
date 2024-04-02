@@ -17,59 +17,21 @@ reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
-function reduced_indices(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d == 1
-        return (reduced_index(inds[1]), tail(inds)...)::typeof(inds)
-    elseif 1 < d <= N
-        return tuple(inds[1:d-1]..., oftype(inds[d], reduced_index(inds[d])), inds[d+1:N]...)::typeof(inds)
-    else
-        return inds
-    end
+function reduced_indices(axs::Indices{N}, region) where N
+    _check_valid_region(region)
+    ntuple(d -> d in region ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function reduced_indices0(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d <= N
-        ind = inds[d]
-        rd = isempty(ind) ? ind : reduced_index(inds[d])
-        if d == 1
-            return (rd, tail(inds)...)::typeof(inds)
-        else
-            return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
-        end
-    else
-        return inds
-    end
+function reduced_indices0(axs::Indices{N}, region) where N
+    _check_valid_region(region)
+    ntuple(d -> d in region && !isempty(axs[d]) ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function reduced_indices(inds::Indices{N}, region) where N
-    rinds = collect(inds)
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rinds[d] = reduced_index(rinds[d])
-        end
+function _check_valid_region(region)
+    for d in region
+        isa(d, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
+        Int(d) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
     end
-    tuple(rinds...)::typeof(inds)
-end
-
-function reduced_indices0(inds::Indices{N}, region) where N
-    rinds = collect(inds)
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rind = rinds[d]
-            rinds[d] = isempty(rind) ? rind : reduced_index(rind)
-        end
-    end
-    tuple(rinds...)::typeof(inds)
 end
 
 ###### Generic reduction functions #####

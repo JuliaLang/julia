@@ -28,11 +28,8 @@
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
-    XX(jl_genericmemory_isassigned) \
     XX(jl_genericmemory_owner) \
     XX(jl_genericmemoryref) \
-    XX(jl_genericmemoryset) \
-    XX(jl_genericmemoryunset) \
     XX(jl_array_rank) \
     XX(jl_array_to_string) \
     XX(jl_atexit_hook) \
@@ -41,6 +38,7 @@
     XX(jl_atomic_error) \
     XX(jl_atomic_new_bits) \
     XX(jl_atomic_store_bits) \
+    XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
@@ -111,10 +109,10 @@
     XX(jl_egal__bits) \
     XX(jl_egal__bitstag) \
     XX(jl_eh_restore_state) \
+    XX(jl_eh_restore_state_noexcept) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
     XX(jl_environ) \
-    XX(jl_eof_error) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \
@@ -241,8 +239,6 @@
     XX(jl_method_lookup_by_tt) \
     XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
-    XX(jl_git_branch) \
-    XX(jl_git_commit) \
     XX(jl_global_event_loop) \
     XX(jl_has_empty_intersection) \
     XX(jl_has_free_typevars) \
@@ -271,7 +267,6 @@
     XX(jl_ios_buffer_n) \
     XX(jl_ios_fd) \
     XX(jl_ios_get_nbyte_int) \
-    XX(jl_ir_flag_inferred) \
     XX(jl_ir_flag_has_fcall) \
     XX(jl_ir_flag_inlining) \
     XX(jl_ir_inlining_cost) \
@@ -372,6 +367,7 @@
     XX(jl_pointerref) \
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
+    XX(jl_pop_handler_noexcept) \
     XX(jl_preload_sysimg_so) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \
@@ -392,6 +388,7 @@
     XX(jl_raise_debugger) \
     XX(jl_readuntil) \
     XX(jl_cache_flags) \
+    XX(jl_match_cache_flags_current) \
     XX(jl_match_cache_flags) \
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
@@ -438,11 +435,9 @@
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \
     XX(jl_stdin_stream) \
-    XX(jl_stdout_obj) \
     XX(jl_stdout_stream) \
     XX(jl_stored_inline) \
     XX(jl_string_ptr) \
-    XX(jl_string_to_array) \
     XX(jl_subtype) \
     XX(jl_subtype_env) \
     XX(jl_subtype_env_size) \
@@ -486,7 +481,7 @@
     XX(jl_type_intersection) \
     XX(jl_type_intersection_with_env) \
     XX(jl_type_morespecific) \
-    XX(jl_type_morespecific_no_subtype) \
+    XX(jl_method_morespecific) \
     XX(jl_type_union) \
     XX(jl_type_unionall) \
     XX(jl_unbox_bool) \
@@ -518,7 +513,6 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_write_compiler_output) \
-    XX(jl_yield) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
     XX(jl_setjmp) \
@@ -541,9 +535,8 @@
     YY(jl_init_codegen) \
     YY(jl_getFunctionInfo) \
     YY(jl_register_fptrs) \
-    YY(jl_generate_fptr) \
     YY(jl_generate_fptr_for_unspecialized) \
-    YY(jl_generate_fptr_for_oc_wrapper) \
+    YY(jl_compile_codeinst) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \

@@ -249,6 +249,10 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
     path
 end
 
+# Files that were requested to be deleted but can't be by the current process
+# i.e. loaded DLLs on Windows
+delayed_delete_dir() = joinpath(tempdir(), "julia_delayed_deletes")
+
 """
     rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
 
@@ -270,20 +274,26 @@ Stacktrace:
 [...]
 ```
 """
-function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
+function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allow_delayed_delete::Bool=true)
+    # allow_delayed_delete is used by Pkg.gc() but is otherwise not part of the public API
     if islink(path) || !isdir(path)
         try
-            @static if Sys.iswindows()
-                # is writable on windows actually means "is deletable"
-                st = lstat(path)
-                if ispath(st) && (filemode(st) & 0o222) == 0
-                    chmod(path, 0o777)
-                end
-            end
             unlink(path)
         catch err
-            if force && isa(err, IOError) && err.code==Base.UV_ENOENT
-                return
+            if isa(err, IOError)
+                force && err.code==Base.UV_ENOENT && return
+                @static if Sys.iswindows()
+                    if allow_delayed_delete && err.code==Base.UV_EACCES && endswith(path, ".dll")
+                        # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
+                        # but they can be moved. So move out to allow the dir to be deleted.
+                        # Pkg.gc() cleans up this dir when possible
+                        dir = mkpath(delayed_delete_dir())
+                        temp_path = tempname(dir, cleanup = false, suffix = string("_", basename(path)))
+                        @debug "Could not delete DLL most likely because it is loaded, moving to tempdir" path temp_path
+                        mv(path, temp_path)
+                        return
+                    end
+                end
             end
             rethrow()
         end
@@ -291,12 +301,14 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         if recursive
             try
                 for p in readdir(path)
-                    rm(joinpath(path, p), force=force, recursive=true)
+                    try
+                        rm(joinpath(path, p), force=force, recursive=true)
+                    catch err
+                        (isa(err, IOError) && err.code==Base.UV_EACCES) || rethrow()
+                    end
                 end
             catch err
-                if !(isa(err, IOError) && err.code==Base.UV_EACCES)
-                    rethrow(err)
-                end
+                (isa(err, IOError) && err.code==Base.UV_EACCES) || rethrow()
             end
         end
         req = Libc.malloc(_sizeof_uv_fs)
@@ -480,13 +492,26 @@ function tempdir()
         rc = ccall(:uv_os_tmpdir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
             resize!(buf, sz[])
-            return String(buf)
+            break
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1)  # space for null-terminator implied by StringVector
         else
             uv_error("tempdir()", rc)
         end
     end
+    tempdir = String(buf)
+    try
+        s = stat(tempdir)
+        if !ispath(s)
+            @warn "tempdir path does not exist" tempdir
+        elseif !isdir(s)
+            @warn "tempdir path is not a directory" tempdir
+        end
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @warn "accessing tempdir path failed" _exception=ex
+    end
+    return tempdir
 end
 
 """
@@ -504,13 +529,19 @@ function prepare_for_deletion(path::AbstractString)
         return
     end
 
-    try chmod(path, filemode(path) | 0o333)
-    catch; end
+    try
+        chmod(path, filemode(path) | 0o333)
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+    end
     for (root, dirs, files) in walkdir(path; onerror=x->())
         for dir in dirs
             dpath = joinpath(root, dir)
-            try chmod(dpath, filemode(dpath) | 0o333)
-            catch; end
+            try
+                chmod(dpath, filemode(dpath) | 0o333)
+            catch ex
+                ex isa IOError || ex isa SystemError || rethrow()
+            end
         end
     end
 end
@@ -601,13 +632,13 @@ end
 
 
 # Obtain a temporary filename.
-function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanup::Bool=true)
+function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanup::Bool=true, suffix::AbstractString="")
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
 
     prefix = joinpath(parent, temp_prefix)
     filename = nothing
     for i in 1:max_tries
-        filename = string(prefix, _rand_filename())
+        filename = string(prefix, _rand_filename(), suffix)
         if ispath(filename)
             filename = nothing
         else
@@ -663,7 +694,7 @@ end # os-test
 
 
 """
-    tempname(parent=tempdir(); cleanup=true) -> String
+    tempname(parent=tempdir(); cleanup=true, suffix="") -> String
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
@@ -674,7 +705,8 @@ existing at the time of the call to `tempname`.
 When called with no arguments, the temporary name will be an absolute path to a
 temporary name in the system temporary directory as given by `tempdir()`. If a
 `parent` directory argument is given, the temporary path will be in that
-directory instead.
+directory instead. If a suffix is given the tempname will end with that suffix
+and be tested for uniqueness with that suffix.
 
 The `cleanup` option controls whether the process attempts to delete the
 returned path automatically when the process exits. Note that the `tempname`
@@ -685,6 +717,9 @@ you do and `cleanup` is `true` it will be deleted upon process termination.
 !!! compat "Julia 1.4"
     The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4
     the path `tempname` would never be cleaned up at process termination.
+
+!!! compat "Julia 1.12"
+    The `suffix` keyword argument was added in Julia 1.12.
 
 !!! warning
 
@@ -894,7 +929,79 @@ julia> readdir(abspath("base"), join=true)
  "/home/JuliaUser/dev/julia/base/weakkeydict.jl"
 ```
 """
-function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
+readdir(; join::Bool=false, kwargs...) = readdir(join ? pwd() : "."; join, kwargs...)::Vector{String}
+readdir(dir::AbstractString; kwargs...) = _readdir(dir; return_objects=false, kwargs...)::Vector{String}
+
+# this might be better as an Enum but they're not available here
+# UV_DIRENT_T
+const UV_DIRENT_UNKNOWN = Cint(0)
+const UV_DIRENT_FILE = Cint(1)
+const UV_DIRENT_DIR = Cint(2)
+const UV_DIRENT_LINK = Cint(3)
+const UV_DIRENT_FIFO = Cint(4)
+const UV_DIRENT_SOCKET = Cint(5)
+const UV_DIRENT_CHAR = Cint(6)
+const UV_DIRENT_BLOCK = Cint(7)
+
+"""
+    DirEntry
+
+A type representing a filesystem entry that contains the name of the entry, the directory, and
+the raw type of the entry. The full path of the entry can be obtained lazily by accessing the
+`path` field. The type of the entry can be checked for by calling [`isfile`](@ref), [`isdir`](@ref),
+[`islink`](@ref), [`isfifo`](@ref), [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref)
+"""
+struct DirEntry
+    dir::String
+    name::String
+    rawtype::Cint
+end
+function Base.getproperty(obj::DirEntry, p::Symbol)
+    if p === :path
+        return joinpath(obj.dir, obj.name)
+    else
+        return getfield(obj, p)
+    end
+end
+Base.propertynames(::DirEntry) = (:dir, :name, :path, :rawtype)
+Base.isless(a::DirEntry, b::DirEntry) = a.dir == b.dir ? isless(a.name, b.name) : isless(a.dir, b.dir)
+Base.hash(o::DirEntry, h::UInt) = hash(o.dir, hash(o.name, hash(o.rawtype, h)))
+Base.:(==)(a::DirEntry, b::DirEntry) = a.name == b.name && a.dir == b.dir && a.rawtype == b.rawtype
+joinpath(obj::DirEntry, args...) = joinpath(obj.path, args...)
+isunknown(obj::DirEntry) =  obj.rawtype == UV_DIRENT_UNKNOWN
+islink(obj::DirEntry) =     isunknown(obj) ? islink(obj.path) : obj.rawtype == UV_DIRENT_LINK
+isfile(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfile(obj.path)      : obj.rawtype == UV_DIRENT_FILE
+isdir(obj::DirEntry) =      (isunknown(obj) || islink(obj)) ? isdir(obj.path)       : obj.rawtype == UV_DIRENT_DIR
+isfifo(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfifo(obj.path)      : obj.rawtype == UV_DIRENT_FIFO
+issocket(obj::DirEntry) =   (isunknown(obj) || islink(obj)) ? issocket(obj.path)    : obj.rawtype == UV_DIRENT_SOCKET
+ischardev(obj::DirEntry) =  (isunknown(obj) || islink(obj)) ? ischardev(obj.path)   : obj.rawtype == UV_DIRENT_CHAR
+isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(obj.path)  : obj.rawtype == UV_DIRENT_BLOCK
+realpath(obj::DirEntry) = realpath(obj.path)
+
+"""
+    _readdirx(dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
+
+Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
+or the current working directory if not given. If `sort` is true, the returned vector is
+sorted by name.
+
+Unlike [`readdir`](@ref), `_readdirx` returns [`DirEntry`](@ref) objects, which contain the name of the
+file, the directory it is in, and the type of the file which is determined during the
+directory scan. This means that calls to [`isfile`](@ref), [`isdir`](@ref), [`islink`](@ref), [`isfifo`](@ref),
+[`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref) can be made on the
+returned objects without further stat calls. However, for some filesystems, the type of the file
+cannot be determined without a stat call. In these cases the `rawtype` field of the [`DirEntry`](@ref))
+object will be 0 (`UV_DIRENT_UNKNOWN`) and [`isfile`](@ref) etc. will fall back to a `stat` call.
+
+```julia
+for obj in _readdirx()
+    isfile(obj) && println("\$(obj.name) is a file with path \$(obj.path)")
+end
+```
+"""
+_readdirx(dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
+
+function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
     req = Libc.malloc(_sizeof_uv_fs)
     try
@@ -904,11 +1011,16 @@ function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
         err < 0 && uv_error("readdir($(repr(dir)))", err)
 
         # iterate the listing into entries
-        entries = String[]
+        entries = return_objects ? DirEntry[] : String[]
         ent = Ref{uv_dirent_t}()
         while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Cvoid}, Ptr{uv_dirent_t}), req, ent)
             name = unsafe_string(ent[].name)
-            push!(entries, join ? joinpath(dir, name) : name)
+            if return_objects
+                rawtype = ent[].typ
+                push!(entries, DirEntry(dir, name, rawtype))
+            else
+                push!(entries, join ? joinpath(dir, name) : name)
+            end
         end
 
         # Clean up the request string
@@ -922,8 +1034,6 @@ function readdir(dir::AbstractString; join::Bool=false, sort::Bool=true)
         Libc.free(req)
     end
 end
-readdir(; join::Bool=false, sort::Bool=true) =
-    readdir(join ? pwd() : ".", join=join, sort=sort)
 
 """
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
@@ -979,18 +1089,16 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
                 end
                 return
             end
-        content = tryf(readdir, root)
-        content === nothing && return
-        dirs = Vector{eltype(content)}()
-        files = Vector{eltype(content)}()
-        for name in content
-            path = joinpath(root, name)
-
+        entries = tryf(_readdirx, root)
+        entries === nothing && return
+        dirs = Vector{String}()
+        files = Vector{String}()
+        for entry in entries
             # If we're not following symlinks, then treat all symlinks as files
-            if (!follow_symlinks && something(tryf(islink, path), true)) || !something(tryf(isdir, path), false)
-                push!(files, name)
+            if (!follow_symlinks && something(tryf(islink, entry), true)) || !something(tryf(isdir, entry), false)
+                push!(files, entry.name)
             else
-                push!(dirs, name)
+                push!(dirs, entry.name)
             end
         end
 

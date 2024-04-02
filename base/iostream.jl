@@ -292,12 +292,15 @@ function open(fname::String; lock = true,
     if !lock
         s._dolock = false
     end
-    systemerror("opening file $(repr(fname))",
-                ccall(:ios_file, Ptr{Cvoid},
-                      (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
+    if ccall(:ios_file, Ptr{Cvoid},
+             (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+             s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL
+        systemerror("opening file $(repr(fname))")
+    end
     if flags.append
-        systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
+        if ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
+            systemerror("seeking to end of file $fname")
+        end
     end
     return s
 end
@@ -455,26 +458,24 @@ end
 
 function copyuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
     ensureroom(out, 1) # make sure we can read at least 1 byte, for iszero(n) check below
-    ptr = (out.append ? out.size+1 : out.ptr)
-    d = out.data
-    len = length(d)
     while true
+        d = out.data
+        len = length(d)
+        ptr = (out.append ? out.size+1 : out.ptr)
         GC.@preserve d @_lock_ios s n=
             Int(ccall(:jl_readuntil_buf, Csize_t, (Ptr{Cvoid}, UInt8, Ptr{UInt8}, Csize_t),
                 s.ios, delim, pointer(d, ptr), (len - ptr + 1) % Csize_t))
         iszero(n) && break
         ptr += n
-        if d[ptr-1] == delim
-            keep || (ptr -= 1)
-            break
-        end
+        found = (d[ptr - 1] == delim)
+        found && !keep && (ptr -= 1)
+        out.size = max(out.size, ptr - 1)
+        out.append || (out.ptr = ptr)
+        found && break
         (eof(s) || len == out.maxsize) && break
         len = min(2len + 64, out.maxsize)
-        resize!(d, len)
-    end
-    out.size = max(out.size, ptr - 1)
-    if !out.append
-        out.ptr = ptr
+        ensureroom(out, len)
+        @assert length(out.data) >= len
     end
     return out
 end

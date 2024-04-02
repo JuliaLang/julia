@@ -148,6 +148,7 @@ Base.setproperty!
 Base.replaceproperty!
 Base.swapproperty!
 Base.modifyproperty!
+Base.setpropertyonce!
 Base.propertynames
 Base.hasproperty
 Core.getfield
@@ -155,9 +156,8 @@ Core.setfield!
 Core.modifyfield!
 Core.replacefield!
 Core.swapfield!
+Core.setfieldonce!
 Core.isdefined
-Core.getglobal
-Core.setglobal!
 Base.@isdefined
 Base.convert
 Base.promote
@@ -352,6 +352,7 @@ Base.@timed
 Base.@elapsed
 Base.@allocated
 Base.@allocations
+Base.@lock_conflicts
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -373,6 +374,8 @@ Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
+Base.Sys.isreadable
+Base.Sys.iswritable
 Base.Sys.username
 Base.@static
 ```
@@ -460,6 +463,12 @@ Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@locals
+Core.getglobal
+Core.setglobal!
+Core.modifyglobal!
+Core.swapglobal!
+Core.setglobalonce!
+Core.replaceglobal!
 ```
 
 ## Documentation

@@ -114,45 +114,7 @@ const AnyDict = Dict{Any,Any}
 Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)
 Dict(ps::Pair...)                  = Dict(ps)
 
-function Dict(kv)
-    try
-        dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
-    catch
-        if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
-            throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
-        else
-            rethrow()
-        end
-    end
-end
-
-function grow_to!(dest::AbstractDict{K, V}, itr) where V where K
-    y = iterate(itr)
-    y === nothing && return dest
-    ((k,v), st) = y
-    dest2 = empty(dest, typeof(k), typeof(v))
-    dest2[k] = v
-    grow_to!(dest2, itr, st)
-end
-
-# this is a special case due to (1) allowing both Pairs and Tuples as elements,
-# and (2) Pair being invariant. a bit annoying.
-function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
-    y = iterate(itr, st)
-    while y !== nothing
-        (k,v), st = y
-        if isa(k,K) && isa(v,V)
-            dest[k] = v
-        else
-            new = empty(dest, promote_typejoin(K,typeof(k)), promote_typejoin(V,typeof(v)))
-            merge!(new, dest)
-            new[k] = v
-            return grow_to!(new, itr, st)
-        end
-        y = iterate(itr, st)
-    end
-    return dest
-end
+Dict(kv) = dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 

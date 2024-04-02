@@ -33,6 +33,8 @@ export BINDIR,
        iswindows,
        isjsvm,
        isexecutable,
+       isreadable,
+       iswritable,
        username,
        which
 
@@ -358,7 +360,7 @@ free_memory() = ccall(:uv_get_available_memory, UInt64, ())
 
 Get the total memory in RAM (including that which is currently used) in bytes.
 This amount may be constrained, e.g., by Linux control groups. For the unconstrained
-amount, see `Sys.physical_memory()`.
+amount, see `Sys.total_physical_memory()`.
 """
 function total_memory()
     constrained = ccall(:uv_get_constrained_memory, UInt64, ())
@@ -397,7 +399,7 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - man page of `getrusage`(2) on Linux and BSD.
     - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
@@ -551,24 +553,9 @@ windows_version
 
 const WINDOWS_VISTA_VER = v"6.0"
 
-"""
-    Sys.isexecutable(path::String)
-
-Return `true` if the given `path` has executable permissions.
-
-!!! note
-    Prior to Julia 1.6, this did not correctly interrogate filesystem
-    ACLs on Windows, therefore it would return `true` for any
-    file.  From Julia 1.6 on, it correctly determines whether the
-    file is marked as executable or not.
-"""
-function isexecutable(path::String)
-    # We use `access()` and `X_OK` to determine if a given path is
-    # executable by the current user.  `X_OK` comes from `unistd.h`.
-    X_OK = 0x01
-    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
-end
-isexecutable(path::AbstractString) = isexecutable(String(path))
+const isexecutable = Base.isexecutable
+const isreadable   = Base.isreadable
+const iswritable   = Base.iswritable
 
 """
     Sys.which(program_name::String)
@@ -663,6 +650,8 @@ user = get(Sys.username, ENV, "USER")
 
 !!! compat "Julia 1.11"
     This function requires at least Julia 1.11.
+
+See also [`homedir`](@ref).
 """
 function username()
     pw = Libc.getpw()

@@ -244,28 +244,38 @@ function show_convert_error(io::IO, ex::MethodError, arg_types_param)
 end
 
 function showerror(io::IO, ex::MethodError)
+    @nospecialize io
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
-    is_arg_types = isa(ex.args, DataType)
-    arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
+    is_arg_types = !isa(ex.args, Tuple)
+    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    arg_types_param::SimpleVector = (unwrap_unionall(arg_types)::DataType).parameters
+    san_arg_types_param = Any[rewrap_unionall(a, arg_types) for a in arg_types_param]
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
     if isa(meth, MethodList) && length(meth) > 1
         return showerror_ambiguous(io, meth, f, arg_types)
     end
-    arg_types_param::SimpleVector = arg_types.parameters
     print(io, "MethodError: ")
     ft = typeof(f)
     f_is_function = false
-    kwargs = ()
-    if f === Core.kwcall && !is_arg_types
-        f = (ex.args::Tuple)[2]
-        ft = typeof(f)
+    kwargs = []
+    if f === Core.kwcall && length(arg_types_param) >= 2 && arg_types_param[1] <: NamedTuple && !is_arg_types
+        # if this is a kwcall, reformat it as a call with kwargs
+        # TODO: handle !is_arg_types here (aka invoke with kwargs), which needs a value for `f`
+        local kwt
+        let args = ex.args::Tuple
+            f = args[2]
+            ft = typeof(f)
+            kwt = typeof(args[1])
+            ex = MethodError(f, args[3:end], ex.world)
+        end
         arg_types_param = arg_types_param[3:end]
-        kwargs = pairs(ex.args[1])
-        ex = MethodError(f, ex.args[3:end::Int], ex.world)
+        san_arg_types_param = san_arg_types_param[3:end]
+        keys = kwt.parameters[1]::Tuple
+        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in 1:length(keys)]
+        arg_types = rewrap_unionall(Tuple{arg_types_param...}, arg_types)
     end
-    name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
@@ -277,36 +287,28 @@ function showerror(io::IO, ex::MethodError)
         if ft <: Function && isempty(ft.parameters) && _isself(ft)
             f_is_function = true
         end
-        print(io, "no method matching ")
+        if is_arg_types
+            print(io, "no method matching invoke ")
+        else
+            print(io, "no method matching ")
+        end
         buf = IOBuffer()
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
-        show_signature_function(iob, isa(f, Type) ? Type{f} : typeof(f))
-        print(iob, "(")
-        for (i, typ) in enumerate(arg_types_param)
-            print(iob, "::", typ)
-            i == length(arg_types_param) || print(iob, ", ")
-        end
-        if !isempty(kwargs)
-            print(iob, "; ")
-            for (i, (k, v)) in enumerate(kwargs)
-                print(iob, k, "::", typeof(v))
-                i == length(kwargs)::Int || print(iob, ", ")
-            end
-        end
-        print(iob, ")")
+        show_signature_function(iob, Core.Typeof(f))
+        show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
         str = String(take!(buf))
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
     # catch the two common cases of element-wise addition and subtraction
-    if (f === Base.:+ || f === Base.:-) && length(arg_types_param) == 2
+    if (f === Base.:+ || f === Base.:-) && length(san_arg_types_param) == 2
         # we need one array of numbers and one number, in any order
-        if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
-            any(x -> x <: Number, arg_types_param)
+        if any(x -> x <: AbstractArray{<:Number}, san_arg_types_param) &&
+            any(x -> x <: Number, san_arg_types_param)
 
             nounf = f === Base.:+ ? "addition" : "subtraction"
             varnames = ("scalar", "array")
-            first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
+            first, second = san_arg_types_param[1] <: Number ? varnames : reverse(varnames)
             fstring = f === Base.:+ ? "+" : "-"  # avoid depending on show_default for functions (invalidation)
             print(io, "\nFor element-wise $nounf, use broadcasting with dot syntax: $first .$fstring $second")
         end
@@ -315,17 +317,31 @@ function showerror(io::IO, ex::MethodError)
         print(io, "\nUse square brackets [] for indexing an Array.")
     end
     # Check for local functions that shadow methods in Base
-    if f_is_function && isdefined(Base, name)
-        basef = getfield(Base, name)
-        if basef !== ex.f && hasmethod(basef, arg_types)
-            print(io, "\nYou may have intended to import ")
-            show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+    let name = ft.name.mt.name
+        if f_is_function && isdefined(Base, name)
+            basef = getfield(Base, name)
+            if basef !== f && hasmethod(basef, arg_types)
+                print(io, "\nYou may have intended to import ")
+                show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+            end
         end
     end
-    if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
-        !hasmethod(ex.f, arg_types, world = ex.world))
+    if ex.world == typemax(UInt) || hasmethod(f, arg_types, world=ex.world)
+        if !isempty(kwargs)
+            print(io, "\nThis method does not support all of the given keyword arguments (and may not support any).")
+        end
+        if ex.world == typemax(UInt) || isempty(kwargs)
+            print(io, "\nThis error has been manually thrown, explicitly, so the method may exist but be intentionally marked as unimplemented.")
+        end
+    elseif hasmethod(f, arg_types) && !hasmethod(f, arg_types, world=ex.world)
         curworld = get_world_counter()
         print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
+    elseif f isa Function
+        print(io, "\nThe function `$f` exists, but no method is defined for this combination of argument types.")
+    elseif f isa Type
+        print(io, "\nThe type `$f` exists, but no method is defined for this combination of argument types when trying to construct it.")
+    else
+        print(io, "\nThe object of type `$(typeof(f))` exists, but no method is defined for this combination of argument types when trying to treat it as a callable object.")
     end
     if !is_arg_types
         # Check for row vectors used where a column vector is intended.
@@ -342,7 +358,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
+    Experimental.show_error_hints(io, ex, san_arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
@@ -354,16 +370,12 @@ end
 striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
-function showerror_ambiguous(io::IO, meths, f, args)
+function showerror_ambiguous(io::IO, meths, f, args::Type)
+    @nospecialize f args
     print(io, "MethodError: ")
     show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
-    print(io, "(")
-    p = args.parameters
-    for (i,a) in enumerate(p)
-        print(io, "::", a)
-        i < length(p) && print(io, ", ")
-    end
-    println(io, ") is ambiguous.\n\nCandidates:")
+    show_tuple_as_call(io, :var"", args, hasfirst=false)
+    println(io, " is ambiguous.\n\nCandidates:")
     sigfix = Any
     for m in meths
         print(io, "  ")
@@ -375,7 +387,7 @@ function showerror_ambiguous(io::IO, meths, f, args)
         let sigfix=sigfix
             if all(m->morespecific(sigfix, m.sig), meths)
                 print(io, "\nPossible fix, define\n  ")
-                Base.show_tuple_as_call(io, :function,  sigfix)
+                show_tuple_as_call(io, :function,  sigfix)
             else
                 print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
                 print(io, "adding a new method more specific than any of the existing applicable methods.")
@@ -388,7 +400,7 @@ end
 
 #Show an error by directly calling jl_printf.
 #Useful in Base submodule __init__ functions where stderr isn't defined yet.
-function showerror_nostdio(err, msg::AbstractString)
+function showerror_nostdio(@nospecialize(err), msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, msg)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, ":\n")
@@ -400,15 +412,18 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
-function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
-    is_arg_types = isa(ex.args, DataType)
+function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
+    @nospecialize io
+    is_arg_types = !isa(ex.args, Tuple)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
-    arg_types_param = Any[arg_types.parameters...]
+    arg_types_param = Any[(unwrap_unionall(arg_types)::DataType).parameters...]
+    arg_types_param = Any[rewrap_unionall(a, arg_types) for a in arg_types_param]
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
     f = ex.f
     ft = typeof(f)
-    lines = []
+    lines = String[]
+    line_score = Int[]
     # These functions are special cased to only show if first argument is matched.
     special = f === convert || f === getindex || f === setindex!
     funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
@@ -499,85 +514,82 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
             end
 
-            if right_matches > 0 || length(arg_types_param) < 2
-                if length(t_i) < length(sig)
-                    # If the methods args is longer than input then the method
-                    # arguments is printed as not a match
-                    for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
-                        sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
-                        if Base.isvarargtype(sigtype)
-                            sigstr = (unwrapva(sigtype::Core.TypeofVararg), "...")
-                        else
-                            sigstr = (sigtype,)
-                        end
-                        if !((min(length(t_i), length(sig)) == 0) && k==1)
-                            print(iob, ", ")
-                        end
-                        if k == 1 && Base.isvarargtype(sigtype)
-                            # There wasn't actually a mismatch - the method match failed for
-                            # some other reason, e.g. world age. Just print the sigstr.
-                            print(iob, sigstr...)
-                        elseif get(io, :color, false)::Bool
-                            let sigstr=sigstr
-                                Base.with_output_color(Base.error_color(), iob) do iob
-                                    print(iob, "::", sigstr...)
-                                end
-                            end
-                        else
-                            print(iob, "!Matched::", sigstr...)
-                        end
+            if length(t_i) < length(sig)
+                # If the methods args is longer than input then the method
+                # arguments is printed as not a match
+                for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
+                    sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
+                    if Base.isvarargtype(sigtype)
+                        sigstr = (unwrapva(sigtype::Core.TypeofVararg), "...")
+                    else
+                        sigstr = (sigtype,)
                     end
-                end
-                kwords = kwarg_decl(method)
-                if !isempty(kwords)
-                    print(iob, "; ")
-                    join(iob, kwords, ", ")
-                end
-                print(iob, ")")
-                show_method_params(iob0, tv)
-                file, line = updated_methodloc(method)
-                if file === nothing
-                    file = string(method.file)
-                end
-                stacktrace_contract_userdir() && (file = contractuser(file))
-
-                if !isempty(kwargs)::Bool
-                    unexpected = Symbol[]
-                    if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
-                        for (k, v) in kwargs
-                            if !(k::Symbol in kwords)
-                                push!(unexpected, k::Symbol)
+                    if !((min(length(t_i), length(sig)) == 0) && k==1)
+                        print(iob, ", ")
+                    end
+                    if k == 1 && Base.isvarargtype(sigtype)
+                        # There wasn't actually a mismatch - the method match failed for
+                        # some other reason, e.g. world age. Just print the sigstr.
+                        print(iob, sigstr...)
+                    elseif get(io, :color, false)::Bool
+                        let sigstr=sigstr
+                            Base.with_output_color(Base.error_color(), iob) do iob
+                                print(iob, "::", sigstr...)
                             end
                         end
-                    end
-                    if !isempty(unexpected)
-                        Base.with_output_color(Base.error_color(), iob) do iob
-                            plur = length(unexpected) > 1 ? "s" : ""
-                            print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
-                        end
+                    else
+                        print(iob, "!Matched::", sigstr...)
                     end
                 end
-                if ex.world < reinterpret(UInt, method.primary_world)
-                    print(iob, " (method too new to be called from this world context.)")
-                elseif ex.world > reinterpret(UInt, method.deleted_world)
-                    print(iob, " (method deleted before this world age.)")
-                end
-                println(iob)
-
-                m = parentmodule_before_main(method)
-                modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
-                print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
-
-                # TODO: indicate if it's in the wrong world
-                push!(lines, (buf, right_matches))
             end
+            kwords = kwarg_decl(method)
+            if !isempty(kwords)
+                print(iob, "; ")
+                join(iob, kwords, ", ")
+            end
+            print(iob, ")")
+            show_method_params(iob0, tv)
+            file, line = updated_methodloc(method)
+            if file === nothing
+                file = string(method.file)
+            end
+            stacktrace_contract_userdir() && (file = contractuser(file))
+
+            if !isempty(kwargs)::Bool
+                unexpected = Symbol[]
+                if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
+                    for (k, v) in kwargs
+                        if !(k::Symbol in kwords)
+                            push!(unexpected, k::Symbol)
+                        end
+                    end
+                end
+                if !isempty(unexpected)
+                    Base.with_output_color(Base.error_color(), iob) do iob
+                        plur = length(unexpected) > 1 ? "s" : ""
+                        print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
+                    end
+                end
+            end
+            if ex.world < reinterpret(UInt, method.primary_world)
+                print(iob, " (method too new to be called from this world context.)")
+            elseif ex.world > reinterpret(UInt, method.deleted_world)
+                print(iob, " (method deleted before this world age.)")
+            end
+            println(iob)
+
+            m = parentmodule_before_main(method)
+            modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+            print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
+            push!(lines, String(take!(buf)))
+            push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
         end
     end
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
             print(io, "\n\nClosest candidates are:")
-            sort!(lines, by = x -> -x[2])
+            permute!(lines, sortperm(line_score))
             i = 0
             for line in lines
                 println(io)
@@ -586,7 +598,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     break
                 end
                 i += 1
-                print(io, String(take!(line[1])))
+                print(io, line)
             end
             println(io) # extra newline for spacing to stacktrace
         end
@@ -1011,6 +1023,31 @@ end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 
+# handler for displaying a hint in case the user tries to call setindex! on
+# something that doesn't support it:
+#  - a number (probably attempting to use wrong indexing)
+#    eg: a = [1 2; 3 4]; a[1][2] = 5
+#  - a type (probably tried to initialize without parentheses)
+#    eg: d = Dict; d["key"] = 2
+function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if ex.f == setindex!
+        T = arg_types[1]
+        if T <: Number
+            print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
+            printstyled(io, "a[1, 2]", color=:cyan)
+            print(io, " rather than a[1][2]")
+        else isType(T)
+            Tx = T.parameters[1]
+            print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
+            printstyled(io, "d = $Tx([...])", color=:cyan)
+            print(io, " rather than d = $Tx")
+        end
+    end
+end
+
+Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
+
 # Display a hint in case the user tries to use the + operator on strings
 # (probably attempting concatenation)
 function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
@@ -1024,17 +1061,30 @@ end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
 
-
 # Display a hint in case the user tries to use the min or max function on an iterable
-function min_max_on_iterable(io, ex, arg_types, kwargs)
+# or tries to use something like `collect` on an iterator without defining either IteratorSize or length
+function methods_on_iterable(io, ex, arg_types, kwargs)
     @nospecialize
-    if (ex.f === max || ex.f === min) && length(arg_types) == 1 && Base.isiterable(only(arg_types))
-        f_correct = ex.f === max ? "maximum" : "minimum"
+    f = ex.f
+    if (f === max || f === min) && length(arg_types) == 1 && Base.isiterable(only(arg_types))
+        f_correct = f === max ? "maximum" : "minimum"
         print(io, "\nFinding the $f_correct of an iterable is performed with `$f_correct`.")
     end
+    if (f === Base.length || f === Base.size) && length(arg_types) >= 1
+        arg_type_tuple = Tuple{arg_types...}
+        if hasmethod(iterate, arg_type_tuple)
+            iterkind = IteratorSize(arg_types[1])
+            if iterkind isa HasLength
+                print(io, "\nYou may need to implement the `length` method or define `IteratorSize` for this type to be `SizeUnknown`.")
+            elseif iterkind isa HasShape
+                print(io, "\nYou may need to implement the `length` and `size` methods for `IteratorSize` `HasShape`.")
+            end
+        end
+    end
+    nothing
 end
 
-Experimental.register_error_hint(min_max_on_iterable, MethodError)
+Experimental.register_error_hint(methods_on_iterable, MethodError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

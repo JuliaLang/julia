@@ -3,6 +3,7 @@
 module ScopedValues
 
 export ScopedValue, with, @with
+public get
 
 """
     ScopedValue(x)
@@ -19,6 +20,8 @@ Dynamic scopes are propagated across tasks.
 # Examples
 
 ```jldoctest
+julia> using Base.ScopedValues;
+
 julia> const sval = ScopedValue(1);
 
 julia> sval[]
@@ -52,9 +55,29 @@ Base.eltype(::ScopedValue{T}) where {T} = T
 """
     isassigned(val::ScopedValue)
 
-Test if the ScopedValue has a default value.
+Test whether a `ScopedValue` has an assigned value.
+
+See also: [`ScopedValues.with`](@ref), [`ScopedValues.@with`](@ref), [`ScopedValues.get`](@ref).
+
+# Examples
+```jldoctest
+julia> using Base.ScopedValues
+
+julia> a = ScopedValue(1); b = ScopedValue{Int}();
+
+julia> isassigned(a)
+true
+
+julia> isassigned(b)
+false
+```
 """
-Base.isassigned(val::ScopedValue) = val.has_default
+function Base.isassigned(val::ScopedValue)
+    val.has_default && return true
+    scope = Core.current_scope()::Union{Scope, Nothing}
+    scope === nothing && return false
+    return haskey((scope::Scope).values, val)
+end
 
 const ScopeStorage = Base.PersistentDict{ScopedValue, Any}
 
@@ -107,15 +130,30 @@ const novalue = NoValue()
 If the scoped value isn't set and doesn't have a default value,
 return `nothing`. Otherwise returns `Some{T}` with the current
 value.
+
+See also: [`ScopedValues.with`](@ref), [`ScopedValues.@with`](@ref), [`ScopedValues.ScopedValue`](@ref).
+
+# Examples
+```jldoctest
+julia> using Base.ScopedValues
+
+julia> a = ScopedValue(42); b = ScopedValue{Int}();
+
+julia> ScopedValues.get(a)
+Some(42)
+
+julia> isnothing(ScopedValues.get(b))
+true
+```
 """
 function get(val::ScopedValue{T}) where {T}
     scope = Core.current_scope()::Union{Scope, Nothing}
     if scope === nothing
-        isassigned(val) && return Some{T}(val.default)
+        val.has_default && return Some{T}(val.default)
         return nothing
     end
     scope = scope::Scope
-    if isassigned(val)
+    if val.has_default
         return Some{T}(Base.get(scope.values, val, val.default)::T)
     else
         v = Base.get(scope.values, val, novalue)
@@ -144,11 +182,32 @@ function Base.show(io::IO, val::ScopedValue)
 end
 
 """
-    @with vars... expr
+    @with (var::ScopedValue{T} => val)... expr
 
-Macro version of `with(f, vars...)` but with `expr` instead of `f` function.
-This is similar to using [`with`](@ref) with a `do` block, but avoids creating
-a closure.
+Macro version of `with`. The expression `@with var=>val expr` evaluates `expr` in a
+new dynamic scope with `var` set to `val`. `val` will be converted to type `T`.
+`@with var=>val expr` is equivalent to `with(var=>val) do expr end`, but `@with`
+avoids creating a closure.
+
+See also: [`ScopedValues.with`](@ref), [`ScopedValues.ScopedValue`](@ref), [`ScopedValues.get`](@ref).
+
+# Examples
+```jldoctest
+julia> using Base.ScopedValues
+
+julia> const a = ScopedValue(1);
+
+julia> f(x) = a[] + x;
+
+julia> @with a=>2 f(10)
+12
+
+julia> @with a=>3 begin
+           x = 100
+           f(x)
+       end
+103
+```
 """
 macro with(exprs...)
     if length(exprs) > 1
@@ -165,9 +224,44 @@ macro with(exprs...)
 end
 
 """
-    with(f, (var::ScopedValue{T} => val::T)...)
+    with(f, (var::ScopedValue{T} => val)...)
 
-Execute `f` in a new scope with `var` set to `val`.
+Execute `f` in a new dynamic scope with `var` set to `val`. `val` will be converted
+to type `T`.
+
+See also: [`ScopedValues.@with`](@ref), [`ScopedValues.ScopedValue`](@ref), [`ScopedValues.get`](@ref).
+
+# Examples
+```jldoctest
+julia> using Base.ScopedValues
+
+julia> a = ScopedValue(1);
+
+julia> f(x) = a[] + x;
+
+julia> f(10)
+11
+
+julia> with(a=>2) do
+           f(10)
+       end
+12
+
+julia> f(10)
+11
+
+julia> b = ScopedValue(2);
+
+julia> g(x) = a[] + b[] + x;
+
+julia> with(a=>10, b=>20) do
+           g(30)
+       end
+60
+
+julia> with(() -> a[] * b[], a=>3, b=>4)
+12
+```
 """
 function with(f, pair::Pair{<:ScopedValue}, rest::Pair{<:ScopedValue}...)
     @with(pair, rest..., f())

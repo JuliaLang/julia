@@ -584,9 +584,9 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
     char *pp = (char*)jl_unbox_long(p);
     jl_datatype_t *rettyp = jl_apply_cmpswap_type(ety);
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    jl_value_t *result = NULL;
+    JL_GC_PUSH1(&result);
     if (ety == (jl_value_t*)jl_any_type) {
-        jl_value_t *result;
-        JL_GC_PUSH1(&result);
         result = expected;
         int success;
         while (1) {
@@ -595,8 +595,6 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
                 break;
         }
         result = jl_new_struct(rettyp, result, success ? jl_true : jl_false);
-        JL_GC_POP();
-        return result;
     }
     else {
         if (jl_typeof(x) != ety)
@@ -604,8 +602,20 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
         size_t nb = jl_datatype_size(ety);
         if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
             jl_error("atomic_pointerreplace: invalid pointer for atomic operation");
-        return jl_atomic_cmpswap_bits((jl_datatype_t*)ety, rettyp, pp, expected, x, nb);
+        int isptr = jl_field_isptr(rettyp, 0);
+        jl_task_t *ct = jl_current_task;
+        result = jl_gc_alloc(ct->ptls, isptr ? nb : jl_datatype_size(rettyp), isptr ? ety : (jl_value_t*)rettyp);
+        int success = jl_atomic_cmpswap_bits((jl_datatype_t*)ety, result, pp, expected, x, nb);
+        if (isptr) {
+            jl_value_t *z = jl_gc_alloc(ct->ptls, jl_datatype_size(rettyp), rettyp);
+            *(jl_value_t**)z = result;
+            result = z;
+            nb = sizeof(jl_value_t*);
+        }
+        *((uint8_t*)result + nb) = success ? 1 : 0;
     }
+    JL_GC_POP();
+    return result;
 }
 
 JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
@@ -1374,10 +1384,8 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
 un_iintrinsic_fast(LLVMNeg, neg, neg_int, u)
 #define add(a,b) a + b
 bi_iintrinsic_fast(LLVMAdd, add, add_int, u)
-bi_iintrinsic_fast(LLVMAdd, add, add_ptr, u)
 #define sub(a,b) a - b
 bi_iintrinsic_fast(LLVMSub, sub, sub_int, u)
-bi_iintrinsic_fast(LLVMSub, sub, sub_ptr, u)
 #define mul(a,b) a * b
 bi_iintrinsic_fast(LLVMMul, mul, mul_int, u)
 #define div(a,b) a / b
@@ -1685,4 +1693,20 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
         return jl_cpu_has_fma(64);
     else
         return jl_false;
+}
+
+JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *ptr, jl_value_t *offset)
+{
+    JL_TYPECHK(add_ptr, pointer, ptr);
+    JL_TYPECHK(add_ptr, ulong, offset);
+    char *ptrval = (char*)jl_unbox_long(ptr) + jl_unbox_ulong(offset);
+    return jl_new_bits(jl_typeof(ptr), &ptrval);
+}
+
+JL_DLLEXPORT jl_value_t *jl_sub_ptr(jl_value_t *ptr, jl_value_t *offset)
+{
+    JL_TYPECHK(sub_ptr, pointer, ptr);
+    JL_TYPECHK(sub_ptr, ulong, offset);
+    char *ptrval = (char*)jl_unbox_long(ptr) - jl_unbox_ulong(offset);
+    return jl_new_bits(jl_typeof(ptr), &ptrval);
 }

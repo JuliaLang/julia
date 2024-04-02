@@ -184,7 +184,7 @@ function Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, Ab
     end
     for d in ndims(Ay)+1:ndims(z)
         # Similar error to what Ay + z would give, to match (Any,Any,Any) method:
-        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+        size(z,d) > 1 && throw(DimensionMismatch(string("z has dims ",
             axes(z), ", must have singleton at dim ", d)))
     end
     Ay .+ z
@@ -197,7 +197,7 @@ function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, Ab
     end
     for d in 3:ndims(z)
         # Similar error to (u*v) + z:
-        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+        size(z,d) > 1 && throw(DimensionMismatch(string("z has dims ",
             axes(z), ", must have singleton at dim ", d)))
     end
     (u .* v) .+ z
@@ -682,19 +682,60 @@ end
 
 lapack_size(t::AbstractChar, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
+"""
+    copyto!(B::AbstractMatrix, ir_dest::AbstractUnitRange, jr_dest::AbstractUnitRange,
+            tM::AbstractChar,
+            M::AbstractVecOrMat, ir_src::AbstractUnitRange, jr_src::AbstractUnitRange) -> B
+
+Efficiently copy elements of matrix `M` to `B` conditioned on the character
+parameter `tM` as follows:
+
+| `tM` | Destination | Source |
+| --- | :--- | :--- |
+| `'N'` | `B[ir_dest, jr_dest]` | `M[ir_src, jr_src]` |
+| `'T'` | `B[ir_dest, jr_dest]` | `transpose(M)[ir_src, jr_src]` |
+| `'C'` | `B[ir_dest, jr_dest]` | `adjoint(M)[ir_src, jr_src]` |
+
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore, the index range
+parameters must satisfy `length(ir_dest) == length(ir_src)` and
+`length(jr_dest) == length(jr_src)`.
+
+See also [`copy_transpose!`](@ref) and [`copy_adjoint!`](@ref).
+"""
 function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
+    elseif tM == 'T'
+        copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
     else
-        LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
-        tM == 'C' && conj!(@view B[ir_dest, jr_dest])
+        copy_adjoint!(B, ir_dest, jr_dest, M, jr_src, ir_src)
     end
     B
 end
 
+"""
+    copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange, jr_dest::AbstractUnitRange,
+                    tM::AbstractChar,
+                    M::AbstractVecOrMat, ir_src::AbstractUnitRange, jr_src::AbstractUnitRange) -> B
+
+Efficiently copy elements of matrix `M` to `B` conditioned on the character
+parameter `tM` as follows:
+
+| `tM` | Destination | Source |
+| --- | :--- | :--- |
+| `'N'` | `B[ir_dest, jr_dest]` | `transpose(M)[jr_src, ir_src]` |
+| `'T'` | `B[ir_dest, jr_dest]` | `M[jr_src, ir_src]` |
+| `'C'` | `B[ir_dest, jr_dest]` | `conj(M)[jr_src, ir_src]` |
+
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore, the index
+range parameters must satisfy `length(ir_dest) == length(jr_src)` and
+`length(jr_dest) == length(ir_src)`.
+
+See also [`copyto!`](@ref) and [`copy_adjoint!`](@ref).
+"""
 function copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
-        LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
+        copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
         copyto!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         tM == 'C' && conj!(@view B[ir_dest, jr_dest])

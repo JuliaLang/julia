@@ -44,7 +44,16 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 if C_NULL == owner
                     # No global of this name exists in this module.
                     # This is the common case, so do not print that information.
-                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    # It could be the binding was exported by two modules, which we can detect
+                    # by the `usingfailed` flag in the binding:
+                    if isdefined(bnd, :flags) && Bool(bnd.flags >> 4 & 1) # magic location of the `usingfailed` flag
+                        print(io, "\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+                    else
+                        print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    end
                     owner = bnd
                 else
                     owner = unsafe_pointer_to_objref(owner)::Core.Binding
@@ -91,7 +100,7 @@ function __init__()
     return nothing
 end
 
-using Base.Meta, Sockets
+using Base.Meta, Sockets, StyledStrings
 import InteractiveUtils
 
 export
@@ -130,12 +139,10 @@ import ..LineEdit:
     history_first,
     history_last,
     history_search,
-    accept_result,
     setmodifiers!,
     terminal,
     MIState,
     PromptState,
-    TextInterface,
     mode_idx
 
 include("REPLCompletions.jl")
@@ -205,6 +212,27 @@ const repl_ast_transforms = Any[softscope] # defaults for new REPL backends
 # to e.g. install packages on demand
 const install_packages_hooks = Any[]
 
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+# We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
+# code to run (and error).
+__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
+    ccall(:jl_expand_with_loc, Any, (Any, Any, Ptr{UInt8}, Cint), ast, mod, toplevel_file[], toplevel_line[])
+__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
+    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Cint}), mod, ast, 1, 1, toplevel_file, toplevel_line)
+
+function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
+    if !isexpr(ast, :toplevel)
+        ast = __repl_entry_lower_with_loc(mod, ast, toplevel_file, toplevel_line)
+        check_for_missing_packages_and_run_hooks(ast)
+        return __repl_entry_eval_expanded_with_loc(mod, ast, toplevel_file, toplevel_line)
+    end
+    local value=nothing
+    for i = 1:length(ast.args)
+        value = toplevel_eval_with_hooks(mod, ast.args[i], toplevel_file, toplevel_line)
+    end
+    return value
+end
+
 function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     lasterr = nothing
     Base.sigatomic_begin()
@@ -215,13 +243,10 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
             else
                 backend.in_eval = true
-                if !isempty(install_packages_hooks)
-                    check_for_missing_packages_and_run_hooks(ast)
-                end
                 for xf in backend.ast_transforms
                     ast = Base.invokelatest(xf, ast)
                 end
-                value = Core.eval(mod, ast)
+                value = toplevel_eval_with_hooks(mod, ast)
                 backend.in_eval = false
                 setglobal!(Base.MainInclude, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
@@ -244,13 +269,14 @@ function check_for_missing_packages_and_run_hooks(ast)
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
+        isempty(install_packages_hooks) && Base.require_stdlib(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
         for f in install_packages_hooks
             Base.invokelatest(f, mods) && return
         end
     end
 end
 
-function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
+function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
     ast.head === :quote && return mods # don't search if it's not going to be run during this eval
     if ast.head === :using || ast.head === :import
         for arg in ast.args
@@ -265,12 +291,24 @@ function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
             end
         end
     end
-    for arg in ast.args
-        if isexpr(arg, (:block, :if, :using, :import))
-            modules_to_be_loaded(arg, mods)
+    if ast.head !== :thunk
+        for arg in ast.args
+            if isexpr(arg, (:block, :if, :using, :import))
+                _modules_to_be_loaded!(arg, mods)
+            end
+        end
+    else
+        code = ast.args[1]
+        for arg in code.code
+            isa(arg, Expr) || continue
+            _modules_to_be_loaded!(arg, mods)
         end
     end
-    filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
+end
+
+function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
+    _modules_to_be_loaded!(ast, mods)
+    filter!(mod::Symbol -> !in(mod, (:Base, :Main, :Core)), mods) # Exclude special non-package modules
     return unique(mods)
 end
 
@@ -955,7 +993,7 @@ end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
                        !isempty(DEPOT_PATH) ? joinpath(DEPOT_PATH[1], "logs", "repl_history.jl") :
-                       error("DEPOT_PATH is empty and and ENV[\"JULIA_HISTORY\"] not set."))
+                       error("DEPOT_PATH is empty and ENV[\"JULIA_HISTORY\"] not set."))
 
 backend(r::AbstractREPL) = r.backendref
 
@@ -1188,24 +1226,23 @@ function setup_interface(
         ']' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
-                    Pkg = Base.require(pkgid)
-                    # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
-                    pkg_mode = nothing
+                REPLExt = Base.require_stdlib(pkgid, "REPLExt")
+                pkg_mode = nothing
+                if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
                     for mode in repl.interface.modes
-                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
+                        if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
                             pkg_mode = mode
                             break
                         end
                     end
-                    # TODO: Cache the `pkg_mode`?
-                    if pkg_mode !== nothing
-                        buf = copy(LineEdit.buffer(s))
-                        transition(s, pkg_mode) do
-                            LineEdit.state(s, pkg_mode).input_buffer = buf
-                        end
-                        return
+                end
+                # TODO: Cache the `pkg_mode`?
+                if pkg_mode !== nothing
+                    buf = copy(LineEdit.buffer(s))
+                    transition(s, pkg_mode) do
+                        LineEdit.state(s, pkg_mode).input_buffer = buf
                     end
+                    return
                 end
             end
             edit_insert(s, ']')
@@ -1342,7 +1379,7 @@ function setup_interface(
                     # execute the statement
                     terminal = LineEdit.terminal(s) # This is slightly ugly but ok for now
                     raw!(terminal, false) && disable_bracketed_paste(terminal)
-                    LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
+                    @invokelatest LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
                     raw!(terminal, true) && enable_bracketed_paste(terminal)
                     LineEdit.push_undo(s) # when the last line is incomplete
                 end
@@ -1651,7 +1688,6 @@ function __current_ast_transforms(backend)
         backend.ast_transforms
     end
 end
-
 
 function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)

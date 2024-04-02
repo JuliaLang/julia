@@ -212,7 +212,7 @@ end
 end
 
 
-@testset "element type" begin
+@testset "elelement/value/key types" begin
     @test eltype((1,2,3)) === Int
     @test eltype((1.0,2.0,3.0)) <: AbstractFloat
     @test eltype((true, false)) === Bool
@@ -227,6 +227,11 @@ end
         typejoin(Int, Float64, Bool)
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+
+    @test valtype((1,2,3)) === eltype((1,2,3))
+    @test valtype(Tuple{Int, Missing}) === eltype(Tuple{Int, Missing})
+    @test keytype((1,2,3)) === Int
+    @test keytype(Tuple{Int, Missing}) === Int
 end
 
 @testset "map with Nothing and Missing" begin
@@ -812,4 +817,16 @@ namedtup = (;a=1, b=2, c=3)
     pair = (1 => "2")
     @test (1, "2") == @inferred Tuple(pair)
     @test (1, "2") == @inferred Tuple{Int,String}(pair)
+end
+
+@testset "circshift" begin
+    t1 = (1, 2, 3, 4, 5)
+    t2 = (1, 'a', -7.0, 3)
+    t3 = ('a', 'b', 'c', 'd')
+    @test @inferred(Base.circshift(t1, 2)) == (4, 5, 1, 2, 3)
+    # The return type of mixed tuples with runtime shift cannot be inferred.
+    @test Base.circshift(t2, 3) == ('a', -7.0, 3, 1)
+    @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
+    @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
+    @test_throws MethodError circshift(t1, 'a')
 end

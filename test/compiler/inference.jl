@@ -184,11 +184,7 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
-    if commutative
-        @test r == Core.Compiler.tuplemerge(b, a)
-    else
-        @test_broken r == Core.Compiler.tuplemerge(b, a)
-    end
+    @test r == Core.Compiler.tuplemerge(b, a) broken=!commutative
 end
 tuplemerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
 tuplemerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
@@ -238,13 +234,18 @@ tuplemerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{Char, Int}}, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}}
 @test Core.Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{Int, Int}}, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Vector) == Union{Nothing, AbstractVector}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, AbstractArray{Int}}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Array) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractArray{Int}}, Vector) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector}, Matrix{Int}) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Vector) == Union{Nothing, Int, AbstractVector}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Matrix) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, Int, AbstractArray{Int}}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Array) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractArray{Int}}, Vector) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector}, Matrix{Int}) == Union{Nothing, Int, AbstractArray}
 @test Core.Compiler.tmerge(Union{Nothing, AbstractFloat}, Integer) == Union{Nothing, AbstractFloat, Integer}
+@test Core.Compiler.tmerge(AbstractVector, AbstractMatrix) == Union{AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Nothing}, AbstractMatrix) == Union{Nothing, AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Int}, AbstractMatrix) == Union{Int, AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Integer}, AbstractMatrix) == Union{Integer, AbstractArray}
+@test Core.Compiler.tmerge(Union{AbstractVector, Nothing, Int}, AbstractMatrix) == Union{Nothing, Int, AbstractArray}
 
 # test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
 # Specifically test with base types of a trivial type, a simple union, a complicated union, and a tuple.
@@ -675,7 +676,6 @@ end
 function test_inferred_static(arrow::Pair, all_ssa)
     code, rt = arrow
     @test isdispatchelem(rt)
-    @test code.inferred
     for i = 1:length(code.code)
         e = code.code[i]
         test_inferred_static(e)
@@ -1622,24 +1622,24 @@ let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Co
     @test memoryref_isassigned_tfunc(Any, Any, Any) === Bool
     @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Vararg{Any}]) == Bool
     @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Symbol, Bool, Vararg{Bool}]) == Bool
-    @test memoryrefset!_tfunc(MemoryRef{Int}, Int, Symbol, Bool) === MemoryRef{Int}
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Int, Symbol, Bool) === Int
     let ua = MemoryRef{<:Integer}
-        @test memoryrefset!_tfunc(ua, Int, Symbol, Bool) === ua
+        @test memoryrefset!_tfunc(ua, Int, Symbol, Bool) === Int
     end
-    @test memoryrefset!_tfunc(GenericMemoryRef, Int, Symbol, Bool) === GenericMemoryRef
-    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Int, Symbol, Bool) === GenericMemoryRef{:not_atomic}
-    @test memoryrefset!_tfunc(Any, Int, Symbol, Bool) === Any
+    @test memoryrefset!_tfunc(GenericMemoryRef, Int, Symbol, Bool) === Int
+    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Int, Symbol, Bool) === Int
+    @test memoryrefset!_tfunc(Any, Int, Symbol, Bool) === Int
     @test memoryrefset!_tfunc(MemoryRef{String}, Int, Symbol, Bool) === Union{}
     @test memoryrefset!_tfunc(String, Char, Symbol, Bool) === Union{}
-    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Symbol, Bool) === MemoryRef{Int}
-    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Any, Any) === MemoryRef{Int}
-    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Any, Any, Any) === GenericMemoryRef{:not_atomic}
-    @test memoryrefset!_tfunc(GenericMemoryRef, Any, Any, Any) === GenericMemoryRef
-    @test memoryrefset!_tfunc(Any, Any, Any, Any) === Any # also probably could be GenericMemoryRef
-    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Any}]) == MemoryRef{Int}
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Symbol, Bool) === Any # could improve this to Int
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Any, Any) === Any # could improve this to Int
+    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Any, Any, Any) === Any
+    @test memoryrefset!_tfunc(GenericMemoryRef, Any, Any, Any) === Any
+    @test memoryrefset!_tfunc(Any, Any, Any, Any) === Any
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Any}]) == Any
     @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Symbol}]) == Union{}
-    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Vararg{Bool}]) == MemoryRef{Int}
-    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Bool, Vararg{Any}]) == MemoryRef{Int}
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Vararg{Bool}]) === Any # could improve this to Int
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Bool, Vararg{Any}]) === Any # could improve this to Int
     @test memoryrefoffset_tfunc(MemoryRef) == memoryrefoffset_tfunc(GenericMemoryRef) == Int
     @test memoryrefoffset_tfunc(Memory) == memoryrefoffset_tfunc(GenericMemory) == Union{}
     @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{MemoryRef}]) == Int
@@ -1698,7 +1698,6 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
     @test opt.src.ssavaluetypes isa Vector{Any}
-    @test !opt.src.inferred
     @test opt.mod === Base
 end
 
@@ -4680,11 +4679,11 @@ end
 
     a = Tuple{Vararg{Tuple{}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}
+    @test a == Union{Tuple{Tuple{Vararg{Tuple{}}}}, Tuple{Vararg{Tuple{}}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}
+    @test a == Tuple{Vararg{Union{Tuple{Tuple{Vararg{Tuple{}}}}, Tuple{Vararg{Tuple{}}}}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}}}
+    @test a == Tuple
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
     @test a == Tuple
 end
@@ -5628,3 +5627,56 @@ end
 
 # Issue #52613
 @test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar
+
+# https://github.com/JuliaLang/julia/issues/53590
+func53590(b) = b ? Int : Float64
+function issue53590(b1, b2)
+    T1 = func53590(b1)
+    T2 = func53590(b2)
+    return typejoin(T1, T2)
+end
+@test issue53590(true, true) == Int
+@test issue53590(true, false) == Real
+@test issue53590(false, false) == Float64
+@test issue53590(false, true) == Real
+
+# Expr(:throw_undef_if_not) handling
+@eval function has_tuin()
+    $(Expr(:throw_undef_if_not, :x, false))
+end
+@test Core.Compiler.return_type(has_tuin, Tuple{}) === Union{}
+@test_throws UndefVarError has_tuin()
+
+# issue #53585
+let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
+    @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
+    @test only(Base.return_types(vcat, t)) == Vector{Float64}
+end
+
+# Infinite loop in inference on SSA assignment
+const stop_infinite_loop::Base.Threads.Atomic{Bool} = Base.Threads.Atomic{Bool}(false)
+function gen_infinite_loop_ssa_generator(world::UInt, source, _)
+    ci = make_codeinfo(Any[
+        # Block 1
+        (),
+        # Block 2
+        PhiNode(Int32[1, 5], Any[SSAValue(1), SSAValue(3)]),
+        Expr(:call, tuple, SSAValue(2)),
+        Expr(:call, getindex, GlobalRef(@__MODULE__, :stop_infinite_loop)),
+        GotoIfNot(SSAValue(4), 2),
+        # Block 3
+        ReturnNode(SSAValue(2))
+    ]; slottypes=Any[Any])
+    ci.slotnames = Symbol[:var"#self#"]
+    ci
+end
+
+@eval function gen_infinite_loop_ssa()
+    $(Expr(:meta, :generated, gen_infinite_loop_ssa_generator))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+
+# We want to make sure that both this returns `Tuple` and that
+# it doesn't infinite loop inside inference.
+@test Core.Compiler.return_type(gen_infinite_loop_ssa, Tuple{}) === Tuple

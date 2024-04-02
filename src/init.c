@@ -273,7 +273,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
@@ -317,7 +317,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                     assert(item);
                     uv_unref(item->h);
                     jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
-                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                     jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                     jlbacktrace(); // written to STDERR_FILENO
                     item = next_shutdown_queue_item(item);
@@ -372,7 +372,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\npostoutput hook threw an error: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
@@ -539,7 +539,7 @@ int jl_isabspath(const char *in) JL_NOTSAFEPOINT
     return 0; // relative path
 }
 
-static char *abspath(const char *in, int nprefix)
+static char *absrealpath(const char *in, int nprefix)
 { // compute an absolute realpath location, so that chdir doesn't change the file reference
   // ignores (copies directly over) nprefix characters at the start of abspath
 #ifndef _OS_WINDOWS_
@@ -655,7 +655,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         }
     }
     if (jl_options.julia_bindir)
-        jl_options.julia_bindir = abspath(jl_options.julia_bindir, 0);
+        jl_options.julia_bindir = absrealpath(jl_options.julia_bindir, 0);
     free(free_path);
     free_path = NULL;
     if (jl_options.image_file) {
@@ -670,33 +670,33 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             jl_options.image_file = free_path;
         }
         if (jl_options.image_file)
-            jl_options.image_file = abspath(jl_options.image_file, 0);
+            jl_options.image_file = absrealpath(jl_options.image_file, 0);
         if (free_path) {
             free(free_path);
             free_path = NULL;
         }
     }
     if (jl_options.outputo)
-        jl_options.outputo = abspath(jl_options.outputo, 0);
+        jl_options.outputo = absrealpath(jl_options.outputo, 0);
     if (jl_options.outputji)
-        jl_options.outputji = abspath(jl_options.outputji, 0);
+        jl_options.outputji = absrealpath(jl_options.outputji, 0);
     if (jl_options.outputbc)
-        jl_options.outputbc = abspath(jl_options.outputbc, 0);
+        jl_options.outputbc = absrealpath(jl_options.outputbc, 0);
     if (jl_options.outputasm)
-        jl_options.outputasm = abspath(jl_options.outputasm, 0);
+        jl_options.outputasm = absrealpath(jl_options.outputasm, 0);
     if (jl_options.machine_file)
-        jl_options.machine_file = abspath(jl_options.machine_file, 0);
+        jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
     if (jl_options.tracked_path)
-        jl_options.tracked_path = abspath(jl_options.tracked_path, 0);
+        jl_options.tracked_path = absrealpath(jl_options.tracked_path, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {
         for (; *cmdp; cmdp++) {
             const char *cmd = *cmdp;
             if (cmd[0] == 'L') {
-                *cmdp = abspath(cmd, 1);
+                *cmdp = absrealpath(cmd, 1);
             }
         }
     }

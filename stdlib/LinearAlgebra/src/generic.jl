@@ -864,6 +864,8 @@ function dot(x, y) # arbitrary iterables
     end
     (vx, xs) = ix
     (vy, ys) = iy
+    typeof(vx) == typeof(x) && typeof(vy) == typeof(y) && throw(ArgumentError(
+            "cannot evaluate dot recursively if the type of an element is identical to that of the container"))
     s = dot(vx, vy)
     while true
         ix = iterate(x, xs)
@@ -1639,6 +1641,15 @@ julia> M = [1 0; 2 2]
 
 julia> det(M)
 2.0
+```
+Note that, in general, `det` computes a floating-point approximation of the
+determinant, even for integer matrices, typically via Gaussian elimination.
+Julia includes an exact algorithm for integer determinants (the Bareiss algorithm),
+but only uses it by default for `BigInt` matrices (since determinants quickly
+overflow any fixed integer precision):
+```jldoctest
+julia> det(BigInt[1 0; 2 2]) # exact integer determinant
+2
 ```
 """
 function det(A::AbstractMatrix{T}) where {T}

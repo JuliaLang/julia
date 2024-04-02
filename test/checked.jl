@@ -3,7 +3,7 @@
 # Checked integer arithmetic
 
 import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
-             checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+             checked_div, checked_rem, checked_fld, checked_mod, checked_cld, checked_pow,
              add_with_overflow, sub_with_overflow, mul_with_overflow
 
 # checked operations
@@ -166,6 +166,19 @@ import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
     @test checked_cld(typemin(T), T(1)) === typemin(T)
     @test_throws DivideError checked_cld(typemin(T), T(0))
     @test_throws DivideError checked_cld(typemin(T), T(-1))
+
+    @test checked_pow(T(1), T(0)) === T(1)
+    @test checked_pow(typemax(T), T(0)) === T(1)
+    @test checked_pow(typemin(T), T(0)) === T(1)
+    @test checked_pow(T(1), T(1)) === T(1)
+    @test checked_pow(T(1), typemax(T)) === T(1)
+    @test checked_pow(T(2), T(2)) === T(4)
+    @test_throws OverflowError checked_pow(T(2), typemax(T))
+    @test_throws OverflowError checked_pow(T(-2), typemax(T))
+    @test_throws OverflowError checked_pow(typemax(T), T(2))
+    @test_throws OverflowError checked_pow(typemin(T), T(2))
+    @test_throws DomainError checked_pow(T(2), -T(1))
+    @test_throws DomainError checked_pow(-T(2), -T(1))
 end
 
 @testset for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
@@ -296,6 +309,10 @@ end
     @test checked_cld(true, true) === true
     @test checked_cld(false, true) === false
     @test_throws DivideError checked_cld(true, false)
+
+    @test checked_pow(true, 1) === true
+    @test checked_pow(true, 1000000) === true
+    @test checked_pow(false, 1000000) === false
 end
 @testset "BigInt" begin
     @test checked_abs(BigInt(-1)) == BigInt(1)
@@ -310,6 +327,9 @@ end
     @test checked_fld(BigInt(10), BigInt(3)) == BigInt(3)
     @test checked_mod(BigInt(9), BigInt(4)) == BigInt(1)
     @test checked_cld(BigInt(10), BigInt(3)) == BigInt(4)
+
+    @test checked_pow(BigInt(2), 2) == BigInt(4)
+    @test checked_pow(BigInt(2), 100) == BigInt(1267650600228229401496703205376)
 end
 
 @testset "Additional tests" begin

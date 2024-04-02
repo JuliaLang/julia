@@ -9,14 +9,14 @@ const VInt = UInt32
     VersionNumber
 
 Version number type which follows the specifications of
-[semantic versioning (semver)](https://semver.org/), composed of major, minor
+[semantic versioning (semver)](https://semver.org/spec/v2.0.0-rc.2.html), composed of major, minor
 and patch numeric values, followed by pre-release and build
 alphanumeric annotations.
 
 `VersionNumber` objects can be compared with all of the standard comparison
-operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
+operators (`==`, `<`, `<=`, etc.), with the result following semver v2.0.0-rc.2 rules.
 
-`VersionNumber` has the the following public fields:
+`VersionNumber` has the following public fields:
 - `v.major::Integer`
 - `v.minor::Integer`
 - `v.patch::Integer`

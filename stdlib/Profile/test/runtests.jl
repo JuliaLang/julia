@@ -306,3 +306,4 @@ include("allocs.jl")
     @test_broken isempty(undoc)
     @test undoc == [:Allocs]
 end
+include("heapsnapshot_reassemble.jl")

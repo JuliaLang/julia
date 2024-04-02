@@ -812,6 +812,7 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    //Name.endswith_lower("jl_genericmemoryref_t") ||
                    Name.endswith_lower("jl_method_t") ||
                    Name.endswith_lower("jl_method_instance_t") ||
+                   Name.endswith_lower("jl_debuginfo_t") ||
                    Name.endswith_lower("jl_tupletype_t") ||
                    Name.endswith_lower("jl_datatype_t") ||
                    Name.endswith_lower("jl_typemap_entry_t") ||
@@ -1444,7 +1445,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   } else if (name == "JL_GC_PUSH1" || name == "JL_GC_PUSH2" ||
              name == "JL_GC_PUSH3" || name == "JL_GC_PUSH4" ||
              name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6" ||
-             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8") {
+             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8" ||
+             name == "JL_GC_PUSH9") {
     ProgramStateRef State = C.getState();
     // Transform slots to roots, transform values to rooted
     unsigned NumArgs = CE->getNumArgs();

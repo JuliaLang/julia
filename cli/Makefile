@@ -24,6 +24,8 @@ else ifeq ($(OS),Linux)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed -Wl,-z,notext
 else ifeq ($(OS),FreeBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
+else ifeq ($(OS),OpenBSD)
+LOADER_LDFLAGS += -Wl,--no-as-needed -lpthread -rdynamic -lc -Wl,--as-needed
 else ifeq ($(OS),Darwin)
 LOADER_LDFLAGS += -lSystem
 endif
@@ -48,7 +50,7 @@ LIB_DOBJS := $(BUILDDIR)/loader_lib.dbg.obj
 # If this is an architecture that supports dynamic linking, link in a trampoline definition
 ifneq (,$(wildcard $(SRCDIR)/trampolines/trampolines_$(ARCH).S))
 LIB_OBJS += $(BUILDDIR)/loader_trampolines.o
-LIB_DOBJS += $(BUILDDIR)/loader_trampolines.o
+LIB_DOBJS += $(BUILDDIR)/loader_trampolines.dbg.obj
 endif
 
 default: release
@@ -65,6 +67,8 @@ $(BUILDDIR)/loader_exe.dbg.obj : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/
 	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_trampolines.o : $(SRCDIR)/trampolines/trampolines_$(ARCH).S $(HEADERS) $(SRCDIR)/trampolines/common.h
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
+$(BUILDDIR)/loader_trampolines.dbg.obj : $(SRCDIR)/trampolines/trampolines_$(ARCH).S $(HEADERS) $(SRCDIR)/trampolines/common.h
+	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
 
 # Debugging target to help us see what kind of code is being generated for our trampolines
 dump-trampolines: $(SRCDIR)/trampolines/trampolines_$(ARCH).S
@@ -105,7 +109,7 @@ julia-debug: $(build_bindir)/julia-debug$(EXE)
 libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 
-ifneq (,$(filter $(OS), Linux FreeBSD))
+ifneq (,$(filter $(OS), Linux FreeBSD OpenBSD))
 VERSIONSCRIPT := -Wl,--version-script=$(BUILDDIR)/julia.expmap
 endif
 

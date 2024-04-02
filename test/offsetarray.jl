@@ -864,3 +864,8 @@ end
     # this is fixed in #40038, so the evaluation of its CartesianIndices should work
     @test CartesianIndices(A) == CartesianIndices(B)
 end
+
+@testset "indexing views (#53249)" begin
+    v = view([1,2,3,4], :)
+    @test v[Base.IdentityUnitRange(2:3)] == OffsetArray(2:3, 2:3)
+end

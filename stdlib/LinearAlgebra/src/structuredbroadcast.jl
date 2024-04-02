@@ -2,7 +2,7 @@
 
 ## Broadcast styles
 import Base.Broadcast
-using Base.Broadcast: DefaultArrayStyle, Broadcasted, tail
+using Base.Broadcast: DefaultArrayStyle, Broadcasted
 
 struct StructuredMatrixStyle{T} <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()
@@ -152,8 +152,13 @@ end
 
 function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
     inds = axes(bc)
-    if isstructurepreserving(bc) || (fzeropreserving(bc) && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
+    fzerobc = fzeropreserving(bc)
+    if isstructurepreserving(bc) || (fzerobc && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
         return structured_broadcast_alloc(bc, T, ElType, length(inds[1]))
+    elseif fzerobc && T <: UnitLowerTriangular
+        return similar(convert(Broadcasted{StructuredMatrixStyle{LowerTriangular}}, bc), ElType)
+    elseif fzerobc && T <: UnitUpperTriangular
+        return similar(convert(Broadcasted{StructuredMatrixStyle{UpperTriangular}}, bc), ElType)
     end
     return similar(convert(Broadcasted{DefaultArrayStyle{ndims(bc)}}, bc), ElType)
 end
@@ -251,6 +256,8 @@ end
 # We can also implement `map` and its promotion in terms of broadcast with a stricter dimension check
 function map(f, A::StructuredMatrix, Bs::StructuredMatrix...)
     sz = size(A)
-    all(map(B->size(B)==sz, Bs)) || throw(DimensionMismatch("dimensions must match"))
+    for B in Bs
+        size(B) == sz || Base.throw_promote_shape_mismatch(sz, size(B))
+    end
     return f.(A, Bs...)
 end

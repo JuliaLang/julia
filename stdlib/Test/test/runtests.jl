@@ -162,7 +162,7 @@ let fails = @testset NoThrowTestSet begin
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
-        @test_throws ["BoundsError", "aquire", "1-element", "at index [2]"] [1][2]
+        @test_throws ["BoundsError", "acquire", "1-element", "at index [2]"] [1][2]
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -294,7 +294,7 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[26])
-        @test occursin("Expected: [\"BoundsError\", \"aquire\", \"1-element\", \"at index [2]\"]", str)
+        @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
 
@@ -468,11 +468,11 @@ end
     end
     @testset "ts results" begin
         @test isa(ts, Test.DefaultTestSet)
-        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Test.get_test_counts(ts)
-        total_pass   = passes + c_passes
-        total_fail   = fails  + c_fails
-        total_error  = errors + c_errors
-        total_broken = broken + c_broken
+        tc = Test.get_test_counts(ts)
+        total_pass   = tc.passes + tc.cumulative_passes
+        total_fail   = tc.fails  + tc.cumulative_fails
+        total_error  = tc.errors + tc.cumulative_errors
+        total_broken = tc.broken + tc.cumulative_broken
         @test total_pass   == 24
         @test total_fail   == 6
         @test total_error  == 6
@@ -1585,4 +1585,128 @@ end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Test))
+end
+
+module CustomTestSetModule
+    using Test
+    struct CustomTestSet <: Test.AbstractTestSet
+        description::String
+    end
+    Test.record(::CustomTestSet, result) = result
+    Test.finish(cts::CustomTestSet) = cts
+end
+
+@testset "Unexported custom TestSet" begin
+    using .CustomTestSetModule
+    let res = @testset CustomTestSetModule.CustomTestSet begin
+                @test true
+            end
+        @test res isa CustomTestSetModule.CustomTestSet
+    end
+end
+
+struct CustomPrintingTestSet <: AbstractTestSet
+    description::String
+    passes::Int
+    errors::Int
+    fails::Int
+    broken::Int
+end
+
+function Test.finish(cpts::CustomPrintingTestSet)
+    if Test.get_testset_depth() != 0
+        push!(Test.get_current_testset(), cpts)
+        # printing is handled by the parent
+        return cpts
+    end
+
+    Test.print_testset_results(cpts)
+    cpts
+end
+
+@testset "Custom testsets participate in printing" begin
+    mktemp() do f, _
+        write(f,
+        """
+        using Test
+
+        mutable struct CustomPrintingTestSet <: Test.AbstractTestSet
+            description::String
+            passes::Int
+            fails::Int
+            errors::Int
+            broken::Int
+        end
+        CustomPrintingTestSet(desc::String) = CustomPrintingTestSet(desc, 0,0,0,0)
+
+        Test.record(cpts::CustomPrintingTestSet, ::Test.Pass) = cpts.passes += 1
+        Test.record(cpts::CustomPrintingTestSet, ::Test.Error) = cpts.errors += 1
+        Test.record(cpts::CustomPrintingTestSet, ::Test.Fail) = cpts.fails += 1
+        Test.record(cpts::CustomPrintingTestSet, ::Test.Broken) = cpts.broken += 1
+        Test.get_test_counts(ts::CustomPrintingTestSet) = Test.TestCounts(
+                                                                true,
+                                                                ts.passes,
+                                                                ts.fails,
+                                                                ts.errors,
+                                                                ts.broken,
+                                                                0,
+                                                                0,
+                                                                0,
+                                                                0,
+                                                                Test.format_duration(ts))
+
+        function Test.finish(cpts::CustomPrintingTestSet)
+            if Test.get_testset_depth() != 0
+                Test.record(Test.get_testset(), cpts)
+                # printing is handled by the parent
+                return cpts
+            end
+
+            Test.print_test_results(cpts)
+            cpts
+        end
+
+        struct NonRecordingTestSet <: Test.AbstractTestSet
+            description::String
+        end
+        Test.record(nrts::NonRecordingTestSet, ::Test.Result) = nrts
+        Test.finish(nrts::NonRecordingTestSet) = Test.record(Test.get_testset(), nrts)
+
+         @testset "outer" begin
+            @testset "a" begin
+                @test true
+            end
+            @testset CustomPrintingTestSet "custom" begin
+                @test false
+                @test true
+                @test_broken false
+                @test error()
+            end
+            @testset NonRecordingTestSet "no-record" begin
+                @test false
+                @test true
+                @test_broken false
+                @test error()
+            end
+            @testset "b" begin
+                @test true
+            end
+        end
+        """)
+
+        # this tests both the `TestCounts` parts as well as the fallback `x`s
+        expected = r"""
+                    Test Summary: | Pass  Fail  Error  Broken  Total  Time
+                    outer         |    3     1      1       1      6  \s*\d*.\ds
+                      a           |    1                           1  \s*\d*.\ds
+                      custom      |    1     1      1       1      4  \s*?s
+                      no-record   |    x     x      x       x      ?  \s*?s
+                      b           |    1                           1  \s*\d*.\ds
+                    ERROR: Some tests did not pass: 3 passed, 1 failed, 1 errored, 1 broken.
+                    """
+
+        cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+        result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+        @test occursin(expected, result)
+    end
 end

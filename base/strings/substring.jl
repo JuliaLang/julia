@@ -140,6 +140,8 @@ function hash(s::SubString{String}, h::UInt)
     ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
 end
 
+_isannotated(::SubString{T}) where {T} = _isannotated(T)
+
 """
     reverse(s::AbstractString) -> AbstractString
 

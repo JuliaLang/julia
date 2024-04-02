@@ -198,7 +198,7 @@ function validate_tags(tags::Dict)
         throw_invalid_key("arch")
     end
     # Validate `os`
-    if tags["os"] ∉ ("linux", "macos", "freebsd", "windows")
+    if tags["os"] ∉ ("linux", "macos", "freebsd", "openbsd", "windows")
         throw_invalid_key("os")
     end
     # Validate `os`/`arch` combination
@@ -306,7 +306,7 @@ function compare_version_cap(a::String, b::String, a_requested::Bool, b_requeste
         return a == b
     end
 
-    # Otherwise, do the comparison between the the single version cap and the single version:
+    # Otherwise, do the comparison between the single version cap and the single version:
     if a_requested
         return b <= a
     else
@@ -375,8 +375,10 @@ function os()
         return "windows"
     elseif Sys.isapple()
         return "macos"
-    elseif Sys.isbsd()
+    elseif Sys.isfreebsd()
         return "freebsd"
+    elseif Sys.isopenbsd()
+        return "openbsd"
     else
         return "linux"
     end
@@ -422,6 +424,7 @@ const platform_names = Dict(
     "macos" => "macOS",
     "windows" => "Windows",
     "freebsd" => "FreeBSD",
+    "openbsd" => "OpenBSD",
     nothing => "Unknown",
 )
 
@@ -556,6 +559,8 @@ function os_str(p::AbstractPlatform)
         else
             return "-unknown-freebsd"
         end
+    elseif os(p) == "openbsd"
+        return "-unknown-openbsd"
     else
         return "-unknown"
     end
@@ -581,7 +586,8 @@ Sys.isapple(p::AbstractPlatform) = os(p) == "macos"
 Sys.islinux(p::AbstractPlatform) = os(p) == "linux"
 Sys.iswindows(p::AbstractPlatform) = os(p) == "windows"
 Sys.isfreebsd(p::AbstractPlatform) = os(p) == "freebsd"
-Sys.isbsd(p::AbstractPlatform) = os(p) ∈ ("freebsd", "macos")
+Sys.isopenbsd(p::AbstractPlatform) = os(p) == "openbsd"
+Sys.isbsd(p::AbstractPlatform) = os(p) ∈ ("freebsd", "openbsd", "macos")
 Sys.isunix(p::AbstractPlatform) = Sys.isbsd(p) || Sys.islinux(p)
 
 const arch_mapping = Dict(
@@ -632,6 +638,7 @@ end
 const os_mapping = Dict(
     "macos" => "-apple-darwin[\\d\\.]*",
     "freebsd" => "-(.*-)?freebsd[\\d\\.]*",
+    "openbsd" => "-(.*-)?openbsd[\\d\\.]*",
     "windows" => "-w64-mingw32",
     "linux" => "-(.*-)?linux",
 )
@@ -745,6 +752,9 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         if os == "freebsd"
             os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)"sa)
         end
+        if os == "openbsd"
+            os_version = extract_os_version("openbsd", r".*openbsd([\d.]+)"sa)
+        end
         tags["os_version"] = os_version
 
         return Platform(arch, os, tags; validate_strict)
@@ -802,7 +812,7 @@ function parse_dl_name_version(path::String, os::String)
         # On OSX, libraries look like `libnettle.6.3.dylib`
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
     else
-        # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
+        # On Linux and others BSD, libraries look like `libnettle.so.6.3.0`
         dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"sa
     end
 

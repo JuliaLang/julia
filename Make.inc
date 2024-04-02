@@ -670,7 +670,7 @@ JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
 endif
 endif
 
-ifeq ($(OS), FreeBSD)
+ifneq ($(findstring $(OS),FreeBSD OpenBSD),)
 LOCALBASE ?= /usr/local
 else
 LOCALBASE ?= /usr
@@ -726,7 +726,7 @@ SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
-ifneq ($(findstring $(OS),Linux FreeBSD),)
+ifneq ($(findstring $(OS),Linux FreeBSD OpenBSD),)
 SANITIZE_LDFLAGS += -Wl,--warn-unresolved-symbols
 endif # OS Linux or FreeBSD
 endif # SANITIZE_MEMORY=1
@@ -758,6 +758,12 @@ ifeq ($(WITH_GC_VERIFY), 1)
 JCXXFLAGS += -DGC_VERIFY
 JCFLAGS += -DGC_VERIFY
 endif
+
+ifneq ($(JL_STACK_SIZE),)
+JCXXFLAGS += -DJL_STACK_SIZE=$(JL_STACK_SIZE)
+JCFLAGS += -DJL_STACK_SIZE=$(JL_STACK_SIZE)
+endif
+
 
 ifeq ($(WITH_GC_DEBUG_ENV), 1)
 JCXXFLAGS += -DGC_DEBUG_ENV
@@ -1063,7 +1069,7 @@ JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
-ifeq ($(OS),Darwin)
+ifneq ($(findstring $(OS),Darwin OpenBSD),)
 LIBUNWIND:=-lunwind
 JCPPFLAGS+=-DLLVMLIBUNWIND
 else
@@ -1374,6 +1380,19 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expma
 	$(NO_WHOLE_ARCHIVE)
 endif
 
+ifeq ($(OS), OpenBSD)
+JLDFLAGS += -Wl,--Bdynamic
+ifneq ($(SANITIZE),1)
+JLDFLAGS += -Wl,-no-undefined
+endif
+
+JLIBLDFLAGS += -Wl,-Bsymbolic-functions
+
+OSLIBS += -Wl,--no-as-needed -lpthread -lm -lc++abi -lc
+OSLIBS += -Wl,--whole-archive -lcompiler_rt -Wl,--no-whole-archive
+OSLIBS += -Wl,--export-dynamic,--as-needed,--version-script=$(BUILDROOT)/src/julia.expmap
+endif
+
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
@@ -1386,7 +1405,7 @@ endif
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
 JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
@@ -1481,7 +1500,7 @@ endif
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
-CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+ CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path -sdk macosx)
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix

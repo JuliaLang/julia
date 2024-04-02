@@ -1166,7 +1166,7 @@ and fewer memory accesses due to caching. These are the same reasons that it is 
 to access arrays in column-major order (see above). Irregular access patterns and non-contiguous
 views can drastically slow down computations on arrays because of non-sequential memory access.
 
-Copying irregularly-accessed data into a contiguous array before repeated access it can result
+Copying irregularly-accessed data into a contiguous array before repeatedly accessing it can result
 in a large speedup, such as in the example below. Here, a matrix is being accessed at
 randomly-shuffled indices before being multiplied. Copying into plain arrays speeds up the
 multiplication even with the added cost of copying and allocation.
@@ -1238,6 +1238,34 @@ versus:
 ```julia
 println(file, f(a), f(b))
 ```
+
+## Avoid eager string materialization
+
+In settings where a string representation of an object is only needed
+conditionally (e.g. in error paths of functions or conditional warnings such as
+deprecations), it is advisable to avoid the overhead of eagerly materializing
+the string. Since Julia 1.8, this can be achieved via
+[`LazyString`](@ref) and the corresponding string macro [`@lazy_str`](@ref).
+
+For example, instead of:
+
+```julia
+Base.depwarn("`foo` is deprecated for type $(typeof(x))", :bar)
+```
+
+use:
+
+```julia
+Base.depwarn(lazy"`foo` is deprecated for type $(typeof(x))", :bar)
+```
+
+or the equivalent macro-free version:
+
+```julia
+Base.depwarn(LazyString("`foo` is deprecated for type ", typeof(x)), :bar)
+```
+
+Through this approach, the interpolated string will only be constructed when it is actually displayed.
 
 ## Optimize network I/O during parallel execution
 

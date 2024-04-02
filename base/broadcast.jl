@@ -338,7 +338,7 @@ function flatten(bc::Broadcasted)
     # concatenate the nested arguments into {a, b, c, d}
     args = cat_nested(bc)
     # build a tuple of functions `makeargs`. Its elements take
-    # the whole "flat" argument list and and generate the appropriate
+    # the whole "flat" argument list and generate the appropriate
     # input arguments for the broadcasted function `f`, e.g.,
     #          makeargs[1] = ((w, x, y, z)) -> w
     #          makeargs[2] = ((w, x, y, z)) -> g(x, y)
@@ -520,7 +520,7 @@ end
 _bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $b"))))
 _bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $(length(b))")))
 _bcs1(a, b::Integer) = _bcs1(b, a)
-_bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : (_bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $(length(a)) and $(length(b))")))
+_bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : _bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch(LazyString("arrays could not be broadcast to a common size: a has axes ", a, " and b has axes ", b)))
 # _bcsm tests whether the second index is consistent with the first
 _bcsm(a, b) = a == b || length(b) == 1
 _bcsm(a, b::Number) = b == 1
