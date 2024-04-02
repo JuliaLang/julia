@@ -57,7 +57,7 @@ disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is ena
 out by pasting the code block above this paragraph straight into the REPL. This feature does not
 work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
 
-The result (`ans`) of executing an expression is displayed by the REPL using the [`show`](@ref) function
+A non-[`nothing`](@ref) result of executing an expression is displayed by the REPL using the [`show`](@ref) function
 with a specific [`IOContext`](@ref) (via [`display`](@ref), which defaults to calling
 `show(io, MIME("text/plain"), ans)`, which in turn defaults to `show(io, ans)`). 
 In particular, the `:limit` attribute is set to `true`.
