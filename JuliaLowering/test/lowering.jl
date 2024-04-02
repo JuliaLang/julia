@@ -5,17 +5,6 @@ using JuliaLowering
 
 using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref
 
-src = """
-let
-    y = 1
-    x = 2
-    let x = sin(x)
-        y = x
-    end
-    (x, y)
-end
-"""
-
 # src = """
 # let
 #     local x, (y = 2), (w::T = ww), q::S
@@ -28,14 +17,27 @@ end
 # end
 # """
 
-# src = """
-# let
-#     function f() Int end
-#     function foo(y::f(a))
-#         y
-#     end
-# end
-# """
+src = """
+let
+    y = 1
+    x = 2
+    let x = 3
+        y = x + 1
+    end
+    (x, y)
+end
+"""
+
+src = """
+begin
+    function f(x)
+        y = x + 1
+        "hello world", x, y
+    end
+
+    f(1)
+end
+"""
 
 
 # src = """
@@ -45,21 +47,28 @@ end
 t = parsestmt(SyntaxNode, src, filename="foo.jl")
 
 ctx = JuliaLowering.DesugaringContext()
-
 t2 = SyntaxTree(ctx.graph, t)
+@info "Input code" t2
 
 t3 = JuliaLowering.expand_forms(ctx, t2)
+@info "Desugared" t3
 
-ctx2 = JuliaLowering.ScopeResolutionContext(ctx)
-
+in_mod = Main # Module(:Foo)
+ctx2 = JuliaLowering.ScopeResolutionContext(ctx, in_mod)
 t4 = JuliaLowering.resolve_scopes!(ctx2, t3)
-
 @info "Resolved scopes" t4
 
-code = JuliaLowering.compile_toplevel(ctx2, Main, t4)
+t5 = JuliaLowering.compile_lambda(ctx2, t4)
 
-@info "Code" code
+@info "Linear IR" t5
 
+t6 = JuliaLowering.to_expr(in_mod, ctx2.var_info, t5)
+
+x = 100
+y = 200
+@info "CodeInfo" t6
+
+@info "Eval" Base.eval(in_mod, t6)
 
 # flisp parts to do
 # let

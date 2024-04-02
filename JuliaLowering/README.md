@@ -178,6 +178,19 @@ We traverse the AST starting at the root paying attention to certian nodes:
 * Build new scope with table of renames
 * Resolve the body with the new scope, applying the renames
 
+### Intermediate forms used in lowering
+
+* `local-def` - flisp code explains this as
+  - "a local that we know has an assignment that dominates all usages"
+  - "local declaration of a defined variable"
+
+There's also this comment in https://github.com/JuliaLang/julia/issues/22314:
+
+> mark the [...] variable as local-def, which would prevent it from getting Core.Boxed during the closure conversion it'll be detected as known-SSA
+
+But maybe that's confusing. It seems like `local-def` is a local which lowering
+asserts is "always defined" / "definitely initialized before use". But it's not
+necessarily single-assign, so not SSA.
 
 ### Lowered IR
 

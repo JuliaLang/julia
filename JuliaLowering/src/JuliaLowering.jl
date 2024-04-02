@@ -4,9 +4,9 @@ using JuliaSyntax
 
 using JuliaSyntax: SyntaxHead, highlight, Kind, GreenNode, @KSet_str
 using JuliaSyntax: haschildren, children, child, numchildren, head, kind, flags
-using JuliaSyntax: filename, first_byte, last_byte, source_location
+using JuliaSyntax: filename, first_byte, last_byte, source_location, span
 
-using JuliaSyntax: is_literal, is_number, is_operator, is_prec_assignment, is_infix_op_call, is_postfix_op_call
+using JuliaSyntax: is_literal, is_number, is_operator, is_prec_assignment, is_infix_op_call, is_postfix_op_call, is_error
 
 include("syntax_graph.jl")
 include("utils.jl")

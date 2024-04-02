@@ -8,9 +8,11 @@ struct SSAVar
 end
 
 struct LambdaInfo
-    # TODO: Make this concretely typed?
+    # TODO: Make SyntaxList concretely typed?
     args::SyntaxList
+    static_parameters::SyntaxList
     ret_var::Union{Nothing,SyntaxTree}
+    is_toplevel_thunk::Bool
 end
 
 abstract type AbstractLoweringContext end
@@ -345,6 +347,7 @@ function expand_function_def(ctx, ex)
         # argument destructuring
         # dotop names
         # overlays
+        static_parameters = SyntaxList(ctx)
 
         # Add self argument where necessary
         args = name[2:end]
@@ -368,6 +371,7 @@ function expand_function_def(ctx, ex)
                             makenode(ctx, name, K"call", core_ref(ctx, name, "Typeof"), name))
             function_name = name
         end
+        args = pushfirst!(collect(args), farg)
 
         # preamble is arbitrary code which computes
         # svec(types, sparms, location)
@@ -396,23 +400,22 @@ function expand_function_def(ctx, ex)
                             makenode(ctx, callex, K"call",
                                      svec_type(ctx, name),
                                      arg_types...),
-                            makenode(ctx, callex, K"Value", value=source_location(LineNumberNode, callex))
+                            makenode(ctx, callex, K"call",
+                                     svec_type(ctx, name)), # FIXME sparams
+                            makenode(ctx, callex, K"Value", value=QuoteNode(source_location(LineNumberNode, callex)))
                            )
         if !isnothing(return_type)
             ret_var, ret_assign = assign_tmp(ctx, return_type)
             body = makenode(ctx, body, K"block",
                             ret_assign,
-                            body,
-                            scope_type=:hard)
+                            body)
         else
             ret_var = nothing
-            body = makenode(ctx, body, K"block",
-                            body,
-                            scope_type=:hard)
         end
         lambda = makenode(ctx, body, K"lambda", body,
-                          lambda_info=LambdaInfo(arg_names, ret_var))
+                          lambda_info=LambdaInfo(arg_names, static_parameters, ret_var, false))
         makenode(ctx, ex, K"block",
+                 makenode(ctx, ex, K"method", function_name),
                  makenode(ctx, ex, K"method",
                           function_name,
                           preamble,
