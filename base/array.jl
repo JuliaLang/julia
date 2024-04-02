@@ -275,13 +275,13 @@ function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
 end
 
 """
-    unsafe_copyto!(dest::Array, do, src::Array, so, N)
+    unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
 
-Copy `N` elements from a source array to a destination, starting at the linear index `so` in the
-source and `do` in the destination (1-indexed).
+Copy `n` elements from a source array to a destination, starting at the linear index `soffs` in the
+source and `doffs` in the destination (1-indexed).
 
 The `unsafe` prefix on this function indicates that no validation is performed to ensure
-that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
+that n is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
 the same manner as C.
 """
 function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
@@ -291,10 +291,10 @@ function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
 end
 
 """
-    copyto!(dest, do, src, so, N)
+    copyto!(dest, doffs, src, soffs, n)
 
-Copy `N` elements from collection `src` starting at the linear index `so`, to array `dest` starting at
-the index `do`. Return `dest`.
+Copy `n` elements from collection `src` starting at the linear index `soffs`, to array `dest` starting at
+the index `doffs`. Return `dest`.
 """
 copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
 copyto!(dest::Array, doffs::Integer, src::Memory, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
