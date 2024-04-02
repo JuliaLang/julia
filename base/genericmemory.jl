@@ -300,7 +300,7 @@ end
 @eval function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
     isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
     @boundscheck checkbounds(m, inds)
-    ref = MemoryRef(m, first(inds)) # @inbounds here is not safe on view(Memory{T}(undef, 0), 2:1)
+    ref = MemoryRef(m, first(inds)) # @inbounds would be safe here but does not help performance.
     dims = (length(inds),)
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
