@@ -132,7 +132,9 @@ if !test_relocated_depot
         test_harness(empty_depot_path=false) do
             push!(LOAD_PATH, @__DIR__)
             # skip this dir to make the pkgimage not relocatable
-            filter!(!=(@__DIR__), DEPOT_PATH)
+            filter!(DEPOT_PATH) do depot
+                !startswith(@__DIR__, depot)
+            end
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
