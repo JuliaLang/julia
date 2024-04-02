@@ -92,9 +92,9 @@ can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
     @test frame.func === typeof(func).name.mt.name
     # broken until #50082 can be addressed
-    @test frame.linfo.def.module === which(func, (Any,)).module broken=inlined
-    @test frame.linfo.def === which(func, (Any,)) broken=inlined
-    @test frame.linfo.specTypes === Tuple{typeof(func), Int} broken=inlined
+    @test frame.linfo.def.module === which(func, (Any,)).module
+    @test frame.linfo.def === which(func, (Any,))
+    @test frame.linfo.specTypes === Tuple{typeof(func), Int}
     # line
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c
@@ -265,4 +265,62 @@ end
 
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
+end
+
+global f_parent1_line::Int, f_inner1_line::Int, f_innermost1_line::Int
+function f_parent1(a)
+    x = a
+    return begin
+        @inline f_inner1(x)
+    end
+end; f_parent1_line = (@__LINE__) - 2
+function f_inner1(a)
+    x = a
+    return @inline f_innermost1(x)
+end; f_inner1_line = (@__LINE__) - 1
+f_innermost1(x) = x > 0 ? @noinline(sin(x)) : error("x is negative")
+f_innermost1_line = (@__LINE__) - 1
+let st = try
+        f_parent1(-1)
+    catch err
+        stacktrace(catch_backtrace())
+    end
+    @test any(st) do sf
+        sf.func === :f_parent1 && sf.line == f_parent1_line && sf.linfo isa Core.MethodInstance
+    end
+    @test any(st) do sf
+        sf.func === :f_inner1 && sf.line == f_inner1_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+    @test any(st) do sf
+        sf.func === :f_innermost1 && sf.line == f_innermost1_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+end
+
+global f_parent2_line::Int, f_inner2_line::Int, f_innermost2_line::Int
+function f_parent2(a)
+    x = identity(a)
+    return begin
+        @inline f_inner2(x)
+    end
+end; f_parent2_line = (@__LINE__) - 2
+function f_inner2(a)
+    x = identity(a)
+    return @inline f_innermost2(x)
+end; f_inner2_line = (@__LINE__) - 1
+f_innermost2(x) = x > 0 ? @noinline(sin(x)) : error("x is negative")
+f_innermost2_line = (@__LINE__) - 1
+let st = try
+        f_parent2(-1)
+    catch err
+        stacktrace(catch_backtrace())
+    end
+    @test any(st) do sf
+        sf.func === :f_parent2 && sf.line == f_parent2_line && sf.linfo isa Core.MethodInstance
+    end
+    @test_broken any(st) do sf
+        sf.func === :f_inner2 && sf.line == f_inner2_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
+    @test_broken any(st) do sf
+        sf.func === :f_innermost2 && sf.line == f_innermost2_line && sf.linfo isa Core.MethodInstance && sf.inlined
+    end
 end

@@ -109,8 +109,10 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
     infos = @ccall jl_lookup_code_address(pointer::Ptr{Cvoid}, false::Cint)::Core.SimpleVector
     pointer = convert(UInt64, pointer)
     isempty(infos) && return [StackFrame(empty_sym, empty_sym, -1, nothing, true, false, pointer)] # this is equal to UNKNOWN
-    res = Vector{StackFrame}(undef, length(infos))
-    for i in 1:length(infos)
+    ninfos = length(infos)
+    res = Vector{StackFrame}(undef, ninfos)
+    local debuginfo = false
+    for i = ninfos:-1:1
         info = infos[i]::Core.SimpleVector
         @assert(length(info) == 6)
         func = info[1]::Symbol
@@ -118,7 +120,20 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
         linenum = info[3]::Int
         linfo = info[4]
         if linfo isa Core.CodeInstance
+            if debuginfo === false
+                debuginfo = linfo.debuginfo
+            else
+                debuginfo = true
+            end
             linfo = linfo.def
+        elseif debuginfo isa Core.DebugInfo
+            # TODO lookup a program counter `pc` at the parent frame and use `buildLineInfoNode(debuginfo, nothing, pc)`
+            if length(debuginfo.edges) == 1 # XXX
+                debuginfo = debuginfo.edges[1]
+                linfo = debuginfo.def
+            else
+                debuginfo = true
+            end
         end
         res[i] = StackFrame(func, file, linenum, linfo, info[5]::Bool, info[6]::Bool, pointer)
     end
