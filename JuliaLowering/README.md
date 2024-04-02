@@ -32,6 +32,13 @@ This work is intended to
     - Precise author-defined error reporting from macros
     - Sketch better interfaces for syntax trees (hopefully!)
 
+## Trying it out
+
+Note this is a very early work in progress; most things probably don't work!
+
+1. Check out the caf/lowering-2 branch of JuliaSyntax.jl
+2. Run the demo `include("test/lowering.jl")`
+
 # Design Notes
 
 A disorganized collection of design notes :)

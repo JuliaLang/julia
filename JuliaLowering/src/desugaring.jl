@@ -131,6 +131,11 @@ function is_placeholder(ex)
     kind(ex) == K"Identifier" && all(==('_'), ex.name_val)
 end
 
+function is_identifier(x)
+    k = kind(x)
+    k == K"Identifier" || k == K"var" || is_operator(k) || is_macro_name(k)
+end
+
 function is_eventually_call(ex::SyntaxTree)
     k = kind(ex)
     return k == K"call" || ((k == K"where" || k == K"::") && is_eventually_call(ex[1]))
