@@ -274,8 +274,8 @@ unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero
     Base.getpass(message::AbstractString; with_suffix::Bool=true) -> Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
-object containing the secret. If `with_suffix` is `true` (the default) the
-suffix ': ' will be appended to `message`.
+object containing the secret. If `with_suffix` is `true` (the default), the
+suffix `": "` will be appended to `message`.
 
 !!! info "Windows"
     Note that on Windows, the secret might be displayed as it is typed; see
@@ -357,9 +357,7 @@ function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bo
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
     with_raw_tty(stdin) do
         print(output, prompt)
-        if with_suffix
-            print(output, ": ")
-        end
+        with_suffix && print(output, ": ")
         flush(output)
 
         s = SecretBuffer()
