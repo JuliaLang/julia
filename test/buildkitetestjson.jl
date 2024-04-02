@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Convert test(set) results to a Buildkit-compatible JSON representation.
+# Convert test(set) results to a Buildkite-compatible JSON representation.
 # Based on <https://buildkite.com/docs/test-analytics/importing-json#json-test-results-data-reference>.
 
-module BuildKiteTestJSON
+module BuildkiteTestJSON
 
 using Test
 using Dates
