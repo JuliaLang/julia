@@ -12,12 +12,7 @@ JULIA_ROOT:=$(CURDIR)/../..
 LLVM_BOLT:=$(STAGE0_TOOLS)llvm-bolt
 LLVM_MERGEFDATA:=$(STAGE0_TOOLS)merge-fdata
 
-# TODO: apply --emit-relocs only to FILES_TO_OPTIMIZE given how much it bloats binaries, ofc those sections don't actually get loaded at runtime but still.
-
-# libjulia-codegen.so doesn't produce a profile. We still run bolt as stripping .rela.debug_info saves ~60mb
-# Probably a bug that it doesn't. TODO: FIXIT
-FILES_TO_OPTIMIZE_NO_PROFILE := $(shell readlink $(STAGE1_BUILD)/usr/lib/libjulia-codegen.so)
-
+# TODO: work out why libjulia-codegen.so doesn't produce a profile.
 SYMLINKS_TO_OPTIMIZE := libLLVM.so libjulia-internal.so
 FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(STAGE1_BUILD)/usr/lib/$$file; done)
 
@@ -41,7 +36,7 @@ stage0: | $(STAGE0_BUILD)
 $(STAGE1_BUILD): stage0
 stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
-	$(MAKE) -C $(STAGE1_BUILD) julia-src-release CFLAGS+=-fno-reorder-blocks-and-partition CXXFLAGS+=-fno-reorder-blocks-and-partition LDFLAGS+=-Wl,--emit-relocs && touch $@
+	$(MAKE) -C $(STAGE1_BUILD) julia-src-release && touch $@
 
 copy_originals: stage1
 	for file in $(FILES_TO_OPTIMIZE) $(FILES_TO_OPTIMIZE_NO_PROFILE); do \
