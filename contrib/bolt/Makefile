@@ -19,7 +19,6 @@ FILES_TO_OPTIMIZE_NO_PROFILE := $(shell readlink $(STAGE1_BUILD)/usr/lib/libjuli
 
 SYMLINKS_TO_OPTIMIZE := libLLVM.so libjulia-internal.so
 FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(STAGE1_BUILD)/usr/lib/$$file; done)
-FILES_TO_OPTIMIZE += julia/sys.so
 
 AFTER_INSTRUMENT_MESSAGE:='Run `make clean-profiles` to start with a clean slate. $\
     Then run Julia to collect realistic profile data, for example: `$(STAGE1_BUILD)/julia -e $\
@@ -105,6 +104,12 @@ clean-pkgimage:
 	$(MAKE) -C $(STAGE1_BUILD) -f pkgimage.mk clean
 
 rebuild-pkgimage: | clean-pkgimage pkgimage
+
+# TODO: Enable only for sys.so
+rebuild-sysimg:
+	# Binary sizes don't decrease for anythign but sys.so. I don't see why performance would increase for the others but haven't checked.
+	# rm $(STAGE1_BUILD)/usr/lib/julia/sys.so $(STAGE1_BUILD)/usr/lib/julia/sys-o.a $(STAGE1_BUILD)/usr/lib/julia/sys.ji $(STAGE1_BUILD)/usr/lib/julia/corecompiler.ji
+	$(MAKE) -C $(STAGE1_BUILD) julia-sysimg-release
 
 install: stage1
 	$(MAKE) -C $(STAGE1_BUILD) USE_BINARYBUILDER_LLVM=0 install
