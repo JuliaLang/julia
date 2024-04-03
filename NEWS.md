@@ -80,8 +80,8 @@ Standard library changes
 * The `init` keyword argument in `reduce(op, itr; init)` and other reduction functions with implementation-defined
   associativity (`mapreduce`, `maximum`, `minimum`, `sum`, `prod`, `any`, and `all`)
   is now guaranteed to be used for non-empty collections one or more times. This ensures that all calls
-  to the reducing function `op` take one argument from `itr` and the other from either `init` or the result from a
-  previous `op` evaluation. Previously it was explicitly allowed to be omitted from the reduction entirely.
+  to the reducing function `op` have one argument that is either `init` or the result from a
+  previous `op` evaluation. Previously `init` was explicitly allowed to be omitted from the reduction entirely.
 
 #### StyledStrings
 

@@ -285,8 +285,8 @@ function `op` with those results or results from previous `op` evaluations until
 
 If provided, `init` is the return value for empty collections and is used one or more times as
 an argument to `op` for non-empty collections. The `init` value is not transformed by the function `f`.
-Using `init` ensures that all calls to `op` take one argument from the (mapped) collection(s) and the other
-from either `init` or the result from a previous `op` evaluation, and the ordering of these arguments is
+Using `init` ensures that all calls to `op` have one argument that is either `init`
+or the result from a previous `op` evaluation, and the ordering of these arguments is
 unspecified. As it may appear in the reduction one or more times, it must be a neutral element for `op` that
 does not change the result by being used more than once. It is generally an error to call `mapreduce`
 with empty collections without specifying an `init` value, but in unambiguous cases an
@@ -493,8 +493,8 @@ or results from previous `op` evaluations until a single value is returned.
 
 If provided, `init` provides the return value for empty collections and is used one or more times as
 an argument to `op` for non-empty collections.
-Using `init` ensures that all calls to `op` take one argument from `itr` and the other
-from either `init` or the result from a previous `op` evaluation, and the ordering of these arguments is
+Using `init` ensures that all calls to `op` have one argument that is either `init`
+or the result from a previous `op` evaluation, and the ordering of these arguments is
 unspecified. As it may appear in a reduction one or more times, it must be a neutral element for `op` that
 does not change the result by being used more than once. It is generally an error to call `reduce`
 with an empty collection without specifying an `init` value, but in unambiguous cases an
