@@ -652,3 +652,8 @@ min(x::T, y::T) where {T<:Real} = ifelse(y < x, y, x)
 minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)
 
 flipsign(x::T, y::T) where {T<:Signed} = no_op_err("flipsign", T)
+
+function copy(x::T) where {T}
+    isbits(x) || throw(MethodError(copy, (x,)))
+    x
+end

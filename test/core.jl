@@ -8132,3 +8132,19 @@ macro macroception()
 end
 
 @test (@macroception()) === 1
+
+struct NewIsBitsType
+    a::Int
+    b::Float64
+end
+
+mutable struct NewMutableType end
+
+@testset "`isbits`` fallback for `copy`" begin
+    let x = NewMutableType()
+        @test_throws MethodError copy(x)
+    end
+    @testset "x: $x" for x ∈ (nothing, missing, NewIsBitsType(3, 0.3))
+        @test x === copy(x)
+    end
+end
