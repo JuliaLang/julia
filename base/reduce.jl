@@ -283,23 +283,29 @@ mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Int
 Apply function `f` to each element(s) in `itrs`, and then repeatedly call the 2 argument
 function `op` with those results or results from previous `op` evaluations until a single value is returned.
 
-If provided, `init` is included exactly once as the left-most argument to `op`
-for non-empty `itrs` and serves as the return value for empty `itrs`. It is
-not transformed by the mapping function `f`. It is generally an error to call `mapreduce`
+If provided, `init` provides the return value for empty collections and is used one or more times as
+an argument to `op` for non-empty collections. The `init` value is not transformed by the function `f`.
+Using `init` ensures that all calls to `op` take one argument from the (mapped) collection(s) and the other
+from either `init` or the result from a previous `op` evaluation, and the ordering of these arguments is
+unspecified. As it may appear in a reduction one or more times, it must be a neutral element for `op` that 
+does not change the result by being used more than once. It is generally an error to call `mapreduce`
 with empty collections without specifying an `init` value, but in unambiguous cases an
 identity value for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
 
 In contrast with [`mapfoldl`](@ref) and [`mapfoldr`](@ref), the sequence of
 function evaluations and the associativity of the reduction is not specified
-and may vary between different methods and Julia versions.
-For example, `mapreduce(√, +, [1, 4, 9])` may be evaluated as either
-`(√1+√4)+√9` (left-associative) _or_ `√1+(√4+√9)` (right-associative).
-The return value for non-associative `op` functions may vary between
-different methods and between Julia versions. For example, `-` is not
-associative and thus `mapreduce(√, -, [1, 4, 9])` may return either
-`-4.0` or `2.0` depending upon the exact method or version of Julia.
+and may vary between different methods and across Julia versions. Some implementations
+may reuse the return value of `f` for elements that appear multiple times in the
+collection(s).
+
+For example, `mapreduce(√, +, [1, 4, 9, 16])` may be evaluated as the left-associative
+`((√1+√4)+√9)+√16` _or_ the right-associative `√1+(√4+(√9+√16))`
+_or_ as the potentially-parallel `(√1+√4)+(√9+√16)` and returns `10.0` regardless.
+A non-associative function like `-` is not a valid `op` argument
+as `mapreduce(√, -, [1, 4, 9, 16])` may return any of `-4.0`, `-2.0` or
+`0.0`, depending upon which of the above associativity strategies is used.
 Because floating-point roundoff errors typically break associativity,
-even for operations like + that are associative in exact arithmetic,
+even for common operations like + that are associative in exact arithmetic,
 this also means that the floating-point errors incurred by mapreduce
 are implementation-defined; for example `mapreduce(identity, +, [.1, .2, .3])` may return
 either `0.6` or `0.6000000000000001`.
@@ -332,9 +338,6 @@ true
 
 julia> mapreduce(uppercase, *, ['j','u','l','i','a'])
 "JULIA"
-
-julia> mapreduce(uppercase, *, ['j','u','l','i','a'], init="Hello ")
-"Hello JULIA"
 ```
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
@@ -488,21 +491,27 @@ _mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f,
 Repeatedly call the 2 argument function `op` with the element(s) in `itr`
 or results from previous `op` evaluations until a single value is returned.
 
-If provided, `init` is included exactly once as the left-most argument to `op`
-for non-empty `itrs` and serves as the return value for empty `itrs`. It is generally an error to call `reduce`
-with empty collections without specifying an `init` value, but in unambiguous cases an
+If provided, `init` provides the return value for empty collections and is used one or more times as
+an argument to `op` for non-empty collections.
+Using `init` ensures that all calls to `op` take one argument from `itr` and the other
+from either `init` or the result from a previous `op` evaluation, and the ordering of these arguments is
+unspecified. As it may appear in a reduction one or more times, it must be a neutral element for `op` that 
+does not change the result by being used more than once. It is generally an error to call `reduce`
+with an empty collection without specifying an `init` value, but in unambiguous cases an
 identity value for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
 
-In contrast with [`foldl`](@ref) and [`foldr`](@ref), the associativity of the reduction is not specified
-and may vary between different methods and Julia versions.
-For example, `reduce(+, [1, 2, 3])` may be evaluated as either
-`(1+2)+3` (left-associative) _or_ `1+(2+3)` (right-associative).
-The return value for non-associative `op` functions may vary between
-different methods and between Julia versions. For example, `-` is not
-associative and thus `reduce(-, [1, 2, 3])` may return either
-`-4` or `2` depending upon the exact method or version of Julia.
-This is also true of some floating point operations that are typically
-associative, for example `reduce(+, [.1, .2, .3])` may return
+In contrast with [`foldl`](@ref) and [`foldr`](@ref), the associativity of the reduction is
+not specified and may vary between different methods and across Julia versions.
+For example, `reduce(+, [1, 2, 3, 4])` may be evaluated as the left-associative
+`((1+2)+3)+4` _or_ the right-associative `1+(2+(3+4))`
+_or_ as the potentially-parallel `(1+2)+(3+4)` and returns `10.0` regardless.
+A non-associative function like `-` is not a valid `op` argument
+as `reduce(-, [1, 2, 3, 4])` may return any of `-4.0`, `-2.0` or
+`0.0`, depending upon which of the above associativity strategies is used.
+Because floating-point roundoff errors typically break associativity,
+even for common operations like + that are associative in exact arithmetic,
+this also means that the floating-point errors incurred by reduce
+are implementation-defined; for example `reduce(+, [.1, .2, .3])` may return
 either `0.6` or `0.6000000000000001`.
 
 While the associativity of the reduction is not defined, `reduce` does preserve
@@ -525,9 +534,6 @@ true
 
 julia> reduce(string, ['J','u','l','i','a'])
 "Julia"
-
-julia> reduce(string, ['J','u','l','i','a'], init="Hello ")
-"Hello Julia"
 ```
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
