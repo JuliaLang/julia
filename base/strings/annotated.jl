@@ -439,7 +439,8 @@ function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:A
     write(io.io, String(astr))
 end
 
-write(io::AnnotatedIOBuffer, c::AnnotatedChar) = write(io, AnnotatedString(c))
+write(io::AnnotatedIOBuffer, c::AnnotatedChar) =
+    write(io, AnnotatedString(string(c), map(a -> (1:ncodeunits(c), a), annotations(c))))
 write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
 write(io::AnnotatedIOBuffer, b::UInt8) = write(io.io, b)
