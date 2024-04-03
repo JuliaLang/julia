@@ -2637,7 +2637,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             else
                 t = Union{}
             end
-        elseif !hasintersect(windenconst(condt), Bool)
+        elseif !hasintersect(widenconst(condt), Bool)
             t = Union{}
         end
     elseif ehead === :boundscheck
