@@ -6,14 +6,15 @@ STAGE1_BUILD:=$(CURDIR)/bolt.build
 STAGE0_TOOLS:=$(STAGE0_BUILD)/usr/tools/
 
 PROFILE_DIR:=$(CURDIR)/profiles-bolt
-PROFILE_FILE:=$(PROFILE_DIR)/merged.fdata
 PROFRAW_FILES:=$(wildcard $(PROFILE_DIR)/*.fdata)
 JULIA_ROOT:=$(CURDIR)/../..
 
 LLVM_BOLT:=$(STAGE0_TOOLS)llvm-bolt
 LLVM_MERGEFDATA:=$(STAGE0_TOOLS)merge-fdata
 
-# libjulia-codegen.so doesn't produce a profile. Not sure why, but bolt decreases the binary size significantly, so still enabled.
+# TODO: apply --emit-relocs only to FILES_TO_OPTIMIZE given how much it bloats binaries, ofc those sections don't actually get loaded at runtime but still.
+
+# libjulia-codegen.so doesn't produce a profile. We still run bolt as stripping .rela.debug_info saves ~60mb
 # Probably a bug that it doesn't. TODO: FIXIT
 FILES_TO_OPTIMIZE_NO_PROFILE := $(shell readlink $(STAGE1_BUILD)/usr/lib/libjulia-codegen.so)
 
@@ -36,30 +37,50 @@ stage0: | $(STAGE0_BUILD)
 
 # Build with --emit-relocs, binary builder doesn't do this so we need to build LLVM for now.
 # -fno-reorder-blocks-and-partition is needed on gcc >= 8, remove the flag on clang as unsupported and unnecessary.
-# Manually skip package image creation.
+# Manually skip package image creation and sysimg creation - we want to profile all julia code that gets compiled.
 $(STAGE1_BUILD): stage0
 stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
-	$(MAKE) -C $(STAGE1_BUILD) julia-release CFLAGS+=-fno-reorder-blocks-and-partition CXXFLAGS+=-fno-reorder-blocks-and-partition LDFLAGS+=-Wl,--emit-relocs && touch $@
+	$(MAKE) -C $(STAGE1_BUILD) julia-src-release CFLAGS+=-fno-reorder-blocks-and-partition CXXFLAGS+=-fno-reorder-blocks-and-partition LDFLAGS+=-Wl,--emit-relocs && touch $@
 
-move_originals: stage1
+copy_originals: stage1
 	for file in $(FILES_TO_OPTIMIZE) $(FILES_TO_OPTIMIZE_NO_PROFILE); do \
 		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
-		mv $$abs_file "$$abs_file.original"; \
+		cp $$abs_file "$$abs_file.original"; \
 	done && \
 	touch $@
 
 bolt_instrument: move_originals
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
-		$(LLVM_BOLT) "$$abs_file.original" -o $$abs_file --instrument --instrumentation-file-append-pid --instrumentation-file="$(PROFILE_DIR)/$$file-prof" --thread-count=4; \
-		mkdir -p $$(dirname "$(PROFILE_DIR)/$$file-prof");\
+		$(LLVM_BOLT) "$$abs_file.original" -o $$abs_file --instrument --instrumentation-file-append-pid --instrumentation-file="$(PROFILE_DIR)/$$file-prof" --thread-count=4 -no-huge-pages; \
+		mkdir -p $$(dirname "$(PROFILE_DIR)/$$file-prof"); \
+		printf "\n"; \
 	done && \
-	@echo $(AFTER_INSTRUMENT_MESSAGE) && \
+	for file in $(FILES_TO_OPTIMIZE_NO_PROFILE); do \
+		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
+		$(LLVM_BOLT) "$$abs_file.original" -o $$abs_file \
+		-reorder-blocks=ext-tsp \
+		-reorder-functions=hfsort+ \
+		-split-functions \
+		-split-all-cold \
+		-jump-tables=move \
+		-no-huge-pages \
+		-icf=1 \
+		--use-old-text \
+		-update-debug-sections \
+		-dyno-stats; \
+	done && \
 	touch $@
+	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
-pkgimage: stage1
-	$(MAKE) -C $(STAGE1_BUILD) stdlibs-cache-release
+# Good to run seperately so relocation data doesn't bloat .so sizes
+# Doesn't seem beneficial to profile on everything this does and it slows down the process significantly.
+finish-stage1: stage1
+	$(MAKE) -C $(STAGE1_BUILD)
+
+# pkgimage: stage1
+# 	$(MAKE) -C $(STAGE1_BUILD) stdlibs-cache-release
 
 merge_data: stage1
 	for file in $(FILES_TO_OPTIMIZE); do \
@@ -79,37 +100,25 @@ bolt: merge_data
 		-split-functions \
 		-split-all-cold \
 		-jump-tables=move \
+		-no-huge-pages \
 		-icf=1 \
 		--use-old-text \
 		-update-debug-sections \
 		--thread-count=4 \
 		-dyno-stats; \
     done && \
-	for file in $(FILES_TO_OPTIMIZE_NO_PROFILE); do \
-		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
-			$(LLVM_BOLT) "$$abs_file.original" -o $$abs_file \
-			-reorder-blocks=ext-tsp \
-			-reorder-functions=hfsort+ \
-			-split-functions \
-			-split-all-cold \
-			-jump-tables=move \
-			-icf=1 \
-			--use-old-text \
-			-update-debug-sections \
-			-dyno-stats; \
-	done && \
     touch $@
 
-clean-pkgimage:
-	$(MAKE) -C $(STAGE1_BUILD) -f pkgimage.mk clean
+# clean-pkgimage:
+# 	$(MAKE) -C $(STAGE1_BUILD) -f pkgimage.mk clean
 
-rebuild-pkgimage: | clean-pkgimage pkgimage
+# rebuild-pkgimage: | clean-pkgimage pkgimage
 
-# TODO: Enable only for sys.so
-rebuild-sysimg:
-	# Binary sizes don't decrease for anythign but sys.so. I don't see why performance would increase for the others but haven't checked.
-	# rm $(STAGE1_BUILD)/usr/lib/julia/sys.so $(STAGE1_BUILD)/usr/lib/julia/sys-o.a $(STAGE1_BUILD)/usr/lib/julia/sys.ji $(STAGE1_BUILD)/usr/lib/julia/corecompiler.ji
-	$(MAKE) -C $(STAGE1_BUILD) julia-sysimg-release
+# # TODO: Enable only for sys.so
+# rebuild-sysimg:
+# 	# Binary sizes don't decrease for anythign but sys.so. I don't see why performance would increase for the others but haven't checked.
+# 	# rm $(STAGE1_BUILD)/usr/lib/julia/sys.so $(STAGE1_BUILD)/usr/lib/julia/sys-o.a $(STAGE1_BUILD)/usr/lib/julia/sys.ji $(STAGE1_BUILD)/usr/lib/julia/corecompiler.ji
+# 	$(MAKE) -C $(STAGE1_BUILD) julia-sysimg-release
 
 install: stage1
 	$(MAKE) -C $(STAGE1_BUILD) USE_BINARYBUILDER_LLVM=0 install
@@ -118,7 +127,7 @@ clean-profiles:
 	rm -rf $(PROFILE_DIR)
 
 clean:
-	rm -f stage0 stage1 bolt move_originals merge_data $(PROFILE_FILE)
+	rm -f stage0 stage1 bolt move_originals merge_data
 
 restore_originals: move_originals
 	for file in $(FILES_TO_OPTIMIZE) $(FILES_TO_OPTIMIZE_NO_PROFILE); do \
