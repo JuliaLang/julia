@@ -301,13 +301,14 @@ let w = Vector{Any}(undef, 9)
     end
 end
 
+# PR 53713
 if Int === Int64
     # literal_pow only for exponents x: -2^63 <= x < 2^63 #53860 (all Int)
     @test (@which 2^-9223372036854775809).name === :^
     @test (@which 2^-9223372036854775808).name === :literal_pow
     @test (@which 2^9223372036854775807).name === :literal_pow
     @test (@which 2^9223372036854775808).name === :^
-else
+elseif Int === Int32
     # literal_pow only for exponents x: -2^31 <= x < 2^31 #53860 (all Int)
     @test (@which 2^-2147483649).name === :^
     @test (@which 2^-2147483648).name === :literal_pow
