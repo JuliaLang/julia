@@ -1639,8 +1639,10 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function get_oc_code_rt(@nospecialize(oc::Core.OpaqueClosure), types=Tuple, optimize::Bool=true)
-    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
+    @nospecialize oc types
+    ccall(:jl_is_in_pure_context, Bool, ()) &&
+        error("code reflection cannot be used from generated functions")
     m = oc.source
     if isa(m, Method)
         if isdefined(m, :source)
@@ -1663,10 +1665,11 @@ function get_oc_code_rt(@nospecialize(oc::Core.OpaqueClosure), types=Tuple, opti
     end
 end
 
-function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure), types=Tuple;
+function code_typed_opaque_closure(oc::Core.OpaqueClosure, types;
                                    debuginfo::Symbol=:default,
                                    optimize::Bool=true,
                                    _...)
+    @nospecialize oc types
     (code, rt) = get_oc_code_rt(oc, types, optimize)
     debuginfo === :none && remove_linenums!(code)
     return Any[Pair{CodeInfo,Any}(code, rt)]
