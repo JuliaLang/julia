@@ -1667,7 +1667,7 @@ function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure), types=
                                    debuginfo::Symbol=:default,
                                    optimize::Bool=true,
                                    _...)
-    (code, rt) = get_oc_code_rt(oc, types; optimize)
+    (code, rt) = get_oc_code_rt(oc, types, optimize)
     debuginfo === :none && remove_linenums!(code)
     return Any[Pair{CodeInfo,Any}(code, rt)]
 end
