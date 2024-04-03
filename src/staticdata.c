@@ -466,9 +466,8 @@ JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT
     if (idx < lbids) {
         return (jl_value_t*)jl_top_mods.items[idx];
     }
-    // jl_top_module is Base, but we want !jl_object_in_image(v)
-    // to use `Main` instead of Base.
-    return (jl_value_t*)jl_main_module;
+    // The object is runtime allocated
+    return (jl_value_t*)jl_nothing;
 }
 
 // hash of definitions for predefined function pointers

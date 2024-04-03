@@ -15,6 +15,11 @@ FooBase_module = :FooBase4b3a94a1a081a8cb
 end
 using .ConflictingBindings
 
+@testset "object_build_id" begin
+    @test Base.object_build_id([1]) === nothing
+    @test Base.object_build_id(Base) == Base.module_build_id(Base)
+end
+
 # method root provenance
 
 rootid(m::Module) = Base.module_build_id(Base.parentmodule(m)) % UInt64

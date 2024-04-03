@@ -3048,8 +3048,11 @@ function module_build_id(m::Module)
 end
 
 function object_build_id(obj)
-    mod = ccall(:jl_object_top_module, Module, (Any,), obj)
-    return module_build_id(mod)
+    mod = ccall(:jl_object_top_module, Any, (Any,), obj)
+    if mod === nothing
+        return nothing
+    end
+    return module_build_id(mod::Module)
 end
 
 function isvalid_cache_header(f::IOStream)
