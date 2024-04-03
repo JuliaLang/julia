@@ -77,13 +77,11 @@ New library features
 Standard library changes
 ------------------------
 
-* The `init` keyword for `reduce` and other reduction functions without guaranteed
+* The `init` keyword argument in `reduce(op, itr; init)` and other reduction functions with implementation-defined
   associativity (`mapreduce`, `maximum`, `minimum`, `sum`, `prod`, `any`, and `all`)
-  now provides greater guarantees on how its value is incorporated into the reduction:
-  it is used exactly once as the left-most argument for all non-empty collections,
-  and it is no longer required to be a "neutral" operand for the reduction.
-  Previously, its semantics for non-empty collections was explicitly not specified, allowing
-  implementations to use it 0, 1, or more times in the reduction ([#53871]).
+  is now guaranteed to be used for non-empty collections one or more times. This ensures that all calls
+  to the reducing function `op` take one argument from `itr` and the other from either `init` or the result from a
+  previous `op` evaluation. Previously it was explicitly allowed to be omitted from the reduction entirely.
 
 #### StyledStrings
 
