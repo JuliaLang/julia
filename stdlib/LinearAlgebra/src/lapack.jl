@@ -470,7 +470,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             lda = max(1, stride(A,2))
             work = Vector{$elty}(undef, nb*n)
-            if n > 0
+            if minmn > 0
                 info = Ref{BlasInt}()
                 ccall((@blasfunc($geqrt), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
@@ -496,7 +496,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             if p != n || q != n
                 throw(DimensionMismatch("block reflector T has dimensions ($p,$q), but should have dimensions ($n,$n)"))
             end
-            if n > 0
+            if n > 0    # this implies `m > 0` because of `m >= n`
                 info = Ref{BlasInt}()
                 ccall((@blasfunc($geqrt3), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
