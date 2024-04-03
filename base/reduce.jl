@@ -283,7 +283,7 @@ mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Int
 Apply function `f` to each element(s) in `itrs`, and then repeatedly call the 2 argument
 function `op` with those results or results from previous `op` evaluations until a single value is returned.
 
-If provided, `init` provides the return value for empty collections and is used one or more times as
+If provided, `init` is the return value for empty collections and is used one or more times as
 an argument to `op` for non-empty collections. The `init` value is not transformed by the function `f`.
 Using `init` ensures that all calls to `op` take one argument from the (mapped) collection(s) and the other
 from either `init` or the result from a previous `op` evaluation, and the ordering of these arguments is
