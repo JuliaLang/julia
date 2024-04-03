@@ -328,7 +328,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
     end
     # n.b. relocatability = (isa(inferred_result, String) && inferred_result[end]) || inferred_result === nothing
     if !@isdefined edges
-        edges = Core.DebugInfo(result.linfo)
+        edges = DebugInfo(result.linfo)
     end
     return CodeInstance(result.linfo, owner,
         widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
@@ -923,7 +923,7 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
     tree.slotflags = fill(0x00, nargs)
     tree.ssavaluetypes = 1
-    tree.debuginfo = Core.DebugInfo(mi)
+    tree.debuginfo = DebugInfo(mi)
     tree.ssaflags = UInt32[0]
     set_inlineable!(tree, true)
     tree.parent = mi

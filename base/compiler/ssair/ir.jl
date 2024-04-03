@@ -177,40 +177,41 @@ end
 # mutable version of the compressed DebugInfo
 mutable struct DebugInfoStream
     def::Union{MethodInstance,Symbol,Nothing}
-    linetable::Union{Nothing,Core.DebugInfo}
-    edges::Vector{Any} # Vector{Core.DebugInfo}
+    linetable::Union{Nothing,DebugInfo}
+    edges::Vector{DebugInfo}
     firstline::Int32 # the starting line for this block (specified by having an index of 0)
     codelocs::Vector{Int32} # for each statement:
         # index into linetable (if defined), else a line number (in the file represented by def)
         # then index into edges
         # then index into edges[linetable]
     function DebugInfoStream(codelocs::Vector{Int32})
-        return new(nothing, nothing, [], 0, codelocs)
+        return new(nothing, nothing, DebugInfo[], 0, codelocs)
     end
-    #DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
-    #    if debuginfo_file1(di.def) === debuginfo_file1(di.def)
-    #        new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
-    #            ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
-    #    else
+    # DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
+    #     if debuginfo_file1(di.def) === debuginfo_file1(di.def)
+    #         new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
+    #             ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
+    #     else
     function DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int)
         codelocs = zeros(Int32, nstmts * 3)
         for i = 1:nstmts
             codelocs[3i - 2] = i
         end
-        return new(def, di, Vector{Any}(), 0, codelocs)
+        return new(def, di, DebugInfo[], 0, codelocs)
     end
     global copy(di::DebugInfoStream) = new(di.def, di.linetable, di.edges, di.firstline, di.codelocs)
 end
 
 Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
-    Core.DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
+    DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
-getdebugidx(debuginfo::Core.DebugInfo, pc::Int) = ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
+getdebugidx(debuginfo::DebugInfo, pc::Int) =
+    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     if 3 <= 3pc <= length(debuginfo.codelocs)
-        return (debuginfo.codelocs[3pc - 2], debuginfo.codelocs[3pc - 1], debuginfo.codelocs[3pc - 0])
+        return (debuginfo.codelocs[3pc-2], debuginfo.codelocs[3pc-1], debuginfo.codelocs[3pc-0])
     elseif pc == 0
         return (Int32(debuginfo.firstline), Int32(0), Int32(0))
     else

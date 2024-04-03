@@ -101,9 +101,12 @@ const rewrite_op =
 function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
-    elseif expr.head === :call && expr.args[1] === :^ && expr.args[3] isa Integer
-        # mimic Julia's literal_pow lowering of literal integer powers
-        return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(expr.args[2]), Val{expr.args[3]}())
+    elseif expr.head === :call && expr.args[1] === :^
+        ea = expr.args
+        if length(ea) >= 3 && isa(ea[3], Int)
+            # mimic Julia's literal_pow lowering of literal integer powers
+            return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(ea[2]), Val(ea[3]))
+        end
     end
     op = get(rewrite_op, expr.head, :nothing)
     if op !== :nothing
@@ -363,6 +366,10 @@ for f in (:^, :atan, :hypot, :log)
         $f_fast(x::Number, y::Number) = $f_fast(promote(x, y)...)
         # fall-back implementation that applies after promotion
         $f_fast(x::T, y::T) where {T<:Number} = $f(x, y)
+    end
+    # Issue 53886 - avoid promotion of Int128 etc to be consistent with non-fastmath
+    if f === :^
+        @eval $f_fast(x::Number, y::Integer) = $f(x, y)
     end
 end
 

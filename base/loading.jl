@@ -3199,7 +3199,7 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
 
     includes_srcfiles = CacheHeaderIncludes[]
     includes_depfiles = CacheHeaderIncludes[]
-    for (i, inc) in enumerate(includes)
+    for inc in includes
         if inc.filename ∈ srcfiles
             push!(includes_srcfiles, inc)
         else
@@ -3207,23 +3207,63 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         end
     end
 
-    # determine depot for @depot replacement for include() files and include_dependency() files separately
-    srcfiles_depot = resolve_depot(first(srcfiles))
-    if srcfiles_depot === :no_depot_found
-        @debug("Unable to resolve @depot tag include() files from cache file $cachefile", srcfiles, _group=:relocatable)
-    elseif srcfiles_depot === :not_relocatable
-        @debug("include() files from $cachefile are not relocatable", srcfiles, _group=:relocatable)
-    else
-        for inc in includes_srcfiles
-            inc.filename = restore_depot_path(inc.filename, srcfiles_depot)
+
+    # The @depot resolution logic for include() files:
+    # 1. If the cache is not relocatable because of an absolute path,
+    #    we ignore that path for the depot search.
+    #    Recompilation will be triggered by stale_cachefile() if that absolute path does not exist.
+    # 2. If we can't find a depot for a relocatable path,
+    #    we still replace it with the depot we found from other files.
+    #    Recompilation will be triggered by stale_cachefile() because the resolved path does not exist.
+    # 3. We require that relocatable paths all resolve to the same depot.
+    # 4. We explicitly check that all relocatable paths resolve to the same depot. This has two reasons:
+    #    - We want to scan all source files in order to provide logs for 1. and 2. above.
+    #    - It is possible that a depot might be missing source files.
+    #      Assume that we have two depots on DEPOT_PATH, depot_complete and depot_incomplete.
+    #      If DEPOT_PATH=["depot_complete","depot_incomplete"] then no recompilation shall happen,
+    #      because depot_complete will be picked.
+    #      If DEPOT_PATH=["depot_incomplete","depot_complete"] we trigger recompilation and
+    #      hopefully a meaningful error about missing files is thrown.
+    #      If we were to just select the first depot we find, then whether recompilation happens would
+    #      depend on whether the first relocatable file resolves to depot_complete or depot_incomplete.
+    srcdepot = nothing
+    any_not_relocatable = false
+    any_no_depot_found = false
+    multiple_depots_found = false
+    for src in srcfiles
+        depot = resolve_depot(src)
+        if depot === :not_relocatable
+            any_not_relocatable = true
+        elseif depot === :no_depot_found
+            any_no_depot_found = true
+        elseif isnothing(srcdepot)
+            srcdepot = depot
+        elseif depot != srcdepot
+            multiple_depots_found = true
         end
     end
+    if any_no_depot_found
+        @debug("Unable to resolve @depot tag for at least one include() file from cache file $cachefile", srcfiles, _group=:relocatable)
+    end
+    if any_not_relocatable
+        @debug("At least one include() file from $cachefile is not relocatable", srcfiles, _group=:relocatable)
+    end
+    if multiple_depots_found
+        @debug("Some include() files from $cachefile are distributed over multiple depots", srcfiles, _group=:relocatable)
+    elseif !isnothing(srcdepot)
+        for inc in includes_srcfiles
+            inc.filename = restore_depot_path(inc.filename, srcdepot)
+        end
+    end
+
+    # unlike include() files, we allow each relocatable include_dependency() file to resolve
+    # to a separate depot, #52161
     for inc in includes_depfiles
         depot = resolve_depot(inc.filename)
         if depot === :no_depot_found
-            @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", srcfiles, _group=:relocatable)
+            @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", _group=:relocatable)
         elseif depot === :not_relocatable
-            @debug("include_dependency() file $(inc.filename) from $cachefile is not relocatable", srcfiles, _group=:relocatable)
+            @debug("include_dependency() file $(inc.filename) from $cachefile is not relocatable", _group=:relocatable)
         else
             inc.filename = restore_depot_path(inc.filename, depot)
         end
