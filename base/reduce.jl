@@ -287,7 +287,7 @@ If provided, `init` is the return value for empty collections and is used one or
 an argument to `op` for non-empty collections. The `init` value is not transformed by the function `f`.
 Using `init` ensures that all calls to `op` take one argument from the (mapped) collection(s) and the other
 from either `init` or the result from a previous `op` evaluation, and the ordering of these arguments is
-unspecified. As it may appear in a reduction one or more times, it must be a neutral element for `op` that 
+unspecified. As it may appear in the reduction one or more times, it must be a neutral element for `op` that 
 does not change the result by being used more than once. It is generally an error to call `mapreduce`
 with empty collections without specifying an `init` value, but in unambiguous cases an
 identity value for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
