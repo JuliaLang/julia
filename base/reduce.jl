@@ -554,7 +554,7 @@ The return type is `Int` for signed integers of less than system word size, and
 arguments, a common return type is found to which all arguments are promoted.
 
 The value returned for empty `itr` can be specified by `init`. It must be
-the additive identity (i.e. zero) as it is unspecified whether `init` is used
+the additive identity (i.e. zero) as it may be used one or more times
 for non-empty collections.
 
 !!! compat "Julia 1.6"
@@ -593,7 +593,7 @@ The return type is `Int` for signed integers of less than system word size, and
 arguments, a common return type is found to which all arguments are promoted.
 
 The value returned for empty `itr` can be specified by `init`. It must be
-the additive identity (i.e. zero) as it is unspecified whether `init` is used
+the additive identity (i.e. zero) as it may be used one or more times
 for non-empty collections.
 
 !!! compat "Julia 1.6"
@@ -625,7 +625,7 @@ The return type is `Int` for signed integers of less than system word size, and
 arguments, a common return type is found to which all arguments are promoted.
 
 The value returned for empty `itr` can be specified by `init`. It must be the
-multiplicative identity (i.e. one) as it is unspecified whether `init` is used
+multiplicative identity (i.e. one) as it may be used one or more times
 for non-empty collections.
 
 !!! compat "Julia 1.6"
@@ -649,7 +649,7 @@ The return type is `Int` for signed integers of less than system word size, and
 arguments, a common return type is found to which all arguments are promoted.
 
 The value returned for empty `itr` can be specified by `init`. It must be the
-multiplicative identity (i.e. one) as it is unspecified whether `init` is used
+multiplicative identity (i.e. one) as it may be used one or more times
 for non-empty collections.
 
 !!! compat "Julia 1.6"
@@ -733,7 +733,7 @@ Return the largest result of calling function `f` on each element of `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
-other element) as it is unspecified whether `init` is used
+other element) as it may be used one or more times
 for non-empty collections.
 
 !!! compat "Julia 1.6"
@@ -760,7 +760,7 @@ Return the smallest result of calling function `f` on each element of `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
-other element) as it is unspecified whether `init` is used
+other element) as it may be used one or more times
 for non-empty collections.
 
 !!! compat "Julia 1.6"
@@ -787,7 +787,7 @@ Return the largest element in a collection.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
-other element) as it is unspecified whether `init` is used
+other element) as it may be used one or more times
 for non-empty collections.
 
 !!! compat "Julia 1.6"
@@ -819,7 +819,7 @@ Return the smallest element in a collection.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
-other element) as it is unspecified whether `init` is used
+other element) as it may be used one or more times
 for non-empty collections.
 
 !!! compat "Julia 1.6"
@@ -854,7 +854,7 @@ The value returned for empty `itr` can be specified by `init`. It must be a 2-tu
 first and second elements are neutral elements for `min` and `max` respectively
 (i.e. which are greater/less than or equal to any other element). As a consequence, when
 `itr` is empty the returned `(mn, mx)` tuple will satisfy `mn ≥ mx`. When `init` is
-specified it may be used even for non-empty `itr`.
+specified it may be used one or more times for non-empty `itr`.
 
 !!! compat "Julia 1.8"
     Keyword argument `init` requires Julia 1.8 or later.
@@ -881,7 +881,7 @@ return them as a 2-tuple. Only one pass is made over `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
 first and second elements are neutral elements for `min` and `max` respectively
-(i.e. which are greater/less than or equal to any other element). It is used for non-empty
+(i.e. which are greater/less than or equal to any other element). It is used one or more times for non-empty
 collections. Note: it implies that, for empty `itr`, the returned value `(mn, mx)` satisfies
 `mn ≥ mx` even though for non-empty `itr` it  satisfies `mn ≤ mx`.  This is a "paradoxical"
 but yet expected result.
