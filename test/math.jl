@@ -1467,7 +1467,9 @@ end
     @test prevfloat(1.0) ^ (-Z^54) ≈ 7.38905609893065
     @test prevfloat(1.0) ^ (-Z^62) ≈ 2.2844135865231613e222
     @test prevfloat(1.0) ^ (-Z^63) == Inf
-    @test prevfloat(1.0) ^ (Z^62) * prevfloat(1.0) ^ (-Z^62) == 1.0
+    @test prevfloat(1.0) ^ (Z^62-1) * prevfloat(1.0) ^ (-Z^62+1) == 1.0
+    n, x = -1065564664, 0.9999997040311492
+    @test abs(x^n - Float64(big(x)^n)) / eps(x^n) == 0
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.

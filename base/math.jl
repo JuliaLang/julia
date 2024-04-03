@@ -1320,39 +1320,43 @@ end
     y = 1.0
     isnan(x) && return x
     n == 3 && return x*x*x # keep compatibility with literal_pow
+    normal(x, y) = begin z = x; x = z + y; y -= x - z; return x, y; end
     xnlo = ynlo = 0.0
     negate = signbit(x) && n & 1 > 0
     xa = abs(x)
-    toinf = xa > 1
+    toinf = xa >= 1
     invert = false
     if n < 0
         if n == -2
             rx = inv(x)
             return rx * rx #keep compatibility with literal_pow
         end
-        if toinf
-            xx = inv(x)
-            xnlo = fma(-xx, x, 1.0) * xx
-            x = xx
+        if toinf # || xa < 1.0 - sqrt(eps(1.0))
+            xx, x = x, inv(x)
+            xnlo = fma(-xx, x, 1.0) * x
         else
             invert = true
         end
         n = -n
         toinf = !toinf
     end
+    MAXI = 16
+    maxi = invert ? 1 : MAXI
     while n != 0
-        xx, xnlo, yy, ynlo, n = pow_loop(x, xnlo, y, ynlo, n, 16)
-        x = xx + xnlo; xnlo -= x - xx
-        y = yy + ynlo; ynlo -= y - yy
-    end
-    if isfinite(y) && !iszero(y)
+        x, xnlo = normal(x, xnlo)
+        x, xnlo, y, ynlo, n = pow_loop(x, xnlo, y, ynlo, n, maxi)
+
         if invert
-            x = inv(y)
-            err = fma(x, y, -1.0)
-            y = (-ynlo * x + err) * x + x
+            xx, x = x, inv(x)
+            xnlo = (fma(-xx, x, 1.0) - xnlo * x) * x
+            yy, y = y, inv(y)
+            ynlo = (fma(-yy, y, 1.0) - ynlo * y) * y
+            invert = false
+            maxi = MAXI
         end
+        y, ynlo = normal(y, ynlo)
     end
-    return isfinite(y) && !iszero(y) ? y : flipsign(toinf ? Inf : 0.0, -negate)
+    return isfinite(y) && !iszero(y) ? y : flipsign(ifelse(toinf, Inf, 0.0), -negate)
 end
 
 @assume_effects :terminates_locally @inline function pow_loop(x, xnlo, y, ynlo, n, maxi)
