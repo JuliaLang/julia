@@ -504,6 +504,7 @@ using .StackTraces
 
 # experimental API's
 include("experimental.jl")
+include("support.jl")
 
 # utilities
 include("deepcopy.jl")

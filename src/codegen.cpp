@@ -6180,6 +6180,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         return emit_invoke_modify(ctx, ex, expr_t);
     }
     else if (head == jl_call_sym) {
+        //jl_safe_printf("NATHAN\n");
+
         jl_value_t *expr_t;
         bool is_promotable = false;
         if (ssaidx_0based < 0)

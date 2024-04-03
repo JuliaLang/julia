@@ -181,6 +181,9 @@ end
         return t._isexception ? t.result : nothing
     elseif field === :scope
         error("Querying `scope` is disallowed. Use `current_scope` instead.")
+    elseif field === :storage
+        # Enforce type stability
+        return getfield(t, :storage)::Union{IdDict{Any,Any},Nothing}
     else
         return getfield(t, field)
     end

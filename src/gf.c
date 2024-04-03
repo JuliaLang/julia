@@ -3161,8 +3161,22 @@ have_entry:
     return mfunc;
 }
 
+// TO BE SET BY JULIA CODE
+JL_DLLEXPORT int (*is_enforce_static) (void) = 0;
+
+
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
+
+    // If this code was marked @enforce_stable, a :call (a dynamic dispatch) is illegal.
+    // We can tell if it is marked by checking if enforce_local is defined in the task
+    // local state dictionary:
+    //if (is_enforce_static && is_enforce_static()) {
+        //jl_error("Dynamic dispatch is not allowed in this context.");
+    if (is_enforce_static && is_enforce_static()) {
+        jl_errorf("Dynamic dispatch is not allowed in type stable code. Attempted to call %s with %d arguments.", jl_symbol_name(jl_gf_name(F)), nargs);// , jl_sprint(args, nargs));
+    }
+
     size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
