@@ -350,6 +350,9 @@ precompile_test_harness(false) do dir
         @test objectid(Foo.a_vec_int) === Foo.oid_vec_int
         @test objectid(Foo.a_mat_int) === Foo.oid_mat_int
         @test Foo.oid_vec_int !== Foo.oid_mat_int
+        @test Base.object_build_id(Foo.a_vec_int) == Base.object_build_id(Foo.a_mat_int)
+        @test Base.object_build_id(Foo) == Base.module_build_id(Foo)
+        @test Base.object_build_id(Foo.a_vec_int) == Base.module_build_id(Foo)
     end
 
     @eval begin function ccallable_test()
