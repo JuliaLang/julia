@@ -327,7 +327,7 @@ Base.show(io::IO, code::Union{IRCode, IncrementalCompact}) = show_ir(io, code)
 lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
 
 # utility function to extract the file name from a DebugInfo object
-function debuginfo_file1(debuginfo::Union{Core.DebugInfo,DebugInfoStream})
+function debuginfo_file1(debuginfo::Union{DebugInfo,DebugInfoStream})
     def = debuginfo.def
     if def isa MethodInstance
         def = def.def
@@ -342,7 +342,7 @@ function debuginfo_file1(debuginfo::Union{Core.DebugInfo,DebugInfoStream})
 end
 
 # utility function to extract the first line number and file of a block of code
-function debuginfo_firstline(debuginfo::Union{Core.DebugInfo,DebugInfoStream})
+function debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream})
     linetable = debuginfo.linetable
     while linetable != nothing
         debuginfo = linetable
@@ -375,7 +375,7 @@ function append_scopes!(scopes::Vector{LineInfoNode}, pc::Int, debuginfo, @nospe
             line < 0 && (doupdate = false; line = 0) # broken debug info
             push!(scopes, LineInfoNode(def, debuginfo_file1(debuginfo), Int32(line)))
         else
-            doupdate = append_scopes!(scopes, line, debuginfo.linetable::Core.DebugInfo, def) && doupdate
+            doupdate = append_scopes!(scopes, line, debuginfo.linetable::DebugInfo, def) && doupdate
         end
         inl_to == 0 && return doupdate
         def = :var"macro expansion"

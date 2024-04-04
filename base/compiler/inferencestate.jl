@@ -691,10 +691,7 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)
                 usebb = block_for_inst(frame.cfg, r)
-                # We're guaranteed to visit the statement if it's in the current
-                # basic block, since SSA values can only ever appear after their
-                # def.
-                if usebb != frame.currbb
+                if usebb != frame.currbb || r < ssa_id
                     push!(W, usebb)
                 end
             end
