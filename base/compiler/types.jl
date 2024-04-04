@@ -99,8 +99,6 @@ mutable struct InferenceResult
 end
 InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
     InferenceResult(mi, matching_cache_argtypes(𝕃, mi)...)
-InferenceResult(mi::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(mi, matching_cache_argtypes(𝕃, mi, argtypes)...)
 
 function stack_analysis_result!(inf_result::InferenceResult, @nospecialize(result))
     return inf_result.analysis_results = AnalysisResults(result, inf_result.analysis_results)

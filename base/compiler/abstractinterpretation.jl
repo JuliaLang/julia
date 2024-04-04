@@ -1248,7 +1248,9 @@ function const_prop_call(interp::AbstractInterpreter,
     concrete_eval_result::Union{Nothing, ConstCallResults}=nothing)
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
-    inf_result = cache_lookup(𝕃ᵢ, mi, arginfo.argtypes, inf_cache)
+    argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+    given_argtypes, overridden_by_const = matching_cache_argtypes(𝕃ᵢ, mi, argtypes)
+    inf_result = cache_lookup(𝕃ᵢ, mi, given_argtypes, inf_cache)
     if inf_result !== nothing
         # found the cache for this constant prop'
         if inf_result.result === nothing
@@ -1259,8 +1261,7 @@ function const_prop_call(interp::AbstractInterpreter,
         return return_cached_result(interp, inf_result, sv)
     end
     # perform fresh constant prop'
-    argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-    inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
+    inf_result = InferenceResult(mi, given_argtypes, overridden_by_const)
     if !any(inf_result.overridden_by_const)
         add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
         return nothing
