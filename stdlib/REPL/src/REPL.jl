@@ -396,9 +396,11 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
         io = IOContext(io, :limit => true, :module => active_module(d)::Module)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
-            mode = LineEdit.mode(mistate)
-            if mode isa LineEdit.Prompt
-                LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+            if mistate !== nothing # `nothing` can occur during testing
+                mode = LineEdit.mode(mistate)
+                if mode isa LineEdit.Prompt
+                    LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+                end
             end
         end
         get(io, :color, false)::Bool && write(io, answer_color(d.repl))

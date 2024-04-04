@@ -1834,3 +1834,30 @@ end
     @test_broken isempty(undoc)
     @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
 end
+
+struct A40735
+    str::String
+end
+
+# https://github.com/JuliaLang/julia/issues/40735
+@testset "Long printing" begin
+    previous = REPL.SHOW_MAXIMUM_BYTES
+    try
+        REPL.SHOW_MAXIMUM_BYTES = 1000
+        fake_repl() do stdin_write, stdout_read, repl
+            str = string(('a':'z')...)^40
+            # Even with the low byte limit, we can show the string
+            # without issue, thanks to the `show` method that truncates
+            # string `show`. Here we check that we have forwarded the IOContext
+            # correctly so that still happens:
+            display(REPL.REPLDisplay(repl), MIME"text/plain"(), str)
+            # Now, if we wrap our long string in a struct, we no longer
+            # get the abbreviated printing. Here we check that with our
+            # low limit we do trigger the`REPL.LimitIOException`.
+            a = A40735(str)
+            @test_throws REPL.LimitIOException display(REPL.REPLDisplay(repl), MIME"text/plain"(), a)
+        end
+    finally
+        REPL.SHOW_MAXIMUM_BYTES = previous
+    end
+end
