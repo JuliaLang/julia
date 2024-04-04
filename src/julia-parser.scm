@@ -2167,13 +2167,13 @@
              (take-token s))
          (if checked (check-identifier tok))
          (cons tok #f)))
-      ;; allow :(::) as a special case
-      ((and (not checked) (eq? nxt '|::|)
+      ;; allow :(::) and :(.) (DEPRECATED) as a special case
+      ((and (not checked) (or (eq? nxt '|::|) (eq? nxt '|.|))
             (let ((spc (ts:space? s)))
               (or (and (take-token s) (eqv? (require-token s) #\) ))
-                  (and (ts:put-back! s '|::| spc) #f))))
+                  (and (ts:put-back! s nxt spc) #f))))
        (take-token s)  ;; take #\)
-       '(|::| . #f))
+       (cons nxt #f))
       ((eqv? nxt #\;)
        (let ((ex (arglist-to-tuple s #t #f (parse-arglist s #\) ))))
          (cons ex (eq? (car ex) 'tuple))))
@@ -2560,15 +2560,21 @@
           ;; symbol/expression quote
           ((eq? t ':)
            (take-token s)
-           (let ((nxt (peek-token s)))
+           (let ((nxt (peek-token s))
+                 (spc (ts:space? s)))
              (if (and (closing-token? nxt)
-                      (or (not (symbol? nxt))
-                          (ts:space? s)))
+                      (or (not (symbol? nxt)) spc))
                  ':
-                 (cond ((ts:space? s)
+                 (cond (spc
                         (error "whitespace not allowed after \":\" used for quoting"))
                        ((eqv? nxt #\newline)
                         (error "newline not allowed after \":\" used for quoting"))
+                       ((eq? nxt '|.|)
+                        (take-token s)
+                        (if (or (ts:space? s) (not (symbol? (peek-token s))))
+                          ;; DEPRECATED: :. (white-space sensitive for fist dot)
+                          (list 'quote '|.|)
+                          (list 'quote (parse-lens s checked))))
                        (else (list 'quote
                            ;; being inside quote makes `end` non-special again. issue #27690
                            (with-bindings ((end-symbol #f))
@@ -2577,14 +2583,7 @@
           ;; lens .a.b.c
           ((eq? t '|.|)
            (take-token s)
-           (let ((nxt (peek-token s))
-                 (spc (ts:space? s)))
-            (if (closing-token? (peek-token s))
-              ;; :(.)
-              (begin
-                (ts:put-back! s t spc)
-                (parse-identifier s t checked))
-              (parse-lens s checked))))
+           (parse-lens s checked))
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))
