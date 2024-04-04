@@ -360,6 +360,32 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
+SHOW_MAXIMUM_BYTES::Int = 100_000
+
+# Limit printing during REPL display
+mutable struct LimitIO{IO_t <: IO} <: IO
+    io::IO_t
+    maxbytes::Int
+    n::Int # max bytes to write
+end
+LimitIO(io::IO, maxbytes) = LimitIO(io, maxbytes, 0)
+
+# Forward `ioproperties` onwards (for interop with IOContext)
+Base.ioproperties(io::LimitIO) = Base.ioproperties(io.io)
+
+struct LimitIOException <: Exception
+    maxbytes::Int
+end
+
+function Base.showerror(io::IO, e::LimitIOException)
+    print(io, "$LimitIOException: aborted printing after attempting to `show` more than $(e.maxbytes) bytes of data in the REPL.")
+end
+
+function Base.write(io::LimitIO, v::UInt8)
+    io.n > io.maxbytes && throw(LimitIOException(io.maxbytes))
+    io.n += write(io.io, v)
+end
+
 struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
 end
@@ -380,7 +406,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
-        show(io, mime, x[])
+        # We wrap in a LimitIO to limit the amount of printing, and in an
+        # IOContext to support downstream `get` queries properly.
+        show(IOContext(LimitIO(io, SHOW_MAXIMUM_BYTES)), mime, x[])
         println(io)
     end
     return nothing
