@@ -1239,7 +1239,7 @@ const_prop_result(inf_result::InferenceResult) =
     ConstCallResults(inf_result.result, inf_result.exc_result, ConstPropResult(inf_result),
                      inf_result.ipo_effects, inf_result.linfo)
 
-# return cached constant analysis result
+# return cached result of constant analysis
 return_cached_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
     const_prop_result(inf_result)
 
@@ -1249,8 +1249,15 @@ function const_prop_call(interp::AbstractInterpreter,
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
     argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-    given_argtypes, overridden_by_const = matching_cache_argtypes(𝕃ᵢ, mi, argtypes)
-    inf_result = cache_lookup(𝕃ᵢ, mi, given_argtypes, inf_cache)
+    # use `cache_argtypes` that has been constructed for fresh regular inference if available
+    volatile_inf_result = result.volatile_inf_result
+    if volatile_inf_result !== nothing
+        cache_argtypes = volatile_inf_result.inf_result.argtypes
+    else
+        cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
+    end
+    argtypes = matching_cache_argtypes(𝕃ᵢ, mi, argtypes, cache_argtypes)
+    inf_result = cache_lookup(𝕃ᵢ, mi, argtypes, inf_cache)
     if inf_result !== nothing
         # found the cache for this constant prop'
         if inf_result.result === nothing
@@ -1260,12 +1267,18 @@ function const_prop_call(interp::AbstractInterpreter,
         @assert inf_result.linfo === mi "MethodInstance for cached inference result does not match"
         return return_cached_result(interp, inf_result, sv)
     end
-    # perform fresh constant prop'
-    inf_result = InferenceResult(mi, given_argtypes, overridden_by_const)
-    if !any(inf_result.overridden_by_const)
+    overridden_by_const = falses(length(argtypes))
+    for i = 1:length(argtypes)
+        if argtypes[i] !== cache_argtypes[i]
+            overridden_by_const[i] = true
+        end
+    end
+    if !any(overridden_by_const)
         add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
         return nothing
     end
+    # perform fresh constant prop'
+    inf_result = InferenceResult(mi, argtypes, overridden_by_const)
     frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
     if frame === nothing
         add_remark!(interp, sv, "[constprop] Could not retrieve the source")
@@ -1287,26 +1300,19 @@ end
 
 # TODO implement MustAlias forwarding
 
-struct ConditionalArgtypes <: ForwardableArgtypes
+struct ConditionalArgtypes
     arginfo::ArgInfo
     sv::InferenceState
 end
 
-"""
-    matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
-                            conditional_argtypes::ConditionalArgtypes)
-
-The implementation is able to forward `Conditional` of `conditional_argtypes`,
-as well as the other general extended lattice information.
-"""
 function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
-                                 conditional_argtypes::ConditionalArgtypes)
+                                 conditional_argtypes::ConditionalArgtypes,
+                                 cache_argtypes::Vector{Any})
     (; arginfo, sv) = conditional_argtypes
     (; fargs, argtypes) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
     def = mi.def::Method
     nargs = Int(def.nargs)
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, mi)
     local condargs = nothing
     for i in 1:length(argtypes)
         argtype = argtypes[i]
@@ -1349,7 +1355,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
     else
         given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
     end
-    return pick_const_args!(𝕃, cache_argtypes, overridden_by_const, given_argtypes)
+    return pick_const_args!(𝕃, given_argtypes, cache_argtypes)
 end
 
 # This is only for use with `Conditional`.

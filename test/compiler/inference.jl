@@ -4485,7 +4485,7 @@ let
                # Vararg
         #=va=# Bound, unbound,         # => Tuple{Integer,Integer} (invalid `TypeVar` widened beforehand)
         } where Bound<:Integer
-    argtypes = Core.Compiler.most_general_argtypes(method, specTypes, true)
+    argtypes = Core.Compiler.most_general_argtypes(method, specTypes)
     popfirst!(argtypes)
     @test argtypes[1] == Integer
     @test argtypes[2] == Integer
