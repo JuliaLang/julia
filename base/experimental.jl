@@ -380,7 +380,7 @@ struct GetPropertyLens
 end
 Base.getproperty() = GetPropertyLens(())
 Base.getproperty(lens::GetPropertyLens, s::Symbol) =
-    GetPropertyLens(lens, tuple(getfield(lens, :syms)..., s))
+    GetPropertyLens(tuple(getfield(lens, :syms)..., s))
 
 function (lens::GetPropertyLens)(strct)
     syms = getfield(lens, :syms)

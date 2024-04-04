@@ -1044,20 +1044,22 @@
     (if (initial-operator? op)
         (begin
           (take-token s)
-          (if (or (eq? op '-) (eq? op '+))
-              (let ((nch (peek-char (ts:port s))))
-                (if (or (and (char? nch) (char-numeric? nch))
-                        (and (eqv? nch #\.) (read-char (ts:port s))))
-                    (let ((num (read-number (ts:port s) (eqv? nch #\.) (eq? op '-))))
-                      (if (or (memv (peek-token s) '(#\[ #\{))
-                              (is-prec-power? (peek-token s)))
-                          ;; `[`, `{` (issue #18851) and `^` have higher precedence than
-                          ;; unary negation; -2^x parsed as (- (^ 2 x)).
-                          (begin (ts:put-back! s (maybe-negate op num) spc)
-                                 (list 'call op (parse-factor s)))
-                          num))
-                    (parse-unary-call s op #t spc)))
-              (parse-unary-call s op (unary-op? op) spc)))
+          (if (eq? (peek-token s) '|.|)
+            (error "`.` after unary operator is ambiguous. Use parentheses.")
+            (if (or (eq? op '-) (eq? op '+))
+                (let ((nch (peek-char (ts:port s))))
+                  (if (or (and (char? nch) (char-numeric? nch))
+                          (and (eqv? nch #\.) (read-char (ts:port s))))
+                      (let ((num (read-number (ts:port s) (eqv? nch #\.) (eq? op '-))))
+                        (if (or (memv (peek-token s) '(#\[ #\{))
+                                (is-prec-power? (peek-token s)))
+                            ;; `[`, `{` (issue #18851) and `^` have higher precedence than
+                            ;; unary negation; -2^x parsed as (- (^ 2 x)).
+                            (begin (ts:put-back! s (maybe-negate op num) spc)
+                                  (list 'call op (parse-factor s)))
+                            num))
+                      (parse-unary-call s op #t spc)))
+              (parse-unary-call s op (unary-op? op) spc))))
         (parse-factor s))))
 
 (define (fix-syntactic-unary e)
