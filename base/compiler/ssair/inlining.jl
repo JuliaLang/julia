@@ -300,7 +300,8 @@ function finish_cfg_inline!(state::CFGInliningState)
     end
 end
 
-function ir_inline_linetable!(debuginfo::DebugInfoStream, inlinee_debuginfo::DebugInfo, inlinee::MethodInstance)
+# TODO append `inlinee_debuginfo` to inner linetable when `inlined_at[2] ≠ 0`
+function ir_inline_linetable!(debuginfo::DebugInfoStream, inlinee_debuginfo::DebugInfo, inlined_at::NTuple{3,Int32})
     # Append the linetable of the inlined function to our edges table
     linetable_offset = 1
     while true
@@ -312,16 +313,14 @@ function ir_inline_linetable!(debuginfo::DebugInfoStream, inlinee_debuginfo::Deb
         end
         linetable_offset += 1
     end
-    return Int32(linetable_offset)
+    return (inlined_at[1], Int32(linetable_offset), Int32(0))
 end
 
 function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
-                              ir::IRCode, di::DebugInfo, mi::MethodInstance, inlined_at::Int32, argexprs::Vector{Any})
+                              ir::IRCode, di::DebugInfo, mi::MethodInstance, inlined_at::NTuple{3,Int32}, argexprs::Vector{Any})
     def = mi.def::Method
     debuginfo = inline_target isa IRCode ? inline_target.debuginfo : inline_target.ir.debuginfo
-
-    linetable_offset = ir_inline_linetable!(debuginfo, di, mi)
-    topline = (inlined_at, linetable_offset, Int32(0))
+    topline = new_inlined_at = ir_inline_linetable!(debuginfo, di, inlined_at)
     if should_insert_coverage(def.module, di)
         insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, topline))
     end
@@ -343,7 +342,7 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
             NewInstruction(Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
             ir.argtypes[1], topline))
     end
-    return SSASubstitute(mi, argexprs, spvals_ssa, (inlined_at, linetable_offset))
+    return SSASubstitute(mi, argexprs, spvals_ssa, new_inlined_at)
 end
 
 function adjust_boundscheck!(inline_compact::IncrementalCompact, idx′::Int, stmt::Expr, boundscheck::Symbol)
@@ -359,8 +358,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                          item::InliningTodo, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     inlined_at = compact.result[idx][:line]
-    @assert inlined_at[2] == 0 "already inlined this instruction"
-    ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.di, item.mi, inlined_at[1], argexprs)
+    ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.di, item.mi, inlined_at, argexprs)
     boundscheck = has_flag(compact.result[idx], IR_FLAG_INBOUNDS) ? :off : boundscheck
 
     # If the iterator already moved on to the next basic block,
@@ -1771,7 +1769,7 @@ struct SSASubstitute
     mi::MethodInstance
     arg_replacements::Vector{Any}
     spvals_ssa::Union{Nothing,SSAValue}
-    inlined_at::NTuple{2,Int32} # TODO: add a map also, so that ssaidx doesn't need to equal inlined_idx?
+    inlined_at::NTuple{3,Int32} # TODO: add a map also, so that ssaidx doesn't need to equal inlined_idx?
 end
 
 function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)

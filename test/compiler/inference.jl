@@ -5652,3 +5652,31 @@ let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
     @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
     @test only(Base.return_types(vcat, t)) == Vector{Float64}
 end
+
+# Infinite loop in inference on SSA assignment
+const stop_infinite_loop::Base.Threads.Atomic{Bool} = Base.Threads.Atomic{Bool}(false)
+function gen_infinite_loop_ssa_generator(world::UInt, source, _)
+    ci = make_codeinfo(Any[
+        # Block 1
+        (),
+        # Block 2
+        PhiNode(Int32[1, 5], Any[SSAValue(1), SSAValue(3)]),
+        Expr(:call, tuple, SSAValue(2)),
+        Expr(:call, getindex, GlobalRef(@__MODULE__, :stop_infinite_loop)),
+        GotoIfNot(SSAValue(4), 2),
+        # Block 3
+        ReturnNode(SSAValue(2))
+    ]; slottypes=Any[Any])
+    ci.slotnames = Symbol[:var"#self#"]
+    ci
+end
+
+@eval function gen_infinite_loop_ssa()
+    $(Expr(:meta, :generated, gen_infinite_loop_ssa_generator))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+
+# We want to make sure that both this returns `Tuple` and that
+# it doesn't infinite loop inside inference.
+@test Core.Compiler.return_type(gen_infinite_loop_ssa, Tuple{}) === Tuple
