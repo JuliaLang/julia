@@ -19,7 +19,7 @@ LLVM_BOLT:=$(STAGE0_TOOLS)llvm-bolt
 LLVM_MERGEFDATA:=$(STAGE0_TOOLS)merge-fdata
 
 # TODO: work out why libjulia-codegen.so doesn't produce a profile.
-SYMLINKS_TO_OPTIMIZE := libLLVM.so # If you update this, you need to add BOLTLDFLAGS and BOLTCXXFLAGS to the build of your new file.
+SYMLINKS_TO_OPTIMIZE := libLLVM.so libjulia-internal.so # If you update this, you need to add BOLTLDFLAGS and BOLTCXXFLAGS to the build of your new file.
 FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(STAGE1_BUILD)/usr/lib/$$file; done)
 
 # TODO: Fixup Message
