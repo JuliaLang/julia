@@ -1114,7 +1114,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
         end
         # DateTime in base only manages 3 significant digits in fractional
         # second
-        fractional_second = parse_int(l, false)
+        fractional_second = parse_int(l, false)::Int64
         # Truncate off the rest eventual digits
         accept_batch(l, isdigit)
     end
