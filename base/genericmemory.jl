@@ -297,6 +297,12 @@ end
     $(Expr(:new, :(Array{T, N}), :ref, :dims))
 end
 
+"""
+    view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo})
+
+Create a vector `v::Vector{T}` backed by the specified indicies of `m`. It is only safe to
+resize `v` if `m` is subseqently not used.
+"""
 @eval function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
     isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
     @boundscheck checkbounds(m, inds)
