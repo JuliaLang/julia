@@ -640,12 +640,15 @@
 
 ;; parse left-to-right binary operator
 ;; produces structures like (+ (+ (+ 2 3) 4) 5)
-(define-macro (parse-LtoR s down ops)
+(define-macro (parse-LtoR s down ops syntactic)
   `(let loop ((ex (,down ,s))
               (t  (peek-token ,s)))
      (if (,ops t)
          (begin (take-token ,s)
-                (loop (list 'call t ex (,down ,s)) (peek-token ,s)))
+                (loop (if ,syntactic
+                    (list       t ex (,down ,s))
+                    (list 'call t ex (,down ,s)))
+                  (peek-token ,s)))
          ex)))
 
 ;; parse right-to-left binary operator
@@ -849,7 +852,7 @@
             (else ex)))))
 
 (define (parse-pipe< s) (parse-RtoL s parse-pipe> is-prec-pipe<? #f parse-pipe<))
-(define (parse-pipe> s) (parse-LtoR s parse-range is-prec-pipe>?))
+(define (parse-pipe> s) (parse-LtoR s parse-range is-prec-pipe>? #f))
 
 ;; parse ranges and postfix ...
 ;; colon is strange; 3 arguments with 2 colons yields one call:
@@ -929,8 +932,8 @@
 
 (define (parse-expr s)     (parse-with-chains s parse-term          is-prec-plus?  '(+ ++)))
 (define (parse-term s)     (parse-with-chains s parse-rational      is-prec-times? '(*)))
-(define (parse-rational s) (parse-LtoR        s parse-shift         is-prec-rational?))
-(define (parse-shift s)    (parse-LtoR        s parse-unary-subtype is-prec-bitshift?))
+(define (parse-rational s) (parse-LtoR        s parse-shift         is-prec-rational? #f))
+(define (parse-shift s)    (parse-LtoR        s parse-unary-subtype is-prec-bitshift? #f))
 
 ;; parse `<: A where B` as `<: (A where B)` (issue #21545)
 (define (parse-unary-subtype s)
@@ -2156,11 +2159,11 @@
       ((eqv? nxt #\) )
        ;; empty tuple ()
        (begin (take-token s) '((tuple) . #t)))
-      ((syntactic-op? nxt)
+      ((and (syntactic-op? nxt) (not (eq? nxt '|.|)))
        ;; allow (=) etc.
        (let ((tok (take-token s)))
          (if (not (eqv? (require-token s) #\) ))
-             (error (string "invalid identifier name \"" tok "\""))
+             (error (string "A: invalid identifier name \"" tok "\""))
              (take-token s))
          (if checked (check-identifier tok))
          (cons tok #f)))
@@ -2473,6 +2476,55 @@
      ;; process escape sequences using lisp read
      (read (open-input-string (string #\" s #\"))))))
 
+;; parse an identifier, having previously obtained symbol token `t`
+(define (parse-identifier s t checked)
+  (if checked
+      (begin (check-identifier t)
+            (if (closing-token? t)
+                (error (string "unexpected \"" (take-token s) "\"")))))
+  (take-token s)
+  (cond ((and (eq? t 'var)
+              (if (or (ts:pbtok s) (ts:last-tok s))
+                  (and (eqv? (peek-token s) #\") (not (ts:space? s)))
+                  ;; Hack: avoid peek-token if possible to preserve
+                  ;; (io.pos (ts:port s)) for non-greedy Meta.parse
+                  (eqv? (peek-char (ts:port s)) #\")))
+        ;; var"funky identifier" syntax
+        (peek-token s)
+        (take-token s) ;; leading "
+        (let ((str (parse-raw-literal s #\"))
+              (nxt (peek-token s)))
+          (if (and (symbol? nxt) (not (operator? nxt)) (not (ts:space? s)))
+              (error (string "suffix not allowed after `var\"" str "\"`")))
+          (symbol str)))
+        ((eq? t 'true)  '(true))
+        ((eq? t 'false) '(false))
+        (else t)))
+
+(define (parse-quoted-identifier s checked)
+  (let ((t (require-token s)))
+    (if (symbol? t)
+      `(quote ,(parse-identifier s t checked))
+      (error (string "X: unexpected \"" (take-token s) "\"")))))
+
+(define (parse-lens s checked)
+  (list '|.| 
+    (let loop ((ex (parse-quoted-identifier s checked))
+               (t (peek-token s)))
+      (cond 
+        ((eqv? t #\( )
+          (error "Call syntax after lens is reserved. Add parentheses."))
+        ((eq? t '|.|)
+          (let ((spc (ts:space? s)))
+            (take-token s)
+            (let ((nxt (peek-token s)))
+              (if (eqv? nxt #\( )
+                ;; lens broadcast .a.b.c.(vec).
+                ;; (begin (ts:put-back! s t spc) ex)
+                (error "lens broadcast syntax is reserved. Add parentheses.")
+                (loop (list '|.| ex (parse-quoted-identifier s checked)) nxt)))))
+        (else ex)))))
+
 ;; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s (checked #t))
   (let ((t (require-token s)))
@@ -2519,33 +2571,16 @@
                            (with-bindings ((end-symbol #f))
                                           (parse-atom s #f))))))))
 
+          ;; lens .a.b.c
+          ((eq? t '|.|)
+           (take-token s)
+           (parse-lens s checked))
+
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))
 
           ;; identifier
-          ((symbol? t)
-           (if checked
-               (begin (check-identifier t)
-                      (if (closing-token? t)
-                          (error (string "unexpected \"" (take-token s) "\"")))))
-           (take-token s)
-           (cond ((and (eq? t 'var)
-                       (if (or (ts:pbtok s) (ts:last-tok s))
-                           (and (eqv? (peek-token s) #\") (not (ts:space? s)))
-                           ;; Hack: avoid peek-token if possible to preserve
-                           ;; (io.pos (ts:port s)) for non-greedy Meta.parse
-                           (eqv? (peek-char (ts:port s)) #\")))
-                  ;; var"funky identifier" syntax
-                  (peek-token s)
-                  (take-token s) ;; leading "
-                  (let ((str (parse-raw-literal s #\"))
-                        (nxt (peek-token s)))
-                    (if (and (symbol? nxt) (not (operator? nxt)) (not (ts:space? s)))
-                        (error (string "suffix not allowed after `var\"" str "\"`")))
-                    (symbol str)))
-                 ((eq? t 'true)  '(true))
-                 ((eq? t 'false) '(false))
-                 (else t)))
+          ((symbol? t) (parse-identifier s t checked))
 
           ;; parens or tuple
           ((eqv? t #\( )

@@ -1479,3 +1479,17 @@ julia> [1, 2] .∉ ([2, 3],)
 ```
 """
 ∉, ∌
+
+struct GetPropertyLens
+    syms::Tuple{Vararg{Symbol}}
+end
+getproperty() = GetPropertyLens(())
+getproperty(lens::GetPropertyLens, s::Symbol) =
+    GetPropertyLens(lens, tuple(getfield(lens, :syms)..., s))
+
+function (lens::GetPropertyLens)(strct)
+    syms = getfield(lens, :syms)
+    isempty(syms) && return strct
+    sym = first(syms)
+    return GetPropertyLens(tail(syms))(getproperty(strct, sym))
+end
