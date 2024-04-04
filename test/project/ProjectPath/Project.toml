@@ -1,6 +1,6 @@
 name = "ProjectPath"
 uuid = "32833bde-7fc1-4d28-8365-9d01e1bcbc1b"
-entrypath = "CustomPath.jl"
+entryfile = "CustomPath.jl"
 version = "0.1.0"
 
 [deps]

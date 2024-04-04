@@ -748,12 +748,12 @@ end
 
 function project_file_path(project_file::String, name::String)
     d = parsed_toml(project_file)
-    projectpath = get(d, "path", nothing)::Union{String, Nothing}
+    entryfile = get(d, "path", nothing)::Union{String, Nothing}
     # "path" entry in project file is soft deprecated
-    if projectpath === nothing
-        projectpath = get(d, "entrypath", nothing)::Union{String, Nothing}
+    if entryfile === nothing
+        entryfile = get(d, "entryfile", nothing)::Union{String, Nothing}
     end
-    return entry_path(dirname(project_file), name, projectpath)
+    return entry_path(dirname(project_file), name, entryfile)
 end
 
 function workspace_manifest(project_file)
@@ -844,10 +844,10 @@ function implicit_env_project_file_extension(dir::String, ext::PkgId)
     return nothing, nothing
 end
 
-# given a path, name, and possibly an entrypath, return the entry point
-function entry_path(path::String, name::String, entrypath::Union{Nothing,String})::String
+# given a path, name, and possibly an entryfile, return the entry point
+function entry_path(path::String, name::String, entryfile::Union{Nothing,String})::String
     isfile_casesensitive(path) && return normpath(path)
-    entrypoint = entrypath === nothing ? joinpath("src", "$name.jl") : entrypath
+    entrypoint = entryfile === nothing ? joinpath("src", "$name.jl") : entryfile
     return normpath(joinpath(path, entrypoint))
 end
 
@@ -1022,9 +1022,9 @@ end
 
 function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::Dict{String,Any})
     path = get(entry, "path", nothing)::Union{Nothing, String}
-    entrypath = get(entry, "entrypath", nothing)::Union{Nothing, String}
+    entryfile = get(entry, "entryfile", nothing)::Union{Nothing, String}
     if path !== nothing
-        path = entry_path(normpath(abspath(dirname(manifest_file), path)), pkg.name, entrypath)
+        path = entry_path(normpath(abspath(dirname(manifest_file), path)), pkg.name, entryfile)
         return path
     end
     hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
@@ -1041,7 +1041,7 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
     for slug in (version_slug(uuid, hash), version_slug(uuid, hash, 4))
         for depot in DEPOT_PATH
             path = joinpath(depot, "packages", pkg.name, slug)
-            ispath(path) && return entry_path(abspath(path), pkg.name, entrypath)
+            ispath(path) && return entry_path(abspath(path), pkg.name, entryfile)
         end
     end
     # no depot contains the package, return missing to stop looking
