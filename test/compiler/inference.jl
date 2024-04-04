@@ -5647,6 +5647,22 @@ end
 @test Core.Compiler.return_type(has_tuin, Tuple{}) === Union{}
 @test_throws UndefVarError has_tuin()
 
+function gen_tuin_from_arg(world::UInt, source, _, _)
+    ci = make_codeinfo(Any[
+        Expr(:throw_undef_if_not, :x, Core.Argument(2)),
+        ReturnNode(true),
+    ]; slottypes=Any[Any, Bool])
+    ci.slotnames = Symbol[:var"#self#", :def]
+    ci
+end
+
+@eval function has_tuin2(def)
+    $(Expr(:meta, :generated, gen_tuin_from_arg))
+    $(Expr(:meta, :generated_only))
+end
+@test_throws UndefVarError has_tuin2(false)
+@test has_tuin2(true)
+
 # issue #53585
 let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
     @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
