@@ -28,6 +28,7 @@
 #include "llvm-codegen-shared.h"
 #include <stack>
 #include <queue>
+#include <tuple>
 
 
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
@@ -227,7 +228,7 @@ struct jl_codegen_params_t {
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
-    llvm::MapVector<jl_method_instance_t*, jl_method_instance_t*> enqueuers;
+    llvm::MapVector<jl_method_instance_t*, std::tuple<jl_method_instance_t*, std::string, unsigned int>> enqueuers;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;

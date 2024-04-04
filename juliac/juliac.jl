@@ -103,6 +103,7 @@ write(io, """
             end
             String(_unsafe_take!(s))
         end
+        show(io::IO, T::Type) = print(io, "Type")
     end
     @eval Base.GMP begin
 

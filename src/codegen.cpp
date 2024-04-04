@@ -15,6 +15,7 @@
 #include <map>
 #include <array>
 #include <vector>
+#include <tuple>
 #include <set>
 #include <functional>
 
@@ -1939,7 +1940,7 @@ public:
     size_t max_world = -1;
     const char *name = NULL;
     StringRef file{};
-    ssize_t *line = NULL;
+    int32_t line = -1;
     Value *spvals_ptr = NULL;
     Value *argArray = NULL;
     Value *argCount = NULL;
@@ -2099,16 +2100,19 @@ static void print_stack_crumbs(jl_codectx_t &ctx) {
     errs() << "Stacktrace:\n";
     jl_method_instance_t *caller = ctx.linfo;
     jl_((jl_value_t*)caller);
+    errs() << "In " << ctx.file << ":" << ctx.line << "\n";
     while (true) {
         auto it = ctx.emission_context.enqueuers.find(caller);
         if (it != ctx.emission_context.enqueuers.end()) {
-            caller = it->second;
+            caller = std::get<jl_method_instance_t *>(it->second);
         } else {
             break;
         }
         if (caller) {
-            if (jl_is_method_instance(caller))
+            if (jl_is_method_instance(caller)) {
                 jl_((jl_value_t*)caller);
+                errs() << "In " << std::get<std::string>(it->second) << ":" << (int32_t)std::get<unsigned int>(it->second) << "\n";
+            }
         }
         else
             break;
@@ -4026,6 +4030,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     errs() << "in module ";
                     jl_(ctx.linfo->def.method->module);
                     errs() << "for call to Core._apply_iterate\n";
+                    errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
                     print_stack_crumbs(ctx);
                 }
                 return true;
@@ -5110,8 +5115,11 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
                         ctx.call_targets[codeinst] = {cc, return_roots, trampoline_decl, specsig};
-                        if (ctx.params->no_dynamic_dispatch)
-                            ctx.emission_context.enqueuers[mi] = ctx.linfo;
+                        if (ctx.params->no_dynamic_dispatch) {
+                            auto filename = std::string(ctx.builder.getCurrentDebugLocation()->getFilename());
+                            auto line = ctx.builder.getCurrentDebugLocation()->getLine();
+                            ctx.emission_context.enqueuers[mi] = std::make_tuple(ctx.linfo, std::move(filename), line);
+                        }
                     }
                 }
             }
@@ -5128,7 +5136,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                 jl_(lival.constant);
             else
                 errs() << "unknown";
-
+            errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
             print_stack_crumbs(ctx);
         }
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
@@ -5193,6 +5201,7 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
         jl_(ctx.linfo->def.method->module);
         errs() << "for call to ";
         jl_(args[0]);
+        errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
         print_stack_crumbs(ctx);
     }
     // emit function and arguments
@@ -5313,6 +5322,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         jl_(ctx.linfo->def.method->module);
         errs() << "for call to ";
         jl_(args[0]);
+        errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
         print_stack_crumbs(ctx);
     }
     // emit function and arguments
@@ -8012,6 +8022,7 @@ static jl_llvm_functions_t
     if (lam && jl_is_method(lam->def.method)) {
         toplineno = lam->def.method->line;
         ctx.file = jl_symbol_name(lam->def.method->file);
+        ctx.line = lam->def.method->line;
     }
     else if ((jl_value_t*)src->debuginfo != jl_nothing) {
         // look for the file and line info of the original start of this block, as reported by lowering
@@ -8020,6 +8031,7 @@ static jl_llvm_functions_t
             debuginfo = debuginfo->linetable;
         ctx.file = jl_debuginfo_file(debuginfo);
         struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
+        ctx.line = lineidx.line;
         toplineno = std::max((int32_t)0, lineidx.line);
     }
     if (ctx.file.empty())
