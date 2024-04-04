@@ -12,7 +12,5 @@ make merge_data
 make bolt
 ```
 
-YOU NEED TO REBUILD THE PKGIMAGES AFTER BOLTING OTHERWISE SEGFAULTS GALORE.
-
 This doesn't align the code to support huge pages as it doesn't seem that we do that currently.
 Decreases .so sizes by 2-4mb.
