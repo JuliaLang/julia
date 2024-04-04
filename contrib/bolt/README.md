@@ -5,12 +5,11 @@ DO NOT STRIP THE RESULTING .so FILES, https://github.com/llvm/llvm-project/issue
 Example usage
 ```bash
 make stage1
-make move_originals
+make copy_originals
 make bolt_instrument
 make pkgimage
 make merge_data
 make bolt
-make rebuild-pkgimage
 ```
 
 YOU NEED TO REBUILD THE PKGIMAGES AFTER BOLTING OTHERWISE SEGFAULTS GALORE.
