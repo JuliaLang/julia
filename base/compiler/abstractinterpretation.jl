@@ -1292,20 +1292,20 @@ struct ConditionalArgtypes <: ForwardableArgtypes
 end
 
 """
-    matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
+    matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
                             conditional_argtypes::ConditionalArgtypes)
 
 The implementation is able to forward `Conditional` of `conditional_argtypes`,
 as well as the other general extended lattice information.
 """
-function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
+function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
                                  conditional_argtypes::ConditionalArgtypes)
     (; arginfo, sv) = conditional_argtypes
     (; fargs, argtypes) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
-    def = linfo.def::Method
+    def = mi.def::Method
     nargs = Int(def.nargs)
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, linfo)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, mi)
     local condargs = nothing
     for i in 1:length(argtypes)
         argtype = argtypes[i]
@@ -1336,7 +1336,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
     end
     if condargs !== nothing
         given_argtypes = let condargs=condargs
-            va_process_argtypes(𝕃, given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
+            va_process_argtypes(𝕃, given_argtypes, mi) do isva_given_argtypes::Vector{Any}, last::Int
                 # invalidate `Conditional` imposed on varargs
                 for (slotid, i) in condargs
                     if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
@@ -1346,7 +1346,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
             end
         end
     else
-        given_argtypes = va_process_argtypes(𝕃, given_argtypes, linfo)
+        given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
     end
     return pick_const_args!(𝕃, cache_argtypes, overridden_by_const, given_argtypes)
 end
@@ -2278,7 +2278,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtIn
     return abstract_call_known(interp, f, arginfo, si, sv, max_methods)
 end
 
-function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
+function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
     isref = false
     if unwrapva(T) === Bottom
         return Bottom
@@ -2293,12 +2293,12 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
     else
         return Any
     end
-    if isa(linfo.def, Method)
-        spsig = linfo.def.sig
+    if isa(mi.def, Method)
+        spsig = mi.def.sig
         if isa(spsig, UnionAll)
-            if !isempty(linfo.sparam_vals)
+            if !isempty(mi.sparam_vals)
                 sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
-                                  v for v in  linfo.sparam_vals]
+                                  v for v in  mi.sparam_vals]
                 T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
                 for v in sparam_vals

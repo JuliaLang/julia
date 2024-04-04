@@ -276,14 +276,14 @@ mutable struct InferenceState
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
                             interp::AbstractInterpreter)
-        linfo = result.linfo
+        mi = result.linfo
         world = get_inference_world(interp)
         if world == typemax(UInt)
             error("Entering inference from a generated function with an invalid world")
         end
-        def = linfo.def
+        def = mi.def
         mod = isa(def, Method) ? def.module : def
-        sptypes = sptypes_from_meth_instance(linfo)
+        sptypes = sptypes_from_meth_instance(mi)
         code = src.code::Vector{Any}
         cfg = compute_basic_blocks(code)
         method_info = MethodInfo(src)
@@ -339,7 +339,7 @@ mutable struct InferenceState
         !iszero(cache_mode & CACHE_MODE_LOCAL) && push!(get_inference_cache(interp), result)
 
         this = new(
-            linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
+            mi, world, mod, sptypes, slottypes, src, cfg, method_info,
             currbb, currpc, ip, handlers, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
@@ -582,13 +582,13 @@ end
 
 const EMPTY_SPTYPES = VarState[]
 
-function sptypes_from_meth_instance(linfo::MethodInstance)
-    def = linfo.def
+function sptypes_from_meth_instance(mi::MethodInstance)
+    def = mi.def
     isa(def, Method) || return EMPTY_SPTYPES # toplevel
     sig = def.sig
-    if isempty(linfo.sparam_vals)
+    if isempty(mi.sparam_vals)
         isa(sig, UnionAll) || return EMPTY_SPTYPES
-        # linfo is unspecialized
+        # mi is unspecialized
         spvals = Any[]
         sig′ = sig
         while isa(sig′, UnionAll)
@@ -596,7 +596,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
             sig′ = sig′.body
         end
     else
-        spvals = linfo.sparam_vals
+        spvals = mi.sparam_vals
     end
     nvals = length(spvals)
     sptypes = Vector{VarState}(undef, nvals)
@@ -614,7 +614,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
                     # if this parameter came from `arg::Type{T}`,
                     # then `arg` is more precise than `Type{T} where lb<:T<:ub`
-                    ty = fieldtype(linfo.specTypes, j)
+                    ty = fieldtype(mi.specTypes, j)
                     @goto ty_computed
                 elseif (va = va_from_vatuple(sⱼ)) !== nothing
                     # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
@@ -645,8 +645,8 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 # type variables, we can use it for a more accurate analysis of whether `v`
                 # is constrained or not, otherwise we should use `def.sig` which always
                 # doesn't contain any free type variables
-                if !has_free_typevars(linfo.specTypes)
-                    sig = linfo.specTypes
+                if !has_free_typevars(mi.specTypes)
+                    sig = mi.specTypes
                 end
                 @assert !has_free_typevars(sig)
                 constrains_param(v, sig, #=covariant=#true)
@@ -858,8 +858,8 @@ function is_effect_overridden(sv::AbsIntState, effect::Symbol)
     end
     return false
 end
-function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
-    def = linfo.def
+function is_effect_overridden(mi::MethodInstance, effect::Symbol)
+    def = mi.def
     return isa(def, Method) && is_effect_overridden(def, effect)
 end
 is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)

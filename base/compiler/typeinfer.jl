@@ -339,7 +339,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter,
-        linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult,
+        ::MethodInstance, valid_worlds::WorldRange, result::InferenceResult,
         can_discard_trees::Bool=may_discard_trees(interp))
     return result.src
 end
