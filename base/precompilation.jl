@@ -389,6 +389,36 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         Base.PkgId(uuid, name)
         for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
     ]
+
+    if manifest
+        keep = Set(keys(env.deps))
+        target = "manifest"
+    else
+        if isempty(pkgs)
+            pkgs = [pkg.name for pkg in direct_deps]
+            target = "all packages"
+        else
+            target = join(pkgs, ", ")
+        end
+
+        # restrict to dependencies of given packages
+        function collect_all_deps(pkg::UUID, keep::Set{UUID}, indent = 1)
+            for _dep in env.deps[pkg]
+                if !(_dep in keep)
+                    push!(keep, _dep)
+                    collect_all_deps(_dep, keep, indent + 2)
+                end
+            end
+        end
+
+        keep = Set{UUID}()
+        for pkg in pkgs
+            pkg_uuid = env.project_deps[pkg]
+            push!(keep, pkg_uuid)
+            collect_all_deps(pkg_uuid, keep)
+        end
+    end
+
     stale_cache = Dict{StaleCacheKey, Bool}()
     exts = Dict{Base.PkgId, String}() # ext -> parent
     # make a flat map of each dep and its direct deps
@@ -396,6 +426,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     pkg_exts_map = Dict{Base.PkgId, Vector{Base.PkgId}}()
 
     for (dep, deps) in env.deps
+        dep in keep || continue
         pkg = Base.PkgId(dep, env.names[dep])
         Base.in_sysimage(pkg) && continue
         deps = [Base.PkgId(x, env.names[x]) for x in deps]
@@ -408,6 +439,10 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             push!(ext_deps, pkg) # depends on parent package
             all_extdeps_available = true
             for extdep_uuid in extdep_uuids
+                if !(extdep_uuid in keep)
+                    all_extdeps_available = false
+                    break
+                end
                 extdep_name = env.names[extdep_uuid]
                 if extdep_uuid in keys(env.deps) || Base.in_sysimage(Base.PkgId(extdep_uuid, extdep_name))
                     push!(ext_deps, Base.PkgId(extdep_uuid, extdep_name))
@@ -516,51 +551,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         @warn """Circular dependency detected. Precompilation will be skipped for:\n  $(join(string.(circular_deps), "\n  "))"""
     end
     @debug "precompile: circular dep check done"
-
-    if !manifest
-        if isempty(pkgs)
-            pkgs = [pkg.name for pkg in direct_deps]
-            target = "all packages"
-        else
-            target = join(pkgs, ", ")
-        end
-        # restrict to dependencies of given packages
-        function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
-            for _dep in depsmap[dep]
-                if !(_dep in alldeps)
-                    push!(alldeps, _dep)
-                    collect_all_deps(depsmap, _dep, alldeps)
-                end
-            end
-            return alldeps
-        end
-        keep = Set{Base.PkgId}()
-        for dep in depsmap
-            dep_pkgid = first(dep)
-            if dep_pkgid.name in pkgs
-                push!(keep, dep_pkgid)
-                collect_all_deps(depsmap, dep_pkgid, keep)
-            end
-        end
-        for ext in keys(exts)
-            if issubset(collect_all_deps(depsmap, ext), keep) # if all extension deps are kept
-                push!(keep, ext)
-            end
-        end
-        filter!(d->in(first(d), keep), depsmap)
-        if isempty(depsmap)
-            if _from_loading
-                # if called from loading precompilation it may be a package from another environment stack so
-                # don't error and allow serial precompilation to try
-                # TODO: actually handle packages from other envs in the stack
-                return
-            else
-                return
-            end
-        end
-    else
-        target = "manifest"
-    end
 
     nconfigs = length(configs)
     if nconfigs == 1
