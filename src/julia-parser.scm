@@ -2476,12 +2476,15 @@
      ;; process escape sequences using lisp read
      (read (open-input-string (string #\" s #\"))))))
 
-;; parse an identifier, having previously obtained symbol token `t`
-(define (parse-identifier s t checked)
+(define (maybe-check-identifier t checked)
   (if checked
       (begin (check-identifier t)
             (if (closing-token? t)
-                (error (string "unexpected \"" (take-token s) "\"")))))
+                (error (string "unexpected \"" (take-token s) "\""))))))
+
+;; parse an identifier, having previously obtained symbol token `t`
+(define (parse-identifier s t checked)
+  (maybe-check-identifier t checked)
   (take-token s)
   (cond ((and (eq? t 'var)
               (if (or (ts:pbtok s) (ts:last-tok s))
@@ -2574,7 +2577,14 @@
           ;; lens .a.b.c
           ((eq? t '|.|)
            (take-token s)
-           (parse-lens s checked))
+           (let ((nxt (peek-token s))
+                 (spc (ts:space? s)))
+            (if (closing-token? (peek-token s))
+              ;; :(.)
+              (begin
+                (ts:put-back! s t spc)
+                (parse-identifier s t checked))
+              (parse-lens s checked))))
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))
