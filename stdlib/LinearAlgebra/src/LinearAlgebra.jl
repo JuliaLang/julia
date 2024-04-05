@@ -238,14 +238,14 @@ julia> LinearAlgebra.checksquare(A, B)
 """
 function checksquare(A)
     m,n = size(A)
-    m == n || throw(DimensionMismatch("matrix is not square: dimensions are $(size(A))"))
+    m == n || throw(DimensionMismatch(lazy"matrix is not square: dimensions are $(size(A))"))
     m
 end
 
 function checksquare(A...)
     sizes = Int[]
     for a in A
-        size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
+        size(a,1)==size(a,2) || throw(DimensionMismatch(lazy"matrix is not square: dimensions are $(size(a))"))
         push!(sizes, size(a,1))
     end
     return sizes
