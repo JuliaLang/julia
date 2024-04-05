@@ -322,6 +322,7 @@ end
         @test eltype(eltype(Df)) <: AbstractFloat
         @test (x -> (x,)).(D) == (x -> (x,)).(M)
         @test (x -> 1).(D) == ones(Int,size(D))
+        @test all(==(2), ndims.(D))
         @test_throws MethodError size.(D)
     end
     @testset "Diagonal" begin
