@@ -1844,19 +1844,19 @@ end
     previous = REPL.SHOW_MAXIMUM_BYTES
     try
         REPL.SHOW_MAXIMUM_BYTES = 1000
-        fake_repl() do stdin_write, stdout_read, repl
-            str = string(('a':'z')...)^40
-            # Even with the low byte limit, we can show the string
-            # without issue, thanks to the `show` method that truncates
-            # string `show`. Here we check that we have forwarded the IOContext
-            # correctly so that still happens:
-            display(REPL.REPLDisplay(repl), MIME"text/plain"(), str)
-            # Now, if we wrap our long string in a struct, we no longer
-            # get the abbreviated printing. Here we check that with our
-            # low limit we do trigger the`REPL.LimitIOException`.
-            a = A40735(str)
-            @test_throws REPL.LimitIOException display(REPL.REPLDisplay(repl), MIME"text/plain"(), a)
-        end
+        str = string(('a':'z')...)^50
+        @test length(str) > 1100
+        # For a raw string, we correctly get the standard abbreviated output
+        output = sprint(REPL.show_limited, MIME"text/plain"(), str; context=:limit => true)
+        @test !endswith(output, "…")
+        @test contains(output, "⋯")
+        # For a struct without a custom `show` method, we don't hit the abbreviated
+        # 3-arg show on the inner string, so here we check that the REPL print-limiting
+        # feature is correctly kicking in.
+        a = A40735(str)
+        output = sprint(REPL.show_limited, MIME"text/plain"(), a; context=:limit => true)
+        @test endswith(output, "…[printing stopped after 1000 displaying bytes]")
+        @test length(output) < 1100
     finally
         REPL.SHOW_MAXIMUM_BYTES = previous
     end

@@ -390,17 +390,26 @@ struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
 end
 
+function show_limited(io::IO, mime::MIME, x)
+    try
+        # We wrap in a LimitIO to limit the amount of printing, and in an
+        # IOContext to support downstream `get` queries properly.
+        show(IOContext(LimitIO(io, SHOW_MAXIMUM_BYTES)), mime, x)
+    catch e
+        e isa LimitIOException || rethrow()
+        print(io, "…[printing stopped after $(e.maxbytes) displaying bytes]")
+    end
+end
+
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
         io = IOContext(io, :limit => true, :module => active_module(d)::Module)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
-            if mistate !== nothing # `nothing` can occur during testing
-                mode = LineEdit.mode(mistate)
-                if mode isa LineEdit.Prompt
-                    LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
-                end
+            mode = LineEdit.mode(mistate)
+            if mode isa LineEdit.Prompt
+                LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
             end
         end
         get(io, :color, false)::Bool && write(io, answer_color(d.repl))
@@ -408,9 +417,7 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
-        # We wrap in a LimitIO to limit the amount of printing, and in an
-        # IOContext to support downstream `get` queries properly.
-        show(IOContext(LimitIO(io, SHOW_MAXIMUM_BYTES)), mime, x[])
+        show_limited(io, mime, x[])
         println(io)
     end
     return nothing
