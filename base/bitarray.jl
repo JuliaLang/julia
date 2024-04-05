@@ -403,7 +403,6 @@ julia> falses(2,3)
 falses(dims::DimOrInd...) = falses(dims)
 falses(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = falses(map(to_dim, dims))
 falses(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), false)
-falses(dims::NTuple{N, DimOrInd}) where {N} = fill!(BitArray(undef, dims), false)
 falses(dims::Tuple{}) = fill!(BitArray(undef, dims), false)
 
 """
@@ -422,7 +421,6 @@ julia> trues(2,3)
 trues(dims::DimOrInd...) = trues(dims)
 trues(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = trues(map(to_dim, dims))
 trues(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), true)
-trues(dims::NTuple{N, DimOrInd}) where {N} = fill!(BitArray(undef, dims), true)
 trues(dims::Tuple{}) = fill!(BitArray(undef, dims), true)
 
 function one(x::BitMatrix)
