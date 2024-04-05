@@ -1584,7 +1584,7 @@ julia> code_typed(+, (Float64, Float64))
 """
 function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs...)
     if isa(f, Core.OpaqueClosure)
-        return code_typed_opaque_closure(f; kwargs...)
+        return code_typed_opaque_closure(f, types; kwargs...)
     end
     tt = signature_type(f, types)
     return code_typed_by_type(tt; kwargs...)
@@ -1639,20 +1639,38 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function get_oc_code_rt(@nospecialize(oc::Core.OpaqueClosure))
-    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
+    @nospecialize oc types
+    ccall(:jl_is_in_pure_context, Bool, ()) &&
+        error("code reflection cannot be used from generated functions")
     m = oc.source
     if isa(m, Method)
-        code = _uncompressed_ir(m)
-        return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+        if isdefined(m, :source)
+            if optimize
+                tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
+                mi = Core.Compiler.specialize_method(m, tt, Core.svec())
+                interp = Core.Compiler.NativeInterpreter(m.primary_world)
+                return Core.Compiler.typeinf_code(interp, mi, optimize)
+            else
+                code = _uncompressed_ir(m)
+                return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+            end
+        else
+            # OC constructed from optimized IR
+            codeinst = m.specializations.cache
+            return Pair{CodeInfo, Any}(codeinst.inferred, codeinst.rettype)
+        end
     else
         error("encountered invalid Core.OpaqueClosure object")
     end
 end
 
-function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
-                                   debuginfo::Symbol=:default, _...)
-    (code, rt) = get_oc_code_rt(oc)
+function code_typed_opaque_closure(oc::Core.OpaqueClosure, types;
+                                   debuginfo::Symbol=:default,
+                                   optimize::Bool=true,
+                                   _...)
+    @nospecialize oc types
+    (code, rt) = get_oc_code_rt(oc, types, optimize)
     debuginfo === :none && remove_linenums!(code)
     return Any[Pair{CodeInfo,Any}(code, rt)]
 end
@@ -1807,7 +1825,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        _, rt = only(code_typed_opaque_closure(f))
+        _, rt = only(code_typed_opaque_closure(f, types))
         return Any[rt]
     end
     if isa(f, Core.Builtin)
@@ -1876,7 +1894,7 @@ function infer_return_type(@nospecialize(f), @nospecialize(types=default_tt(f));
                            interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        return last(only(code_typed_opaque_closure(f)))
+        return last(only(code_typed_opaque_closure(f, types)))
     end
     if isa(f, Core.Builtin)
         return _builtin_return_type(interp, f, types)
