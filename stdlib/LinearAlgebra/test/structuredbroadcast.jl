@@ -316,13 +316,20 @@ end
         Dcopy = copy.(D)
         @test Dcopy isa T
         @test Dcopy == D
+        Df = float.(D)
+        @test Df isa T
+        @test Df == D
+        @test eltype(eltype(Df)) <: AbstractFloat
         @test (x -> (x,)).(D) == (x -> (x,)).(M)
+        @test (x -> 1).(D) == ones(Int,size(D))
+        @test_throws MethodError size.(D)
     end
     @testset "Diagonal" begin
         @testset "square" begin
             A = [1 3; 2 4]
             D = Diagonal([A, A])
             standardbroadcastingtests(D, Diagonal)
+            @test sincos.(D) == sincos.(Matrix{eltype(D)}(D))
             M = [x for x in D]
             @test cos.(D) == cos.(M)
         end
@@ -335,6 +342,14 @@ end
         @testset "rectangular blocks" begin
             D = Diagonal([ones(Bool,3,4), ones(Bool,2,3)])
             standardbroadcastingtests(D, Diagonal)
+        end
+
+        @testset "incompatible sizes" begin
+            A = reshape(1:12, 4, 3)
+            B = reshape(1:12, 3, 4)
+            D1 = Diagonal(fill(A, 2))
+            D2 = Diagonal(fill(B, 2))
+            @test_throws DimensionMismatch D1 .+ D2
         end
     end
     @testset "Bidiagonal" begin
