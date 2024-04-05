@@ -290,23 +290,25 @@ function indcopy(sz::Dims, I::GenericMemory)
 end
 
 # Wrapping a memory region in an Array
-@eval function reshape(m::GenericMemory{M, T}, dims::Vararg{Int, N}) where {M, T, N}
-    len = Core.checked_dims(dims...)
-    length(m) == len || throw(DimensionMismatch("parent has $(length(m)) elements, which is incompatible with size $(dims)"))
-    ref = MemoryRef(m)
-    $(Expr(:new, :(Array{T, N}), :ref, :dims))
-end
+@eval begin # @eval for the Array construction. Block for the docstring.
+    function reshape(m::GenericMemory{M, T}, dims::Vararg{Int, N}) where {M, T, N}
+        len = Core.checked_dims(dims...)
+        length(m) == len || throw(DimensionMismatch("parent has $(length(m)) elements, which is incompatible with size $(dims)"))
+        ref = MemoryRef(m)
+        $(Expr(:new, :(Array{T, N}), :ref, :dims))
+    end
 
-"""
-    view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo})
+    """
+        view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo})
 
-Create a vector `v::Vector{T}` backed by the specified indicies of `m`. It is only safe to
-resize `v` if `m` is subseqently not used.
-"""
-@eval function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
-    isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
-    @boundscheck checkbounds(m, inds)
-    ref = MemoryRef(m, first(inds)) # @inbounds would be safe here but does not help performance.
-    dims = (length(inds),)
-    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+    Create a vector `v::Vector{T}` backed by the specified indices of `m`. It is only safe to
+    resize `v` if `m` is subseqently not used.
+    """
+    function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
+        isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
+        @boundscheck checkbounds(m, inds)
+        ref = MemoryRef(m, first(inds)) # @inbounds would be safe here but does not help performance.
+        dims = (length(inds),)
+        $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+    end
 end
