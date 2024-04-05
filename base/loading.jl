@@ -1484,12 +1484,6 @@ function run_extension_callbacks(pkgid::PkgId)
     extids = pop!(EXT_DORMITORY, pkgid, nothing)
     extids === nothing && return
     for extid in extids
-        if in(extid.id, precompilation_stack)
-            @warn """
-            Dependency cycle detected in extension precompilation: $(precompilation_stack_list()) > $(extid.id.name)
-            Loading $(extid.id.name) here will likely fail.
-            """
-        end
         if extid.ntriggers > 0
             # indicate pkgid is loaded
             extid.ntriggers -= 1
@@ -1504,6 +1498,12 @@ function run_extension_callbacks(pkgid::PkgId)
         if extid.ntriggers == 0
             # actually load extid, now that all dependencies are met,
             # and record the result
+            if in(extid.id, precompilation_stack)
+                @warn """
+                Dependency cycle detected in extension precompilation: $(precompilation_stack_list()) > $(extid.id.name)
+                Loading $(extid.id.name) here will likely fail.
+                """
+            end
             succeeded = succeeded && run_extension_callbacks(extid)
             succeeded || push!(EXT_DORMITORY_FAILED, extid)
         end
