@@ -3197,13 +3197,13 @@ end
     @test_throws BoundsError view(mem, 3:11)
     @test_throws BoundsError view(mem, 0:4)
 
-    @test view(mem, 1:5)::Vector{Int} == 11:15
-    @test view(mem, 1:2)::Vector{Int} == 11:12
-    @test view(mem, 1:10)::Vector{Int} == 11:20
-    @test view(mem, 3:8)::Vector{Int} == 13:18
-    @test view(mem, 20:19)::Vector{Int} == []
-    @test view(mem, -5:-7)::Vector{Int} == []
-    @test reshape(mem, 5, 2)::Matrix{Int} == reshape(11:20, 5, 2)
+    @test @inferred(view(mem, 1:5))::Vector{Int} == 11:15
+    @test @inferred(view(mem, 1:2))::Vector{Int} == 11:12
+    @test @inferred(view(mem, 1:10))::Vector{Int} == 11:20
+    @test @inferred(view(mem, 3:8))::Vector{Int} == 13:18
+    @test @inferred(view(mem, 20:19))::Vector{Int} == []
+    @test @inferred(view(mem, -5:-7))::Vector{Int} == []
+    @test @inferred(reshape(mem, 5, 2))::Matrix{Int} == reshape(11:20, 5, 2)
 
     empty_mem = Memory{Module}(undef, 0)
     @test_throws BoundsError view(empty_mem, 0:1)
@@ -3212,12 +3212,12 @@ end
     @test_throws DimensionMismatch reshape(empty_mem, 1, 2, 3)
     @test_throws ArgumentError reshape(empty_mem, 2^16, 2^16, 2^16, 2^16)
 
-    @test view(empty_mem, 1:0)::Vector{Module} == []
-    @test view(empty_mem, 10:3)::Vector{Module} == []
-    @test isempty(reshape(empty_mem, 0, 7, 1)::Array{Module, 3})
+    @test @inferred(view(empty_mem, 1:0))::Vector{Module} == []
+    @test @inferred(view(empty_mem, 10:3))::Vector{Module} == []
+    @test isempty(@inferred(reshape(empty_mem, 0, 7, 1))::Array{Module, 3})
 
     offset_inds = OffsetArrays.IdOffsetRange(values=3:6, indices=53:56)
-    @test view(collect(mem), offset_inds) == view(mem, offset_inds)
+    @test @inferred(view(collect(mem), offset_inds)) == view(mem, offset_inds)
 end
 
 @testset "Memory size" begin
