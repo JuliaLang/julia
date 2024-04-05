@@ -70,7 +70,7 @@ end
 const NULL_ANALYSIS_RESULTS = AnalysisResults(nothing)
 
 """
-    InferenceResult(linfo::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
+    InferenceResult(mi::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
 
 A type that represents the result of running type inference on a chunk of code.
 
@@ -89,18 +89,18 @@ mutable struct InferenceResult
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
     ci::CodeInstance         # CodeInstance if this result has been added to the cache
-    function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
-        # def = linfo.def
+    function InferenceResult(mi::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
+        # def = mi.def
         # nargs = def isa Method ? Int(def.nargs) : 0
         # @assert length(cache_argtypes) == nargs
-        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing, nothing,
+        return new(mi, cache_argtypes, overridden_by_const, nothing, nothing, nothing,
             WorldRange(), Effects(), Effects(), NULL_ANALYSIS_RESULTS, false)
     end
 end
-InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
-InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
+InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
+    InferenceResult(mi, matching_cache_argtypes(𝕃, mi)...)
+InferenceResult(mi::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
+    InferenceResult(mi, matching_cache_argtypes(𝕃, mi, argtypes)...)
 
 function stack_analysis_result!(inf_result::InferenceResult, @nospecialize(result))
     return inf_result.analysis_results = AnalysisResults(result, inf_result.analysis_results)

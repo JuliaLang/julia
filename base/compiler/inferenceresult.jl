@@ -1,31 +1,32 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance) ->
+    matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance) ->
         (cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
 
-Returns argument types `cache_argtypes::Vector{Any}` for `linfo` that are in the native
+Returns argument types `cache_argtypes::Vector{Any}` for `mi` that are in the native
 Julia type domain. `overridden_by_const::BitVector` is all `false` meaning that
 there is no additional extended lattice information there.
 
-    matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance, argtypes::ForwardableArgtypes) ->
+    matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance, argtypes::ForwardableArgtypes) ->
         (cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
 
 Returns cache-correct extended lattice argument types `cache_argtypes::Vector{Any}`
-for `linfo` given some `argtypes` accompanied by `overridden_by_const::BitVector`
+for `mi` given some `argtypes` accompanied by `overridden_by_const::BitVector`
 that marks which argument contains additional extended lattice information.
 
 In theory, there could be a `cache` containing a matching `InferenceResult`
-for the provided `linfo` and `given_argtypes`. The purpose of this function is
-to return a valid value for `cache_lookup(𝕃, linfo, argtypes, cache).argtypes`,
+for the provided `mi` and `given_argtypes`. The purpose of this function is
+to return a valid value for `cache_lookup(𝕃, mi, argtypes, cache).argtypes`,
 so that we can construct cache-correct `InferenceResult`s in the first place.
 """
 function matching_cache_argtypes end
 
-function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance)
-    mthd = isa(linfo.def, Method) ? linfo.def::Method : nothing
-    cache_argtypes = most_general_argtypes(mthd, linfo.specTypes)
-    return cache_argtypes, falses(length(cache_argtypes))
+function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance)
+    method = isa(mi.def, Method) ? mi.def::Method : nothing
+    cache_argtypes = most_general_argtypes(method, mi.specTypes)
+    overridden_by_const = falses(length(cache_argtypes))
+    return cache_argtypes, overridden_by_const
 end
 
 struct SimpleArgtypes <: ForwardableArgtypes
@@ -33,25 +34,25 @@ struct SimpleArgtypes <: ForwardableArgtypes
 end
 
 """
-    matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance, argtypes::SimpleArgtypes)
+    matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance, argtypes::SimpleArgtypes)
 
 The implementation for `argtypes` with general extended lattice information.
 This is supposed to be used for debugging and testing or external `AbstractInterpreter`
 usages and in general `matching_cache_argtypes(::MethodInstance, ::ConditionalArgtypes)`
 is more preferred it can forward `Conditional` information.
 """
-function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance, simple_argtypes::SimpleArgtypes)
+function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance, simple_argtypes::SimpleArgtypes)
     (; argtypes) = simple_argtypes
     given_argtypes = Vector{Any}(undef, length(argtypes))
     for i = 1:length(argtypes)
         given_argtypes[i] = widenslotwrapper(argtypes[i])
     end
-    given_argtypes = va_process_argtypes(𝕃, given_argtypes, linfo)
-    return pick_const_args(𝕃, linfo, given_argtypes)
+    given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
+    return pick_const_args(𝕃, mi, given_argtypes)
 end
 
-function pick_const_args(𝕃::AbstractLattice, linfo::MethodInstance, given_argtypes::Vector{Any})
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, linfo)
+function pick_const_args(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any})
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, mi)
     return pick_const_args!(𝕃, cache_argtypes, overridden_by_const, given_argtypes)
 end
 
@@ -60,7 +61,7 @@ function pick_const_args!(𝕃::AbstractLattice, cache_argtypes::Vector{Any}, ov
         given_argtype = given_argtypes[i]
         cache_argtype = cache_argtypes[i]
         if !is_argtype_match(𝕃, given_argtype, cache_argtype, false)
-            # prefer the argtype we were given over the one computed from `linfo`
+            # prefer the argtype we were given over the one computed from `mi`
             if (isa(given_argtype, PartialStruct) && isa(cache_argtype, Type) &&
                 !⊏(𝕃, given_argtype, cache_argtype))
                 # if the type information of this `PartialStruct` is less strict than
@@ -80,8 +81,9 @@ function is_argtype_match(𝕃::AbstractLattice,
                           overridden_by_const::Bool)
     if is_forwardable_argtype(𝕃, given_argtype)
         return is_lattice_equal(𝕃, given_argtype, cache_argtype)
+    else
+        return !overridden_by_const
     end
-    return !overridden_by_const
 end
 
 va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any}, mi::MethodInstance) =
@@ -114,24 +116,24 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
     withfirst::Bool = true)
     toplevel = method === nothing
     isva = !toplevel && method.isva
-    linfo_argtypes = Any[(unwrap_unionall(specTypes)::DataType).parameters...]
+    mi_argtypes = Any[(unwrap_unionall(specTypes)::DataType).parameters...]
     nargs::Int = toplevel ? 0 : method.nargs
     # For opaque closure, the closure environment is processed elsewhere
     withfirst || (nargs -= 1)
     cache_argtypes = Vector{Any}(undef, nargs)
     # First, if we're dealing with a varargs method, then we set the last element of `args`
     # to the appropriate `Tuple` type or `PartialStruct` instance.
+    mi_argtypes_length = length(mi_argtypes)
     if !toplevel && isva
         if specTypes::Type == Tuple
-            linfo_argtypes = Any[Any for i = 1:nargs]
+            mi_argtypes = Any[Any for i = 1:nargs]
             if nargs > 1
-                linfo_argtypes[end] = Tuple
+                mi_argtypes[end] = Tuple
             end
             vargtype = Tuple
         else
-            linfo_argtypes_length = length(linfo_argtypes)
-            if nargs > linfo_argtypes_length
-                va = linfo_argtypes[linfo_argtypes_length]
+            if nargs > mi_argtypes_length
+                va = mi_argtypes[mi_argtypes_length]
                 if isvarargtype(va)
                     new_va = rewrap_unionall(unconstrain_vararg_length(va), specTypes)
                     vargtype = Tuple{new_va}
@@ -140,8 +142,8 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 end
             else
                 vargtype_elements = Any[]
-                for i in nargs:linfo_argtypes_length
-                    p = linfo_argtypes[i]
+                for i in nargs:mi_argtypes_length
+                    p = mi_argtypes[i]
                     p = unwraptv(isvarargtype(p) ? unconstrain_vararg_length(p) : p)
                     push!(vargtype_elements, elim_free_typevars(rewrap_unionall(p, specTypes)))
                 end
@@ -164,13 +166,12 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
     # type info as we go (where possible). Note that if we're dealing with a varargs method,
     # we already handled the last element of `cache_argtypes` (and decremented `nargs` so that
     # we don't overwrite the result of that work here).
-    linfo_argtypes_length = length(linfo_argtypes)
-    if linfo_argtypes_length > 0
-        n = linfo_argtypes_length > nargs ? nargs : linfo_argtypes_length
+    if mi_argtypes_length > 0
+        n = mi_argtypes_length > nargs ? nargs : mi_argtypes_length
         tail_index = n
         local lastatype
         for i = 1:n
-            atyp = linfo_argtypes[i]
+            atyp = mi_argtypes[i]
             if i == n && isvarargtype(atyp)
                 atyp = unwrapva(atyp)
                 tail_index -= 1
@@ -209,13 +210,14 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-function cache_lookup(𝕃::AbstractLattice, linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
-    method = linfo.def::Method
+function cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any},
+                      cache::Vector{InferenceResult})
+    method = mi.def::Method
     nargs = Int(method.nargs)
     method.isva && (nargs -= 1)
     length(given_argtypes) ≥ nargs || return nothing
     for cached_result in cache
-        cached_result.linfo === linfo || continue
+        cached_result.linfo === mi || continue
         cache_argtypes = cached_result.argtypes
         cache_overridden_by_const = cached_result.overridden_by_const
         for i in 1:nargs
