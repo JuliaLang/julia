@@ -488,6 +488,8 @@ eval(Core, quote
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 
+const NullDebugInfo = DebugInfo(:none)
+
 struct LineInfoNode # legacy support for aiding Serializer.deserialize of old IR
     mod::Module
     method

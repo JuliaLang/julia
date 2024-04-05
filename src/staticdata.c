@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    189
+#define NUM_TAGS    190
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -265,6 +265,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_kwcall_mt);
         INSERT_TAG(jl_kwcall_func);
         INSERT_TAG(jl_opaque_closure_method);
+        INSERT_TAG(jl_nulldebuginfo);
 
         // some Core.Builtin Functions that we want to be able to reference:
         INSERT_TAG(jl_builtin_throw);
@@ -2500,6 +2501,8 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_
         m->slot_syms = jl_compress_argnames(ci->slotnames);
         jl_gc_wb(m, m->slot_syms);
     }
+    ci->debuginfo = jl_nulldebuginfo;
+    jl_gc_wb(ci, ci->debuginfo);
     jl_value_t *ret = (jl_value_t*)ci;
     if (compressed)
         ret = (jl_value_t*)jl_compress_ir(m, ci);
@@ -2522,6 +2525,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
                 if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
                     jl_gc_wb(codeinst, stripped);
                 }
+                record_field_change((jl_value_t**)&codeinst->debuginfo, (jl_value_t*)jl_nulldebuginfo);
             }
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
@@ -2563,6 +2567,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     if (jl_options.strip_metadata) {
         record_field_change((jl_value_t**)&m->file, (jl_value_t*)jl_empty_sym);
         m->line = 0;
+        record_field_change((jl_value_t**)&m->debuginfo, (jl_value_t*)jl_nulldebuginfo);
     }
     jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
     if (!jl_is_svec(specializations)) {
