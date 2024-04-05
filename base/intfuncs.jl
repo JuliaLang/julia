@@ -742,7 +742,7 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 function bin(x::Unsigned, pad::Int, neg::Bool)
     m = top_set_bit(x)
     n = neg + max(pad, m)
-    a = StringVector(n)
+    a = StringMemory(n)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
     #     @inbounds a[n - i] = 0x30 + (((x >> i) % UInt8)::UInt8 & 0x1)
     # end
@@ -769,7 +769,7 @@ end
 function oct(x::Unsigned, pad::Int, neg::Bool)
     m = div(top_set_bit(x) + 2, 3)
     n = neg + max(pad, m)
-    a = StringVector(n)
+    a = StringMemory(n)
     i = n
     while i > neg
         @inbounds a[i] = 0x30 + ((x % UInt8)::UInt8 & 0x7)
@@ -844,7 +844,7 @@ end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
-    a = StringVector(n)
+    a = StringMemory(n)
     append_c_digits_fast(n, x, a, 1)
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
@@ -853,7 +853,7 @@ end
 function hex(x::Unsigned, pad::Int, neg::Bool)
     m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
     n = neg + max(pad, m)
-    a = StringVector(n)
+    a = StringMemory(n)
     i = n
     while i >= 2
         b = (x % UInt8)::UInt8
@@ -880,7 +880,7 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     b = (base % Int)::Int
     digits = abs(b) <= 36 ? base36digits : base62digits
     n = neg + ndigits(x, base=b, pad=pad)
-    a = StringVector(n)
+    a = StringMemory(n)
     i = n
     @inbounds while i > neg
         if b > 0
@@ -956,7 +956,7 @@ julia> bitstring(2.2)
 function bitstring(x::T) where {T}
     isprimitivetype(T) || throw(ArgumentError("$T not a primitive type"))
     sz = sizeof(T) * 8
-    str = StringVector(sz)
+    str = StringMemory(sz)
     i = sz
     @inbounds while i >= 4
         b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
