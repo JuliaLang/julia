@@ -109,7 +109,7 @@ function unsafe_copyto!(dest::Memory{T}, doffs, src::Memory{T}, soffs, n) where{
     return dest
 end
 
-function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
+function unsafe_copyto!(dest::Memory{T}, doffs, src::Memory, soffs, n) where{T}
     @_terminates_locally_meta
     n == 0 && return dest
     # use pointer math to determine if they are deemed to alias
@@ -119,7 +119,7 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     @inbounds if destp < srcp || destp > endp
         for i = 1:n
             if isassigned(src, soffs + i - 1)
-                dest[doffs + i - 1] = src[soffs + i - 1]
+                dest[doffs + i - 1] = src[soffs + i - 1]::T
             else
                 _unsetindex!(dest, doffs + i - 1)
             end
@@ -127,7 +127,7 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     else
         for i = n:-1:1
             if isassigned(src, soffs + i - 1)
-                dest[doffs + i - 1] = src[soffs + i - 1]
+                dest[doffs + i - 1] = src[soffs + i - 1]::T
             else
                 _unsetindex!(dest, doffs + i - 1)
             end
