@@ -42,7 +42,7 @@ end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
 StringMemory(n::Integer) = unsafe_wrap(Memory{UInt8}, _string_n(n))
-StringVector(n::Integer) = view(StringMemory(n), 1:n)
+StringVector(n::Integer) = view(StringMemory(n), 1:n)::Vector{UInt8}
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
