@@ -3535,6 +3535,8 @@ static jl_value_t *core(const char *name)
     return jl_get_global(jl_core_module, jl_symbol(name));
 }
 
+jl_debuginfo_t *jl_nulldebuginfo;
+
 // fetch references to things defined in boot.jl
 void post_boot_hooks(void)
 {
@@ -3590,6 +3592,7 @@ void post_boot_hooks(void)
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
+    jl_nulldebuginfo = (jl_debuginfo_t*)core("NullDebugInfo");
 
     jl_init_box_caches();
 
