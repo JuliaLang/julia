@@ -622,12 +622,7 @@ end
     @test Date("-2013-10-10") == Date(-2013, 10, 10)
     @test Date("-2013") == Date(-2013, 01, 01)
 
-    try
-        Date("")
-        @test false
-    catch err
-        @test err.msg == "Cannot parse an empty string as a Date or Time"
-    end
+    @test_throws "Cannot parse an empty string as a Date or Time" Date("")
 end
 
 end
