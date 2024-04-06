@@ -1157,7 +1157,7 @@ end
 
 
 """
-    BracketedSort(target[, next::Algorithm]) isa Algorithm
+    BracketedSort(target[, next::Algorithm]) isa Base.Sort.Algorithm
 
 Perform a partialsort for the elements that fall into the indices specified by the `target`
 using BracketedSort with the `next` algorithm for subproblems.
