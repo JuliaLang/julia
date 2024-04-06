@@ -1256,7 +1256,9 @@ function modf(x::T) where T<:IEEEFloat
 end
 
 @inline function use_power_by_squaring(n::Integer)
-    -2^13 <= n < 2^13
+    # -2^13 <= n < 2^13
+    n = abs(n)
+    sizeof(n)*8 - Base.leading_zeros(n) + Base.count_ones(n) < 20
 end
 
 # @constprop aggressive to help the compiler see the switch between the integer and float
