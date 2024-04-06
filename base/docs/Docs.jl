@@ -89,11 +89,19 @@ function initmeta(m::Module)
     nothing
 end
 
+struct TypeParams{T<:Tuple} end
+
 function signature!(tv::Vector{Any}, expr::Expr)
     is_macrocall = isexpr(expr, :macrocall)
     if is_macrocall || isexpr(expr, :call)
         sig = :(Union{Tuple{}})
         first_arg = is_macrocall ? 3 : 2 # skip function arguments
+        if isexpr(expr.args[1], :curly)
+            push!((sig.args[end]::Expr).args, :($TypeParams{Tuple{$((expr.args[1]::Expr).args[2:end]...)}}))
+            if isempty(tv)
+                append!(tv, mapany(tvar, (expr.args[1]::Expr).args[2:end]))
+            end
+        end
         for arg in expr.args[first_arg:end]
             isexpr(arg, :parameters) && continue
             if isexpr(arg, :kw) # optional arg
