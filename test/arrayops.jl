@@ -3187,23 +3187,37 @@ end
     end
 end
 
-@testset "Wrapping Memory into Arrays" begin
-    mem = Memory{Int}(undef, 10) .= 1
-    memref = MemoryRef(mem)
-    @test_throws DimensionMismatch wrap(Array, mem, (10, 10))
-    @test wrap(Array, mem, (5,)) == ones(Int, 5)
-    @test wrap(Array, mem, 2) == ones(Int, 2)
-    @test wrap(Array, memref, 10) == ones(Int, 10)
-    @test wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
-    @test wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
+@testset "Wrapping Memory into Arrays with view and reshape" begin
+    mem::Memory{Int} = Memory{Int}(undef, 10) .= 11:20
 
-    memref2 = MemoryRef(mem, 3)
-    @test wrap(Array, memref2, (5,)) == ones(Int, 5)
-    @test wrap(Array, memref2, 2) == ones(Int, 2)
-    @test wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
-    @test wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
-    @test_throws DimensionMismatch wrap(Array, memref2, 9)
-    @test_throws DimensionMismatch wrap(Array, memref2, 10)
+    @test_throws DimensionMismatch reshape(mem, 10, 10)
+    @test_throws DimensionMismatch reshape(mem, 5)
+    @test_throws BoundsError view(mem, 1:10, 1:10)
+    @test_throws BoundsError view(mem, 1:11)
+    @test_throws BoundsError view(mem, 3:11)
+    @test_throws BoundsError view(mem, 0:4)
+
+    @test @inferred(view(mem, 1:5))::Vector{Int} == 11:15
+    @test @inferred(view(mem, 1:2))::Vector{Int} == 11:12
+    @test @inferred(view(mem, 1:10))::Vector{Int} == 11:20
+    @test @inferred(view(mem, 3:8))::Vector{Int} == 13:18
+    @test @inferred(view(mem, 20:19))::Vector{Int} == []
+    @test @inferred(view(mem, -5:-7))::Vector{Int} == []
+    @test @inferred(reshape(mem, 5, 2))::Matrix{Int} == reshape(11:20, 5, 2)
+
+    empty_mem = Memory{Module}(undef, 0)
+    @test_throws BoundsError view(empty_mem, 0:1)
+    @test_throws BoundsError view(empty_mem, 1:2)
+    @test_throws DimensionMismatch reshape(empty_mem, 1)
+    @test_throws DimensionMismatch reshape(empty_mem, 1, 2, 3)
+    @test_throws ArgumentError reshape(empty_mem, 2^16, 2^16, 2^16, 2^16)
+
+    @test @inferred(view(empty_mem, 1:0))::Vector{Module} == []
+    @test @inferred(view(empty_mem, 10:3))::Vector{Module} == []
+    @test isempty(@inferred(reshape(empty_mem, 0, 7, 1))::Array{Module, 3})
+
+    offset_inds = OffsetArrays.IdOffsetRange(values=3:6, indices=53:56)
+    @test @inferred(view(collect(mem), offset_inds)) == view(mem, offset_inds)
 end
 
 @testset "Memory size" begin
