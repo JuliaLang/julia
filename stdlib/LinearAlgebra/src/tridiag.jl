@@ -9,7 +9,7 @@ struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
     function SymTridiagonal{T, V}(dv, ev) where {T, V<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
-            throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
+            throw(DimensionMismatch(lazy"subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
         end
         new{T, V}(dv, ev)
     end
@@ -191,8 +191,8 @@ function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
     elseif absn <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-absn), zero(T))
     else
-        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+        throw(ArgumentError(string(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 function diag(M::SymTridiagonal, n::Integer=0)
@@ -207,8 +207,8 @@ function diag(M::SymTridiagonal, n::Integer=0)
     elseif n <= size(M,1)
         throw(ArgumentError("requested diagonal contains undefined zeros of an array type"))
     else
-        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+        throw(ArgumentError(string(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 
@@ -350,8 +350,8 @@ isdiag(M::SymTridiagonal) =  iszero(_evview(M))
 function tril!(M::SymTridiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(string(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < -1
         fill!(M.ev, zero(T))
         fill!(M.dv, zero(T))
@@ -369,8 +369,8 @@ end
 function triu!(M::SymTridiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(string(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 1
         fill!(M.ev, zero(T))
         fill!(M.dv, zero(T))
@@ -463,7 +463,7 @@ end
     if i == j
         @inbounds A.dv[i] = x
     else
-        throw(ArgumentError("cannot set off-diagonal entry ($i, $j)"))
+        throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j)"))
     end
     return x
 end
@@ -480,7 +480,7 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         if (length(dl) != n-1 || length(du) != n-1) && !(length(d) == 0 && length(dl) == 0 && length(du) == 0)
             throw(ArgumentError(string("cannot construct Tridiagonal from incompatible ",
                 "lengths of subdiagonal, diagonal and superdiagonal: ",
-                "($(length(dl)), $(length(d)), $(length(du)))")))
+                lazy"($(length(dl)), $(length(d)), $(length(du)))")))
         end
         new{T,V}(dl, d, Base.unalias(dl, du))
     end
@@ -645,8 +645,8 @@ function diag(M::Tridiagonal{T}, n::Integer=0) where T
     elseif abs(n) <= size(M,1)
         return fill!(similar(M.d, size(M,1)-abs(n)), zero(T))
     else
-        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+        throw(ArgumentError(string(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 
@@ -698,8 +698,8 @@ end
     elseif j - i == 1
         @inbounds A.du[i] = x
     elseif !iszero(x)
-        throw(ArgumentError(string("cannot set entry ($i, $j) off ",
-            "the tridiagonal band to a nonzero value ($x)")))
+        throw(ArgumentError(string(lazy"cannot set entry ($i, $j) off ",
+            lazy"the tridiagonal band to a nonzero value ($x)")))
     end
     return x
 end
@@ -741,8 +741,8 @@ isdiag(M::Tridiagonal) = iszero(M.dl) && iszero(M.du)
 function tril!(M::Tridiagonal{T}, k::Integer=0) where T
     n = length(M.d)
     if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(string(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < -1
         fill!(M.dl, zero(T))
         fill!(M.d, zero(T))
@@ -759,8 +759,8 @@ end
 function triu!(M::Tridiagonal{T}, k::Integer=0) where T
     n = length(M.d)
     if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(string(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif k > 1
         fill!(M.dl, zero(T))
         fill!(M.d, zero(T))
@@ -928,7 +928,7 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
     LinearAlgebra.require_one_based_indexing(B)
     n = size(A, 1)
     if n != size(B,1)
-        throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+        throw(DimensionMismatch(lazy"matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
     end
     nrhs = size(B, 2)
 

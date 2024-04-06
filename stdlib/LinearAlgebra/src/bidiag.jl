@@ -8,7 +8,7 @@ struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
     function Bidiagonal{T,V}(dv, ev, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
         if length(ev) != max(length(dv)-1, 0)
-            throw(DimensionMismatch("length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
+            throw(DimensionMismatch(lazy"length of diagonal vector is $(length(dv)), length of off-diagonal vector is $(length(ev))"))
         end
         (uplo != 'U' && uplo != 'L') && throw_uplo()
         new{T,V}(dv, ev, uplo)
@@ -438,11 +438,11 @@ function check_A_mul_B!_sizes(C, A, B)
     mB, nB = size(B)
     mC, nC = size(C)
     if mA != mC
-        throw(DimensionMismatch("first dimension of A, $mA, and first dimension of output C, $mC, must match"))
+        throw(DimensionMismatch(lazy"first dimension of A, $mA, and first dimension of output C, $mC, must match"))
     elseif nA != mB
-        throw(DimensionMismatch("second dimension of A, $nA, and first dimension of B, $mB, must match"))
+        throw(DimensionMismatch(lazy"second dimension of A, $nA, and first dimension of B, $mB, must match"))
     elseif nB != nC
-        throw(DimensionMismatch("second dimension of output C, $nC, and second dimension of B, $nB, must match"))
+        throw(DimensionMismatch(lazy"second dimension of output C, $nC, and second dimension of B, $nB, must match"))
     end
 end
 
@@ -562,10 +562,10 @@ function _mul!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, _add::MulA
     nA = size(A,1)
     nB = size(B,2)
     if !(size(C,1) == size(B,1) == nA)
-        throw(DimensionMismatch("A has first dimension $nA, B has $(size(B,1)), C has $(size(C,1)) but all must match"))
+        throw(DimensionMismatch(lazy"A has first dimension $nA, B has $(size(B,1)), C has $(size(C,1)) but all must match"))
     end
     if size(C,2) != nB
-        throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
+        throw(DimensionMismatch(lazy"A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
     iszero(nA) && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
@@ -763,11 +763,11 @@ function ldiv!(c::AbstractVecOrMat, A::Bidiagonal, b::AbstractVecOrMat)
     N = size(A, 2)
     mb, nb = size(b, 1), size(b, 2)
     if N != mb
-        throw(DimensionMismatch("second dimension of A, $N, does not match first dimension of b, $mb"))
+        throw(DimensionMismatch(lazy"second dimension of A, $N, does not match first dimension of b, $mb"))
     end
     mc, nc = size(c, 1), size(c, 2)
     if mc != mb || nc != nb
-        throw(DimensionMismatch("size of result, ($mc, $nc), does not match the size of b, ($mb, $nb)"))
+        throw(DimensionMismatch(lazy"size of result, ($mc, $nc), does not match the size of b, ($mb, $nb)"))
     end
 
     if N == 0
@@ -833,11 +833,11 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     mc, nc = size(C)
     if mc != m || nc != n
-        throw(DimensionMismatch("expect output to have size ($m, $n), but got ($mc, $nc)"))
+        throw(DimensionMismatch(lazy"expect output to have size ($m, $n), but got ($mc, $nc)"))
     end
 
     zi = findfirst(iszero, B.dv)
