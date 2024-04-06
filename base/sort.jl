@@ -1346,7 +1346,7 @@ end
 
 
 """
-    StableCheckSorted(next) isa Algorithm
+    StableCheckSorted(next) isa Base.Sort.Algorithm
 
 Check if an input is sorted and/or reverse-sorted.
 
