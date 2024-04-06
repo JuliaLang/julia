@@ -1095,8 +1095,6 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
-    current = current_task()
-    t === current && throw(ConcurrencyViolationError("Cannot throw an exception to the currently running task!"))
     t.result = exc
     t._isexception = true
     set_next_task(t)
