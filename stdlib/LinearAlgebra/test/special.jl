@@ -111,6 +111,7 @@ Random.seed!(1)
         struct TypeWithZero end
         Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
         Base.convert(::Type{TypeWithZero}, ::TypeWithoutZero) = TypeWithZero()
+        Base.zero(x::Union{TypeWithoutZero, TypeWithZero}) = zero(typeof(x))
         Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
         LinearAlgebra.symmetric(::TypeWithoutZero, ::Symbol) = TypeWithoutZero()
         LinearAlgebra.symmetric_type(::Type{TypeWithoutZero}) = TypeWithoutZero
