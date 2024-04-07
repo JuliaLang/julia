@@ -2137,7 +2137,7 @@ end
     return Type
 end
 
-@nospecs function opaque_closure_tfunc(𝕃::AbstractLattice, arg, lb, ub, source, env::Vector{Any}, linfo::MethodInstance)
+@nospecs function opaque_closure_tfunc(𝕃::AbstractLattice, arg, lb, ub, source, env::Vector{Any}, mi::MethodInstance)
     argt, argt_exact = instanceof_tfunc(arg)
     lbt, lb_exact = instanceof_tfunc(lb)
     if !lb_exact
@@ -2151,7 +2151,7 @@ end
 
     (isa(source, Const) && isa(source.val, Method)) || return t
 
-    return PartialOpaque(t, tuple_tfunc(𝕃, env), linfo, source.val)
+    return PartialOpaque(t, tuple_tfunc(𝕃, env), mi, source.val)
 end
 
 # whether getindex for the elements can potentially throw UndefRef

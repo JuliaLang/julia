@@ -143,7 +143,7 @@ See the [`@code_warntype`](@ref man-code-warntype) section in the Performance Ti
 
 See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref), [`code_native`](@ref).
 """
-function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt(f));
+function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_tt(f));
                        world=Base.get_world_counter(),
                        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world),
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
@@ -154,10 +154,10 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt
     nargs::Int = 0
     if isa(f, Core.OpaqueClosure)
         isa(f.source, Method) && (nargs = f.nargs)
-        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f)[1]..., nargs; lineprinter)
+        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs; lineprinter)
         return nothing
     end
-    matches = Base._methods_by_ftype(Base.signature_type(f, t), #=lim=#-1, world)::Vector
+    matches = Base._methods_by_ftype(Base.signature_type(f, tt), #=lim=#-1, world)::Vector
     for match in matches
         match = match::Core.MethodMatch
         (src, rettype) = Core.Compiler.typeinf_code(interp, match, optimize)

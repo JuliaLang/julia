@@ -426,7 +426,6 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 @goto done
             end
             if path !== nothing
-                path = entry_path(path, pkg.name)
                 env′ = env
                 @goto done
             end
@@ -438,12 +437,15 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
         # e.g. if they have been explicitly added to the project/manifest
         mbypath = manifest_uuid_path(Sys.STDLIB, pkg)
         if mbypath isa String
-            path = entry_path(mbypath, pkg.name)
+            path = mbypath
             env′ = Sys.STDLIB
             @goto done
         end
     end
     @label done
+    if path !== nothing && !isfile_casesensitive(path)
+        path = nothing
+    end
     if cache !== nothing
         cache.located[(pkg, stopenv)] = path === nothing ? nothing : (path, something(env′))
     end
@@ -690,7 +692,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         proj = project_file_name_uuid(project_file, pkg.name)
         if proj == pkg
             # if `pkg` matches the project, return the project itself
-            return project_file_path(project_file)
+            return project_file_path(project_file, pkg.name)
         end
         mby_ext = project_file_ext_path(project_file, pkg.name)
         mby_ext === nothing || return mby_ext
@@ -725,7 +727,7 @@ end
 
 function project_file_ext_path(project_file::String, name::String)
     d = parsed_toml(project_file)
-    p = project_file_path(project_file)
+    p = dirname(project_file)
     exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
     if exts !== nothing
         if name in keys(exts)
@@ -744,9 +746,14 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
     return PkgId(uuid, name)
 end
 
-function project_file_path(project_file::String)
+function project_file_path(project_file::String, name::String)
     d = parsed_toml(project_file)
-    joinpath(dirname(project_file), get(d, "path", "")::String)
+    entryfile = get(d, "path", nothing)::Union{String, Nothing}
+    # "path" entry in project file is soft deprecated
+    if entryfile === nothing
+        entryfile = get(d, "entryfile", nothing)::Union{String, Nothing}
+    end
+    return entry_path(dirname(project_file), name, entryfile)
 end
 
 function workspace_manifest(project_file)
@@ -837,12 +844,11 @@ function implicit_env_project_file_extension(dir::String, ext::PkgId)
     return nothing, nothing
 end
 
-# given a path and a name, return the entry point
-function entry_path(path::String, name::String)::Union{Nothing,String}
+# given a path, name, and possibly an entryfile, return the entry point
+function entry_path(path::String, name::String, entryfile::Union{Nothing,String})::String
     isfile_casesensitive(path) && return normpath(path)
-    path = normpath(joinpath(path, "src", "$name.jl"))
-    isfile_casesensitive(path) && return path
-    return nothing # source not found
+    entrypoint = entryfile === nothing ? joinpath("src", "$name.jl") : entryfile
+    return normpath(joinpath(path, entrypoint))
 end
 
 ## explicit project & manifest API ##
@@ -1016,15 +1022,16 @@ end
 
 function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::Dict{String,Any})
     path = get(entry, "path", nothing)::Union{Nothing, String}
+    entryfile = get(entry, "entryfile", nothing)::Union{Nothing, String}
     if path !== nothing
-        path = normpath(abspath(dirname(manifest_file), path))
+        path = entry_path(normpath(abspath(dirname(manifest_file), path)), pkg.name, entryfile)
         return path
     end
     hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
     if hash === nothing
         mbypath = manifest_uuid_path(Sys.STDLIB, pkg)
-        if mbypath isa String
-            return entry_path(mbypath, pkg.name)
+        if mbypath isa String && isfile(mbypath)
+            return mbypath
         end
         return nothing
     end
@@ -1034,7 +1041,7 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
     for slug in (version_slug(uuid, hash), version_slug(uuid, hash, 4))
         for depot in DEPOT_PATH
             path = joinpath(depot, "packages", pkg.name, slug)
-            ispath(path) && return abspath(path)
+            ispath(path) && return entry_path(abspath(path), pkg.name, entryfile)
         end
     end
     # no depot contains the package, return missing to stop looking
@@ -2504,8 +2511,8 @@ function require_stdlib(uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
         uuidkey = PkgId(uuid5(uuidkey.uuid, ext), ext)
     end
     #mbypath = manifest_uuid_path(env, uuidkey)
-    #if mbypath isa String
-    #    sourcepath = entry_path(mbypath, uuidkey.name)
+    #if mbypath isa String && isfile_casesensitive(mbypath)
+    #    sourcepath = mbypath
     #else
     #    # if the user deleted the stdlib folder, we next try using their environment
     #    sourcepath = locate_package_env(uuidkey)
