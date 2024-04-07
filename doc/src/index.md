@@ -18,11 +18,18 @@ hero:
     - theme: alt
       text: View on Github
       link: https://github.com/JuliaLang/julia
-    - theme: alt
-      text: Tutorials
-      link: /tutorials/creating-packages
+    - theme: brand
+      text: Sponsor
+      link: https://github.com/sponsors/julialang
 ---
 ```
+
+::: danger
+
+This is a fork from the origial repo. Please visit the [official website](https://julialang.org).
+
+:::
+
 
 ```@eval
 io = IOBuffer()
