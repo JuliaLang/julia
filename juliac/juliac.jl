@@ -133,6 +133,21 @@ write(io, """
             end
         end
     end
+    @eval Base.Sort begin
+        issorted(itr;
+            lt::T=isless, by::F=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where {T,F} =
+            issorted(itr, ord(lt,by,rev,order))
+    end
+    @eval Base.Unicode begin
+        function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform::F = identity) where F
+            nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
+            buffer = Base.StringVector(nwords*4)
+            nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
+            nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
+            nbytes < 0 && utf8proc_error(nbytes)
+            return String(resize!(buffer, nbytes))
+        end
+    end
 
     #TODO Make these conditional on being used by the module
 

@@ -2113,6 +2113,7 @@ static void print_stack_crumbs(jl_codectx_t &ctx) {
                 jl_((jl_value_t*)caller);
                 errs() << "In " << std::get<std::string>(it->second) << ":" << (int32_t)std::get<unsigned int>(it->second) << "\n";
             }
+            ctx.emission_context.enqueuers.erase(caller); //TODO: this is not the best way to handle this, figure out way to make it not cycle
         }
         else
             break;
