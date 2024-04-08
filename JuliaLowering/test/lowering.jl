@@ -3,7 +3,17 @@
 using JuliaSyntax
 using JuliaLowering
 
-using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref
+using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode
+
+function wrapscope(ex, scope_type)
+    makenode(ex, ex, K"block", ex; scope_type=scope_type)
+end
+
+function softscope_test(ex)
+    wrapscope(wrapscope(ex, :neutral), :soft)
+end
+
+#-------------------------------------------------------------------------------
 
 # src = """
 # let
@@ -39,6 +49,9 @@ begin
 end
 """
 
+# src = """
+#     x = 1
+# """
 
 # src = """
 #     x + y
@@ -48,6 +61,7 @@ t = parsestmt(SyntaxNode, src, filename="foo.jl")
 
 ctx = JuliaLowering.DesugaringContext()
 t2 = SyntaxTree(ctx.graph, t)
+# t2 = softscope_test(t2)
 @info "Input code" t2
 
 t3 = JuliaLowering.expand_forms(ctx, t2)
@@ -64,10 +78,10 @@ t5 = JuliaLowering.compile_lambda(ctx2, t4)
 
 t6 = JuliaLowering.to_expr(in_mod, ctx2.var_info, t5)
 
-x = 100
-y = 200
 @info "CodeInfo" t6
 
+x = 100
+y = 200
 @info "Eval" Base.eval(in_mod, t6)
 
 # flisp parts to do

@@ -129,6 +129,7 @@ function _convert_nodes(graph::SyntaxGraph, node::SyntaxNode)
     if !isnothing(node.val)
         v = node.val
         if v isa Symbol
+            # TODO: Fixes in JuliaSyntax to avoid ever converting to Symbol
             setattr!(graph, id, name_val=string(v))
         else
             setattr!(graph, id, value=v)
@@ -262,7 +263,7 @@ JuliaSyntax.last_byte(tree::SyntaxTree) = last_byte(sourceref(tree))
 function SyntaxTree(graph::SyntaxGraph, node::SyntaxNode)
     ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=Union{SourceRef,NodeId},
                        value=Any, name_val=String)
-    id = _convert_nodes(graph, node)
+    id = _convert_nodes(freeze_attrs(graph), node)
     return SyntaxTree(graph, id)
 end
 

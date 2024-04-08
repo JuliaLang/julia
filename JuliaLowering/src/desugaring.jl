@@ -44,6 +44,7 @@ _node_ids(c, cs...) = (_node_id(c), _node_ids(cs...)...)
 
 function _makenode(graph::SyntaxGraph, srcref, head, children; attrs...)
     id = newnode!(graph)
+    # TODO: Having this list of kinds seeems hacky?
     if kind(head) in (K"Identifier", K"core", K"top", K"SSAValue", K"Value", K"slot") || is_literal(head)
         @assert length(children) == 0
     else
@@ -58,11 +59,13 @@ function makenode(graph::SyntaxGraph, srcref, head, children...; attrs...)
     _makenode(graph, srcref, head, children; attrs...)
 end
 
-function makenode(ctx::AbstractLoweringContext, srcref, head, children::SyntaxTree...; attrs...)
+function makenode(ctx::Union{AbstractLoweringContext,SyntaxTree},
+                  srcref, head, children::SyntaxTree...; attrs...)
     _makenode(ctx.graph, srcref, head, _node_ids(children...); attrs...)
 end
 
-function makenode(ctx::AbstractLoweringContext, srcref, head, children::SyntaxList; attrs...)
+function makenode(ctx::Union{AbstractLoweringContext,SyntaxTree},
+                  srcref, head, children::SyntaxList; attrs...)
     ctx.graph === children.graph || error("Mismatching graphs")
     _makenode(ctx.graph, srcref, head, children.ids; attrs...)
 end

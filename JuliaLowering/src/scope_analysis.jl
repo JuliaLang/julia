@@ -247,6 +247,7 @@ function make_scope(ctx, ex, scope_type, lambda_info)
         # All non-local assignments are implicitly global at top level
         for (name,e) in assignments
             if !haskey(locals, name)
+                new_var(ctx, name, :global)
                 push!(ctx.implicit_toplevel_globals, name)
             end
         end
@@ -305,7 +306,7 @@ function make_scope(ctx, ex, scope_type, lambda_info)
     return ScopeInfo(in_toplevel_thunk, is_soft_scope, is_hard_scope, var_ids, lambda_locals)
 end
 
-function resolve_scopes_!(ctx, ex)
+function _resolve_scopes!(ctx, ex)
     k = kind(ex)
     if k == K"Identifier"
         if is_placeholder(ex)
@@ -335,7 +336,7 @@ function resolve_scopes_!(ctx, ex)
             resolve_scopes!(ctx, a)
         end
         for e in children(ex)
-            resolve_scopes_!(ctx, e)
+            _resolve_scopes!(ctx, e)
         end
         pop!(ctx.scope_stack)
         setattr!(ctx.graph, ex.id, lambda_locals=scope.lambda_locals)
@@ -343,12 +344,12 @@ function resolve_scopes_!(ctx, ex)
         scope = make_scope(ctx, ex, ex.scope_type, nothing)
         push!(ctx.scope_stack, scope)
         for e in children(ex)
-            resolve_scopes_!(ctx, e)
+            _resolve_scopes!(ctx, e)
         end
         pop!(ctx.scope_stack)
     else
         for e in children(ex)
-            resolve_scopes_!(ctx, e)
+            _resolve_scopes!(ctx, e)
         end
     end
     ex
@@ -357,7 +358,7 @@ end
 function resolve_scopes!(ctx::ScopeResolutionContext, ex)
     thunk = makenode(ctx, ex, K"lambda", ex;
                      lambda_info=LambdaInfo(SyntaxList(ctx), SyntaxList(ctx), nothing, true))
-    resolve_scopes_!(ctx, thunk)
+    _resolve_scopes!(ctx, thunk)
     return thunk
 end
 
