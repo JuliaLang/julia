@@ -466,10 +466,10 @@ for f in Symbol[
     :issetgid,
     :issticky,
 ]
-    @eval ($f)(path::AbstractString) = ($f)(stat(path))
+    @eval ($f)(path::AbstractString, paths::AbstractString...) = ($f)(stat(path, paths...))
 end
 
-islink(path::AbstractString) = islink(lstat(path))
+islink(path::AbstractString, paths::AbstractString...) = islink(lstat(path, paths...))
 
 # samefile can be used for files and directories: #11145#issuecomment-99511194
 function samefile(a::StatStruct, b::StatStruct)
