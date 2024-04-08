@@ -308,7 +308,7 @@ end
         isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
         @boundscheck checkbounds(m, inds)
         ref = MemoryRef(m, first(inds)) # @inbounds would be safe here but does not help performance.
-        dims = (length(inds),)
+        dims = (Int(length(inds)),)
         $(Expr(:new, :(Array{T, 1}), :ref, :dims))
     end
 end
