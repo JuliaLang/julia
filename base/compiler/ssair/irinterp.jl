@@ -168,8 +168,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         elseif head === :leave
             return false
         else
-            Core.println(stmt)
-            error("reprocess_instruction!: unhandled expression found")
+            error("reprocess_instruction!: unhandled expression found. Expr: $stmt")
         end
     elseif isa(stmt, PhiNode)
         rt = abstract_eval_phi_stmt(interp, stmt, idx, irsv)
