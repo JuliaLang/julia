@@ -5525,7 +5525,7 @@ let a = Base.StringVector(2^17)
 end
 
 # issue #53990 / https://github.com/JuliaLang/julia/pull/53896#discussion_r1555087951
-@test Base.StringVector(UInt64(2)) isa String
+@test Base.StringVector(UInt64(2)) isa Vector{UInt8}
 
 @test_throws ArgumentError eltype(Bottom)
 
