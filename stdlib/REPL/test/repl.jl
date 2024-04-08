@@ -1855,7 +1855,7 @@ end
         # feature is correctly kicking in.
         a = A40735(str)
         output = sprint(REPL.show_limited, MIME"text/plain"(), a; context=:limit => true)
-        @test endswith(output, "…[printing stopped after 1000 displaying bytes]")
+        @test endswith(output, "…[printing stopped after displaying 1000 bytes]")
         @test length(output) < 1100
     finally
         REPL.SHOW_MAXIMUM_BYTES = previous
