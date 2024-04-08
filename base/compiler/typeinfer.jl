@@ -810,7 +810,7 @@ struct EdgeCallResult
     end
 end
 
-# return cached regular inference result
+# return cached result of regular inference
 function return_cached_result(::AbstractInterpreter, codeinst::CodeInstance, caller::AbsIntState)
     rt = cached_return_type(codeinst)
     effects = ipo_effects(codeinst)
@@ -869,10 +869,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
         exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
-        # note that this result is cached globally exclusively, we can use this local result destructively
-        volatile_inf_result = (isinferred && (force_inline ||
-            src_inlining_policy(interp, result.src, NoCallInfo(), IR_FLAG_NULL))) ?
-            VolatileInferenceResult(result) : nothing
+        # note that this result is cached globally exclusively, so we can use this local result destructively
+        volatile_inf_result = isinferred ? VolatileInferenceResult(result) : nothing
         return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
         # unresolvable cycle
