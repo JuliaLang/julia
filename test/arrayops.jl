@@ -3205,6 +3205,9 @@ end
     @test @inferred(view(mem, -5:-7))::Vector{Int} == []
     @test @inferred(reshape(mem, 5, 2))::Matrix{Int} == reshape(11:20, 5, 2)
 
+    # 53990
+    @test @inferred(view(mem, unsigned(1):10))::Vector{Int} == 11:20
+
     empty_mem = Memory{Module}(undef, 0)
     @test_throws BoundsError view(empty_mem, 0:1)
     @test_throws BoundsError view(empty_mem, 1:2)
