@@ -77,6 +77,7 @@ convert(::Type{Union{String, SubString{String}}}, s::AbstractString) = convert(S
 function _memory_offset(x::CodeUnits{<:Any, <:Union{String, SubString{String}}}, I::Vararg{Any,N}) where {N}
     (_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
 end
+strides(x::CodeUnits{<:Any, <:Union{String, SubString{String}}}) = (1,)
 
 function String(s::SubString{String})
     parent = s.string
