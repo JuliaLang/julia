@@ -63,18 +63,13 @@ to an output stream, or `ncodeunits(string(c))` but computed efficiently.
     using `ncodeunits(string(c))`.
 """
 function ncodeunits(c::Char)
-    # All Char are 4 byte wide, and since unicode encoding
-    # doesn't have null bytes (except for \0), we can just
-    # count non-zero bytes
-    char_data = reinterpret(UInt32, c)
-    mask = 0xff % UInt32
-    nbytes = !iszero(char_data & mask)
-    Base.Cartesian.@nexprs 3 i -> begin
-        m <<= 0x8
-        nbytes += !iszero(char_data & mask)
-    end
-    # We have to account for `\0`, which is encoded as all zeros
-    nbytes + iszero(uc)
+    u = reinterpret(UInt32, c)
+
+    # We care about how many trailing bytes are all zero
+    n_nonzero_bytes = sizeof(UInt32) - div(trailing_zeros(u), 0x8)
+
+    # Take care of '\0', which has an all-zero bitpattern
+    n_nonzero_bytes + iszero(u)
 end
 
 """
