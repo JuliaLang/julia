@@ -84,11 +84,8 @@ impl Collection<JuliaVM> for VMCollection {
                 Address::from_usize(thread_id::get())
             })));
             match ctx {
-                GCThreadContext::Controller(mut c) => {
-                    mmtk::memory_manager::start_control_collector(&SINGLETON, worker_tls, &mut c)
-                }
-                GCThreadContext::Worker(mut w) => {
-                    mmtk::memory_manager::start_worker(&SINGLETON, worker_tls, &mut w)
+                GCThreadContext::Worker(w) => {
+                    mmtk::memory_manager::start_worker(&SINGLETON, worker_tls, w)
                 }
             }
         });

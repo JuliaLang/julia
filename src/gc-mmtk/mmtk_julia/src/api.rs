@@ -11,7 +11,6 @@ use crate::{BUILDER, DISABLED_GC, MUTATORS, USER_TRIGGERED_GC};
 use libc::c_char;
 use log::*;
 use mmtk::memory_manager;
-use mmtk::scheduler::GCController;
 use mmtk::scheduler::GCWorker;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference, OpaquePointer};
@@ -132,15 +131,6 @@ pub extern "C" fn mmtk_gc_init(
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_start_control_collector(
-    tls: VMWorkerThread,
-    gc_controller: *mut GCController<JuliaVM>,
-) {
-    let mut gc_controller = unsafe { Box::from_raw(gc_controller) };
-    memory_manager::start_control_collector(&SINGLETON, tls, &mut gc_controller);
-}
-
-#[no_mangle]
 pub extern "C" fn mmtk_bind_mutator(tls: VMMutatorThread, tid: usize) -> *mut Mutator<JuliaVM> {
     let mutator_box = memory_manager::bind_mutator(&SINGLETON, tls);
 
@@ -230,8 +220,8 @@ pub extern "C" fn mmtk_will_never_move(object: ObjectReference) -> bool {
 
 #[no_mangle]
 pub extern "C" fn mmtk_start_worker(tls: VMWorkerThread, worker: *mut GCWorker<JuliaVM>) {
-    let mut worker = unsafe { Box::from_raw(worker) };
-    memory_manager::start_worker::<JuliaVM>(&SINGLETON, tls, &mut worker)
+    let worker = unsafe { Box::from_raw(worker) };
+    memory_manager::start_worker::<JuliaVM>(&SINGLETON, tls, worker)
 }
 
 #[no_mangle]
@@ -450,14 +440,6 @@ pub extern "C" fn mmtk_start_spawned_worker_thread(
     ctx: *mut GCWorker<JuliaVM>,
 ) {
     mmtk_start_worker(tls, ctx);
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_start_spawned_controller_thread(
-    tls: VMWorkerThread,
-    ctx: *mut GCController<JuliaVM>,
-) {
-    mmtk_start_control_collector(tls, ctx);
 }
 
 #[inline(always)]
