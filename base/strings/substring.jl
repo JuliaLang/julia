@@ -75,7 +75,7 @@ convert(::Type{Union{String, SubString{String}}}, s::AbstractString) = convert(S
 # This allows CodeUnits of known, memory-backed String types to act like a dense array
 # See issue #53996
 function _memory_offset(x::CodeUnits{<:Any, <:Union{String, SubString{String}}})
-	(_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
+    (_to_linear_index(x, I...) - first(LinearIndices(x)))*elsize(x)
 end
 
 function String(s::SubString{String})
