@@ -2853,7 +2853,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
         newvar = jl_new_typevar(vb->var->name, vb->lb, vb->ub);
 
-    // flatten all innervar into a (revered) list
+    // flatten all innervar into a (reversed) list
     size_t icount = 0;
     if (vb->innervars)
         icount += jl_array_nrows(vb->innervars);
