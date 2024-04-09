@@ -18,6 +18,11 @@ transpose(Q::AbstractQ{<:Real}) = AdjointQ(Q)
 transpose(Q::AbstractQ) = error("transpose not implemented for $(typeof(Q)). Consider using adjoint instead of transpose.")
 adjoint(adjQ::AdjointQ) = adjQ.Q
 
+Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{p}) where {p} =
+    Q*Base.literal_pow(^, Q, Val(p-1)) # for speed
+Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{1}) = Q*I
+Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{-1}) = Q'*I # for disambiguation
+
 # promotion with AbstractMatrix, at least for equal eltypes
 promote_rule(::Type{<:AbstractMatrix{T}}, ::Type{<:AbstractQ{T}}) where {T} =
     (@inline; Union{AbstractMatrix{T},AbstractQ{T}})
