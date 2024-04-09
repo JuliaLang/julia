@@ -20,8 +20,8 @@ adjoint(adjQ::AdjointQ) = adjQ.Q
 
 Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{p}) where {p} =
     Q*Base.literal_pow(^, Q, Val(p-1)) # for speed
-Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{1}) = Q*I
-Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{-1}) = Q'*I # for disambiguation
+Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{1}) = Q
+Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{-1}) = inv(Q)
 
 # promotion with AbstractMatrix, at least for equal eltypes
 promote_rule(::Type{<:AbstractMatrix{T}}, ::Type{<:AbstractQ{T}}) where {T} =
