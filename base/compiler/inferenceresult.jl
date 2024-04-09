@@ -56,9 +56,14 @@ end
 va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any}, mi::MethodInstance) =
     va_process_argtypes(Returns(nothing), 𝕃, given_argtypes, mi)
 function va_process_argtypes(@specialize(va_handler!), 𝕃::AbstractLattice, given_argtypes::Vector{Any}, mi::MethodInstance)
-    def = mi.def::Method
-    isva = def.isva
-    nargs = Int(def.nargs)
+    def = mi.def
+    if def isa Method
+        isva = def.isva
+        nargs = Int(def.nargs)
+    else
+        isva = false
+        nargs = length((mi.specTypes::DataType).parameters)
+    end
     if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs-isva)
