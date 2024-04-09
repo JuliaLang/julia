@@ -470,8 +470,10 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 
 // this compiles li and emits fptr
 extern "C" JL_DLLEXPORT_CODEGEN
-jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
+jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world, int *did_compile)
 {
+    if (did_compile != NULL)
+        *did_compile = 0;
     auto ct = jl_current_task;
     bool timed = (ct->reentrant_timing & 1) == 0;
     if (timed)
@@ -526,6 +528,8 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
         _jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), is_recompile);
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)
             codeinst = NULL;
+        else if (did_compile != NULL)
+            *did_compile = 1;
     }
     else {
         codeinst = NULL;
@@ -613,7 +617,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly
-    jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
+    jl_code_instance_t *codeinst = jl_generate_fptr(mi, world, NULL);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_acquire(&codeinst->invoke);
         if (getwrapper)
