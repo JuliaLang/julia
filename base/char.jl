@@ -62,7 +62,20 @@ to an output stream, or `ncodeunits(string(c))` but computed efficiently.
     This method requires at least Julia 1.1. In Julia 1.0 consider
     using `ncodeunits(string(c))`.
 """
-ncodeunits(c::Char) = write(devnull, c) # this is surprisingly efficient
+function ncodeunits(c::Char)
+    # All Char are 4 byte wide, and since unicode encoding
+    # doesn't have null bytes (except for \0), we can just
+    # count non-zero bytes
+    char_data = reinterpret(UInt32, c)
+    mask = 0xff % UInt32
+    nbytes = !iszero(char_data & mask)
+    Base.Cartesian.@nexprs 3 i -> begin
+        m <<= 0x8
+        nbytes += !iszero(char_data & mask)
+    end
+    # We have to account for `\0`, which is encoded as all zeros
+    nbytes + iszero(uc)
+end
 
 """
     codepoint(c::AbstractChar) -> Integer
