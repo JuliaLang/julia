@@ -483,7 +483,7 @@ for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Uni
         function dot(A::$T, B::$T)
             n = size(A, 2)
             if n != size(B, 2)
-                throw(DimensionMismatch("A has dimensions $(size(A)) but B has dimensions $(size(B))"))
+                throw(DimensionMismatch(lazy"A has dimensions $(size(A)) but B has dimensions $(size(B))"))
             end
 
             dotprod = $real(zero(dot(first(A), first(B))))
