@@ -262,7 +262,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"local_def" || k == K"local"
         nothing
     else
-        throw(LoweringError(ex, "Invalid syntax"))
+        throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end
 end
 
@@ -368,7 +368,6 @@ function compile_lambda(outer_ctx, ex)
     slot_rewrites = Dict{VarId,Int}()
     _add_slots!(slot_rewrites, ctx.var_info, (arg.var_id for arg in lambda_info.args))
     _add_slots!(slot_rewrites, ctx.var_info, ex.lambda_locals)
-    @info "" slot_rewrites
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     makenode(ctx, ex, K"lambda",
              makenode(ctx, ex[1], K"block", code),
@@ -377,12 +376,19 @@ function compile_lambda(outer_ctx, ex)
             )
 end
 
+function linearize_ir(ctx, ex)
+    graph = ensure_attributes(ctx.graph, slot_rewrites=Dict{VarId,Int})
+    _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.next_var_id,
+                           nothing, ctx.var_info, ctx.mod)
+    res = compile_lambda(_ctx, reparent(_ctx, ex))
+    _ctx, res
+end
 
 #-------------------------------------------------------------------------------
 # Conversion to Expr + CodeInfo
 
 # Convert our data structures to CodeInfo
-function to_code_info(ex, in_mod, funcname, var_info, slot_rewrites)
+function to_code_info(ex, mod, funcname, var_info, slot_rewrites)
     input_code = children(ex)
     # Convert code to Expr and record low res locations in table
     num_stmts = length(input_code)
@@ -391,13 +397,13 @@ function to_code_info(ex, in_mod, funcname, var_info, slot_rewrites)
     linetable_map = Dict{Tuple{Int,String}, Int32}()
     linetable = Any[]
     for i in 1:length(code)
-        code[i] = to_expr(in_mod, var_info, input_code[i])
+        code[i] = to_expr(mod, var_info, input_code[i])
         fname = filename(input_code[i])
         lineno, _ = source_location(input_code[i])
         loc = (lineno, fname)
         codelocs[i] = get!(linetable_map, loc) do
             inlined_at = 0 # FIXME: nonzero for expanded macros
-            full_loc = Core.LineInfoNode(in_mod, Symbol(funcname), Symbol(fname),
+            full_loc = Core.LineInfoNode(mod, Symbol(funcname), Symbol(fname),
                                          Int32(lineno), Int32(inlined_at))
             push!(linetable, full_loc)
             length(linetable)
@@ -449,7 +455,7 @@ function to_code_info(ex, in_mod, funcname, var_info, slot_rewrites)
     )
 end
 
-function to_expr(in_mod, var_info, ex)
+function to_expr(mod, var_info, ex)
     k = kind(ex)
     if is_literal(k)
         ex.value
@@ -467,14 +473,14 @@ function to_expr(in_mod, var_info, ex)
     elseif k == K"SSAValue"
         Core.SSAValue(ex.var_id)
     elseif k == K"return"
-        Core.ReturnNode(to_expr(in_mod, var_info, ex[1]))
+        Core.ReturnNode(to_expr(mod, var_info, ex[1]))
     elseif is_quoted(k)
         TODO(ex, "Convert SyntaxTree to Expr")
     elseif k == K"lambda"
         funcname = ex.lambda_info.is_toplevel_thunk ?
             "top-level scope" :
             "none"              # FIXME
-        ir = to_code_info(ex[1], in_mod, funcname, var_info, ex.slot_rewrites)
+        ir = to_code_info(ex[1], mod, funcname, var_info, ex.slot_rewrites)
         if ex.lambda_info.is_toplevel_thunk
             Expr(:thunk, ir)
         else
@@ -498,7 +504,7 @@ function to_expr(in_mod, var_info, ex)
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")
         end
-        Expr(head, map(e->to_expr(in_mod, var_info, e), children(ex))...)
+        Expr(head, map(e->to_expr(mod, var_info, e), children(ex))...)
     end
 end
 

@@ -15,15 +15,13 @@ struct LambdaInfo
     is_toplevel_thunk::Bool
 end
 
-abstract type AbstractLoweringContext end
-
 struct DesugaringContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     next_var_id::Ref{VarId}
 end
 
-function DesugaringContext()
-    graph = SyntaxGraph()
+function DesugaringContext(ctx)
+    graph = syntax_graph(ctx)
     ensure_attributes!(graph,
                        kind=Kind, syntax_flags=UInt16, green_tree=GreenNode,
                        source_pos=Int, source=Union{SourceRef,NodeId},
@@ -84,6 +82,10 @@ function mapchildren(f, ctx, ex)
         end
     end
     return ex2
+end
+
+function syntax_graph(ctx::AbstractLoweringContext)
+    ctx.graph
 end
 
 function new_var_id(ctx::AbstractLoweringContext)
@@ -460,7 +462,7 @@ function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             return ex[1]
         else
-            makenode(ctx, ex, K"call", top_ref(ctx, ex, "string"), expand_forms(children(ex))...)
+            makenode(ctx, ex, K"call", top_ref(ctx, ex, "string"), expand_forms(ctx, children(ex))...)
         end
     elseif k == K"tuple"
         # TODO: named tuples
@@ -484,5 +486,11 @@ function expand_forms(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector})
         push!(res, expand_forms(ctx, e))
     end
     res
+end
+
+function expand_forms(ex::SyntaxTree)
+    ctx = DesugaringContext(ex)
+    res = expand_forms(ctx, reparent(ctx, ex))
+    ctx, res
 end
 

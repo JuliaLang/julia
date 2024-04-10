@@ -57,44 +57,25 @@ end
 #     x + y
 # """
 
-t = parsestmt(SyntaxNode, src, filename="foo.jl")
+ex = parsestmt(SyntaxTree, src, filename="foo.jl")
+# t = softscope_test(t)
+@info "Input code" ex
 
-ctx = JuliaLowering.DesugaringContext()
-t2 = SyntaxTree(ctx.graph, t)
-# t2 = softscope_test(t2)
-@info "Input code" t2
+in_mod = Main
+ctx, ex_desugar = JuliaLowering.expand_forms(ex)
+@info "Desugared" ex_desugar
 
-t3 = JuliaLowering.expand_forms(ctx, t2)
-@info "Desugared" t3
+ctx2, ex_scoped = JuliaLowering.resolve_scopes!(ctx, in_mod, ex_desugar)
+@info "Resolved scopes" ex_scoped
 
-in_mod = Main # Module(:Foo)
-ctx2 = JuliaLowering.ScopeResolutionContext(ctx, in_mod)
-t4 = JuliaLowering.resolve_scopes!(ctx2, t3)
-@info "Resolved scopes" t4
+ctx3, ex_compiled = JuliaLowering.linearize_ir(ctx2, ex_scoped)
+@info "Linear IR" ex_compiled
 
-t5 = JuliaLowering.compile_lambda(ctx2, t4)
-
-@info "Linear IR" t5
-
-t6 = JuliaLowering.to_expr(in_mod, ctx2.var_info, t5)
-
-@info "CodeInfo" t6
-
+ex_expr = JuliaLowering.to_expr(in_mod, ctx2.var_info, ex_compiled)
+@info "CodeInfo" ex_expr
 x = 100
 y = 200
-@info "Eval" Base.eval(in_mod, t6)
-
-# flisp parts to do
-# let
-# desugar/let => 76
-# desugar/func => ~100 (partial)
-# desugar/call => 70
-# handle-scopes => 195
-# handle-scopes/scope-block => 99
-# handle-scopes/locals => 16
-# linear-ir => 250 (partial, approximate)
-# linear-ir/func => 22
-
+@info "Eval" Base.eval(in_mod, ex_expr)
 
 # Syntax tree ideas: Want following to work?
 # This can be fully inferrable!

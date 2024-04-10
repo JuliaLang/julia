@@ -129,13 +129,12 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
     # scopes.
     var_info::Dict{VarId,VarInfo}
     # Variables which were implicitly global due to being assigned to in top
-    # level code top level
+    # level code
     implicit_toplevel_globals::Set{String}
 end
 
-function ScopeResolutionContext(ctx::DesugaringContext, mod::Module)
-    # FIXME: Add slot_rewrites later
-    graph = ensure_attributes(ctx.graph, lambda_locals=Set{VarId}, slot_rewrites=Dict{VarId,Int})
+function ScopeResolutionContext(ctx, mod::Module)
+    graph = ensure_attributes(ctx.graph, lambda_locals=Set{VarId})
     ScopeResolutionContext(graph,
                            ctx.next_var_id,
                            mod,
@@ -360,5 +359,11 @@ function resolve_scopes!(ctx::ScopeResolutionContext, ex)
                      lambda_info=LambdaInfo(SyntaxList(ctx), SyntaxList(ctx), nothing, true))
     _resolve_scopes!(ctx, thunk)
     return thunk
+end
+
+function resolve_scopes!(ctx::DesugaringContext, mod::Module, ex)
+    ctx2 = ScopeResolutionContext(ctx, mod)
+    res = resolve_scopes!(ctx2, reparent(ctx2, ex))
+    ctx2, res
 end
 

@@ -64,6 +64,8 @@ _insert_kinds()
 include("syntax_graph.jl")
 include("utils.jl")
 
+abstract type AbstractLoweringContext end
+
 include("desugaring.jl")
 include("scope_analysis.jl")
 include("linear_ir.jl")

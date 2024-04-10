@@ -145,6 +145,13 @@ function _convert_nodes(graph::SyntaxGraph, node::SyntaxNode)
     return id
 end
 
+"""
+    syntax_graph(ctx)
+
+Return `SyntaxGraph` associated with `ctx`
+"""
+syntax_graph(graph::SyntaxGraph) = graph
+
 #-------------------------------------------------------------------------------
 struct SyntaxTree{GraphType}
     graph::GraphType
@@ -370,6 +377,18 @@ function Base.show(io::IO, node::SyntaxTree)
     _show_syntax_tree_sexpr(io, node)
 end
 
+function reparent(ctx, ex::SyntaxTree)
+    # Ensure `ex` has the same parent graph, in a somewhat loose sense.
+    # Could relax by copying if necessary?
+    # In that case, would we copy all the attributes? That would have slightly
+    # different semantics.
+    graph = syntax_graph(ctx)
+    @assert graph.edge_ranges === ex.graph.edge_ranges
+    SyntaxTree(graph, ex.id)
+end
+
+syntax_graph(ex::SyntaxTree) = ex.graph
+
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
 struct SyntaxList{GraphType, NodeIdVecType} <: AbstractVector{SyntaxTree}
@@ -383,6 +402,8 @@ end
 
 SyntaxList(graph::SyntaxGraph) = SyntaxList(graph, Vector{NodeId}())
 SyntaxList(ctx) = SyntaxList(ctx.graph)
+
+syntax_graph(lst::SyntaxList) = lst.graph
 
 Base.size(v::SyntaxList) = size(v.ids)
 
@@ -428,6 +449,6 @@ end
 #-------------------------------------------------------------------------------
 
 function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::JuliaSyntax.ParseStream; kws...)
-    SyntaxTree(build_tree(SyntaxNode, stream; kws...))
+    SyntaxTree(JuliaSyntax.build_tree(SyntaxNode, stream; kws...))
 end
 
