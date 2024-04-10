@@ -328,9 +328,21 @@ end
     @test lt5(4) && !lt5(5)
 end
 
+@testset "in tuples" begin
+    @test ∈(5, (1,5,10,11))
+    @test ∉(0, (1,5,10,11))
+    @test ∈(5, (1,"hi","hey",5.0))
+    @test ∉(0, (1,"hi","hey",5.0))
+    @test ∈(5, (5,))
+    @test ∉(0, (5,))
+    @test ∉(5, ())
+end
+
 @testset "ni" begin
     @test ∋([1,5,10,11], 5)
     @test !∋([1,10,11], 5)
+    @test ∋((1,5,10,11), 5)
+    @test ∌((1,10,11), 5)
     @test ∋(5)([5,1])
     @test !∋(42)([0,1,100])
     @test ∌(0)(1:10)

@@ -1332,22 +1332,41 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-for ItrT = (Tuple,Any)
-    # define a generic method and a specialized version for `Tuple`,
-    # whose method bodies are identical, while giving better effects to the later
-    @eval function in(x, itr::$ItrT)
-        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
-        anymissing = false
-        for y in itr
-            v = (y == x)
-            if ismissing(v)
-                anymissing = true
-            elseif v
-                return true
-            end
+function in(x, itr::Any)
+    anymissing = false
+    for y in itr
+        v = (y == x)
+        if ismissing(v)
+            anymissing = true
+        elseif v
+            return true
         end
+    end
+    return anymissing ? missing : false
+end
+
+# Specialized variant of in for Tuple, which can generate typed comparisons for each element
+# of the tuple, skipping values that are statically known to be != at compile time.
+function in(x, itr::Tuple)
+    @_terminates_locally_meta
+    _in_tuple(x, itr, false)
+end
+# This recursive function will be unrolled at compiletime, and will not generate separate
+# llvm-compiled specializations for each step of the recursion.
+@inline function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
+    @_terminates_locally_meta
+    # Base case
+    if isempty(itr)
         return anymissing ? missing : false
     end
+    # Recursive case
+    v = (itr[1] == x)
+    if ismissing(v)
+        anymissing = true
+    elseif v
+        return true
+    end
+    return _in_tuple(x, Base.tail(itr), anymissing)
 end
 
 const ∈ = in
