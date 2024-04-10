@@ -23,8 +23,11 @@ end
 function rst(io::IO, code::Code)
     if code.language == "jldoctest"
         println(io, ".. doctest::\n")
-    elseif code.language != "rst"
+    elseif code.language in ("", "julia", "julia-repl")
         println(io, ".. code-block:: julia\n")
+    elseif code.language == "rst"
+    else
+        println(io, "::\n")
     end
     for l in eachsplit(code.code, '\n')
         println(io, "    ", l)
