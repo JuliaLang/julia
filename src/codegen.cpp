@@ -5127,7 +5127,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         }
     }
     if (!handled) {
-        if (0 && ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
+        if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
             errs() << "Tried emitting dynamic dispatch from ";
             jl_(ctx.linfo);
             errs() << "in module ";

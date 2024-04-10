@@ -148,7 +148,25 @@ write(io, """
             return String(resize!(buffer, nbytes))
         end
     end
-
+    @eval Base.TOML begin
+        function try_return_datetime(p, year, month, day, h, m, s, ms)
+            return DateTime(year, month, day, h, m, s, ms)
+        end
+        function try_return_date(p, year, month, day)
+            return Date(year, month, day)
+        end
+        function parse_local_time(l::Parser)
+            h = @try parse_int(l, false)
+            h in 0:23 || return ParserError(ErrParsingDateTime)
+            _, m, s, ms = @try _parse_local_time(l, true)
+            # TODO: Could potentially parse greater accuracy for the
+            # fractional seconds here.
+            return try_return_time(l, h, m, s, ms)
+        end
+        function try_return_time(p, h, m, s, ms)
+            return Time(h, m, s, ms)
+        end
+    end
     #TODO Make these conditional on being used by the module
 
     using LinearAlgebra
