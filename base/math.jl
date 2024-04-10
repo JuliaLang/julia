@@ -1277,7 +1277,7 @@ end
     end
     yint = unsafe_trunc(Int64, y) # This is actually safe since julia freezes the result
     yisint = y == yint
-    yisint && use_power_by_squaring(yint) && return @noinline x^yint
+    yisint && use_power_by_squaring(yint) && return @noinline pow_body(x, yint)
     2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x === +0.0 or -0.0 (Inf * false === 0.0)
     s = 1
     if x < 0
@@ -1323,8 +1323,11 @@ end
     return T(exp2(log2(abs(widen(x))) * y))
 end
 
-# compensated power by squaring
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
+    x^clamp(n, Int64)
+end
+# compensated power by squaring
+@constprop :aggressive @inline function ^(x::Float64, n::Int64)
     n == 0 && return one(x)
     if use_power_by_squaring(n)
         return pow_body(x, n)
@@ -1338,8 +1341,9 @@ end
             if n % Int64 != n
                 n = ifelse(n < 0, typemin(Int64), typemax(Int64))
             end
-            n1, n2 = divrem(n, Int64(1) << 53)
-            return pow_body(x, n1 * 0x1p53) * copysign(pow_body(x, Float64(n2)), s)
+            n2 = n % 1024
+            y = float(n - n2)
+            return pow_body(x, y) * copysign(pow_body(x, n2), s)
         end
     end
 end
@@ -1347,6 +1351,7 @@ end
 # this method is only reliable for -2^20 < n < 2^20 (cf. #53881 #53886)
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
+    n == 0 && return y
     xnlo = ynlo = 0.0
     n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
