@@ -166,7 +166,9 @@ for func in (:conj, :copy, :real, :imag)
 end
 
 transpose(S::SymTridiagonal) = S
-adjoint(S::SymTridiagonal{<:Real}) = S
+adjoint(S::SymTridiagonal{<:Number}) = SymTridiagonal(vec(adjoint(S.dv)), vec(adjoint(S.ev)))
+adjoint(S::SymTridiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}}) =
+    SymTridiagonal(adjoint(parent(S.dv)), adjoint(parent(S.ev)))
 adjoint(S::SymTridiagonal) = Adjoint(S)
 permutedims(S::SymTridiagonal) = S
 function permutedims(S::SymTridiagonal, perm)
@@ -618,7 +620,9 @@ end
 
 adjoint(S::Tridiagonal) = Adjoint(S)
 transpose(S::Tridiagonal) = Transpose(S)
-adjoint(S::Tridiagonal{<:Real}) = Tridiagonal(S.du, S.d, S.dl)
+adjoint(S::Tridiagonal{<:Number}) = Tridiagonal(vec(adjoint(S.du)), vec(adjoint(S.d)), vec(adjoint(S.dl)))
+adjoint(S::Tridiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}}) =
+    Tridiagonal(adjoint(parent(S.du)), adjoint(parent(S.d)), adjoint(parent(S.dl)))
 transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
 permutedims(T::Tridiagonal) = Tridiagonal(T.du, T.d, T.dl)
 function permutedims(T::Tridiagonal, perm)

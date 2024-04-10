@@ -282,6 +282,9 @@ end
         @testset "Idempotent tests" begin
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
+                if func ∈ (transpose, adjoint)
+                    @test func(func(A)) === A
+                end
             end
         end
         @testset "permutedims(::[Sym]Tridiagonal)" begin

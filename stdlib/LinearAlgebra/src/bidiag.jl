@@ -277,7 +277,9 @@ end
 
 adjoint(B::Bidiagonal) = Adjoint(B)
 transpose(B::Bidiagonal) = Transpose(B)
-adjoint(B::Bidiagonal{<:Number}) = Bidiagonal(conj(B.dv), conj(B.ev), B.uplo == 'U' ? :L : :U)
+adjoint(B::Bidiagonal{<:Number}) = Bidiagonal(vec(adjoint(B.dv)), vec(adjoint(B.ev)), B.uplo == 'U' ? :L : :U)
+adjoint(B::Bidiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}}) =
+    Bidiagonal(adjoint(parent(B.dv)), adjoint(parent(B.ev)), B.uplo == 'U' ? :L : :U)
 transpose(B::Bidiagonal{<:Number}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
 permutedims(B::Bidiagonal) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? 'L' : 'U')
 function permutedims(B::Bidiagonal, perm)

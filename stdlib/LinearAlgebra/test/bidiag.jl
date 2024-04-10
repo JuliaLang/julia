@@ -166,6 +166,9 @@ Random.seed!(1)
 
         @testset for func in (conj, transpose, adjoint)
             @test func(func(T)) == T
+            if func ∈ (transpose, adjoint)
+                @test func(func(T)) === T
+            end
         end
 
         @testset "permutedims(::Bidiagonal)" begin
