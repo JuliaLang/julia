@@ -541,7 +541,7 @@ function ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractMatrix{T}, rcond::Rea
     m, n = size(A)
 
     if m > size(B, 1) || n > size(B, 1)
-        throw(DimensionMismatch("B has leading dimension $(size(B, 1)) but needs at least $(max(m, n))"))
+        throw(DimensionMismatch(lazy"B has leading dimension $(size(B, 1)) but needs at least $(max(m, n))"))
     end
 
     if length(A.factors) == 0 || length(B) == 0
@@ -734,7 +734,7 @@ _ret_size(A::Factorization, B::AbstractMatrix) = (max(size(A, 2), size(B, 1)), s
 function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}}) where T<:BlasReal
     require_one_based_indexing(BIn)
     m, n = size(A)
-    m == size(BIn, 1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(BIn,1)) rows"))
+    m == size(BIn, 1) || throw(DimensionMismatch(lazy"left hand side has $m rows, but right hand side has $(size(BIn,1)) rows"))
 
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|

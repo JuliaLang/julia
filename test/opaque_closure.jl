@@ -239,7 +239,13 @@ let foo::Int = 42
 end
 
 let oc = @opaque a->sin(a)
-    @test length(code_typed(oc, (Int,))) == 1
+    let opt = code_typed(oc, (Int,))
+        @test length(opt) == 1
+        @test opt[1][2] === Float64
+    end
+    let unopt = code_typed(oc, (Int,); optimize=false)
+        @test length(unopt) == 1
+    end
 end
 
 # constructing an opaque closure from IRCode
@@ -257,6 +263,7 @@ end
 let ir = first(only(Base.code_ircode(sin, (Int,))))
     @test OpaqueClosure(ir)(42) == sin(42)
     @test OpaqueClosure(ir)(42) == sin(42) # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
+    @test length(code_typed(OpaqueClosure(ir))) == 1
     ir = first(only(Base.code_ircode(sin, (Float64,))))
     @test OpaqueClosure(ir)(42.) == sin(42.)
     @test OpaqueClosure(ir)(42.) == sin(42.) # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
