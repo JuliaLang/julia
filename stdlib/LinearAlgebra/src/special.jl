@@ -307,6 +307,95 @@ isdiag(A::HermOrSym{<:Any,<:Diagonal}) = isdiag(parent(A))
 dot(x::AbstractVector, A::RealHermSymComplexSym{<:Real,<:Diagonal}, y::AbstractVector) =
     dot(x, A.data, y)
 
+# O(N) implementations using the banded structure
+function copyto!(A::Tridiagonal, B::Diagonal)
+    if axes(A) == axes(B)
+        A.d .= B.diag
+        A.dl .= zero.(A.dl)
+        A.du .= zero.(A.du)
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+function copyto!(A::SymTridiagonal, B::Diagonal)
+    if axes(A) == axes(B)
+        issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Diagonal matrix to a SymTridiagonal one"))
+        A.dv .= B.diag
+        A.ev .= zero.(A.ev)
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+function copyto!(A::Bidiagonal, B::Diagonal)
+    if axes(A) == axes(B)
+        A.dv .= B.diag
+        B.ev .= zero.(B.ev)
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+function copyto!(A::Diagonal, B::Bidiagonal)
+    if axes(A) == axes(B)
+        iszero(B.ev) ||
+            throw(ArgumentError("cannot copy a Bidiagonal with a non-zero off-diagonal band to a Diagonal"))
+        A.diag .= B.dv
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+function copyto!(A::Diagonal, B::Tridiagonal)
+    if axes(A) == axes(B)
+        isdiag(B) ||
+            throw(ArgumentError("cannot copy a Tridiagonal with a non-zero off-diagonal band to a Diagonal"))
+        A.diag .= B.d
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+function copyto!(A::Diagonal, B::SymTridiagonal)
+    if axes(A) == axes(B)
+        isdiag(B) ||
+            throw(ArgumentError("cannot copy a SymTridiagonal with a non-zero off-diagonal band to a Diagonal"))
+        A.diag .= (eltype(B) <: Number ? identity : symmetric).(B.dv)
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+function copyto!(A::Tridiagonal, B::Bidiagonal)
+    if axes(A) == axes(B)
+        A.d .= B.dv
+        if B.uplo == 'U'
+            A.du .= B.ev
+            A.dl .= zero.(A.dl)
+        else
+            A.dl .= B.ev
+            A.du .= zero.(A.du)
+        end
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+function copyto!(A::Bidiagonal, B::Tridiagonal)
+    if axes(A) == axes(B)
+        (A.uplo == 'U' && iszero(B.dl)) ||
+            throw(ArgumentError("cannot copy a Tridiagonal with a non-zero subdiagonal to a Bidiagonal with uplo=:U"))
+        (A.uplo == 'L' && iszero(B.du)) ||
+            throw(ArgumentError("cannot copy a Tridiagonal with a non-zero superdiagonal to a Bidiagonal with uplo=:L"))
+        A.d .= B.dv
+        A.ev .= A.uplo == 'U' ? B.du : B.dl
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+
 # equals and approx equals methods for structured matrices
 # SymTridiagonal == Tridiagonal is already defined in tridiag.jl
 

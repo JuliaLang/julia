@@ -984,3 +984,27 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
     end
     return B
 end
+
+# combinations of Tridiagonal and Symtridiagonal
+function copyto!(A::Tridiagonal, B::SymTridiagonal)
+    if axes(A) == axes(B)
+        A.du .= B.ev
+        # Broadcast identity for numbers to access the faster copyto! path
+        # This uses the fact that transpose(x::Number) = x and symmetric(x::Number) = x
+        A.dl .= (eltype(B) <: Number ? identity : transpose).(_evview(B.ev))
+        A.d .= (eltype(B) <: Number ? identity : symmetric).(B.dv)
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+function copyto!(A::SymTridiagonal, B::Tridiagonal)
+    if axes(A) == axes(B)
+        issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal one"))
+        A.dv .= B.d
+        A.ev .= B.du
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end

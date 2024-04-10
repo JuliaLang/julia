@@ -293,6 +293,25 @@ function Base.copy(tB::Transpose{<:Any,<:Bidiagonal})
     return Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
 end
 
+function copyto!(A::Bidiagonal, B::Bidiagonal)
+    if axes(A) == axes(B)
+        A.dv .= B.dv
+        if A.uplo == B.uplo
+            A.ev .= B.ev
+        elseif iszero(B.ev) # diagonal source
+            A.ev .= zero.(A.ev)
+        else
+            zeroband = istriu(A) ? "lower" : "upper"
+            uplo = A.uplo
+            throw(ArgumentError(string("cannot set the ",
+                zeroband, " bidiagonal band to a nonzero value for uplo=:", uplo)))
+        end
+    else
+        @invoke copyto!(A::AbstractMatrix, B::AbstractMatrix)
+    end
+    return A
+end
+
 iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
 isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
 function istriu(M::Bidiagonal, k::Integer=0)
