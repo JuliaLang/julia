@@ -113,6 +113,8 @@ end
 function term(io::IO, md::Code, columns)
     code = if md.language ∈ ("", "julia", "julia-repl", "jldoctest")
         highlight(md.code)
+    elseif md.language == "styled"
+        styled(md.code)
     else
         styled"{markdown_code:$(md.code)}"
     end
@@ -185,7 +187,12 @@ function terminline(io::AnnotIO, md::Link)
 end
 
 function terminline(io::IO, code::Code)
-    print(io, styled"{markdown_inlinecode:$(code.code)}")
+    body = if code.language == "styled"
+        styled(code.code)
+    else
+        code.code
+    end
+    print(io, styled"{markdown_inlinecode:$body}")
 end
 
 function terminline(io::IO, tex::LaTeX)
