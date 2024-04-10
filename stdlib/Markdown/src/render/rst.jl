@@ -26,6 +26,9 @@ function rst(io::IO, code::Code)
     elseif code.language in ("", "julia", "julia-repl")
         println(io, ".. code-block:: julia\n")
     elseif code.language == "rst"
+    elseif code.language == "styled"
+        code = Code("", String(styled(code.code)))
+        println(io, "::\n")
     else
         println(io, "::\n")
     end
