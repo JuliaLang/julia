@@ -1,7 +1,10 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.0-DEV"
+julia_version = "1.10.6"
 manifest_format = "2.0"
-project_hash = "c87947f1f1f070eea848950c304d668a112dec3d"
+project_hash = "0948477fbecf27074f82e46d6fe927b1e66ada5b"
 
-[deps]
+[[deps.ExtDep3]]
+path = "../ExtDep3.jl"
+uuid = "a5541f1e-a556-4fdc-af15-097880d743a1"
+version = "0.1.0"

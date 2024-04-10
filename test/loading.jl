@@ -1040,6 +1040,9 @@ end
                 using ExtDep2
                 $ew using ExtDep2
                 $ew HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+                using ExtDep3
+                $ew using ExtDep3
+                $ew HasExtensions.ext_dep_loaded || error("ext_dep_loaded not set")
             end
             """
             return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
@@ -1088,6 +1091,8 @@ end
             test_ext(HasExtensions, :Extension)
             using ExtDep2
             test_ext(HasExtensions, :ExtensionFolder)
+            using ExtDep3
+            test_ext(HasExtensions, :ExtensionDep)
         end
         """
         for compile in (`--compiled-modules=no`, ``)
