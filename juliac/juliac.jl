@@ -60,8 +60,9 @@ tmp,io = mktemp(tmpdir, cleanup=false)
 julia_libs = Base.shell_split(Base.isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : "-ljulia -ljulia-internal")
 write(io, """
     Sys.__init__()
-    copy!(LOAD_PATH, ["."]) # Only allow loading packages from current project
     Base.init_depot_path()
+    Base.init_load_path()
+    Base.init_active_project()
     task = current_task()
     task.rngState0 = 0x5156087469e170ab
     task.rngState1 = 0x7431eaead385992c
@@ -194,7 +195,7 @@ close(io)
 is_small_image() = static_call_graph ? `--small-image=yes` : ``
 is_strict() = strict ? `--no-dispatch-precompile=yes` : ``
 is_verbose() = verbose ? `--verbose-compilation=yes` : ``
-cmd = addenv(`$cmd --project --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(is_small_image()) $(is_strict()) $(is_verbose()) $tmp`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(is_small_image()) $(is_strict()) $(is_verbose()) $tmp`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
 result = run(cmd)
 
 result.exitcode == 0 || error("Failed to compile $file")
