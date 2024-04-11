@@ -2113,7 +2113,6 @@ static void print_stack_crumbs(jl_codectx_t &ctx) {
                 jl_((jl_value_t*)caller);
                 errs() << "In " << std::get<std::string>(it->second) << ":" << (int32_t)std::get<unsigned int>(it->second) << "\n";
             }
-            ctx.emission_context.enqueuers.erase(caller); //TODO: this is not the best way to handle this, figure out way to make it not cycle
         }
         else
             break;
@@ -4025,8 +4024,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *theArgs = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
-                if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
-                    errs() << "Tried emitting dynamic dispatch from ";
+                if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
+                    errs() << "Tried emitting dynamic apply iterate from ";
                     jl_(ctx.linfo);
                     errs() << "in module ";
                     jl_(ctx.linfo->def.method->module);
@@ -5119,16 +5118,18 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                         if (ctx.params->no_dynamic_dispatch) {
                             auto filename = std::string(ctx.builder.getCurrentDebugLocation()->getFilename());
                             auto line = ctx.builder.getCurrentDebugLocation()->getLine();
-                            ctx.emission_context.enqueuers[mi] = std::make_tuple(ctx.linfo, std::move(filename), line);
+                            if ((ctx.emission_context.enqueuers.find(mi) == ctx.emission_context.enqueuers.end()))
+                                ctx.emission_context.enqueuers[mi] = std::make_tuple(ctx.linfo, std::move(filename), line);
                         }
                     }
                 }
             }
         }
     }
+
     if (!handled) {
-        if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
-            errs() << "Tried emitting dynamic dispatch from ";
+        if (0 && ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
+            errs() << "Tried emitting jl_invoke from ";
             jl_(ctx.linfo);
             errs() << "in module ";
             jl_(ctx.linfo->def.method->module);
@@ -5195,8 +5196,8 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
             return mark_julia_type(ctx, oldnew, true, rt);
         }
     }
-    if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
-        errs() << "Tried emitting dynamic dispatch from ";
+    if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
+        errs() << "Tried emitting invoke modify from ";
         jl_(ctx.linfo);
         errs() << "in module ";
         jl_(ctx.linfo->def.method->module);
@@ -5316,7 +5317,9 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             }
         }
     }
-    if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type) {
+    if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
+        // jl_code_instance_t * codeinst = jl_atomic_load_relaxed(&ctx.linfo->cache);
+        // jl_((void*)jl_uncompress_ir(codeinst->def->def.method, codeinst, codeinst->inferred));
         errs() << "Tried emitting dynamic dispatch from ";
         jl_(ctx.linfo);
         errs() << "in module ";
