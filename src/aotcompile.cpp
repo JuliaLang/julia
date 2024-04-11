@@ -1696,6 +1696,7 @@ void jl_dump_native_impl(void *native_code,
         JL_TIMING(NATIVE_AOT, NATIVE_Setup);
         dataM.setTargetTriple(TheTriple.str());
         dataM.setDataLayout(DL);
+        dataM.setPICLevel(PICLevel::BigPIC);
         auto &Context = dataM.getContext();
 
         Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
