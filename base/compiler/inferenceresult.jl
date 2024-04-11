@@ -9,8 +9,15 @@ struct SimpleArgtypes
     argtypes::Vector{Any}
 end
 
+# Like `SimpleArgtypes`, but allows the argtypes to be wider than the current call.
+# As a result, it is not legal to refine the cache result with information more
+# precise than was it deducible from the `WidenedSimpleArgtypes`.
+struct WidenedArgtypes
+    argtypes::Vector{Any}
+end
+
 function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
-                                 simple_argtypes::SimpleArgtypes,
+                                 simple_argtypes::Union{SimpleArgtypes, WidenedArgtypes},
                                  cache_argtypes::Vector{Any})
     (; argtypes) = simple_argtypes
     given_argtypes = Vector{Any}(undef, length(argtypes))
