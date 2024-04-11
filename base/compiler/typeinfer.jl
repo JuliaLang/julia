@@ -581,7 +581,11 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
 
     maybe_validate_code(me.linfo, me.src, "inferred")
-    nothing
+
+    argsinfo = me.result.argsinfo
+    argsinfo isa ArgUsed && stack_analysis_result!(me.result, argsinfo)
+
+    return nothing
 end
 
 # record the backedges
@@ -874,10 +878,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, so we can use this local result destructively
         volatile_inf_result = isinferred ? VolatileInferenceResult(result) : nothing
-        used = traverse_analysis_results(result) do @nospecialize result
-            return result isa ArgUsed ? result.used : nothing
-        end
-        return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects; volatile_inf_result, used)
+        return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects; volatile_inf_result, (result.argsinfo::ArgUsed).used)
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, Any, nothing, Effects())

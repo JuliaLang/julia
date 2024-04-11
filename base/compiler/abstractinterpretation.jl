@@ -1285,7 +1285,8 @@ function const_prop_call(interp::AbstractInterpreter,
         return nothing
     end
     # perform fresh constant prop'
-    inf_result = InferenceResult(mi, argtypes, overridden_by_const)
+    argsinfo = ArgtypeOverridden(overridden_by_const)
+    inf_result = InferenceResult(mi, argtypes, argsinfo)
     frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
     if frame === nothing
         add_remark!(interp, sv, "[constprop] Could not retrieve the source")
@@ -2370,8 +2371,15 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     if isa(e, SSAValue)
         return RTEffects(abstract_eval_ssavalue(e, sv), Union{}, EFFECTS_TOTAL)
     elseif isa(e, SlotNumber)
+        slotid = slot_id(e)
+        if sv isa InferenceState && slotid ≤ length(sv.result.argtypes)
+            argsinfo = sv.result.argsinfo
+            if argsinfo isa ArgUsed
+                argsinfo.used[slotid] |= true
+            end
+        end
         if vtypes !== nothing
-            vtyp = vtypes[slot_id(e)]
+            vtyp = vtypes[slotid]
             if !vtyp.undef
                 return RTEffects(vtyp.typ, Union{}, EFFECTS_TOTAL)
             end

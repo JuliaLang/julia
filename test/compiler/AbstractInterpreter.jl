@@ -447,7 +447,7 @@ const CONST_INVOKE_INTERP = ConstInvokeInterp(; world=CONST_INVOKE_INTERP_WORLD)
 function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
     for inf_result in CONST_INVOKE_INTERP.inf_cache
         if inf_result.linfo === mi
-            if CC.any(inf_result.overridden_by_const)
+            if inf_result.argsinfo isa CC.ArgtypeOverridden
                 return CodeInstance(CONST_INVOKE_INTERP, inf_result)
             end
         end
