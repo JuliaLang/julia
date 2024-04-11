@@ -23,8 +23,8 @@ Profiling support.
 module Profile
 
 global print
-public @profile,
-    clear,
+export @profile
+public clear,
     print,
     fetch,
     retrieve,
@@ -43,8 +43,6 @@ const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cyc
 
 # deprecated functions: use `getdict` instead
 lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
-
-export @profile
 
 """
     @profile
@@ -1288,6 +1286,7 @@ function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; strea
         prefix = filepath
         _stream_heap_snapshot(prefix, all_one)
         Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
     end
     return filepath
 end

@@ -22,8 +22,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     argtypes = arginfo.argtypes
-    matches = find_matching_methods(𝕃ᵢ, argtypes, atype, method_table(interp),
-        InferenceParams(interp).max_union_splitting, max_methods)
+    matches = find_method_matches(interp, argtypes, atype; max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return CallMeta(Any, Any, Effects(), NoCallInfo())
@@ -255,73 +254,79 @@ struct UnionSplitMethodMatches
 end
 any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
 
-function find_matching_methods(𝕃::AbstractLattice,
-                               argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
-                               max_union_splitting::Int, max_methods::Int)
-    # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-    if 1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
-        split_argtypes = switchtupleunion(𝕃, argtypes)
-        infos = MethodMatchInfo[]
-        applicable = Any[]
-        applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
-        valid_worlds = WorldRange()
-        mts = MethodTable[]
-        fullmatches = Bool[]
-        for i in 1:length(split_argtypes)
-            arg_n = split_argtypes[i]::Vector{Any}
-            sig_n = argtypes_to_type(arg_n)
-            mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
-            mt === nothing && return FailedMethodMatch("Could not identify method table for call")
-            mt = mt::MethodTable
-            matches = findall(sig_n, method_table; limit = max_methods)
-            if matches === nothing
-                return FailedMethodMatch("For one of the union split cases, too many methods matched")
-            end
-            push!(infos, MethodMatchInfo(matches))
-            for m in matches
-                push!(applicable, m)
-                push!(applicable_argtypes, arg_n)
-            end
-            valid_worlds = intersect(valid_worlds, matches.valid_worlds)
-            thisfullmatch = any(match::MethodMatch->match.fully_covers, matches)
-            found = false
-            for (i, mt′) in enumerate(mts)
-                if mt′ === mt
-                    fullmatches[i] &= thisfullmatch
-                    found = true
-                    break
-                end
-            end
-            if !found
-                push!(mts, mt)
-                push!(fullmatches, thisfullmatch)
-            end
-        end
-        return UnionSplitMethodMatches(applicable,
-                                       applicable_argtypes,
-                                       UnionSplitInfo(infos),
-                                       valid_worlds,
-                                       mts,
-                                       fullmatches)
-    else
-        mt = ccall(:jl_method_table_for, Any, (Any,), atype)
-        if mt === nothing
-            return FailedMethodMatch("Could not identify method table for call")
-        end
-        mt = mt::MethodTable
-        matches = findall(atype, method_table; limit = max_methods)
-        if matches === nothing
-            # this means too many methods matched
-            # (assume this will always be true, so we don't compute / update valid age in this case)
-            return FailedMethodMatch("Too many methods matched")
-        end
-        fullmatch = any(match::MethodMatch->match.fully_covers, matches)
-        return MethodMatches(matches.matches,
-                             MethodMatchInfo(matches),
-                             matches.valid_worlds,
-                             mt,
-                             fullmatch)
+function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
+                             max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
+                             max_methods::Int = InferenceParams(interp).max_methods)
+    if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting)
+        return find_union_split_method_matches(interp, argtypes, atype, max_methods)
     end
+    return find_simple_method_matches(interp, atype, max_methods)
+end
+
+# NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
+is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_splitting::Int) =
+    1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
+
+function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any},
+                                         @nospecialize(atype), max_methods::Int)
+    split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes)
+    infos = MethodMatchInfo[]
+    applicable = Any[]
+    applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
+    valid_worlds = WorldRange()
+    mts = MethodTable[]
+    fullmatches = Bool[]
+    for i in 1:length(split_argtypes)
+        arg_n = split_argtypes[i]::Vector{Any}
+        sig_n = argtypes_to_type(arg_n)
+        mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
+        mt === nothing && return FailedMethodMatch("Could not identify method table for call")
+        mt = mt::MethodTable
+        matches = findall(sig_n, method_table(interp); limit = max_methods)
+        if matches === nothing
+            return FailedMethodMatch("For one of the union split cases, too many methods matched")
+        end
+        push!(infos, MethodMatchInfo(matches))
+        for m in matches
+            push!(applicable, m)
+            push!(applicable_argtypes, arg_n)
+        end
+        valid_worlds = intersect(valid_worlds, matches.valid_worlds)
+        thisfullmatch = any(match::MethodMatch->match.fully_covers, matches)
+        found = false
+        for (i, mt′) in enumerate(mts)
+            if mt′ === mt
+                fullmatches[i] &= thisfullmatch
+                found = true
+                break
+            end
+        end
+        if !found
+            push!(mts, mt)
+            push!(fullmatches, thisfullmatch)
+        end
+    end
+    info = UnionSplitInfo(infos)
+    return UnionSplitMethodMatches(
+        applicable, applicable_argtypes, info, valid_worlds, mts, fullmatches)
+end
+
+function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int)
+    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    if mt === nothing
+        return FailedMethodMatch("Could not identify method table for call")
+    end
+    mt = mt::MethodTable
+    matches = findall(atype, method_table(interp); limit = max_methods)
+    if matches === nothing
+        # this means too many methods matched
+        # (assume this will always be true, so we don't compute / update valid age in this case)
+        return FailedMethodMatch("Too many methods matched")
+    end
+    info = MethodMatchInfo(matches)
+    fullmatch = any(match::MethodMatch->match.fully_covers, matches)
+    return MethodMatches(
+        matches.matches, info, matches.valid_worlds, mt, fullmatch)
 end
 
 """
@@ -689,6 +694,10 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
     if callee_method2 !== inf_method2
         return false
     end
+    if isa(frame, InferenceState) && cache_owner(frame.interp) !== cache_owner(interp)
+        # Don't assume that frames in different interpreters are the same
+        return false
+    end
     if !hardlimit || InferenceParams(interp).ignore_recursion_hardlimit
         # if this is a soft limit,
         # also inspect the parent of this edge,
@@ -897,7 +906,12 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Concrete eval disabled for overlayed methods")
         end
         if !any_conditional(arginfo)
-            return :semi_concrete_eval
+            if may_optimize(interp)
+                return :semi_concrete_eval
+            else
+                # disable irinterp if optimization is disabled, since it requires optimized IR
+                add_remark!(interp, sv, "[constprop] Semi-concrete interpretation disabled for non-optimizing interpreter")
+            end
         end
     end
     return :none
@@ -1225,7 +1239,7 @@ const_prop_result(inf_result::InferenceResult) =
     ConstCallResults(inf_result.result, inf_result.exc_result, ConstPropResult(inf_result),
                      inf_result.ipo_effects, inf_result.linfo)
 
-# return cached constant analysis result
+# return cached result of constant analysis
 return_cached_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
     const_prop_result(inf_result)
 
@@ -1234,7 +1248,16 @@ function const_prop_call(interp::AbstractInterpreter,
     concrete_eval_result::Union{Nothing, ConstCallResults}=nothing)
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
-    inf_result = cache_lookup(𝕃ᵢ, mi, arginfo.argtypes, inf_cache)
+    argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+    # use `cache_argtypes` that has been constructed for fresh regular inference if available
+    volatile_inf_result = result.volatile_inf_result
+    if volatile_inf_result !== nothing
+        cache_argtypes = volatile_inf_result.inf_result.argtypes
+    else
+        cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
+    end
+    argtypes = matching_cache_argtypes(𝕃ᵢ, mi, argtypes, cache_argtypes)
+    inf_result = cache_lookup(𝕃ᵢ, mi, argtypes, inf_cache)
     if inf_result !== nothing
         # found the cache for this constant prop'
         if inf_result.result === nothing
@@ -1244,13 +1267,18 @@ function const_prop_call(interp::AbstractInterpreter,
         @assert inf_result.linfo === mi "MethodInstance for cached inference result does not match"
         return return_cached_result(interp, inf_result, sv)
     end
-    # perform fresh constant prop'
-    argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-    inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
-    if !any(inf_result.overridden_by_const)
+    overridden_by_const = falses(length(argtypes))
+    for i = 1:length(argtypes)
+        if argtypes[i] !== cache_argtypes[i]
+            overridden_by_const[i] = true
+        end
+    end
+    if !any(overridden_by_const)
         add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
         return nothing
     end
+    # perform fresh constant prop'
+    inf_result = InferenceResult(mi, argtypes, overridden_by_const)
     frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
     if frame === nothing
         add_remark!(interp, sv, "[constprop] Could not retrieve the source")
@@ -1272,26 +1300,19 @@ end
 
 # TODO implement MustAlias forwarding
 
-struct ConditionalArgtypes <: ForwardableArgtypes
+struct ConditionalArgtypes
     arginfo::ArgInfo
     sv::InferenceState
 end
 
-"""
-    matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
-                            conditional_argtypes::ConditionalArgtypes)
-
-The implementation is able to forward `Conditional` of `conditional_argtypes`,
-as well as the other general extended lattice information.
-"""
-function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
-                                 conditional_argtypes::ConditionalArgtypes)
+function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
+                                 conditional_argtypes::ConditionalArgtypes,
+                                 cache_argtypes::Vector{Any})
     (; arginfo, sv) = conditional_argtypes
     (; fargs, argtypes) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
-    def = linfo.def::Method
+    def = mi.def::Method
     nargs = Int(def.nargs)
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, linfo)
     local condargs = nothing
     for i in 1:length(argtypes)
         argtype = argtypes[i]
@@ -1322,7 +1343,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
     end
     if condargs !== nothing
         given_argtypes = let condargs=condargs
-            va_process_argtypes(𝕃, given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
+            va_process_argtypes(𝕃, given_argtypes, mi) do isva_given_argtypes::Vector{Any}, last::Int
                 # invalidate `Conditional` imposed on varargs
                 for (slotid, i) in condargs
                     if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
@@ -1332,9 +1353,9 @@ function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
             end
         end
     else
-        given_argtypes = va_process_argtypes(𝕃, given_argtypes, linfo)
+        given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
     end
-    return pick_const_args!(𝕃, cache_argtypes, overridden_by_const, given_argtypes)
+    return pick_const_args!(𝕃, given_argtypes, cache_argtypes)
 end
 
 # This is only for use with `Conditional`.
@@ -2264,7 +2285,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtIn
     return abstract_call_known(interp, f, arginfo, si, sv, max_methods)
 end
 
-function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
+function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
     isref = false
     if unwrapva(T) === Bottom
         return Bottom
@@ -2279,12 +2300,12 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
     else
         return Any
     end
-    if isa(linfo.def, Method)
-        spsig = linfo.def.sig
+    if isa(mi.def, Method)
+        spsig = mi.def.sig
         if isa(spsig, UnionAll)
-            if !isempty(linfo.sparam_vals)
+            if !isempty(mi.sparam_vals)
                 sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
-                                  v for v in  linfo.sparam_vals]
+                                  v for v in  mi.sparam_vals]
                 T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
                 for v in sparam_vals
@@ -2611,7 +2632,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             effects = EFFECTS_UNKNOWN
         end
     elseif ehead === :throw_undef_if_not
-        condt = argextype(stmt.args[2], ir)
+        condt = abstract_eval_value(interp, e.args[2], vtypes, sv)
         condval = maybe_extract_const_bool(condt)
         t = Nothing
         exct = UndefVarError
@@ -2623,7 +2644,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             else
                 t = Union{}
             end
-        elseif !hasintersect(windenconst(condt), Bool)
+        elseif !hasintersect(widenconst(condt), Bool)
             t = Union{}
         end
     elseif ehead === :boundscheck
@@ -2686,7 +2707,7 @@ function refine_partial_type(@nospecialize t)
         # if the first/second parameter of `NamedTuple` is known to be empty,
         # the second/first argument should also be empty tuple type,
         # so refine it here
-        return Const(NamedTuple())
+        return Const((;))
     end
     return t
 end
@@ -2717,7 +2738,8 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, vtypes::Un
         val = phi.values[i]
         # N.B.: Phi arguments are restricted to not have effects, so we can drop
         # them here safely.
-        rt = tmerge(typeinf_lattice(interp), rt, abstract_eval_special_value(interp, val, vtypes, sv).rt)
+        thisval = abstract_eval_special_value(interp, val, vtypes, sv).rt
+        rt = tmerge(typeinf_lattice(interp), rt, thisval)
     end
     return rt
 end
@@ -2731,7 +2753,14 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     if !isa(e, Expr)
         if isa(e, PhiNode)
             add_curr_ssaflag!(sv, IR_FLAGS_REMOVABLE)
-            return RTEffects(abstract_eval_phi(interp, e, vtypes, sv), Union{}, EFFECTS_TOTAL)
+            # Implement convergence for PhiNodes. In particular, PhiNodes need to tmerge over
+            # the incoming values from all iterations, but `abstract_eval_phi` will only tmerge
+            # over the first and last iterations. By tmerging in the current old_rt, we ensure that
+            # we will not lose an intermediate value.
+            rt = abstract_eval_phi(interp, e, vtypes, sv)
+            old_rt = sv.ssavaluetypes[sv.currpc]
+            rt = old_rt === NOT_FOUND ? rt : tmerge(typeinf_lattice(interp), old_rt, rt)
+            return RTEffects(rt, Union{}, EFFECTS_TOTAL)
         end
         (; rt, exct, effects) = abstract_eval_special_value(interp, e, vtypes, sv)
     else

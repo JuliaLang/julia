@@ -8,8 +8,8 @@ struct StructuredMatrixStyle{T} <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()
 StructuredMatrixStyle{T}(::Val{N}) where {T,N} = Broadcast.DefaultArrayStyle{N}()
 
-const StructuredMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}
-for ST in Base.uniontypes(StructuredMatrix)
+const StructuredMatrix{T} = Union{Diagonal{T},Bidiagonal{T},SymTridiagonal{T},Tridiagonal{T},LowerTriangular{T},UnitLowerTriangular{T},UpperTriangular{T},UnitUpperTriangular{T}}
+for ST in (Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular)
     @eval Broadcast.BroadcastStyle(::Type{<:$ST}) = $(StructuredMatrixStyle{ST}())
 end
 
@@ -133,6 +133,7 @@ fails as `zero(::Tuple{Int})` is not defined. However,
 iszerodefined(::Type) = false
 iszerodefined(::Type{<:Number}) = true
 iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
+iszerodefined(::Type{<:UniformScaling{T}}) where T = iszerodefined(T)
 
 fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
@@ -144,6 +145,7 @@ fzero(::Type{T}) where T = T
 fzero(r::Ref) = r[]
 fzero(t::Tuple{Any}) = t[1]
 fzero(S::StructuredMatrix) = zero(eltype(S))
+fzero(::StructuredMatrix{<:AbstractMatrix{T}}) where {T<:Number} = haszero(T) ? zero(T)*I : missing
 fzero(x) = missing
 function fzero(bc::Broadcast.Broadcasted)
     args = map(fzero, bc.args)
@@ -152,8 +154,13 @@ end
 
 function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
     inds = axes(bc)
-    if isstructurepreserving(bc) || (fzeropreserving(bc) && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
+    fzerobc = fzeropreserving(bc)
+    if isstructurepreserving(bc) || (fzerobc && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
         return structured_broadcast_alloc(bc, T, ElType, length(inds[1]))
+    elseif fzerobc && T <: UnitLowerTriangular
+        return similar(convert(Broadcasted{StructuredMatrixStyle{LowerTriangular}}, bc), ElType)
+    elseif fzerobc && T <: UnitUpperTriangular
+        return similar(convert(Broadcasted{StructuredMatrixStyle{UpperTriangular}}, bc), ElType)
     end
     return similar(convert(Broadcasted{DefaultArrayStyle{ndims(bc)}}, bc), ElType)
 end
@@ -204,7 +211,7 @@ function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     end
     for i = 1:size(dest, 1)-1
         v = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
-        v == (@inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))) || throw(ArgumentError("broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
+        v == (@inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))) || throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
         dest.ev[i] = v
     end
     return dest

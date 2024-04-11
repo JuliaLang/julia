@@ -83,7 +83,27 @@ const MAX_INLINE_CONST_SIZE = 256
 
 function count_const_size(@nospecialize(x), count_self::Bool = true)
     (x isa Type || x isa Core.TypeName || x isa Symbol) && return 0
-    ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
+    if ismutable(x)
+        # No definite size
+        (isa(x, GenericMemory) || isa(x, String) || isa(x, SimpleVector)) &&
+            return MAX_INLINE_CONST_SIZE + 1
+        if isa(x, Module)
+            # We allow modules, because we already assume they are externally
+            # rooted, so we count their contents as 0 size.
+            return sizeof(Ptr{Cvoid})
+        end
+        # We allow mutable types with no mutable fields (i.e. those mutable
+        # types used for identity only). The intent of this function is to
+        # prevent the rooting of large amounts of data that may have been
+        # speculatively computed. If the struct can get mutated later, we
+        # cannot assess how much data we might end up rooting. However, if
+        # the struct is mutable only for identity, the query still works.
+        for i = 1:nfields(x)
+            if !isconst(typeof(x), i)
+                return MAX_INLINE_CONST_SIZE + 1
+            end
+        end
+    end
     isbits(x) && return Core.sizeof(x)
     dt = typeof(x)
     sz = count_self ? sizeof(dt) : 0
@@ -127,29 +147,23 @@ function get_staged(mi::MethodInstance, world::UInt)
     end
 end
 
-function retrieve_code_info(linfo::MethodInstance, world::UInt)
-    def = linfo.def
-    if !isa(def, Method)
-        return linfo.uninferred
-    end
-    c = nothing
-    if isdefined(def, :generator)
-        # user code might throw errors – ignore them
-        c = get_staged(linfo, world)
-    end
+function retrieve_code_info(mi::MethodInstance, world::UInt)
+    def = mi.def
+    isa(def, Method) || return mi.uninferred
+    c = isdefined(def, :generator) ? get_staged(mi, world) : nothing
     if c === nothing && isdefined(def, :source)
         src = def.source
         if src === nothing
             # can happen in images built with --strip-ir
             return nothing
         elseif isa(src, String)
-            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), def, C_NULL, src)
+            c = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), def, C_NULL, src)
         else
             c = copy(src::CodeInfo)
         end
     end
     if c isa CodeInfo
-        c.parent = linfo
+        c.parent = mi
         return c
     end
     return nothing
@@ -503,8 +517,6 @@ end
 ###########
 # options #
 ###########
-
-is_root_module(m::Module) = false
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 

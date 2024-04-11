@@ -1068,6 +1068,9 @@ function _growbeg!(a::Vector, delta::Integer)
     else
         @noinline (function()
         memlen = length(mem)
+        if offset + len - 1 > memlen || offset < 1
+            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+        end
         # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
         # the +1 is because I didn't want to have an off by 1 error.
         newmemlen = max(overallocation(memlen), len + 2 * delta + 1)
@@ -1083,6 +1086,9 @@ function _growbeg!(a::Vector, delta::Integer)
             newmem = array_new_memory(mem, newmemlen)
         end
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+        if ref !== a.ref
+            @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+        end
         setfield!(a, :ref, @inbounds GenericMemoryRef(newmem, newoffset))
         end)()
     end
@@ -1103,6 +1109,10 @@ function _growend!(a::Vector, delta::Integer)
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
         @noinline (function()
+        if offset + len - 1 > memlen || offset < 1
+            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+        end
+
         if offset - 1 > div(5 * newlen, 4)
             # If the offset is far enough that we can copy without resizing
             # while maintaining proportional spacing on both ends of the array
@@ -1120,6 +1130,9 @@ function _growend!(a::Vector, delta::Integer)
         end
         newref = @inbounds GenericMemoryRef(newmem, newoffset)
         unsafe_copyto!(newref, ref, len)
+        if ref !== a.ref
+            @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+        end
         setfield!(a, :ref, newref)
         end)()
     end
@@ -2622,7 +2635,7 @@ Dict{Symbol, Int64} with 3 entries:
   :B => -1
   :C => 0
 
-julia> findall(x -> x >= 0, d)
+julia> findall(≥(0), d)
 2-element Vector{Symbol}:
  :A
  :C
@@ -3066,55 +3079,4 @@ intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
     else
         _getindex(v, i)
     end
-end
-
-"""
-    wrap(Array, m::Union{Memory{T}, MemoryRef{T}}, dims)
-
-Create an array of size `dims` using `m` as the underlying memory. This can be thought of as a safe version
-of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointers.
-"""
-function wrap end
-
-# validity checking for _wrap calls, separate from allocation of Array so that it can be more likely to inline into the caller
-function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
-    mem = ref.mem
-    mem_len = length(mem) + 1 - memoryrefoffset(ref)
-    len = Core.checked_dims(dims...)
-    @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
-    if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
-        mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-        ref = MemoryRef(mem)
-    end
-    return ref
-end
-
-@noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(
-    "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $proddims > $len, so that the array would have more elements than the underlying memory can store."))
-
-@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
-    dims = convert(Dims, dims)
-    ref = _wrap(m, dims)
-    $(Expr(:new, :(Array{T, N}), :ref, :dims))
-end
-
-@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
-    dims = convert(Dims, dims)
-    ref = _wrap(MemoryRef(m), dims)
-    $(Expr(:new, :(Array{T, N}), :ref, :dims))
-end
-@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
-    dims = (Int(l),)
-    ref = _wrap(m, dims)
-    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
-end
-@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
-    dims = (Int(l),)
-    ref = _wrap(MemoryRef(m), (l,))
-    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
-end
-@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}) where {T}
-    ref = MemoryRef(m)
-    dims = (length(m),)
-    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end

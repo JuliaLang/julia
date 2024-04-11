@@ -427,7 +427,7 @@ The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 
 The argument `tol` determines the tolerance for determining the rank.
-For negative values, the tolerance is the machine precision.
+For negative values, the tolerance is equal to `eps()*size(A,1)*maximum(diag(A))`.
 
 If you have a matrix `A` that is slightly non-Hermitian due to roundoff errors in its construction,
 wrap it in `Hermitian(A)` before passing it to `cholesky` in order to treat it as perfectly Hermitian.

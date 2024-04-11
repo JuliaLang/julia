@@ -43,6 +43,7 @@ relocatedepot:
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg3 $(SRCDIR)/relocatedepot
+	@cp -R $(SRCDIR)/RelocationTestPkg4 $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
 
@@ -55,6 +56,7 @@ revise-relocatedepot: revise-% :
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg3 $(SRCDIR)/relocatedepot
+	@cp -R $(SRCDIR)/RelocationTestPkg4 $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
 
@@ -70,5 +72,6 @@ clangsa:
 clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
+	@$(MAKE) -C llvmpasses $@
 
 .PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) relocatedepot revise-relocatedepot embedding gcext clangsa clean

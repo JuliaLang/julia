@@ -39,7 +39,7 @@ eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedI
 # reshaping to same # of dimensions
 @eval function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
     throw_dmrsa(dims, len) =
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
     len = Core.checked_dims(dims...) # make sure prod(dims) doesn't overflow (and because of the comparison to length(a))
     if len != length(a)
         throw_dmrsa(dims, length(a))
@@ -238,7 +238,8 @@ offset_if_vec(i::Integer, axs::Tuple) = i
 
 @inline function isassigned(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(Bool, A, index) || return false
-    @inbounds ret = isassigned(parent(A), index)
+    indexparent = index - firstindex(A) + firstindex(parent(A))
+    @inbounds ret = isassigned(parent(A), indexparent)
     ret
 end
 @inline function isassigned(A::ReshapedArray{T,N}, indices::Vararg{Int, N}) where {T,N}
@@ -251,7 +252,8 @@ end
 
 @inline function getindex(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(A, index)
-    @inbounds ret = parent(A)[index]
+    indexparent = index - firstindex(A) + firstindex(parent(A))
+    @inbounds ret = parent(A)[indexparent]
     ret
 end
 @inline function getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
@@ -275,7 +277,8 @@ end
 
 @inline function setindex!(A::ReshapedArrayLF, val, index::Int)
     @boundscheck checkbounds(A, index)
-    @inbounds parent(A)[index] = val
+    indexparent = index - firstindex(A) + firstindex(parent(A))
+    @inbounds parent(A)[indexparent] = val
     val
 end
 @inline function setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
