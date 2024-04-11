@@ -697,7 +697,7 @@ mktempdir() do pfx
         libs_deleted += 1
     end
     @test libs_deleted > 0
-    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) --startup-file=no -e 'print("no codegen!\n")'`) == "no codegen!"
 
     # PR #47343
     libs_emptied = 0
