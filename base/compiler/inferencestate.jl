@@ -377,7 +377,7 @@ Given the code of a function, compute, at every statement, the current
 try/catch handler, and the current exception stack top. This function returns
 a tuple of:
 
-    1. `handler_at`: A statement length vector of tuples `(catch_handler, exception_stack)`, 
+    1. `handler_at`: A statement length vector of tuples `(catch_handler, exception_stack)`,
        which are indices into `handlers`
 
     2. `handlers`: A `TryCatchFrame` vector of handlers
