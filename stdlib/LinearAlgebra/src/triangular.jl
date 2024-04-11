@@ -43,6 +43,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         similar(A::$t, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
         copy(A::$t) = $t(copy(A.data))
+        Base.unaliascopy(A::$t) = $t(Base.unaliascopy(A.data))
 
         real(A::$t{<:Real}) = A
         real(A::$t{<:Complex}) = (B = real(A.data); $t(B))
@@ -152,6 +153,8 @@ UnitUpperTriangular
 const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
 const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
 const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
+
+Base.dataids(A::UpperOrLowerTriangular) = Base.dataids(A.data)
 
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
@@ -513,21 +516,23 @@ tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
 # copy and scale
 function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular}}
-    checkbounds(A, axes(B)...)
+    @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
+    B2 = Base.unalias(A, B)
     for j = 1:n
         for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
-            @inbounds A[i,j] = B[i,j]
+            @inbounds A[i,j] = B2[i,j]
         end
     end
     return A
 end
 function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular}}
-    checkbounds(A, axes(B)...)
+    @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
+    B2 = Base.unalias(A, B)
     for j = 1:n
         for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
-            @inbounds A[i,j] = B[i,j]
+            @inbounds A[i,j] = B2[i,j]
         end
     end
     return A
