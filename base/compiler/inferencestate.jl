@@ -510,13 +510,23 @@ function _should_insert_coverage(info::DebugInfo)
     return false
 end
 
+struct ArgUsed
+    used::BitVector
+end
+
 function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     world = get_inference_world(interp)
     src = retrieve_code_info(result.linfo, world)
     src === nothing && return nothing
     maybe_validate_code(result.linfo, src, "lowered")
-    return InferenceState(result, src, cache_mode, interp)
+    sv = InferenceState(result, src, cache_mode, interp)
+    used = falses(length(result.argtypes))
+    for i = 1:length(result.argtypes)
+        used[i] |= !iszero(src.slotflags[i])
+    end
+    stack_analysis_result!(result, ArgUsed(used))
+    return sv
 end
 InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =
     InferenceState(result, convert_cache_mode(cache_mode), interp)

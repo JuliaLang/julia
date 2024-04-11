@@ -23,6 +23,10 @@ abstract type AbstractLattice end
 struct ArgInfo
     fargs::Union{Nothing,Vector{Any}}
     argtypes::Vector{Any}
+    used::Union{Nothing,BitVector}
+    function ArgInfo(fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, used::Union{Nothing,BitVector}=nothing)
+        return new(fargs, argtypes, used)
+    end
 end
 
 struct StmtInfo

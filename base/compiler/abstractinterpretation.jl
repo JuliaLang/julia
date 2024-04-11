@@ -99,14 +99,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             this_rt = widenwrappedconditional(this_rt)
         else
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)
-            (; rt, exct, edge, effects, volatile_inf_result) = result
+            (; rt, exct, edge, effects, volatile_inf_result, used) = result
             this_conditional = ignorelimited(rt)
             this_rt = widenwrappedconditional(rt)
             this_exct = exct
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
-            this_arginfo = ArgInfo(fargs, this_argtypes)
+            this_arginfo = ArgInfo(fargs, this_argtypes, used)
             const_call_result = abstract_call_method_with_const_args(interp,
                 result, f, this_arginfo, si, match, sv)
             const_result = volatile_inf_result
@@ -652,7 +652,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         sparams = recomputed[2]::SimpleVector
     end
 
-    (; rt, exct, edge, effects, volatile_inf_result) = typeinf_edge(interp, method, sig, sparams, sv)
+    (; rt, exct, edge, effects, volatile_inf_result, used) = typeinf_edge(interp, method, sig, sparams, sv)
 
     if edge === nothing
         edgecycle = edgelimited = true
@@ -676,7 +676,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         end
     end
 
-    return MethodCallResult(rt, exct, edgecycle, edgelimited, edge, effects, volatile_inf_result)
+    return MethodCallResult(rt, exct, edgecycle, edgelimited, edge, effects; volatile_inf_result, used)
 end
 
 function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
@@ -785,13 +785,15 @@ struct MethodCallResult
     edge::Union{Nothing,MethodInstance}
     effects::Effects
     volatile_inf_result::Union{Nothing,VolatileInferenceResult}
+    used::Union{Nothing,BitVector}
     function MethodCallResult(@nospecialize(rt), @nospecialize(exct),
                               edgecycle::Bool,
                               edgelimited::Bool,
                               edge::Union{Nothing,MethodInstance},
-                              effects::Effects,
-                              volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
-        return new(rt, exct, edgecycle, edgelimited, edge, effects, volatile_inf_result)
+                              effects::Effects;
+                              volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing,
+                              used::Union{Nothing,BitVector}=nothing)
+        return new(rt, exct, edgecycle, edgelimited, edge, effects, volatile_inf_result, used)
     end
 end
 
@@ -1317,7 +1319,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
                                  conditional_argtypes::ConditionalSimpleArgtypes,
                                  cache_argtypes::Vector{Any})
     (; arginfo, sv) = conditional_argtypes
-    (; fargs, argtypes) = arginfo
+    (; fargs, argtypes, used) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
     def = mi.def::Method
     nargs = Int(def.nargs)
@@ -1362,6 +1364,16 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
         end
     else
         given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
+    end
+    if used !== nothing
+        for i = 1:length(given_argtypes)
+            if !used[i]
+                cache_argtype = cache_argtypes[i]
+                if !(cache_argtype isa Const)
+                    given_argtypes[i] = cache_argtype
+                end
+            end
+        end
     end
     return pick_const_args!(𝕃, given_argtypes, cache_argtypes)
 end
