@@ -37,7 +37,7 @@ end
     throw(DomainError(x,
         LazyString(f," was called with a real argument < -1 but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
 end
-@noinline function throw_exp_domainerror(x)
+@assume_effects :terminates_globally @noinline function throw_exp_domainerror(x)
     throw(DomainError(x, LazyString(
         "Exponentiation yielding a complex result requires a ",
         "complex argument.\nReplace x^y with (x+0im)^y, ",
@@ -1277,7 +1277,10 @@ end
     end
     yint = unsafe_trunc(Int64, y) # This is actually safe since julia freezes the result
     yisint = y == yint
-    yisint && use_power_by_squaring(yint) && return @noinline pow_body(x, yint)
+    if yisint
+        yint == 0 && return 1.0
+        use_power_by_squaring(yint) && return @noinline pow_body(x, yint)
+    end
     2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x === +0.0 or -0.0 (Inf * false === 0.0)
     s = 1
     if x < 0
@@ -1288,7 +1291,7 @@ end
     return copysign(pow_body(abs(x), y), s)
 end
 
-@inline function pow_body(x::Float64, y::Float64)
+@assume_effects :total @noinline function pow_body(x::Float64, y::Float64)
     xu = reinterpret(UInt64, x)
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
@@ -1324,7 +1327,9 @@ end
 end
 
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
-    x^clamp(n, Int64)
+    T = Int64
+    m = n >= typemax(T) ? typemax(T) : n <= typemin(T) ? typemin(T) : n
+    x^(m%Int64)
 end
 # compensated power by squaring
 @constprop :aggressive @inline function ^(x::Float64, n::Int64)
