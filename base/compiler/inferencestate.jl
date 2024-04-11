@@ -371,16 +371,16 @@ was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
 compute_trycatch(ir::IRCode, ip::BitSet) = compute_trycatch(ir.stmts.stmt, ip, ir.cfg.blocks)
 
 """
-    compute_trycatch(code, ip [, bbs])
+    compute_trycatch(code, ip [, bbs]) -> (handler_at, handlers)
 
 Given the code of a function, compute, at every statement, the current
 try/catch handler, and the current exception stack top. This function returns
 a tuple of:
 
-    1. A statement length vector of tuples `(catch_handler, exception_stack)`, which
-       are indices into ...
+    1. `handler_at`: A statement length vector of tuples `(catch_handler, exception_stack)`, 
+       which are indices into `handlers`
 
-    2. A TryCatchFrame vector of handlers
+    2. `handlers`: A `TryCatchFrame` vector of handlers
 """
 function compute_trycatch(code::Vector{Any}, ip::BitSet, bbs::Union{Vector{BasicBlock}, Nothing}=nothing)
     # The goal initially is to record the frame like this for the state at exit:
