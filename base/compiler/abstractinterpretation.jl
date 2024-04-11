@@ -1243,12 +1243,17 @@ const_prop_result(inf_result::InferenceResult) =
 return_cached_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
     const_prop_result(inf_result)
 
+function compute_forwarded_argtypes(interp::AbstractInterpreter, arginfo::ArgInfo, sv::AbsIntState)
+    𝕃ᵢ = typeinf_lattice(interp)
+    return has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+end
+
 function const_prop_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
     concrete_eval_result::Union{Nothing, ConstCallResults}=nothing)
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
-    argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+    forwarded_argtypes = compute_forwarded_argtypes(interp, arginfo, sv)
     # use `cache_argtypes` that has been constructed for fresh regular inference if available
     volatile_inf_result = result.volatile_inf_result
     if volatile_inf_result !== nothing
@@ -1256,7 +1261,7 @@ function const_prop_call(interp::AbstractInterpreter,
     else
         cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
     end
-    argtypes = matching_cache_argtypes(𝕃ᵢ, mi, argtypes, cache_argtypes)
+    argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
     inf_result = cache_lookup(𝕃ᵢ, mi, argtypes, inf_cache)
     if inf_result !== nothing
         # found the cache for this constant prop'
@@ -1290,7 +1295,7 @@ function const_prop_call(interp::AbstractInterpreter,
         return nothing
     end
     @assert inf_result.result !== nothing
-    if concrete_eval_result !== nothing
+    if concrete_eval_result !== nothing && isa(forwarded_argtypes, SimpleArgtypes)
         # override return type and effects with concrete evaluation result if available
         inf_result.result = concrete_eval_result.rt
         inf_result.ipo_effects = concrete_eval_result.effects
