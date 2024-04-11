@@ -71,6 +71,7 @@ write(io, """
     uuid_tuple = (UInt64(0), UInt64(0))
     ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
+    (f::Base.RedirectStdStream)(io::Core.CoreSTDOUT) = Base._redirect_io_global(io, f.unix_fd)
     Core.Compiler.track_newly_inferred.x = true
     let mod = Base.include(Base.__toplevel__, "$absfile")
         if !isa(mod, Module)
