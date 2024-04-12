@@ -9780,7 +9780,7 @@ jl_llvm_functions_t jl_emit_codeinst(
     return decls;
 }
 
-void jl_breakpoint(jl_value_t *v);
+extern "C" void jl_breakpoint(jl_value_t *v);
 void jl_compile_workqueue(
     jl_codegen_params_t &params,
     CompilationPolicy policy)
