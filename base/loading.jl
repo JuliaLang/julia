@@ -426,7 +426,6 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 @goto done
             end
             if path !== nothing
-                path = entry_path(path, pkg.name)
                 env′ = env
                 @goto done
             end
@@ -438,12 +437,15 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
         # e.g. if they have been explicitly added to the project/manifest
         mbypath = manifest_uuid_path(Sys.STDLIB, pkg)
         if mbypath isa String
-            path = entry_path(mbypath, pkg.name)
+            path = mbypath
             env′ = Sys.STDLIB
             @goto done
         end
     end
     @label done
+    if path !== nothing && !isfile_casesensitive(path)
+        path = nothing
+    end
     if cache !== nothing
         cache.located[(pkg, stopenv)] = path === nothing ? nothing : (path, something(env′))
     end
@@ -690,7 +692,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         proj = project_file_name_uuid(project_file, pkg.name)
         if proj == pkg
             # if `pkg` matches the project, return the project itself
-            return project_file_path(project_file)
+            return project_file_path(project_file, pkg.name)
         end
         mby_ext = project_file_ext_path(project_file, pkg.name)
         mby_ext === nothing || return mby_ext
@@ -725,7 +727,7 @@ end
 
 function project_file_ext_path(project_file::String, name::String)
     d = parsed_toml(project_file)
-    p = project_file_path(project_file)
+    p = dirname(project_file)
     exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
     if exts !== nothing
         if name in keys(exts)
@@ -744,9 +746,14 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
     return PkgId(uuid, name)
 end
 
-function project_file_path(project_file::String)
+function project_file_path(project_file::String, name::String)
     d = parsed_toml(project_file)
-    joinpath(dirname(project_file), get(d, "path", "")::String)
+    entryfile = get(d, "path", nothing)::Union{String, Nothing}
+    # "path" entry in project file is soft deprecated
+    if entryfile === nothing
+        entryfile = get(d, "entryfile", nothing)::Union{String, Nothing}
+    end
+    return entry_path(dirname(project_file), name, entryfile)
 end
 
 function workspace_manifest(project_file)
@@ -837,12 +844,11 @@ function implicit_env_project_file_extension(dir::String, ext::PkgId)
     return nothing, nothing
 end
 
-# given a path and a name, return the entry point
-function entry_path(path::String, name::String)::Union{Nothing,String}
+# given a path, name, and possibly an entryfile, return the entry point
+function entry_path(path::String, name::String, entryfile::Union{Nothing,String})::String
     isfile_casesensitive(path) && return normpath(path)
-    path = normpath(joinpath(path, "src", "$name.jl"))
-    isfile_casesensitive(path) && return path
-    return nothing # source not found
+    entrypoint = entryfile === nothing ? joinpath("src", "$name.jl") : entryfile
+    return normpath(joinpath(path, entrypoint))
 end
 
 ## explicit project & manifest API ##
@@ -1016,15 +1022,16 @@ end
 
 function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::Dict{String,Any})
     path = get(entry, "path", nothing)::Union{Nothing, String}
+    entryfile = get(entry, "entryfile", nothing)::Union{Nothing, String}
     if path !== nothing
-        path = normpath(abspath(dirname(manifest_file), path))
+        path = entry_path(normpath(abspath(dirname(manifest_file), path)), pkg.name, entryfile)
         return path
     end
     hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
     if hash === nothing
         mbypath = manifest_uuid_path(Sys.STDLIB, pkg)
-        if mbypath isa String
-            return entry_path(mbypath, pkg.name)
+        if mbypath isa String && isfile(mbypath)
+            return mbypath
         end
         return nothing
     end
@@ -1034,7 +1041,7 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
     for slug in (version_slug(uuid, hash), version_slug(uuid, hash, 4))
         for depot in DEPOT_PATH
             path = joinpath(depot, "packages", pkg.name, slug)
-            ispath(path) && return abspath(path)
+            ispath(path) && return entry_path(abspath(path), pkg.name, entryfile)
         end
     end
     # no depot contains the package, return missing to stop looking
@@ -1381,13 +1388,12 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         proj_pkg = project_file_name_uuid(implicit_project_file, pkg.name)
         if pkg == proj_pkg
             d_proj = parsed_toml(implicit_project_file)
-            weakdeps = get(d_proj, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
             extensions = get(d_proj, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             extensions === nothing && return
-            weakdeps === nothing && return
-            if weakdeps isa Dict{String, Any}
-                return _insert_extension_triggers(pkg, extensions, weakdeps)
-            end
+            weakdeps = get(Dict{String, Any}, d_proj, "weakdeps")::Dict{String,Any}
+            deps = get(Dict{String, Any}, d_proj, "deps")::Dict{String,Any}
+            total_deps = merge(weakdeps, deps)
+            return _insert_extension_triggers(pkg, extensions, total_deps)
         end
 
         # Now look in manifest
@@ -1402,27 +1408,35 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                 uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
                 uuid === nothing && continue
                 if UUID(uuid) == pkg.uuid
-                    weakdeps = get(entry, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
                     extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
                     extensions === nothing && return
-                    weakdeps === nothing && return
-                    if weakdeps isa Dict{String, Any}
-                        return _insert_extension_triggers(pkg, extensions, weakdeps)
+                    weakdeps = get(Dict{String, Any}, entry, "weakdeps")::Union{Vector{String}, Dict{String,Any}}
+                    deps = get(Dict{String, Any}, entry, "deps")::Union{Vector{String}, Dict{String,Any}}
+
+                    function expand_deps_list(deps′::Vector{String})
+                        deps′_expanded = Dict{String, Any}()
+                        for (dep_name, entries) in d
+                            dep_name in deps′ || continue
+                            entries::Vector{Any}
+                            if length(entries) != 1
+                                error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
+                            end
+                            entry = first(entries)::Dict{String, Any}
+                            uuid = entry["uuid"]::String
+                            deps′_expanded[dep_name] = uuid
+                        end
+                        return deps′_expanded
                     end
 
-                    d_weakdeps = Dict{String, Any}()
-                    for (dep_name, entries) in d
-                        dep_name in weakdeps || continue
-                        entries::Vector{Any}
-                        if length(entries) != 1
-                            error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
-                        end
-                        entry = first(entries)::Dict{String, Any}
-                        uuid = entry["uuid"]::String
-                        d_weakdeps[dep_name] = uuid
+                    if weakdeps isa Vector{String}
+                        weakdeps = expand_deps_list(weakdeps)
                     end
-                    @assert length(d_weakdeps) == length(weakdeps)
-                    return _insert_extension_triggers(pkg, extensions, d_weakdeps)
+                    if deps isa Vector{String}
+                        deps = expand_deps_list(deps)
+                    end
+
+                    total_deps = merge(weakdeps, deps)
+                    return _insert_extension_triggers(pkg, extensions, total_deps)
                 end
             end
         end
@@ -1430,7 +1444,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
     return nothing
 end
 
-function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}, weakdeps::Dict{String, Any})
+function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}, totaldeps::Dict{String, Any})
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
@@ -1444,7 +1458,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
         push!(trigger1, gid)
         for trigger in triggers
             # TODO: Better error message if this lookup fails?
-            uuid_trigger = UUID(weakdeps[trigger]::String)
+            uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
             if !haskey(explicit_loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
@@ -2504,8 +2518,8 @@ function require_stdlib(uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
         uuidkey = PkgId(uuid5(uuidkey.uuid, ext), ext)
     end
     #mbypath = manifest_uuid_path(env, uuidkey)
-    #if mbypath isa String
-    #    sourcepath = entry_path(mbypath, uuidkey.name)
+    #if mbypath isa String && isfile_casesensitive(mbypath)
+    #    sourcepath = mbypath
     #else
     #    # if the user deleted the stdlib folder, we next try using their environment
     #    sourcepath = locate_package_env(uuidkey)
