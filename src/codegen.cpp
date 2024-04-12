@@ -5128,18 +5128,18 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
     }
 
     if (!handled) {
-        if (0 && ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
-            errs() << "Tried emitting jl_invoke from ";
-            jl_(ctx.linfo);
-            errs() << "in module ";
-            jl_(ctx.linfo->def.method->module);
-            errs() << "for call to ";
-            if (lival.constant)
-                jl_(lival.constant);
-            else
-                errs() << "unknown";
-            errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-            print_stack_crumbs(ctx);
+        if (ctx.params->no_dynamic_dispatch) {
+            if (lival.constant) {
+                arraylist_push(&new_invokes, lival.constant);
+            } else if (rt != jl_bottom_type) {
+                errs() << "Tried emitting dynamic dispatch from ";
+                jl_(ctx.linfo);
+                errs() << "in module ";
+                jl_(ctx.linfo->def.method->module);
+                errs() << "for call to unknown";
+
+                print_stack_crumbs(ctx);
+            }
         }
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
         result = mark_julia_type(ctx, r, true, rt);
@@ -6624,6 +6624,18 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
             GlobalVariable::InternalLinkage,
             name, M);
     jl_init_function(f, params.TargetTriple);
+    if (ctx.params->no_dynamic_dispatch) {
+        arraylist_push(&new_invokes, codeinst->def);
+        // else if (rt != jl_bottom_type) {
+        //     errs() << "Tried emitting dynamic dispatch from ";
+        //     jl_(ctx.linfo);
+        //     errs() << "in module ";
+        //     jl_(ctx.linfo->def.method->module);
+        //     errs() << "for call to unknown";
+
+        //     print_stack_crumbs(ctx);
+        // }
+    }
     jl_name_jlfunc_args(params, f);
     //f->setAlwaysInline();
     ctx.f = f; // for jl_Module

@@ -340,6 +340,7 @@ jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_
 // The `policy` flag switches between the default mode `0` and the extern mode `1` used by GPUCompiler.
 // `_imaging_mode` controls if raw pointers can be embedded (e.g. the code will be loaded into the same session).
 // `_external_linkage` create linkages between pkgimages.
+arraylist_t new_invokes;
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
@@ -384,6 +385,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     params.debug_level = cgparams->debug_info_level;
     params.external_linkage = _external_linkage;
     size_t compile_for[] = { jl_typeinf_world, _world };
+    arraylist_new(&new_invokes, 0);
     for (int worlds = 0; worlds < 2; worlds++) {
         JL_TIMING(NATIVE_AOT, NATIVE_Codegen);
         size_t this_world = compile_for[worlds];
@@ -403,6 +405,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 continue;
             }
             mi = (jl_method_instance_t*)item;
+            compile_mi:
             src = NULL;
             // if this method is generally visible to the current compilation world,
             // and this is either the primary world, or not applicable in the primary world
@@ -428,6 +431,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                         params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
                 }
             }
+            //TODO: is goto the best way to do this?
+            mi = (jl_method_instance_t*)arraylist_pop(&new_invokes);
+            if (mi != NULL)
+                goto compile_mi;
         }
 
         // finally, make sure all referenced methods also get compiled or fixed up
@@ -435,7 +442,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     JL_GC_POP();
-
+    arraylist_free(&new_invokes);
     // process the globals array, before jl_merge_module destroys them
     SmallVector<std::string, 0> gvars(params.global_targets.size());
     data->jl_value_to_llvm.resize(params.global_targets.size());

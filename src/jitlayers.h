@@ -65,7 +65,7 @@
 using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
-
+extern arraylist_t new_invokes;
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 
