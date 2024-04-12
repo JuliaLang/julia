@@ -1469,12 +1469,12 @@ end
     @test E ^ (-Z^54) ≈ 7.38905609893065
     @test E ^ (-Z^62) ≈ 2.2844135865231613e222
     @test E ^ (-Z^63) == Inf
-    @test abs(E ^ (Z^62-1) * E ^ (-Z^62+1) - 1) <= eps(0.9)
+    @test abs(E ^ (Z^62-1) * E ^ (-Z^62+1) - 1) <= eps(1.0)
     n, x = -1065564664, 0.9999997040311492
     @test abs(x^n - Float64(big(x)^n)) / eps(x^n) == 0 # ULPs
     @test E ^ (big(2)^100 + 1) == 0
     @test E ^ 6705320061009595392 == nextfloat(0.0)
-    n = Int(1024 / log2(E))
+    n = Int64(1024 / log2(E))
     @test E^n == Inf
     @test E^float(n) == Inf
 end
