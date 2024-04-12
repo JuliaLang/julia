@@ -107,6 +107,9 @@ write(io, """
         end
         show(io::IO, T::Type) = print(io, "Type")
     end
+    @eval Core begin
+        DomainError(@nospecialize(val), @nospecialize(msg::AbstractString)) = (@noinline; \$(Expr(:new, :DomainError, :val, :msg)))
+    end
     @eval Base.Unicode begin
         function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform::F = identity) where F
             nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
