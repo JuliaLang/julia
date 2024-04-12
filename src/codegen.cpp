@@ -9780,7 +9780,7 @@ jl_llvm_functions_t jl_emit_codeinst(
     return decls;
 }
 
-
+void jl_breakpoint(jl_value_t *v);
 void jl_compile_workqueue(
     jl_codegen_params_t &params,
     CompilationPolicy policy)
@@ -9834,6 +9834,8 @@ void jl_compile_workqueue(
                     auto decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
                     if (result_m)
                         it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
+                    else
+                        jl_breakpoint((jl_value_t*)codeinst);
                 }
             }
             if (it != params.compiled_functions.end()) {
@@ -9856,6 +9858,7 @@ void jl_compile_workqueue(
                 auto it = params.compiled_functions.find(codeinst);
                 errs() << "Bailed out to invoke when compiling:";
                 jl_(codeinst->def);
+                jl_breakpoint((jl_value_t*)codeinst);
                 if (it != params.compiled_functions.end()) {
                     errs() << it->second.second.functionObject << "\n";
                     errs() << it->second.second.specFunctionObject << "\n";
