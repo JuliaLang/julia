@@ -405,6 +405,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 continue;
             }
             mi = (jl_method_instance_t*)item;
+            int from_invoke = 0;
             compile_mi:
             src = NULL;
             // if this method is generally visible to the current compilation world,
@@ -413,6 +414,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= this_world && this_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
+                if (from_invoke) {
+                    jl_safe_printf("Inferred invoke mi");
+                    jl_(mi);
+                }
+
                 if (jl_options.small_image && !codeinst) {
                     // If we're building a small image, we need to compile everything
                     // to ensure that we have all the information we need.
@@ -433,8 +439,12 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             }
             //TODO: is goto the best way to do this?
             mi = (jl_method_instance_t*)arraylist_pop(&new_invokes);
-            if (mi != NULL)
+            if (mi != NULL) {
+                jl_safe_printf("Compiling mi that had an invoke emitted for it");
+                jl_(mi);
+                from_invoke = 1;
                 goto compile_mi;
+            }
         }
 
         // finally, make sure all referenced methods also get compiled or fixed up
