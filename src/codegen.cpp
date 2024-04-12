@@ -9856,8 +9856,11 @@ void jl_compile_workqueue(
                 auto it = params.compiled_functions.find(codeinst);
                 errs() << "Bailed out to invoke when compiling:";
                 jl_(codeinst->def);
-                errs() << it->second.second.functionObject << "\n";
-                // errs() << it->second.second.specFunctionObject << "\n";
+                if (it != params.compiled_functions.end()) {
+                    errs() << it->second.second.functionObject << "\n";
+                    errs() << it->second.second.specFunctionObject << "\n";
+                } else
+                    errs() << "codeinst not in compile_functions\n";
                 // emit specsig-to-(jl)invoke conversion
                 Function *preal = emit_tojlinvoke(codeinst, mod, params);
                 proto.decl->setLinkage(GlobalVariable::InternalLinkage);
