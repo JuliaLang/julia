@@ -409,7 +409,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             all_extdeps_available = true
             for extdep_uuid in extdep_uuids
                 extdep_name = env.names[extdep_uuid]
-                if extdep_uuid in keys(env.deps) || Base.in_sysimage(Base.PkgId(extdep_uuid, extdep_name))
+                if extdep_uuid in keys(env.deps)
                     push!(ext_deps, Base.PkgId(extdep_uuid, extdep_name))
                 else
                     all_extdeps_available = false

@@ -188,7 +188,7 @@ Julia session and get the PID and REPL's task address:
    _ _   _| |_  __ _   |  Type "?" for help, "]?" for Pkg help.
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  Version 1.6.2 (2021-07-14)
- _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org/ release
+ _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org release
 |__/                   |
 
 1> getpid()
@@ -264,7 +264,7 @@ We can see this problem illustrated with `bpftrace` quite easily. First, in one 
    _ _   _| |_  __ _   |  Type "?" for help, "]?" for Pkg help.
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  Version 1.6.2 (2021-07-14)
- _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org/ release
+ _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org release
 |__/                   |
 
 1> getpid()

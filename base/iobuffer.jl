@@ -42,7 +42,7 @@ end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
 StringMemory(n::Integer) = unsafe_wrap(Memory{UInt8}, _string_n(n))
-StringVector(n::Integer) = wrap(Array, StringMemory(n))
+StringVector(n::Integer) = view(StringMemory(n), 1:n)::Vector{UInt8}
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
@@ -456,7 +456,7 @@ function take!(io::IOBuffer)
         if nbytes == 0 || io.reinit
             data = StringVector(0)
         elseif io.writable
-            data = wrap(Array, MemoryRef(io.data, io.offset + 1), nbytes)
+            data = view(io.data, io.offset+1:nbytes+io.offset)
         else
             data = copyto!(StringVector(io.size), 1, io.data, io.offset + 1, nbytes)
         end
@@ -465,7 +465,7 @@ function take!(io::IOBuffer)
         if nbytes == 0
             data = StringVector(0)
         elseif io.writable
-            data = wrap(Array, MemoryRef(io.data, io.ptr), nbytes)
+            data = view(io.data, io.ptr:io.ptr+nbytes-1)
         else
             data = read!(io, data)
         end
@@ -491,11 +491,7 @@ state.  This should only be used internally for performance-critical
 It might save an allocation compared to `take!` (if the compiler elides the
 Array allocation), as well as omits some checks.
 """
-_unsafe_take!(io::IOBuffer) =
-    wrap(Array, io.size == io.offset ?
-        MemoryRef(Memory{UInt8}()) :
-        MemoryRef(io.data, io.offset + 1),
-        io.size - io.offset)
+_unsafe_take!(io::IOBuffer) = view(io.data, io.offset+1:io.size)
 
 function write(to::IO, from::GenericIOBuffer)
     written::Int = bytesavailable(from)
