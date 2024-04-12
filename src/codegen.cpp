@@ -9853,7 +9853,8 @@ void jl_compile_workqueue(
         if (proto.specsig) {
             // expected specsig
             if (!preal_specsig) {
-                errs() << "Bailed out to invoke when compiling:"
+                auto it = params.compiled_functions.find(codeinst);
+                errs() << "Bailed out to invoke when compiling:";
                 jl_(codeinst->def);
                 errs() << it->second.second.functionObject << "\n";
                 errs() << it->second.second.specFunctionObject << "\n";
