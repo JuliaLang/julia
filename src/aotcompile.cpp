@@ -438,6 +438,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 }
             }
             //TODO: is goto the best way to do this?
+            jl_compile_workqueue(params, policy);
             mi = (jl_method_instance_t*)arraylist_pop(&new_invokes);
             if (mi != NULL) {
                 jl_safe_printf("Compiling mi that had an invoke emitted for it");
@@ -448,8 +449,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         }
 
         // finally, make sure all referenced methods also get compiled or fixed up
-        jl_compile_workqueue(params, policy);
     }
+
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     JL_GC_POP();
     arraylist_free(&new_invokes);
