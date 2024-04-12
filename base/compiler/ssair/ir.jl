@@ -1673,9 +1673,7 @@ function may_replace_phi(values::Vector{Any}, phi_bb::BasicBlock, idx::Int)
     # just to be safe.
     v = values[1]
     before_def = isa(v, OldSSAValue) && idx < v.id
-    !before_def || return false
-
-    return true
+    return !before_def
 end
 
 function reprocess_phi_node!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, phi::PhiNode, old_idx::Int)
