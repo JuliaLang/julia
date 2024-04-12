@@ -9822,7 +9822,8 @@ void jl_compile_workqueue(
             if (it == params.compiled_functions.end()) {
                 // Reinfer the function. The JIT came along and removed the inferred
                 // method body. See #34993
-                if (policy != CompilationPolicy::Default &&
+                // TODO: This seems like it would be an issue in normal sysimages as well
+                if ((policy != CompilationPolicy::Default || params.params->no_dynamic_dispatch) &&
                     jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
                     // Codegen lock is held, so SOURCE_MODE_FORCE_SOURCE_UNCACHED is not required
                     codeinst = jl_type_infer(codeinst->def, jl_atomic_load_relaxed(&codeinst->max_world), 0, SOURCE_MODE_FORCE_SOURCE);
