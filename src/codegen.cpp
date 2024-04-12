@@ -6624,7 +6624,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
             GlobalVariable::InternalLinkage,
             name, M);
     jl_init_function(f, params.TargetTriple);
-    if (ctx.params->no_dynamic_dispatch) {
+    if (params.params->no_dynamic_dispatch) {
         arraylist_push(&new_invokes, codeinst->def);
         // else if (rt != jl_bottom_type) {
         //     errs() << "Tried emitting dynamic dispatch from ";
