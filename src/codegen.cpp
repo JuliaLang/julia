@@ -9855,15 +9855,17 @@ void jl_compile_workqueue(
         if (proto.specsig) {
             // expected specsig
             if (!preal_specsig) {
-                auto it = params.compiled_functions.find(codeinst);
-                errs() << "Bailed out to invoke when compiling:";
-                jl_(codeinst->def);
-                jl_breakpoint((jl_value_t*)codeinst);
-                if (it != params.compiled_functions.end()) {
-                    errs() << it->second.second.functionObject << "\n";
-                    errs() << it->second.second.specFunctionObject << "\n";
-                } else
-                    errs() << "codeinst not in compile_functions\n";
+                if (params.params->no_dynamic_dispatch) {
+                    auto it = params.compiled_functions.find(codeinst);
+                    errs() << "Bailed out to invoke when compiling:";
+                    jl_(codeinst->def);
+                    jl_breakpoint((jl_value_t*)codeinst);
+                    if (it != params.compiled_functions.end()) {
+                        errs() << it->second.second.functionObject << "\n";
+                        errs() << it->second.second.specFunctionObject << "\n";
+                    } else
+                        errs() << "codeinst not in compile_functions\n";
+                }
                 // emit specsig-to-(jl)invoke conversion
                 Function *preal = emit_tojlinvoke(codeinst, mod, params);
                 proto.decl->setLinkage(GlobalVariable::InternalLinkage);
