@@ -1366,6 +1366,9 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
     else
         given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
     end
+    # XXX The argtype widening should probably be handled by `WidenedArgtypes`, but it would
+    # be fine to widen it here as well, since unused-ness ensures that the argtype has no
+    # contribution to the results like return type, effects, etc.
     if used !== nothing
         for i = 1:length(given_argtypes)
             if !used[i]
