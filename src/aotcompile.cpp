@@ -415,8 +415,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
                 if (from_invoke) {
-                    jl_safe_printf("Inferred invoke mi");
+                    jl_safe_printf("Inferred invoke to: ");
                     jl_(mi);
+                    jl_safe_printf("\n");
                 }
 
                 if (jl_options.small_image && !codeinst) {
@@ -427,6 +428,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                     abort();
                 }
                 if (codeinst && !params.compiled_functions.count(codeinst)) {
+                    if (from_invoke) {
+                        jl_safe_printf("Codegen for invoke to: ");
+                        jl_(mi);
+                        jl_safe_printf("\n");
+                    }
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
                     orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(codeinst->def),
@@ -441,8 +447,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             jl_compile_workqueue(params, policy);
             mi = (jl_method_instance_t*)arraylist_pop(&new_invokes);
             if (mi != NULL) {
-                jl_safe_printf("Compiling mi that had an invoke emitted for it");
-                jl_(mi);
                 from_invoke = 1;
                 goto compile_mi;
             }

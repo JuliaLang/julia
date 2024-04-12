@@ -4025,11 +4025,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
                 if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
-                    errs() << "Tried emitting dynamic apply iterate from ";
-                    jl_(ctx.linfo);
-                    errs() << "in module ";
-                    jl_(ctx.linfo->def.method->module);
-                    errs() << "for call to Core._apply_iterate\n";
+                    // if we know the return type, we can assume the result is of that type
+                    errs() << "ERROR: Dynamic call to Core._apply_iterate detected\n";
                     errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
                     print_stack_crumbs(ctx);
                 }
@@ -5131,12 +5128,13 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         if (ctx.params->no_dynamic_dispatch) {
             if (lival.constant) {
                 arraylist_push(&new_invokes, lival.constant);
+                auto filename = std::string(ctx.builder.getCurrentDebugLocation()->getFilename());
+                auto line = ctx.builder.getCurrentDebugLocation()->getLine();
+                if ((ctx.emission_context.enqueuers.find((jl_method_instance_t*)lival.constant) == ctx.emission_context.enqueuers.end()))
+                    ctx.emission_context.enqueuers[(jl_method_instance_t*)lival.constant] = std::make_tuple(ctx.linfo, std::move(filename), line);
             } else if (rt != jl_bottom_type) {
-                errs() << "Tried emitting dynamic dispatch from ";
-                jl_(ctx.linfo);
-                errs() << "in module ";
-                jl_(ctx.linfo->def.method->module);
-                errs() << "for call to unknown";
+                errs() << "Dynamic call to unknown function";
+                errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
 
                 print_stack_crumbs(ctx);
             }
@@ -5197,11 +5195,7 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
         }
     }
     if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
-        errs() << "Tried emitting invoke modify from ";
-        jl_(ctx.linfo);
-        errs() << "in module ";
-        jl_(ctx.linfo->def.method->module);
-        errs() << "for call to ";
+        errs() << "ERROR: dynamic invoke modify call to";
         jl_(args[0]);
         errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
         print_stack_crumbs(ctx);
@@ -5320,11 +5314,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
         // jl_code_instance_t * codeinst = jl_atomic_load_relaxed(&ctx.linfo->cache);
         // jl_((void*)jl_uncompress_ir(codeinst->def->def.method, codeinst, codeinst->inferred));
-        errs() << "Tried emitting dynamic dispatch from ";
-        jl_(ctx.linfo);
-        errs() << "in module ";
-        jl_(ctx.linfo->def.method->module);
-        errs() << "for call to ";
+        errs() << "ERROR: Dynamic call to ";
         jl_(args[0]);
         errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
         print_stack_crumbs(ctx);
@@ -6626,6 +6616,9 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     jl_init_function(f, params.TargetTriple);
     if (params.params->no_dynamic_dispatch) {
         arraylist_push(&new_invokes, codeinst->def);
+        // TODO: Debuginfo!
+        if ((ctx.emission_context.enqueuers.find(codeinst->def) == ctx.emission_context.enqueuers.end()))
+            ctx.emission_context.enqueuers[codeinst->def] = std::make_tuple(ctx.linfo, "", 0);
         // else if (rt != jl_bottom_type) {
         //     errs() << "Tried emitting dynamic dispatch from ";
         //     jl_(ctx.linfo);
