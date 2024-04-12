@@ -1675,7 +1675,7 @@ as opposed to the later phase when it is first invoked. The parser does not "kno
 The magic of type inference takes place in the later phase of compilation.
 
 Thus, the parser does not know that `r` has a fixed type (`Int`).
-nor that `r` does not change value once the inner function is created (so that
+Nor that `r` does not change value once the inner function is created (so that
 the box is unneeded).  Therefore, the parser emits code for
 box that holds an object with an abstract type such as `Any`, which
 requires run-time type dispatch for each occurrence of `r`.  This can be
