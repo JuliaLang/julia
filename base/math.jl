@@ -37,7 +37,7 @@ end
     throw(DomainError(x,
         LazyString(f," was called with a real argument < -1 but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
 end
-@assume_effects :terminates_globally @noinline function throw_exp_domainerror(x)
+@noinline function throw_exp_domainerror(x)
     throw(DomainError(x, LazyString(
         "Exponentiation yielding a complex result requires a ",
         "complex argument.\nReplace x^y with (x+0im)^y, ",
@@ -1291,7 +1291,7 @@ end
     return copysign(pow_body(abs(x), y), s)
 end
 
-@assume_effects :total @noinline function pow_body(x::Float64, y::Float64)
+@assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
     xu = reinterpret(UInt64, x)
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
@@ -1339,13 +1339,10 @@ end
     else
         s = ifelse(x < 0 && isodd(n), -1.0, 1.0)
         x = abs(x)
-        y = Float64(n)
+        y = float(n)
         if y == n
             return copysign(pow_body(x, y), s)
         else
-            if n % Int64 != n
-                n = ifelse(n < 0, typemin(Int64), typemax(Int64))
-            end
             n2 = n % 1024
             y = float(n - n2)
             return pow_body(x, y) * copysign(pow_body(x, n2), s)
