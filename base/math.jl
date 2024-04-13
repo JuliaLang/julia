@@ -1322,11 +1322,8 @@ end
 end
 
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
-    T = Int64
-    m = n >= typemax(T) ? typemax(T) : n <= typemin(T) ? typemin(T) : n
-    x^(m%Int64)
+    x^clamp(n, Int64)
 end
-# compensated power by squaring
 @constprop :aggressive @inline function ^(x::Float64, n::Int64)
     n == 0 && return one(x)
     if use_power_by_squaring(n)
@@ -1345,6 +1342,7 @@ end
     end
 end
 
+# compensated power by squaring
 # this method is only reliable for -2^20 < n < 2^20 (cf. #53881 #53886)
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
