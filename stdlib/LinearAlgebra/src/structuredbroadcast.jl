@@ -189,12 +189,23 @@ isvalidstructbc(dest::Bidiagonal, bc::Broadcasted{StructuredMatrixStyle{Bidiagon
     (size(dest, 1) < 2 || find_uplo(bc) == dest.uplo) &&
     (isstructurepreserving(bc) || fzeropreserving(bc))
 
+@inline function getindex(bc::Broadcasted, b::BandIndex)
+    @boundscheck checkbounds(bc, b)
+    @inbounds Broadcast._broadcast_getindex(bc, b)
+end
+
+function Broadcast.newindex(A::StructuredMatrix, b::BandIndex)
+    # we use the fact that a StructuredMatrix is square,
+    # and we apply newindex to both the axes at once to obtain the result
+    size(A,1) > 1 ? b : BandIndex(0, 1)
+end
+
 function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.diag[i] = @inbounds bc[CartesianIndex(i, i)]
+        dest.diag[i] = @inbounds bc[BandIndex(0, i)]
     end
     return dest
 end
@@ -204,15 +215,15 @@ function copyto!(dest::Bidiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.dv[i] = @inbounds bc[CartesianIndex(i, i)]
+        dest.dv[i] = @inbounds bc[BandIndex(0, i)]
     end
     if dest.uplo == 'U'
         for i = 1:size(dest, 1)-1
-            dest.ev[i] = @inbounds bc[CartesianIndex(i, i+1)]
+            dest.ev[i] = @inbounds bc[BandIndex(1, i)]
         end
     else
         for i = 1:size(dest, 1)-1
-            dest.ev[i] = @inbounds bc[CartesianIndex(i+1, i)]
+            dest.ev[i] = @inbounds bc[BandIndex(-1, i)]
         end
     end
     return dest
@@ -223,11 +234,11 @@ function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.dv[i] = @inbounds bc[CartesianIndex(i, i)]
+        dest.dv[i] = @inbounds bc[BandIndex(0, i)]
     end
     for i = 1:size(dest, 1)-1
-        v = @inbounds bc[CartesianIndex(i, i+1)]
-        v == (@inbounds bc[CartesianIndex(i+1, i)]) || throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
+        v = @inbounds bc[BandIndex(1, i)]
+        v == (@inbounds bc[BandIndex(-1, i)]) || throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
         dest.ev[i] = v
     end
     return dest
@@ -238,11 +249,13 @@ function copyto!(dest::Tridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.d[i] = @inbounds bc[CartesianIndex(i, i)]
+        dest.d[i] = @inbounds bc[BandIndex(0, i)]
     end
     for i = 1:size(dest, 1)-1
-        dest.du[i] = @inbounds bc[CartesianIndex(i, i+1)]
-        dest.dl[i] = @inbounds bc[CartesianIndex(i+1, i)]
+        dest.du[i] = @inbounds bc[BandIndex(1, i)]
+    end
+    for i = 1:size(dest, 1)-1
+        dest.dl[i] = @inbounds bc[BandIndex(-1, i)]
     end
     return dest
 end

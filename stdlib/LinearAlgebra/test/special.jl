@@ -3,7 +3,7 @@
 module TestSpecial
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: rmul!
+using LinearAlgebra: rmul!, BandIndex
 
 n= 10 #Size of matrix to test
 Random.seed!(1)
@@ -769,6 +769,19 @@ end
                 end
             end
         end
+    end
+end
+
+@testset "BandIndex indexing" begin
+    for D in (Diagonal(1:3), Bidiagonal(1:3, 2:3, :U), Bidiagonal(1:3, 2:3, :L),
+                Tridiagonal(2:3, 1:3, 1:2), SymTridiagonal(1:3, 2:3))
+        M = Matrix(D)
+        for band in -size(D,1)+1:size(D,1)-1
+            for idx in 1:size(D,1)-abs(band)
+                @test D[BandIndex(band, idx)] == M[BandIndex(band, idx)]
+            end
+        end
+        @test_throws BoundsError D[BandIndex(size(D,1),1)]
     end
 end
 
