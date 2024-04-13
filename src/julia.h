@@ -2078,6 +2078,7 @@ JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t e
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage);
+JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci);
