@@ -280,7 +280,7 @@ function seek(io::GenericIOBuffer, n::Int)
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
-    io.ptr = min(clamp(widen(max(0, n)) + widen(io.offset), Int), io.size)+1
+    io.ptr = clamp(n, 0, io.size - io.offset) + io.offset + 1
     return io
 end
 
