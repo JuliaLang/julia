@@ -39,7 +39,7 @@ eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedI
 # reshaping to same # of dimensions
 @eval function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
     throw_dmrsa(dims, len) =
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
     len = Core.checked_dims(dims...) # make sure prod(dims) doesn't overflow (and because of the comparison to length(a))
     if len != length(a)
         throw_dmrsa(dims, length(a))

@@ -1820,3 +1820,19 @@ function f53521()
     end
 end
 @test code_typed(f53521)[1][2] === Nothing
+
+# Test that adce_pass! sets Refined on PhiNode values
+let code = Any[
+    # Basic Block 1
+    GotoIfNot(false, 3)
+    # Basic Block 2
+    nothing
+    # Basic Block 3
+    PhiNode(Int32[1, 2], Any[1.0, 1])
+    ReturnNode(Core.SSAValue(3))
+]
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Nothing, Union{Int64, Float64}, Any])
+    (ir, made_changes) = Core.Compiler.adce_pass!(ir)
+    @test made_changes
+    @test (ir[Core.SSAValue(length(ir.stmts))][:flag] & Core.Compiler.IR_FLAG_REFINED) != 0
+end

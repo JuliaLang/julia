@@ -215,16 +215,6 @@ static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, ui
     return fixnum(jl_module_next_counter(ctx->module));
 }
 
-static value_t fl_julia_current_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
-{
-    return symbol(fl_ctx, jl_filename);
-}
-
-static value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
-{
-    return fixnum(jl_lineno);
-}
-
 static int jl_is_number(jl_value_t *v)
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
@@ -257,8 +247,6 @@ static const builtinspec_t julia_flisp_ast_ext[] = {
     { "nothrow-julia-global", fl_nothrow_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
-    { "julia-current-file", fl_julia_current_file },
-    { "julia-current-line", fl_julia_current_line },
     { NULL, NULL }
 };
 
@@ -729,8 +717,20 @@ static int julia_to_scm_noalloc1(fl_context_t *fl_ctx, jl_value_t *v, value_t *r
 
 static value_t julia_to_scm_noalloc2(fl_context_t *fl_ctx, jl_value_t *v, int check_valid) JL_NOTSAFEPOINT
 {
-    if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
-        return fixnum(jl_unbox_long(v));
+    if (jl_is_long(v)) {
+        if (fits_fixnum(jl_unbox_long(v))) {
+            return fixnum(jl_unbox_long(v));
+        } else {
+#ifdef _P64
+            value_t prim = cprim(fl_ctx, fl_ctx->int64type, sizeof(int64_t));
+            *((int64_t*)cp_data((cprim_t*)ptr(prim))) = jl_unbox_long(v);
+#else
+            value_t prim = cprim(fl_ctx, fl_ctx->int32type, sizeof(int32_t));
+            *((int32_t*)cp_data((cprim_t*)ptr(prim))) = jl_unbox_long(v);
+#endif
+            return prim;
+        }
+    }
     if (check_valid) {
         if (jl_is_ssavalue(v))
             lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");

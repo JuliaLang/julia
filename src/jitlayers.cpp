@@ -113,6 +113,15 @@ static void *getTLSAddress(void *control)
 }
 #endif
 
+#ifdef _OS_OPENBSD_
+extern "C" {
+    __int128 __divti3(__int128, __int128);
+    __int128 __modti3(__int128, __int128);
+    unsigned __int128 __udivti3(unsigned __int128, unsigned __int128);
+    unsigned __int128 __umodti3(unsigned __int128, unsigned __int128);
+}
+#endif
+
 // Snooping on which functions are being compiled, and how long it takes
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_compiles_impl(void *s)
@@ -461,10 +470,11 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_compile_codeinst_impl(jl_code_instance_t *ci)
+int jl_compile_codeinst_impl(jl_code_instance_t *ci)
 {
+    int newly_compiled = 0;
     if (jl_atomic_load_relaxed(&ci->invoke) != NULL) {
-        return;
+        return newly_compiled;
     }
     JL_LOCK(&jl_codegen_lock);
     if (jl_atomic_load_relaxed(&ci->invoke) == NULL) {
@@ -472,8 +482,10 @@ void jl_compile_codeinst_impl(jl_code_instance_t *ci)
         uint64_t start = jl_typeinf_timing_begin();
         _jl_compile_codeinst(ci, NULL, *jl_ExecutionEngine->getContext());
         jl_typeinf_timing_end(start, 0);
+        newly_compiled = 1;
     }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
+    return newly_compiled;
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
@@ -1729,6 +1741,17 @@ JuliaOJIT::JuliaOJIT()
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
 
+#ifdef _OS_OPENBSD_
+    orc::SymbolMap i128_crt;
+
+    i128_crt[mangle("__divti3")] = JITEvaluatedSymbol::fromPointer(&__divti3, JITSymbolFlags::Exported);
+    i128_crt[mangle("__modti3")] = JITEvaluatedSymbol::fromPointer(&__modti3, JITSymbolFlags::Exported);
+    i128_crt[mangle("__udivti3")] = JITEvaluatedSymbol::fromPointer(&__udivti3, JITSymbolFlags::Exported);
+    i128_crt[mangle("__umodti3")] = JITEvaluatedSymbol::fromPointer(&__umodti3, JITSymbolFlags::Exported);
+
+    cantFail(GlobalJD.define(orc::absoluteSymbols(i128_crt)));
+#endif
+
 #ifdef MSAN_EMUTLS_WORKAROUND
     orc::SymbolMap msan_crt;
     msan_crt[mangle("__emutls_get_address")] = JITEvaluatedSymbol::fromPointer(msan_workaround::getTLSAddress, JITSymbolFlags::Exported);
@@ -1805,7 +1828,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     auto Lookups = ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}}, NewExports);
     if (!Lookups) {
         ES.reportError(Lookups.takeError());
-        errs() << "Failed to lookup symbols in module!";
+        errs() << "Failed to lookup symbols in module!\n";
         if (CurrentlyCompiling) {
             CurrentlyCompiling.withModuleDo([](Module &M) JL_NOTSAFEPOINT { errs() << "Dumping failing module\n" << M << "\n"; });
         } else {

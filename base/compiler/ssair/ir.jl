@@ -177,40 +177,41 @@ end
 # mutable version of the compressed DebugInfo
 mutable struct DebugInfoStream
     def::Union{MethodInstance,Symbol,Nothing}
-    linetable::Union{Nothing,Core.DebugInfo}
-    edges::Vector{Any} # Vector{Core.DebugInfo}
+    linetable::Union{Nothing,DebugInfo}
+    edges::Vector{DebugInfo}
     firstline::Int32 # the starting line for this block (specified by having an index of 0)
     codelocs::Vector{Int32} # for each statement:
         # index into linetable (if defined), else a line number (in the file represented by def)
         # then index into edges
         # then index into edges[linetable]
     function DebugInfoStream(codelocs::Vector{Int32})
-        return new(nothing, nothing, [], 0, codelocs)
+        return new(nothing, nothing, DebugInfo[], 0, codelocs)
     end
-    #DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
-    #    if debuginfo_file1(di.def) === debuginfo_file1(di.def)
-    #        new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
-    #            ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
-    #    else
+    # DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int) =
+    #     if debuginfo_file1(di.def) === debuginfo_file1(di.def)
+    #         new(def, di.linetable, Core.svec(di.edges...), getdebugidx(di, 0),
+    #             ccall(:jl_uncompress_codelocs, Any, (Any, Int), di.codelocs, nstmts)::Vector{Int32})
+    #     else
     function DebugInfoStream(def::Union{MethodInstance,Nothing}, di::DebugInfo, nstmts::Int)
         codelocs = zeros(Int32, nstmts * 3)
         for i = 1:nstmts
             codelocs[3i - 2] = i
         end
-        return new(def, di, Vector{Any}(), 0, codelocs)
+        return new(def, di, DebugInfo[], 0, codelocs)
     end
     global copy(di::DebugInfoStream) = new(di.def, di.linetable, di.edges, di.firstline, di.codelocs)
 end
 
 Core.DebugInfo(di::DebugInfoStream, nstmts::Int) =
-    Core.DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
+    DebugInfo(something(di.def), di.linetable, Core.svec(di.edges...),
         ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), di.firstline, di.codelocs, nstmts)::String)
 
-getdebugidx(debuginfo::Core.DebugInfo, pc::Int) = ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
+getdebugidx(debuginfo::DebugInfo, pc::Int) =
+    ccall(:jl_uncompress1_codeloc, NTuple{3,Int32}, (Any, Int), debuginfo.codelocs, pc)
 
 function getdebugidx(debuginfo::DebugInfoStream, pc::Int)
     if 3 <= 3pc <= length(debuginfo.codelocs)
-        return (debuginfo.codelocs[3pc - 2], debuginfo.codelocs[3pc - 1], debuginfo.codelocs[3pc - 0])
+        return (debuginfo.codelocs[3pc-2], debuginfo.codelocs[3pc-1], debuginfo.codelocs[3pc-0])
     elseif pc == 0
         return (Int32(debuginfo.firstline), Int32(0), Int32(0))
     else
@@ -1600,17 +1601,15 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         end
 
         values = process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
-        # Don't remove the phi node if it is before the definition of its value
-        # because doing so can create forward references. This should only
-        # happen with dead loops, but can cause problems when optimization
-        # passes look at all code, dead or not. This check should be
-        # unnecessary when DCE can remove those dead loops entirely, so this is
-        # just to be safe.
-        before_def = isassigned(values, 1) && (v = values[1]; isa(v, OldSSAValue)) && idx < v.id
-        if length(edges) == 1 && isassigned(values, 1) && !before_def &&
-                length(cfg_transforms_enabled ?
-                    result_bbs[bb_rename_succ[active_bb]].preds :
-                    compact.ir.cfg.blocks[active_bb].preds) == 1
+
+        # Quick egality check for PhiNode that may be replaced with its incoming
+        # value without needing to set the `Refined` flag. We can't do the actual
+        # refinement check, because we do not have access to the lattice here.
+        # Users may call `reprocess_phi_node!` inside the compaction loop to
+        # revisit PhiNodes with the proper lattice refinement check.
+        if may_replace_phi(values, cfg_transforms_enabled ?
+                result_bbs[bb_rename_succ[active_bb]] :
+                compact.ir.cfg.blocks[active_bb], idx) && argextype(values[1], compact) === inst[:type]
             # There's only one predecessor left - just replace it
             v = values[1]
             @assert !isa(v, NewSSAValue)
@@ -1659,6 +1658,38 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         ssa_rename[idx] = stmt
     end
     return result_idx
+end
+
+function may_replace_phi(values::Vector{Any}, phi_bb::BasicBlock, idx::Int)
+    length(values) == 1 || return false
+    isassigned(values, 1) || return false
+    length(phi_bb.preds) == 1 || return false
+
+    # Don't remove the phi node if it is before the definition of its value
+    # because doing so can create forward references. This should only
+    # happen with dead loops, but can cause problems when optimization
+    # passes look at all code, dead or not. This check should be
+    # unnecessary when DCE can remove those dead loops entirely, so this is
+    # just to be safe.
+    v = values[1]
+    before_def = isa(v, OldSSAValue) && idx < v.id
+    return !before_def
+end
+
+function reprocess_phi_node!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, phi::PhiNode, old_idx::Int)
+    phi_bb = compact.active_result_bb
+    did_just_finish_bb(compact) && (phi_bb -= 1)
+    may_replace_phi(phi.values, compact.cfg_transform.result_bbs[phi_bb], compact.idx) || return false
+
+    # There's only one predecessor left - just replace it
+    v = phi.values[1]
+    if !⊑(𝕃ₒ, compact[compact.ssa_rename[old_idx]][:type], argextype(v, compact))
+        v = Refined(v)
+    end
+    compact.ssa_rename[old_idx] = v
+
+    delete_inst_here!(compact)
+    return true
 end
 
 function resize!(compact::IncrementalCompact, nnewnodes::Int)

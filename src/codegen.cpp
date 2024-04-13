@@ -86,7 +86,7 @@ static bool jl_fpo_disabled(const Triple &TT) {
     // MSAN doesn't support FPO
     return true;
 #endif
-    if (TT.isOSLinux() || TT.isOSWindows() || TT.isOSFreeBSD()) {
+    if (TT.isOSLinux() || TT.isOSWindows() || TT.isOSFreeBSD() || TT.isOSOpenBSD()) {
         return true;
     }
     return false;
@@ -283,6 +283,7 @@ extern void _chkstk(void);
 
 // types
 struct jl_typecache_t {
+    Type *T_ptr;
     Type *T_size;
     Type *T_jlvalue;
     Type *T_pjlvalue;
@@ -304,7 +305,7 @@ struct jl_typecache_t {
     bool initialized;
 
     jl_typecache_t() :
-        T_jlvalue(nullptr), T_pjlvalue(nullptr), T_prjlvalue(nullptr),
+        T_ptr(nullptr), T_jlvalue(nullptr), T_pjlvalue(nullptr), T_prjlvalue(nullptr),
         T_ppjlvalue(nullptr), T_pprjlvalue(nullptr),
         T_jlgenericmemory(nullptr), T_jlarray(nullptr), T_pjlarray(nullptr),
         T_jlfunc(nullptr), T_jlfuncparams(nullptr), T_sigatomic(nullptr), T_ppint8(nullptr),
@@ -315,6 +316,7 @@ struct jl_typecache_t {
             return;
         }
         initialized = true;
+        T_ptr = getInt8PtrTy(context);
         T_ppint8 = PointerType::get(getInt8PtrTy(context), 0);
         T_sigatomic = Type::getIntNTy(context, sizeof(sig_atomic_t) * 8);
         T_size = DL.getIntPtrType(context);
@@ -1615,9 +1617,9 @@ static const auto &builtin_func_map() {
           { jl_f_memoryref_addr,          new JuliaFunction<>{XSTR(jl_f_memoryref), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefoffset_addr,    new JuliaFunction<>{XSTR(jl_f_memoryrefoffset), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefset_addr,       new JuliaFunction<>{XSTR(jl_f_memoryrefset), get_func_sig, get_func_attrs} },
-          { jl_f_memoryrefswap_addr,      new JuliaFunction<>{XSTR(jl_f_memoryswapset), get_func_sig, get_func_attrs} },
-          { jl_f_memoryrefreplace_addr,   new JuliaFunction<>{XSTR(jl_f_memoryreplaceset), get_func_sig, get_func_attrs} },
-          { jl_f_memoryrefmodify_addr,    new JuliaFunction<>{XSTR(jl_f_memorymodifyset), get_func_sig, get_func_attrs} },
+          { jl_f_memoryrefswap_addr,      new JuliaFunction<>{XSTR(jl_f_memoryrefswap), get_func_sig, get_func_attrs} },
+          { jl_f_memoryrefreplace_addr,   new JuliaFunction<>{XSTR(jl_f_memoryrefreplace), get_func_sig, get_func_attrs} },
+          { jl_f_memoryrefmodify_addr,    new JuliaFunction<>{XSTR(jl_f_memoryrefmodify), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefsetonce_addr,   new JuliaFunction<>{XSTR(jl_f_memoryrefsetonce), get_func_sig, get_func_attrs} },
           { jl_f_memoryref_isassigned_addr,new JuliaFunction<>{XSTR(jl_f_memoryref_isassigned), get_func_sig, get_func_attrs} },
           { jl_f_apply_type_addr,         new JuliaFunction<>{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
@@ -7377,6 +7379,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     if (ctx.emission_context.TargetTriple.isAArch64() || ctx.emission_context.TargetTriple.isARM() || ctx.emission_context.TargetTriple.isPPC64()) {
         if (nest) {
             emit_error(ctx, "cfunction: closures are not supported on this platform");
+            JL_GC_POP();
             return jl_cgval_t();
         }
     }

@@ -300,7 +300,8 @@ function finish_cfg_inline!(state::CFGInliningState)
     end
 end
 
-function ir_inline_linetable!(debuginfo::DebugInfoStream, inlinee_debuginfo::DebugInfo, inlinee::MethodInstance)
+# TODO append `inlinee_debuginfo` to inner linetable when `inlined_at[2] ≠ 0`
+function ir_inline_linetable!(debuginfo::DebugInfoStream, inlinee_debuginfo::DebugInfo, inlined_at::NTuple{3,Int32})
     # Append the linetable of the inlined function to our edges table
     linetable_offset = 1
     while true
@@ -312,16 +313,14 @@ function ir_inline_linetable!(debuginfo::DebugInfoStream, inlinee_debuginfo::Deb
         end
         linetable_offset += 1
     end
-    return Int32(linetable_offset)
+    return (inlined_at[1], Int32(linetable_offset), Int32(0))
 end
 
 function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
-                              ir::IRCode, di::DebugInfo, mi::MethodInstance, inlined_at::Int32, argexprs::Vector{Any})
+                              ir::IRCode, di::DebugInfo, mi::MethodInstance, inlined_at::NTuple{3,Int32}, argexprs::Vector{Any})
     def = mi.def::Method
     debuginfo = inline_target isa IRCode ? inline_target.debuginfo : inline_target.ir.debuginfo
-
-    linetable_offset = ir_inline_linetable!(debuginfo, di, mi)
-    topline = (inlined_at, linetable_offset, Int32(0))
+    topline = new_inlined_at = ir_inline_linetable!(debuginfo, di, inlined_at)
     if should_insert_coverage(def.module, di)
         insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, topline))
     end
@@ -343,7 +342,7 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
             NewInstruction(Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
             ir.argtypes[1], topline))
     end
-    return SSASubstitute(mi, argexprs, spvals_ssa, (inlined_at, linetable_offset))
+    return SSASubstitute(mi, argexprs, spvals_ssa, new_inlined_at)
 end
 
 function adjust_boundscheck!(inline_compact::IncrementalCompact, idx′::Int, stmt::Expr, boundscheck::Symbol)
@@ -359,8 +358,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                          item::InliningTodo, boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     inlined_at = compact.result[idx][:line]
-    @assert inlined_at[2] == 0 "already inlined this instruction"
-    ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.di, item.mi, inlined_at[1], argexprs)
+    ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.di, item.mi, inlined_at, argexprs)
     boundscheck = has_flag(compact.result[idx], IR_FLAG_INBOUNDS) ? :off : boundscheck
 
     # If the iterator already moved on to the next basic block,
@@ -1296,16 +1294,16 @@ end
 function handle_any_const_result!(cases::Vector{InliningCase},
     @nospecialize(result), match::MethodMatch, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-    allow_abstract::Bool, allow_typevars::Bool)
+    allow_typevars::Bool)
     if isa(result, ConcreteResult)
         return handle_concrete_result!(cases, result, match, info, state)
     elseif isa(result, SemiConcreteResult)
-        return handle_semi_concrete_result!(cases, result, match, info, flag, state; allow_abstract)
+        return handle_semi_concrete_result!(cases, result, match, info, flag, state)
     elseif isa(result, ConstPropResult)
-        return handle_const_prop_result!(cases, result, match, info, flag, state; allow_abstract, allow_typevars)
+        return handle_const_prop_result!(cases, result, match, info, flag, state; allow_typevars)
     else
         @assert result === nothing || result isa VolatileInferenceResult
-        return handle_match!(cases, match, argtypes, info, flag, state; allow_abstract, allow_typevars, volatile_inf_result = result)
+        return handle_match!(cases, match, argtypes, info, flag, state; allow_typevars, volatile_inf_result = result)
     end
 end
 
@@ -1370,7 +1368,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
                 handled_all_cases = false
             else
                 handled_all_cases &= handle_any_const_result!(cases,
-                    result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=false)
+                    result, match, argtypes, info, flag, state; allow_typevars=false)
             end
         end
         fully_covered &= split_fully_covered
@@ -1386,7 +1384,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             match = getsplit(info, i)[j]
             result = getresult(info, k)
             handled_all_cases &= handle_any_const_result!(cases,
-                result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=true)
+                result, match, argtypes, info, flag, state; allow_typevars=true)
         end
     elseif !isempty(cases)
         # if we've not seen all candidates, union split is valid only for dispatch tuples
@@ -1409,10 +1407,8 @@ end
 function handle_match!(cases::Vector{InliningCase},
     match::MethodMatch, argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt32,
     state::InliningState;
-    allow_abstract::Bool, allow_typevars::Bool,
-    volatile_inf_result::Union{Nothing,VolatileInferenceResult})
+    allow_typevars::Bool, volatile_inf_result::Union{Nothing,VolatileInferenceResult})
     spec_types = match.spec_types
-    allow_abstract || isdispatchtuple(spec_types) || return false
     # We may see duplicated dispatch signatures here when a signature gets widened
     # during abstract interpretation: for the purpose of inlining, we can just skip
     # processing this dispatch candidate (unless unmatched type parameters are present)
@@ -1425,10 +1421,9 @@ end
 
 function handle_const_prop_result!(cases::Vector{InliningCase}, result::ConstPropResult,
     match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-    allow_abstract::Bool, allow_typevars::Bool)
+    allow_typevars::Bool)
     mi = result.result.linfo
     spec_types = match.spec_types
-    allow_abstract || isdispatchtuple(spec_types) || return false
     if !validate_sparams(mi.sparam_vals)
         (allow_typevars && !may_have_fcalls(mi.def::Method)) || return false
     end
@@ -1462,11 +1457,9 @@ function semiconcrete_result_item(result::SemiConcreteResult,
 end
 
 function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult,
-    match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-    allow_abstract::Bool)
+    match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState)
     mi = result.mi
     spec_types = match.spec_types
-    allow_abstract || isdispatchtuple(spec_types) || return false
     validate_sparams(mi.sparam_vals) || return false
     item = semiconcrete_result_item(result, info, flag, state)
     item === nothing && return false
@@ -1771,7 +1764,7 @@ struct SSASubstitute
     mi::MethodInstance
     arg_replacements::Vector{Any}
     spvals_ssa::Union{Nothing,SSAValue}
-    inlined_at::NTuple{2,Int32} # TODO: add a map also, so that ssaidx doesn't need to equal inlined_idx?
+    inlined_at::NTuple{3,Int32} # TODO: add a map also, so that ssaidx doesn't need to equal inlined_idx?
 end
 
 function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)

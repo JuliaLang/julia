@@ -1056,7 +1056,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
         # IOContext If :module is not set, default to Main (or current active module).
         # nothing can be used to force printing prefix
         from = get(io, :module, active_module())
-        if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from))
+        if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from::Module))
             show(io, tn.module)
             print(io, ".")
             if globfunc && !is_id_start_char(first(string(sym)))

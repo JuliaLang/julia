@@ -156,7 +156,7 @@ function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
                              sv.unreachable, sv.bb_vartables, sv.insert_coverage)
 end
-function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
+function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
     nssavalues = src.ssavaluetypes
     if nssavalues isa Int
@@ -164,7 +164,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     else
         nssavalues = length(src.ssavaluetypes::Vector{Any})
     end
-    sptypes = sptypes_from_meth_instance(linfo)
+    sptypes = sptypes_from_meth_instance(mi)
     nslots = length(src.slotflags)
     slottypes = src.slottypes
     if slottypes === nothing
@@ -172,7 +172,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     end
     stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
     # cache some useful state computations
-    def = linfo.def
+    def = mi.def
     mod = isa(def, Method) ? def.module : def
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
@@ -186,13 +186,13 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
             for slot = 1:nslots
         ])
     end
-    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
+    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
 end
-function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
+function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
     world = get_inference_world(interp)
-    src = retrieve_code_info(linfo, world)
+    src = retrieve_code_info(mi, world)
     src === nothing && return nothing
-    return OptimizationState(linfo, src, interp)
+    return OptimizationState(mi, src, interp)
 end
 
 function argextype end # imported by EscapeAnalysis
@@ -527,6 +527,8 @@ function any_stmt_may_throw(ir::IRCode, bb::Int)
     return false
 end
 
+visit_conditional_successors(callback, ir::IRCode, bb::Int) = # used for test
+    visit_conditional_successors(callback, LazyPostDomtree(ir), ir, bb)
 function visit_conditional_successors(callback, lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
     visited = BitSet((bb,))
     worklist = Int[bb]
@@ -1033,20 +1035,22 @@ end
 function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
     while true
         next = getdebugidx(di, codeloc)
-        next[1] < 0 && return false # invalid info
-        next[1] == 0 && next[2] == 0 && return false # no new info
+        line = next[1]
+        line < 0 && return false # invalid info
+        line == 0 && next[2] == 0 && return false # no new info
         prevloc <= 0 && return true # no old info
         prev = getdebugidx(di, prevloc)
         next === prev && return false # exactly identical
-        prev[1] < 0 && return true # previous invalid info, now valid
+        prevline = prev[1]
+        prevline < 0 && return true # previous invalid info, now valid
         edge = next[2]
         edge === prev[2] || return true # change to this edge
         linetable = di.linetable
         # check for change to line number here
-        if linetable === nothing || next[1] == 0
-            next[1] == prev[1] || return true
+        if linetable === nothing || line == 0
+            line == prevline || return true
         else
-            changed_lineinfo(linetable, next[1], prev[1]) && return true
+            changed_lineinfo(linetable::DebugInfo, Int(line), Int(prevline)) && return true
         end
         # check for change to edge here
         edge == 0 && return false # no edge here
@@ -1102,6 +1106,20 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                         code[i] = nothing
                     end
                 end
+            elseif isa(expr, PhiNode)
+                new_edges = Int32[]
+                new_vals = Any[]
+                for j = 1:length(expr.edges)
+                    edge = expr.edges[j]
+                    (edge in sv.unreachable || (ssavaluetypes[edge] === Union{} && !isa(code[edge], PhiNode))) && continue
+                    push!(new_edges, edge)
+                    if isassigned(expr.values, j)
+                        push!(new_vals, expr.values[j])
+                    else
+                        resize!(new_vals, length(new_edges))
+                    end
+                end
+                code[i] = PhiNode(new_edges, new_vals)
             end
         end
     end

@@ -333,6 +333,7 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m);
 extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT extern arraylist_t jl_linkage_blobs; // external linkage: sysimg/pkgimages
 JL_DLLEXPORT extern arraylist_t jl_image_relocs;  // external linkage: sysimg/pkgimages
+JL_DLLEXPORT extern arraylist_t jl_top_mods;  // external linkage: sysimg/pkgimages
 extern arraylist_t eytzinger_image_tree;
 extern arraylist_t eytzinger_idxs;
 
@@ -790,7 +791,7 @@ JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
-jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
+JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
 
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs);
@@ -1012,7 +1013,8 @@ STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 
 size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 
-uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+// Query if this object is perm-allocated in an image.
+JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
@@ -1429,7 +1431,6 @@ JL_DLLEXPORT jl_value_t *jl_abs_float(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_copysign_float(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_flipsign_int(jl_value_t *a, jl_value_t *b);
 
-JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *a);
 JL_DLLEXPORT int jl_stored_inline(jl_value_t *el_type);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
@@ -1728,7 +1729,7 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 #define IR_FLAG_INBOUNDS 0x01
 
 JL_DLLIMPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec);
-JL_DLLIMPORT void jl_compile_codeinst(jl_code_instance_t *unspec);
+JL_DLLIMPORT int jl_compile_codeinst(jl_code_instance_t *unspec);
 JL_DLLIMPORT int jl_compile_extern_c(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 typedef struct {

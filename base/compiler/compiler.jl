@@ -203,6 +203,7 @@ include("compiler/ssair/ir.jl")
 include("compiler/ssair/tarjan.jl")
 
 include("compiler/abstractlattice.jl")
+include("compiler/stmtinfo.jl")
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
 
@@ -210,7 +211,6 @@ include("compiler/typeutils.jl")
 include("compiler/typelimits.jl")
 include("compiler/typelattice.jl")
 include("compiler/tfuncs.jl")
-include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")

@@ -654,7 +654,7 @@ const __BIG_FLOAT_MAX__ = 8192
         else
             # right aligned
             n = width - (newpos - pos)
-            if zero
+            if zero && isfinite(x)
                 ex = (arg < 0 || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
                 so = pos + ex
                 len = (newpos - pos) - ex

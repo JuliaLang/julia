@@ -1286,6 +1286,7 @@ function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; strea
         prefix = filepath
         _stream_heap_snapshot(prefix, all_one)
         Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
     end
     return filepath
 end

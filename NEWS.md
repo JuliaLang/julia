@@ -26,6 +26,11 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+- Generated LLVM IR now uses actual pointer types instead of passing pointers as integers.
+  This affects `llvmcall`: Inline LLVM IR should be updated to use `i8*` or `ptr` instead of
+  `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
+  IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
+
 Command-line option changes
 ---------------------------
 
