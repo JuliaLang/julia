@@ -264,8 +264,8 @@ function skip(io::GenericIOBuffer, n::Integer)
 end
 function skip(io::GenericIOBuffer, n::Int)
     if signbit(n)
-        @assert !signbit(position(io))
-        seek(io, position(io) + n) # Does error checking
+        seekto = clamp(widen(position(io)) + widen(n), Int)
+        seek(io, seekto) # Does error checking
     else
         @assert io.ptr ≤ io.size + 1
         n_max = io.size + 1 - io.ptr
