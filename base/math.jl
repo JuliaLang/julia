@@ -1255,13 +1255,8 @@ function modf(x::T) where T<:IEEEFloat
     return (rx, ix)
 end
 
-@inline function use_power_by_squaring(n::Union{Int32,Int64,Int128,UInt32,UInt64,UInt128})
-    # top_set_bit is not available during bootstrap
-    x = abs(n)
-    2*(8sizeof(x) - leading_zeros(x)) + count_ones(x) + 6*(n<0) < 40
-end
 @inline function use_power_by_squaring(n::Integer)
-    -2^13 <= n < 2^13
+    -2^13 <= n <= 2^15
 end
 
 # @constprop aggressive to help the compiler see the switch between the integer and float
