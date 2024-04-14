@@ -66,8 +66,8 @@ const ISAs_by_family = Dict(
         "power8" => ISA(Set{UInt32}()),
     ],
     "riscv64" => [
-        # We have no way to test riscv64 features yet, so we're only going to declare the ISA used by Debian:
-        "rv64imafdc_zicsr_zifencei_zca_zcd" => ISA(Set{UInt32}()),
+        # We have no way to test riscv64 features yet, so we're only going to declare the lowest ISA:
+        "riscv64" => ISA(Set{UInt32}()),
     ],
 )
 
