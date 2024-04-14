@@ -281,6 +281,10 @@ function seek(io::GenericIOBuffer, n::Int)
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
+    # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
+    #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
+    #(n < 0 || n > io.size - io.offset) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
+    #io.ptr = n + io.offset + 1
     io.ptr = clamp(n, 0, io.size - io.offset) + io.offset + 1
     return io
 end
