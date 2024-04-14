@@ -387,7 +387,9 @@ function artifact_meta(name::String, artifacts_toml::String;
                        pkg_uuid::Union{Base.UUID,Nothing}=nothing)
     return artifact_meta(name, artifact_toml, convert(Platform, platform)::Platform, pkg_uuid)
 end
-function artifact_meta(name::String, artifacts_toml::String, platform::Platform, pkg_uuid::Union{Base.UUID,Nothing})
+function artifact_meta(name::String, artifacts_toml::String,
+                       platform::Platform, # no default since two-arg version is defined above
+                       pkg_uuid::Union{Base.UUID,Nothing}=nothing)
     if !isfile(artifacts_toml)
         return nothing
     end
