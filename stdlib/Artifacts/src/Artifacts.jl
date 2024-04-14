@@ -9,7 +9,9 @@ that would be convenient to place within an immutable, life-cycled datastore.
 module Artifacts
 
 import Base: get, SHA1
-using Base.BinaryPlatforms, Base.TOML
+using Base.BinaryPlatforms: AbstractPlatform, Platform, HostPlatform
+using Base.BinaryPlatforms: tags, triplet, select_platform
+using Base.TOML: TOML
 
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
        select_downloadable_artifacts, find_artifacts_toml, @artifact_str
@@ -296,7 +298,8 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
     return Platform(entry["arch"]::String, entry["os"]::String, tags)
 end
 
-function pack_platform!(meta::Dict, p::AbstractPlatform)
+pack_platform!(meta::Dict, p::AbstractPlatform) = pack_platform(meta, convert(Platform, p)::Platform)
+function pack_platform!(meta::Dict, p::Platform)
     for (k, v) in tags(p)
         if v !== nothing
             meta[k] = v
@@ -382,17 +385,24 @@ most appropriate mapping.  If none is found, return `nothing`.
 function artifact_meta(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
                        pkg_uuid::Union{Base.UUID,Nothing}=nothing)
+    return artifact_meta(name, artifact_toml, convert(Platform, platform)::Platform, pkg_uuid)
+end
+function artifact_meta(name::String, artifacts_toml::String, platform::Platform, pkg_uuid::Union{Base.UUID,Nothing})
     if !isfile(artifacts_toml)
         return nothing
     end
 
     # Parse the toml of the artifacts_toml file
     artifact_dict = load_artifacts_toml(artifacts_toml; pkg_uuid=pkg_uuid)
-    return artifact_meta(name, artifact_dict, artifacts_toml; platform=platform)
+    return artifact_meta(name, artifact_dict, artifacts_toml, platform)
 end
 
 function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform())
+    return artifact_meta(name, artifact_dict, artifact_toml, convert(Platform, platform))
+end
+function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String,
+                       platform::Platform)
     if !haskey(artifact_dict, name)
         return nothing
     end
@@ -400,7 +410,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
 
     # If it's an array, find the entry that best matches our current platform
     if isa(meta, Vector)
-        dl_dict = Dict{AbstractPlatform,Dict{String,Any}}()
+        dl_dict = Dict{Platform,Dict{String,Any}}()
         for x in meta
             x = x::Dict{String, Any}
             dl_dict[unpack_platform(x, name, artifacts_toml)] = x
@@ -438,7 +448,12 @@ collapsed artifact.  Returns `nothing` if no mapping can be found.
 function artifact_hash(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
                        pkg_uuid::Union{Base.UUID,Nothing}=nothing)::Union{Nothing, SHA1}
-    meta = artifact_meta(name, artifacts_toml; platform=platform)
+    artifact_hash(name, artifacts_toml, convert(Platform, platform), pkg_uuid)
+end
+function artifact_hash(name::String, artifacts_toml::String,
+                       platform::Platform,
+                       pkg_uuid::Union{Base.UUID,Nothing}=nothing)::Union{Nothing, SHA1}
+    meta = artifact_meta(name, artifacts_toml, platform)
     if meta === nothing
         return nothing
     end
@@ -446,14 +461,23 @@ function artifact_hash(name::String, artifacts_toml::String;
     return SHA1(meta["git-tree-sha1"])
 end
 
+
 function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::String;
                                        platform::AbstractPlatform = HostPlatform(),
+                                       pkg_uuid::Union{Nothing,Base.UUID} = nothing,
+                                       include_lazy::Bool = false)
+    return select_downloable_artifacts(artifact_dict, artifacts_toml,
+                                       convert(Platform, platform)::Platform,
+                                       pkg_uuid, include_lazy)
+end
+function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::String,
+                                       platform::Platform,
                                        pkg_uuid::Union{Nothing,Base.UUID} = nothing,
                                        include_lazy::Bool = false)
     artifacts = Dict{String,Any}()
     for name in keys(artifact_dict)
         # Get the metadata about this name for the requested platform
-        meta = artifact_meta(name, artifact_dict, artifacts_toml; platform=platform)
+        meta = artifact_meta(name, artifact_dict, artifacts_toml, platform)
 
         # If there are no instances of this name for the desired platform, skip it
         # Also skip if there's no `download` stanza (e.g. it's only a local artifact)
@@ -486,7 +510,7 @@ function select_downloadable_artifacts(artifacts_toml::String;
         return Dict{String,Any}()
     end
     artifact_dict = load_artifacts_toml(artifacts_toml; pkg_uuid=pkg_uuid)
-    return select_downloadable_artifacts(artifact_dict, artifacts_toml; platform, pkg_uuid, include_lazy)
+    return select_downloadable_artifacts(artifact_dict, artifacts_toml, convert(Platform, platform), pkg_uuid, include_lazy)
 end
 
 
@@ -559,7 +583,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     end
 
     # If not, try determining what went wrong:
-    meta = artifact_meta(name, artifact_dict, artifacts_toml; platform)
+    meta = artifact_meta(name, artifact_dict, artifacts_toml, platform)
     if meta !== nothing && get(meta, "lazy", false)
         if lazyartifacts isa Module && isdefined(lazyartifacts, :ensure_artifact_installed)
             if nameof(lazyartifacts) in (:Pkg, :Artifacts)
@@ -638,7 +662,7 @@ function artifact_slash_lookup(name::String, artifact_dict::Dict,
                                artifacts_toml::String, platform::Platform)
     artifact_name, artifact_path_tail = split_artifact_slash(name)
 
-    meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml; platform)
+    meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml, platform)
     if meta === nothing
         error("Cannot locate artifact '$(name)' for $(triplet(platform)) in '$(artifacts_toml)'")
     end
