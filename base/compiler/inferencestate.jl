@@ -802,7 +802,6 @@ mutable struct IRInterpretationState
             given_argtypes[i] = widenslotwrapper(argtypes[i])
         end
         if isa(mi.def, Method)
-            given_argtypes = va_process_argtypes(optimizer_lattice(interp), given_argtypes, mi)
             argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
                 for i = 1:length(given_argtypes)]
         else
@@ -832,6 +831,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     end
     method_info = MethodInfo(src)
     ir = inflate_ir(src, mi)
+    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, mi)
     return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
                                  codeinst.min_world, codeinst.max_world)
 end
