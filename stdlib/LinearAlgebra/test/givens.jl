@@ -5,6 +5,9 @@ module TestGivens
 using Test, LinearAlgebra, Random
 using LinearAlgebra: Givens, Rotation, givensAlgorithm
 
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 # Test givens rotations
 @testset "Test Givens for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
     if elty <: Real
@@ -95,15 +98,19 @@ end
 const TNumber = Union{Float64,ComplexF64}
 struct MockUnitful{T<:TNumber} <: Number
     data::T
-    MockUnitful(data::T) where T<:TNumber = new{T}(data)
 end
-import Base: *, /, one, oneunit
-*(a::MockUnitful{T}, b::T) where T<:TNumber = MockUnitful(a.data * b)
-*(a::T, b::MockUnitful{T}) where T<:TNumber = MockUnitful(a * b.data)
+import Base: *, /, convert, conj, float, abs, one, oneunit, promote_rule
+*(a::MockUnitful, b::TNumber) = MockUnitful(a.data * b)
+*(a::TNumber, b::MockUnitful) = MockUnitful(a * b.data)
 *(a::MockUnitful{T}, b::MockUnitful{T}) where T<:TNumber = MockUnitful(a.data * b.data)
 /(a::MockUnitful{T}, b::MockUnitful{T}) where T<:TNumber = a.data / b.data
+abs(a::MockUnitful) = MockUnitful(abs(a.data))
+conj(a::MockUnitful) = MockUnitful(conj(a.data))
+convert(::Type{MockUnitful{T}}, x::MockUnitful) where {T} = MockUnitful(convert(T, x.data))
+float(a::MockUnitful) = MockUnitful(float(a.data))
 one(::Type{<:MockUnitful{T}}) where T = one(T)
 oneunit(::Type{<:MockUnitful{T}}) where T = MockUnitful(one(T))
+promote_rule(::Type{MockUnitful{T}}, ::Type{MockUnitful{S}}) where {T,S} = MockUnitful{promote_type(T, S)}
 
 @testset "unitful givens rotation unitful $T " for T in (Float64, ComplexF64)
     g, r = givens(MockUnitful(T(3)), MockUnitful(T(4)), 1, 2)
@@ -119,6 +126,16 @@ end
     @test !isfinite(r)
     cs, sn, r = givensAlgorithm(T(1.0), T(Inf))
     @test !isfinite(r)
+end
+
+@testset "givensAlgorithm with quaternions" for (x, y) in
+(
+    (Quaternion(randn(4)...), Quaternion(randn(4)...)),
+    (0, Quaternion(randn(4)...)),
+)
+    c, s, r = givensAlgorithm(x, y)
+    @test c * x + s * y ≈ r
+    @test c * y ≈ s' * x
 end
 
 end # module TestGivens

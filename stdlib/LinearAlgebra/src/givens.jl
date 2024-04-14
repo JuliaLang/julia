@@ -250,19 +250,22 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     return cs, sn, r
 end
 
-# enable for unitful quantities
-function givensAlgorithm(f::T, g::T) where T
-    fs = f / oneunit(T)
-    gs = g / oneunit(T)
-    typeof(fs) === T && typeof(gs) === T &&
-    !isa(fs, Union{AbstractFloat,Complex{<:AbstractFloat}}) &&
-    throw(MethodError(givensAlgorithm, (fs, gs)))
-
-    c, s, r = givensAlgorithm(fs, gs)
-    return c, s, r * oneunit(T)
+# From Janovská, D., & Opfer, G. (2003). Givens’ Transformation Applied to Quaternion
+# Valued Vectors. BIT Numerical Mathematics, 43(5), 991–1002.
+# doi:10.1023/b:bitn.0000014561.58141.2c
+function givensAlgorithm(f::Number, g::Number)
+    nrm = hypot(f, g)
+    c = abs(f) / nrm
+    s, u = if iszero(f)
+        -one(first(promote(f, g))), -g
+    else
+        # Note that the paper conjugates the argument in the definition of sign but the
+        # givens rotation implementation then ends up with conjugating twice.
+        signf̄ = sign(f)
+        (signf̄ * conj(g)) / nrm, nrm * signf̄
+    end
+    return c, s, u
 end
-
-givensAlgorithm(f, g) = givensAlgorithm(promote(float(f), float(g))...)
 
 """
 
