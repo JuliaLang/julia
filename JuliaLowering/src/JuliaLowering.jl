@@ -8,6 +8,8 @@ using JuliaSyntax: filename, first_byte, last_byte, source_location, span
 
 using JuliaSyntax: is_literal, is_number, is_operator, is_prec_assignment, is_infix_op_call, is_postfix_op_call, is_error
 
+# The following kinds are used in intermediate forms by lowering but are not
+# part of the surface syntax
 function _insert_kinds()
     JuliaSyntax.insert_kinds!(JuliaLowering, 1, [
         "BEGIN_LOWERING_KINDS"
@@ -17,6 +19,7 @@ function _insert_kinds()
             # A literal Julia value of any kind, as might be inserted by the AST
             # during macro expansion
             "Value"
+            # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
             "inline"
             "noinline"
@@ -69,6 +72,8 @@ abstract type AbstractLoweringContext end
 include("desugaring.jl")
 include("scope_analysis.jl")
 include("linear_ir.jl")
+
+include("eval.jl")
 
 function __init__()
     _insert_kinds()

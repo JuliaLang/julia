@@ -445,7 +445,7 @@ function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
     elseif k == K"function"
         expand_forms(ctx, expand_function_def(ctx, ex))
     elseif k == K"let"
-        return expand_forms(ctx, expand_let(ctx, ex))
+        expand_forms(ctx, expand_let(ctx, ex))
     elseif k == K"local" || k == K"global"
         if numchildren(ex) == 1 && kind(ex[1]) == K"Identifier"
             # Don't recurse when already simplified - `local x`, etc
@@ -454,13 +454,13 @@ function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
             expand_forms(ctx, expand_decls(ctx, ex)) # FIXME
         end
     elseif is_operator(k) && !haschildren(ex)
-        return makenode(ctx, ex, K"Identifier", name_val=ex.name_val)
+        makenode(ctx, ex, K"Identifier", name_val=ex.name_val)
     elseif k == K"char" || k == K"var"
         @chk numchildren(ex) == 1
-        return ex[1]
+        ex[1]
     elseif k == K"string"
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
-            return ex[1]
+            ex[1]
         else
             makenode(ctx, ex, K"call", top_ref(ctx, ex, "string"), expand_forms(ctx, children(ex))...)
         end
@@ -468,7 +468,7 @@ function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
         # TODO: named tuples
         makenode(ctx, ex, K"call", core_ref(ctx, ex, "tuple"), expand_forms(ctx, children(ex))...)
     elseif !haschildren(ex)
-        return ex
+        ex
     else
         if k == K"="
             @chk numchildren(ex) == 2

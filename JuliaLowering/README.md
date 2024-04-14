@@ -238,3 +238,47 @@ mutable struct CodeInfo
 end
 ```
 
+### Notes on toplevel-only forms and eval-related functions
+
+In the current Julia runtime,
+
+`Base.eval()`
+- Uses `jl_toplevel_eval_in` which calls `jl_toplevel_eval_flex`
+
+`jl_toplevel_eval_flex(mod, ex)`
+- Lowers if necessay
+- Evaluates certain blessed top level forms
+  * `:.`
+  * `:module`
+  * `:using`
+  * `:import`
+  * `:public`
+  * `:export`
+  * `:global`
+  * `:const`
+  * `:toplevel`
+  * `:error`
+  * `:incomplete`
+  * Identifier and literals
+- Otherwise expects `Expr(:thunk)`
+  * Use codegen "where necessary/profitable" (eg ccall, has_loops etc)
+  * Otherwise interpret via `jl_interpret_toplevel_thunk`
+
+Should we reimplement eval of the above blessed top level forms in Julia?
+Pros:
+- Semantically sound. Lowering should do syntax checking in things like `Expr(:using)`
+- Precise lowering error messages
+- Replaces more Expr usage
+- Replaces a whole pile of C code with significantly less Julia code
+- Lowering output becomes more consistently imperative
+Cons: 
+- Lots more code to write
+- May need to invent intermediate data structures to replace `Expr`
+- Bootstrap?
+- Some forms require creating toplevel thunks
+
+In general, we'd be replacing current *declarative* lowering targets like
+`Expr(:using)` with an *imperative* call to a `Core` API instead. The call and
+the setup of its arguments would need to go in a thunk. We've currently got an
+odd mixture of imperative and declarative lowered code.
+
