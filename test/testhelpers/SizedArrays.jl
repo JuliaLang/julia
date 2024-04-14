@@ -45,6 +45,7 @@ Base.axes(a::SizedArray) = map(SOneTo, size(a))
 Base.getindex(A::SizedArray, i...) = getindex(A.data, i...)
 Base.setindex!(A::SizedArray, v, i...) = setindex!(A.data, v, i...)
 Base.zero(::Type{T}) where T <: SizedArray = SizedArray{size(T)}(zeros(eltype(T), size(T)))
+Base.parent(S::SizedArray) = S.data
 +(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = SizedArray{SZ}(S1.data + S2.data)
 ==(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = S1.data == S2.data
 

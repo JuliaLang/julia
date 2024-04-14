@@ -2110,6 +2110,11 @@ end
         for ax in ((r,r), (s, r), (2, r))
             A = f(ax...)
             @test axes(A) == map(_to_oneto, ax)
+            if all(x -> x isa SizedArrays.SOneTo, ax)
+                @test A isa SizedArrays.SizedArray && parent(A) isa Array
+            else
+                @test A isa Array
+            end
             @test all(==(v), A)
         end
     end
