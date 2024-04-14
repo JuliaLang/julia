@@ -267,7 +267,6 @@ function skip(io::GenericIOBuffer, n::Int)
         seekto = clamp(widen(position(io)) + widen(n), Int)
         seek(io, seekto) # Does error checking
     else
-        @assert io.ptr ≤ io.size + 1
         n_max = io.size + 1 - io.ptr
         io.ptr += min(n, n_max)
         io
