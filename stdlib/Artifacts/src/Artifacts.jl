@@ -762,8 +762,8 @@ load_artifacts_toml(artifacts_toml::AbstractString; kwargs...) =
     load_artifacts_toml(String(artifacts_toml)::String; kwargs...)
 artifact_meta(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
     artifact_meta(String(name)::String, String(artifacts_toml)::String; kwargs...)
-artifact_meta(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString; kwargs...) =
-    artifact_meta(String(name)::String, artifact_dict, String(artifacts_toml)::String; kwargs...)
+artifact_meta(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString, platform::AbstractPlatform=HostPlatform(); kwargs...) =
+    artifact_meta(String(name)::String, artifact_dict, String(artifacts_toml)::String, convert(Platform, platform); kwargs...)
 artifact_hash(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
     artifact_hash(String(name)::String, String(artifacts_toml)::String; kwargs...)
 select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::AbstractString; kwargs...) =
