@@ -503,7 +503,7 @@ copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size
     BandIndex(band, index)
 
 Represent a Cartesian index as a linear index along a band.
-This type is primarily meant to index into a speficic band without branches,
+This type is primarily meant to index into a specific band without branches,
 so, for best performance, `band` should be a compile-time constant.
 """
 struct BandIndex
