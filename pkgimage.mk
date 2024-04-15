@@ -25,8 +25,7 @@ print-depot-path:
 	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e '@show Base.DEPOT_PATH')
 
 $(BUILDDIR)/stdlib/%.image: $(JULIAHOME)/stdlib/Project.toml $(JULIAHOME)/stdlib/Manifest.toml $(INDEPENDENT_STDLIBS_SRCS) $(JULIA_DEPOT_PATH)/compiled
-	export JULIA_CPU_TARGET="$(JULIA_CPU_TARGET)"
-	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.Precompilation.precompilepkgs(;configs=[``=>Base.CacheFlags(), `--check-bounds=yes`=>Base.CacheFlags(;check_bounds=1)])')
+	@$(call PRINT_JULIA, JULIA_CPU_TARGET="$(JULIA_CPU_TARGET)" $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.Precompilation.precompilepkgs(;configs=[``=>Base.CacheFlags(), `--check-bounds=yes`=>Base.CacheFlags(;check_bounds=1)])')
 	touch $@
 
 $(BUILDDIR)/stdlib/release.image: $(build_private_libdir)/sys.$(SHLIB_EXT)
