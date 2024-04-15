@@ -385,7 +385,7 @@ most appropriate mapping.  If none is found, return `nothing`.
 function artifact_meta(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
                        pkg_uuid::Union{Base.UUID,Nothing}=nothing)
-    return artifact_meta(name, artifact_toml, convert(Platform, platform)::Platform, pkg_uuid)
+    return artifact_meta(name, artifacts_toml, convert(Platform, platform)::Platform, pkg_uuid)
 end
 function artifact_meta(name::String, artifacts_toml::String,
                        platform::Platform, # no default since two-arg version is defined above
@@ -401,7 +401,7 @@ end
 
 function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform())
-    return artifact_meta(name, artifact_dict, artifact_toml, convert(Platform, platform))
+    return artifact_meta(name, artifact_dict, artifacts_toml, convert(Platform, platform))
 end
 function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String,
                        platform::Platform)
