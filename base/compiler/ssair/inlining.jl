@@ -80,7 +80,7 @@ function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds
     @timeit "analysis" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
-    @timeit "execution" ir = batch_inline!(ir, todo, propagate_inbounds, OptimizationParams(state.interp))
+    @timeit "execution" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp)
     return ir
 end
 
@@ -522,7 +522,7 @@ assuming their order stays the same post-discovery in `ml_matches`.
 """
 function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                                union_split::UnionSplit, boundscheck::Symbol,
-                               todo_bbs::Vector{Tuple{Int,Int}}, params::OptimizationParams)
+                               todo_bbs::Vector{Tuple{Int,Int}}, interp::AbstractInterpreter)
     (; fully_covered, atype, cases, bbs) = union_split
     stmt, typ, line = compact.result[idx][:stmt], compact.result[idx][:type], compact.result[idx][:line]
     join_bb = bbs[end]
@@ -565,8 +565,10 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                 (isa(argex, SSAValue) || isa(argex, Argument)) || continue
                 aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
                 if !(aft <: mft)
+                    𝕃ₒ = optimizer_lattice(interp)
+                    narrowed_type = tmeet(𝕃ₒ, argextype(argex, compact), mft)
                     argexprs′[i] = insert_node_here!(compact,
-                        NewInstruction(PiNode(argex, mft), mft, line))
+                        NewInstruction(PiNode(argex, mft), narrowed_type, line))
                 end
             end
         end
@@ -605,7 +607,8 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
     return insert_node_here!(compact, NewInstruction(pn, typ, line))
 end
 
-function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, params::OptimizationParams)
+function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, interp::AbstractInterpreter)
+    params = OptimizationParams(interp)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     state = CFGInliningState(ir)
     for (idx, item) in todo
@@ -662,7 +665,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                 if isa(item, InliningTodo)
                     compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
-                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, params)
+                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, interp)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact, 0)
