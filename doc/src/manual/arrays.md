@@ -407,7 +407,7 @@ sums a series without allocating memory:
 
 ```jldoctest
 julia> sum(1/n^2 for n=1:1000)
-1.6439345666815615
+1.6439345666815597
 ```
 
 When writing a generator expression with multiple dimensions inside an argument list, parentheses
