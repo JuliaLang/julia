@@ -4485,7 +4485,7 @@ let
                # Vararg
         #=va=# Bound, unbound,         # => Tuple{Integer,Integer} (invalid `TypeVar` widened beforehand)
         } where Bound<:Integer
-    argtypes = Core.Compiler.most_general_argtypes(method, specTypes, true)
+    argtypes = Core.Compiler.most_general_argtypes(method, specTypes)
     popfirst!(argtypes)
     @test argtypes[1] == Integer
     @test argtypes[2] == Integer
@@ -5647,6 +5647,22 @@ end
 @test Core.Compiler.return_type(has_tuin, Tuple{}) === Union{}
 @test_throws UndefVarError has_tuin()
 
+function gen_tuin_from_arg(world::UInt, source, _, _)
+    ci = make_codeinfo(Any[
+        Expr(:throw_undef_if_not, :x, Core.Argument(2)),
+        ReturnNode(true),
+    ]; slottypes=Any[Any, Bool])
+    ci.slotnames = Symbol[:var"#self#", :def]
+    ci
+end
+
+@eval function has_tuin2(def)
+    $(Expr(:meta, :generated, gen_tuin_from_arg))
+    $(Expr(:meta, :generated_only))
+end
+@test_throws UndefVarError has_tuin2(false)
+@test has_tuin2(true)
+
 # issue #53585
 let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
     @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
@@ -5680,3 +5696,25 @@ end
 # We want to make sure that both this returns `Tuple` and that
 # it doesn't infinite loop inside inference.
 @test Core.Compiler.return_type(gen_infinite_loop_ssa, Tuple{}) === Tuple
+
+# inference local cache lookup with extended lattice elements that may be transformed
+# by `matching_cache_argtypes`
+@newinterp CachedConditionalInterp
+Base.@constprop :aggressive function func_cached_conditional(x, y)
+    if x
+        @noinline sin(y)
+    else
+        0.0
+    end
+end;
+function test_func_cached_conditional(y)
+    y₁ = func_cached_conditional(isa(y, Float64), y)
+    y₂ = func_cached_conditional(isa(y, Float64), y)
+    return y₁, y₂
+end;
+let interp = CachedConditionalInterp();
+    @test Base.infer_return_type(test_func_cached_conditional, (Any,); interp) == Tuple{Float64, Float64}
+    @test count(interp.inf_cache) do result
+        result.linfo.def.name === :func_cached_conditional
+    end == 1
+end

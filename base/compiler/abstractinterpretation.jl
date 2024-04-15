@@ -1239,16 +1239,30 @@ const_prop_result(inf_result::InferenceResult) =
     ConstCallResults(inf_result.result, inf_result.exc_result, ConstPropResult(inf_result),
                      inf_result.ipo_effects, inf_result.linfo)
 
-# return cached constant analysis result
+# return cached result of constant analysis
 return_cached_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
     const_prop_result(inf_result)
+
+function compute_forwarded_argtypes(interp::AbstractInterpreter, arginfo::ArgInfo, sv::AbsIntState)
+    𝕃ᵢ = typeinf_lattice(interp)
+    return has_conditional(𝕃ᵢ, sv) ? ConditionalSimpleArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+end
 
 function const_prop_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
     concrete_eval_result::Union{Nothing, ConstCallResults}=nothing)
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
-    inf_result = cache_lookup(𝕃ᵢ, mi, arginfo.argtypes, inf_cache)
+    forwarded_argtypes = compute_forwarded_argtypes(interp, arginfo, sv)
+    # use `cache_argtypes` that has been constructed for fresh regular inference if available
+    volatile_inf_result = result.volatile_inf_result
+    if volatile_inf_result !== nothing
+        cache_argtypes = volatile_inf_result.inf_result.argtypes
+    else
+        cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
+    end
+    argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
+    inf_result = cache_lookup(𝕃ᵢ, mi, argtypes, inf_cache)
     if inf_result !== nothing
         # found the cache for this constant prop'
         if inf_result.result === nothing
@@ -1258,13 +1272,18 @@ function const_prop_call(interp::AbstractInterpreter,
         @assert inf_result.linfo === mi "MethodInstance for cached inference result does not match"
         return return_cached_result(interp, inf_result, sv)
     end
-    # perform fresh constant prop'
-    argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-    inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
-    if !any(inf_result.overridden_by_const)
+    overridden_by_const = falses(length(argtypes))
+    for i = 1:length(argtypes)
+        if argtypes[i] !== cache_argtypes[i]
+            overridden_by_const[i] = true
+        end
+    end
+    if !any(overridden_by_const)
         add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
         return nothing
     end
+    # perform fresh constant prop'
+    inf_result = InferenceResult(mi, argtypes, overridden_by_const)
     frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
     if frame === nothing
         add_remark!(interp, sv, "[constprop] Could not retrieve the source")
@@ -1276,7 +1295,10 @@ function const_prop_call(interp::AbstractInterpreter,
         return nothing
     end
     @assert inf_result.result !== nothing
-    if concrete_eval_result !== nothing
+    # ConditionalSimpleArgtypes is allowed, because the only case in which it modifies
+    # the argtypes is when one of the argtypes is a `Conditional`, which case
+    # concrete_eval_result will not be available.
+    if concrete_eval_result !== nothing && isa(forwarded_argtypes, Union{SimpleArgtypes, ConditionalSimpleArgtypes})
         # override return type and effects with concrete evaluation result if available
         inf_result.result = concrete_eval_result.rt
         inf_result.ipo_effects = concrete_eval_result.effects
@@ -1286,26 +1308,19 @@ end
 
 # TODO implement MustAlias forwarding
 
-struct ConditionalArgtypes <: ForwardableArgtypes
+struct ConditionalSimpleArgtypes
     arginfo::ArgInfo
     sv::InferenceState
 end
 
-"""
-    matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
-                            conditional_argtypes::ConditionalArgtypes)
-
-The implementation is able to forward `Conditional` of `conditional_argtypes`,
-as well as the other general extended lattice information.
-"""
-function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
-                                 conditional_argtypes::ConditionalArgtypes)
+function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
+                                 conditional_argtypes::ConditionalSimpleArgtypes,
+                                 cache_argtypes::Vector{Any})
     (; arginfo, sv) = conditional_argtypes
     (; fargs, argtypes) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
-    def = linfo.def::Method
+    def = mi.def::Method
     nargs = Int(def.nargs)
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, linfo)
     local condargs = nothing
     for i in 1:length(argtypes)
         argtype = argtypes[i]
@@ -1336,7 +1351,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
     end
     if condargs !== nothing
         given_argtypes = let condargs=condargs
-            va_process_argtypes(𝕃, given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
+            va_process_argtypes(𝕃, given_argtypes, mi) do isva_given_argtypes::Vector{Any}, last::Int
                 # invalidate `Conditional` imposed on varargs
                 for (slotid, i) in condargs
                     if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
@@ -1346,9 +1361,9 @@ function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance,
             end
         end
     else
-        given_argtypes = va_process_argtypes(𝕃, given_argtypes, linfo)
+        given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
     end
-    return pick_const_args!(𝕃, cache_argtypes, overridden_by_const, given_argtypes)
+    return pick_const_args!(𝕃, given_argtypes, cache_argtypes)
 end
 
 # This is only for use with `Conditional`.
@@ -2278,7 +2293,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtIn
     return abstract_call_known(interp, f, arginfo, si, sv, max_methods)
 end
 
-function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
+function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
     isref = false
     if unwrapva(T) === Bottom
         return Bottom
@@ -2293,12 +2308,12 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
     else
         return Any
     end
-    if isa(linfo.def, Method)
-        spsig = linfo.def.sig
+    if isa(mi.def, Method)
+        spsig = mi.def.sig
         if isa(spsig, UnionAll)
-            if !isempty(linfo.sparam_vals)
+            if !isempty(mi.sparam_vals)
                 sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
-                                  v for v in  linfo.sparam_vals]
+                                  v for v in  mi.sparam_vals]
                 T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
                 for v in sparam_vals
@@ -2637,7 +2652,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             else
                 t = Union{}
             end
-        elseif !hasintersect(windenconst(condt), Bool)
+        elseif !hasintersect(widenconst(condt), Bool)
             t = Union{}
         end
     elseif ehead === :boundscheck

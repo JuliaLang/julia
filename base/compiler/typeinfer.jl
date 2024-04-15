@@ -204,9 +204,8 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = fill(false)
 
-# Wrapper around `_typeinf` that optionally records the exclusive time for
-# each inference performed by `NativeInterpreter`.
-function typeinf(interp::NativeInterpreter, frame::InferenceState)
+# Wrapper around `_typeinf` that optionally records the exclusive time for each invocation.
+function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     if __measure_typeinf__[]
         Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
@@ -216,7 +215,6 @@ function typeinf(interp::NativeInterpreter, frame::InferenceState)
         return _typeinf(interp, frame)
     end
 end
-typeinf(interp::AbstractInterpreter, frame::InferenceState) = _typeinf(interp, frame)
 
 function finish!(interp::AbstractInterpreter, caller::InferenceState)
     result = caller.result
@@ -328,7 +326,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
     end
     # n.b. relocatability = (isa(inferred_result, String) && inferred_result[end]) || inferred_result === nothing
     if !@isdefined edges
-        edges = Core.DebugInfo(result.linfo)
+        edges = DebugInfo(result.linfo)
     end
     return CodeInstance(result.linfo, owner,
         widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
@@ -339,7 +337,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter,
-        linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult,
+        ::MethodInstance, valid_worlds::WorldRange, result::InferenceResult,
         can_discard_trees::Bool=may_discard_trees(interp))
     return result.src
 end
@@ -810,7 +808,7 @@ struct EdgeCallResult
     end
 end
 
-# return cached regular inference result
+# return cached result of regular inference
 function return_cached_result(::AbstractInterpreter, codeinst::CodeInstance, caller::AbsIntState)
     rt = cached_return_type(codeinst)
     effects = ipo_effects(codeinst)
@@ -869,10 +867,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
         exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
-        # note that this result is cached globally exclusively, we can use this local result destructively
-        volatile_inf_result = (isinferred && (force_inline ||
-            src_inlining_policy(interp, result.src, NoCallInfo(), IR_FLAG_NULL))) ?
-            VolatileInferenceResult(result) : nothing
+        # note that this result is cached globally exclusively, so we can use this local result destructively
+        volatile_inf_result = isinferred ? VolatileInferenceResult(result) : nothing
         return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
         # unresolvable cycle
@@ -923,7 +919,7 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
     tree.slotflags = fill(0x00, nargs)
     tree.ssavaluetypes = 1
-    tree.debuginfo = Core.DebugInfo(mi)
+    tree.debuginfo = DebugInfo(mi)
     tree.ssaflags = UInt32[0]
     set_inlineable!(tree, true)
     tree.parent = mi

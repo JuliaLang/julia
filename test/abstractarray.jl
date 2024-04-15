@@ -11,6 +11,9 @@ using .Main.StructArrays
 isdefined(Main, :FillArrays) || @eval Main include("testhelpers/FillArrays.jl")
 using .Main.FillArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
+using .Main.SizedArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -2095,5 +2098,24 @@ end
     r2[eachindex(r2)] = r2 .* 2
     for (i, j) in zip(eachindex(r2), eachindex(z))
         @test r2[i] == z[j]
+    end
+end
+
+@testset "zero for arbitrary axes" begin
+    r = SizedArrays.SOneTo(2)
+    s = Base.OneTo(2)
+    _to_oneto(x::Integer) = Base.OneTo(2)
+    _to_oneto(x::Union{Base.OneTo, SizedArrays.SOneTo}) = x
+    for (f, v) in ((zeros, 0), (ones, 1), ((x...)->fill(3,x...),3))
+        for ax in ((r,r), (s, r), (2, r))
+            A = f(ax...)
+            @test axes(A) == map(_to_oneto, ax)
+            if all(x -> x isa SizedArrays.SOneTo, ax)
+                @test A isa SizedArrays.SizedArray && parent(A) isa Array
+            else
+                @test A isa Array
+            end
+            @test all(==(v), A)
+        end
     end
 end
