@@ -133,7 +133,8 @@ function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
 
-function reinit_stdio()
+reinit_stdio() = _reinit_stdio()
+function _reinit_stdio()
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))::IO
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO

@@ -2111,13 +2111,113 @@ static void print_stack_crumbs(jl_codectx_t &ctx) {
         if (caller) {
             if (jl_is_method_instance(caller)) {
                 jl_((jl_value_t*)caller);
-                errs() << "In " << std::get<std::string>(it->second) << ":" << (int32_t)std::get<unsigned int>(it->second) << "\n";
+                errs() << "In " << std::get<2>(it->second) << ":" << (int32_t)std::get<unsigned int>(it->second) << "\n";
             }
         }
         else
             break;
     }
     abort();
+}
+
+static jl_value_t *StackFrame(
+        jl_value_t *linfo,
+        std::string fn_name,
+        std::string filepath,
+        int32_t lineno) {
+
+    jl_value_t *StackFrame = jl_get_global(jl_base_module, jl_symbol("StackFrame"));
+    assert(StackFrame != nullptr);
+
+    jl_value_t *args[7] = {
+        /* func */ (jl_value_t *)jl_symbol(fn_name.c_str()),
+        /* line */ (jl_value_t *)jl_symbol(filepath.c_str()),
+        /* line */ jl_box_int32(lineno),
+        /* linfo */ (jl_value_t *)linfo,
+        /* from_c */ jl_false,
+        /* inlined */ jl_false,
+        /* pointer */ jl_box_uint64(0)
+    };
+
+    jl_value_t *frame = nullptr;
+    JL_TRY {
+        frame = jl_apply_generic(StackFrame, args, 7);
+    } JL_CATCH {}
+    return frame;
+}
+
+static size_t append_stack_crumbs(jl_array_t *out, jl_codectx_t &ctx, size_t pos) JL_NOTSAFEPOINT {
+    jl_method_instance_t *caller = ctx.linfo;
+    size_t i = pos;
+
+    while (true) {
+        auto it = ctx.emission_context.enqueuers.find(caller);
+        if (it == ctx.emission_context.enqueuers.end())
+            break;
+        caller = std::get<jl_method_instance_t *>(it->second);
+        std::string fn_name = std::get<1>(it->second);
+        std::string filepath = std::get<2>(it->second);
+        int32_t lineno = (int32_t)std::get<unsigned int>(it->second);
+        if (!caller)
+            break;
+
+        if (out != nullptr) {
+            jl_value_t *frame = StackFrame((jl_value_t *)caller, fn_name, filepath, lineno);
+            if (frame == nullptr)
+                return SIZE_MAX;
+            jl_array_ptr_set(out, i, frame);
+        }
+        i += 1;
+    }
+    return i - pos;
+}
+
+static void print_stacktrace(jl_codectx_t &ctx) {
+    jl_task_t *ct = jl_get_current_task();
+    assert(ct);
+
+    // Temporarily operate in the current age
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_get_world_counter();
+
+    // Walk stack once to count
+    size_t stack_len = append_stack_crumbs(nullptr, ctx, 0);
+    jl_array_t *bt = jl_alloc_array_1d(jl_array_any_type, stack_len + 1);
+    JL_GC_PUSH1(&bt);
+
+    // Walk again to create StackFrames
+    std::string filepath(ctx.file);
+    std::string fn_name(ctx.funcName);
+    jl_array_ptr_set(bt, 0, StackFrame((jl_value_t *)ctx.linfo, fn_name, filepath, ctx.line));
+    if (append_stack_crumbs(bt, ctx, 1) == SIZE_MAX) {
+        // Encountered an error when creating StackFrames
+        print_stack_crumbs(ctx);
+        JL_GC_POP();
+        ct->world_age = last_age;
+        return;
+    }
+
+    // Call `reinit_stdio` to get TTY IO objects (w/ color)
+    jl_value_t *reinit_stdio = jl_get_global(jl_base_module, jl_symbol("_reinit_stdio"));
+    assert(reinit_stdio);
+    jl_apply_generic(reinit_stdio, nullptr, 0);
+
+    // Show the backtrace
+    jl_value_t *show_backtrace = jl_get_global(jl_base_module, jl_symbol("show_backtrace"));
+    jl_value_t *base_stderr = jl_get_global(jl_base_module, jl_symbol("stderr"));
+    assert(show_backtrace && base_stderr);
+
+    JL_TRY {
+        jl_value_t *args[2] = { base_stderr, (jl_value_t *)bt };
+        jl_apply_generic(show_backtrace, args, 2);
+    } JL_CATCH {
+        print_stack_crumbs(ctx);
+    }
+
+    fprintf(stderr, "\n");
+    JL_GC_POP();
+    ct->world_age = last_age;
+    return;
 }
 
 
@@ -4028,7 +4128,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     // if we know the return type, we can assume the result is of that type
                     errs() << "ERROR: Dynamic call to Core._apply_iterate detected\n";
                     errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-                    print_stack_crumbs(ctx);
+                    print_stacktrace(ctx);
                 }
                 return true;
             }
@@ -5116,7 +5216,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                             auto filename = std::string(ctx.builder.getCurrentDebugLocation()->getFilename());
                             auto line = ctx.builder.getCurrentDebugLocation()->getLine();
                             if ((ctx.emission_context.enqueuers.find(mi) == ctx.emission_context.enqueuers.end()))
-                                ctx.emission_context.enqueuers[mi] = std::make_tuple(ctx.linfo, std::move(filename), line);
+                                ctx.emission_context.enqueuers[mi] = std::make_tuple(ctx.linfo, ctx.funcName, std::move(filename), line);
                         }
                     }
                 }
@@ -5131,12 +5231,12 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                 auto filename = std::string(ctx.builder.getCurrentDebugLocation()->getFilename());
                 auto line = ctx.builder.getCurrentDebugLocation()->getLine();
                 if ((ctx.emission_context.enqueuers.find((jl_method_instance_t*)lival.constant) == ctx.emission_context.enqueuers.end()))
-                    ctx.emission_context.enqueuers[(jl_method_instance_t*)lival.constant] = std::make_tuple(ctx.linfo, std::move(filename), line);
+                    ctx.emission_context.enqueuers[(jl_method_instance_t*)lival.constant] = std::make_tuple(ctx.linfo, ctx.funcName, std::move(filename), line);
             } else if (rt != jl_bottom_type) {
                 errs() << "Dynamic call to unknown function";
                 errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
 
-                print_stack_crumbs(ctx);
+                print_stacktrace(ctx);
             }
         }
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
@@ -5198,7 +5298,7 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
         errs() << "ERROR: dynamic invoke modify call to";
         jl_(args[0]);
         errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-        print_stack_crumbs(ctx);
+        print_stacktrace(ctx);
     }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
@@ -5317,7 +5417,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         errs() << "ERROR: Dynamic call to ";
         jl_(args[0]);
         errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-        print_stack_crumbs(ctx);
+        print_stacktrace(ctx);
     }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, n_generic_args, julia_call);
@@ -6618,7 +6718,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
         arraylist_push(&new_invokes, codeinst->def);
         // TODO: Debuginfo!
         if ((ctx.emission_context.enqueuers.find(codeinst->def) == ctx.emission_context.enqueuers.end()))
-            ctx.emission_context.enqueuers[codeinst->def] = std::make_tuple(ctx.linfo, "", 0);
+            ctx.emission_context.enqueuers[codeinst->def] = std::make_tuple(ctx.linfo, ctx.funcName, "", 0);
         // else if (rt != jl_bottom_type) {
         //     errs() << "Tried emitting dynamic dispatch from ";
         //     jl_(ctx.linfo);
@@ -6626,7 +6726,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
         //     jl_(ctx.linfo->def.method->module);
         //     errs() << "for call to unknown";
 
-        //     print_stack_crumbs(ctx);
+        //     print_stacktrace(ctx);
         // }
     }
     jl_name_jlfunc_args(params, f);
