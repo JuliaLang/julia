@@ -23,6 +23,8 @@ Language changes
    expression within a given `:toplevel` expression to make use of macros
    defined earlier in the same `:toplevel` expression. ([#53515])
 
+ - Infinite loops are no longer undefined behavior 🥳 ([#52999])
+
 Compiler/Runtime improvements
 -----------------------------
 
