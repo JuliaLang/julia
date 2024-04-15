@@ -680,7 +680,7 @@ function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
     require_one_based_indexing(B)
     n = size(A,1)
     if n != size(B,1)
-        throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+        throw(DimensionMismatch(lazy"matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
     end
     nrhs = size(B,2)
     dl = A.factors.dl
@@ -713,7 +713,7 @@ function ldiv!(transA::TransposeFactorization{<:Any,<:LU{T,Tridiagonal{T,V}}}, B
     A = transA.parent
     n = size(A,1)
     if n != size(B,1)
-        throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+        throw(DimensionMismatch(lazy"matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
     end
     nrhs = size(B,2)
     dl = A.factors.dl
@@ -750,7 +750,7 @@ function ldiv!(adjA::AdjointFactorization{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::Ab
     A = adjA.parent
     n = size(A,1)
     if n != size(B,1)
-        throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+        throw(DimensionMismatch(lazy"matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
     end
     nrhs = size(B,2)
     dl = A.factors.dl

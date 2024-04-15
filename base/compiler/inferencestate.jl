@@ -368,7 +368,21 @@ is_inferred(result::InferenceResult) = result.result !== nothing
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
 
-function compute_trycatch(code::Vector{Any}, ip::BitSet)
+compute_trycatch(ir::IRCode, ip::BitSet) = compute_trycatch(ir.stmts.stmt, ip, ir.cfg.blocks)
+
+"""
+    compute_trycatch(code, ip [, bbs]) -> (handler_at, handlers)
+
+Given the code of a function, compute, at every statement, the current
+try/catch handler, and the current exception stack top. This function returns
+a tuple of:
+
+    1. `handler_at`: A statement length vector of tuples `(catch_handler, exception_stack)`,
+       which are indices into `handlers`
+
+    2. `handlers`: A `TryCatchFrame` vector of handlers
+"""
+function compute_trycatch(code::Vector{Any}, ip::BitSet, bbs::Union{Vector{BasicBlock}, Nothing}=nothing)
     # The goal initially is to record the frame like this for the state at exit:
     # 1: (enter 3) # == 0
     # 3: (expr)    # == 1
@@ -388,6 +402,7 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
         stmt = code[pc]
         if isa(stmt, EnterNode)
             l = stmt.catch_dest
+            (bbs !== nothing) && (l = first(bbs[l].stmts))
             push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
@@ -412,8 +427,10 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
             stmt = code[pc]
             if isa(stmt, GotoNode)
                 pc´ = stmt.label
+                (bbs !== nothing) && (pc´ = first(bbs[pc´].stmts))
             elseif isa(stmt, GotoIfNot)
                 l = stmt.dest::Int
+                (bbs !== nothing) && (l = first(bbs[l].stmts))
                 if handler_at[l] != cur_stacks
                     @assert handler_at[l][1] == 0 || handler_at[l][1] == cur_stacks[1] "unbalanced try/catch"
                     handler_at[l] = cur_stacks
@@ -424,6 +441,7 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 break
             elseif isa(stmt, EnterNode)
                 l = stmt.catch_dest
+                (bbs !== nothing) && (l = first(bbs[l].stmts))
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
                 if l != 0
@@ -783,9 +801,12 @@ mutable struct IRInterpretationState
         for i = 1:length(given_argtypes)
             given_argtypes[i] = widenslotwrapper(argtypes[i])
         end
-        given_argtypes = va_process_argtypes(optimizer_lattice(interp), given_argtypes, mi)
-        argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
-            for i = 1:length(given_argtypes)]
+        if isa(mi.def, Method)
+            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
+                for i = 1:length(given_argtypes)]
+        else
+            argtypes_refined = Bool[false for i = 1:length(given_argtypes)]
+        end
         empty!(ir.argtypes)
         append!(ir.argtypes, given_argtypes)
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
@@ -810,6 +831,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     end
     method_info = MethodInfo(src)
     ir = inflate_ir(src, mi)
+    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, mi)
     return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
                                  codeinst.min_world, codeinst.max_world)
 end

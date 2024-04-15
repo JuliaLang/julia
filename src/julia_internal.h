@@ -333,6 +333,7 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m);
 extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT extern arraylist_t jl_linkage_blobs; // external linkage: sysimg/pkgimages
 JL_DLLEXPORT extern arraylist_t jl_image_relocs;  // external linkage: sysimg/pkgimages
+JL_DLLEXPORT extern arraylist_t jl_top_mods;  // external linkage: sysimg/pkgimages
 extern arraylist_t eytzinger_image_tree;
 extern arraylist_t eytzinger_idxs;
 
@@ -1012,7 +1013,8 @@ STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 
 size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 
-uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+// Query if this object is perm-allocated in an image.
+JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns

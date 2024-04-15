@@ -2859,6 +2859,33 @@ end
     @inferred accumulate(*, String[])
     @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=1) == ["a" "b"; "ac" "bd"]
     @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=2) == ["a" "ab"; "c" "cd"]
+
+    # #53438
+    v = [(1, 2), (3, 4)]
+    @test_throws MethodError accumulate(+, v)
+    @test_throws MethodError cumsum(v)
+    @test_throws MethodError cumprod(v)
+    @test_throws MethodError accumulate(+, v; init=(0, 0))
+    @test_throws MethodError accumulate(+, v; dims=1, init=(0, 0))
+
+    # Some checks to ensure we're identifying the widest needed eltype
+    # as identified in PR 53461
+    @testset "Base._accumulate_promote_op" begin
+        # A somewhat contrived example where each call to `foo`
+        # will return a different type
+        foo(x::Bool, y::Int)::Int = x + y
+        foo(x::Int, y::Int)::Float64 = x + y
+        foo(x::Float64, y::Int)::ComplexF64 = x + y * im
+        foo(x::ComplexF64, y::Int)::String = string(x, "+", y)
+
+        v = collect(1:5)
+        @test Base._accumulate_promote_op(foo, v; init=true) === Base._accumulate_promote_op(foo, v) == Union{Float64, String, ComplexF64}
+        @test Base._accumulate_promote_op(/, v) === Base._accumulate_promote_op(/, v; init=0) == Float64
+        @test Base._accumulate_promote_op(+, v) === Base._accumulate_promote_op(+, v; init=0) === Int
+        @test Base._accumulate_promote_op(+, v; init=0.0) === Float64
+        @test Base._accumulate_promote_op(+, Union{Int, Missing}[v...]) === Union{Int, Missing}
+        @test Base._accumulate_promote_op(+, Union{Int, Nothing}[v...]) === Union{Int, Nothing}
+    end
 end
 
 struct F21666{T <: Base.ArithmeticStyle}
@@ -3203,6 +3230,7 @@ end
     @test @inferred(view(mem, 3:8))::Vector{Int} == 13:18
     @test @inferred(view(mem, 20:19))::Vector{Int} == []
     @test @inferred(view(mem, -5:-7))::Vector{Int} == []
+    @test @inferred(view(mem, :))::Vector{Int} == mem
     @test @inferred(reshape(mem, 5, 2))::Matrix{Int} == reshape(11:20, 5, 2)
 
     # 53990
@@ -3217,6 +3245,7 @@ end
 
     @test @inferred(view(empty_mem, 1:0))::Vector{Module} == []
     @test @inferred(view(empty_mem, 10:3))::Vector{Module} == []
+    @test @inferred(view(empty_mem, :))::Vector{Module} == empty_mem
     @test isempty(@inferred(reshape(empty_mem, 0, 7, 1))::Array{Module, 3})
 
     offset_inds = OffsetArrays.IdOffsetRange(values=3:6, indices=53:56)

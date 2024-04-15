@@ -90,7 +90,7 @@ Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Integer, j::Integer)
 Base.@propagate_inbounds function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1
         x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
-            "($i, $j) of an UpperHessenberg matrix to a nonzero value ($x)"))
+            lazy"($i, $j) of an UpperHessenberg matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -180,7 +180,7 @@ end
 function ldiv!(F::UpperHessenberg, B::AbstractVecOrMat; shift::Number=false)
     checksquare(F)
     m = size(F,1)
-    m != size(B,1) && throw(DimensionMismatch("wrong right-hand-side # rows != $m"))
+    m != size(B,1) && throw(DimensionMismatch(lazy"wrong right-hand-side # rows != $m"))
     require_one_based_indexing(B)
     n = size(B,2)
     H = F.data
@@ -230,7 +230,7 @@ end
 function rdiv!(B::AbstractMatrix, F::UpperHessenberg; shift::Number=false)
     checksquare(F)
     m = size(F,1)
-    m != size(B,2) && throw(DimensionMismatch("wrong right-hand-side # cols != $m"))
+    m != size(B,2) && throw(DimensionMismatch(lazy"wrong right-hand-side # cols != $m"))
     require_one_based_indexing(B)
     n = size(B,1)
     H = F.data
