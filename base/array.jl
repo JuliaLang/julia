@@ -529,7 +529,6 @@ function fill end
 fill(v, dims::DimOrInd...) = fill(v, dims)
 fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
 fill(v, dims::NTuple{N, Integer}) where {N} = (a=Array{typeof(v),N}(undef, dims); fill!(a, v); a)
-fill(v, dims::NTuple{N, DimOrInd}) where {N} = (a=similar(Array{typeof(v),N}, dims); fill!(a, v); a)
 fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
 
 """
@@ -587,11 +586,6 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
         end
         function $fname(::Type{T}, dims::Tuple{}) where {T}
             a = Array{T}(undef)
-            fill!(a, $felt(T))
-            return a
-        end
-        function $fname(::Type{T}, dims::NTuple{N, DimOrInd}) where {T,N}
-            a = similar(Array{T,N}, dims)
             fill!(a, $felt(T))
             return a
         end
