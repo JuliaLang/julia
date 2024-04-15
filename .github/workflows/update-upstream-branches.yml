@@ -13,7 +13,6 @@ jobs:
         branch:
           - "master"
           - "backports-release-1.10"
-          - "backports-release-1.9"
     steps:
       - name: Checkout RAI/julia
         uses: actions/checkout@v3

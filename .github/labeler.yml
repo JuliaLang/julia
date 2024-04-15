@@ -1,4 +1,3 @@
 # See https://github.com/actions/labeler
 port-to-master: '**'
 port-to-v1.10: '**'
-port-to-v1.9: '**'
