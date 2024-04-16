@@ -178,6 +178,7 @@ end
 
 # Allow us to easily serialize Platform objects
 function Base.show(io::IO, p::Platform)
+    os(p) == "any" && return print(io, "any")
     print(io, "Platform(")
     show(io, arch(p))
     print(io, ", ")
@@ -189,6 +190,7 @@ end
 
 # Make showing the platform a bit more palatable
 function Base.show(io::IO, ::MIME"text/plain", p::Platform)
+    os(p) == "any" && return print(io, "any")
     str = string(platform_name(p), " ", arch(p))
     # Add on all the other tags not covered by os/arch:
     other_tags = sort!(filter!(kv -> kv[1] ∉ ("os", "arch"), collect(tags(p))))
@@ -548,26 +550,29 @@ function triplet(p::AbstractPlatform)
 end
 
 function os_str(p::AbstractPlatform)
-    if os(p) == "linux"
+    _os = os(p)
+    if _os == "linux"
         return "-linux"
-    elseif os(p) == "macos"
+    elseif _os == "macos"
         osvn = os_version(p)
         if osvn !== nothing
             return "-apple-darwin$(osvn.major)"
         else
             return "-apple-darwin"
         end
-    elseif os(p) == "windows"
+    elseif _os == "windows"
         return "-w64-mingw32"
-    elseif os(p) == "freebsd"
+    elseif _os == "freebsd"
         osvn = os_version(p)
         if osvn !== nothing
             return "-unknown-freebsd$(osvn.major).$(osvn.minor)"
         else
             return "-unknown-freebsd"
         end
-    elseif os(p) == "openbsd"
+    elseif _os == "openbsd"
         return "-unknown-openbsd"
+    elseif _os == "any"
+        return ""
     else
         return "-unknown"
     end
