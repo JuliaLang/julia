@@ -29,7 +29,7 @@ let code = Any[
         ReturnNode(Core.SSAValue(10)),
     ]
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.stmt[3]
@@ -47,7 +47,7 @@ let code = Any[]
     push!(code, Expr(:call, :opaque))
     push!(code, ReturnNode(nothing))
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end
@@ -804,7 +804,7 @@ function each_stmt_a_bb(stmts, preds, succs)
     append!(ir.stmts.stmt, stmts)
     empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
     empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
-    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
+    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:3length(stmts)])
     empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
     empty!(ir.cfg.blocks); append!(ir.cfg.blocks, [BasicBlock(StmtRange(i, i), preds[i], succs[i]) for i = 1:length(stmts)])
     empty!(ir.cfg.index);  append!(ir.cfg.index,  [i for i = 2:length(stmts)])
@@ -1801,3 +1801,83 @@ let n = 1000
     end
 end
 @test f_1000_blocks() == 0
+
+# https://github.com/JuliaLang/julia/issues/53521
+# Incorrect scope counting in :leave
+using Base.ScopedValues
+function f53521()
+    VALUE = ScopedValue(1)
+    @with VALUE => 2 begin
+        for i = 1
+            @with VALUE => 3 begin
+                try
+                    foo()
+                catch
+                    nothing
+                end
+            end
+        end
+    end
+end
+@test code_typed(f53521)[1][2] === Nothing
+
+# Test that adce_pass! sets Refined on PhiNode values
+let code = Any[
+    # Basic Block 1
+    GotoIfNot(false, 3)
+    # Basic Block 2
+    nothing
+    # Basic Block 3
+    PhiNode(Int32[1, 2], Any[1.0, 1])
+    ReturnNode(Core.SSAValue(3))
+]
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Nothing, Union{Int64, Float64}, Any])
+    (ir, made_changes) = Core.Compiler.adce_pass!(ir)
+    @test made_changes
+    @test (ir[Core.SSAValue(length(ir.stmts))][:flag] & Core.Compiler.IR_FLAG_REFINED) != 0
+end
+
+# JuliaLang/julia#52991: statements that may not :terminate should not be deleted
+@noinline Base.@assume_effects :effect_free :nothrow function issue52991(n)
+    local s = 0
+    try
+        while true
+            yield()
+            if n - rand(1:10) > 0
+                s += 1
+            else
+                break
+            end
+        end
+    catch
+    end
+    return s
+end
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(issue52991, (Int,)))
+let src = code_typed1((Int,)) do x
+        issue52991(x)
+        nothing
+    end
+    @test count(isinvoke(:issue52991), src.code) == 1
+end
+let t = @async begin
+        issue52991(11) # this call never terminates
+        nothing
+    end
+    sleep(1)
+    if istaskdone(t)
+        ok = false
+    else
+        ok = true
+        schedule(t, InterruptException(); error=true)
+    end
+    @test ok
+end
+
+# JuliaLang/julia47664
+@test !fully_eliminated() do
+    any(isone, Iterators.repeated(0))
+end
+@test !fully_eliminated() do
+    all(iszero, Iterators.repeated(0))
+end

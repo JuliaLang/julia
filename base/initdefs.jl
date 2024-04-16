@@ -9,7 +9,7 @@ A string containing the script name passed to Julia from the command line. Note 
 script name remains unchanged from within included files. Alternatively see
 [`@__FILE__`](@ref).
 """
-global PROGRAM_FILE = ""
+global PROGRAM_FILE::String = ""
 
 """
     ARGS
@@ -75,11 +75,11 @@ Here is an overview of some of the subdirectories that may exist in a depot:
 
 * `artifacts`: Contains content that packages use for which Pkg manages the installation of.
 * `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
-* `config`: Contains julia-level configuration such as a `startup.jl`
+* `config`: Contains julia-level configuration such as a `startup.jl`.
 * `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
 * `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
 * `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
-* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
+* `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and Julia.
 * `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
 * `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
 * `scratchspaces`: Contains content that a package itself installs via the [`Scratch.jl`](https://github.com/JuliaPackaging/Scratch.jl) package. `Pkg.gc()` will delete content that is known to be unused.
@@ -480,7 +480,7 @@ end
 
 ## hook for disabling threaded libraries ##
 
-library_threading_enabled = true
+library_threading_enabled::Bool = true
 const disable_library_threading_hooks = []
 
 function at_disable_library_threading(f)

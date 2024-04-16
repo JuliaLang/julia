@@ -1239,6 +1239,34 @@ versus:
 println(file, f(a), f(b))
 ```
 
+## Avoid eager string materialization
+
+In settings where a string representation of an object is only needed
+conditionally (e.g. in error paths of functions or conditional warnings such as
+deprecations), it is advisable to avoid the overhead of eagerly materializing
+the string. Since Julia 1.8, this can be achieved via
+[`LazyString`](@ref) and the corresponding string macro [`@lazy_str`](@ref).
+
+For example, instead of:
+
+```julia
+Base.depwarn("`foo` is deprecated for type $(typeof(x))", :bar)
+```
+
+use:
+
+```julia
+Base.depwarn(lazy"`foo` is deprecated for type $(typeof(x))", :bar)
+```
+
+or the equivalent macro-free version:
+
+```julia
+Base.depwarn(LazyString("`foo` is deprecated for type ", typeof(x)), :bar)
+```
+
+Through this approach, the interpolated string will only be constructed when it is actually displayed.
+
 ## Optimize network I/O during parallel execution
 
 When executing a remote function in parallel:
@@ -1647,7 +1675,7 @@ as opposed to the later phase when it is first invoked. The parser does not "kno
 The magic of type inference takes place in the later phase of compilation.
 
 Thus, the parser does not know that `r` has a fixed type (`Int`).
-nor that `r` does not change value once the inner function is created (so that
+Nor that `r` does not change value once the inner function is created (so that
 the box is unneeded).  Therefore, the parser emits code for
 box that holds an object with an abstract type such as `Any`, which
 requires run-time type dispatch for each occurrence of `r`.  This can be

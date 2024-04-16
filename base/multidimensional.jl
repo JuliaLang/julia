@@ -4,7 +4,7 @@
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
-                  convert, show, iterate, promote_rule, to_indices
+                  convert, show, iterate, promote_rule, to_indices, copy
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
@@ -365,7 +365,7 @@ module IteratorsMD
     end
 
     # getindex for a 0D CartesianIndices is necessary for disambiguation
-    @propagate_inbounds function Base.getindex(iter::CartesianIndices{0,R}) where {R}
+    @inline function Base.getindex(iter::CartesianIndices{0,R}) where {R}
         CartesianIndex()
     end
     @inline function Base.getindex(iter::CartesianIndices{N,R}, I::Vararg{Int, N}) where {N,R}
@@ -475,6 +475,8 @@ module IteratorsMD
 
     @inline in(i::CartesianIndex, r::CartesianIndices) = false
     @inline in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N} = all(map(in, i.I, r.indices))
+
+    copy(iter::CartesianIndices) = iter
 
     simd_outer_range(iter::CartesianIndices{0}) = iter
     function simd_outer_range(iter::CartesianIndices)

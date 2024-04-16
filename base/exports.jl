@@ -460,7 +460,6 @@ export
     vcat,
     vec,
     view,
-    wrap,
     zeros,
 
 # search, find, match and related functions
@@ -653,11 +652,6 @@ export
     sprint,
     summary,
 
-# ScopedValue
-    with,
-    @with,
-    ScopedValue,
-
 # logging
     @debug,
     @info,
@@ -711,6 +705,8 @@ export
     yield,
     yieldto,
     wait,
+    waitany,
+    waitall,
     timedwait,
     asyncmap,
     asyncmap!,
@@ -719,6 +715,7 @@ export
 # channels
     take!,
     put!,
+    isfull,
     isready,
     fetch,
     bind,
@@ -935,6 +932,7 @@ export
     isblockdev,
     ischardev,
     isdir,
+    isexecutable,
     isfifo,
     isfile,
     islink,
@@ -1078,103 +1076,3 @@ export
     @static,
 
     @main
-
-public
-# Modules
-    Checked,
-    Filesystem,
-    Order,
-    Sort,
-
-# Types
-    AbstractLock,
-    AsyncCondition,
-    CodeUnits,
-    Event,
-    Fix1,
-    Fix2,
-    Generator,
-    ImmutableDict,
-    OneTo,
-    LogRange,
-    AnnotatedString,
-    AnnotatedChar,
-    UUID,
-
-# Annotated strings
-    annotatedstring,
-    annotate!,
-    annotations,
-
-# Semaphores
-    Semaphore,
-    acquire,
-    release,
-
-# collections
-    IteratorEltype,
-    IteratorSize,
-    to_index,
-    vect,
-    isdone,
-    front,
-    rest,
-    split_rest,
-    tail,
-    checked_length,
-
-# Loading
-    DL_LOAD_PATH,
-    load_path,
-    active_project,
-
-# Reflection and introspection
-    isambiguous,
-    isexpr,
-    isidentifier,
-    issingletontype,
-    identify_package,
-    locate_package,
-    moduleroot,
-    jit_total_bytes,
-    summarysize,
-    isexported,
-    ispublic,
-    remove_linenums!,
-
-# Opperators
-    operator_associativity,
-    operator_precedence,
-    isbinaryoperator,
-    isoperator,
-    isunaryoperator,
-
-# C interface
-    cconvert,
-    unsafe_convert,
-
-# Error handling
-    exit_on_sigint,
-    windowserror,
-
-# Macros
-    @assume_effects,
-    @constprop,
-    @locals,
-    @propagate_inbounds,
-
-# IO
-    # types
-    BufferStream,
-    IOServer,
-    OS_HANDLE,
-    PipeEndpoint,
-    TTY,
-    # functions
-    reseteof,
-    link_pipe!,
-
-# misc
-    notnothing,
-    runtests,
-    text_colors

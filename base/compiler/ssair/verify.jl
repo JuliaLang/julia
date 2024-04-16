@@ -111,8 +111,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
         @verify_error "IR info length is invalid $(length(ir.stmts.info)) / $(length(ir.stmts))"
         error("")
     end
-    if length(ir.stmts.line) != length(ir.stmts)
-        @verify_error "IR line length is invalid $(length(ir.stmts.line)) / $(length(ir.stmts))"
+    if length(ir.stmts.line) != length(ir.stmts) * 3
+        @verify_error "IR line length is invalid $(length(ir.stmts.line)) / $(length(ir.stmts) * 3)"
         error("")
     end
     if length(ir.stmts.flag) != length(ir.stmts)
@@ -329,20 +329,6 @@ function verify_ir(ir::IRCode, print::Bool=true,
             @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
             error("")
         else
-            if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
-                if (stmt isa ReturnNode)
-                    if isdefined(stmt, :val)
-                        # TODO: Disallow unreachable returns?
-                        # bb_unreachable(domtree, Int64(edge))
-                    else
-                        #@verify_error "Missing line number information for statement $idx of $ir"
-                    end
-                end
-                if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
-                    if ir.stmts[idx][:line] <= 0
-                    end
-                end
-            end
             isforeigncall = false
             if isa(stmt, Expr)
                 if stmt.head === :(=)
@@ -397,12 +383,12 @@ function verify_ir(ir::IRCode, print::Bool=true,
     end
 end
 
-function verify_linetable(linetable::Vector{LineInfoNode}, print::Bool=true)
-    for i in 1:length(linetable)
-        line = linetable[i]
-        if i <= line.inlined_at
-            @verify_error "Misordered linetable"
-            error("")
+function verify_linetable(di::DebugInfoStream, nstmts::Int, print::Bool=true)
+    @assert 3nstmts == length(di.codelocs)
+    for i in 1:nstmts
+        edge = di.codelocs[3i-1]
+        if !(edge == 0 || get(di.edges, edge, nothing) isa DebugInfo)
+            @verify_error "Malformed debuginfo index into edges"
         end
     end
 end

@@ -975,4 +975,19 @@ end
     @test conj(H) == conj(Array(H))
 end
 
+@testset "copyto! with aliasing (#39460)" begin
+    M = Matrix(reshape(1:36, 6, 6))
+    @testset for T in (Symmetric, Hermitian), uploA in (:U, :L), uploB in (:U, :L)
+        A = T(view(M, 1:5, 1:5), uploA)
+        A2 = copy(A)
+        B = T(view(M, 2:6, 2:6), uploB)
+        @test copyto!(B, A) == A2
+
+        A = view(M, 2:4, 2:4)
+        B = T(view(M, 1:3, 1:3), uploB)
+        B2 = copy(B)
+        @test copyto!(A, B) == B2
+    end
+end
+
 end # module TestSymmetric
