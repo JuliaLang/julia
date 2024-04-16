@@ -122,7 +122,7 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
 end
 # Get the proper trimmed shape
 _trimmedshape(::ScalarIndex, rest...) = (1, _trimmedshape(rest...)...)
-_trimmedshape(i::AbstractRange, rest...) = (maximum(i, init=zero(eltype(i))), _trimmedshape(rest...)...)
+_trimmedshape(i::AbstractRange, rest...) = (isempty(i) ? zero(eltype(i)) : maximum(i), _trimmedshape(rest...)...)
 _trimmedshape(i::Union{UnitRange,StepRange,OneTo}, rest...) = (length(i), _trimmedshape(rest...)...)
 _trimmedshape(i::AbstractArray{<:ScalarIndex}, rest...) = (length(i), _trimmedshape(rest...)...)
 _trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{0}}, rest...) = _trimmedshape(rest...)
