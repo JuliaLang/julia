@@ -13,14 +13,14 @@ transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R
 (*)(R::AbstractRotation, A::AbstractMatrix) = _rot_mul_vecormat(R, A)
 function _rot_mul_vecormat(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    lmul!(convert(AbstractRotation{TS}, R), copy_similar(A, TS))
+    lmul!(R, copy_similar(A, TS))
 end
 
 (*)(A::AbstractVector, R::AbstractRotation) = _vecormat_mul_rot(A, R)
 (*)(A::AbstractMatrix, R::AbstractRotation) = _vecormat_mul_rot(A, R)
 function _vecormat_mul_rot(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    rmul!(copy_similar(A, TS), convert(AbstractRotation{TS}, R))
+    rmul!(copy_similar(A, TS), R)
 end
 
 """

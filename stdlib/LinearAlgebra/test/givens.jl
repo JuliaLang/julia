@@ -91,32 +91,19 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
 using .Main.Furlongs
 
-@testset "testing dimensions with Furlongs" begin
-    @test_throws MethodError givens(Furlong(1.0), Furlong(2.0), 1, 2)
-end
-
 const TNumber = Union{Float64,ComplexF64}
-struct MockUnitful{T<:TNumber} <: Number
-    data::T
-end
-import Base: *, /, convert, conj, float, abs, one, oneunit, promote_rule
-*(a::MockUnitful, b::TNumber) = MockUnitful(a.data * b)
-*(a::TNumber, b::MockUnitful) = MockUnitful(a * b.data)
-*(a::MockUnitful{T}, b::MockUnitful{T}) where T<:TNumber = MockUnitful(a.data * b.data)
-/(a::MockUnitful{T}, b::MockUnitful{T}) where T<:TNumber = a.data / b.data
-abs(a::MockUnitful) = MockUnitful(abs(a.data))
-conj(a::MockUnitful) = MockUnitful(conj(a.data))
-convert(::Type{MockUnitful{T}}, x::MockUnitful) where {T} = MockUnitful(convert(T, x.data))
-float(a::MockUnitful) = MockUnitful(float(a.data))
-one(::Type{<:MockUnitful{T}}) where T = one(T)
-oneunit(::Type{<:MockUnitful{T}}) where T = MockUnitful(one(T))
-promote_rule(::Type{MockUnitful{T}}, ::Type{MockUnitful{S}}) where {T,S} = MockUnitful{promote_type(T, S)}
 
-@testset "unitful givens rotation unitful $T " for T in (Float64, ComplexF64)
-    g, r = givens(MockUnitful(T(3)), MockUnitful(T(4)), 1, 2)
-    @test g.c ≈ 3/5
-    @test g.s ≈ 4/5
-    @test r.data ≈ 5.0
+@testset "unitful givens rotation unitful $T " for T in (Float32, Float64, ComplexF32, ComplexF64)
+    g, r = givens(Furlong(T(3)), Furlong(T(4)), 1, 2)
+    @test g.c.val ≈ 3/5
+    @test g.c isa Furlong{0}
+    @test g.s.val ≈ 4/5
+    @test g.s isa Furlong{0}
+    @test r.val ≈ 5.0
+    @test r isa Furlong{1}
+    y = g * [Furlong(T(3)), Furlong(T(4))]
+    @test y[1].val ≈ r.val
+    @test y[2].val ≈ 0 atol = 10eps()
 end
 
 # 51554
