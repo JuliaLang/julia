@@ -1050,11 +1050,15 @@ end
 
 A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
+
+Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 """
 function yield(t::Task, @nospecialize(x=nothing))
-    (t._state === task_state_runnable && t.queue === nothing) || error("yield: Task not runnable")
+    current = current_task()
+    t === current && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
+    (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
     t.result = x
-    enq_work(current_task())
+    enq_work(current)
     set_next_task(t)
     return try_yieldto(ensure_rescheduled)
 end
