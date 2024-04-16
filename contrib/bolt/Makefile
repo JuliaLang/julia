@@ -24,7 +24,6 @@ BOLT_ARGS += -split-strategy=cdsplit
 BOLT_ARGS += --use-old-text
 # Update DWARF debug info in the final binary
 BOLT_ARGS += -update-debug-sections
-BOLT_ARGS += --thread-count=4
 # Print optimization statistics
 BOLT_ARGS += -dyno-stats
 
@@ -59,7 +58,6 @@ $(STAGE0_BUILD) $(STAGE1_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
 
 # This is solely to install llvm-bolt and merge-fdata
-stage0: export USE_BINARYBUILDER_LLVM=1
 stage0: | $(STAGE0_BUILD)
 	$(MAKE) -C $(STAGE0_BUILD)/deps install-bolt && \
 	touch $@
@@ -81,7 +79,7 @@ copy_originals: stage1
 bolt_instrument: copy_originals
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
-		$(LLVM_BOLT) "$$abs_file.original" -o $$abs_file --instrument --instrumentation-file-append-pid --instrumentation-file="$(PROFILE_DIR)/$$file-prof" --thread-count=4 -no-huge-pages; \
+		$(LLVM_BOLT) "$$abs_file.original" -o $$abs_file --instrument --instrumentation-file-append-pid --instrumentation-file="$(PROFILE_DIR)/$$file-prof" -no-huge-pages; \
 		mkdir -p $$(dirname "$(PROFILE_DIR)/$$file-prof"); \
 		printf "\n"; \
 	done && \
