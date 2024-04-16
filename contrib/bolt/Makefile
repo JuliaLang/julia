@@ -1,12 +1,11 @@
 .PHONY: clean clean-profiles restore_originals
 
 # Settings taken from https://github.com/rust-lang/rust/blob/master/src/tools/opt-dist/src/bolt.rs
-# TODO: Use the changes in https://github.com/rust-lang/rust/pull/119418/files once we get to LLVM 17/18
 BOLT_ARGS :=
 # Reorder basic blocks within functions
 BOLT_ARGS += -reorder-blocks=ext-tsp
 # Reorder functions within the binary
-BOLT_ARGS += -reorder-functions=hfsort+
+BOLT_ARGS += -reorder-functions=cdsort
 # Split function code into hot and code regions
 BOLT_ARGS += -split-functions
 # Split as many basic blocks as possible
@@ -17,6 +16,8 @@ BOLT_ARGS += -jump-tables=move
 BOLT_ARGS += -no-huge-pages
 # Fold functions with identical code
 BOLT_ARGS += -icf=1
+# Split using best available strategy (three-way splitting, Cache-Directed Sort)
+BOLT_ARGS += -split-strategy=cdsplit
 # The following flag saves about 16 MiB of libLLVM.so size.
 # However, it succeeds very non-deterministically.
 # Try to reuse old text segments to reduce binary size
