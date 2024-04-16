@@ -127,3 +127,15 @@ end
     visited = test_exceptions(Base)
     test_exceptions(Core, visited)
 end
+
+# inference quality test for `error`
+@test Base.infer_return_type(error, (Any,)) === Union{}
+@test Base.infer_return_type(xs->error(xs...), (Vector{Any},)) === Union{}
+module Issue54029
+export raise54029
+Base.Experimental.@max_methods 1
+raise54029(x) = error(x)
+end
+using .Issue54029
+@test Base.infer_return_type(raise54029, (Any,)) === Union{}
+@test Base.infer_return_type(xs->raise54029(xs...), (Vector{Any},)) === Union{}
