@@ -2603,6 +2603,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         t = Bool
         effects = EFFECTS_TOTAL
         exct = Union{}
+        isa(sym, Symbol) && (sym = GlobalRef(frame_module(sv), sym))
         if isa(sym, SlotNumber) && vtypes !== nothing
             vtyp = vtypes[slot_id(sym)]
             if vtyp.typ === Bottom
@@ -2610,19 +2611,11 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             elseif !vtyp.undef
                 t = Const(true) # definitely assigned previously
             end
-        elseif isa(sym, Symbol)
-            if isdefined(frame_module(sv), sym)
-                t = Const(true)
-            elseif InferenceParams(interp).assume_bindings_static
-                t = Const(false)
-            else
-                effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
-            end
         elseif isa(sym, GlobalRef)
-            if isdefined(sym.mod, sym.name)
+            if InferenceParams(interp).assume_bindings_static
+                t = Const(isdefined_globalref(sym))
+            elseif isdefinedconst_globalref(sym)
                 t = Const(true)
-            elseif InferenceParams(interp).assume_bindings_static
-                t = Const(false)
             else
                 effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
             end
@@ -2819,9 +2812,10 @@ function override_effects(effects::Effects, override::EffectsOverride)
 end
 
 isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
+isdefinedconst_globalref(g::GlobalRef) = isconst(g) && isdefined_globalref(g)
 
 function abstract_eval_globalref_type(g::GlobalRef)
-    if isdefined_globalref(g) && isconst(g)
+    if isdefinedconst_globalref(g)
         return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
     end
     ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
@@ -2840,11 +2834,15 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, sv::
         if is_mutation_free_argtype(rt)
             inaccessiblememonly = ALWAYS_TRUE
         end
-    elseif isdefined_globalref(g)
-        nothrow = true
     elseif InferenceParams(interp).assume_bindings_static
         consistent = inaccessiblememonly = ALWAYS_TRUE
-        rt = Union{}
+        if isdefined_globalref(g)
+            nothrow = true
+        else
+            rt = Union{}
+        end
+    elseif isdefinedconst_globalref(g)
+        nothrow = true
     end
     return RTEffects(rt, nothrow ? Union{} : UndefVarError, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))
 end
