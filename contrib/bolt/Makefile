@@ -123,6 +123,5 @@ restore_originals: copy_originals
 delete_originals: copy_originals
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
-		# rm "$$abs_file.original"; \
-		echo "Would remove $$abs_file.original"; \
+		rm "$$abs_file.original"; \
 	done
