@@ -5767,7 +5767,7 @@ function test_func_unused_constprop2_inter(x)
 end;
 let interp = LocalCacheInterp()
     @test Base.infer_return_type(test_func_unused_constprop2_inter, (Float64,); interp) == Tuple{Base.RefValue{Float64}, Base.RefValue{Float64}}
-    @test_broken count(interp.inf_cache) do result
+    @test count(interp.inf_cache) do result
         result.linfo.def.name === :func_unused_constprop2_inter
     end == 0
 end
