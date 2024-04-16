@@ -57,7 +57,7 @@ end
         @test pu - pd == eps(pz)
     end
 
-    for T in [Float32,Float64]
+    for T in [Float16,Float32,Float64]
         for v in [sqrt(big(2.0)),-big(1.0)/big(3.0),nextfloat(big(1.0)),
                   prevfloat(big(1.0)),nextfloat(big(0.0)),prevfloat(big(0.0)),
                   pi,ℯ,eulergamma,catalan,golden,
@@ -350,4 +350,111 @@ end
         @test round(T(2.7)) == T(2.0)
         Base.Rounding.setrounding_raw(T, Base.Rounding.to_fenv(old))
     end
+end
+
+@testset "rounding floats with specified return type #50778" begin
+    @test round(Float64, 1.2) === 1.0
+    @test round(Float32, 1e60) === Inf32
+    x = floatmax(Float32)-1.0
+    @test round(Float32, x) == x
+end
+
+@testset "rounding complex numbers (#42060, #47128)" begin
+    # 42060
+    @test ceil(Complex(4.6, 2.2)) === Complex(5.0, 3.0)
+    @test floor(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
+    @test trunc(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
+    @test round(Complex(4.6, 2.2)) === Complex(5.0, 2.0)
+    @test ceil(Complex(-4.6, -2.2)) === Complex(-4.0, -2.0)
+    @test floor(Complex(-4.6, -2.2)) === Complex(-5.0, -3.0)
+    @test trunc(Complex(-4.6, -2.2)) === Complex(-4.0, -2.0)
+    @test round(Complex(-4.6, -2.2)) === Complex(-5.0, -2.0)
+
+    # 47128
+    @test round(Complex{Int}, Complex(4.6, 2.2)) === Complex(5, 2)
+    @test ceil(Complex{Int}, Complex(4.6, 2.2)) === Complex(5, 3)
+end
+
+@testset "rounding to custom integers" begin
+    struct Int50812 <: Integer
+        x::Int
+    end
+    @test round(Int50812, 1.2) === Int50812(1)
+    @test round(Int50812, π) === Int50812(3)
+    @test ceil(Int50812, π) === Int50812(4)
+end
+
+const MPFRRM = Base.MPFR.MPFRRoundingMode
+
+function mpfr_to_ieee(::Type{Float32}, x::BigFloat, r::MPFRRM)
+    ccall((:mpfr_get_flt, Base.MPFR.libmpfr), Float32, (Ref{BigFloat}, MPFRRM), x, r)
+end
+function mpfr_to_ieee(::Type{Float64}, x::BigFloat, r::MPFRRM)
+    ccall((:mpfr_get_d, Base.MPFR.libmpfr), Float64, (Ref{BigFloat}, MPFRRM), x, r)
+end
+
+function mpfr_to_ieee(::Type{G}, x::BigFloat, r::RoundingMode) where {G}
+    mpfr_to_ieee(G, x, convert(MPFRRM, r))
+end
+
+const mpfr_rounding_modes = map(
+    Base.Fix1(convert, MPFRRM),
+    (RoundNearest, RoundToZero, RoundFromZero, RoundDown, RoundUp)
+)
+
+sample_float(::Type{T}, e::Integer) where {T<:AbstractFloat} = ldexp(rand(T) + true, e)::T
+
+function float_samples(::Type{T}, exponents, n::Int) where {T<:AbstractFloat}
+    ret = T[]
+    for e ∈ exponents, i ∈ 1:n
+        push!(ret, sample_float(T, e), -sample_float(T, e))
+    end
+    ret
+end
+
+# a reasonable range of values for testing behavior between 1:200
+const fib200 = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 200]
+
+@testset "IEEEFloat(::BigFloat) against MPFR" begin
+    for pr ∈ fib200
+        setprecision(BigFloat, pr) do
+            exp = exponent(floatmax(Float64)) + 10
+            bf_samples = float_samples(BigFloat, (-exp):exp, 20) # about 82680 random values
+            for mpfr_rm ∈ mpfr_rounding_modes, bf ∈ bf_samples, F ∈ (Float32, Float64)
+                @test (
+                    mpfr_to_ieee(F, bf, mpfr_rm) ===
+                    F(bf, mpfr_rm) === F(bf, convert(RoundingMode, mpfr_rm))
+                )
+            end
+        end
+    end
+end
+
+const native_rounding_modes = (
+    RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp,
+    RoundToZero, RoundFromZero, RoundUp, RoundDown
+)
+
+# Checks that each rounding mode is faithful.
+@testset "IEEEFloat(::BigFloat) faithful rounding" begin
+    for pr ∈ fib200
+        setprecision(BigFloat, pr) do
+            exp = 500
+            bf_samples = float_samples(BigFloat, (-exp):exp, 20) # about 40040 random values
+            for rm ∈ (mpfr_rounding_modes..., Base.MPFR.MPFRRoundFaithful,
+                      native_rounding_modes...),
+                bf ∈ bf_samples,
+                F ∈ (Float16, Float32, Float64)
+                f = F(bf, rm)
+                @test (f === F(bf, RoundDown)) | (f === F(bf, RoundUp))
+            end
+        end
+    end
+end
+
+@testset "round(Int, -Inf16) should throw (#51113)" begin
+    @test_throws InexactError round(Int32, -Inf16)
+    @test_throws InexactError round(Int64, -Inf16)
+    @test_throws InexactError round(Int128, -Inf16)
+    # More comprehensive testing is present in test/floatfuncs.jl
 end

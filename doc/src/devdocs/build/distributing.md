@@ -53,7 +53,7 @@ as it will make Julia fail at startup on any machine with incompatible CPUs
 We therefore recommend that you pass the `MARCH` variable when calling `make`,
 setting it to the baseline target you intend to support. This will determine
 the target CPU for both the Julia executable and libraries, and the system
-image (the latter can also be set using `JULIA_CPU_TARGET`). Typically useful
+image (the latter can also be set using [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET)). Typically useful
 values for x86 CPUs are `x86-64` and `core2` (for 64-bit builds) and
 `pentium4` (for 32-bit builds). Unfortunately, CPUs older than Pentium 4
 are currently not supported (see

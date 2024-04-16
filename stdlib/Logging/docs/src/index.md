@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Logging/docs/src/index.md"
+```
+
 # [Logging](@id man-logging)
 
 The [`Logging`](@ref Logging.Logging) module provides a way to record the history and progress of a
@@ -180,7 +184,7 @@ pattern match against the log event stream.
 
 ## Environment variables
 
-Message filtering can be influenced through the `JULIA_DEBUG` environment
+Message filtering can be influenced through the [`JULIA_DEBUG`](@ref JULIA_DEBUG) environment
 variable, and serves as an easy way to enable debug logging for a file or
 module. Loading julia with `JULIA_DEBUG=loading` will activate
 `@debug` log messages in `loading.jl`. For example, in Linux shells:
@@ -298,6 +302,8 @@ Logging.Debug
 Logging.Info
 Logging.Warn
 Logging.Error
+Logging.BelowMinLevel
+Logging.AboveMaxLevel
 ```
 
 ### [Processing events with AbstractLogger](@id AbstractLogger-interface)

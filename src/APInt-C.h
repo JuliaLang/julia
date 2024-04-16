@@ -3,10 +3,12 @@
 #ifndef JL_APINT_C_H
 #define JL_APINT_C_H
 
+#include "julia.h"
+#include "dtypes.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "dtypes.h"
 
 #ifdef LLVM_VERSION_MAJOR
 using integerPart = llvm::APInt::WordType;
@@ -57,16 +59,16 @@ JL_DLLEXPORT unsigned LLVMCountTrailingZeros(unsigned numbits, integerPart *pa);
 JL_DLLEXPORT unsigned LLVMCountLeadingOnes(unsigned numbits, integerPart *pa);
 JL_DLLEXPORT unsigned LLVMCountLeadingZeros(unsigned numbits, integerPart *pa);
 
-JL_DLLEXPORT void LLVMFPtoSI(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr);
-JL_DLLEXPORT void LLVMFPtoUI(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr);
-JL_DLLEXPORT void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr);
-JL_DLLEXPORT void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr);
-JL_DLLEXPORT void LLVMSExt(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr);
-JL_DLLEXPORT void LLVMZExt(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr);
-JL_DLLEXPORT void LLVMTrunc(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr);
+JL_DLLEXPORT void LLVMFPtoSI(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void LLVMFPtoUI(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void LLVMSItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void LLVMUItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void LLVMSExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void LLVMZExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT void LLVMTrunc(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
 
-JL_DLLEXPORT int LLVMFPtoSI_exact(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr);
-JL_DLLEXPORT int LLVMFPtoUI_exact(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr);
+JL_DLLEXPORT int LLVMFPtoSI_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
+JL_DLLEXPORT int LLVMFPtoUI_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr);
 
 JL_DLLEXPORT void jl_LLVMSMod(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);
 JL_DLLEXPORT void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr);

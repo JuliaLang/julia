@@ -7,15 +7,10 @@
 #include <llvm/Support/MathExtras.h>
 
 #include "APInt-C.h"
-#include "julia.h"
 #include "julia_assert.h"
 #include "julia_internal.h"
 
 using namespace llvm;
-
-inline uint64_t RoundUpToAlignment(uint64_t Value, uint64_t Align, uint64_t Skew = 0) {
-    return alignTo(Value, Align, Skew);
-}
 
 const unsigned int integerPartWidth = llvm::APInt::APINT_BITS_PER_WORD;
 const unsigned int host_char_bit = 8;
@@ -25,15 +20,15 @@ const unsigned int host_char_bit = 8;
     APInt s; \
     if ((numbits % integerPartWidth) != 0) { \
         /* use LLT_ALIGN to round the memory area up to the nearest integerPart-sized chunk */ \
-        unsigned nbytes = RoundUpToAlignment(numbits, integerPartWidth) / host_char_bit; \
+        unsigned nbytes = alignTo(numbits, integerPartWidth) / host_char_bit; \
         integerPart *data_a64 = (integerPart*)alloca(nbytes); \
         /* TODO: this memcpy assumes little-endian,
          * for big-endian, need to align the copy to the other end */ \
-        memcpy(data_a64, p##s, RoundUpToAlignment(numbits, host_char_bit) / host_char_bit); \
-        s = APInt(numbits, makeArrayRef(data_a64, nbytes / sizeof(integerPart))); \
+        memcpy(data_a64, p##s, alignTo(numbits, host_char_bit) / host_char_bit); \
+        s = APInt(numbits, ArrayRef<uint64_t>(data_a64, nbytes / sizeof(integerPart))); \
     } \
     else { \
-        s = APInt(numbits, makeArrayRef(p##s, numbits / integerPartWidth)); \
+        s = APInt(numbits, ArrayRef<uint64_t>(p##s, numbits / integerPartWidth)); \
     }
 
 /* assign to "integerPart *pr" from "APInt a" */
@@ -47,7 +42,7 @@ const unsigned int host_char_bit = 8;
     else if (numbits <= 64) \
         *(uint64_t*)p##r = a.getZExtValue(); \
     else \
-        memcpy(p##r, a.getRawData(), RoundUpToAlignment(numbits, host_char_bit) / host_char_bit); \
+        memcpy(p##r, a.getRawData(), alignTo(numbits, host_char_bit) / host_char_bit); \
 
 extern "C" JL_DLLEXPORT
 void LLVMNeg(unsigned numbits, integerPart *pa, integerPart *pr) {
@@ -313,17 +308,25 @@ void LLVMByteSwap(unsigned numbits, integerPart *pa, integerPart *pr) {
     ASSIGN(r, a)
 }
 
-void LLVMFPtoInt(unsigned numbits, void *pa, unsigned onumbits, integerPart *pr, bool isSigned, bool *isExact) {
+extern "C" float julia_half_to_float(uint16_t ival) JL_NOTSAFEPOINT;
+extern "C" uint16_t julia_float_to_half(float param) JL_NOTSAFEPOINT;
+extern "C" float julia_bfloat_to_float(uint16_t ival) JL_NOTSAFEPOINT;
+extern "C" uint16_t julia_float_to_bfloat(float param) JL_NOTSAFEPOINT;
+
+void LLVMFPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty, integerPart *pr, bool isSigned, bool *isExact) {
     double Val;
-    if (numbits == 16)
-        Val = julia__gnu_h2f_ieee(*(uint16_t*)pa);
-    else if (numbits == 32)
+    if (ty == jl_float16_type)
+        Val = julia_half_to_float(*(uint16_t*)pa);
+    else if (ty == jl_bfloat16_type)
+        Val = julia_bfloat_to_float(*(uint16_t*)pa);
+    else if (ty == jl_float32_type)
         Val = *(float*)pa;
-    else if (numbits == 64)
+    else if (jl_float64_type)
         Val = *(double*)pa;
     else
         jl_error("FPtoSI: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
-    unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
+    unsigned onumbytes = jl_datatype_size(oty);
+    unsigned onumbits = onumbytes * host_char_bit;
     if (onumbits <= 64) { // fast-path, if possible
         if (isSigned) {
             int64_t ia = Val;
@@ -350,7 +353,7 @@ void LLVMFPtoInt(unsigned numbits, void *pa, unsigned onumbits, integerPart *pr,
         APFloat a(Val);
         bool isVeryExact;
         APFloat::roundingMode rounding_mode = APFloat::rmNearestTiesToEven;
-        unsigned nbytes = RoundUpToAlignment(onumbits, integerPartWidth) / host_char_bit;
+        unsigned nbytes = alignTo(onumbits, integerPartWidth) / host_char_bit;
         integerPart *parts = (integerPart*)alloca(nbytes);
         APFloat::opStatus status = a.convertToInteger(MutableArrayRef<integerPart>(parts, nbytes), onumbits, isSigned, rounding_mode, &isVeryExact);
         memcpy(pr, parts, onumbytes);
@@ -360,69 +363,78 @@ void LLVMFPtoInt(unsigned numbits, void *pa, unsigned onumbits, integerPart *pr,
 }
 
 extern "C" JL_DLLEXPORT
-void LLVMFPtoSI(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    LLVMFPtoInt(numbits, pa, onumbits, pr, true, NULL);
+void LLVMFPtoSI(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) {
+    LLVMFPtoInt(ty, pa, oty, pr, true, NULL);
 }
 
 extern "C" JL_DLLEXPORT
-void LLVMFPtoUI(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    LLVMFPtoInt(numbits, pa, onumbits, pr, false, NULL);
+void LLVMFPtoUI(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) {
+    LLVMFPtoInt(ty, pa, oty, pr, false, NULL);
 }
 
 extern "C" JL_DLLEXPORT
-int LLVMFPtoSI_exact(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
+int LLVMFPtoSI_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) {
     bool isExact;
-    LLVMFPtoInt(numbits, pa, onumbits, pr, true, &isExact);
+    LLVMFPtoInt(ty, pa, oty, pr, true, &isExact);
     return isExact;
 }
 
 extern "C" JL_DLLEXPORT
-int LLVMFPtoUI_exact(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
+int LLVMFPtoUI_exact(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) {
     bool isExact;
-    LLVMFPtoInt(numbits, pa, onumbits, pr, false, &isExact);
+    LLVMFPtoInt(ty, pa, oty, pr, false, &isExact);
     return isExact;
 }
 
 extern "C" JL_DLLEXPORT
-void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
+void LLVMSItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) {
     double val;
     { // end scope before jl_error call
+        unsigned numbytes = jl_datatype_size(ty);
+        unsigned numbits = numbytes * host_char_bit;
         CREATE(a)
         val = a.roundToDouble(true);
     }
-    if (onumbits == 16)
-        *(uint16_t*)pr = julia__gnu_f2h_ieee(val);
-    else if (onumbits == 32)
+    if (oty == jl_float16_type)
+        *(uint16_t*)pr = julia_float_to_half(val);
+    else if (oty == jl_bfloat16_type)
+        *(uint16_t*)pr = julia_float_to_bfloat(val);
+    else if (oty == jl_float32_type)
         *(float*)pr = val;
-    else if (onumbits == 64)
+    else if (oty == jl_float64_type)
         *(double*)pr = val;
     else
         jl_error("SItoFP: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
 }
 
 extern "C" JL_DLLEXPORT
-void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
+void LLVMUItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) {
     double val;
     { // end scope before jl_error call
+        unsigned numbytes = jl_datatype_size(ty);
+        unsigned numbits = numbytes * host_char_bit;
         CREATE(a)
         val = a.roundToDouble(false);
     }
-    if (onumbits == 16)
-        *(uint16_t*)pr = julia__gnu_f2h_ieee(val);
-    else if (onumbits == 32)
+    if (oty == jl_float16_type)
+        *(uint16_t*)pr = julia_float_to_half(val);
+    else if (oty == jl_bfloat16_type)
+        *(uint16_t*)pr = julia_float_to_bfloat(val);
+    else if (oty == jl_float32_type)
         *(float*)pr = val;
-    else if (onumbits == 64)
+    else if (oty == jl_float64_type)
         *(double*)pr = val;
     else
         jl_error("UItoFP: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
 }
 
 extern "C" JL_DLLEXPORT
-void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    if (!(onumbits > inumbits))
+void LLVMSExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerPart *pr) {
+    unsigned inumbytes = jl_datatype_size(ty);
+    unsigned onumbytes = jl_datatype_size(otys);
+    if (!(onumbytes > inumbytes))
         jl_error("SExt: output bitsize must be > input bitsize");
-    unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
-    unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
+    unsigned inumbits = inumbytes * host_char_bit;
     int bits = (0 - inumbits) % host_char_bit;
     int signbit = (inumbits - 1) % host_char_bit;
     int sign = ((unsigned char*)pa)[inumbytes - 1] & (1 << signbit) ? -1 : 0;
@@ -437,11 +449,12 @@ void LLVMSExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
 }
 
 extern "C" JL_DLLEXPORT
-void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    if (!(onumbits > inumbits))
+void LLVMZExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerPart *pr) {
+    unsigned inumbytes = jl_datatype_size(ty);
+    unsigned onumbytes = jl_datatype_size(otys);
+    if (!(onumbytes > inumbytes))
         jl_error("ZExt: output bitsize must be > input bitsize");
-    unsigned inumbytes = RoundUpToAlignment(inumbits, host_char_bit) / host_char_bit;
-    unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
+    unsigned inumbits = inumbytes * host_char_bit;
     int bits = (0 - inumbits) % host_char_bit;
     // copy over the input bytes
     memcpy(pr, pa, inumbytes);
@@ -454,10 +467,11 @@ void LLVMZExt(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart
 }
 
 extern "C" JL_DLLEXPORT
-void LLVMTrunc(unsigned inumbits, integerPart *pa, unsigned onumbits, integerPart *pr) {
-    if (!(onumbits < inumbits))
+void LLVMTrunc(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerPart *pr) {
+    unsigned inumbytes = jl_datatype_size(ty);
+    unsigned onumbytes = jl_datatype_size(otys);
+    if (!(onumbytes < inumbytes))
         jl_error("Trunc: output bitsize must be < input bitsize");
-    unsigned onumbytes = RoundUpToAlignment(onumbits, host_char_bit) / host_char_bit;
     memcpy(pr, pa, onumbytes);
 }
 

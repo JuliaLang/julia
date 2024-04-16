@@ -1,4 +1,4 @@
-# Punctuation
+# [Punctuation](@id man-punctuation)
 
 Extended documentation for mathematical symbols & functions is [here](@ref math-ops).
 

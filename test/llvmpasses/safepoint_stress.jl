@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s | opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LateLowerGCFrame -FinalLowerGC -S - | FileCheck %s
-# RUN: julia --startup-file=no %s | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame),FinalLowerGC' -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC)' -S - | FileCheck %s
 
 
 println("""
@@ -15,7 +14,7 @@ define void @stress(i64 %a, i64 %b) {
     %ptls = call {}*** @julia.ptls_states()
 """)
 
-# CHECK: %gcframe = alloca {} addrspace(10)*, i32 10002
+# CHECK: %gcframe = alloca ptr addrspace(10), i32 10002
 for i = 1:10000
     println("\t%arg$i = call {} addrspace(10)* @alloc()")
 end

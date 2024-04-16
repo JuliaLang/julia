@@ -1,9 +1,12 @@
-; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LowerExcHandlers -S %s | FileCheck %s
-; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LowerExcHandlers)' -S %s | FileCheck %s
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
+; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LowerExcHandlers)' -S %s | FileCheck %s
+
+; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LowerExcHandlers)' -S %s | FileCheck %s
 
 attributes #1 = { returns_twice }
-declare i32 @julia.except_enter() #1
-declare void @ijl_pop_handler(i32)
+declare i32 @julia.except_enter({}*) #1
+declare void @ijl_pop_handler({}*, i32)
 declare i8**** @julia.ptls_states()
 declare i8**** @julia.get_pgcstack()
 
@@ -13,7 +16,7 @@ top:
 ; CHECK: call void @llvm.lifetime.start
 ; CHECK: call void @ijl_enter_handler
 ; CHECK: setjmp
-    %r = call i32 @julia.except_enter()
+    %r = call i32 @julia.except_enter({}* null)
     %cmp = icmp eq i32 %r, 0
     br i1 %cmp, label %try, label %catch
 try:
@@ -21,7 +24,7 @@ try:
 catch:
     br label %after
 after:
-    call void @ijl_pop_handler(i32 1)
+    call void @ijl_pop_handler({}* null, i32 1)
 ; CHECK: llvm.lifetime.end
     ret void
 }

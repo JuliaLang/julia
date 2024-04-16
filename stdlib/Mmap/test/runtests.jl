@@ -339,3 +339,7 @@ open(file, "r+") do s
     finalize(A); A = nothing; GC.gc()
 end
 rm(file)
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Mmap))
+end

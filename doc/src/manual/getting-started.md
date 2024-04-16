@@ -10,8 +10,9 @@ known as a read-eval-print loop or "REPL") by double-clicking the Julia executab
 `julia` from the command line:
 
 ```@eval
+using REPL
 io = IOBuffer()
-Base.banner(io)
+REPL.banner(io)
 banner = String(take!(io))
 import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia> 1 + 2\n3\n\njulia> ans\n3\n```")
@@ -34,7 +35,7 @@ command:
 $ julia script.jl
 ```
 
-You can pass additional arguments to Julia, and to your program `script.jl`. A detailed list of all the available options can be found under [Command-line Interface](@ref).
+You can pass additional arguments to Julia, and to your program `script.jl`. A detailed list of all the available options can be found under [Command-line Interface](@ref cli).
 
 ## Resources
 

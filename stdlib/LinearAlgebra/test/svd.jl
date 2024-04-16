@@ -127,7 +127,19 @@ aimg  = randn(n,n)/2
             gsvd = svd(b,c)
             @test gsvd.U*gsvd.D1*gsvd.R*gsvd.Q' ≈ b
             @test gsvd.V*gsvd.D2*gsvd.R*gsvd.Q' ≈ c
+            # AbstractMatrix svd
+            T = Tridiagonal(a)
+            asvd = svd(T, a)
+            @test asvd.U*asvd.D1*asvd.R*asvd.Q' ≈ T
+            @test asvd.V*asvd.D2*asvd.R*asvd.Q' ≈ a
+            @test all(≈(1), svdvals(T, T))
         end
+    end
+    @testset "singular value decomposition of AbstractMatrix" begin
+        A = Tridiagonal(aa)
+        F = svd(A)
+        @test Matrix(F) ≈ A
+        @test svdvals(A) ≈ F.S
     end
     @testset "singular value decomposition of Hermitian/real-Symmetric" begin
         for T in (eltya <: Real ? (Symmetric, Hermitian) : (Hermitian,))

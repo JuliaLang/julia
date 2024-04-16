@@ -11,7 +11,7 @@ assumption works fine in most instances but fails miserably for a just-in-time c
 `julia`.  For this reason it is crucial to pass `--smc-check=all-non-file` to `valgrind`, else
 code may crash or behave unexpectedly (often in subtle ways).
 
-In some cases, to better detect memory errors using Valgrind it can help to compile `julia` with
+In some cases, to better detect memory errors using Valgrind, it can help to compile `julia` with
 memory pools disabled.  The compile-time flag `MEMDEBUG` disables memory pools in Julia, and
 `MEMDEBUG2` disables memory pools in FemtoLisp.  To build `julia` with both flags, add the following
 line to `Make.user`:
@@ -20,7 +20,7 @@ line to `Make.user`:
 CFLAGS = -DMEMDEBUG -DMEMDEBUG2
 ```
 
-Another thing to note: if your program uses multiple workers processes, it is likely that you
+Another thing to note: if your program uses multiple worker processes, it is likely that you
 want all such worker processes to run under Valgrind, not just the parent process.  To do this,
 pass `--trace-children=yes` to `valgrind`.
 
@@ -57,7 +57,7 @@ to `valgrind` as well.
 
 ## Additional spurious warnings
 
-This section covers Valgrind warnings which cannot be added to the
+This section covers Valgrind warnings that cannot be added to the
 suppressions file yet are nonetheless safe to ignore.
 
 ### Unhandled rr system calls

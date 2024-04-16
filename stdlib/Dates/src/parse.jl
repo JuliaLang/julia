@@ -198,6 +198,7 @@ end
 
 function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
     i, end_pos = firstindex(s), lastindex(s)
+    i > end_pos && throw(ArgumentError("Cannot parse an empty string as a DateTime"))
 
     local dy
     dm = dd = Int64(1)
@@ -206,7 +207,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     let val = tryparsenext_base10(s, i, end_pos, 1)
         val === nothing && @goto error
         dy, i = val
-        i > end_pos && @goto error
+        i > end_pos && @goto done
     end
 
     c, i = iterate(s, i)::Tuple{Char, Int}
@@ -279,6 +280,7 @@ end
 
 function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = firstindex(str), lastindex(str)
+    pos > len && throw(ArgumentError("Cannot parse an empty string as a Date or Time"))
     val = tryparsenext_internal(T, str, pos, len, df, true)
     @assert val !== nothing
     values, endpos = val
@@ -287,6 +289,7 @@ end
 
 function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = firstindex(str), lastindex(str)
+    pos > len && return nothing
     res = tryparsenext_internal(T, str, pos, len, df, false)
     res === nothing && return nothing
     values, endpos = res

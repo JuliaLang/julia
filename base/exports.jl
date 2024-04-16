@@ -65,6 +65,7 @@ export
     Missing,
     NTuple,
     IdDict,
+    IdSet,
     OrdinalRange,
     Pair,
     PartialQuickSort,
@@ -238,6 +239,7 @@ export
     bitrotate,
     bswap,
     cbrt,
+    fourthroot,
     ceil,
     cis,
     cispi,
@@ -352,6 +354,7 @@ export
     tan,
     tand,
     tanh,
+    tanpi,
     trailing_ones,
     trailing_zeros,
     trunc,
@@ -363,6 +366,7 @@ export
     zero,
     √,
     ∛,
+    ∜,
     ≈,
     ≉,
 
@@ -408,6 +412,7 @@ export
     isperm,
     issorted,
     last,
+    logrange,
     mapslices,
     max,
     maximum!,
@@ -445,6 +450,7 @@ export
     sortperm!,
     sortslices,
     dropdims,
+    stack,
     step,
     stride,
     strides,
@@ -528,6 +534,7 @@ export
     getkey,
     haskey,
     in,
+    in!,
     intersect!,
     intersect,
     isdisjoint,
@@ -589,6 +596,7 @@ export
     digits,
     digits!,
     eachsplit,
+    eachrsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -660,7 +668,6 @@ export
 
 # iteration
     iterate,
-
     enumerate,  # re-exported from Iterators
     zip,
     only,
@@ -698,6 +705,8 @@ export
     yield,
     yieldto,
     wait,
+    waitany,
+    waitall,
     timedwait,
     asyncmap,
     asyncmap!,
@@ -706,6 +715,7 @@ export
 # channels
     take!,
     put!,
+    isfull,
     isready,
     fetch,
     bind,
@@ -745,6 +755,7 @@ export
     swapproperty!,
     modifyproperty!,
     replaceproperty!,
+    setpropertyonce!,
     fieldoffset,
     fieldname,
     fieldnames,
@@ -772,6 +783,7 @@ export
 # syntax
     esc,
     gensym,
+    @kwdef,
     macroexpand,
     @macroexpand1,
     @macroexpand,
@@ -790,9 +802,13 @@ export
     parentmodule,
     pathof,
     pkgdir,
+    pkgversion,
     names,
     which,
     @isdefined,
+    @invoke,
+    invokelatest,
+    @invokelatest,
 
 # loading source files
     __precompile__,
@@ -811,7 +827,7 @@ export
     atreplinit,
     exit,
     ntuple,
-    Splat,
+    splat,
 
 # I/O and events
     close,
@@ -849,6 +865,8 @@ export
     readline,
     readlines,
     readuntil,
+    copyuntil,
+    copyline,
     redirect_stdio,
     redirect_stderr,
     redirect_stdin,
@@ -914,6 +932,7 @@ export
     isblockdev,
     ischardev,
     isdir,
+    isexecutable,
     isfifo,
     isfile,
     islink,
@@ -936,6 +955,7 @@ export
     pwd,
     readlink,
     rm,
+    samefile,
     stat,
     symlink,
     tempdir,
@@ -970,8 +990,11 @@ export
     reenable_sigint,
     unsafe_copyto!,
     unsafe_load,
+    unsafe_modify!,
     unsafe_pointer_to_objref,
+    unsafe_replace!,
     unsafe_store!,
+    unsafe_swap!,
 
 # implemented in Random module
     rand,
@@ -995,6 +1018,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @Kwargs,
     @lazy_str, # lazy string
 
     # documentation
@@ -1012,6 +1036,8 @@ export
     @timev,
     @elapsed,
     @allocated,
+    @allocations,
+    @lock_conflicts,
 
     # tasks
     @sync,
@@ -1040,10 +1066,13 @@ export
     @atomic,
     @atomicswap,
     @atomicreplace,
+    @atomiconce,
     @__dot__,
     @enum,
     @label,
     @goto,
     @view,
     @views,
-    @static
+    @static,
+
+    @main

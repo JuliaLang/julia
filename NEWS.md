@@ -1,149 +1,129 @@
-Julia v1.9 Release Notes
+Julia v1.12 Release Notes
 ========================
 
 New language features
 ---------------------
 
-* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
-* Slurping in assignments is now also allowed in non-final position. This is
-  handled via `Base.split_rest`. ([#42902])
-
 Language changes
 ----------------
 
-* New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
-  for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
-  `getfield`. ([#44137])
-* A few basic operators have been generalized to more naturally support vector space structures:
-  unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
-  binary minus falls back to addition `-(x, y) = x + (-y)`, and, at the most generic level,
-  left- and right-division fall back to multiplication with the inverse from left and right,
-  respectively, as stated in the docstring. ([#44564])
+ - When methods are replaced with exactly equivalent ones, the old method is no
+   longer deleted implicitly simultaneously, although the new method does take
+   priority and become more specific than the old method. Thus if the new
+   method is deleted later, the old method will resume operating. This can be
+   useful to mocking frameworks (such as in SparseArrays, Pluto, and Mocking,
+   among others), as they do not need to explicitly restore the old method.
+   While inference and compilation still must be repeated with this, it also
+   may pave the way for inference to be able to intelligently re-use the old
+   results, once the new method is deleted. ([#53415])
+
+ - Macro expansion will no longer eargerly recurse into into `Expr(:toplevel)`
+   expressions returned from macros. Instead, macro expansion of `:toplevel`
+   expressions will be delayed until evaluation time. This allows a later
+   expression within a given `:toplevel` expression to make use of macros
+   defined earlier in the same `:toplevel` expression. ([#53515])
 
 Compiler/Runtime improvements
 -----------------------------
 
+- Generated LLVM IR now uses actual pointer types instead of passing pointers as integers.
+  This affects `llvmcall`: Inline LLVM IR should be updated to use `i8*` or `ptr` instead of
+  `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
+  IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
 
 Command-line option changes
 ---------------------------
 
-* In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
-  process affinity which is set typically in HPC and cloud environments ([#42340]).
-* `--math-mode=fast` is now a no-op ([#41638]). Users are encouraged to use the @fastmath macro instead, which has more well-defined semantics.
-* The `--threads` command-line option now accepts `auto|N[,auto|M]` where `M` specifies the
-  number of interactive threads to create (`auto` currently means 1) ([#42302]).
+* The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
+  This `main` function should be declared using `@main` to indicate that it is an entry point.
 
 Multi-threading changes
 -----------------------
 
-* `Threads.@spawn` now accepts an optional first argument: `:default` or `:interactive`.
-  An interactive task desires low latency and implicitly agrees to be short duration or to
-  yield frequently. Interactive tasks will run on interactive threads, if any are specified
-  when Julia is started ([#42302]).
-
 Build system changes
 --------------------
-
 
 New library functions
 ---------------------
 
-* `Iterators.flatmap` was added ([#44792]).
-* New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
-  inspecting which function `f` was originally wrapped. ([#42717])
+* `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
+* The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
+* `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
 
-Library changes
----------------
+New library features
+--------------------
 
-* A known concurrency issue of `iterate` methods on `Dict` and other derived objects such
-  as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
-  now be called on a dictionary or set shared by arbitrary tasks provided that there are no
-  tasks mutating the dictionary or set ([#44534]).
-* Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
-* `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
-* `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
-* `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
-* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
-* `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
-  a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
-* `time()` now has up to nanosecond resolution on Unix based platforms.
+* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
+* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
+* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
+* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
+  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
+  no longer required there for correctness to avoid data races ([#52461]).
+* After a process exits, `closewrite` will no longer be automatically called on
+  the stream passed to it. Call `wait` on the process instead to ensure the
+  content is fully written, then call `closewrite` manually to avoid
+  data-races. Or use the callback form of `open` to have all that handled
+  automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `filter` can now act on a `NamedTuple` ([#50795]).
+* `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
+  the uniquing checking ([#53474])
+* `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
+* `time()` now has up to nanosecond resolution on Unix based platforms. ([#45023])
 
 Standard library changes
 ------------------------
+
+#### StyledStrings
+
+#### JuliaSyntaxHighlighting
 
 #### Package Manager
 
 #### LinearAlgebra
 
-* The methods `a / b` and `b \ a` with `a` a scalar and `b` a vector,
-  which were equivalent to `a * pinv(b)`, have been removed due to the
-  risk of confusion with elementwise division ([#44358]).
-* We are now wholly reliant on libblastrampoline (LBT) for calling
-  BLAS and LAPACK. OpenBLAS is shipped by default, but building the
-  system image with other BLAS/LAPACK libraries is not
-  supported. Instead, it is recommended that the LBT mechanism be used
-  for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
-* `lu` now supports a new pivoting strategy `RowNonZero()` that chooses
-   the first non-zero pivot element, for use with new arithmetic types and for pedagogy ([#44571]).
-* `normalize(x, p=2)` now supports any normed vector space `x`, including scalars ([#44925]).
-
-#### Markdown
+#### Logging
 
 #### Printf
 
-#### Random
+#### Profile
 
-* `randn` and `randexp` now work for any `AbstractFloat` type defining `rand` ([#44714]).
+#### Random
 
 #### REPL
 
-* `Meta-e` now opens the current input in an editor. The content (if modified) will be
-  executed upon existing the editor.
+#### SuiteSparse
 
 #### SparseArrays
 
-#### Dates
+#### Test
 
-#### Downloads
+#### Dates
 
 #### Statistics
 
-#### Sockets
-
-#### Tar
-
 #### Distributed
-
-* The package environment (active project, `LOAD_PATH`, `DEPOT_PATH`) are now propagated
-  when adding *local* workers (e.g. with `addprocs(N::Int)` or through the `--procs=N`
-  command line flag) ([#43270]).
-* `addprocs` for local workers now accept the `env` keyword argument for passing
-  environment variables to the workers processes. This was already supported for
-  remote workers ([#43270]).
-
-#### UUIDs
 
 #### Unicode
 
-* `graphemes(s, m:n)` returns a substring of the `m`-th to `n`-th graphemes in `s` ([#44266]).
-
-#### Mmap
-
 #### DelimitedFiles
 
+#### InteractiveUtils
 
 Deprecated or removed
 ---------------------
 
-* Unexported `splat` is deprecated in favor of exported `Splat`, which has pretty printing of the wrapped function. ([#42717])
 * `Libc.TimeVal` is deprecated in favor of `Libc.TimeSpec`, which (generally) has higher resolution.
-  This deprecation follows the deprecation of `gettimeofday` in libc.
+  This deprecation follows the deprecation of `gettimeofday` in libc. ([#45023])
 
 External dependencies
 ---------------------
 
-
 Tooling Improvements
----------------------
+--------------------
 
 <!--- generated by NEWS-update.jl: -->

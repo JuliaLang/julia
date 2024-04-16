@@ -120,6 +120,7 @@ end
     Base.compact(io)
     @test position(io) == 0
     @test ioslength(io) == 0
+    Base._resize!(io,0)
     Base.ensureroom(io,50)
     @test position(io) == 0
     @test ioslength(io) == 0
@@ -347,4 +348,13 @@ end
 
 @testset "bytesavailable devnull" begin
     @test bytesavailable(devnull) == 0
+end
+
+@testset "#48188 read_sub for non Array AbstractArray" begin
+    a = [0,0,0]
+    v = @view a[1:2]
+    io = IOBuffer()
+    write(io,1)
+    seek(io,0)
+    @test Base.read_sub(io,v,1,1) == [1,0]
 end

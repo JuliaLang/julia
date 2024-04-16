@@ -15,7 +15,7 @@ extern "C" {
 JULIA_DEFINE_FAST_TLS
 
 #ifdef _COMPILER_ASAN_ENABLED_
-JL_DLLEXPORT const char* __asan_default_options()
+JL_DLLEXPORT const char* __asan_default_options(void)
 {
     return "allow_user_segv_handler=1:detect_leaks=0";
     // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
@@ -36,7 +36,7 @@ int main(int argc, char * argv[])
 {
 #endif
 
-#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
     // ASAN/TSAN do not support RTLD_DEEPBIND
     // https://github.com/google/sanitizers/issues/611
     putenv("LBT_USE_RTLD_DEEPBIND=0");
@@ -45,9 +45,8 @@ int main(int argc, char * argv[])
     // Convert Windows wchar_t values to UTF8
 #ifdef _OS_WINDOWS_
     for (int i = 0; i < argc; i++) {
-        size_t max_arg_len = 4*wcslen(wargv[i]);
-        argv[i] = (char *)malloc(max_arg_len);
-        if (!wchar_to_utf8(wargv[i], argv[i], max_arg_len)) {
+        argv[i] = wchar_to_utf8(wargv[i]);
+        if (!argv[i]) {
             jl_loader_print_stderr("Unable to convert all arguments to UTF-8!\n");
             return 1;
         }

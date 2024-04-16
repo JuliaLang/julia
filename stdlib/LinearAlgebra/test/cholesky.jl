@@ -260,11 +260,12 @@ end
     end
 end
 
-@testset "behavior for non-positive definite matrices" for T in (Float64, ComplexF64)
+@testset "behavior for non-positive definite matrices" for T in (Float64, ComplexF64, BigFloat)
     A = T[1 2; 2 1]
     B = T[1 2; 0 1]
+    C = T[2 0; 0 0]
     # check = (true|false)
-    for M in (A, Hermitian(A), B)
+    for M in (A, Hermitian(A), B, C)
         @test_throws PosDefException cholesky(M)
         @test_throws PosDefException cholesky!(copy(M))
         @test_throws PosDefException cholesky(M; check = true)
@@ -272,17 +273,19 @@ end
         @test !LinearAlgebra.issuccess(cholesky(M; check = false))
         @test !LinearAlgebra.issuccess(cholesky!(copy(M); check = false))
     end
-    for M in (A, Hermitian(A), B)
-        @test_throws RankDeficientException cholesky(M, RowMaximum())
-        @test_throws RankDeficientException cholesky!(copy(M), RowMaximum())
-        @test_throws RankDeficientException cholesky(M, RowMaximum(); check = true)
-        @test_throws RankDeficientException cholesky!(copy(M), RowMaximum(); check = true)
-        @test !LinearAlgebra.issuccess(cholesky(M, RowMaximum(); check = false))
-        @test !LinearAlgebra.issuccess(cholesky!(copy(M), RowMaximum(); check = false))
-        C = cholesky(M, RowMaximum(); check = false)
-        @test_throws RankDeficientException chkfullrank(C)
-        C = cholesky!(copy(M), RowMaximum(); check = false)
-        @test_throws RankDeficientException chkfullrank(C)
+    if T !== BigFloat # generic pivoted cholesky is not implemented
+        for M in (A, Hermitian(A), B)
+            @test_throws RankDeficientException cholesky(M, RowMaximum())
+            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum())
+            @test_throws RankDeficientException cholesky(M, RowMaximum(); check = true)
+            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum(); check = true)
+            @test !LinearAlgebra.issuccess(cholesky(M, RowMaximum(); check = false))
+            @test !LinearAlgebra.issuccess(cholesky!(copy(M), RowMaximum(); check = false))
+            C = cholesky(M, RowMaximum(); check = false)
+            @test_throws RankDeficientException chkfullrank(C)
+            C = cholesky!(copy(M), RowMaximum(); check = false)
+            @test_throws RankDeficientException chkfullrank(C)
+        end
     end
     @test !isposdef(A)
     str = sprint((io, x) -> show(io, "text/plain", x), cholesky(A; check = false))
@@ -303,6 +306,7 @@ end
     v = rand(5)
     @test cholesky(Diagonal(v)) \ B ≈ Diagonal(v) \ B
     @test B / cholesky(Diagonal(v)) ≈ B / Diagonal(v)
+    @test inv(cholesky(Diagonal(v)))::Diagonal ≈ Diagonal(1 ./ v)
 end
 
 struct WrappedVector{T} <: AbstractVector{T}
@@ -389,9 +393,9 @@ end
 
     # complex
     D = complex(D)
-    CD = cholesky(D)
-    CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{ComplexF64}
+    CD = cholesky(Hermitian(D))
+    CM = cholesky(Matrix(Hermitian(D)))
+    @test CD isa Cholesky{ComplexF64,<:Diagonal}
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
@@ -404,6 +408,12 @@ end
 
     # InexactError for Int
     @test_throws InexactError cholesky!(Diagonal([2, 1]))
+end
+
+@testset "Cholesky for AbstractMatrix" begin
+    S = SymTridiagonal(fill(2.0, 4), ones(3))
+    C = cholesky(S)
+    @test C.L * C.U ≈ S
 end
 
 @testset "constructor with non-BlasInt arguments" begin

@@ -27,6 +27,15 @@ throw
 
 ## native julia error handling ##
 
+# This is `Experimental.@max_methods 2 function error end`, which is not available at this point in bootstrap.
+# NOTE It is important to always be able to infer the return type of `error` as `Union{}`,
+# but there's a hitch when a package globally sets `@max_methods 1` and it causes inference
+# for `error(::Any)` to fail (JuliaLang/julia#54029).
+# This definition site `@max_methods 2` setting overrides any global `@max_methods 1` settings
+# on package side, guaranteeing that return type inference on `error` is successful always.
+function error end
+typeof(error).name.max_methods = UInt8(2)
+
 """
     error(message::AbstractString)
 
@@ -37,7 +46,7 @@ error(s::AbstractString) = throw(ErrorException(s))
 """
     error(msg...)
 
-Raise an `ErrorException` with the given message.
+Raise an `ErrorException` with a message constructed by `string(msg...)`.
 """
 function error(s::Vararg{Any,N}) where {N}
     @noinline
@@ -162,7 +171,7 @@ end
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
     @noinline
-    throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
+    throw(MethodError(Core.kwcall, (kw, args...), tls_world_age()))
 end
 
 ## system error handling ##
@@ -197,15 +206,17 @@ windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Mai
 """
     @assert cond [text]
 
-Throw an [`AssertionError`](@ref) if `cond` is `false`. Preferred syntax for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
+Throw an [`AssertionError`](@ref) if `cond` is `false`. This is the preferred syntax for
+writing assertions, which are conditions that are assumed to be true, but that the user
+might decide to check anyways, as an aid to debugging if they fail.
+The optional message `text` is displayed upon assertion failure.
 
 !!! warning
-    An assert might be disabled at various optimization levels.
+    An assert might be disabled at some optimization levels.
     Assert should therefore only be used as a debugging tool
-    and not used for authentication verification (e.g., verifying passwords),
-    nor should side effects needed for the function to work correctly
-    be used inside of asserts.
+    and not used for authentication verification (e.g., verifying passwords or checking array bounds).
+    The code must not rely on the side effects of running `cond` for the correct behavior
+    of a function.
 
 # Examples
 ```jldoctest
@@ -226,14 +237,14 @@ macro assert(ex, msgs...)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = quote
-            msg = $(Expr(:quote,msg))
-            isdefined(Main, :Base) ? Main.Base.string(msg) :
-                (Core.println(msg); "Error during bootstrap. See stdout.")
-        end
+        msg = :(_assert_tostring($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
+
+# this may be overridden in contexts where `string(::Expr)` doesn't work
+_assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
+    (Core.println(msg); "Error during bootstrap. See stdout.")
 
 struct ExponentialBackOff
     n::Int
@@ -295,7 +306,6 @@ function retry(f;  delays=ExponentialBackOff(), check=nothing)
             try
                 return f(args...; kwargs...)
             catch e
-                y === nothing && rethrow()
                 if check !== nothing
                     result = check(state, e)
                     state, retry_or_not = length(result) == 2 ? result : (state, result)

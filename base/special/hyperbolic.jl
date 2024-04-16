@@ -175,7 +175,7 @@ function asinh(x::T) where T <: Union{Float32, Float64}
     #        return sign(x)*log(2|x|+1/(|x|+sqrt(x*x+1)))
     #    d) |x| >= 2^28
     #        return sign(x)*(log(x)+ln2))
-    if isnan(x) || isinf(x)
+    if !isfinite(x)
         return x
     end
     absx = abs(x)

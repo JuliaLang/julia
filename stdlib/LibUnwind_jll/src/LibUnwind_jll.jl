@@ -4,7 +4,6 @@
 
 baremodule LibUnwind_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -14,9 +13,9 @@ export libunwind
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libunwind_handle = C_NULL
-libunwind_path = ""
+artifact_dir::String = ""
+libunwind_handle::Ptr{Cvoid} = C_NULL
+libunwind_path::String = ""
 
 const libunwind = "libunwind.so.8"
 
