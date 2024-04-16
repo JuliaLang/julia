@@ -8,10 +8,29 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
+
+#if JL_LLVM_VERSION >= 160000
+#include <llvm/Support/ModRef.h>
+#endif
+
 #include "julia.h"
 
 #define STR(csym)           #csym
 #define XSTR(csym)          STR(csym)
+
+#if JL_LLVM_VERSION >= 160000
+
+#include <optional>
+
+template<typename T>
+using Optional = std::optional<T>;
+static constexpr std::nullopt_t None = std::nullopt;
+
+#else
+
+#include <llvm/ADT/Optional.h>
+
+#endif
 
 enum AddressSpace {
     Generic = 0,
@@ -60,9 +79,19 @@ namespace JuliaType {
         return llvm::FunctionType::get(T_prjlvalue, {
                 T_prjlvalue,  // function
                 T_pprjlvalue, // args[]
-                llvm::Type::getInt32Ty(C),
-                T_prjlvalue,  // linfo
-                }, // nargs
+                llvm::Type::getInt32Ty(C), // nargs
+                T_prjlvalue},  // linfo
+            false);
+    }
+
+    static inline auto get_jlfunc3_ty(llvm::LLVMContext &C) {
+        auto T_prjlvalue = get_prjlvalue_ty(C);
+        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T = get_pjlvalue_ty(C, Derived);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C)}, // nargs
             false);
     }
 
@@ -149,9 +178,11 @@ static inline llvm::MDNode *get_tbaa_const(llvm::LLVMContext &ctxt) {
 
 static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instruction *inst)
 {
+    using namespace llvm;
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
-    if (llvm::isa<llvm::LoadInst>(inst) && md && md == get_tbaa_const(md->getContext()))
-        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), llvm::None));
+    if (llvm::isa<llvm::LoadInst>(inst) && md && md == get_tbaa_const(md->getContext())) {
+        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), None));
+    }
     return inst;
 }
 
@@ -191,7 +222,7 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
     auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
     const int ptls_offset = offsetof(jl_task_t, ptls);
     llvm::Value *pptls = builder.CreateInBoundsGEP(
-            T_pjlvalue, current_task,
+            T_pjlvalue, emit_bitcast_with_builder(builder, current_task, T_ppjlvalue),
             ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
             "ptls_field");
     LoadInst *ptls_load = builder.CreateAlignedLoad(T_pjlvalue,
@@ -241,7 +272,11 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_s
             auto T_psize = T_size->getPointerTo();
             FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {T_psize}, false);
             F = Function::Create(FT, Function::ExternalLinkage, "julia.safepoint", M);
+#if JL_LLVM_VERSION >= 160000
+            F->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
             F->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
         }
         builder.CreateCall(F, {signal_page});
     }
@@ -269,8 +304,8 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
     BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
     BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
     Constant *zero8 = ConstantInt::get(T_int8, 0);
-    builder.CreateCondBr(builder.CreateAnd(builder.CreateICmpNE(old_state, zero8), // if (old_state && !state)
-                                           builder.CreateICmpEQ(state, zero8)),
+    builder.CreateCondBr(builder.CreateOr(builder.CreateICmpEQ(old_state, zero8), // if (!old_state || !state)
+                                          builder.CreateICmpEQ(state, zero8)),
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
@@ -290,7 +325,7 @@ static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm
 static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
 {
     using namespace llvm;
-    Value *old_state = builder.getInt8(0);
+    Value *old_state = builder.getInt8(JL_GC_STATE_UNSAFE);
     return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 

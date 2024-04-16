@@ -201,6 +201,7 @@ end
     let # try/catch
         result = code_escapes((Any,)) do a
             try
+                println("prevent ConstABI")
                 nothing
             catch err
                 return a # return escape
@@ -210,6 +211,7 @@ end
     end
     let result = code_escapes((Any,)) do a
             try
+                println("prevent ConstABI")
                 nothing
             finally
                 return a # return escape

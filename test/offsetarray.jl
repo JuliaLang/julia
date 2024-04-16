@@ -403,7 +403,8 @@ v2 = copy(v)
 v = OffsetArray(v0, (-3,))
 @test lastindex(v) == 1
 @test v ≈ v
-@test axes(v') === (Base.OneTo(1), OffsetArrays.IdOffsetRange(Base.OneTo(4), -3))
+@test (@inferred axes(v')[1]) === OffsetArrays.IdOffsetRange(Base.OneTo(1))
+@test (@inferred axes(v')[2]) === OffsetArrays.IdOffsetRange(Base.OneTo(4), -3)
 @test parent(v) == collect(v)
 rv = reverse(v)
 @test axes(rv) == axes(v)
@@ -862,4 +863,9 @@ end
     # but the conversion to an OrdinalRange was not defined.
     # this is fixed in #40038, so the evaluation of its CartesianIndices should work
     @test CartesianIndices(A) == CartesianIndices(B)
+end
+
+@testset "indexing views (#53249)" begin
+    v = view([1,2,3,4], :)
+    @test v[Base.IdentityUnitRange(2:3)] == OffsetArray(2:3, 2:3)
 end

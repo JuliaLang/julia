@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # reference on sorted binary search:
-#   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
+#   https://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns lastindex(v)+1 if x is greater than all values in v.

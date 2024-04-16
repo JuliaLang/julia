@@ -52,9 +52,6 @@ end
 
 # foreach
 let a = []
-    foreach(()->push!(a,0))
-    @test a == [0]
-    a = []
     foreach(x->push!(a,x), [1,5,10])
     @test a == [1,5,10]
     a = []

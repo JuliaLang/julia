@@ -139,7 +139,7 @@ julia> test(1,2)
 x is less than y.
 
 julia> test(2,1)
-ERROR: UndefVarError: `relation` not defined
+ERROR: UndefVarError: `relation` not defined in local scope
 Stacktrace:
  [1] test(::Int64, ::Int64) at ./none:7
 ```
@@ -458,7 +458,7 @@ julia> for j = 1:3
 3
 
 julia> j
-ERROR: UndefVarError: `j` not defined
+ERROR: UndefVarError: `j` not defined in `Main`
 ```
 
 ```jldoctest
@@ -862,7 +862,8 @@ end
            else
                foo
            end
-    ERROR: UndefVarError: `foo` not defined
+    ERROR: UndefVarError: `foo` not defined in `Main`
+    Suggestion: check for spelling errors or missing imports.
     ```
     Use the [`local` keyword](@ref local-scope) outside the `try` block to make the variable
     accessible from anywhere within the outer scope.

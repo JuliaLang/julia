@@ -220,6 +220,8 @@ end
 end
 @testset "combinatorics" begin
     @test factorial(BigInt(40)) == parse(BigInt,"815915283247897734345611269596115894272000000000")
+    @test_throws DomainError factorial(BigInt(-1))
+    @test_throws DomainError factorial(BigInt(rand(-999:-2)))
     @test binomial(BigInt(1), -1) == BigInt(0)
     @test binomial(BigInt(1), 2)  == BigInt(0)
     @test binomial(BigInt(-53), 42) == parse(BigInt,"959509335087854414441273718")

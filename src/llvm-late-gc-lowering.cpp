@@ -12,7 +12,8 @@
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SmallSet.h>
-#include "llvm/Analysis/CFG.h"
+#include <llvm/Analysis/CFG.h>
+#include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
@@ -455,7 +456,6 @@ SmallVector<SmallVector<unsigned, 0>, 0> TrackCompositeType(Type *T) {
 }
 
 
-
 // Walk through simple expressions to until we hit something that requires root numbering
 // If the input value is a scalar (pointer), we may return a composite value as base
 // in which case the second member of the pair is the index of the value in the vector.
@@ -600,7 +600,7 @@ Value *LateLowerGCFrame::MaybeExtractScalar(State &S, std::pair<Value*,int> ValE
     }
     else if (ValExpr.second != -1) {
         auto Tracked = TrackCompositeType(V->getType());
-        auto Idxs = makeArrayRef(Tracked[ValExpr.second]);
+        auto Idxs = ArrayRef<unsigned>(Tracked[ValExpr.second]);
         auto IdxsNotVec = Idxs.slice(0, Idxs.size() - 1);
         Type *FinalT = ExtractValueInst::getIndexedType(V->getType(), IdxsNotVec);
         bool IsVector = isa<VectorType>(FinalT);
@@ -616,12 +616,12 @@ Value *LateLowerGCFrame::MaybeExtractScalar(State &S, std::pair<Value*,int> ValE
                 V = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
             return V;
         }
+        IRBuilder<InstSimplifyFolder> foldbuilder(InsertBefore->getContext(), InstSimplifyFolder(InsertBefore->getModule()->getDataLayout()));
+        foldbuilder.SetInsertPoint(InsertBefore);
         if (Idxs.size() > IsVector)
-            V = ExtractValueInst::Create(V, IsVector ? IdxsNotVec : Idxs, "", InsertBefore);
+            V = foldbuilder.CreateExtractValue(V, IsVector ? IdxsNotVec : Idxs);
         if (IsVector)
-            V = ExtractElementInst::Create(V,
-                    ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()),
-                    "", InsertBefore);
+            V = foldbuilder.CreateExtractElement(V, ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()));
     }
     return V;
 }
@@ -908,7 +908,7 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         auto Idxs = IVI->getIndices();
         unsigned j = 0;
         for (unsigned i = 0; i < Tracked.size(); ++i) {
-            auto Elem = makeArrayRef(Tracked[i]);
+            auto Elem = ArrayRef<unsigned>(Tracked[i]);
             if (Elem.size() < Idxs.size())
                 continue;
             if (Idxs.equals(Elem.slice(0, Idxs.size()))) // Tracked.startswith(Idxs)
@@ -921,7 +921,7 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         assert(Tracked.size() == BaseNumbers.size());
         auto Idxs = EVI->getIndices();
         for (unsigned i = 0; i < Tracked.size(); ++i) {
-            auto Elem = makeArrayRef(Tracked[i]);
+            auto Elem = ArrayRef<unsigned>(Tracked[i]);
             if (Elem.size() < Idxs.size())
                 continue;
             if (Idxs.equals(Elem.slice(0, Idxs.size()))) // Tracked.startswith(Idxs)
@@ -1620,24 +1620,43 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == gc_preserve_end_func || callee == typeof_func ||
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
-                        callee == write_barrier_func || callee == gc_loaded_func ||
+                        callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
+                        callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
                         callee->getName() == "memcmp") {
                         continue;
                     }
+#if JL_LLVM_VERSION >= 160000
+                    if (callee->getMemoryEffects().onlyReadsMemory() ||
+                        callee->getMemoryEffects().onlyAccessesArgPointees()) {
+                        continue;
+                    }
+#else
                     if (callee->hasFnAttribute(Attribute::ReadNone) ||
                         callee->hasFnAttribute(Attribute::ReadOnly) ||
                         callee->hasFnAttribute(Attribute::ArgMemOnly)) {
                         continue;
                     }
+#endif
                     if (MemTransferInst *MI = dyn_cast<MemTransferInst>(CI)) {
                         MaybeTrackDst(S, MI);
                     }
                 }
-                if (isa<IntrinsicInst>(CI) || CI->hasFnAttr(Attribute::ArgMemOnly) ||
-                    CI->hasFnAttr(Attribute::ReadNone) || CI->hasFnAttr(Attribute::ReadOnly)) {
+#if JL_LLVM_VERSION >= 160000
+                if (isa<IntrinsicInst>(CI) ||
+                    CI->getMemoryEffects().onlyAccessesArgPointees() ||
+                    CI->getMemoryEffects().onlyReadsMemory()) {
                     // Intrinsics are never safepoints.
                     continue;
                 }
+#else
+                if (isa<IntrinsicInst>(CI) ||
+                    CI->hasFnAttr(Attribute::ArgMemOnly) ||
+                    CI->hasFnAttr(Attribute::ReadNone)   ||
+                    CI->hasFnAttr(Attribute::ReadOnly)) {
+                    // Intrinsics are never safepoints.
+                    continue;
+                }
+#endif
                 SmallVector<int, 0> CalleeRoots;
                 for (Use &U : CI->args()) {
                     // Find all callee rooted arguments.
@@ -1798,11 +1817,13 @@ static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> 
         auto IdxsNotVec = Idxs.slice(0, Idxs.size() - 1);
         Type *FinalT = ExtractValueInst::getIndexedType(V->getType(), IdxsNotVec);
         bool IsVector = isa<VectorType>(FinalT);
+        IRBuilder<InstSimplifyFolder> foldbuilder(irbuilder.getContext(), InstSimplifyFolder(irbuilder.GetInsertBlock()->getModule()->getDataLayout()));
+        foldbuilder.restoreIP(irbuilder.saveIP());
+        foldbuilder.SetCurrentDebugLocation(irbuilder.getCurrentDebugLocation());
         if (Idxs.size() > IsVector)
-            V = irbuilder.Insert(ExtractValueInst::Create(V, IsVector ? IdxsNotVec : Idxs));
+            V = foldbuilder.CreateExtractValue(V, IsVector ? IdxsNotVec : Idxs);
         if (IsVector)
-            V = irbuilder.Insert(ExtractElementInst::Create(V,
-                    ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back())));
+            V = foldbuilder.CreateExtractElement(V, ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()));
     }
     return V;
 }
@@ -1843,7 +1864,7 @@ SmallVector<Value*, 0> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, I
         return false;
     };
     for (unsigned i = 0; i < Tracked.size(); ++i) {
-        auto Idxs = makeArrayRef(Tracked[i]);
+        auto Idxs = ArrayRef<unsigned>(Tracked[i]);
         if (ignore_field(Idxs))
             continue;
         Value *Elem = ExtractScalar(Src, STy, isptr, Idxs, irbuilder);
@@ -2417,8 +2438,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                             false),
                         builder.CreatePtrToInt(tag, T_size),
                     });
+                newI->setAttributes(allocBytesIntrinsic->getAttributes());
+                newI->addDereferenceableRetAttr(CI->getRetDereferenceableBytes());
                 newI->takeName(CI);
-
                 // Now, finally, set the tag. We do this in IR instead of in the C alloc
                 // function, to provide possible optimization opportunities. (I think? TBH
                 // the most recent editor of this code is not entirely clear on why we
@@ -2459,14 +2481,15 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ++it;
                 continue;
             } else if ((call_func && callee == call_func) ||
-                       (call2_func && callee == call2_func)) {
+                       (call2_func && callee == call2_func) ||
+                       (call3_func && callee == call3_func)) {
                 assert(T_prjlvalue);
                 size_t nargs = CI->arg_size();
                 size_t nframeargs = nargs-1;
-                if (callee == call_func)
-                    nframeargs -= 1;
-                else if (callee == call2_func)
+                if (callee == call2_func)
                     nframeargs -= 2;
+                else
+                    nframeargs -= 1;
                 SmallVector<Value*, 4> ReplacementArgs;
                 auto arg_it = CI->arg_begin();
                 assert(arg_it != CI->arg_end());
@@ -2499,7 +2522,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     ReplacementArgs.erase(ReplacementArgs.begin());
                     ReplacementArgs.push_back(front);
                 }
-                FunctionType *FTy = callee == call2_func ? JuliaType::get_jlfunc2_ty(CI->getContext()) : JuliaType::get_jlfunc_ty(CI->getContext());
+                FunctionType *FTy = callee == call3_func ? JuliaType::get_jlfunc3_ty(CI->getContext()) :
+                                    callee == call2_func ? JuliaType::get_jlfunc2_ty(CI->getContext()) :
+                                                           JuliaType::get_jlfunc_ty(CI->getContext());
                 CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI);
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto callattrs = CI->getAttributes();
@@ -2757,7 +2782,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
                     assert(Elem->getContext().supportsTypedPointers());
                     Elem = new BitCastInst(Elem, T_prjlvalue, "", SI);
                 }
-                //auto Idxs = makeArrayRef(Tracked[i]);
+                //auto Idxs = ArrayRef<unsigned>(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
                 (void)shadowStore;

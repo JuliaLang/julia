@@ -95,7 +95,7 @@ function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
         # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
+        eval_ind = findlast(frame -> !frame.from_c && startswith(String(frame.func), "__repl_entry"), bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
@@ -240,7 +240,7 @@ function exec_options(opts)
         if cmd_suppresses_program(cmd)
             arg_is_program = false
             repl = false
-        elseif cmd == 'L'
+        elseif cmd == 'L' || cmd == 'm'
             # nothing
         elseif cmd == 'B' # --bug-report
             # If we're doing a bug report, don't load anything else. We will
@@ -260,9 +260,9 @@ function exec_options(opts)
     # Load Distributed module only if any of the Distributed options have been specified.
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
-        let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            Core.eval(Main, :(const Distributed = $Distributed))
-            Core.eval(Main, :(using .Distributed))
+        let Distributed = require_stdlib(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
+            Core.eval(MainInclude, :(const Distributed = $Distributed))
+            Core.eval(Main, :(using Base.MainInclude.Distributed))
         end
 
         invokelatest(Main.Distributed.process_opts, opts)
@@ -292,6 +292,13 @@ function exec_options(opts)
         elseif cmd == 'E'
             invokelatest(show, Core.eval(Main, parse_input_line(arg)))
             println()
+        elseif cmd == 'm'
+            @eval Main import $(Symbol(arg)).main
+            if !should_use_main_entrypoint()
+                error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
+            end
+            return false
+
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode
@@ -384,25 +391,25 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
 function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
-    if !isdefined(mod, :InteractiveUtils)
+    if !isdefined(MainInclude, :InteractiveUtils)
         try
-            let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(mod, :(const InteractiveUtils = $InteractiveUtils))
-                Core.eval(mod, :(using .InteractiveUtils))
-                return InteractiveUtils
+            # TODO: we have to use require_stdlib here because it is a dependency of REPL, but we would sort of prefer not to
+            let InteractiveUtils = require_stdlib(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
+                Core.eval(MainInclude, :(const InteractiveUtils = $InteractiveUtils))
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
+            return nothing
         end
-        return nothing
     end
-    return getfield(mod, :InteractiveUtils)
+    Core.eval(mod, :(using Base.MainInclude.InteractiveUtils))
+    return MainInclude.InteractiveUtils
 end
 
 function load_REPL()
     # load interactive-only libraries
     try
-        return Base.require(PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL"))
+        return Base.require_stdlib(PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL"))
     catch ex
         @warn "Failed to import REPL" exception=(ex, catch_backtrace())
     end
@@ -425,7 +432,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            banner == :no || Base.banner(term, short=banner==:short)
+            banner == :no || REPL.banner(term, short=banner==:short)
             if term.term_type == "dumb"
                 repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
@@ -445,7 +452,6 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
-        banner == :no || Base.banner(short=banner==:short)
         let input = stdin
             if isa(input, File) || isa(input, IOStream)
                 # for files, we can slurp in the whole thing at once
@@ -487,17 +493,9 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     nothing
 end
 
-# MainInclude exists to hide Main.include and eval from `names(Main)`.
+# MainInclude exists to weakly add certain identifiers to Main
 baremodule MainInclude
 using ..Base
-# These definitions calls Base._include rather than Base.include to get
-# one-frame stacktraces for the common case of using include(fname) in Main.
-include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
-function include(fname::AbstractString)
-    isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    Base._include(identity, Main, fname)
-end
-eval(x) = Core.eval(Main, x)
 
 """
     ans
@@ -516,17 +514,7 @@ global err = nothing
 
 # weakly exposes ans and err variables to Main
 export ans, err
-
 end
-
-"""
-    eval(expr)
-
-Evaluate an expression in the global scope of the containing module.
-Every `Module` (except those defined with `baremodule`) has its own 1-argument
-definition of `eval`, which evaluates expressions in that module.
-"""
-MainInclude.eval
 
 function should_use_main_entrypoint()
     isdefined(Main, :main) || return false
@@ -534,30 +522,6 @@ function should_use_main_entrypoint()
     (isdefined(M_binding_owner, Symbol("#__main_is_entrypoint__#")) && M_binding_owner.var"#__main_is_entrypoint__#") || return false
     return true
 end
-
-"""
-    include([mapexpr::Function,] path::AbstractString)
-
-Evaluate the contents of the input source file in the global scope of the containing module.
-Every module (except those defined with `baremodule`) has its own
-definition of `include`, which evaluates the file in that module.
-Returns the result of the last evaluated expression of the input file. During including,
-a task-local include path is set to the directory containing the file. Nested calls to
-`include` will search relative to that path. This function is typically used to load source
-interactively, or to combine files in packages that are broken into multiple source files.
-The argument `path` is normalized using [`normpath`](@ref) which will resolve
-relative path tokens such as `..` and convert `/` to the appropriate path separator.
-
-The optional first argument `mapexpr` can be used to transform the included code before
-it is evaluated: for each parsed expression `expr` in `path`, the `include` function
-actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
-
-Use [`Base.include`](@ref) to evaluate a file into another module.
-
-!!! compat "Julia 1.5"
-    Julia 1.5 is required for passing the `mapexpr` argument.
-"""
-MainInclude.include
 
 function _start()
     empty!(ARGS)

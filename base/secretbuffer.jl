@@ -117,6 +117,18 @@ end
 const _sb_hash = UInt === UInt32 ? 0x111c0925 : 0xb06061e370557428
 hash(s::SecretBuffer, h::UInt) = hash(_sb_hash, h)
 
+copy(s::SecretBuffer) = copy!(SecretBuffer(sizehint=length(s.data)), s)
+function copy!(dest::SecretBuffer, src::SecretBuffer)
+    if length(dest.data) != length(src.data)
+        securezero!(dest.data)
+        dest.data = copy(src.data)
+    else
+        copyto!(dest.data, src.data)
+    end
+    dest.size = src.size
+    dest.ptr = src.ptr
+    return dest
+end
 
 function write(io::SecretBuffer, b::UInt8)
     if io.ptr > length(io.data)
@@ -188,7 +200,7 @@ resetting its pointer and size.
 This function is used to securely erase the sensitive data held in the buffer,
 reducing the potential for information leaks.
 
-# Example
+# Examples
 ```julia
 s = SecretBuffer()
 write(s, 's', 'e', 'c', 'r', 'e', 't')

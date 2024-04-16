@@ -1,6 +1,13 @@
 using Test
 using Profile: Allocs
 
+Allocs.clear()
+let iobuf = IOBuffer()
+    for format in (:tree, :flat)
+        Test.@test_logs (:warn, r"^There were no samples collected\.") Allocs.print(iobuf; format, C=true)
+    end
+end
+
 @testset "alloc profiler doesn't segfault" begin
     res = Allocs.@profile sample_rate=1.0 begin
         # test the allocations during compilation
@@ -13,6 +20,20 @@ using Profile: Allocs
     @test first_alloc.size > 0
     @test length(first_alloc.stacktrace) > 0
     @test length(string(first_alloc.type)) > 0
+
+    # test printing options
+    for options in ((format=:tree, C=true),
+                    (format=:tree, maxdepth=2),
+                    (format=:flat, C=true),
+                    (),
+                    (format=:flat, sortedby=:count),
+                    (format=:tree, recur=:flat),
+                   )
+        iobuf = IOBuffer()
+        Allocs.print(iobuf; options...)
+        str = String(take!(iobuf))
+        @test !isempty(str)
+    end
 end
 
 @testset "alloc profiler works when there are multiple tasks on multiple threads" begin

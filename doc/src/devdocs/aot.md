@@ -23,7 +23,7 @@ Firstly, the methods that need to be compiled to native code must be identified.
 
 Once the methods to be compiled have been identified, they are passed to the `jl_create_system_image` function. This function sets up a number of data structures that will be used when serializing native code to a file, and then calls `jl_create_native` with the array of methods. `jl_create_native` runs codegen on the methods produces one or more LLVM modules. `jl_create_system_image` then records some useful information about what codegen produced from the module(s).
 
-The module(s) are then passed to `jl_dump_native`, along with the information recorded by `jl_create_system_image`. `jl_dump_native` contains the code necessary to serialize the module(s) to bitcode, object, or assembly files depending on the command-line options passed to Julia. The serialized code and information is then written to a file as an archive.
+The module(s) are then passed to `jl_dump_native`, along with the information recorded by `jl_create_system_image`. `jl_dump_native` contains the code necessary to serialize the module(s) to bitcode, object, or assembly files depending on the command-line options passed to Julia. The serialized code and information are then written to a file as an archive.
 
 The final step is to run a system linker on the object files in the archive produced by `jl_dump_native`. Once this step is complete, a shared library containing the compiled code is produced.
 

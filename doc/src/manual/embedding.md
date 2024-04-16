@@ -247,7 +247,7 @@ Its second argument `args` is an array of `jl_value_t*` arguments and `nargs` is
 arguments.
 
 There is also an alternative, possibly simpler, way of calling Julia functions and that is via [`@cfunction`](@ref).
-Using `@cfunction` allows you to do the type conversions on the Julia side which typically is easier than doing it on
+Using `@cfunction` allows you to do the type conversions on the Julia side, which is typically easier than doing it on
 the C side. The `sqrt` example above would with `@cfunction` be written as:
 
 ```c
@@ -255,7 +255,10 @@ double (*sqrt_jl)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt
 double ret = sqrt_jl(2.0);
 ```
 
-where we first define a C callable function in Julia, extract the function pointer from it and finally call it.
+where we first define a C callable function in Julia, extract the function pointer from it, and finally call it.
+In addition to simplifying type conversions by doing them in the higher-level language, calling Julia functions
+via `@cfunction` pointers eliminates the dynamic-dispatch overhead required by `jl_call` (for which all of the
+arguments are "boxed"), and should have performance equivalent to native C function pointers.
 
 ## Memory Management
 
@@ -432,14 +435,14 @@ object has just been allocated and no garbage collection has run since then. Not
 `jl_...` functions can sometimes invoke garbage collection.
 
 The write barrier is also necessary for arrays of pointers when updating their data directly.
-For example:
+Calling `jl_array_ptr_set` is usually much preferred. But direct updates can be done. For example:
 
 ```c
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
 void **data = jl_array_data(some_array, void*);
 jl_value_t *some_value = ...;
 data[0] = some_value;
-jl_gc_wb(some_array, some_value);
+jl_gc_wb(jl_array_owner(some_array), some_value);
 ```
 
 ### Controlling the Garbage Collector

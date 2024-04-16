@@ -131,15 +131,14 @@ rounds_away_from_zero(t::Tuple{Any,Bool}) = rounds_away_from_zero(t...)
 tie_breaker_is_to_even(t::Tuple{Any,Bool}) = tie_breaker_is_to_even(first(t))
 tie_breaker_rounds_away_from_zero(t::Tuple{Any,Bool}) = tie_breaker_rounds_away_from_zero(t...)
 
-abstract type RoundingIncrementHelper end
-struct FinalBit <: RoundingIncrementHelper end
-struct RoundBit <: RoundingIncrementHelper end
-struct StickyBit <: RoundingIncrementHelper end
+struct FinalBit end
+struct RoundBit end
+struct StickyBit end
 
 function correct_rounding_requires_increment(x, rounding_mode, sign_bit::Bool)
     r = (rounding_mode, sign_bit)
     f = let y = x
-        (z::RoundingIncrementHelper) -> y(z)::Bool
+        (z::Union{FinalBit,RoundBit,StickyBit}) -> y(z)::Bool
     end
     if rounds_to_nearest(r)
         if f(RoundBit())

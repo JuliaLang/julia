@@ -4,11 +4,12 @@
     IdDict([itr])
 
 `IdDict{K,V}()` constructs a hash table using [`objectid`](@ref) as hash and
-`===` as equality with keys of type `K` and values of type `V`.
+`===` as equality with keys of type `K` and values of type `V`. See [`Dict`](@ref)
+for further help and [`IdSet`](@ref) for the set version of this.
 
-See [`Dict`](@ref) for further help. In the example below, The `Dict`
-keys are all `isequal` and therefore get hashed the same, so they get overwritten.
-The `IdDict` hashes by object-id, and thus preserves the 3 different keys.
+In the example below, the `Dict` keys are all `isequal` and therefore get hashed
+the same, so they get overwritten. The `IdDict` hashes by object-id, and thus
+preserves the 3 different keys.
 
 # Examples
 ```julia-repl
@@ -53,18 +54,7 @@ IdDict(ps::Pair{K}...)             where {K}   = IdDict{K,Any}(ps)
 IdDict(ps::(Pair{K,V} where K)...) where {V}   = IdDict{Any,V}(ps)
 IdDict(ps::Pair...)                            = IdDict{Any,Any}(ps)
 
-function IdDict(kv)
-    try
-        dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
-    catch
-        if !applicable(iterate, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
-            throw(ArgumentError(
-                "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
-        else
-            rethrow()
-        end
-    end
-end
+IdDict(kv) = dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
 
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
@@ -84,7 +74,7 @@ function sizehint!(d::IdDict, newsz)
 end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
-    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
+    !isa(key, K) && throw(KeyTypeError(K, key))
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)::V
     end

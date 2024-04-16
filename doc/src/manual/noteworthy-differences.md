@@ -56,6 +56,10 @@ may trip up Julia users accustomed to MATLAB:
   * In Julia, if `A` and `B` are arrays, logical comparison operations like `A == B` do not return
     an array of booleans. Instead, use `A .== B`, and similarly for the other boolean operators like
     [`<`](@ref), [`>`](@ref).
+  * In Julia, when you want to apply a scalar-valued function elementwise to an array, use broadcasting
+    syntax: `f.(A)` instead of `f(A)`. In some cases, both operations are defined but mean different things:
+    in MATLAB `exp(A)` applies elementwise and `expm(A)` is the [matrix exponential](https://en.wikipedia.org/wiki/Matrix_exponential),
+    but in Julia `exp.(A)` applies elementwise and `exp(A)` is the matrix exponential.
   * In Julia, the operators [`&`](@ref), [`|`](@ref), and [`⊻`](@ref xor) ([`xor`](@ref)) perform the
     bitwise operations equivalent to `and`, `or`, and `xor` respectively in MATLAB, and have precedence
     similar to Python's bitwise operators (unlike C). They can operate on scalars or element-wise
@@ -245,12 +249,17 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, the exponentiation operator is `^`, not `**` as in Python.
   * Julia uses `nothing` of type `Nothing` to represent a null value, whereas Python uses `None` of type `NoneType`.
   * In Julia, the standard operators over a matrix type are matrix operations, whereas, in Python, the standard operators are element-wise operations. When both `A` and `B` are matrices, `A * B` in Julia performs matrix multiplication, not element-wise multiplication as in Python. `A * B` in Julia is equivalent with `A @ B` in Python, whereas `A * B` in Python is equivalent with `A .* B` in Julia.
+  * In Julia, when you want to apply a scalar-valued function elementwise to an array, use broadcasting
+    syntax: `f.(A)` instead of `f(A)`. In some cases, both operations are defined but mean different things:
+    `numpy.exp(A)` applies elementwise and `scipy.linalg.expm(A)` is the [matrix exponential](https://en.wikipedia.org/wiki/Matrix_exponential),
+    but in Julia `exp.(A)` applies elementwise and `exp(A)` is the matrix exponential.
   * The adjoint operator `'` in Julia returns an adjoint of a vector (a lazy representation of row vector), whereas the transpose operator `.T` over a vector in Python returns the original vector (non-op).
   * In Julia, a function may contain multiple concrete implementations (called *methods*), which are selected via multiple dispatch based on the types of all arguments to the call, as compared to functions in Python, which have a single implementation and no polymorphism (as opposed to Python method calls which use a different syntax and allows dispatch on the receiver of the method).
   * There are no classes in Julia. Instead there are structures (mutable or immutable), containing data but no methods.
   * Calling a method of a class instance in Python (`x = MyClass(*args); x.f(y)`) corresponds to a function call in Julia, e.g. `x = MyType(args...); f(x, y)`. In general, multiple dispatch is more flexible and powerful than the Python class system.
   * Julia structures may have exactly one abstract supertype, whereas Python classes can inherit from one or more (abstract or concrete) superclasses.
-  * The logical Julia program structure (Packages and Modules) is independent of the file structure (`include` for additional files), whereas the Python code structure is defined by directories (Packages) and files (Modules).
+  * The logical Julia program structure (Packages and Modules) is independent of the file structure, whereas the Python code structure is defined by directories (Packages) and files (Modules).
+  * In Julia, it is idiomatic to split the text of large modules into multiple files, without introducing a new module per file. The code is reassembled inside a single module in a main file via `include`. While the Python equivalent (`exec`) is not typical for this use (it will silently clobber prior definitions), Julia programs are defined as a unit at the `module` level with `using` or `import`, which will only get executed once when first needed--like `include` in Python. Within those modules, the individual files that make up that module are loaded with `include` by listing them once in the intended order.
   * The ternary operator `x > 0 ? 1 : -1` in Julia corresponds to a conditional expression in Python `1 if x > 0 else -1`.
   * In Julia the `@` symbol refers to a macro, whereas in Python it refers to a decorator.
   * Exception handling in Julia is done using `try` — `catch` — `finally`, instead of `try` — `except` — `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia (compared with Python, Julia is faster at ordinary control flow but slower at exception-catching).
@@ -352,7 +361,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     it's more general than that since methods are dispatched on every argument type, not only `this`,
     using the most-specific-declaration rule).
 
-### Julia &hArr; C/C++: Namespaces
+### Julia ⇔ C/C++: Namespaces
   * C/C++ `namespace`s correspond roughly to Julia `module`s.
   * There are no private globals or fields in Julia.  Everything is publicly accessible
     through fully qualified paths (or relative paths, if desired).
@@ -364,7 +373,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Caveat: `import`/`using` (Julia) works only at the global scope level (`module`s)
     * In C++, `using namespace X` works within arbitrary scopes (ex: function scope).
 
-### Julia &hArr; C/C++: Module loading
+### Julia ⇔ C/C++: Module loading
   * When you think of a C/C++ "**library**", you are likely looking for a Julia "**package**".
     * Caveat: C/C++ libraries often house multiple "software modules" whereas Julia
       "packages" typically house one.
@@ -395,7 +404,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     * Directory-based package repositories are the **quickest solution** to developing local
       libraries of "software modules".
 
-### Julia &hArr; C/C++: Assembling modules
+### Julia ⇔ C/C++: Assembling modules
   * In C/C++, `.c`/`.cpp` files are compiled & added to a library with build/`make` scripts.
     * In Julia, `import [PkgName]`/`using [PkgName]` statements load `[PkgName].jl` located
       in a package's `[PkgName]/src/` subdirectory.
@@ -412,7 +421,7 @@ For users coming to Julia from R, these are some noteworthy differences:
       Julia package* ("software module"). It is therefore relatively straightforward to ensure
       file are `include`d only once (No `#ifdef` confusion).
 
-### Julia &hArr; C/C++: Module interface
+### Julia ⇔ C/C++: Module interface
   * C++ exposes interfaces using "public" `.h`/`.hpp` files whereas Julia `module`s mark
     specific symbols that are intended for their users as `public`or `export`ed.
     * Often, Julia `module`s simply add functionality by generating new "methods" to existing
@@ -426,7 +435,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     * Users might be expected to access these components by qualifying functions/structs/...
       with the package/module name (ex: `MyModule.run_this_task(...)`).
 
-### Julia &hArr; C/C++: Quick reference
+### Julia ⇔ C/C++: Quick reference
 
 | Software Concept   | Julia | C/C++ |
 | :---               | :---  | :---  |

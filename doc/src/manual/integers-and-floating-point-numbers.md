@@ -243,11 +243,10 @@ julia> x + 1 == typemin(Int64)
 true
 ```
 
-Thus, arithmetic with Julia integers is actually a form of [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic).
-This reflects the characteristics of the underlying arithmetic of integers as implemented on modern
-computers. In applications where overflow is possible, explicit checking for wraparound produced
-by overflow is essential; otherwise, the [`BigInt`](@ref) type in [Arbitrary Precision Arithmetic](@ref)
-is recommended instead.
+Arithmetic operations with Julia's integer types inherently perform [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic),
+mirroring the characteristics of integer arithmetic on modern computer hardware. In scenarios where overflow is a possibility,
+it is crucial to explicitly check for wraparound effects that can result from such overflows.
+The [`Base.Checked`](@ref) module provides a suite of arithmetic operations equipped with overflow checks, which trigger errors if an overflow occurs. For use cases where overflow cannot be tolerated under any circumstances, utilizing the [`BigInt`](@ref) type, as detailed in [Arbitrary Precision Arithmetic](@ref), is advisable.
 
 An example of overflow behavior and how to potentially resolve it is as follows:
 

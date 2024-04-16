@@ -4,9 +4,9 @@ using Test
 import REPL, REPL.REPLCompletions
 import Markdown
 
-function get_help_io(input)
+function get_help_io(input, mod=Main)
     buf = IOBuffer()
-    eval(REPL.helpmode(buf, input))
+    eval(REPL.helpmode(buf, input, mod))
     String(take!(buf))
 end
 get_help_standard(input) = string(eval(REPL.helpmode(IOBuffer(), input)))
@@ -40,7 +40,7 @@ end
     symbols = "@" .* checks .* "_str"
     results = checks .* "\"\""
     for (i,r) in zip(symbols,results)
-        @test r ∈ REPL.doc_completions(i)
+        @test r ∈ string.(REPL.doc_completions(i))
     end
 end
 @testset "fuzzy score" begin
@@ -56,6 +56,13 @@ end
     # Unicode
     @test 1.0 > REPL.fuzzyscore("αkδψm", "αkδm") > 0.0
     @test 1.0 > REPL.fuzzyscore("αkδψm", "α") > 0.0
+
+    exact_match_export = REPL.fuzzyscore("thing", REPL.AccessibleBinding(:thing))
+    exact_match_public = REPL.fuzzyscore("thing", REPL.AccessibleBinding("A", "thing"))
+    inexact_match_export = REPL.fuzzyscore("thing", REPL.AccessibleBinding(:thang))
+    inexact_match_public = REPL.fuzzyscore("thing", REPL.AccessibleBinding("A", "thang"))
+    @test exact_match_export > exact_match_public > inexact_match_export > inexact_match_public
+    @test exact_match_export ≈ 1.0
 end
 
 @testset "Unicode doc lookup (#41589)" begin
@@ -135,3 +142,26 @@ end
 
 # Issue #51344, don't print "internal binding" warning for non-existent bindings.
 @test string(eval(REPL.helpmode("Base.no_such_symbol"))) == "No documentation found.\n\nBinding `Base.no_such_symbol` does not exist.\n"
+
+module TestSuggestPublic
+    export dingo
+    public dango
+    dingo(x) = x + 1
+    dango(x) = x = 2
+end
+using .TestSuggestPublic
+helplines(s) = map(strip, split(get_help_io(s, @__MODULE__), '\n'; keepempty=false))
+@testset "search lists public names" begin
+    lines = helplines("dango")
+    # Ensure that public names that exactly match the search query are listed first
+    # even if they aren't exported, as long as no exact exported/local match exists
+    @test startswith(lines[1], "search: TestSuggestPublic.dango dingo")
+    @test lines[2] == "Couldn't find dango"  # 🙈🍡
+    @test startswith(lines[3], "Perhaps you meant TestSuggestPublic.dango, dingo")
+end
+dango() = "🍡"
+@testset "search prioritizes exported names" begin
+    # Prioritize exported/local names if they exactly match
+    lines = helplines("dango")
+    @test startswith(lines[1], "search: dango TestSuggestPublic.dango dingo")
+end

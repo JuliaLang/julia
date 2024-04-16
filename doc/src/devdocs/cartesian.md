@@ -133,6 +133,7 @@ Base.Cartesian.@nref
 Base.Cartesian.@nextract
 Base.Cartesian.@nexprs
 Base.Cartesian.@ncall
+Base.Cartesian.@ncallkw
 Base.Cartesian.@ntuple
 Base.Cartesian.@nall
 Base.Cartesian.@nany

@@ -1,0 +1,107 @@
+From 1dada6d65d89d19b2cf89b12169f6b2196c90f1d Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Fri, 12 Jan 2024 00:10:56 +0100
+Subject: [PATCH 1/2] Add compiler test and flag for AVX512BF16 capability
+
+---
+ c_check | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/c_check b/c_check
+index b5e4a9ad00..3e507be818 100755
+--- a/c_check
++++ b/c_check
+@@ -244,6 +244,7 @@ case "$data" in
+ esac
+ 
+ no_avx512=0
++no_avx512bf=0
+ if [ "$architecture" = "x86" ] || [ "$architecture" = "x86_64" ]; then
+     tmpd=$(mktemp -d 2>/dev/null || mktemp -d -t 'OBC')
+     tmpf="$tmpd/a.c"
+@@ -262,6 +263,25 @@ if [ "$architecture" = "x86" ] || [ "$architecture" = "x86_64" ]; then
+     }
+ 
+     rm -rf "$tmpd"
++    if [ "$no_avx512" -eq 0 ]; then
++    tmpd=$(mktemp -d 2>/dev/null || mktemp -d -t 'OBC')
++    tmpf="$tmpd/a.c"
++    code='"__m512 a= _mm512_dpbf16_ps(a, (__m512bh) _mm512_loadu_si512(%1]), (__m512bh) _mm512_loadu_si512(%2]));"'
++    printf "#include <immintrin.h>\n\nint main(void){ %s; }\n" "$code" >> "$tmpf"
++    if [ "$compiler" = "PGI" ]; then
++        args=" -tp cooperlake -c -o $tmpf.o $tmpf"
++    else
++        args=" -march=cooperlake -c -o $tmpf.o $tmpf"
++    fi
++    no_avx512bf=0
++    {
++        $compiler_name $flags $args >/dev/null 2>&1
++    } || {
++        no_avx512bf=1
++    }
++
++    rm -rf "$tmpd"
++  fi
+ fi
+ 
+ no_rv64gv=0
+@@ -409,6 +429,7 @@ done
+  [ "$makefile" = "-" ] && {
+     [ "$no_rv64gv" -eq 1 ] && printf "NO_RV64GV=1\n"
+     [ "$no_avx512" -eq 1 ] && printf "NO_AVX512=1\n"
++    [ "$no_avx512bf" -eq 1 ] && printf "NO_AVX512BF16=1\n"
+     [ "$no_avx2" -eq 1 ] && printf "NO_AVX2=1\n"
+     [ "$oldgcc" -eq 1 ] && printf "OLDGCC=1\n"
+     exit 0
+@@ -437,6 +458,7 @@ done
+     [ "$no_sve" -eq 1 ] && printf "NO_SVE=1\n"
+     [ "$no_rv64gv" -eq 1 ] && printf "NO_RV64GV=1\n"
+     [ "$no_avx512" -eq 1 ] && printf "NO_AVX512=1\n"
++    [ "$no_avx512bf" -eq 1 ] && printf "NO_AVX512BF16=1\n"
+     [ "$no_avx2" -eq 1 ] && printf "NO_AVX2=1\n"
+     [ "$oldgcc" -eq 1 ] && printf "OLDGCC=1\n"
+     [ "$no_lsx" -eq 1 ] && printf "NO_LSX=1\n"
+
+From 995a990e24fdcc8080128a8abc17b4ccc66bd4fd Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Fri, 12 Jan 2024 00:12:46 +0100
+Subject: [PATCH 2/2] Make AVX512 BFLOAT16 kernels conditional on compiler
+ capability
+
+---
+ kernel/x86_64/KERNEL.COOPERLAKE     | 3 ++-
+ kernel/x86_64/KERNEL.SAPPHIRERAPIDS | 2 ++
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/x86_64/KERNEL.COOPERLAKE b/kernel/x86_64/KERNEL.COOPERLAKE
+index dba94aea86..22b042029f 100644
+--- a/kernel/x86_64/KERNEL.COOPERLAKE
++++ b/kernel/x86_64/KERNEL.COOPERLAKE
+@@ -1,5 +1,5 @@
+ include $(KERNELDIR)/KERNEL.SKYLAKEX
+-
++ifneq ($(NO_AVX512BF16), 1)
+ SBGEMM_SMALL_M_PERMIT = sbgemm_small_kernel_permit_cooperlake.c
+ SBGEMM_SMALL_K_NN = sbgemm_small_kernel_nn_cooperlake.c
+ SBGEMM_SMALL_K_B0_NN = sbgemm_small_kernel_nn_cooperlake.c
+@@ -20,3 +20,4 @@ SBGEMMINCOPYOBJ =  sbgemm_incopy$(TSUFFIX).$(SUFFIX)
+ SBGEMMITCOPYOBJ =  sbgemm_itcopy$(TSUFFIX).$(SUFFIX)
+ SBGEMMONCOPYOBJ =  sbgemm_oncopy$(TSUFFIX).$(SUFFIX)
+ SBGEMMOTCOPYOBJ =  sbgemm_otcopy$(TSUFFIX).$(SUFFIX)
++endif
+diff --git a/kernel/x86_64/KERNEL.SAPPHIRERAPIDS b/kernel/x86_64/KERNEL.SAPPHIRERAPIDS
+index 3a832e9174..0ab2b4ddcf 100644
+--- a/kernel/x86_64/KERNEL.SAPPHIRERAPIDS
++++ b/kernel/x86_64/KERNEL.SAPPHIRERAPIDS
+@@ -1,5 +1,6 @@
+ include $(KERNELDIR)/KERNEL.COOPERLAKE
+ 
++ifneq ($(NO_AVX512BF16), 1)
+ SBGEMM_SMALL_M_PERMIT =
+ SBGEMM_SMALL_K_NN     =
+ SBGEMM_SMALL_K_B0_NN  =
+@@ -20,3 +21,4 @@ SBGEMMINCOPYOBJ =  sbgemm_incopy$(TSUFFIX).$(SUFFIX)
+ SBGEMMITCOPYOBJ =  sbgemm_itcopy$(TSUFFIX).$(SUFFIX)
+ SBGEMMONCOPYOBJ =  sbgemm_oncopy$(TSUFFIX).$(SUFFIX)
+ SBGEMMOTCOPYOBJ =  sbgemm_otcopy$(TSUFFIX).$(SUFFIX)
++endif

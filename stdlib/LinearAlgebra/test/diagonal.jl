@@ -18,6 +18,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
@@ -47,6 +50,13 @@ Random.seed!(1)
         DI = Diagonal([1,2,3,4])
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
+
+        # diagonal matrices may be converted to Diagonal
+        local A = [1 0; 0 2]
+        local DA = convert(Diagonal{Float32,Vector{Float32}}, A)
+        @test DA isa Diagonal{Float32,Vector{Float32}}
+        @test DA == A
+
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
@@ -778,6 +788,11 @@ end
         D = Diagonal(fill(M, n))
         @test D == Matrix{eltype(D)}(D)
     end
+
+    S = SizedArray{(2,3)}(reshape([1:6;],2,3))
+    D = Diagonal(fill(S,3))
+    @test D * fill(S,2,3)' == fill(S * S', 3, 2)
+    @test fill(S,3,2)' * D == fill(S' * S, 2, 3)
 end
 
 @testset "Eigensystem for block diagonal (issue #30681)" begin
@@ -811,7 +826,7 @@ end
     @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
 end
 
-@testset "multiplication with Symmetric/Hermitian" begin
+@testset "multiplication/division with Symmetric/Hermitian" begin
     for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
         A = randn(T, n, n); A = A'A
@@ -824,6 +839,10 @@ end
             @test *(transform1(D), transform2(H)) ≈ *(transform1(Matrix(D)), transform2(Matrix(H)))
             @test *(transform1(S), transform2(D)) ≈ *(transform1(Matrix(S)), transform2(Matrix(D)))
             @test *(transform1(S), transform2(H)) ≈ *(transform1(Matrix(S)), transform2(Matrix(H)))
+            @test (transform1(H)/D) * D ≈ transform1(H)
+            @test (transform1(S)/D) * D ≈ transform1(S)
+            @test D * (D\transform2(H)) ≈ transform2(H)
+            @test D * (D\transform2(S)) ≈ transform2(S)
         end
     end
 end
@@ -1217,6 +1236,73 @@ end
 
     # currently falls back to two-term *
     @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
+end
+
+@testset "diagind" begin
+    D = Diagonal(1:4)
+    M = Matrix(D)
+    @testset for k in -4:4
+        @test D[diagind(D,k)] == M[diagind(M,k)]
+    end
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    D = Diagonal([1:2;])
+    @test S * D == A * D
+    @test D * S == D * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, D) == mul!(C2, A, D)
+    @test mul!(C1, S, D, 1, 2) == mul!(C2, A, D, 1 ,2)
+    @test mul!(C1, D, S) == mul!(C2, D, A)
+    @test mul!(C1, D, S, 1, 2) == mul!(C2, D, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test D * sv == D * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, D, sv) == mul!(C2, D, v)
+    @test mul!(C1, D, sv, 1, 2) == mul!(C2, D, v, 1 ,2)
+end
+
+@testset "copy" begin
+    @test copy(Diagonal(1:5)) === Diagonal(1:5)
+end
+
+@testset "kron! for Diagonal" begin
+    a = Diagonal([2,2])
+    b = Diagonal([1,1])
+    c = Diagonal([0,0,0,0])
+    kron!(c,b,a)
+    @test c == Diagonal([2,2,2,2])
+    c=Diagonal(Vector{Float64}(undef, 4))
+    kron!(c,a,b)
+    @test c == Diagonal([2,2,2,2])
+end
+
+@testset "mul/div with an adjoint vector" begin
+    A = [1.0;;]
+    x = [1.0]
+    yadj = Diagonal(A) \ x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+    yadj = Diagonal(A) * x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+end
+
+@testset "Matrix conversion for non-numeric and undef" begin
+    D = Diagonal(Vector{BigInt}(undef, 4))
+    M = Matrix(D)
+    D[diagind(D)] .= 4
+    M[diagind(M)] .= 4
+    @test diag(D) == diag(M)
+
+    D = Diagonal(fill(Diagonal([1,3]), 2))
+    M = Matrix{eltype(D)}(D)
+    @test M isa Matrix{eltype(D)}
+    @test M == D
 end
 
 end # module TestDiagonal

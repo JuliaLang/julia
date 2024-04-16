@@ -62,36 +62,54 @@ A HashArrayMappedTrie that optionally supports persistence.
 mutable struct HAMT{K, V}
     const data::Vector{Union{Leaf{K, V}, HAMT{K, V}}}
     bitmap::BITMAP
+    HAMT{K,V}(data, bitmap) where {K,V} = new{K,V}(data, bitmap)
+    HAMT{K, V}() where {K, V} = new{K,V}(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 0), zero(BITMAP))
 end
-HAMT{K, V}() where {K, V} = HAMT(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 0), zero(BITMAP))
-function HAMT{K,V}(k::K, v) where {K, V}
-    v = convert(V, v)
-    # For a single element we can't have a hash-collision
-    trie = HAMT(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 1), zero(BITMAP))
+
+Base.@assume_effects :nothrow :effect_free function init_hamt(K, V, k, v)
+    # For a single element we can't have a 'hash-collision
+    trie = HAMT{K,V}(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 1), zero(BITMAP))
     trie.data[1] = Leaf{K,V}(k,v)
+    return trie
+end
+
+Base.@assume_effects :effect_free function HAMT{K,V}((k,v)::Pair{K,V}) where {K, V}
+    trie = init_hamt(K, V, k, v)
     bi = BitmapIndex(HashState(k))
     set!(trie, bi)
     return trie
 end
-HAMT(k::K, v::V) where {K, V} = HAMT{K,V}(K, V)
+HAMT{K,V}(kv::Pair) where {K, V} = HAMT{K,V}(convert(Pair{K,V}, kv))
 
+HAMT(pair::Pair{K,V}) where {K, V} = HAMT{K,V}(pair)
+
+# TODO: Parameterize by hash function
 struct HashState{K}
     key::K
     hash::UInt
     depth::Int
     shift::Int
 end
-HashState(key)= HashState(key, hash(key), 0, 0)
+HashState(key) = HashState(key, objectid(key), 0, 0)
 # Reconstruct
-HashState(key, depth, shift) = HashState(key, hash(key, UInt(depth ÷ BITS_PER_LEVEL)), depth, shift)
+Base.@assume_effects :terminates_locally function HashState(other::HashState, key)
+    h = HashState(key)
+    while h.depth !== other.depth
+        h = next(h)
+    end
+    return h
+end
 
 function next(h::HashState)
     depth = h.depth + 1
     shift = h.shift + BITS_PER_LEVEL
+    # Assert disabled for effect precision
+    # @assert h.shift <= MAX_SHIFT
     if shift > MAX_SHIFT
         # Note we use `UInt(depth ÷ BITS_PER_LEVEL)` to seed the hash function
         # the hash docs, do we need to hash `UInt(depth ÷ BITS_PER_LEVEL)` first?
-        h_hash = hash(h.key, UInt(depth ÷ BITS_PER_LEVEL))
+        h_hash = hash(objectid(h.key), UInt(depth ÷ BITS_PER_LEVEL))
+        shift = 0
     else
         h_hash = h.hash
     end
@@ -137,8 +155,7 @@ as the current `level`.
 If a copy function is provided `copyf` use the return `top` for the
 new persistent tree.
 """
-@inline function path(trie::HAMT{K,V}, key, _h, copy=false) where {K, V}
-    h = HashState(key, _h, 0, 0)
+@inline @Base.assume_effects :noub :terminates_locally function path(trie::HAMT{K,V}, key, h::HashState, copy=false) where {K, V}
     if copy
         trie = top = HAMT{K,V}(Base.copy(trie.data), trie.bitmap)
     else
@@ -151,11 +168,12 @@ new persistent tree.
             next = @inbounds trie.data[i]
             if next isa Leaf{K,V}
                 # Check if key match if not we will need to grow.
-                found = (next.key === h.key || isequal(next.key, h.key))
+                found = next.key === h.key
                 return found, true, trie, i, bi, top, h
             end
             if copy
                 next = HAMT{K,V}(Base.copy(next.data), next.bitmap)
+                # :noub because entry_index is guaranteed to be inbounds for trie.data
                 @inbounds trie.data[i] = next
             end
             trie = next::HAMT{K,V}
@@ -171,7 +189,7 @@ end
 Internal function that given an obtained path, either set the value
 or grows the HAMT by inserting a new trie instead.
 """
-@inline function insert!(found, present, trie::HAMT{K,V}, i, bi, h, val) where {K,V}
+@inline @Base.assume_effects :terminates_locally function insert!(found, present, trie::HAMT{K,V}, i, bi, h, val) where {K,V}
     if found # we found a slot, just set it to the new leaf
         # replace or insert
         if present # replace
@@ -184,7 +202,7 @@ or grows the HAMT by inserting a new trie instead.
         @assert present
         # collision -> grow
         leaf = @inbounds trie.data[i]::Leaf{K,V}
-        leaf_h = HashState(leaf.key, h.depth, h.shift)
+        leaf_h = HashState(h, leaf.key)
         if leaf_h.hash == h.hash
             error("Perfect hash collision")
         end

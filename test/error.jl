@@ -96,7 +96,11 @@ end
         f44319(1)
     catch e
         s = sprint(showerror, e)
-        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\n\nClosest candidates are:\n  f44319()\n   @ $curmod_str none:0\n"
+        @test s == """MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))
+                      The function `f44319` exists, but no method is defined for this combination of argument types.
+
+                      Closest candidates are:\n  f44319()\n   @ $curmod_str none:0
+                      """
     end
 end
 
@@ -123,3 +127,15 @@ end
     visited = test_exceptions(Base)
     test_exceptions(Core, visited)
 end
+
+# inference quality test for `error`
+@test Base.infer_return_type(error, (Any,)) === Union{}
+@test Base.infer_return_type(xs->error(xs...), (Vector{Any},)) === Union{}
+module Issue54029
+export raise54029
+Base.Experimental.@max_methods 1
+raise54029(x) = error(x)
+end
+using .Issue54029
+@test Base.infer_return_type(raise54029, (Any,)) === Union{}
+@test Base.infer_return_type(xs->raise54029(xs...), (Vector{Any},)) === Union{}

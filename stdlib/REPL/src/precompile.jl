@@ -4,8 +4,14 @@ module Precompile
 # Can't use this during incremental: `@eval Module() begin``
 
 import ..REPL
+# Prepare this staging area with all the loaded packages available
+for (_pkgid, _mod) in Base.loaded_modules
+    if !(_pkgid.name in ("Main", "Core", "Base", "REPL"))
+        eval(:(const $(Symbol(_mod)) = $_mod))
+    end
+end
 
-# Ugly hack for our cache file to not have a dependency edge on FakePTYs.
+# Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
 Base._track_dependencies[] = false
 try
     Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
@@ -16,6 +22,7 @@ end
 using Base.Meta
 
 import Markdown
+import StyledStrings
 
 ## Debugging options
 # Disable parallel precompiles generation by setting `false`
@@ -78,11 +85,18 @@ generate_precompile_statements() = try
         # Collect statements from running a REPL process and replaying our REPL script
         touch(precompile_file)
         pts, ptm = open_fake_pty()
-        cmdargs = `-e 'import REPL; REPL.Terminals.is_precompiling[] = true'`
-        p = run(addenv(addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file
-                --cpu-target=native --startup-file=no --compiled-modules=existing --color=yes -i $cmdargs```, procenv),
-                "JULIA_PKG_PRECOMPILE_AUTO" => "0"),
-            pts, pts, pts; wait=false)
+        # we don't want existing REPL caches to be used so ignore them
+        setup_cmd = """
+        push!(Base.ignore_compiled_cache, Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+        import REPL
+        REPL.Terminals.is_precompiling[] = true
+        """
+        p = run(
+                addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file
+                    --cpu-target=native --startup-file=no --compiled-modules=existing
+                    --color=yes -i -e "$setup_cmd"```, procenv),
+                pts, pts, pts; wait=false
+            )
         Base.close_stdio(pts)
         # Prepare a background process to copy output from process until `pts` is closed
         output_copy = Base.BufferStream()
@@ -164,10 +178,10 @@ generate_precompile_statements() = try
         end
         close(precompile_copy)
         wait(buffer_reader)
-        close(statements_step)
         return :ok
     end
     !PARALLEL_PRECOMPILATION && wait(step)
+    bind(statements_step, step)
 
     # Make statements unique
     statements = Set{String}()
@@ -181,9 +195,9 @@ generate_precompile_statements() = try
             if !isexpr(ps, :call)
                 # these are typically comments
                 @debug "skipping statement because it does not parse as an expression" statement
+                delete!(statements, statement)
                 continue
             end
-            push!(REPL.PRECOMPILE_STATEMENTS, statement)
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
             # println(ps)
@@ -197,17 +211,13 @@ generate_precompile_statements() = try
         end
     end
 
-    fetch(step) == :ok || throw("Collecting precompiles failed.")
+    fetch(step) == :ok || throw("Collecting precompiles failed: $(c.excp)")
     return nothing
 finally
     GC.gc(true); GC.gc(false); # reduce memory footprint
 end
 
 generate_precompile_statements()
-
-# As a last step in system image generation,
-# remove some references to build time environment for a more reproducible build.
-Base.Filesystem.temp_cleanup_purge(force=true)
 
 precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
 end # Precompile

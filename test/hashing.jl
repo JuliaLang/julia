@@ -302,3 +302,5 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
     # test hashing of rational with odd denominator
     @test hash(5//3) == hash(big(5)//3)
 end
+
+@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))

@@ -10,7 +10,7 @@
 Xoshiro256++ is a fast pseudorandom number generator described by David Blackman and
 Sebastiano Vigna in "Scrambled Linear Pseudorandom Number Generators",
 ACM Trans. Math. Softw., 2021. Reference implementation is available
-at http://prng.di.unimi.it
+at https://prng.di.unimi.it
 
 Apart from the high speed, Xoshiro has a small memory footprint, making it suitable for
 applications where many different random states need to be held for long time.

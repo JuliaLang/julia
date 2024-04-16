@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/LibGit2/docs/src/index.md"
+```
+
 # LibGit2
 
 The LibGit2 module provides bindings to [libgit2](https://libgit2.org/), a portable C library that

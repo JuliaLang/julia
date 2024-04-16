@@ -125,6 +125,12 @@ JL_USED_FUNC void AllocUseInfo::dump(llvm::raw_ostream &OS)
     OS << "hastypeof: " << hastypeof << '\n';
     OS << "refload: " << refload << '\n';
     OS << "refstore: " << refstore << '\n';
+    OS << "allockind:";
+    if ((allockind & AllocFnKind::Uninitialized) != AllocFnKind::Unknown)
+      OS << " uninitialized";
+    if ((allockind & AllocFnKind::Zeroed) != AllocFnKind::Unknown)
+      OS << " zeroed";
+    OS << '\n';
     OS << "Uses: " << uses.size() << '\n';
     for (auto inst: uses)
         inst->print(OS);
@@ -164,8 +170,11 @@ JL_USED_FUNC void AllocUseInfo::dump()
 #define REMARK(remark)
 #endif
 
-void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
+void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
     required.use_info.reset();
+    Attribute allockind = I->getFnAttr(Attribute::AllocKind);
+    if (allockind.isValid())
+        required.use_info.allockind = allockind.getAllocKind();
     if (I->use_empty())
         return;
     CheckInst::Frame cur{I, 0, I->use_begin(), I->use_end()};

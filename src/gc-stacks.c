@@ -37,7 +37,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
         VirtualFree(stk, 0, MEM_RELEASE);
         return MAP_FAILED;
     }
-    jl_atomic_fetch_add(&num_stack_mappings, 1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
 
@@ -45,11 +45,21 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 static void free_stack(void *stkbuf, size_t bufsz)
 {
     VirtualFree(stkbuf, 0, MEM_RELEASE);
-    jl_atomic_fetch_add(&num_stack_mappings, -1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
 }
 
 #else
 
+# ifdef _OS_OPENBSD_
+static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
+{
+    void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    if (stk == MAP_FAILED)
+        return MAP_FAILED;
+    jl_atomic_fetch_add(&num_stack_mappings, 1);
+    return stk;
+}
+# else
 static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
     void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -62,14 +72,15 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
         return MAP_FAILED;
     }
 #endif
-    jl_atomic_fetch_add(&num_stack_mappings, 1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
+# endif
 
 static void free_stack(void *stkbuf, size_t bufsz)
 {
     munmap(stkbuf, bufsz);
-    jl_atomic_fetch_add(&num_stack_mappings, -1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
 }
 #endif
 
@@ -203,12 +214,17 @@ void sweep_stack_pools(void)
     assert(gc_n_threads);
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
 
         // free half of stacks that remain unused since last sweep
         for (int p = 0; p < JL_N_STACK_POOLS; p++) {
             small_arraylist_t *al = &ptls2->heap.free_stacks[p];
             size_t n_to_free;
-            if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
+            if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
+            }
+            else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
                 n_to_free = al->len / 2;
                 if (n_to_free > (al->len - MIN_STACK_MAPPINGS_PER_POOL))
                     n_to_free = al->len - MIN_STACK_MAPPINGS_PER_POOL;
@@ -220,6 +236,12 @@ void sweep_stack_pools(void)
                 void *stk = small_arraylist_pop(al);
                 free_stack(stk, pool_sizes[p]);
             }
+            if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                small_arraylist_free(al);
+            }
+        }
+        if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+            small_arraylist_free(ptls2->heap.free_stacks);
         }
 
         small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;

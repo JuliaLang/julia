@@ -82,7 +82,13 @@ struct IOError <: Exception
     IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end
 
-showerror(io::IO, e::IOError) = print(io, "IOError: ", e.msg)
+function showerror(io::IO, e::IOError)
+    print(io, "IOError: ", e.msg)
+    if e.code == UV_ENOENT && '~' in e.msg
+        print(io, "\nMany shells expand '~' to the home directory in unquoted strings. To replicate this behavior, call",
+                  " `expanduser` to expand the '~' character to the user’s home directory.")
+    end
+end
 
 function _UVError(pfx::AbstractString, code::Integer)
     code = Int32(code)
@@ -128,9 +134,9 @@ function uv_asynccb end
 function uv_timercb end
 
 function reinit_stdio()
-    global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
-    global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
-    global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+    global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))::IO
+    global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
+    global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO
     opts = JLOptions()
     if opts.color != 0
         have_color = (opts.color == 1)

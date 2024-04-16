@@ -24,10 +24,12 @@
 #endif
 
 // Figure out the best signals/timers to use for this platform
-#ifdef __APPLE__ // Darwin's mach ports allow signal-free thread management
+#if defined(__APPLE__) // Darwin's mach ports allow signal-free thread management
 #define HAVE_MACH
 #define HAVE_KEVENT
-#else // generic Linux or BSD
+#elif defined(__OpenBSD__)
+#define HAVE_KEVENT
+#else // generic Linux or FreeBSD
 #define HAVE_TIMER
 #endif
 
@@ -35,10 +37,8 @@
 #include <sys/event.h>
 #endif
 
-// 8M signal stack, same as default stack size and enough
-// for reasonable finalizers.
-// Should also be enough for parallel GC when we have it =)
-#define sig_stack_size (8 * 1024 * 1024)
+// 8M signal stack, same as default stack size (though we barely use this)
+static const size_t sig_stack_size = 8 * 1024 * 1024;
 
 #include "julia_assert.h"
 
@@ -85,6 +85,9 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.mc_rsp;
+#elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
+    const struct sigcontext *ctx = (const struct sigcontext *)_ctx;
+    return ctx->sc_rsp;
 #else
     // TODO Add support for PowerPC(64)?
     return 0;
@@ -94,8 +97,9 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
 {
     // One guard page for signal_stack.
-    return !((char*)ptr < (char*)ptls->signal_stack - jl_page_size ||
-             (char*)ptr > (char*)ptls->signal_stack + sig_stack_size);
+    return ptls->signal_stack == NULL ||
+           ((char*)ptr >= (char*)ptls->signal_stack - jl_page_size &&
+            (char*)ptr <= (char*)ptls->signal_stack + (ptls->signal_stack_size ? ptls->signal_stack_size : sig_stack_size));
 }
 
 // Modify signal context `_ctx` so that `fptr` will execute when the signal
@@ -111,7 +115,7 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     // checks that the syscall is made in the signal handler and that
     // the ucontext address is valid. Hopefully the value of the ucontext
     // will not be part of the validation...
-    if (!ptls || !ptls->signal_stack) {
+    if (!ptls) {
         sigset_t sset;
         sigemptyset(&sset);
         sigaddset(&sset, sig);
@@ -120,13 +124,12 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
         return;
     }
     uintptr_t rsp = jl_get_rsp_from_ctx(_ctx);
-    if (is_addr_on_sigstack(ptls, (void*)rsp)) {
+    if (is_addr_on_sigstack(ptls, (void*)rsp))
         rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
-    }
-    else {
-        rsp = (uintptr_t)ptls->signal_stack + sig_stack_size;
-    }
+    else
+        rsp = (uintptr_t)ptls->signal_stack + (ptls->signal_stack_size ? ptls->signal_stack_size : sig_stack_size);
     assert(rsp % 16 == 0);
+    rsp -= 16;
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     rsp -= sizeof(void*);
@@ -147,6 +150,11 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     rsp -= sizeof(void*);
     ctx->uc_mcontext.mc_esp = rsp;
     ctx->uc_mcontext.mc_eip = (uintptr_t)fptr;
+#elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
+    struct sigcontext *ctx = (struct sigcontext *)_ctx;
+    rsp -= sizeof(void*);
+    ctx->sc_rsp = rsp;
+    ctx->sc_rip = fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     ctx->uc_mcontext.sp = rsp;
@@ -229,15 +237,22 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
     uv_tty_reset_mode();
     if (sig == SIGILL)
         jl_show_sigill(context);
-    jl_critical_error(sig, info->si_code, jl_to_bt_context(context), jl_get_current_task());
+    jl_task_t *ct = jl_get_current_task();
+    jl_critical_error(sig, info->si_code, jl_to_bt_context(context), ct);
+    if (ct)
+        jl_atomic_store_relaxed(&ct->ptls->safepoint, (size_t*)NULL + 1);
     if (info->si_code == 0 ||
         info->si_code == SI_USER ||
 #ifdef SI_KERNEL
         info->si_code == SI_KERNEL ||
 #endif
         info->si_code == SI_QUEUE ||
+#ifdef SI_MESGQ
         info->si_code == SI_MESGQ ||
+#endif
+#ifdef SI_ASYNCIO
         info->si_code == SI_ASYNCIO ||
+#endif
 #ifdef SI_SIGIO
         info->si_code == SI_SIGIO ||
 #endif
@@ -252,7 +267,8 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
              sig != SIGFPE &&
              sig != SIGTRAP)
         raise(sig);
-    // fall-through return to re-execute faulting statement (but without the error handler)
+    // fall-through return to re-execute faulting statement (but without the
+    // error handler and the pgcstack having been destroyed)
 }
 
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
@@ -334,6 +350,11 @@ int is_write_fault(void *context) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
 }
+#elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
+int is_write_fault(void *context) {
+    struct sigcontext *ctx = (struct sigcontext *)context;
+    return exc_reg_is_write_fault(ctx->sc_err);
+}
 #else
 #pragma message("Implement this query for consistent PROT_NONE handling")
 int is_write_fault(void *context) {
@@ -343,7 +364,8 @@ int is_write_fault(void *context) {
 
 static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
 {
-    return (is_addr_on_sigstack(ptls, ptr) &&
+    return (ptls->signal_stack != NULL &&
+            is_addr_on_sigstack(ptls, ptr) &&
             is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
 }
 
@@ -612,6 +634,17 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     }
 }
 
+#elif defined(__OpenBSD__)
+
+JL_DLLEXPORT int jl_profile_start_timer(void)
+{
+    return -1;
+}
+
+JL_DLLEXPORT void jl_profile_stop_timer(void)
+{
+}
+
 #else
 
 #error no profile tools available
@@ -635,30 +668,41 @@ static void allocate_segv_handler(void)
     }
 }
 
-static void *alloc_sigstack(size_t *ssize)
-{
-    void *stk = jl_malloc_stack(ssize, NULL);
-    if (stk == NULL)
-        jl_errorf("fatal error allocating signal stack: mmap: %s", strerror(errno));
-    return stk;
-}
-
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
-    size_t ssize = sig_stack_size;
-    void *signal_stack = alloc_sigstack(&ssize);
-    ptls->signal_stack = signal_stack;
-    stack_t ss;
-    ss.ss_flags = 0;
-    ss.ss_size = ssize - 16;
-    ss.ss_sp = signal_stack;
-    if (sigaltstack(&ss, NULL) < 0) {
-        jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
-    }
-
 #ifdef HAVE_MACH
     attach_exception_port(pthread_mach_thread_np(ptls->system_id), 0);
 #endif
+    stack_t ss;
+    if (sigaltstack(NULL, &ss) < 0)
+        jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
+    if ((ss.ss_flags & SS_DISABLE) != SS_DISABLE)
+        return; // someone else appears to have already set this up, so just use that
+    size_t ssize = sig_stack_size;
+    void *signal_stack = jl_malloc_stack(&ssize, NULL);
+    ss.ss_flags = 0;
+    ss.ss_size = ssize;
+    assert(ssize != 0);
+
+#ifndef _OS_OPENBSD_
+    /* fallback to malloc(), but it isn't possible on OpenBSD */
+    if (signal_stack == NULL) {
+        signal_stack = malloc(ssize);
+        ssize = 0;
+        if (signal_stack == NULL)
+            jl_safe_printf("\nwarning: julia signal alt stack could not be allocated (StackOverflowError will be fatal on this thread).\n");
+        else
+            jl_safe_printf("\nwarning: julia signal stack allocated without guard page (launch foreign threads earlier to avoid this warning).\n");
+    }
+#endif
+
+    if (signal_stack != NULL) {
+        ss.ss_sp = signal_stack;
+        if (sigaltstack(&ss, NULL) < 0)
+            jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
+        ptls->signal_stack = signal_stack;
+        ptls->signal_stack_size = ssize;
+    }
 }
 
 const static int sigwait_sigs[] = {
@@ -1029,7 +1073,7 @@ void jl_install_default_signal_handlers(void)
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
     actf.sa_sigaction = fpe_handler;
-    actf.sa_flags = SA_ONSTACK | SA_SIGINFO;
+    actf.sa_flags = SA_SIGINFO;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
@@ -1038,7 +1082,7 @@ void jl_install_default_signal_handlers(void)
     memset(&acttrap, 0, sizeof(struct sigaction));
     sigemptyset(&acttrap.sa_mask);
     acttrap.sa_sigaction = sigtrap_handler;
-    acttrap.sa_flags = SA_ONSTACK | SA_SIGINFO;
+    acttrap.sa_flags = SA_SIGINFO;
     if (sigaction(SIGTRAP, &acttrap, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }

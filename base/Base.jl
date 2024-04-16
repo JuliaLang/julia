@@ -34,6 +34,8 @@ ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+macro _boundscheck() Expr(:boundscheck) end
+
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
@@ -89,6 +91,36 @@ function replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol
     val = desired isa ty ? desired : convert(ty, desired)
     return Core.replacefield!(x, f, expected, val, success_order, fail_order)
 end
+function setpropertyonce!(x, f::Symbol, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.setfieldonce!(x, f, val, success_order, fail_order)
+end
+
+function swapproperty!(x::Module, f::Symbol, v, order::Symbol=:not_atomic)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = v isa ty ? v : convert(ty, v)
+    return Core.swapglobal!(x, f, val, order)
+end
+function modifyproperty!(x::Module, f::Symbol, op, v, order::Symbol=:not_atomic)
+    @inline
+    return Core.modifyglobal!(x, f, op, v, order)
+end
+function replaceproperty!(x::Module, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.replaceglobal!(x, f, expected, val, success_order, fail_order)
+end
+function setpropertyonce!(x::Module, f::Symbol, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.setglobalonce!(x, f, val, success_order, fail_order)
+end
+
 
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
@@ -105,6 +137,7 @@ if isdefined(Core, :Compiler)
 end
 
 include("exports.jl")
+include("public.jl")
 
 if false
     # simple print definitions for debugging. enable these if something
@@ -479,6 +512,7 @@ include("summarysize.jl")
 include("errorshow.jl")
 
 include("initdefs.jl")
+Filesystem.__postinit__()
 
 # worker threads
 include("threadcall.jl")
@@ -509,6 +543,8 @@ if isdefined(Core, :Compiler) && is_primary_base_module
     Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 end
 
+include("precompilation.jl")
+
 # finally, now make `include` point to the full version
 for m in methods(include)
     delete_method(m)
@@ -532,74 +568,16 @@ end_base_include = time_ns()
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
-# Precompiles for Revise and other packages
-# TODO: move these to contrib/generate_precompile.jl
-# The problem is they don't work there
-for match = _methods(+, (Int, Int), -1, get_world_counter())
-    m = match.method
-    delete!(push!(Set{Method}(), m), m)
-    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
-
-    empty!(Set())
-    push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
-    (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
-    (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
-    (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
-    (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
-    (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
-    Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
-    Dict(Base => [:(1+1)])[Base]
-    Dict(:one => [1])[:one]
-    Dict("abc" => Set())["abc"]
-    pushfirst!([], sum)
-    get(Base.pkgorigins, Base.PkgId(Base), nothing)
-    sort!([1,2,3])
-    unique!([1,2,3])
-    cumsum([1,2,3])
-    append!(Int[], BitSet())
-    isempty(BitSet())
-    delete!(BitSet([1,2]), 3)
-    deleteat!(Int32[1,2,3], [1,3])
-    deleteat!(Any[1,2,3], [1,3])
-    Core.svec(1, 2) == Core.svec(3, 4)
-    any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
-
-    # Code loading uses this
-    sortperm(mtime.(readdir(".")), rev=true)
-    # JLLWrappers uses these
-    Dict{UUID,Set{String}}()[UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
-    get!(Set{String}, Dict{UUID,Set{String}}(), UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
-    eachindex(IndexLinear(), Expr[])
-    push!(Expr[], Expr(:return, false))
-    vcat(String[], String[])
-    k, v = (:hello => nothing)
-    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
-    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
-    # Preferences uses these
-    precompile(get_preferences, (UUID,))
-    precompile(record_compiletime_preference, (UUID, String))
-    get(Dict{String,Any}(), "missing", nothing)
-    delete!(Dict{String,Any}(), "missing")
-    for (k, v) in Dict{String,Any}()
-        println(k)
-    end
-
-    break   # only actually need to do this once
-end
-
 if is_primary_base_module
 
 # Profiling helper
 # triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 # Needs to be in Base because Profile is no longer loaded on boot
-const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
-function profile_printing_listener()
+function profile_printing_listener(cond::Base.AsyncCondition)
     profile = nothing
     try
-        while true
-            wait(PROFILE_PRINT_COND[])
-            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))
-
+        while _trywait(cond)
+            profile = @something(profile, require_stdlib(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))::Module
             invokelatest(profile.peek_report[])
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
@@ -612,10 +590,13 @@ function profile_printing_listener()
             @error "Profile printing listener crashed" exception=ex,catch_backtrace()
         end
     end
+    nothing
 end
 
 function __init__()
     # Base library init
+    global _atexit_hooks_finished = false
+    Filesystem.__postinit__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
@@ -623,6 +604,7 @@ function __init__()
     init_load_path()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
+    empty!(explicit_loaded_modules)
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end
@@ -631,9 +613,20 @@ function __init__()
         # triggering a profile via signals is not implemented on windows
         cond = Base.AsyncCondition()
         Base.uv_unref(cond.handle)
-        PROFILE_PRINT_COND[] = cond
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
-        errormonitor(Threads.@spawn(profile_printing_listener()))
+        t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+        atexit() do
+            # destroy this callback when exiting
+            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+            # this will prompt any ongoing or pending event to flush also
+            close(cond)
+            # error-propagation is not needed, since the errormonitor will handle printing that better
+            _wait(t)
+        end
+        finalizer(cond) do c
+            # if something goes south, still make sure we aren't keeping a reference in C to this
+            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        end
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
     end
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.

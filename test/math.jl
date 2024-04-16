@@ -47,6 +47,17 @@ has_fma = Dict(
         clamp!(x, 1, 3)
         @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
     end
+
+    @test clamp(typemax(UInt64), Int64) === typemax(Int64)
+    @test clamp(typemin(Int), UInt64) === typemin(UInt64)
+    @test clamp(Int16(-1), UInt16) === UInt16(0)
+    @test clamp(-1, 2, UInt(0)) === UInt(2)
+    @test clamp(typemax(UInt16), Int16) === Int16(32767)
+
+    # clamp should not allocate a BigInt for typemax(Int16)
+    x = big(2) ^ 100
+    @test (@allocated clamp(x, Int16)) == 0
+
 end
 
 @testset "constants" begin
@@ -1355,6 +1366,16 @@ end
     # hypot on Complex returns Real
     @test (@inferred hypot(3, 4im)) === 5.0
     @test (@inferred hypot(3, 4im, 12)) === 13.0
+    @testset "promotion, issue #53505" begin
+        @testset "Int,$T" for T in (Float16, Float32, Float64, BigFloat)
+            for args in ((3, 4), (3, 4, 12))
+                for i in eachindex(args)
+                    targs = ntuple(j -> (j == i) ? T(args[j]) : args[j], length(args))
+                    @test (@inferred hypot(targs...)) isa float(eltype(promote(targs...)))
+                end
+            end
+        end
+    end
 end
 
 struct BadFloatWrapper <: AbstractFloat
@@ -1542,23 +1563,13 @@ end
 end
 
 @testset "constant-foldability of core math functions" begin
-    for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt, :fourthroot,
-            :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
-            :exp, :exp2, :exp10, :expm1
-            )
-        for T in (Float16, Float32, Float64)
-            @testset let f = getfield(@__MODULE__, fn), T = T
-                @test Core.Compiler.is_foldable(Base.infer_effects(f, (T,)))
-            end
-        end
-    end
-end;
-@testset "removability of core math functions" begin
-    for T in (Float16, Float32, Float64)
+    for T = Any[Float16, Float32, Float64]
         @testset let T = T
-            for f in (exp, exp2, exp10)
+            for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
+                        asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
                 @testset let f = f
-                    @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+                    @test Base.infer_return_type(f, (T,)) != Union{}
+                    @test Core.Compiler.is_foldable(Base.infer_effects(f, (T,)))
                 end
             end
             @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
@@ -1566,9 +1577,50 @@ end;
         end
     end
 end;
+@testset "removability of core math functions" begin
+    for T = Any[Float16, Float32, Float64]
+        @testset let T = T
+            for f = Any[exp, exp2, exp10, expm1]
+                @testset let f = f
+                    @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+                end
+            end
+        end
+    end
+end;
+@testset "exception type inference of core math functions" begin
+    MathErrorT = Union{DomainError, InexactError}
+    for T = (Float16, Float32, Float64)
+        @testset let T = T
+            for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
+                        asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
+                @testset let f = f
+                    @test Base.infer_exception_type(f, (T,)) <: MathErrorT
+                end
+            end
+            @test Base.infer_exception_type(^, (T,Int)) <: MathErrorT
+            @test Base.infer_exception_type(^, (T,T)) <: MathErrorT
+        end
+    end
+end;
+@test Base.infer_return_type((Int,)) do x
+    local r = nothing
+    try
+        r = sin(x)
+    catch err
+        if err isa DomainError
+            r = 0.0
+        end
+    end
+    return r
+end === Float64
 
 @testset "BigInt Rationals with special funcs" begin
     @test sinpi(big(1//1)) == big(0.0)
     @test tanpi(big(1//1)) == big(0.0)
     @test cospi(big(1//1)) == big(-1.0)
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(MathConstants))
 end

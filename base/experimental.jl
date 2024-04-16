@@ -143,7 +143,7 @@ code to resort to runtime dispatch instead.
 Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
 """
 macro max_methods(n::Int)
-    0 < n < 5 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
+    1 <= n <= 4 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
     return Expr(:meta, :max_methods, n)
 end
 
@@ -156,13 +156,13 @@ for max_methods. This setting is global for the entire generic function (or more
 the MethodTable).
 """
 macro max_methods(n::Int, fdef::Expr)
-    0 < n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
+    1 <= n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
     (fdef.head === :function && length(fdef.args) == 1) || error("Second argument must be a function forward declaration")
     return :(typeof($(esc(fdef))).name.max_methods = $(UInt8(n)))
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,...}
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -195,7 +195,7 @@ macro compiler_options(args...)
             elseif ex.args[1] === :max_methods
                 a = ex.args[2]
                 a = a === :default ? 3 :
-                  a isa Int ? ((0 < a < 5) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
+                  a isa Int ? ((1 <= a <= 4) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
                   error("invalid argument to \"max_methods\" option")
                 push!(opts.args, Expr(:meta, :max_methods, a))
             else
@@ -254,7 +254,7 @@ When issuing a hint, the output should typically start with `\\n`.
 If you define custom exception types, your `showerror` method can
 support hints by calling [`Experimental.show_error_hints`](@ref).
 
-# Example
+# Examples
 
 ```
 julia> module Hinter
@@ -280,6 +280,7 @@ Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby tri
 ```
 julia> Hinter.only_int(1.0)
 ERROR: MethodError: no method matching only_int(::Float64)
+The function `only_int` exists, but no method is defined for this combination of argument types.
 Did you mean to call `any_number`?
 Closest candidates are:
     ...
