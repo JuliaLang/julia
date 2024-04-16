@@ -115,11 +115,14 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
     trimmedpind = _trimmedpind(V.indices...)
     vdest = trimmedpind isa Tuple{Vararg{Union{Slice,Colon}}} ? dest : view(dest, trimmedpind...)
     copyto!(vdest, view(V, _trimmedvind(V.indices...)...))
-    SubArray{T,N,A,I,LD}(dest, map(_trimmedindex, V.indices), 0, Int(LD))
+    indices = map(_trimmedindex, V.indices)
+    stride1 = LD ? compute_stride1(dest, indices) : 0
+    offset1 = LD ? compute_offset1(dest, stride1, indices) : 0
+    SubArray{T,N,A,I,LD}(dest, indices, offset1, stride1)
 end
 # Get the proper trimmed shape
 _trimmedshape(::ScalarIndex, rest...) = (1, _trimmedshape(rest...)...)
-_trimmedshape(i::AbstractRange, rest...) = (maximum(i), _trimmedshape(rest...)...)
+_trimmedshape(i::AbstractRange, rest...) = (isempty(i) ? zero(eltype(i)) : maximum(i), _trimmedshape(rest...)...)
 _trimmedshape(i::Union{UnitRange,StepRange,OneTo}, rest...) = (length(i), _trimmedshape(rest...)...)
 _trimmedshape(i::AbstractArray{<:ScalarIndex}, rest...) = (length(i), _trimmedshape(rest...)...)
 _trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{0}}, rest...) = _trimmedshape(rest...)
