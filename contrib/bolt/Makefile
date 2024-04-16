@@ -36,13 +36,13 @@ BOLT_FLAGS := $\
 STAGE0_BUILD:=$(CURDIR)/toolchain
 STAGE1_BUILD:=$(CURDIR)/bolt.build
 
-STAGE0_TOOLS:=$(STAGE0_BUILD)/usr/tools/
+STAGE0_BINARIES:=$(STAGE0_BUILD)/usr/bin/
 
 PROFILE_DIR:=$(CURDIR)/profiles-bolt
 JULIA_ROOT:=$(CURDIR)/../..
 
-LLVM_BOLT:=$(STAGE0_TOOLS)llvm-bolt
-LLVM_MERGEFDATA:=$(STAGE0_TOOLS)merge-fdata
+LLVM_BOLT:=$(STAGE0_BINARIES)llvm-bolt
+LLVM_MERGEFDATA:=$(STAGE0_BINARIES)merge-fdata
 
 # TODO: work out why libjulia-codegen.so doesn't produce a profile.
 # If you add new files to optimize, you need to add BOLT_LDFLAGS and BOLT_CXXFLAGS to the build of your new file.
@@ -61,7 +61,7 @@ $(STAGE0_BUILD) $(STAGE1_BUILD):
 # This is solely to install llvm-bolt and merge-fdata
 stage0: export USE_BINARYBUILDER_LLVM=1
 stage0: | $(STAGE0_BUILD)
-	$(MAKE) -C $(STAGE0_BUILD)/deps install-llvm && \
+	$(MAKE) -C $(STAGE0_BUILD)/deps install-bolt && \
 	touch $@
 
 # Build with our custom flags, binary builder doesn't use them so we need to build LLVM for now.

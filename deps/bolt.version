@@ -1,0 +1,11 @@
+# -*- makefile -*-
+
+BOLT_VER := 18.1.3
+
+## jll artifact
+BOLT_JLL_NAME := BOLT
+BOLT_JLL_VER := $(BOLT_VER)
+
+## source build
+BOLT_BRANCH=llvmorg-$(BOLT_VER)
+BOLT_SHA1=c13b7485b87909fcf739f62cfa382b55407433c0
