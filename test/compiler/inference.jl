@@ -5759,6 +5759,19 @@ let interp = LocalCacheInterp()
     end == 0
 end
 
+func_unused_constprop2_inter(x, y) = func_unused_constprop2(x, y)
+function test_func_unused_constprop2_inter(x)
+    x₁ = func_unused_constprop2_inter(x, true)
+    x₂ = func_unused_constprop2_inter(x, false)
+    return x₁, x₂
+end;
+let interp = LocalCacheInterp()
+    @test Base.infer_return_type(test_func_unused_constprop2_inter, (Float64,); interp) == Tuple{Base.RefValue{Float64}, Base.RefValue{Float64}}
+    @test_broken count(interp.inf_cache) do result
+        result.linfo.def.name === :func_unused_constprop2_inter
+    end == 0
+end
+
 @noinline Base.@constprop :aggressive function func_unused_constprop3(x, y)
     z = y
     return Ref(sin(x)) # NOTE Ref(...) prevents semi-concrete interpretation

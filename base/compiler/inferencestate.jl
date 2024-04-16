@@ -854,7 +854,7 @@ end
 frame_parent(sv::InferenceState) = sv.parent::Union{Nothing,AbsIntState}
 frame_parent(sv::IRInterpretationState) = sv.parent::Union{Nothing,AbsIntState}
 
-is_constproped(sv::InferenceState) = sv.result.argsinfo isa ArgtypeOverridden
+is_constproped(sv::InferenceState) = sv.result.argsinfo isa ArgtypeOverrideInfo
 is_constproped(::IRInterpretationState) = true
 
 is_cached(sv::InferenceState) = !iszero(sv.cache_mode & CACHE_MODE_GLOBAL)

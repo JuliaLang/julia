@@ -99,14 +99,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             this_rt = widenwrappedconditional(this_rt)
         else
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)
-            (; rt, exct, edge, effects, volatile_inf_result, used) = result
+            (; rt, exct, edge, effects, volatile_inf_result, argtypes_profitable) = result
             this_conditional = ignorelimited(rt)
             this_rt = widenwrappedconditional(rt)
             this_exct = exct
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
-            this_arginfo = ArgInfo(fargs, this_argtypes, used)
+            this_arginfo = ArgInfo(fargs, this_argtypes, argtypes_profitable)
             const_call_result = abstract_call_method_with_const_args(interp,
                 result, f, this_arginfo, si, match, sv)
             const_result = volatile_inf_result
@@ -652,7 +652,8 @@ function abstract_call_method(interp::AbstractInterpreter,
         sparams = recomputed[2]::SimpleVector
     end
 
-    (; rt, exct, edge, effects, volatile_inf_result, used) = typeinf_edge(interp, method, sig, sparams, sv)
+    (; rt, exct, edge, effects, volatile_inf_result, argtypes_profitable) =
+        typeinf_edge(interp, method, sig, sparams, sv)
 
     if edge === nothing
         edgecycle = edgelimited = true
@@ -676,7 +677,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         end
     end
 
-    return MethodCallResult(rt, exct, edgecycle, edgelimited, edge, effects; volatile_inf_result, used)
+    return MethodCallResult(rt, exct, edgecycle, edgelimited, edge, effects; volatile_inf_result, argtypes_profitable)
 end
 
 function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
@@ -785,15 +786,15 @@ struct MethodCallResult
     edge::Union{Nothing,MethodInstance}
     effects::Effects
     volatile_inf_result::Union{Nothing,VolatileInferenceResult}
-    used::Union{Nothing,BitVector}
+    argtypes_profitable::Union{Nothing,BitVector}
     function MethodCallResult(@nospecialize(rt), @nospecialize(exct),
                               edgecycle::Bool,
                               edgelimited::Bool,
                               edge::Union{Nothing,MethodInstance},
                               effects::Effects;
                               volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing,
-                              used::Union{Nothing,BitVector}=nothing)
-        return new(rt, exct, edgecycle, edgelimited, edge, effects, volatile_inf_result, used)
+                              argtypes_profitable::Union{Nothing,BitVector}=nothing)
+        return new(rt, exct, edgecycle, edgelimited, edge, effects, volatile_inf_result, argtypes_profitable)
     end
 end
 
@@ -1285,7 +1286,7 @@ function const_prop_call(interp::AbstractInterpreter,
         return nothing
     end
     # perform fresh constant prop'
-    argsinfo = ArgtypeOverridden(overridden_by_const)
+    argsinfo = ArgtypeOverrideInfo(overridden_by_const)
     inf_result = InferenceResult(mi, argtypes, argsinfo)
     frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
     if frame === nothing
@@ -1320,7 +1321,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
                                  conditional_argtypes::ConditionalSimpleArgtypes,
                                  cache_argtypes::Vector{Any})
     (; arginfo, sv) = conditional_argtypes
-    (; fargs, argtypes, used) = arginfo
+    (; fargs, argtypes, argtypes_profitable) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
     def = mi.def::Method
     nargs = Int(def.nargs)
@@ -1369,9 +1370,9 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
     # XXX The argtype widening should probably be handled by `WidenedArgtypes`, but it would
     # be fine to widen it here as well, since unused-ness ensures that the argtype has no
     # contribution to the results like return type, effects, etc.
-    if used !== nothing
+    if argtypes_profitable !== nothing
         for i = 1:length(given_argtypes)
-            if !used[i]
+            if !argtypes_profitable[i]
                 cache_argtype = cache_argtypes[i]
                 if !(cache_argtype isa Const)
                     given_argtypes[i] = cache_argtype
@@ -2377,8 +2378,8 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
         slotid = slot_id(e)
         if sv isa InferenceState && slotid ≤ length(sv.result.argtypes)
             argsinfo = sv.result.argsinfo
-            if argsinfo isa ArgUsed
-                argsinfo.used[slotid] |= true
+            if argsinfo isa ArgtypeProfitability
+                argsinfo.profitable[slotid] |= true
             end
         end
         if vtypes !== nothing

@@ -23,9 +23,10 @@ abstract type AbstractLattice end
 struct ArgInfo
     fargs::Union{Nothing,Vector{Any}}
     argtypes::Vector{Any}
-    used::Union{Nothing,BitVector}
-    function ArgInfo(fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any}, used::Union{Nothing,BitVector}=nothing)
-        return new(fargs, argtypes, used)
+    argtypes_profitable::Union{Nothing,BitVector}
+    function ArgInfo(fargs::Union{Nothing,Vector{Any}}, argtypes::Vector{Any},
+                     argtypes_profitable::Union{Nothing,BitVector}=nothing)
+        return new(fargs, argtypes, argtypes_profitable)
     end
 end
 
@@ -71,10 +72,10 @@ struct AnalysisResults
 end
 const NULL_ANALYSIS_RESULTS = AnalysisResults(nothing)
 
-struct ArgUsed
-    used::BitVector
+struct ArgtypeProfitability
+    profitable::BitVector
 end
-struct ArgtypeOverridden
+struct ArgtypeOverrideInfo
     overridden_by_const::BitVector
 end
 
@@ -85,13 +86,13 @@ A type that represents the result of running type inference on a chunk of code.
 There are two constructor available:
 - `InferenceResult(mi::MethodInstance, [𝕃::AbstractLattice])` for regular inference,
   without extended lattice information included in `result.argtypes`.
-- `InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, argsinfo::ArgtypeOverridden)`
+- `InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, argsinfo::ArgtypeOverrideInfo)`
   for constant inference, with extended lattice information included in `result.argtypes`.
 """
 mutable struct InferenceResult
     const linfo::MethodInstance
     const argtypes::Vector{Any}
-    const argsinfo::Union{ArgUsed,ArgtypeOverridden} # `ArgUsed` for regular inference, `ArgtypeOverridden` for constant inference
+    const argsinfo::Union{ArgtypeProfitability,ArgtypeOverrideInfo} # `ArgtypeProfitability` for regular inference, `ArgtypeOverrideInfo` for constant inference
     result                   # extended lattice element if inferred, nothing otherwise
     exc_result               # like `result`, but for the thrown value
     src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
@@ -101,7 +102,7 @@ mutable struct InferenceResult
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
     ci::CodeInstance         # CodeInstance if this result has been added to the cache
-    function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, argsinfo::Union{ArgUsed,ArgtypeOverridden})
+    function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, argsinfo::Union{ArgtypeProfitability,ArgtypeOverrideInfo})
         def = mi.def
         nargs = def isa Method ? Int(def.nargs) : 0
         @assert length(argtypes) == nargs "invalid `argtypes` for `mi`"
@@ -111,7 +112,7 @@ mutable struct InferenceResult
 end
 function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
     argtypes = matching_cache_argtypes(𝕃, mi)
-    argsinfo = ArgUsed(falses(length(argtypes)))
+    argsinfo = ArgtypeProfitability(falses(length(argtypes)))
     return InferenceResult(mi, argtypes, argsinfo)
 end
 
