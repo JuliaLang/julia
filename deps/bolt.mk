@@ -41,7 +41,7 @@ ifneq ($(HOSTCC),$(CC))
 LLVM_CMAKE += -DCROSS_TOOLCHAIN_FLAGS_NATIVE="-DCMAKE_C_COMPILER=$$(which $(HOSTCC));-DCMAKE_CXX_COMPILER=$$(which $(HOSTCXX))"
 
 # Defaults to off when crosscompiling, starting from LLVM 18
-LLVM_CMAKE += -DBOLT_ENABLE_RUNTIME=true
+LLVM_CMAKE += -DBOLT_ENABLE_RUNTIME=ON
 endif
 ifeq ($(OS), emscripten)
 LLVM_CMAKE += -DCMAKE_TOOLCHAIN_FILE=$(EMSCRIPTEN)/cmake/Modules/Platform/Emscripten.cmake -DLLVM_INCLUDE_TOOLS=OFF -DLLVM_BUILD_TOOLS=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_THREADS=OFF -DLLVM_BUILD_UTILS=OFF
@@ -94,7 +94,7 @@ endif
 
 BOLT_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir) && \
-	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
+	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P tools/bolt/cmake_install.cmake
 
 # TODO: Change to install-llvm-bolt to not include unnecessary binaries + libraries
 $(eval $(call staged-install, \
