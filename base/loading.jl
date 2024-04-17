@@ -3061,6 +3061,14 @@ function module_build_id(m::Module)
     return (UInt128(hi) << 64) | lo
 end
 
+function object_build_id(obj)
+    mod = ccall(:jl_object_top_module, Any, (Any,), obj)
+    if mod === nothing
+        return nothing
+    end
+    return module_build_id(mod::Module)
+end
+
 function isvalid_cache_header(f::IOStream)
     pkgimage = Ref{UInt8}()
     checksum = ccall(:jl_read_verify_header, UInt64, (Ptr{Cvoid}, Ptr{UInt8}, Ptr{Int64}, Ptr{Int64}), f.ios, pkgimage, Ref{Int64}(), Ref{Int64}()) # returns checksum id or zero

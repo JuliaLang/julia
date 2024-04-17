@@ -1041,4 +1041,14 @@ end
     end
 end
 
+@testset "copyto! with aliasing (#39460)" begin
+    M = Matrix(reshape(1:36, 6, 6))
+    @testset for T in (UpperTriangular, LowerTriangular)
+        A = T(view(M, 1:5, 1:5))
+        A2 = copy(A)
+        B = T(view(M, 2:6, 2:6))
+        @test copyto!(B, A) == A2
+    end
+end
+
 end # module TestTriangular

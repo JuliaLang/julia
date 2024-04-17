@@ -167,7 +167,6 @@ end
 
 transpose(S::SymTridiagonal) = S
 adjoint(S::SymTridiagonal{<:Real}) = S
-adjoint(S::SymTridiagonal) = Adjoint(S)
 permutedims(S::SymTridiagonal) = S
 function permutedims(S::SymTridiagonal, perm)
     Base.checkdims_perm(S, S, perm)
@@ -616,8 +615,6 @@ for func in (:conj, :copy, :real, :imag)
     end
 end
 
-adjoint(S::Tridiagonal) = Adjoint(S)
-transpose(S::Tridiagonal) = Transpose(S)
 adjoint(S::Tridiagonal{<:Real}) = Tridiagonal(S.du, S.d, S.dl)
 transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
 permutedims(T::Tridiagonal) = Tridiagonal(T.du, T.d, T.dl)
