@@ -29,8 +29,8 @@ BOLT_ARGS += -dyno-stats
 
 # -fno-reorder-blocks-and-partition is needed on gcc >= 8.
 BOLT_FLAGS := $\
-	"JCFLAGS_GCC+=-fno-reorder-blocks-and-partition" $\
-	"JCXXFLAGS_GCC+=-fno-reorder-blocks-and-partition" $\
+	"CFLAGS+=-fno-reorder-blocks-and-partition" $\
+	"CXXFLAGS+=-fno-reorder-blocks-and-partition" $\
 	"BOLT_LDFLAGS=-Wl,--emit-relocs"
 
 STAGE0_BUILD:=$(CURDIR)/toolchain
