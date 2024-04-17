@@ -490,8 +490,8 @@ gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
     Base.datatype_haspadding(dt::DataType) -> Bool
 
 Return whether the fields of instances of this type are packed in memory,
-with no intervening padding bits (defined as bits whose value does not uniquely
-impact the egal test when applied to the struct fields).
+with no intervening padding bits (defined as bits whose value does not impact
+the semantic value of the instance itself).
 Can be called on any `isconcretetype`.
 """
 function datatype_haspadding(dt::DataType)
@@ -499,6 +499,21 @@ function datatype_haspadding(dt::DataType)
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return flags & 1 == 1
+end
+
+"""
+    Base.datatype_isbitsegal(dt::DataType) -> Bool
+
+Return whether egality of the (non-padding bits of the) in-memory representation
+of an instance of this type implies semantic egality of the instance itself.
+This may not be the case if the type contains to other values whose egality is
+independent of their identity (e.g. immutable structs, some types, etc.).
+"""
+function datatype_isbitsegal(dt::DataType)
+    @_foldable_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return (flags & (1<<5)) != 0
 end
 
 """
