@@ -73,18 +73,6 @@ write(io, """
     ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
     (f::Base.RedirectStdStream)(io::Core.CoreSTDOUT) = Base._redirect_io_global(io, f.unix_fd)
-    Core.Compiler.track_newly_inferred.x = true
-    let mod = Base.include(Base.__toplevel__, "$absfile")
-        if !isa(mod, Module)
-            mod = Main
-        end
-        if $(output_type == "--output-exe") && isdefined(mod, :main)
-            precompile(mod.main, ())
-        end
-        precompile(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
-        precompile(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
-    end
-    Core.Compiler.track_newly_inferred.x = false
     @eval Base begin
         _assert_tostring(msg) = nothing
         reinit_stdio() = nothing
@@ -121,7 +109,6 @@ write(io, """
         end
     end
     @eval Base.GMP begin
-
         function __init__()
             try
                 ccall((:__gmp_set_memory_functions, libgmp), Cvoid,
@@ -152,16 +139,6 @@ write(io, """
         issorted(itr;
             lt::T=isless, by::F=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where {T,F} =
             issorted(itr, ord(lt,by,rev,order))
-    end
-    @eval Base.Unicode begin
-        function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform::F = identity) where F
-            nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
-            buffer = Base.StringVector(nwords*4)
-            nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
-            nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
-            nbytes < 0 && utf8proc_error(nbytes)
-            return String(resize!(buffer, nbytes))
-        end
     end
     @eval Base.TOML begin
         function try_return_datetime(p, year, month, day, h, m, s, ms)
@@ -202,6 +179,18 @@ write(io, """
         end
     end
 
+    let mod = Base.include(Base.__toplevel__, "$absfile")
+        if !isa(mod, Module)
+            mod = Main
+        end
+        ccall(:jl_set_record_entry_points, Cvoid, (Cint,), 1)
+        if $(output_type == "--output-exe") && isdefined(mod, :main)
+            precompile(mod.main, ())
+        end
+        precompile(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
+        precompile(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
+        ccall(:jl_set_record_entry_points, Cvoid, (Cint,), 0)
+    end
 """)
 close(io)
 

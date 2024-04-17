@@ -110,6 +110,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     JL_GC_PUSH2(&worklist, &udeps);
     jl_module_init_order = jl_alloc_vec_any(0);
     int i, l = jl_array_nrows(worklist);
+    jl_set_record_entry_points(1);
     for (i = 0; i < l; i++) {
         jl_value_t *m = jl_array_ptr_ref(worklist, i);
         jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
@@ -128,6 +129,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
             }
         }
     }
+    jl_set_record_entry_points(0);
 
     assert(jl_precompile_toplevel_module == NULL);
     void *native_code = NULL;
