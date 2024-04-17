@@ -283,61 +283,79 @@ mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Int
 Apply function `f` to each element(s) in `itrs`, and then repeatedly call the 2 argument
 function `op` with those results or results from previous `op` evaluations until a single value is returned.
 
-If provided, `init` is the return value for empty collections and is used one or more times as
-an argument to `op` for non-empty collections. The `init` value is not transformed by the function `f`.
-Using `init` ensures that all calls to `op` have one argument that is either `init`
-or the result from a previous `op` evaluation, and the ordering of these arguments is
-unspecified. As it may appear in the reduction one or more times, it must be a neutral element for `op` that
-does not change the result by being used more than once. It is generally an error to call `mapreduce`
-with empty collections without specifying an `init` value, but in unambiguous cases an
-identity value for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
+The optional `init` keyword argument must be an identity element for `op`.
+The `init` value is not transformed by the function `f`.
+When `init` is provided, all initial evaluation(s) of `op` use `init` and an
+element from `itr` as its arguments with an unspecified argument ordering.
+For empty collections, `init` is the return value. It is generally an error to call `mapreduce`
+with an empty collection without specifying an `init` value, but in unambiguous cases a known
+identity element for `op` may be returned; see [`Base.mapreduce_empty`](@ref) for more details.
 
-In contrast with [`mapfoldl`](@ref) and [`mapfoldr`](@ref), the sequence of
-function evaluations and the associativity of the reduction is not specified
-and may vary between different methods and across Julia versions. Some implementations
+The reduction function `op` must be an associative operation. In contrast with
+[`mapfoldl`](@ref) and [`mapfoldr`](@ref), the sequence of
+function evaluations and the associativity of `mapreduce` is
+not specified and may vary between different methods and across Julia versions. Some implementations
 may reuse the return value of `f` for elements that appear multiple times in the
-collection(s).
-
-For example, `mapreduce(√, +, [1, 4, 9, 16])` may be evaluated as the left-associative
-`((√1+√4)+√9)+√16` _or_ the right-associative `√1+(√4+(√9+√16))`
-_or_ as the potentially-parallel `(√1+√4)+(√9+√16)` and returns `10.0` regardless.
-A non-associative function like `-` is not a valid `op` argument
-as `mapreduce(√, -, [1, 4, 9, 16])` may return any of `-4.0`, `-2.0` or
-`0.0`, depending upon which of the above associativity strategies is used.
-Because floating-point roundoff errors typically break associativity,
-even for common operations like + that are associative in exact arithmetic,
-this also means that the floating-point errors incurred by mapreduce
-are implementation-defined; for example `mapreduce(identity, +, [.1, .2, .3])` may return
-either `0.6` or `0.6000000000000001`.
-
-While the associativity of the reduction is not defined, `mapreduce` does preserve
-the ordering of the iterator for ordered collections, so that the result does *not* require `op` to be commutative.  For example,
-`mapreduce(uppercase, *, ['j','u','l','i','a'])` is guaranteed to always
-return the properly-spelled `"JULIA"` because `Array`s are ordered collections;
-in contrast, the operand ordering is not guaranteed with an unordered collection like `Set`.
-
-[`mapreduce`](@ref) is functionally equivalent to calling
-`reduce(op, map(f, itrs...); init=init)`, but will in general execute faster since no
-intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
-[`map`](@ref).
+collection(s). When `itr` is an ordered collection, `mapreduce` preserves the ordering of the
+iterator in the reduction and so `op` is not required to be commutative. 
 
 Some commonly-used operators may have special implementations of a mapped reduction, and
-are recommended instead of `mapreduce`: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
+should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
 [`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
-
-!!! compat "Julia 1.2"
-    `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest
-julia> mapreduce(√, +, [1, 4, 9])
-6.0
+julia> mapreduce(√, +, [1, 4, 9, 16])
+10.0
 
-julia> mapreduce(identity, +, [.1, .2, .3]) ≈ 0.6
+julia> mapreduce(x->x/10, +, [1, 2, 3, 4]) ≈ 1.0
 true
 
 julia> mapreduce(uppercase, *, ['j','u','l','i','a'])
 "JULIA"
+```
+
+# Extended Help
+
+## Arbitrary associativity: examples and consequences
+
+The associativity of the reduction is not specified, so the `op` function
+must be associative and `init` (if provided) must be an identity element.
+To demonstrate this, consider the example:
+
+```jldoctest
+julia> mapreduce(√, +, [1, 4, 9, 16]; init=0)
+10
+```
+
+There are many possible ways in which `reduce` might compute this,
+including the left-associative `(((0+√1)+√4)+√9)+√16` (like [`foldl`](@ref))
+or the right-associative `√1+(√4+(√9+(√16+0)))` (like [`foldr`](@ref))
+or as a potentially-parallel `((0+√1)+(0+√4))+((0+√9)+(0+√16))`. The exact
+strategy does not matter; `reduce` returns `10.0` because `+` is associative
+and `0` is a commutative identity element for `+`. Note how the `init`
+value may be used one or more times with possibly varying argument orderings and
+is not transformed by `√`.
+
+In contrast, the `-` function is not associative and is not a valid `op` for `reduce`.
+Were `-` erroneously used instead of `+` in the above example, the three example
+strategies return three different results (`-10.0`, `-2.0` and `0.0`, respectively).
+
+More subtly, floating point arithmetic is _also_ typically non-associative,
+even for common operations like `+` that are associative in exact arithmetic.
+This means that the magnitude of floating-point errors incurred by `mapreduce` are
+also unspecified. For example, `mapreduce(x->x/10, +, [1, 2, 3, 4])` may return
+either `1.0` or `0.9999999999999999`, and both are [`≈`](@ref) to `1.0`:
+
+```jldoctest
+julia> mapfoldl(x->x/10, +, [1, 2, 3, 4])
+1.0
+
+julia> mapfoldr(x->x/10, +, [1, 2, 3, 4])
+0.9999999999999999
+
+julia> mapreduce(x->x/10, +, [1, 2, 3, 4]) ≈ 1.0
+true
 ```
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
@@ -491,34 +509,18 @@ _mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f,
 Repeatedly call the 2 argument function `op` with the element(s) in `itr`
 or results from previous `op` evaluations until a single value is returned.
 
-If provided, `init` provides the return value for empty collections and is used one or more times as
-an argument to `op` for non-empty collections.
-Using `init` ensures that all calls to `op` have one argument that is either `init`
-or the result from a previous `op` evaluation, and the ordering of these arguments is
-unspecified. As it may appear in a reduction one or more times, it must be a neutral element for `op` that
-does not change the result by being used more than once. It is generally an error to call `reduce`
-with an empty collection without specifying an `init` value, but in unambiguous cases an
-identity value for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
+The optional `init` keyword argument must be an identity element for `op`.
+When `init` is provided, all initial evaluation(s) of `op` use `init` and an
+element from `itr` as its arguments with an unspecified argument ordering.
+For empty collections, `init` is the return value. It is generally an error to call `reduce`
+with an empty collection without specifying an `init` value, but in unambiguous cases a known
+identity element for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
 
-In contrast with [`foldl`](@ref) and [`foldr`](@ref), the associativity of the reduction is
+The reduction function `op` must be an associative operation. In contrast with
+[`foldl`](@ref) and [`foldr`](@ref), the associativity of `reduce` is
 not specified and may vary between different methods and across Julia versions.
-For example, `reduce(+, [1, 2, 3, 4])` may be evaluated as the left-associative
-`((1+2)+3)+4` _or_ the right-associative `1+(2+(3+4))`
-_or_ as the potentially-parallel `(1+2)+(3+4)` and returns `10.0` regardless.
-A non-associative function like `-` is not a valid `op` argument
-as `reduce(-, [1, 2, 3, 4])` may return any of `-4.0`, `-2.0` or
-`0.0`, depending upon which of the above associativity strategies is used.
-Because floating-point roundoff errors typically break associativity,
-even for common operations like + that are associative in exact arithmetic,
-this also means that the floating-point errors incurred by reduce
-are implementation-defined; for example `reduce(+, [.1, .2, .3])` may return
-either `0.6` or `0.6000000000000001`.
-
-While the associativity of the reduction is not defined, `reduce` does preserve
-the ordering of the iterator for ordered collections.  For example,
-`reduce(string, ['J','u','l','i','a'])` is guaranteed to always
-return the properly-spelled `"Julia"` because `Array`s are ordered collections;
-the returned ordering is not guaranteed with an unordered collection like `Set`.
+When `itr` is an ordered collection, `reduce` preserves the ordering of the
+iterator in the reduction and so `op` is not required to be commutative.
 
 Some commonly-used operators may have special implementations of a reduction, and
 should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
@@ -526,14 +528,56 @@ should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`su
 
 # Examples
 ```jldoctest
-julia> reduce(+, [1, 2, 3])
-6
+julia> reduce(+, [1, 2, 3, 4]; init=0)
+10
 
-julia> reduce(+, [.1, .2, .3]) ≈ 0.6
+julia> reduce(+, [.1, .2, .3, .4]) ≈ 1.0
 true
 
-julia> reduce(string, ['J','u','l','i','a'])
+julia> reduce(*, ['J','u','l','i','a'])
 "Julia"
+```
+
+# Extended Help
+
+## Arbitrary associativity: examples and consequences
+
+The associativity of the reduction is not specified, so the `op` function
+must be associative and `init` (if provided) must be an identity element.
+To demonstrate this, consider the example:
+
+```jldoctest
+julia> reduce(+, [1, 2, 3, 4]; init=0)
+10
+```
+
+There are many possible ways in which `reduce` might compute this,
+including the left-associative `(((0+1)+2)+3)+4` (like [`foldl`](@ref))
+or the right-associative `1+(2+(3+(4+0)))` (like [`foldr`](@ref))
+or as a potentially-parallel `((0+1)+(0+2))+((0+3)+(0+4))`. The exact
+strategy does not matter; `reduce` returns `10` because `+` is associative
+and `0` is a commutative identity element for `+`. Note how the `init`
+value may be used one or more times with possibly varying argument orderings.
+
+In contrast, the `-` function is not associative and is not a valid `op` for `reduce`.
+Were `-` erroneously used instead of `+` in the above example, the three example
+strategies return three different results (`-10`, `-2` and `0`, respectively).
+
+More subtly, floating point arithmetic is _also_ typically non-associative,
+even for common operations like `+` that are associative in exact arithmetic.
+This means that the magnitude of floating-point errors incurred by `reduce` are
+also unspecified. For example, `reduce(+, [.1, .2, .3, .4])` may return
+either `1.0` or `0.9999999999999999`, and both are [`≈`](@ref) to `1.0`:
+
+```jldoctest
+julia> foldl(+, [.1, .2, .3, .4])
+1.0
+
+julia> foldr(+, [.1, .2, .3, .4])
+0.9999999999999999
+
+julia> reduce(+, [.1, .2, .3, .4]) ≈ 1.0
+true
 ```
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
@@ -553,9 +597,13 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
-The value returned for empty `itr` can be specified by `init`. It must be
-the additive identity (i.e. zero) as it may be used one or more times
-for non-empty collections.
+The optional `init` keyword argument must be an additive identity (i.e., zero),
+and it provides the return value for empty collections. It is generally an error to call `sum`
+with an empty collection without specifying an `init` value, but in unambiguous cases the
+[`zero`](@ref) of the return type may be returned.
+
+Like [`mapreduce`](@ref), the associativity of the additions is not specified and the return
+value of `f` may be reused for repeated elements.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -564,6 +612,38 @@ for non-empty collections.
 ```jldoctest
 julia> sum(abs2, [2; 3; 4])
 29
+```
+"""
+sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
+
+"""
+    sum(itr; [init])
+
+Return the sum of all elements in a collection.
+
+The return type is `Int` for signed integers of less than system word size, and
+`UInt` for unsigned integers of less than system word size.  For all other
+arguments, a common return type is found to which all arguments are promoted.
+
+The optional `init` keyword argument must be an additive identity (i.e., zero),
+and it provides the return value for empty collections. It is generally an error to call `sum`
+with an empty collection without specifying an `init` value, but in unambiguous cases the
+[`zero`](@ref) of the return type may be returned.
+
+Like [`reduce`](@ref), the associativity of the additions is not specified.
+
+!!! compat "Julia 1.6"
+    Keyword argument `init` requires Julia 1.6 or later.
+
+See also: [`reduce`](@ref), [`mapreduce`](@ref), [`count`](@ref), [`union`](@ref).
+
+# Examples
+```jldoctest
+julia> sum(1:20)
+210
+
+julia> sum(1:20; init = 0.0)
+210.0
 ```
 
 Note the important difference between `sum(A)` and `reduce(+, A)` for arrays
@@ -581,35 +661,6 @@ In the former case, the integers are widened to system word size and therefore
 the result is 128. In the latter case, no such widening happens and integer
 overflow results in -128.
 """
-sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
-
-"""
-    sum(itr; [init])
-
-Return the sum of all elements in a collection.
-
-The return type is `Int` for signed integers of less than system word size, and
-`UInt` for unsigned integers of less than system word size.  For all other
-arguments, a common return type is found to which all arguments are promoted.
-
-The value returned for empty `itr` can be specified by `init`. It must be
-the additive identity (i.e. zero) as it may be used one or more times
-for non-empty collections.
-
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
-
-See also: [`reduce`](@ref), [`mapreduce`](@ref), [`count`](@ref), [`union`](@ref).
-
-# Examples
-```jldoctest
-julia> sum(1:20)
-210
-
-julia> sum(1:20; init = 0.0)
-210.0
-```
-"""
 sum(a; kw...) = sum(identity, a; kw...)
 sum(a::AbstractArray{Bool}; kw...) =
     isempty(kw) ? count(a) : reduce(add_sum, a; kw...)
@@ -624,9 +675,13 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
-The value returned for empty `itr` can be specified by `init`. It must be the
-multiplicative identity (i.e. one) as it may be used one or more times
-for non-empty collections.
+The optional `init` keyword argument must be a multiplicative identity (i.e., one),
+and it provides the return value for empty collections. It is generally an error to call `prod`
+with an empty collection without specifying an `init` value, but in unambiguous cases the
+[`one`](@ref) of the return type may be returned.
+
+Like [`mapreduce`](@ref), the associativity of the multiplications is not specified and the return
+value of `f` may be reused for repeated elements.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -648,9 +703,12 @@ The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
 arguments, a common return type is found to which all arguments are promoted.
 
-The value returned for empty `itr` can be specified by `init`. It must be the
-multiplicative identity (i.e. one) as it may be used one or more times
-for non-empty collections.
+The optional `init` keyword argument must be a multiplicative identity (i.e., one),
+and it provides the return value for empty collections. It is generally an error to call `prod`
+with an empty collection without specifying an `init` value, but in unambiguous cases the
+[`one`](@ref) of the return type may be returned.
+
+Like [`reduce`](@ref), the associativity of the multiplications is not specified.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -731,10 +789,13 @@ end
 
 Return the largest result of calling function `f` on each element of `itr`.
 
-The value returned for empty `itr` can be specified by `init`. It must be
-a neutral element for `max` (i.e. which is less than or equal to any
-other element) as it may be used one or more times
-for non-empty collections.
+The optional `init` keyword argument must be an identity for `max` (i.e., less than or
+equal to all values), and it provides the return value for empty collections. It is
+an error to call `maximum` with an empty collection without specifying an `init` value.
+
+Like [`mapreduce`](@ref), the associativity of the `max` operations is not specified and
+the return value of `f` may be reused for repeated elements.
+Use [`mapfoldl(f, max, itr)`](@ref) for stronger guarantees on the evaluation strategy.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -758,10 +819,13 @@ maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
 
 Return the smallest result of calling function `f` on each element of `itr`.
 
-The value returned for empty `itr` can be specified by `init`. It must be
-a neutral element for `min` (i.e. which is greater than or equal to any
-other element) as it may be used one or more times
-for non-empty collections.
+The optional `init` keyword argument must be an identity for `min` (i.e., less than or
+equal to all values), and it provides the return value for empty collections. It is
+an error to call `minimum` with an empty collection without specifying an `init` value.
+
+Like [`mapreduce`](@ref), the associativity of the `min` operations is not specified and
+the return value of `f` may be reused for repeated elements.
+Use [`mapfoldl(f, min, itr)`](@ref) for stronger guarantees on the evaluation strategy.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -785,10 +849,12 @@ minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
 
 Return the largest element in a collection.
 
-The value returned for empty `itr` can be specified by `init`. It must be
-a neutral element for `max` (i.e. which is less than or equal to any
-other element) as it may be used one or more times
-for non-empty collections.
+The optional `init` keyword argument must be an identity for `max` (i.e., less than or
+equal to all values), and it provides the return value for empty collections. It is
+an error to call `maximum` with an empty collection without specifying an `init` value.
+
+Like [`reduce`](@ref), the associativity of the `max` operations is not specified.
+Use [`foldl(max, itr)`](@ref) for stronger guarantees on the evaluation strategy.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -817,10 +883,12 @@ maximum(a; kw...) = mapreduce(identity, max, a; kw...)
 
 Return the smallest element in a collection.
 
-The value returned for empty `itr` can be specified by `init`. It must be
-a neutral element for `min` (i.e. which is greater than or equal to any
-other element) as it may be used one or more times
-for non-empty collections.
+The optional `init` keyword argument must be an identity for `min` (i.e., less than or
+equal to all values), and it provides the return value for empty collections. It is
+an error to call `minimum` with an empty collection without specifying an `init` value.
+
+Like [`reduce`](@ref), the associativity of the `min` operations is not specified.
+Use [`foldl(min, itr)`](@ref) for stronger guarantees on the evaluation strategy.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -847,14 +915,15 @@ minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 """
     extrema(itr; [init]) -> (mn, mx)
 
-Compute both the minimum `mn` and maximum `mx` element in a single pass, and return them
+Compute both the [`minimum`](@ref) `mn` and [`maximum`](@ref) `mx` element in an efficient manner, and return them
 as a 2-tuple.
 
-The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
-first and second elements are neutral elements for `min` and `max` respectively
-(i.e. which are greater/less than or equal to any other element). As a consequence, when
-`itr` is empty the returned `(mn, mx)` tuple will satisfy `mn ≥ mx`. When `init` is
-specified it may be used one or more times for non-empty `itr`.
+The optional `init` keyword argument must be a 2-tuple whose elements are identities
+for `min` and `max`, respectively (i.e. which are greater/less than or equal to any
+other element), and it provides the return value for empty collections. As a consequence,
+the initial minimum must be greater than or equal to the initial maximum, and when
+`itr` is empty the returned `(mn, mx)` tuple will have `mn ≥ mx`. It is
+an error to call `extrema` with an empty collection without specifying an `init` value.
 
 !!! compat "Julia 1.8"
     Keyword argument `init` requires Julia 1.8 or later.
@@ -876,15 +945,15 @@ extrema(itr; kw...) = extrema(identity, itr; kw...)
 """
     extrema(f, itr; [init]) -> (mn, mx)
 
-Compute both the minimum `mn` and maximum `mx` of `f` applied to each element in `itr` and
-return them as a 2-tuple. Only one pass is made over `itr`.
+Compute both the [`minimum`](@ref) `mn` and [`maximum`](@ref) `mx` of `f` applied to each element in `itr` and
+return them as a 2-tuple in an efficient manner.
 
-The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
-first and second elements are neutral elements for `min` and `max` respectively
-(i.e. which are greater/less than or equal to any other element). It is used one or more times for non-empty
-collections. Note: it implies that, for empty `itr`, the returned value `(mn, mx)` satisfies
-`mn ≥ mx` even though for non-empty `itr` it  satisfies `mn ≤ mx`.  This is a "paradoxical"
-but yet expected result.
+The optional `init` keyword argument must be a 2-tuple whose elements are identities
+for `min` and `max`, respectively (i.e. which are greater/less than or equal to any
+other returned value), and it provides the return value for empty collections. As a consequence,
+the initial minimum must be greater than or equal to the initial maximum, and when
+`itr` is empty the returned `(mn, mx)` tuple will have `mn ≥ mx`. It is
+an error to call `extrema` with an empty collection without specifying an `init` value.
 
 !!! compat "Julia 1.2"
     This method requires Julia 1.2 or later.
