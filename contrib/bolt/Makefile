@@ -104,9 +104,6 @@ bolt: merge_data
     done && \
     touch $@
 
-install: stage1
-	$(MAKE) -C $(STAGE1_BUILD) USE_BINARYBUILDER_LLVM=0 install
-
 clean-profiles:
 	rm -rf $(PROFILE_DIR)
 
