@@ -269,6 +269,10 @@ end
     end
 end
 
+Base.dataids(A::HermOrSym) = Base.dataids(parent(A))
+Base.unaliascopy(A::Hermitian) = Hermitian(Base.unaliascopy(parent(A)), sym_uplo(A.uplo))
+Base.unaliascopy(A::Symmetric) = Symmetric(Base.unaliascopy(parent(A)), sym_uplo(A.uplo))
+
 _conjugation(::Symmetric) = transpose
 _conjugation(::Hermitian) = adjoint
 
@@ -345,7 +349,7 @@ function copyto!(dest::Symmetric, src::Symmetric)
     if src.uplo == dest.uplo
         copyto!(dest.data, src.data)
     else
-        transpose!(dest.data, src.data)
+        transpose!(dest.data, Base.unalias(dest.data, src.data))
     end
     return dest
 end
@@ -354,7 +358,7 @@ function copyto!(dest::Hermitian, src::Hermitian)
     if src.uplo == dest.uplo
         copyto!(dest.data, src.data)
     else
-        adjoint!(dest.data, src.data)
+        adjoint!(dest.data, Base.unalias(dest.data, src.data))
     end
     return dest
 end

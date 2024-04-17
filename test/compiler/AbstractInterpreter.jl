@@ -514,3 +514,20 @@ let src = code_typed((Int,); interp=CustomDataInterp()) do x
     @test count(isinvoke(:cos), src.code) == 1
     @test count(isinvoke(:+), src.code) == 0
 end
+
+# ephemeral cache mode
+@newinterp DebugInterp #=ephemeral_cache=#true
+func_ext_cache1(a) = func_ext_cache2(a) * cos(a)
+func_ext_cache2(a) = sin(a)
+let interp = DebugInterp()
+    @test Base.infer_return_type(func_ext_cache1, (Float64,); interp) === Float64
+    @test isdefined(interp, :code_cache)
+    found = false
+    for (mi, codeinst) in interp.code_cache.dict
+        if mi.def.name === :func_ext_cache2
+            found = true
+            break
+        end
+    end
+    @test found
+end
