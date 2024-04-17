@@ -926,6 +926,7 @@ function getindex end
 
 function getindex(A::Array, i1::Int, i2::Int, I::Int...)
     @inline
+    @_propagate_inbounds_meta
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
     return @inbounds A[_to_linear_index(A, i1, i2, I...)]
 end
@@ -933,6 +934,7 @@ end
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})
     @inline
+    @_propagate_inbounds_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
     X = similar(A, axes(I))
@@ -983,6 +985,7 @@ function setindex! end
 
 function setindex!(A::Array{T}, x, i::Int) where {T}
     @_noub_if_noinbounds_meta
+    @_propagate_inbounds_meta
     @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
     memoryrefset!(memoryref(A.ref, i, false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
     return A
@@ -990,6 +993,7 @@ end
 function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @_noub_if_noinbounds_meta
+    @_propagate_inbounds_meta
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
     memoryrefset!(memoryref(A.ref, _to_linear_index(A, i1, i2, I...), false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
     return A
