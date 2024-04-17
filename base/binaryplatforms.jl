@@ -441,7 +441,7 @@ const platform_names = Dict(
 Get the "platform name" of the given platform, returning e.g. "Linux" or "Windows".
 """
 function platform_name(p::AbstractPlatform)
-    return platform_names[os(p)]
+    return get(platform_names, os(p), os(p))
 end
 
 function VNorNothing(d::Dict, key)
