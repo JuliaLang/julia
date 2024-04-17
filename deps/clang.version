@@ -1,3 +1,5 @@
+# -*- makefile -*-
+
 ## jll artifact
 # Clang (paired with LLVM, only here as a JLL download)
 CLANG_JLL_NAME := Clang

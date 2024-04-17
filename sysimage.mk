@@ -62,7 +62,7 @@ RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make
 
 $(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
-	export LD_DEBUG=libs && $(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" $(HEAPLIM) --output-ji $(call cygpath_w,$@).tmp \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" $(HEAPLIM) --output-ji $(call cygpath_w,$@).tmp \
 		--startup-file=no --warn-overwrite=yes -g$(BOOTSTRAP_DEBUG_LEVEL) -O0 compiler/compiler.jl)
 	@mv $@.tmp $@
 
