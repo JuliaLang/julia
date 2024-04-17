@@ -2679,10 +2679,6 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         t = Nothing
         exct = Union{}
         effects = Effects(EFFECTS_TOTAL; effect_free=EFFECT_FREE_GLOBALLY)
-    elseif ehead === :method
-        t = Method
-        exct = Union{}
-        effects = Effects(EFFECTS_TOTAL; effect_free=EFFECT_FREE_GLOBALLY)
     elseif ehead === :thunk
         t = Any
         effects = EFFECTS_UNKNOWN
