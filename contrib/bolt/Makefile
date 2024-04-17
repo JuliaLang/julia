@@ -21,7 +21,8 @@ BOLT_ARGS += -split-strategy=cdsplit
 # The following flag saves about 16 MiB of libLLVM.so size.
 # However, it succeeds very non-deterministically.
 # Try to reuse old text segments to reduce binary size
-BOLT_ARGS += --use-old-text
+# Broken for libjulia-internal, https://github.com/llvm/llvm-project/issues/89117
+# BOLT_ARGS += --use-old-text
 # Update DWARF debug info in the final binary
 BOLT_ARGS += -update-debug-sections
 # Print optimization statistics
