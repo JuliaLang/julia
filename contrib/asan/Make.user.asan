@@ -6,6 +6,7 @@ TOOLDIR=$(TOOLCHAIN)/usr/tools
 USECLANG=1
 override CC=$(TOOLDIR)/clang
 override CXX=$(TOOLDIR)/clang++
+override PATCHELF=$(TOOLDIR)/patchelf
 export ASAN_SYMBOLIZER_PATH=$(TOOLDIR)/llvm-symbolizer
 
 USE_BINARYBUILDER_LLVM=1
