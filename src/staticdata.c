@@ -2477,7 +2477,19 @@ static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
     jl_gc_wb(m, jl_atomic_load_relaxed(&bindingkeyset2));
 }
 
-static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_instance_t *codeinst, int orig)
+static void strip_slotnames(jl_array_t *slotnames)
+{
+    // replace slot names with `?`, except unused_sym since the compiler looks at it
+    jl_sym_t *questionsym = jl_symbol("?");
+    int i, l = jl_array_len(slotnames);
+    for (i = 0; i < l; i++) {
+        jl_value_t *s = jl_array_ptr_ref(slotnames, i);
+        if (s != (jl_value_t*)jl_unused_sym)
+            jl_array_ptr_set(slotnames, i, questionsym);
+    }
+}
+
+static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_instance_t *codeinst)
 {
     jl_code_info_t *ci = NULL;
     JL_GC_PUSH1(&ci);
@@ -2489,18 +2501,7 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_
     else {
         ci = (jl_code_info_t*)ci_;
     }
-    // replace slot names with `?`, except unused_sym since the compiler looks at it
-    jl_sym_t *questionsym = jl_symbol("?");
-    int i, l = jl_array_len(ci->slotnames);
-    for (i = 0; i < l; i++) {
-        jl_value_t *s = jl_array_ptr_ref(ci->slotnames, i);
-        if (s != (jl_value_t*)jl_unused_sym)
-            jl_array_ptr_set(ci->slotnames, i, questionsym);
-    }
-    if (orig) {
-        m->slot_syms = jl_compress_argnames(ci->slotnames);
-        jl_gc_wb(m, m->slot_syms);
-    }
+    strip_slotnames(ci->slotnames);
     ci->debuginfo = jl_nulldebuginfo;
     jl_gc_wb(ci, ci->debuginfo);
     jl_value_t *ret = (jl_value_t*)ci;
@@ -2521,7 +2522,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
                 record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
-                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst, 0);
+                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
                 if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
                     jl_gc_wb(codeinst, stripped);
                 }
@@ -2543,26 +2544,39 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     if (m->source) {
         int stripped_ir = 0;
         if (jl_options.strip_ir) {
-            if (jl_atomic_load_relaxed(&m->unspecialized)) {
-                jl_code_instance_t *unspec = jl_atomic_load_relaxed(&jl_atomic_load_relaxed(&m->unspecialized)->cache);
-                if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
-                    // we have a generic compiled version, so can remove the IR
-                    record_field_change(&m->source, jl_nothing);
-                    stripped_ir = 1;
+            int should_strip_ir = jl_options.small_image;
+            if (!should_strip_ir) {
+                if (jl_atomic_load_relaxed(&m->unspecialized)) {
+                    jl_code_instance_t *unspec = jl_atomic_load_relaxed(&jl_atomic_load_relaxed(&m->unspecialized)->cache);
+                    if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
+                        // we have a generic compiled version, so can remove the IR
+                        should_strip_ir = 1;
+                    }
                 }
             }
-            if (!stripped_ir) {
+            if (!should_strip_ir) {
                 int mod_setting = jl_get_module_compile(m->module);
-                // if the method is declared not to be compiled, keep IR for interpreter
                 if (!(mod_setting == JL_OPTIONS_COMPILE_OFF || mod_setting == JL_OPTIONS_COMPILE_MIN)) {
-                    record_field_change(&m->source, jl_nothing);
-                    stripped_ir = 1;
+                    // if the method is declared not to be compiled, keep IR for interpreter
+                    should_strip_ir = 1;
                 }
+            }
+            if (should_strip_ir) {
+                record_field_change(&m->source, jl_nothing);
+                stripped_ir = 1;
             }
         }
-        if (jl_options.strip_metadata && !stripped_ir) {
-            m->source = strip_codeinfo_meta(m, m->source, NULL, 1);
-            jl_gc_wb(m, m->source);
+        if (jl_options.strip_metadata) {
+            if (!stripped_ir) {
+                m->source = strip_codeinfo_meta(m, m->source, NULL);
+                jl_gc_wb(m, m->source);
+            }
+            jl_array_t *slotnames = jl_uncompress_argnames(m->slot_syms);
+            JL_GC_PUSH1(&slotnames);
+            strip_slotnames(slotnames);
+            m->slot_syms = jl_compress_argnames(slotnames);
+            jl_gc_wb(m, m->slot_syms);
+            JL_GC_POP();
         }
     }
     if (jl_options.strip_metadata) {
