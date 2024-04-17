@@ -60,7 +60,7 @@ private:
 };
 
 static unsigned getValueAddrSpace(Value *V) {
-    return cast<PointerType>(V->getType())->getAddressSpace();
+    return V->getType()->getPointerAddressSpace();
 }
 
 static bool isSpecialAS(unsigned AS) {
