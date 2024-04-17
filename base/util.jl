@@ -657,6 +657,7 @@ function def_name_defval_from_kwdef_fielddef(kwdef)
     end
 end
 
+
 function typeconst_ex(ex)
     ex isa Expr || return ex
     if ex.head === :(=)
@@ -665,7 +666,7 @@ function typeconst_ex(ex)
             $(esc(ex.args[1]))::typeof(tmp) = tmp
         end
     elseif ex.head === :block
-        ex = copy(x)
+        ex = copy(ex)
         for i in eachindex(ex.args)
             ex.args[i] = typeconst_ex(ex.args[i])
         end
@@ -682,11 +683,11 @@ Equivalent to `tmp = y; x::typeof(tmp) = tmp`.
 Typically used to improve the performance of globals.
 Can also be used as `@typeconst begin x = 2; y = 3; end` to perform this replacement on several assignments.
 """
-macro typeconst(expr)
+macro typeconst(ex)
     if !(ex isa Expr && (ex.head in (:block, :(=))))
         throw(ArgumentError("@typeconst: argument must be assignment or `begin` block"))
     else
-        typeconst_ex(expr)
+        typeconst_ex(ex)
     end
 end
 
