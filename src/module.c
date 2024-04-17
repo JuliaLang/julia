@@ -908,11 +908,8 @@ jl_value_t *jl_check_binding_wr(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var
             }
             if (jl_egal(rhs, old))
                 return NULL;
-            if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs))
-                reassign = 0;
             else
-                jl_safe_printf("WARNING: redefinition of constant %s.%s. This may fail, cause incorrect answers, or produce other errors.\n",
-                               jl_symbol_name(mod->name), jl_symbol_name(var));
+                reassign = 0;
         }
         if (!reassign)
             jl_errorf("invalid redefinition of constant %s.%s",

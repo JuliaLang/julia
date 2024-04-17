@@ -686,88 +686,22 @@ Special top-level assignments, such as those performed by the `function` and `st
 are constant by default.
 
 Note that `const` only affects the variable binding; the variable may be bound to a mutable
-object (such as an array), and that object may still be modified. Additionally when one tries
-to assign a value to a variable that is declared constant the following scenarios are possible:
-
-* if a new value has a different type than the type of the constant then an error is thrown:
+object (such as an array), and that object may still be modified. When one tries to assign a
+value to a variable that is declared constant an error is thrown
+ unless assignment would not result in the change of variable:
 ```jldoctest
 julia> const x = 1.0
 1.0
 
-julia> x = 1
+julia> x = 1.3
 ERROR: invalid redefinition of constant x
 ```
-* if a new value has the same type as the constant then a warning is printed:
-```jldoctest
-julia> const y = 1.0
-1.0
-
-julia> y = 2.0
-WARNING: redefinition of constant y. This may fail, cause incorrect answers, or produce other errors.
-2.0
-```
-* if an assignment would not result in the change of variable value no message is given:
 ```jldoctest
 julia> const z = 100
 100
 
 julia> z = 100
 100
-```
-The last rule applies to immutable objects even if the variable binding would change, e.g.:
-```julia-repl
-julia> const s1 = "1"
-"1"
-
-julia> s2 = "1"
-"1"
-
-julia> pointer.([s1, s2], 1)
-2-element Array{Ptr{UInt8},1}:
- Ptr{UInt8} @0x00000000132c9638
- Ptr{UInt8} @0x0000000013dd3d18
-
-julia> s1 = s2
-"1"
-
-julia> pointer.([s1, s2], 1)
-2-element Array{Ptr{UInt8},1}:
- Ptr{UInt8} @0x0000000013dd3d18
- Ptr{UInt8} @0x0000000013dd3d18
-```
-However, for mutable objects the warning is printed as expected:
-```jldoctest
-julia> const a = [1]
-1-element Vector{Int64}:
- 1
-
-julia> a = [1]
-WARNING: redefinition of constant a. This may fail, cause incorrect answers, or produce other errors.
-1-element Vector{Int64}:
- 1
-```
-
-Note that although sometimes possible, changing the value of a `const` variable is strongly
-discouraged, and is intended only for convenience during interactive use. Changing constants can
-cause various problems or unexpected behaviors. For instance, if a method references a constant and
-is already compiled before the constant is changed, then it might keep using the old value:
-
-```jldoctest
-julia> const x = 1
-1
-
-julia> f() = x
-f (generic function with 1 method)
-
-julia> f()
-1
-
-julia> x = 2
-WARNING: redefinition of constant x. This may fail, cause incorrect answers, or produce other errors.
-2
-
-julia> f()
-1
 ```
 
 ## [Typed Globals](@id man-typed-globals)
