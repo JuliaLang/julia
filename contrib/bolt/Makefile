@@ -87,6 +87,7 @@ bolt_instrument: copy_originals
 	touch $@
 	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
+# TODO: Seems to be rebuilding sysimage as well unnecessarily
 pkgimage: stage1
 	$(MAKE) -C $(STAGE1_BUILD) stdlibs-cache-release
 
