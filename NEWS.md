@@ -27,6 +27,7 @@ New library functions
 ---------------------
 
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
+* `Iterators.findall` is a lazy version of `findall` ([#54124])
 
 New library features
 --------------------
