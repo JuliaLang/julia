@@ -2480,7 +2480,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, vtypes::Union{V
                 ft = fieldtype(rt, i)
                 nothrow && (nothrow = ⊑(𝕃ᵢ, at, ft))
                 at = tmeet(𝕃ᵢ, at, ft)
-                at === Bottom && return RTEffects(Bottom, exct, EFFECTS_THROWS)
+                at === Bottom && return RTEffects(Bottom, TypeError, EFFECTS_THROWS)
                 if ismutable && !isconst(rt, i)
                     ats[i] = ft # can't constrain this field (as it may be modified later)
                     continue
