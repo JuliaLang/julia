@@ -571,6 +571,13 @@ end
     @test_broken ismissing(norm(x, 0))
 end
 
+@testset "avoid stackoverflow of norm on AbstractChar" begin
+    @test_throws ArgumentError norm('a')
+    @test_throws ArgumentError norm(['a', 'b'])
+    @test_throws ArgumentError norm("s")
+    @test_throws ArgumentError norm(["s", "t"])
+end
+
 @testset "peakflops" begin
     @test LinearAlgebra.peakflops(1024, eltype=Float32, ntrials=2) > 0
 end

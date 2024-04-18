@@ -657,6 +657,9 @@ julia> norm(-2, Inf)
 end
 norm(::Missing, p::Real=2) = missing
 
+norm(c::AbstractChar, p::Real=2) =
+    throw(ArgumentError(lazy"Cannot compute norm for object of type $(typeof(c))"))
+
 # special cases of opnorm
 function opnorm1(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
