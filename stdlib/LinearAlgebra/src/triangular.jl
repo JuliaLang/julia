@@ -757,6 +757,80 @@ for op in (:+, :-)
     end
 end
 
+function kron(A::UpperTriangular{T}, B::UpperTriangular{S}) where {T<:Number,S<:Number}
+    C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
+    return kron!(C, A, B)
+end
+
+function kron(A::LowerTriangular{T}, B::LowerTriangular{S}) where {T<:Number,S<:Number}
+    C = LowerTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
+    return kron!(C, A, B)
+end
+
+function kron!(C::UpperTriangular{<:Number}, A::UpperTriangular{<:Number}, B::UpperTriangular{<:Number})
+    size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+    _triukron!(C.data, A.data, B.data)
+    return C
+end
+
+function kron!(C::LowerTriangular{<:Number}, A::LowerTriangular{<:Number}, B::LowerTriangular{<:Number})
+    size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+    _trilkron!(C.data, A.data, B.data)
+    return C
+end
+
+function _triukron!(C, A, B)
+    n_A = size(A, 1)
+    n_B = size(B, 1)
+    @inbounds for j = 1:n_A
+        jnB = (j - 1) * n_B
+        for i = 1:(j-1)
+            Aij = A[i, j]
+            inB = (i - 1) * n_B
+            for l = 1:n_B
+                for k = 1:l
+                    C[inB+k, jnB+l] = Aij * B[k, l]
+                end
+                for k = 1:(l-1)
+                    C[inB+l, jnB+k] = zero(eltype(C))
+                end
+            end
+        end
+        Ajj = A[j, j]
+        for l = 1:n_B
+            for k = 1:l
+                C[jnB+k, jnB+l] = Ajj * B[k, l]
+            end
+        end
+    end
+end
+
+function _trilkron!(C, A, B)
+    n_A = size(A, 1)
+    n_B = size(B, 1)
+    @inbounds for j = 1:n_A
+        jnB = (j - 1) * n_B
+        Ajj = A[j, j]
+        for l = 1:n_B
+            for k = l:n_B
+                C[jnB+k, jnB+l] = Ajj * B[k, l]
+            end
+        end
+        for i = (j+1):n_A
+            Aij = A[i, j]
+            inB = (i - 1) * n_B
+            for l = 1:n_B
+                for k = l:n_B
+                    C[inB+k, jnB+l] = Aij * B[k, l]
+                end
+                for k = (l+1):n_B
+                    C[inB+l, jnB+k] = zero(eltype(C))
+                end
+            end
+        end
+    end
+end
+
 ######################
 # BlasFloat routines #
 ######################
