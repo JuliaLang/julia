@@ -49,6 +49,7 @@ New library functions
 * `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
+* `Iterators.findall` is a lazy version of `findall`
 
 New library features
 --------------------
