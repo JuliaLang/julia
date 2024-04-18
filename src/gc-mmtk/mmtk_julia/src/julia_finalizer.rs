@@ -146,7 +146,7 @@ fn sweep_finalizer_list(
         let (isfreed, isold) = if gc_ptr_tag(v0, 2) {
             (true, false)
         } else {
-            let isfreed = !memory_manager::is_live_object(v);
+            let isfreed = !memory_manager::is_live_object::<JuliaVM>(v);
             let isold = finalizer_list_marked.is_some() && !isfreed;
             (isfreed, isold)
         };

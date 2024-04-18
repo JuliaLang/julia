@@ -31,7 +31,7 @@ lazy_static = "1.1"
 # - change branch
 # - change repo name
 # But other changes including adding/removing whitespaces in commented lines may break the CI
-mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev="5ab62f96c006475285b00b6d20a8b1bf83b74a4d" }
+mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev="e79e94e744660c486d5471f252ff05c4248bcea9" }
 # Uncomment the following to build locally
 # mmtk = { path = "../repos/mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
