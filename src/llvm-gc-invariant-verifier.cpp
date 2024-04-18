@@ -78,7 +78,7 @@ void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
 }
 
 void GCInvariantVerifier::checkStoreInst(Type *VTy, unsigned AS, Value &SI) {
-    if (VTy->isPointerTy()) {
+    if (VTy->isPtrOrPtrVectorTy()) {
         /* We currently don't obey this for arguments. That's ok - they're
            externally rooted. */
         unsigned AS = VTy->getPointerAddressSpace();
@@ -107,14 +107,14 @@ void GCInvariantVerifier::visitAtomicCmpXchgInst(AtomicCmpXchgInst &SI) {
 
 void GCInvariantVerifier::visitLoadInst(LoadInst &LI) {
     Type *Ty = LI.getType();
-    if (Ty->isPointerTy()) {
+    if (Ty->isPtrOrPtrVectorTy()) {
         unsigned AS = Ty->getPointerAddressSpace();
         Check(AS != AddressSpace::CalleeRooted &&
               AS != AddressSpace::Derived,
               "Illegal load of gc relevant value", &LI);
     }
     Ty = LI.getPointerOperand()->getType();
-    if (Ty->isPointerTy()) {
+    if (Ty->isPtrOrPtrVectorTy()) {
         unsigned AS = Ty->getPointerAddressSpace();
         Check(AS != AddressSpace::CalleeRooted,
               "Illegal load of callee rooted value", &LI);
@@ -129,7 +129,7 @@ void GCInvariantVerifier::visitReturnInst(ReturnInst &RI) {
     if (!RI.getReturnValue())
         return;
     Type *RTy = RI.getReturnValue()->getType();
-    if (!RTy->isPointerTy())
+    if (!RTy->isPtrOrPtrVectorTy())
         return;
     unsigned AS = RTy->getPointerAddressSpace();
     Check(!isSpecialAS(AS) || AS == AddressSpace::Tracked,
@@ -138,7 +138,7 @@ void GCInvariantVerifier::visitReturnInst(ReturnInst &RI) {
 
 void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
     Type *Ty = GEP.getType();
-    if (!Ty->isPointerTy())
+    if (!Ty->isPtrOrPtrVectorTy())
         return;
     unsigned AS = Ty->getPointerAddressSpace();
     if (!isSpecialAS(AS))
@@ -170,7 +170,7 @@ void GCInvariantVerifier::visitCallInst(CallInst &CI) {
                 continue;
             }
             Type *Ty = Arg->getType();
-            Check(Ty->isPointerTy() &&
+            Check(Ty->isPtrOrPtrVectorTy() &&
                       Ty->getPointerAddressSpace() == AddressSpace::Tracked,
                   "Invalid derived pointer in jlcall", &CI);
         }
