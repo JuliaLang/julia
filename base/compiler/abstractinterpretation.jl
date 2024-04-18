@@ -2845,7 +2845,7 @@ end
 
 function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, lhs::GlobalRef, @nospecialize(newty))
     effect_free = ALWAYS_FALSE
-    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty)
+    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, ignorelimited(newty))
     inaccessiblememonly = ALWAYS_FALSE
     if !nothrow
         sub_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
@@ -3050,7 +3050,6 @@ end
         return BasicStmtChange(nothing, rt, exct)
     end
     changes = nothing
-    stmt = stmt::Expr
     hd = stmt.head
     if hd === :(=)
         (; rt, exct) = abstract_eval_statement(interp, stmt.args[2], pc_vartable, frame)
