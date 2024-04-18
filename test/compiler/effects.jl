@@ -249,11 +249,11 @@ struct SyntacticallyDefined{T}
 end
 @test Base.infer_effects() do
     Maybe{Int}()
-end |> !Core.Compiler.is_consistent
+end |> Core.Compiler.is_consistent
 @test Base.infer_effects() do
     Maybe{Int}()[]
-end |> !Core.Compiler.is_consistent
-@test !fully_eliminated() do
+end |> Core.Compiler.is_consistent
+@test fully_eliminated() do
     Maybe{Int}()[]
 end
 @test Base.infer_effects() do
@@ -272,7 +272,7 @@ end
 end |> !Core.Compiler.is_consistent
 @test Base.infer_effects() do
     Ref{Int}()[]
-end |> !Core.Compiler.is_consistent
+end |> Core.Compiler.is_consistent
 @test !fully_eliminated() do
     Ref{Int}()[]
 end

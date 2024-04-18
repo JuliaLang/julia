@@ -2456,13 +2456,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, vtypes::Union{V
         ismutable = ismutabletype(ut)
         fcount = datatype_fieldcount(ut)
         nargs = length(e.args) - 1
-        has_any_uninitialized = (fcount === nothing || (fcount > nargs && (let t = rt
-                any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
-            end)))
-        if has_any_uninitialized
-            # allocation with undefined field is inconsistent always
-            consistent = ALWAYS_FALSE
-        elseif ismutable
+        if ismutable
             # mutable allocation isn't `:consistent`, but we still have a chance that
             # return type information later refines the `:consistent`-cy of the method
             consistent = CONSISTENT_IF_NOTRETURNED
