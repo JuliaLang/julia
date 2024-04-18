@@ -949,7 +949,7 @@ static void *signal_listener(void *arg)
             jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
             size_t i;
             for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
-                jl_print_bt_entry_codeloc(-1, bt_data + i);
+                jl_print_bt_entry_codeloc(sig, bt_data + i);
             }
         }
     }
