@@ -662,7 +662,7 @@ function typeconst_ex(ex)
     ex isa Expr || return ex
     if ex.head === :(=)
         quote
-            tmp = $(esc(ex.args[2]))
+            local tmp = $(esc(ex.args[2]))
             $(esc(ex.args[1]))::typeof(tmp) = tmp
         end
     elseif ex.head === :block
