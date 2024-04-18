@@ -463,7 +463,6 @@ function artifact_hash(name::String, artifacts_toml::String,
     return SHA1(meta["git-tree-sha1"])
 end
 
-
 function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::String;
                                        platform::AbstractPlatform = HostPlatform(),
                                        pkg_uuid::Union{Nothing,Base.UUID} = nothing,
