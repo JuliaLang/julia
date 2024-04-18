@@ -1292,7 +1292,7 @@ end
     return copysign(pow_body(abs(x), y), s)
 end
 
-@assume_effects :foldable @inline function pow_body(x::Float64, y::Float64)
+@assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
     xu = reinterpret(UInt64, x)
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
