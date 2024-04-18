@@ -236,7 +236,7 @@ end
 # Effect modeling for Core.compilerbarrier
 @test Base.infer_effects(Base.inferencebarrier, Tuple{Any}) |> Core.Compiler.is_removable_if_unused
 
-# allocation/access of uninitialized fields should taint the :consistent-cy
+# effects modeling for allocation/access of uninitialized fields
 struct Maybe{T}
     x::T
     Maybe{T}() where T = new{T}()
@@ -244,57 +244,9 @@ struct Maybe{T}
     Maybe(x::T) where T = new{T}(x)
 end
 Base.getindex(x::Maybe) = x.x
-
 struct SyntacticallyDefined{T}
     x::T
 end
-
-import Core.Compiler: Const, getfield_notuninit
-for T = (Base.RefValue, Maybe) # both mutable and immutable
-    for name = (Const(1), Const(:x))
-        @test getfield_notuninit(T{String}, name)
-        @test getfield_notuninit(T{Integer}, name)
-        @test getfield_notuninit(T{Union{String,Integer}}, name)
-        @test getfield_notuninit(Union{T{String},T{Integer}}, name)
-        @test !getfield_notuninit(T{Int}, name)
-        @test !getfield_notuninit(T{<:Integer}, name)
-        @test !getfield_notuninit(T{Union{Int32,Int64}}, name)
-        @test !getfield_notuninit(T, name)
-    end
-    # throw doesn't account for undefined behavior
-    for name = (Const(0), Const(2), Const(1.0), Const(:y), Const("x"),
-                Float64, String, Nothing)
-        @test getfield_notuninit(T{String}, name)
-        @test getfield_notuninit(T{Int}, name)
-        @test getfield_notuninit(T{Integer}, name)
-        @test getfield_notuninit(T{<:Integer}, name)
-        @test getfield_notuninit(T{Union{Int32,Int64}}, name)
-        @test getfield_notuninit(T, name)
-    end
-    # should not be too conservative when field isn't known very well but object information is accurate
-    @test getfield_notuninit(T{String}, Int)
-    @test getfield_notuninit(T{String}, Symbol)
-    @test getfield_notuninit(T{Integer}, Int)
-    @test getfield_notuninit(T{Integer}, Symbol)
-    @test !getfield_notuninit(T{Int}, Int)
-    @test !getfield_notuninit(T{Int}, Symbol)
-    @test !getfield_notuninit(T{<:Integer}, Int)
-    @test !getfield_notuninit(T{<:Integer}, Symbol)
-end
-# should be conservative when object information isn't accurate
-@test !getfield_notuninit(Any, Const(1))
-@test !getfield_notuninit(Any, Const(:x))
-# tuples and namedtuples should be okay if not given accurate information
-for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tuple,
-                    NamedTuple{(:a, :b), Tuple{Int,Int}}, NamedTuple{(:x,),Tuple{Any}}, NamedTuple],
-    FieldType = Any[Int, Symbol, Any]
-    @test getfield_notuninit(TupleType, FieldType)
-end
-# skip analysis on fields that are known to be defined syntactically
-@test Core.Compiler.getfield_notuninit(SyntacticallyDefined{Float64}, Symbol)
-@test Core.Compiler.getfield_notuninit(Const(Main), Const(:var))
-@test Core.Compiler.getfield_notuninit(Const(Main), Const(42))
-# high-level tests for `getfield_notuninit`
 @test Base.infer_effects() do
     Maybe{Int}()
 end |> !Core.Compiler.is_consistent
@@ -904,7 +856,6 @@ end |> Core.Compiler.is_foldable_nothrow
 @test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
-@test Core.Compiler.getfield_notuninit(WrapperOneField{Float64}, Symbol)
 @test Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
