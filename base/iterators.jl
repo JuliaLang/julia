@@ -35,7 +35,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, findall, cycle, repeated, product, flatten, flatmap
 
 if Base !== Core.Compiler
 export partition
@@ -944,6 +944,28 @@ end
 IteratorSize(::Type{<:DropWhile}) = SizeUnknown()
 eltype(::Type{DropWhile{I,P}}) where {I,P} = eltype(I)
 IteratorEltype(::Type{DropWhile{I,P}}) where {I,P} = IteratorEltype(I)
+
+"""
+    findall(f, it)
+
+An iterator that generates every key from the key/value pairs of `pairs(it)`,
+where `f(value)` returns `true`.
+`Iterators.findall` is the lazy equivalent of `findall`.
+
+!!! compat "Julia 1.12"
+    Lazy `findall` requires at least Julia 1.12.
+
+# Examples
+```jldoctest
+julia> collect(Iterators.findall(isodd, Dict(2 => 3, 3 => 2)))
+1-element Vector{Int64}:
+ 2
+
+julia> only(Iterators.findall(==(1), [3,6,2,1]))
+4
+```
+"""
+findall(f, it) = map(first, filter(i -> f(last(i)), pairs(it)))
 
 
 # Cycle an iterator forever
