@@ -757,11 +757,14 @@ static void jl_print_debugloc(const char *pre_str, jl_debuginfo_t *debuginfo, jl
 void jl_print_bt_entry_codeloc(int sig, jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
 {
     char sig_str[32], pre_str[64];
-    sig_str[0] = '\0';
+    sig_str[0] = pre_str[0] = '\0';
     if (sig != -1) {
         snprintf(sig_str, 32, "signal (%d) ", sig);
     }
-    snprintf(pre_str, 64, "%sthread (%d) ", sig_str, jl_threadid() + 1);
+    // do not call jl_threadid if there's no current task
+    if (jl_get_current_task()) {
+        snprintf(pre_str, 64, "%sthread (%d) ", sig_str, jl_threadid() + 1);
+    }
 
     if (jl_bt_is_native(bt_entry)) {
         jl_print_native_codeloc(pre_str, bt_entry[0].uintptr);
@@ -1373,7 +1376,11 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
 JL_DLLEXPORT void jl_gdblookup(void* ip)
 {
     char pre_str[64];
-    snprintf(pre_str, 64, "thread (%d) ", jl_threadid() + 1);
+    pre_str[0] = '\0';
+    // do not call jl_threadid if there's no current task
+    if (jl_get_current_task()) {
+        snprintf(pre_str, 64, "thread (%d) ", jl_threadid() + 1);
+    }
     jl_print_native_codeloc(pre_str, (uintptr_t)ip);
 }
 
@@ -1441,7 +1448,11 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
 
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
-    int ctid = jl_threadid() + 1;
+    int ctid = -1;
+    // do not call jl_threadid if there's no current task
+    if (jl_get_current_task()) {
+        ctid = jl_threadid() + 1;
+    }
     jl_safe_printf("thread (%d) ++++ Task backtraces\n", ctid);
     for (size_t i = 0; i < nthreads; i++) {
         jl_ptls_t ptls2 = allstates[i];
