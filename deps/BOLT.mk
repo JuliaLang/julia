@@ -96,7 +96,6 @@ BOLT_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir) && \
 	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P tools/bolt/cmake_install.cmake
 
-# TODO: Change to install-llvm-bolt to not include unnecessary binaries + libraries
 $(eval $(call staged-install, \
 	bolt,$$(BOLT_SRC_DIR)/build, \
 	BOLT_INSTALL,,,))
