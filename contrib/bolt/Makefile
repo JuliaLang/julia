@@ -1,4 +1,4 @@
-.PHONY: clean clean-profiles restore_originals
+.PHONY: clean clean_profiles restore_originals
 
 # Settings taken from https://github.com/rust-lang/rust/blob/master/src/tools/opt-dist/src/bolt.rs
 BOLT_ARGS :=
@@ -18,15 +18,13 @@ BOLT_ARGS += -no-huge-pages
 BOLT_ARGS += -icf=1
 # Split using best available strategy (three-way splitting, Cache-Directed Sort)
 BOLT_ARGS += -split-strategy=cdsplit
-# The following flag saves about 16 MiB of libLLVM.so size.
-# However, it succeeds very non-deterministically.
-# Try to reuse old text segments to reduce binary size
-# Broken for libjulia-internal, https://github.com/llvm/llvm-project/issues/89117
-# BOLT_ARGS += --use-old-text
 # Update DWARF debug info in the final binary
 BOLT_ARGS += -update-debug-sections
 # Print optimization statistics
 BOLT_ARGS += -dyno-stats
+# BOLT doesn't fully support computed gotos, https://github.com/llvm/llvm-project/issues/89117
+# Use escaped regex as the name BOLT recognises is often a bit different, e.g. apply_cl/1(*2)
+BOLT_ARGS += -skip-funcs=.\*apply_cl.\*
 
 # -fno-reorder-blocks-and-partition is needed on gcc >= 8.
 BOLT_FLAGS := $\
@@ -99,14 +97,19 @@ merge_data: bolt_instrument
 	done && \
 	touch $@
 
-bolt: merge_data
+# The --use-old-text saves about 16 MiB of libLLVM.so size.
+# However, the rust folk found it succeeds very non-deterministically for them.
+# It tries to reuse old text segments to reduce binary size
+# BOLT doesn't fully support computed gotos, https://github.com/llvm/llvm-project/issues/89117 so cannot use --use-old-text on libjulia-internal
+# That flag saves less than 1 MiB so oh well.
+bolt:
 	for file in $(FILES_TO_OPTIMIZE); do \
         abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
-		$(LLVM_BOLT) "$$abs_file.original" -data "$(PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS); \
+		$(LLVM_BOLT) "$$abs_file.original" -data "$(PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$(if [ "$$file" != $(shell readlink $(STAGE1_BUILD)/usr/lib/libjulia-internal.so) ]; then echo "--use-old-text"; fi); \
     done && \
     touch $@
 
-clean-profiles:
+clean_profiles:
 	rm -rf $(PROFILE_DIR)
 
 clean:
