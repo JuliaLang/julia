@@ -43,6 +43,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         similar(A::$t, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
         copy(A::$t) = $t(copy(A.data))
+        Base.unaliascopy(A::$t) = $t(Base.unaliascopy(A.data))
 
         real(A::$t{<:Real}) = A
         real(A::$t{<:Complex}) = (B = real(A.data); $t(B))
@@ -152,6 +153,8 @@ UnitUpperTriangular
 const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
 const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
 const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
+
+Base.dataids(A::UpperOrLowerTriangular) = Base.dataids(A.data)
 
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
@@ -272,7 +275,7 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
         iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
-            "($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
+            lazy"($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -282,10 +285,10 @@ end
 @propagate_inbounds function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     if i > j
         iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
-            "($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
+            lazy"($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
     elseif i == j
-        x == oneunit(x) || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
-            "of a UnitUpperTriangular matrix to a non-unit value ($x)"))
+        x == oneunit(x) || throw(ArgumentError(lazy"cannot set index on the diagonal ($i, $j) " *
+            lazy"of a UnitUpperTriangular matrix to a non-unit value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -295,7 +298,7 @@ end
 @propagate_inbounds function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
         iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
-            "($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
+            lazy"($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -305,10 +308,10 @@ end
 @propagate_inbounds function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     if i < j
         iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
-            "($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
+            lazy"($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
     elseif i == j
-        x == oneunit(x) || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
-            "of a UnitLowerTriangular matrix to a non-unit value ($x)"))
+        x == oneunit(x) || throw(ArgumentError(lazy"cannot set index on the diagonal ($i, $j) " *
+            lazy"of a UnitLowerTriangular matrix to a non-unit value ($x)"))
     else
         A.data[i,j] = x
     end
@@ -317,7 +320,7 @@ end
 
 @inline function fill!(A::UpperTriangular, x)
     iszero(x) || throw(ArgumentError("cannot set indices in the lower triangular part " *
-            "of an UpperTriangular matrix to a nonzero value ($x)"))
+            lazy"of an UpperTriangular matrix to a nonzero value ($x)"))
     for col in axes(A,2), row in firstindex(A,1):col
         @inbounds A.data[row, col] = x
     end
@@ -325,7 +328,7 @@ end
 end
 @inline function fill!(A::LowerTriangular, x)
     iszero(x) || throw(ArgumentError("cannot set indices in the upper triangular part " *
-            "of a LowerTriangular matrix to a nonzero value ($x)"))
+            lazy"of a LowerTriangular matrix to a nonzero value ($x)"))
     for col in axes(A,2), row in col:lastindex(A,1)
         @inbounds A.data[row, col] = x
     end
@@ -513,21 +516,23 @@ tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
 # copy and scale
 function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular}}
-    checkbounds(A, axes(B)...)
+    @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
+    B2 = Base.unalias(A, B)
     for j = 1:n
         for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
-            @inbounds A[i,j] = B[i,j]
+            @inbounds A[i,j] = B2[i,j]
         end
     end
     return A
 end
 function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular}}
-    checkbounds(A, axes(B)...)
+    @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
+    B2 = Base.unalias(A, B)
     for j = 1:n
         for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
-            @inbounds A[i,j] = B[i,j]
+            @inbounds A[i,j] = B2[i,j]
         end
     end
     return A
@@ -540,7 +545,7 @@ end
 
 function checksize1(A, B)
     szA, szB = size(A), size(B)
-    szA == szB || throw(DimensionMismatch("size of A, $szA, does not match size of B, $szB"))
+    szA == szB || throw(DimensionMismatch(lazy"size of A, $szA, does not match size of B, $szB"))
     checksquare(B)
 end
 
@@ -749,6 +754,80 @@ for op in (:+, :-)
     end
     for TM1 in (:UpperTriangular, :UnitUpperTriangular), TM2 in (:UpperTriangular, :UnitUpperTriangular)
         @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
+    end
+end
+
+function kron(A::UpperTriangular{T}, B::UpperTriangular{S}) where {T<:Number,S<:Number}
+    C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
+    return kron!(C, A, B)
+end
+
+function kron(A::LowerTriangular{T}, B::LowerTriangular{S}) where {T<:Number,S<:Number}
+    C = LowerTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
+    return kron!(C, A, B)
+end
+
+function kron!(C::UpperTriangular{<:Number}, A::UpperTriangular{<:Number}, B::UpperTriangular{<:Number})
+    size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+    _triukron!(C.data, A.data, B.data)
+    return C
+end
+
+function kron!(C::LowerTriangular{<:Number}, A::LowerTriangular{<:Number}, B::LowerTriangular{<:Number})
+    size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+    _trilkron!(C.data, A.data, B.data)
+    return C
+end
+
+function _triukron!(C, A, B)
+    n_A = size(A, 1)
+    n_B = size(B, 1)
+    @inbounds for j = 1:n_A
+        jnB = (j - 1) * n_B
+        for i = 1:(j-1)
+            Aij = A[i, j]
+            inB = (i - 1) * n_B
+            for l = 1:n_B
+                for k = 1:l
+                    C[inB+k, jnB+l] = Aij * B[k, l]
+                end
+                for k = 1:(l-1)
+                    C[inB+l, jnB+k] = zero(eltype(C))
+                end
+            end
+        end
+        Ajj = A[j, j]
+        for l = 1:n_B
+            for k = 1:l
+                C[jnB+k, jnB+l] = Ajj * B[k, l]
+            end
+        end
+    end
+end
+
+function _trilkron!(C, A, B)
+    n_A = size(A, 1)
+    n_B = size(B, 1)
+    @inbounds for j = 1:n_A
+        jnB = (j - 1) * n_B
+        Ajj = A[j, j]
+        for l = 1:n_B
+            for k = l:n_B
+                C[jnB+k, jnB+l] = Ajj * B[k, l]
+            end
+        end
+        for i = (j+1):n_A
+            Aij = A[i, j]
+            inB = (i - 1) * n_B
+            for l = 1:n_B
+                for k = l:n_B
+                    C[inB+k, jnB+l] = Aij * B[k, l]
+                end
+                for k = (l+1):n_B
+                    C[inB+l, jnB+k] = zero(eltype(C))
+                end
+            end
+        end
     end
 end
 
@@ -1003,11 +1082,11 @@ function generic_trimatmul!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function,
     m, n = size(B, 1), size(B, 2)
     N = size(A, 1)
     if m != N
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
+        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     mc, nc = size(C, 1), size(C, 2)
     if mc != N || nc != n
-        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
+        throw(DimensionMismatch(lazy"output has dimensions ($mc,$nc), should have ($N,$n)"))
     end
     oA = oneunit(eltype(A))
     unit = isunitc == 'U'
@@ -1065,11 +1144,11 @@ function generic_trimatmul!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA:
     m, n = size(B, 1), size(B, 2)
     N = size(A, 1)
     if m != N
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
+        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
     mc, nc = size(C, 1), size(C, 2)
     if mc != N || nc != n
-        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
+        throw(DimensionMismatch(lazy"output has dimensions ($mc,$nc), should have ($N,$n)"))
     end
     oA = oneunit(eltype(A))
     unit = isunitc == 'U'
@@ -1102,11 +1181,11 @@ function generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A
     m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
     if n != N
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
+        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $n, has size $N"))
     end
     mc, nc = size(C, 1), size(C, 2)
     if mc != m || nc != N
-        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
+        throw(DimensionMismatch(lazy"output has dimensions ($mc,$nc), should have ($m,$N)"))
     end
     oB = oneunit(eltype(B))
     unit = isunitc == 'U'
@@ -1164,11 +1243,11 @@ function generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, ::Function, A::Ab
     m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
     if n != N
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
+        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $n, has size $N"))
     end
     mc, nc = size(C, 1), size(C, 2)
     if mc != m || nc != N
-        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
+        throw(DimensionMismatch(lazy"output has dimensions ($mc,$nc), should have ($m,$N)"))
     end
     oB = oneunit(eltype(B))
     unit = isunitc == 'U'
@@ -1212,10 +1291,10 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function,
     mA, nA = size(A)
     m, n = size(B, 1), size(B,2)
     if nA != m
-        throw(DimensionMismatch("second dimension of left hand side A, $nA, and first dimension of right hand side B, $m, must be equal"))
+        throw(DimensionMismatch(lazy"second dimension of left hand side A, $nA, and first dimension of right hand side B, $m, must be equal"))
     end
     if size(C) != size(B)
-        throw(DimensionMismatch("size of output, $(size(C)), does not match size of right hand side, $(size(B))"))
+        throw(DimensionMismatch(lazy"size of output, $(size(C)), does not match size of right hand side, $(size(B))"))
     end
     oA = oneunit(eltype(A))
     @inbounds if uploc == 'U'
@@ -1348,10 +1427,10 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA:
     mA, nA = size(A)
     m, n = size(B, 1), size(B,2)
     if nA != m
-        throw(DimensionMismatch("second dimension of left hand side A, $nA, and first dimension of right hand side B, $m, must be equal"))
+        throw(DimensionMismatch(lazy"second dimension of left hand side A, $nA, and first dimension of right hand side B, $m, must be equal"))
     end
     if size(C) != size(B)
-        throw(DimensionMismatch("size of output, $(size(C)), does not match size of right hand side, $(size(B))"))
+        throw(DimensionMismatch(lazy"size of output, $(size(C)), does not match size of right hand side, $(size(B))"))
     end
     oA = oneunit(eltype(A))
     @inbounds if uploc == 'U'
@@ -1430,10 +1509,10 @@ function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A
     require_one_based_indexing(C, A, B)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     if size(C) != size(A)
-        throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
+        throw(DimensionMismatch(lazy"size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
     end
     oB = oneunit(eltype(B))
     unit = isunitc == 'U'
@@ -1493,10 +1572,10 @@ function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, ::Function, A::Ab
     require_one_based_indexing(C, A, B)
     m, n = size(A)
     if size(B, 1) != n
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
+        throw(DimensionMismatch(lazy"right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
     if size(C) != size(A)
-        throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
+        throw(DimensionMismatch(lazy"size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
     end
     oB = oneunit(eltype(B))
     unit = isunitc == 'U'
@@ -1618,7 +1697,7 @@ end
 #     34(3), (2013) 1341–1360.
 function powm!(A0::UpperTriangular, p::Real)
     if abs(p) >= 1
-        throw(ArgumentError("p must be a real number in (-1,1), got $p"))
+        throw(ArgumentError(lazy"p must be a real number in (-1,1), got $p"))
     end
 
     normA0 = opnorm(A0, 1)
@@ -2548,7 +2627,7 @@ function eigvecs(A::AbstractTriangular{T}) where T
     if TT <: BlasFloat
         return eigvecs(convert(AbstractMatrix{TT}, A))
     else
-        throw(ArgumentError("eigvecs type $(typeof(A)) not supported. Please submit a pull request."))
+        throw(ArgumentError(lazy"eigvecs type $(typeof(A)) not supported. Please submit a pull request."))
     end
 end
 det(A::UnitUpperTriangular{T}) where {T} = one(T)
@@ -2663,7 +2742,7 @@ end
             Bᵢⱼ⁽¹⁾ = M_Bᵢⱼ⁽¹⁾[1:s₁, 1:s₂]
             # Compute Bᵢⱼ⁽⁰⁾ and Bᵢⱼ⁽¹⁾
             mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂])
-            # Retreive Rᵢ,ᵢ₊ₖ as A[i+k,i]'
+            # Retrieve Rᵢ,ᵢ₊ₖ as A[i+k,i]'
             mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]')
             # Solve Uᵢ,ᵢ₊ₖ using Reference [1, (4.10)]
             kron!(L₀, Δ[1:s₂,1:s₂], S[1:s₁,i₁:i₂])

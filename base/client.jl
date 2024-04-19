@@ -95,7 +95,7 @@ function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
         # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
+        eval_ind = findlast(frame -> !frame.from_c && startswith(String(frame.func), "__repl_entry"), bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
@@ -240,7 +240,7 @@ function exec_options(opts)
         if cmd_suppresses_program(cmd)
             arg_is_program = false
             repl = false
-        elseif cmd == 'L'
+        elseif cmd == 'L' || cmd == 'm'
             # nothing
         elseif cmd == 'B' # --bug-report
             # If we're doing a bug report, don't load anything else. We will
@@ -260,7 +260,7 @@ function exec_options(opts)
     # Load Distributed module only if any of the Distributed options have been specified.
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
-        let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
+        let Distributed = require_stdlib(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             Core.eval(MainInclude, :(const Distributed = $Distributed))
             Core.eval(Main, :(using Base.MainInclude.Distributed))
         end
@@ -292,6 +292,13 @@ function exec_options(opts)
         elseif cmd == 'E'
             invokelatest(show, Core.eval(Main, parse_input_line(arg)))
             println()
+        elseif cmd == 'm'
+            @eval Main import $(Symbol(arg)).main
+            if !should_use_main_entrypoint()
+                error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
+            end
+            return false
+
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode
@@ -386,7 +393,8 @@ function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
     if !isdefined(MainInclude, :InteractiveUtils)
         try
-            let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
+            # TODO: we have to use require_stdlib here because it is a dependency of REPL, but we would sort of prefer not to
+            let InteractiveUtils = require_stdlib(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
                 Core.eval(MainInclude, :(const InteractiveUtils = $InteractiveUtils))
             end
         catch ex
@@ -401,7 +409,7 @@ end
 function load_REPL()
     # load interactive-only libraries
     try
-        return Base.require(PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL"))
+        return Base.require_stdlib(PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL"))
     catch ex
         @warn "Failed to import REPL" exception=(ex, catch_backtrace())
     end

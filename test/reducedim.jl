@@ -576,8 +576,8 @@ end
 @testset "type of sum(::Array{$T}" for T in [UInt8, Int8, Int32, Int64, BigInt]
     result = sum(T[1 2 3; 4 5 6; 7 8 9], dims=2)
     @test result == hcat([6, 15, 24])
-    @test eltype(result) === (T <: Base.SmallSigned ? Int :
-                              T <: Base.SmallUnsigned ? UInt :
+    @test eltype(result) === (T <: Base.BitSignedSmall ? Int :
+                              T <: Base.BitUnsignedSmall ? UInt :
                               T)
 end
 

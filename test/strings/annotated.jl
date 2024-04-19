@@ -108,12 +108,45 @@ end
     @test reverse(str2) == Base.AnnotatedString("esac", [(2:3, :label => "oomph")])
 end
 
+@testset "Unicode" begin
+    for words in (["ᲃase", "cɦɒnɡeȿ", "can", "CHⱯNGE", "Сodeunıts"],
+                  ["Сodeunıts", "ᲃase", "cɦɒnɡeȿ", "can", "CHⱯNGE"])
+        ann_words = [Base.AnnotatedString(w, [(1:ncodeunits(w), :i => i)])
+                     for (i, w) in enumerate(words)]
+        ann_str = join(ann_words, '-')
+        for transform in (lowercase, uppercase, titlecase)
+            t_words = map(transform, words)
+            ann_t_words = [Base.AnnotatedString(w, [(1:ncodeunits(w), :i => i)])
+                        for (i, w) in enumerate(t_words)]
+            ann_t_str = join(ann_t_words, '-')
+            t_ann_str = transform(ann_str)
+            @test String(ann_t_str) == String(t_ann_str)
+            @test Base.annotations(ann_t_str) == Base.annotations(t_ann_str)
+        end
+        for transform in (uppercasefirst, lowercasefirst)
+            t_words = vcat(transform(first(words)), words[2:end])
+            ann_t_words = [Base.AnnotatedString(w, [(1:ncodeunits(w), :i => i)])
+                        for (i, w) in enumerate(t_words)]
+            ann_t_str = join(ann_t_words, '-')
+            t_ann_str = transform(ann_str)
+            @test String(ann_t_str) == String(t_ann_str)
+            @test Base.annotations(ann_t_str) == Base.annotations(t_ann_str)
+        end
+    end
+end
+
 @testset "AnnotatedIOBuffer" begin
     aio = Base.AnnotatedIOBuffer()
     # Append-only writing
     @test write(aio, Base.AnnotatedString("hello", [(1:5, :tag => 1)])) == 5
     @test write(aio, ' ') == 1
     @test write(aio, Base.AnnotatedString("world", [(1:5, :tag => 2)])) == 5
+    @test Base.annotations(aio) == [(1:5, :tag => 1), (7:11, :tag => 2)]
+    # Check `annotate!`, including region sorting
+    @test truncate(aio, 0).io.size == 0
+    @test write(aio, "hello world") == ncodeunits("hello world")
+    @test Base.annotate!(aio, 7:11, :tag => 2) === aio
+    @test Base.annotate!(aio, 1:5, :tag => 1) === aio
     @test Base.annotations(aio) == [(1:5, :tag => 1), (7:11, :tag => 2)]
     # Reading
     @test read(seekstart(deepcopy(aio.io)), String) == "hello world"

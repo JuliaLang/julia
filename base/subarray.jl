@@ -115,11 +115,14 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
     trimmedpind = _trimmedpind(V.indices...)
     vdest = trimmedpind isa Tuple{Vararg{Union{Slice,Colon}}} ? dest : view(dest, trimmedpind...)
     copyto!(vdest, view(V, _trimmedvind(V.indices...)...))
-    SubArray{T,N,A,I,LD}(dest, map(_trimmedindex, V.indices), 0, Int(LD))
+    indices = map(_trimmedindex, V.indices)
+    stride1 = LD ? compute_stride1(dest, indices) : 0
+    offset1 = LD ? compute_offset1(dest, stride1, indices) : 0
+    SubArray{T,N,A,I,LD}(dest, indices, offset1, stride1)
 end
 # Get the proper trimmed shape
 _trimmedshape(::ScalarIndex, rest...) = (1, _trimmedshape(rest...)...)
-_trimmedshape(i::AbstractRange, rest...) = (maximum(i), _trimmedshape(rest...)...)
+_trimmedshape(i::AbstractRange, rest...) = (isempty(i) ? zero(eltype(i)) : maximum(i), _trimmedshape(rest...)...)
 _trimmedshape(i::Union{UnitRange,StepRange,OneTo}, rest...) = (length(i), _trimmedshape(rest...)...)
 _trimmedshape(i::AbstractArray{<:ScalarIndex}, rest...) = (length(i), _trimmedshape(rest...)...)
 _trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{0}}, rest...) = _trimmedshape(rest...)
@@ -214,10 +217,6 @@ function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
 end
 
 # Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
-function view(r1::OneTo, r2::OneTo)
-    @_propagate_inbounds_meta
-    getindex(r1, r2)
-end
 function view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
@@ -412,25 +411,24 @@ end
 
 function _unsetindex!(V::FastSubArray, i::Int)
     @inline
-    @boundscheck checkbounds(Bool, V, i)
+    @boundscheck checkbounds(V, i)
     @inbounds _unsetindex!(V.parent, _reindexlinear(V, i))
     return V
 end
 function _unsetindex!(V::FastSubArray{<:Any,1}, i::Int)
     @inline
-    @boundscheck checkbounds(Bool, V, i)
+    @boundscheck checkbounds(V, i)
     @inbounds _unsetindex!(V.parent, _reindexlinear(V, i))
     return V
 end
 function _unsetindex!(V::SubArray{T,N}, i::Vararg{Int,N}) where {T,N}
     @inline
-    @boundscheck checkbounds(Bool, V, i...)
+    @boundscheck checkbounds(V, i...)
     @inbounds _unsetindex!(V.parent, reindex(V.indices, i)...)
     return V
 end
 
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
-IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 
 # Strides are the distance in memory between adjacent elements in a given dimension
 # which we determine from the strides of the parent

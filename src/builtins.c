@@ -1219,6 +1219,8 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
             tt = ((jl_tvar_t*)tt)->ub;
         if (tt == (jl_value_t*)jl_any_type)
             return (jl_value_t*)jl_any_type;
+        if (tt == (jl_value_t*)jl_bottom_type)
+            return (jl_value_t*)jl_bottom_type;
         JL_GC_PUSH1(&f);
         if (jl_is_symbol(f))
             f = jl_box_long(field_index+1);
@@ -2510,7 +2512,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
-    add_builtin("LineInfoNode", (jl_value_t*)jl_lineinfonode_type);
+    add_builtin("LegacyLineInfoNode", (jl_value_t*)jl_lineinfonode_type);
+    add_builtin("DebugInfo", (jl_value_t*)jl_debuginfo_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("GotoIfNot", (jl_value_t*)jl_gotoifnot_type);
     add_builtin("EnterNode", (jl_value_t*)jl_enternode_type);

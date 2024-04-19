@@ -6,6 +6,17 @@ const CC = Core.Compiler
 include("irutils.jl")
 include("newinterp.jl")
 
+# interpreter that performs abstract interpretation only
+# (semi-concrete interpretation should be disabled automatically)
+@newinterp AbsIntOnlyInterp1
+CC.may_optimize(::AbsIntOnlyInterp1) = false
+@test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp1()) >: IO
+
+# it should work even if the interpreter discards inferred source entirely
+@newinterp AbsIntOnlyInterp2
+CC.may_optimize(::AbsIntOnlyInterp2) = false
+CC.transform_result_for_cache(::AbsIntOnlyInterp2, ::Core.MethodInstance, ::CC.WorldRange, ::CC.InferenceResult) = nothing
+@test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
 # OverlayMethodTable
 # ==================
@@ -452,7 +463,6 @@ let # generate cache
     target_mi = CC.specialize_method(only(methods(custom_lookup_target)), Tuple{typeof(custom_lookup_target),Bool,Int}, Core.svec())
     target_ci = custom_lookup(target_mi, CONST_INVOKE_INTERP_WORLD, CONST_INVOKE_INTERP_WORLD)
     @test target_ci.rettype == Tuple{Float64,Nothing} # constprop'ed source
-    # display(@ccall jl_uncompress_ir(target_ci.def.def::Any, C_NULL::Ptr{Cvoid}, target_ci.inferred::Any)::Any)
 
     raw = false
     lookup = @cfunction(custom_lookup, Any, (Any,Csize_t,Csize_t))
@@ -503,4 +513,21 @@ let src = code_typed((Int,); interp=CustomDataInterp()) do x
     @test count(isinvoke(:sin), src.code) == 1
     @test count(isinvoke(:cos), src.code) == 1
     @test count(isinvoke(:+), src.code) == 0
+end
+
+# ephemeral cache mode
+@newinterp DebugInterp #=ephemeral_cache=#true
+func_ext_cache1(a) = func_ext_cache2(a) * cos(a)
+func_ext_cache2(a) = sin(a)
+let interp = DebugInterp()
+    @test Base.infer_return_type(func_ext_cache1, (Float64,); interp) === Float64
+    @test isdefined(interp, :code_cache)
+    found = false
+    for (mi, codeinst) in interp.code_cache.dict
+        if mi.def.name === :func_ext_cache2
+            found = true
+            break
+        end
+    end
+    @test found
 end

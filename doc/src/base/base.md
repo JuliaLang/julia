@@ -375,7 +375,7 @@ Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
 Base.Sys.isreadable
-Base.Sys.iswriteable
+Base.Sys.iswritable
 Base.Sys.username
 Base.@static
 ```

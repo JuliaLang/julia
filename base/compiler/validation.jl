@@ -64,17 +64,17 @@ struct InvalidCodeError <: Exception
 end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
-function maybe_validate_code(linfo::MethodInstance, src::CodeInfo, kind::String)
+function maybe_validate_code(mi::MethodInstance, src::CodeInfo, kind::String)
     if is_asserts()
-        errors = validate_code(linfo, src)
+        errors = validate_code(mi, src)
         if !isempty(errors)
             for e in errors
-                if linfo.def isa Method
+                if mi.def isa Method
                     println(stderr, "WARNING: Encountered invalid ", kind, " code for method ",
-                            linfo.def, ": ", e)
+                            mi.def, ": ", e)
                 else
                     println(stderr, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
-                            linfo.def, ": ", e)
+                            mi.def, ": ", e)
                 end
             end
             error("")

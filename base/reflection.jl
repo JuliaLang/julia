@@ -20,6 +20,8 @@ Base
 """
 parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
+is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
+
 """
     moduleroot(m::Module) -> Module
 
@@ -887,6 +889,7 @@ A special case where exact behavior is guaranteed: when `T <: S`,
 typeintersect(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_intersection, Any, (Any, Any), a::Type, b::Type))
 
 morespecific(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_morespecific, Cint, (Any, Any), a::Type, b::Type) != 0)
+morespecific(a::Method, b::Method) = ccall(:jl_method_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
     fieldoffset(type, i)
@@ -1127,20 +1130,23 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     end
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    return map(method_instances(f, t, world)) do m
+    ret = CodeInfo[]
+    for m in method_instances(f, t, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
-                return ccall(:jl_code_for_staged, Any, (Any, UInt), m, world)::CodeInfo
+                code = ccall(:jl_code_for_staged, Any, (Any, UInt), m, world)::CodeInfo
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
                       "not leaf types, but the `generated` argument is `true`.")
             end
+        else
+            code = uncompressed_ir(m.def::Method)
+            debuginfo === :none && remove_linenums!(code)
         end
-        code = uncompressed_ir(m.def::Method)
-        debuginfo === :none && remove_linenums!(code)
-        return code
+        push!(ret, code)
     end
+    return ret
 end
 
 hasgenerator(m::Method) = isdefined(m, :generator)
@@ -1318,9 +1324,12 @@ uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
                              error("Code for this Method is not available.")
 function _uncompressed_ir(m::Method)
     s = m.source
-    s isa String && (s = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s))
+    if s isa String
+        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
+    end
     return s::CodeInfo
 end
+
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
@@ -1331,7 +1340,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     # this make a better error message than the typeassert that follows
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     for match in _methods_by_ftype(tt, -1, world)::Vector
-        instance = Core.Compiler.specialize_method(match)
+        instance = Core.Compiler.specialize_method(match::Core.MethodMatch)
         push!(results, instance)
     end
     return results
@@ -1497,7 +1506,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     gen_mthds isa Vector || return false
     length(gen_mthds) == 1 || return false
 
-    generator_method = first(gen_mthds).method
+    generator_method = (first(gen_mthds)::Core.MethodMatch).method
     nsparams = length(sparams)
     isdefined(generator_method, :source) || return false
     code = generator_method.source
@@ -1575,7 +1584,7 @@ julia> code_typed(+, (Float64, Float64))
 """
 function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs...)
     if isa(f, Core.OpaqueClosure)
-        return code_typed_opaque_closure(f; kwargs...)
+        return code_typed_opaque_closure(f, types; kwargs...)
     end
     tt = signature_type(f, types)
     return code_typed_by_type(tt; kwargs...)
@@ -1630,20 +1639,38 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function get_oc_code_rt(@nospecialize(oc::Core.OpaqueClosure))
-    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
+    @nospecialize oc types
+    ccall(:jl_is_in_pure_context, Bool, ()) &&
+        error("code reflection cannot be used from generated functions")
     m = oc.source
     if isa(m, Method)
-        code = _uncompressed_ir(m)
-        return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+        if isdefined(m, :source)
+            if optimize
+                tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
+                mi = Core.Compiler.specialize_method(m, tt, Core.svec())
+                interp = Core.Compiler.NativeInterpreter(m.primary_world)
+                return Core.Compiler.typeinf_code(interp, mi, optimize)
+            else
+                code = _uncompressed_ir(m)
+                return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+            end
+        else
+            # OC constructed from optimized IR
+            codeinst = m.specializations.cache
+            return Pair{CodeInfo, Any}(codeinst.inferred, codeinst.rettype)
+        end
     else
         error("encountered invalid Core.OpaqueClosure object")
     end
 end
 
-function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
-                                   debuginfo::Symbol=:default, _...)
-    (code, rt) = get_oc_code_rt(oc)
+function code_typed_opaque_closure(oc::Core.OpaqueClosure, types;
+                                   debuginfo::Symbol=:default,
+                                   optimize::Bool=true,
+                                   _...)
+    @nospecialize oc types
+    (code, rt) = get_oc_code_rt(oc, types, optimize)
     debuginfo === :none && remove_linenums!(code)
     return Any[Pair{CodeInfo,Any}(code, rt)]
 end
@@ -1798,7 +1825,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        _, rt = only(code_typed_opaque_closure(f))
+        _, rt = only(code_typed_opaque_closure(f, types))
         return Any[rt]
     end
     if isa(f, Core.Builtin)
@@ -1867,7 +1894,7 @@ function infer_return_type(@nospecialize(f), @nospecialize(types=default_tt(f));
                            interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        return last(only(code_typed_opaque_closure(f)))
+        return last(only(code_typed_opaque_closure(f, types)))
     end
     if isa(f, Core.Builtin)
         return _builtin_return_type(interp, f, types)
@@ -2459,7 +2486,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector
+        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector)
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
             filter!(ms) do m::Core.MethodMatch
@@ -2472,7 +2499,6 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         # report the other ambiguous pair)
         have_m1 = have_m2 = false
         for match in ms
-            match = match::Core.MethodMatch
             m = match.method
             m === m1 && (have_m1 = true)
             m === m2 && (have_m2 = true)
@@ -2490,7 +2516,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             for match in ms
                 m = match.method
                 match.fully_covers || continue
-                if minmax === nothing || morespecific(m.sig, minmax.sig)
+                if minmax === nothing || morespecific(m, minmax)
                     minmax = m
                 end
             end
@@ -2500,8 +2526,8 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             for match in ms
                 m = match.method
                 m === minmax && continue
-                if !morespecific(minmax.sig, m.sig)
-                    if match.fully_covers || !morespecific(m.sig, minmax.sig)
+                if !morespecific(minmax, m)
+                    if match.fully_covers || !morespecific(m, minmax)
                         return true
                     end
                 end

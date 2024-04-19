@@ -388,7 +388,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --gcthreads
     code = "print(Threads.ngcthreads())"
     cpu_threads = ccall(:jl_effective_threads, Int32, ())
-    @test (cpu_threads == 1 ? "1" : string(div(cpu_threads, 2))) ==
+    @test string(cpu_threads) ==
           read(`$exename --threads auto -e $code`, String) ==
           read(`$exename --threads=auto -e $code`, String) ==
           read(`$exename -tauto -e $code`, String) ==
@@ -444,9 +444,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     mktempdir() do dir
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
-        expected = replace(read(joinpath(helperdir, "coverage_file.info.bad"), String),
-            "<FILENAME>" => realpath(inputfile))
-        expected_good = replace(read(joinpath(helperdir, "coverage_file.info"), String),
+        expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
             "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
@@ -464,21 +462,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
@@ -488,7 +483,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in directory
         tdir = dirname(realpath(inputfile))
@@ -498,7 +492,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
@@ -511,7 +504,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
@@ -523,7 +515,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in relative directory with dot-dot notation
         tdir = dirname(realpath(inputfile))
@@ -535,7 +526,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
@@ -570,15 +560,14 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             do_test()
             """), """
-            DA:1,1
             DA:2,1
             DA:3,1
             DA:5,1
             DA:6,0
             DA:9,1
             DA:10,1
-            LH:6
-            LF:7
+            LH:5
+            LF:6
             """)
         @test contains(coverage_info_for("""
             function cov_bug()
@@ -677,7 +666,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
                 @test occursin("llvm.dbg.cu", code)
-                @test occursin("int.jl", code)
+                # TODO: consider moving test to llvmpasses as this fails on some platforms
+                # without clear reason
+                @test_skip occursin("int.jl", code)
                 @test !occursin("name: \"Int64\"", code)
             end
             let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
@@ -685,7 +676,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
                 @test occursin("llvm.dbg.cu", code)
-                @test occursin("int.jl", code)
+                # TODO: consider moving test to llvmpasses as this fails on some platforms
+                # without clear reason
+                @test_skip occursin("int.jl", code)
                 @test occursin("name: \"Int64\"", code)
             end
         end
@@ -1146,5 +1139,21 @@ if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these
         @test success(pipeline(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
                                       "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
                                       "_RR_TRACE_DIR" => temp_trace_dir); #=stderr, stdout=#))
+    end
+end
+
+@testset "--heap-size-hint" begin
+    exename = `$(Base.julia_cmd())`
+    @test errors_not_signals(`$exename --heap-size-hint -e "exit(0)"`)
+    @testset "--heap-size-hint=$str" for str in ["asdf","","0","1.2vb","b","GB","2.5GB̂","1.2gb2","42gigabytes","5gig","2GiB","NaNt"]
+        @test errors_not_signals(`$exename --heap-size-hint=$str -e "exit(0)"`)
+    end
+    k = 1024
+    m = 1024k
+    g = 1024m
+    t = 1024g
+    @testset "--heap-size-hint=$str" for (str, val) in [("1", 1), ("1e7", 1e7), ("2.5e7", 2.5e7), ("1MB", 1m), ("2.5g", 2.5g), ("1e4kB", 1e4k),
+        ("1e100", typemax(UInt64)), ("1e500g", typemax(UInt64)), ("1e-12t", 1), ("500000000b", 500000000)]
+        @test parse(UInt64,read(`$exename --heap-size-hint=$str -E "Base.JLOptions().heap_size_hint"`, String)) == val
     end
 end

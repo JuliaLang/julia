@@ -16,7 +16,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     permutedims, permuterows!, power_by_squaring, promote_rule, real, sec, sech, setindex!,
     show, similar, sin, sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc,
     typed_hcat, vec, view, zero
-using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
+using Base: IndexLinear, promote_eltype, promote_op, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted
@@ -297,14 +297,14 @@ julia> LinearAlgebra.checksquare(A, B)
 """
 function checksquare(A)
     m,n = size(A)
-    m == n || throw(DimensionMismatch("matrix is not square: dimensions are $(size(A))"))
+    m == n || throw(DimensionMismatch(lazy"matrix is not square: dimensions are $(size(A))"))
     m
 end
 
 function checksquare(A...)
     sizes = Int[]
     for a in A
-        size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
+        size(a,1)==size(a,2) || throw(DimensionMismatch(lazy"matrix is not square: dimensions are $(size(a))"))
         push!(sizes, size(a,1))
     end
     return sizes
@@ -576,11 +576,14 @@ _droplast!(A) = deleteat!(A, lastindex(A))
 matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
 matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
 matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+# diagonal is special, as it does not change the structure of the other matrix
+# we call similar without a size to preserve the type of the matrix wherever possible
 matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
 matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
 matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
-matprod_dest(A::HermOrSym, B::Diagonal, TS) = similar(A, TS, size(A))
-matprod_dest(A::Diagonal, B::HermOrSym, TS) = similar(B, TS, size(B))
+
+# Special handling for adj/trans vec
+matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
 
 # TODO: remove once not used anymore in SparseArrays.jl
 # some trait like this would be cool
@@ -691,7 +694,7 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     end
 
     if parallel
-        let Distributed = Base.require(Base.PkgId(
+        let Distributed = Base.require_stdlib(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             nworkers = @invokelatest Distributed.nworkers()
             results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))
