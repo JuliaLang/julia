@@ -57,7 +57,6 @@ AFTER_INSTRUMENT_MESSAGE:='Run `make clean-profiles` to start with a clean slate
 $(STAGE0_BUILD) $(STAGE1_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
 
-# This is solely to install llvm-bolt and merge-fdata
 stage0: | $(STAGE0_BUILD)
 	$(MAKE) -C $(STAGE0_BUILD)/deps install-BOLT && \
 	touch $@
