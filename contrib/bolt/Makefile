@@ -49,8 +49,8 @@ FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(
 
 AFTER_INSTRUMENT_MESSAGE:='Run `make clean_profiles` to start with a clean slate. $\
 	To collect realistic profile data either do `make pkgimage` or run Julia with an appropriate workload. $\
-	This should produce some data in $(PROFILE_DIR). Afterwards run `make merge_data && make bolt`.'. $\
-	Remember to run `make pkgimage` if you didn't during the profiling stage to make the package images.
+	This should produce some data in $(PROFILE_DIR). Afterwards run `make merge_data && make bolt`. $\
+	Remember to run `make pkgimage` if you '"didn't"' during the profiling stage to make the package images.'
 
 $(STAGE0_BUILD) $(STAGE1_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
