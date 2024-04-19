@@ -5600,6 +5600,13 @@ end |> only === Float64
 @test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
 @test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError
 
+# exception type inference for `:new`
+struct NewExctInference
+    a::Int
+    @eval NewExctInference(a) = $(Expr(:new, :NewExctInference, :a))
+end
+@test Base.infer_exception_type(NewExctInference, (Float64,)) == TypeError
+
 # semi-concrete interpretation accuracy
 # https://github.com/JuliaLang/julia/issues/50037
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
