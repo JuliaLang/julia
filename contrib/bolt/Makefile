@@ -59,7 +59,7 @@ $(STAGE0_BUILD) $(STAGE1_BUILD):
 
 # This is solely to install llvm-bolt and merge-fdata
 stage0: | $(STAGE0_BUILD)
-	$(MAKE) -C $(STAGE0_BUILD)/deps install-bolt && \
+	$(MAKE) -C $(STAGE0_BUILD)/deps install-BOLT && \
 	touch $@
 
 # Build with our custom flags, binary builder doesn't use them so we need to build LLVM for now.
@@ -102,7 +102,7 @@ merge_data: bolt_instrument
 # It tries to reuse old text segments to reduce binary size
 # BOLT doesn't fully support computed gotos, https://github.com/llvm/llvm-project/issues/89117 so cannot use --use-old-text on libjulia-internal
 # That flag saves less than 1 MiB so oh well.
-bolt:
+bolt: merge_data
 	for file in $(FILES_TO_OPTIMIZE); do \
         abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
 		$(LLVM_BOLT) "$$abs_file.original" -data "$(PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$(if [ "$$file" != $(shell readlink $(STAGE1_BUILD)/usr/lib/libjulia-internal.so) ]; then echo "--use-old-text"; fi); \

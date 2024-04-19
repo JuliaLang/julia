@@ -1,10 +1,10 @@
 ## BOLT ##
-include $(SRCDIR)/bolt.version
+include $(SRCDIR)/BOLT.version
 
 ifneq ($(USE_BINARYBUILDER_BOLT), 1)
 BOLT_GIT_URL:=https://github.com/llvm/llvm-project.git
 BOLT_TAR_URL=https://api.github.com/repos/llvm/llvm-project/tarball/$1
-$(eval $(call git-external,bolt,BOLT,CMakeLists.txt,,$(SRCCACHE)))
+$(eval $(call git-external,BOLT,BOLT,CMakeLists.txt,,$(SRCCACHE)))
 
 BOLT_BUILDDIR := $(BUILDDIR)/$(BOLT_SRC_DIR)/build
 
@@ -114,6 +114,6 @@ check-bolt: $(BOLT_BUILDDIR)/build-checked
 
 else # USE_BINARYBUILDER_BOLT
 
-$(eval $(call bb-install,bolt,BOLT,false,true))
+$(eval $(call bb-install,BOLT,BOLT,false,true))
 
 endif # USE_BINARYBUILDER_BOLT
