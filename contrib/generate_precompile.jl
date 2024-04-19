@@ -175,7 +175,7 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
         println(k)
     end
 
-    # interactive statup uses this
+    # interactive startup uses this
     write(IOBuffer(), "")
 
     # Not critical, but helps hide unrelated compilation from @time when using --trace-compile.
