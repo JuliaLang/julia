@@ -428,14 +428,17 @@ struct IRCode
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Expr}
+    assume_bindings_static::Bool # XXX propagate `interp::AbstractInterpreter` here?
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, debuginfo::DebugInfoStream, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
-        return new(stmts, argtypes, sptypes, debuginfo, cfg, NewNodeStream(), meta)
+    function IRCode(stmts::InstructionStream, cfg::CFG, debuginfo::DebugInfoStream,
+                    argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState},
+                    assume_bindings_static::Bool=false)
+        return new(stmts, argtypes, sptypes, debuginfo, cfg, NewNodeStream(), meta, assume_bindings_static)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
         di = ir.debuginfo
         @assert di.codelocs === stmts.line
-        return new(stmts, ir.argtypes, ir.sptypes, di, cfg, new_nodes, ir.meta)
+        return new(stmts, ir.argtypes, ir.sptypes, di, cfg, new_nodes, ir.meta, ir.assume_bindings_static)
     end
     global function copy(ir::IRCode)
         di = ir.debuginfo
@@ -443,7 +446,8 @@ struct IRCode
         di = copy(di)
         di.edges = copy(di.edges)
         di.codelocs = stmts.line
-        return new(stmts, copy(ir.argtypes), copy(ir.sptypes), di, copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+        return new(stmts, copy(ir.argtypes), copy(ir.sptypes), di, copy(ir.cfg),
+                   copy(ir.new_nodes), copy(ir.meta), ir.assume_bindings_static)
     end
 end
 
