@@ -43,16 +43,14 @@ JULIA_ROOT:=$(CURDIR)/../..
 LLVM_BOLT:=$(STAGE0_BINARIES)llvm-bolt
 LLVM_MERGEFDATA:=$(STAGE0_BINARIES)merge-fdata
 
-# TODO: work out why libjulia-codegen.so doesn't produce a profile.
 # If you add new files to optimize, you need to add BOLT_LDFLAGS to the build of your new file.
-SYMLINKS_TO_OPTIMIZE := libLLVM.so libjulia-internal.so
+SYMLINKS_TO_OPTIMIZE := libLLVM.so libjulia-internal.so libjulia-codegen.so
 FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(STAGE1_BUILD)/usr/lib/$$file; done)
 
-# TODO: Fixup Message
-AFTER_INSTRUMENT_MESSAGE:='Run `make clean-profiles` to start with a clean slate. $\
-    Then run Julia to collect realistic profile data, for example: `$(STAGE1_BUILD)/julia -e $\
-    '\''using Pkg; Pkg.add("LoopVectorization; Pkg.test("LoopVectorization'\''`. This $\
-	should produce about 15MB of data in $(PROFILE_DIR). Afterwards run `make merge_data && make bolt`.'
+AFTER_INSTRUMENT_MESSAGE:='Run `make clean_profiles` to start with a clean slate. $\
+	To collect realistic profile data either do `make pkgimage` or run Julia with an appropriate workload. $\
+	This should produce some data in $(PROFILE_DIR). Afterwards run `make merge_data && make bolt`.'. $\
+	Remember to run `make pkgimage` if you didn't during the profiling stage to make the package images.
 
 $(STAGE0_BUILD) $(STAGE1_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
@@ -85,9 +83,8 @@ bolt_instrument: copy_originals
 	touch $@
 	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
-# TODO: Seems to be rebuilding sysimage as well unnecessarily
 pkgimage: stage1
-	$(MAKE) -C $(STAGE1_BUILD) stdlibs-cache-release
+	$(MAKE) -C $(STAGE1_BUILD) -f pkgimage.mk release
 
 merge_data: bolt_instrument
 	for file in $(FILES_TO_OPTIMIZE); do \
