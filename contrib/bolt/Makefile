@@ -30,8 +30,7 @@ BOLT_ARGS += -skip-funcs=.\*apply_cl.\*
 
 # -fno-reorder-blocks-and-partition is needed on gcc >= 8.
 BOLT_FLAGS := $\
-	"BOLT_CFLAGS_GCC=-fno-reorder-blocks-and-partition" $\
-	"BOLT_CXXFLAGS_GCC=-fno-reorder-blocks-and-partition" $\
+	"BOLT_CFLAGS_GCC+=-fno-reorder-blocks-and-partition" $\
 	"BOLT_LDFLAGS=-Wl,--emit-relocs"
 
 STAGE0_BUILD:=$(CURDIR)/toolchain
@@ -45,7 +44,7 @@ JULIA_ROOT:=$(CURDIR)/../..
 LLVM_BOLT:=$(STAGE0_BINARIES)llvm-bolt
 LLVM_MERGEFDATA:=$(STAGE0_BINARIES)merge-fdata
 
-# If you add new files to optimize, you need to add BOLT_LDFLAGS to the build of your new file.
+# If you add new files to optimize, you need to add BOLT_LDFLAGS and BOLT_CFLAGS to the build of your new file.
 SYMLINKS_TO_OPTIMIZE := libLLVM.so libjulia-internal.so libjulia-codegen.so
 FILES_TO_OPTIMIZE := $(shell for file in $(SYMLINKS_TO_OPTIMIZE); do readlink $(STAGE1_BUILD)/usr/lib/$$file; done)
 
