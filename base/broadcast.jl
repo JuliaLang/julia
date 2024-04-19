@@ -196,14 +196,18 @@ const andand = AndAnd()
 broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
-    broadcasted((a, args...) -> a && bcf.f(args...), a, bcf.args...)
+    # Vararg type signature to specialize on args count. This is necessary for performance
+    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a && bcf.f(args...), a, bcf.args...)
 end
 struct OrOr end
 const oror = OrOr()
 broadcasted(::OrOr, a, b) = broadcasted((a, b) -> a || b, a, b)
 function broadcasted(::OrOr, a, bc::Broadcasted)
     bcf = flatten(bc)
-    broadcasted((a, args...) -> a || bcf.f(args...), a, bcf.args...)
+    # Vararg type signature to specialize on args count. This is necessary for performance
+    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a || bcf.f(args...), a, bcf.args...)
 end
 
 Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{<:Any,Axes,F,Args}) where {NewStyle,Axes,F,Args} =
@@ -345,6 +349,7 @@ function flatten(bc::Broadcasted)
     #          makeargs[3] = ((w, x, y, z)) -> z
     makeargs = make_makeargs(bc.args)
     f = Base.maybeconstructor(bc.f)
+    # TODO: consider specializing on args... if performance problems emerge:
     newf = (args...) -> (@inline; f(prepare_args(makeargs, args)...))
     return Broadcasted(bc.style, newf, args, bc.axes)
 end
