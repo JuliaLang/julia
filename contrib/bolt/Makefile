@@ -24,12 +24,14 @@ BOLT_ARGS += -update-debug-sections
 BOLT_ARGS += -dyno-stats
 # BOLT doesn't fully support computed gotos, https://github.com/llvm/llvm-project/issues/89117
 # Use escaped regex as the name BOLT recognises is often a bit different, e.g. apply_cl/1(*2)
+# This doesn't actually seem to do anything the actual mitigation is not using --use-old-text
+# which we do in the bolt target
 BOLT_ARGS += -skip-funcs=.\*apply_cl.\*
 
 # -fno-reorder-blocks-and-partition is needed on gcc >= 8.
 BOLT_FLAGS := $\
-	"CFLAGS+=-fno-reorder-blocks-and-partition" $\
-	"CXXFLAGS+=-fno-reorder-blocks-and-partition" $\
+	"BOLT_CFLAGS_GCC=-fno-reorder-blocks-and-partition" $\
+	"BOLT_CXXFLAGS_GCC=-fno-reorder-blocks-and-partition" $\
 	"BOLT_LDFLAGS=-Wl,--emit-relocs"
 
 STAGE0_BUILD:=$(CURDIR)/toolchain
@@ -73,6 +75,8 @@ copy_originals: stage1
 	done && \
 	touch $@
 
+# I don't think there's any particular reason to have -no-huge-pages here perhaps slightly more accurate profile data
+# as the final build uses -no-huge-pages
 bolt_instrument: copy_originals
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
