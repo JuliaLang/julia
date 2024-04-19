@@ -253,8 +253,12 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
             size_t max_world = ~(size_t)0;
             if (mi != jl_atomic_load_relaxed(&mi->def.method->unspecialized) && !jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->sparam_vals, mi->def.method))
                 mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world, 0);
-            if (mi)
-                jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
+            if (mi) {
+                jl_value_t *ci = jl_rettype_inferred_addr(mi, min_world, max_world);
+                if (ci != jl_nothing)
+                    jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
+            }
+
         }
         else {
             assert(jl_is_simplevector(item));
