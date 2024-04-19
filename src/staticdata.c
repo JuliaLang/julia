@@ -738,8 +738,7 @@ static void print_retainers(jl_value_t *v) JL_GC_DISABLED
     fprintf(stderr, "retained by: \n");
     while (1) {
         v = (jl_value_t *)ptrhash_get(&retainers, v);
-        assert(v != HT_NOTFOUND);
-        if (v == NULL)
+        if (v == NULL || v == HT_NOTFOUND)
             return;
 
         ios_t buf;
@@ -2746,7 +2745,43 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
 
+    // collect needed methods and replace method tables that are in the tags array
+    htable_new(&new_methtables, 0);
+    arraylist_t MIs;
+    arraylist_new(&MIs, 0);
+    arraylist_t gvars;
+    arraylist_new(&gvars, 0);
+    arraylist_t external_fns;
+    arraylist_new(&external_fns, 0);
+
     int en = jl_gc_enable(0);
+    if (native_functions) {
+        jl_get_llvm_gvs(native_functions, &gvars);
+        jl_get_llvm_external_fns(native_functions, &external_fns);
+        if (jl_options.small_image)
+            jl_get_llvm_mis(native_functions, &MIs);
+    }
+    if (jl_options.small_image) {
+        jl_rebuild_methtables(&MIs, &new_methtables);
+        jl_methtable_t *mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_type_type_mt);
+        if (mt != HT_NOTFOUND)
+            jl_type_type_mt = mt;
+        else
+            jl_type_type_mt = jl_new_method_table(jl_type_type_mt->name, jl_type_type_mt->module);
+
+        mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_kwcall_mt);
+        if (mt != HT_NOTFOUND)
+            jl_kwcall_mt = mt;
+        else
+            jl_kwcall_mt = jl_new_method_table(jl_kwcall_mt->name, jl_kwcall_mt->module);
+
+        mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_nonfunction_mt);
+        if (mt != HT_NOTFOUND)
+            jl_nonfunction_mt = mt;
+        else
+            jl_nonfunction_mt = jl_new_method_table(jl_nonfunction_mt->name, jl_nonfunction_mt->module);
+    }
+
     nsym_tag = 0;
     htable_new(&symbol_table, 0);
     htable_new(&fptr_to_id, sizeof(id_to_fptrs) / sizeof(*id_to_fptrs));
@@ -2756,7 +2791,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     }
     htable_new(&serialization_order, 25000);
     htable_new(&retainers, 25000);
-    htable_new(&new_methtables, 0);
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
     arraylist_new(&serialization_queue, 0);
@@ -2793,28 +2827,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_int32_type, 0);
     htable_new(&s.callers_with_edges, 0);
     jl_value_t **const*const tags = get_tags(); // worklist == NULL ? get_tags() : NULL;
-
-    arraylist_t gvars;
-    arraylist_t external_fns;
-    arraylist_t MIs;
-    arraylist_new(&gvars, 0);
-    arraylist_new(&external_fns, 0);
-    arraylist_new(&MIs, 0);
-    if (native_functions) {
-        jl_get_llvm_gvs(native_functions, &gvars);
-        jl_get_llvm_external_fns(native_functions, &external_fns);
-        if (jl_options.small_image)
-            jl_get_llvm_mis(native_functions, &MIs);
-    }
-    if (jl_options.small_image){
-
-        jl_rebuild_methtables(&MIs, &new_methtables);
-        jl_methtable_t *mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_type_type_mt);
-        if (mt != NULL) {
-            jl_type_type_mt = mt;
-            // record_field_change((jl_value_t **)&jl_type_type_mt, (jl_value_t*)mt);
-        }
-    }
 
     if (worklist == NULL) {
         // empty!(Core.ARGS)
