@@ -11,7 +11,7 @@ In the example below, the values are all `isequal` so they get overwritten in th
 The `IdSet` compares by `===` and so preserves the 3 different values.
 
 # Examples
-```jldoctest; filter = r"^\\s*([1\\.0]+|true)"
+```jldoctest; filter = r"^\\s*(1|1\\.0|true)"
 julia> Set(Any[true, 1, 1.0])
 Set{Any} with 1 element:
   1.0
