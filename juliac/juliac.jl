@@ -182,26 +182,29 @@ write(io, """
             return Time(h, m, s, ms)
         end
     end
-    #TODO Make these conditional on being used by the module
-
-    using LinearAlgebra
-    @eval LinearAlgebra.BLAS begin
-        check() = nothing #TODO: this might be unsafe but needs logging macro fixes
-    end
-    using SparseArrays
-    @eval SparseArrays.CHOLMOD begin
-        function __init__()
-            ccall((:SuiteSparse_config_malloc_func_set, :libsuitesparseconfig),
-                Cvoid, (Ptr{Cvoid},), cglobal(:jl_malloc, Ptr{Cvoid}))
-            ccall((:SuiteSparse_config_calloc_func_set, :libsuitesparseconfig),
-                Cvoid, (Ptr{Cvoid},), cglobal(:jl_calloc, Ptr{Cvoid}))
-            ccall((:SuiteSparse_config_realloc_func_set, :libsuitesparseconfig),
-                Cvoid, (Ptr{Cvoid},), cglobal(:jl_realloc, Ptr{Cvoid}))
-            ccall((:SuiteSparse_config_free_func_set, :libsuitesparseconfig),
-                Cvoid, (Ptr{Cvoid},), cglobal(:jl_free, Ptr{Cvoid}))
+    let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
+        if :LinearAlgebra in loaded
+            using LinearAlgebra
+            @eval LinearAlgebra.BLAS begin
+                check() = nothing #TODO: this might be unsafe but needs logging macro fixes
+            end
+        end
+        if :SparseArrays in loaded
+            using SparseArrays
+            @eval SparseArrays.CHOLMOD begin
+                function __init__()
+                    ccall((:SuiteSparse_config_malloc_func_set, :libsuitesparseconfig),
+                        Cvoid, (Ptr{Cvoid},), cglobal(:jl_malloc, Ptr{Cvoid}))
+                    ccall((:SuiteSparse_config_calloc_func_set, :libsuitesparseconfig),
+                        Cvoid, (Ptr{Cvoid},), cglobal(:jl_calloc, Ptr{Cvoid}))
+                    ccall((:SuiteSparse_config_realloc_func_set, :libsuitesparseconfig),
+                        Cvoid, (Ptr{Cvoid},), cglobal(:jl_realloc, Ptr{Cvoid}))
+                    ccall((:SuiteSparse_config_free_func_set, :libsuitesparseconfig),
+                    Cvoid, (Ptr{Cvoid},), cglobal(:jl_free, Ptr{Cvoid}))
+                end
+            end
         end
     end
-
 """)
 close(io)
 
