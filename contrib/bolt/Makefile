@@ -24,7 +24,7 @@ BOLT_ARGS += -update-debug-sections
 BOLT_ARGS += -dyno-stats
 # BOLT doesn't fully support computed gotos, https://github.com/llvm/llvm-project/issues/89117
 # Use escaped regex as the name BOLT recognises is often a bit different, e.g. apply_cl/1(*2)
-# This doesn't actually seem to do anything the actual mitigation is not using --use-old-text
+# This doesn't actually seem to do anything, the actual mitigation is not using --use-old-text
 # which we do in the bolt target
 BOLT_ARGS += -skip-funcs=.\*apply_cl.\*
 
