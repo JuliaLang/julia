@@ -14,6 +14,7 @@ const NRM2_CUTOFF = 32
 const ISONE_CUTOFF = 2^21 # 2M
 
 function isone(A::AbstractMatrix)
+    require_one_based_indexing(A)  # multiplication not defined yet among offset matrices
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
