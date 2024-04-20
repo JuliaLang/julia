@@ -2119,3 +2119,20 @@ end
         end
     end
 end
+
+@testset "one" begin
+    @test one([1 2; 3 4]) == [1 0; 0 1]
+    @test one([1 2; 3 4]) isa Matrix{Int}
+
+    struct Mat <: AbstractMatrix{Int}
+        p::Matrix{Int}
+    end
+    Base.size(m::Mat) = size(m.p)
+    Base.IndexStyle(::Type{<:Mat}) = IndexLinear()
+    Base.getindex(m::Mat, i::Int) = m.p[i]
+    Base.setindex!(m::Mat, v, i::Int) = m.p[i] = v
+    Base.similar(::Mat, ::Type{Int}, size::NTuple{2,Int}) = Mat(Matrix{Int}(undef, size))
+
+    @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
+    @test one(Mat([1 2; 3 4])) isa Mat
+end
