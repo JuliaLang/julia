@@ -74,7 +74,7 @@ copy_originals: stage1
 	done && \
 	touch $@
 
-# I don't think there's any particular reason to have -no-huge-pages here perhaps slightly more accurate profile data
+# I don't think there's any particular reason to have -no-huge-pages here, perhaps slightly more accurate profile data
 # as the final build uses -no-huge-pages
 bolt_instrument: copy_originals
 	for file in $(FILES_TO_OPTIMIZE); do \
@@ -99,8 +99,8 @@ merge_data: bolt_instrument
 # The --use-old-text saves about 16 MiB of libLLVM.so size.
 # However, the rust folk found it succeeds very non-deterministically for them.
 # It tries to reuse old text segments to reduce binary size
-# BOLT doesn't fully support computed gotos, https://github.com/llvm/llvm-project/issues/89117 so cannot use --use-old-text on libjulia-internal
-# That flag saves less than 1 MiB so oh well.
+# BOLT doesn't fully support computed gotos https://github.com/llvm/llvm-project/issues/89117, so we cannot use --use-old-text on libjulia-internal
+# That flag saves less than 1 MiB for libjulia-internal so oh well.
 bolt: merge_data
 	for file in $(FILES_TO_OPTIMIZE); do \
         abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
