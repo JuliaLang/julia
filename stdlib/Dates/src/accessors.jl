@@ -2,46 +2,46 @@
 
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
 # Reference: https://www.researchgate.net/profile/Peter-Baum/publication/316558298_Date_Algorithms/links/5f90c3f992851c14bcdb0da6/Date-Algorithms.pdf
-function _yearmonthday(days)
+function yearmonthday(days)
     z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
     d = c - div(153m - 457, 5); return m > 12 ? (y + 1, m - 12, d) : (y, m, d)
 end
-function _year(days)
+function year(days)
    z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
    return m > 12 ? y + 1 : y
 end
-function _yearmonth(days)
+function yearmonth(days)
     z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
     return m > 12 ? (y + 1, m - 12) : (y, m)
 end
-function _month(days)
+function month(days)
     z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
     return m > 12 ? m - 12 : m
 end
-function _monthday(days)
+function monthday(days)
     z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
     d = c - div(153m - 457, 5); return m > 12 ? (m - 12, d) : (m, d)
 end
-function _day(days)
+function day(days)
     z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
     return c - div(153m - 457, 5)
 end
 # https://en.wikipedia.org/wiki/Talk:ISO_week_date#Algorithms
 const WEEK_INDEX = (15, 23, 3, 11)
-function _week(days)
+function week(days)
     w = div(abs(days - 1), 7) % 20871
     c, w = divrem((w + (w >= 10435)), 5218)
     w = (w * 28 + WEEK_INDEX[c + 1]) % 1461
     return div(w, 28) + 1
 end
 
-function _quarter(days)
+function quarter(days)
     m = month(days)
     return m < 4 ? 1 : m < 7 ? 2 : m < 10 ? 3 : 4
 end
@@ -52,11 +52,11 @@ value(dt::TimeType) = dt.instant.periods.value
 value(t::Time) = t.instant.value
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)
-year(dt::TimeType) = _year(days(dt))
-quarter(dt::TimeType) = _quarter(days(dt))
-month(dt::TimeType) = _month(days(dt))
-week(dt::TimeType) = _week(days(dt))
-day(dt::TimeType) = _day(days(dt))
+year(dt::TimeType) = year(days(dt))
+quarter(dt::TimeType) = quarter(days(dt))
+month(dt::TimeType) = month(days(dt))
+week(dt::TimeType) = week(days(dt))
+day(dt::TimeType) = day(days(dt))
 hour(dt::DateTime)   = mod(fld(value(dt), 3600000), 24)
 minute(dt::DateTime) = mod(fld(value(dt), 60000), 60)
 second(dt::DateTime) = mod(fld(value(dt), 1000), 60)
@@ -70,9 +70,9 @@ nanosecond(t::Time) = mod(value(t), Int64(1000))
 
 dayofmonth(dt::TimeType) = day(dt)
 
-yearmonth(dt::TimeType) = _yearmonth(days(dt))
-monthday(dt::TimeType) = _monthday(days(dt))
-yearmonthday(dt::TimeType) = _yearmonthday(days(dt))
+yearmonth(dt::TimeType) = yearmonth(days(dt))
+monthday(dt::TimeType) = monthday(days(dt))
+yearmonthday(dt::TimeType) = yearmonthday(days(dt))
 
 # Documentation for exported accessors
 for func in (:year, :month, :quarter)
