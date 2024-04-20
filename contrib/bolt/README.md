@@ -8,7 +8,7 @@ Example usage: (`cd` into this directory first)
 make stage1
 make copy_originals
 make bolt_instrument
-make pkgimage
+make finish_stage1
 make merge_data
 make bolt
 ```

@@ -9,7 +9,7 @@ make stage1
 make stage2
 make copy_originals
 make bolt_instrument
-make pkgimage
+make finish_stage2
 make merge_data
 make bolt
 ```
