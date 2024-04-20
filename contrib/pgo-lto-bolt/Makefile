@@ -19,7 +19,8 @@ BOLT_ARGS += -no-huge-pages
 # Fold functions with identical code
 BOLT_ARGS += -icf=1
 # Split using best available strategy (three-way splitting, Cache-Directed Sort)
-BOLT_ARGS += -split-strategy=cdsplit
+# Disabled for libjulia-internal till https://github.com/llvm/llvm-project/issues/89508 is fixed
+# BOLT_ARGS += -split-strategy=cdsplit
 # Update DWARF debug info in the final binary
 BOLT_ARGS += -update-debug-sections
 # Print optimization statistics
@@ -155,7 +156,7 @@ merge_data: bolt_instrument
 bolt: merge_data
 	for file in $(FILES_TO_OPTIMIZE); do \
         abs_file=$(STAGE2_BUILD)/usr/lib/$$file; \
-		$(LLVM_BOLT) "$$abs_file.original" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$(if [ "$$file" != $(shell readlink $(STAGE2_BUILD)/usr/lib/libjulia-internal.so) ]; then echo "--use-old-text"; fi); \
+		$(LLVM_BOLT) "$$abs_file.original" -data "$(BOLT_PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$(if [ "$$file" != $(shell readlink $(STAGE2_BUILD)/usr/lib/libjulia-internal.so) ]; then echo "--use-old-text -split-strategy=cdsplit"; fi); \
     done && \
     touch $@
 
