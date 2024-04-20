@@ -29,25 +29,25 @@ end
 
 src = """
 let
-    y = 1
-    x = 2
-    let x = 3
-        y = x + 1
+    y = 0
+    x = 1
+    let x = x + 1
+        y = x
     end
     (x, y)
 end
 """
 
-src = """
-begin
-    function f(x)
-        y = x + 1
-        "hello world", x, y
-    end
-
-    f(1)
-end
-"""
+# src = """
+# begin
+#     function f(x)
+#         y = x + 1
+#         "hello world", x, y
+#     end
+#
+#     f(1)
+# end
+# """
 
 # src = """
 #     x = 1
@@ -71,11 +71,12 @@ ctx2, ex_scoped = JuliaLowering.resolve_scopes!(ctx, in_mod, ex_desugar)
 ctx3, ex_compiled = JuliaLowering.linearize_ir(ctx2, ex_scoped)
 @info "Linear IR" ex_compiled
 
-ex_expr = JuliaLowering.to_expr(in_mod, ctx2.var_info, ex_compiled)
+ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx2.var_info, ex_compiled)
 @info "CodeInfo" ex_expr
 x = 100
 y = 200
-@info "Eval" Base.eval(in_mod, ex_expr)
+eval_result = Base.eval(in_mod, ex_expr)
+@info "Eval" eval_result
 
 # Syntax tree ideas: Want following to work?
 # This can be fully inferrable!

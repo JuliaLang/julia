@@ -53,8 +53,8 @@ function _find_scope_vars!(assignments, locals, globals, used_names, ex)
     k = kind(ex)
     if k == K"Identifier"
         push!(used_names, ex.name_val)
-    elseif !haschildren(ex) || hasattr(ex, :scope_type) || is_quoted(k) ||
-            k in KSet"lambda module toplevel"
+    elseif !haschildren(ex) || is_quoted(k) ||
+            k in KSet"scope_block lambda module toplevel"
         return
     elseif k == K"local" || k == K"local_def"
         name = ex[1].name_val
@@ -339,7 +339,7 @@ function _resolve_scopes!(ctx, ex)
         end
         pop!(ctx.scope_stack)
         setattr!(ctx.graph, ex.id, lambda_locals=scope.lambda_locals)
-    elseif k == K"block" && hasattr(ex, :scope_type)
+    elseif k == K"scope_block"
         scope = make_scope(ctx, ex, ex.scope_type, nothing)
         push!(ctx.scope_stack, scope)
         for e in children(ex)

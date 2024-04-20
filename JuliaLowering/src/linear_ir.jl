@@ -197,7 +197,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         else
             emit_assignment(ctx, ex, lhs, rhs)
         end
-    elseif k == K"block"
+    elseif k == K"block" || k == K"scope_block"
         nc = numchildren(ex)
         for i in 1:nc
             islast = i == nc

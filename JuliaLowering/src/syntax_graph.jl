@@ -44,6 +44,7 @@ function ensure_attributes!(graph::SyntaxGraph; kws...)
             graph.attributes[k] = Dict{NodeId,v}()
         end
     end
+    graph
 end
 
 function ensure_attributes(graph::SyntaxGraph; kws...)
@@ -244,24 +245,33 @@ JuliaSyntax.filename(src::SourceRef) = filename(src.file)
 JuliaSyntax.source_location(::Type{LineNumberNode}, src::SourceRef) = source_location(LineNumberNode, src.file, src.first_byte)
 JuliaSyntax.source_location(src::SourceRef) = source_location(src.file, src.first_byte)
 
+# TODO: Adding these methods to support LineNumberNode is kind of hacky but we
+# can remove these after JuliaLowering becomes self-bootstrapping for macros
+# and we a proper SourceRef for @ast's @HERE form.
+JuliaSyntax.first_byte(src::LineNumberNode) = 0
+JuliaSyntax.last_byte(src::LineNumberNode) = 0
+JuliaSyntax.filename(src::LineNumberNode) = string(src.file)
+JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
+JuliaSyntax.source_location(src::LineNumberNode) = (src.line, 0)
+
 function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
     highlight(io, src.file, first_byte(src):last_byte(src), note="these are the bytes you're looking for 😊", context_lines_inner=20)
 end
 
 function sourceref(tree::SyntaxTree)
     sources = tree.graph.source
-    id = tree.id
+    id::NodeId = tree.id
     while true
-        s = sources[id]
-        if s isa SourceRef
-            return s
+        s = get(sources, id, nothing)
+        if s isa NodeId
+            id = s
         else
-            id = s::NodeId
+            return s
         end
     end
 end
 
-JuliaSyntax.filename(tree::SyntaxTree) = return filename(sourceref(tree))
+JuliaSyntax.filename(tree::SyntaxTree) = filename(sourceref(tree))
 JuliaSyntax.source_location(::Type{LineNumberNode}, tree::SyntaxTree) = source_location(LineNumberNode, sourceref(tree))
 JuliaSyntax.source_location(tree::SyntaxTree) = source_location(sourceref(tree))
 JuliaSyntax.first_byte(tree::SyntaxTree) = first_byte(sourceref(tree))
@@ -305,12 +315,13 @@ function _value_string(ex)
 end
 
 function _show_syntax_tree(io, current_filename, node, indent, show_byte_offsets)
-    if hasattr(node, :source)
-        fname = filename(node)
-        line, col = source_location(node)
+    sr = sourceref(node)
+    if !isnothing(sr)
+        fname = filename(sr)
+        line, col = source_location(sr)
         posstr = "$(lpad(line, 4)):$(rpad(col,3))"
         if show_byte_offsets
-            posstr *= "│$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))"
+            posstr *= "│$(lpad(first_byte(sr),6)):$(rpad(last_byte(sr),6))"
         end
     else
         fname = nothing
@@ -389,6 +400,11 @@ end
 
 syntax_graph(ex::SyntaxTree) = ex.graph
 
+function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::JuliaSyntax.ParseStream; kws...)
+    SyntaxTree(JuliaSyntax.build_tree(SyntaxNode, stream; kws...))
+end
+
+
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
 struct SyntaxList{GraphType, NodeIdVecType} <: AbstractVector{SyntaxTree}
@@ -444,11 +460,5 @@ end
 
 function Base.pop!(v::SyntaxList)
     SyntaxTree(v.graph, pop!(v.ids))
-end
-
-#-------------------------------------------------------------------------------
-
-function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::JuliaSyntax.ParseStream; kws...)
-    SyntaxTree(JuliaSyntax.build_tree(SyntaxNode, stream; kws...))
 end
 

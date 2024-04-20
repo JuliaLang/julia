@@ -12,6 +12,7 @@ include("kinds.jl")
 _insert_kinds()
 
 include("syntax_graph.jl")
+include("ast.jl")
 include("utils.jl")
 
 abstract type AbstractLoweringContext end

@@ -33,91 +33,6 @@ function DesugaringContext(ctx)
 end
 
 #-------------------------------------------------------------------------------
-# AST creation utilities
-_node_id(ex::NodeId) = ex
-_node_id(ex::SyntaxTree) = ex.id
-
-_node_ids() = ()
-_node_ids(c, cs...) = (_node_id(c), _node_ids(cs...)...)
-
-function _makenode(graph::SyntaxGraph, srcref, head, children; attrs...)
-    id = newnode!(graph)
-    # TODO: Having this list of kinds seeems hacky?
-    if kind(head) in (K"Identifier", K"core", K"top", K"SSAValue", K"Value", K"slot") || is_literal(head)
-        @assert length(children) == 0
-    else
-        setchildren!(graph, id, children)
-    end
-    setattr!(graph, id; source=srcref.id, attrs...)
-    sethead!(graph, id, head)
-    return SyntaxTree(graph, id)
-end
-
-function makenode(graph::SyntaxGraph, srcref, head, children...; attrs...)
-    _makenode(graph, srcref, head, children; attrs...)
-end
-
-function makenode(ctx::Union{AbstractLoweringContext,SyntaxTree},
-                  srcref, head, children::SyntaxTree...; attrs...)
-    _makenode(ctx.graph, srcref, head, _node_ids(children...); attrs...)
-end
-
-function makenode(ctx::Union{AbstractLoweringContext,SyntaxTree},
-                  srcref, head, children::SyntaxList; attrs...)
-    ctx.graph === children.graph || error("Mismatching graphs")
-    _makenode(ctx.graph, srcref, head, children.ids; attrs...)
-end
-
-function mapchildren(f, ctx, ex)
-    cs = SyntaxList(ctx)
-    for e in children(ex)
-        push!(cs, f(e))
-    end
-    ex2 = makenode(ctx, ex, head(ex), cs)
-    # Copy all attributes.
-    # TODO: Make this type stable and efficient
-    for v in values(ex.graph.attributes)
-        if haskey(v, ex.id)
-            v[ex2.id] = v[ex.id]
-        end
-    end
-    return ex2
-end
-
-function syntax_graph(ctx::AbstractLoweringContext)
-    ctx.graph
-end
-
-function new_var_id(ctx::AbstractLoweringContext)
-    id = ctx.next_var_id[]
-    ctx.next_var_id[] += 1
-    return id
-end
-
-# Create a new SSA variable
-function ssavar(ctx::AbstractLoweringContext, srcref)
-    id = makenode(ctx, srcref, K"SSAValue", var_id=new_var_id(ctx))
-    return id
-end
-
-# Assign `ex` to an SSA variable.
-# Return (variable, assignment_node)
-function assign_tmp(ctx::AbstractLoweringContext, ex)
-    var = ssavar(ctx, ex)
-    assign_var = makenode(ctx, ex, K"=", var, ex)
-    var, assign_var
-end
-
-# Convenience functions to create leaf nodes referring to identifiers within
-# the Core and Top modules.
-core_ref(ctx, ex, name) = makenode(ctx, ex, K"core", name_val=name)
-Any_type(ctx, ex) = core_ref(ctx, ex, "Any")
-svec_type(ctx, ex) = core_ref(ctx, ex, "svec")
-nothing_(ctx, ex) = core_ref(ctx, ex, "nothing")
-unused(ctx, ex) = core_ref(ctx, ex, "UNUSED")
-
-top_ref(ctx, ex, name) = makenode(ctx, ex, K"top", name_val=name)
-
 #-------------------------------------------------------------------------------
 # Predicates and accessors working on expression trees
 
@@ -176,7 +91,22 @@ function assigned_name(ex)
 end
 
 #-------------------------------------------------------------------------------
-# Lowering Pass 1 - basic desugaring
+# TODO: Lowering pass 1.1:
+# Aim of this pass is to do some super simple normalizations to make
+# desugaring-proper easier to write. The kinds of things like identifier
+# normalization which would require extra logic to pervade the remaining
+# desugaring.
+#
+# * Identifier normalization
+#   - Strip var""
+#   - Operator -> Identifier if necessary
+# * Strip "container" nodes
+#   - K"char"
+#   - K"parens" nodes
+# * Quasiquote expansion
+
+#-------------------------------------------------------------------------------
+# Lowering Pass 1.2 - desugaring
 function expand_assignment(ctx, ex)
 end
 
@@ -193,31 +123,32 @@ function expand_let(ctx, ex)
     scope_type = get(ex, :scope_type, :hard)
     blk = ex[2]
     if numchildren(ex[1]) == 0 # TODO: Want to use !haschildren(ex[1]) but this doesn't work...
-        return makenode(ctx, ex, K"block", blk;
-                        scope_type=scope_type)
+        return @ast ctx ex [K"scope_block"(scope_type=scope_type) blk]
     end
     for binding in Iterators.reverse(children(ex[1]))
         kb = kind(binding)
         if is_sym_decl(kb)
-            blk = makenode(ctx, ex, K"block",
-                makenode(ctx, ex, K"local", binding),
-                blk;
-                scope_type=scope_type
-            )
+            blk = @ast ctx ex [
+                K"scope_block"(scope_type=scope_type)
+                [K"local" binding]
+                blk
+            ]
         elseif kb == K"=" && numchildren(binding) == 2
             lhs = binding[1]
             rhs = binding[2]
             if is_sym_decl(lhs)
-                tmp, tmpdef = assign_tmp(ctx, rhs)
-                blk = makenode(ctx, binding, K"block",
-                    tmpdef,
-                    makenode(ctx, ex, K"block",
-                        makenode(ctx, lhs, K"local_def", lhs), # TODO: Use K"local" with attr?
-                        makenode(ctx, rhs, K"=", decl_var(lhs), tmp),
-                        blk;
-                        scope_type=scope_type
-                    )
-                )
+                blk = @ast ctx binding [
+                    K"block"
+                    tmp=rhs
+                    [K"scope_block"(ex, scope_type=scope_type)
+                        [K"local_def"(lhs) lhs] # TODO: Use K"local" with attr?
+                        [K"="(rhs)
+                            decl_var(lhs)
+                            tmp
+                        ]
+                        blk
+                    ]
+                ]
             else
                 TODO("Functions and multiple assignment")
             end
@@ -235,7 +166,7 @@ function expand_call(ctx, ex)
         cs[1], cs[2] = cs[2], cs[1]
     end
     # TODO: keywords
-    makenode(ctx, ex, K"call", cs...)
+    @ast ctx ex [K"call" cs...]
 end
 
 # Strip variable type declarations from within a `local` or `global`, returning
@@ -347,7 +278,7 @@ function expand_function_def(ctx, ex)
         if !is_valid_name(name)
             throw(LoweringError(name, "Invalid function name"))
         end
-        return makenode(ctx, ex, K"method", identifier_name(name))
+        return @ast ctx ex [K"method" name]
     elseif kind(name) == K"call"
         callex = name
         body = ex[2]
@@ -364,9 +295,10 @@ function expand_function_def(ctx, ex)
         name = name[1]
         if kind(name) == K"::"
             if numchildren(name) == 1
-                farg = makenode(ctx, name, K"::",
-                                makenode(ctx, name, K"Identifier", name_val="#self#"),
-                                name[1])
+                farg = @ast ctx name [K"::"
+                    "#self#"::K"Identifier"
+                    name[1]
+                ]
             else
                 TODO("Fixme type")
                 farg = name
@@ -376,9 +308,13 @@ function expand_function_def(ctx, ex)
             if !is_valid_name(name)
                 throw(LoweringError(name, "Invalid function name"))
             end
-            farg = makenode(ctx, name, K"::",
-                            makenode(ctx, name, K"Identifier", name_val="#self#"),
-                            makenode(ctx, name, K"call", core_ref(ctx, name, "Typeof"), name))
+            farg = @ast ctx name [K"::"
+                "#self#"::K"Identifier"
+                [K"call"
+                    "Typeof"::K"core"
+                    name
+                ]
+            ]
             function_name = name
         end
         args = pushfirst!(collect(args), farg)
@@ -400,37 +336,45 @@ function expand_function_def(ctx, ex)
                 if i != length(args)
                     throw(LoweringError(arg, "`...` may only be used for the last function argument"))
                 end
-                atype = makenode(K"curly", core_ref(ctx, arg, "Vararg"), arg)
+                atype = @ast ctx arg [K"curly" "Vararg"::K"core" arg]
             end
             push!(arg_types, atype)
         end
 
-        preamble = makenode(ctx, ex, K"call",
-                            svec_type(ctx, callex),
-                            makenode(ctx, callex, K"call",
-                                     svec_type(ctx, name),
-                                     arg_types...),
-                            makenode(ctx, callex, K"call",
-                                     svec_type(ctx, name)), # FIXME sparams
-                            makenode(ctx, callex, K"Value", value=QuoteNode(source_location(LineNumberNode, callex)))
-                           )
+        preamble = @ast ctx callex [
+            K"call"
+            "svec"              ::K"core"
+            [K"call"
+                "svec"          ::K"core"
+                arg_types...
+            ]
+            [K"call"
+                "svec"          ::K"core"
+                # FIXME sparams
+            ]
+            QuoteNode(source_location(LineNumberNode, callex))::K"Value"
+        ]
         if !isnothing(return_type)
-            ret_var, ret_assign = assign_tmp(ctx, return_type)
-            body = makenode(ctx, body, K"block",
-                            ret_assign,
-                            body)
+            body = @ast ctx body [
+                K"block"
+                ret_var=return_type
+                body
+            ]
         else
             ret_var = nothing
         end
-        lambda = makenode(ctx, body, K"lambda", body,
-                          lambda_info=LambdaInfo(arg_names, static_parameters, ret_var, false))
-        makenode(ctx, ex, K"block",
-                 makenode(ctx, ex, K"method", function_name),
-                 makenode(ctx, ex, K"method",
-                          function_name,
-                          preamble,
-                          lambda),
-                 makenode(ctx, ex, K"unnecessary", function_name))
+        @ast ctx ex [
+            K"block"
+            [K"method" function_name]
+            [K"method"
+                function_name
+                preamble
+                [K"lambda"(body, lambda_info=LambdaInfo(arg_names, static_parameters, ret_var, false))
+                    body
+                ]
+            ]
+            [K"unnecessary" function_name]
+        ]
     elseif kind(name) == K"tuple"
         TODO(name, "Anon function lowering")
     else
@@ -454,7 +398,7 @@ function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
             expand_forms(ctx, expand_decls(ctx, ex)) # FIXME
         end
     elseif is_operator(k) && !haschildren(ex)
-        makenode(ctx, ex, K"Identifier", name_val=ex.name_val)
+        makeleaf(ctx, ex, K"Identifier", ex.name_val)
     elseif k == K"char" || k == K"var"
         @chk numchildren(ex) == 1
         ex[1]
@@ -462,11 +406,17 @@ function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             ex[1]
         else
-            makenode(ctx, ex, K"call", top_ref(ctx, ex, "string"), expand_forms(ctx, children(ex))...)
+            @ast ctx ex [K"call" 
+                "string"::K"top"
+                expand_forms(ctx, children(ex))...
+            ]
         end
     elseif k == K"tuple"
         # TODO: named tuples
-        makenode(ctx, ex, K"call", core_ref(ctx, ex, "tuple"), expand_forms(ctx, children(ex))...)
+        @ast ctx ex [K"call" 
+            "tuple"::K"core"
+            expand_forms(ctx, children(ex))...
+        ]
     elseif !haschildren(ex)
         ex
     else
