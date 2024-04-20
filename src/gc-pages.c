@@ -9,6 +9,11 @@
 extern "C" {
 #endif
 
+JL_DLLEXPORT uint64_t jl_get_pg_size(void)
+{
+    return GC_PAGE_SZ;
+}
+
 // Try to allocate memory in chunks to permit faster allocation
 // and improve memory locality of the pools
 #ifdef _P64
