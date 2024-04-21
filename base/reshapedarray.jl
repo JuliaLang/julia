@@ -225,6 +225,11 @@ elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 
 unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
 dataids(A::ReshapedArray) = dataids(A.parent)
+# forward the aliasing check the parent in case there are specializations
+mightalias(A::ReshapedArray, B::ReshapedArray) = mightalias(parent(A), parent(B))
+# special handling for reshaped SubArrays that dispatches to the subarray aliasing check
+mightalias(A::ReshapedArray, B::SubArray) = mightalias(parent(A), B)
+mightalias(A::SubArray, B::ReshapedArray) = mightalias(A, parent(B))
 
 @inline ind2sub_rs(ax, ::Tuple{}, i::Int) = (i,)
 @inline ind2sub_rs(ax, strds, i) = _ind2sub_rs(ax, strds, i - 1)
