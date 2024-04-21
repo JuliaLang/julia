@@ -568,6 +568,19 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     return jl_an_empty_string;
 }
 
+#if JL_LLVM_VERSION >= 180000
+CodeGenOptLevel CodeGenOptLevelFor(int optlevel)
+{
+#ifdef DISABLE_OPT
+    return CodeGenOptLevel::None;
+#else
+    return optlevel == 0 ? CodeGenOptLevel::None :
+        optlevel == 1 ? CodeGenOptLevel::Less :
+        optlevel == 2 ? CodeGenOptLevel::Default :
+        CodeGenOptLevel::Aggressive;
+#endif
+}
+#else
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 {
 #ifdef DISABLE_OPT
@@ -579,6 +592,7 @@ CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
         CodeGenOpt::Aggressive;
 #endif
 }
+#endif
 
 static auto countBasicBlocks(const Function &F) JL_NOTSAFEPOINT
 {

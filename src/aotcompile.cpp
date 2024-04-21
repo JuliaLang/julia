@@ -1634,7 +1634,11 @@ void jl_dump_native_impl(void *native_code,
             jl_ExecutionEngine->getTargetOptions(),
             RelocModel,
             CMModel,
+#if JL_LLVM_VERSION >= 180000
+            CodeGenOptLevel::Aggressive // -O3 TODO: respect command -O0 flag?
+#else
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
+#endif
             ));
     fixupTM(*SourceTM);
     auto DL = jl_create_datalayout(*SourceTM);
