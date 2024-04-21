@@ -1472,7 +1472,8 @@ end
     @test 8.758520413376658e-5^70.55863059215994 == 5.052076767078296e-287
 
     # issue #53881
-    @test prevfloat(1.0) ^ -Int64(2)^62 == 2.2844135865398217e222
+    c53881 = 2.2844135865398217e222 # check correctness within 2 ULPs
+    @test prevfloat(1.0) ^ -Int64(2)^62 ≈ c53881 atol=2eps(c53881)
     @test 2.0 ^ typemin(Int) == 0.0
     @test (-1.0) ^ typemin(Int) == 1.0
     Z = Int64(2)

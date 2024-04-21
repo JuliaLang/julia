@@ -1352,7 +1352,6 @@ end
 # this method is only reliable for -2^20 < n < 2^20 (cf. #53881 #53886)
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
-    n == 0 && return y
     xnlo = ynlo = 0.0
     n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
