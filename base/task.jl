@@ -180,7 +180,9 @@ end
         # TODO: this field name should be deprecated in 2.0
         return t._isexception ? t.result : nothing
     elseif field === :scope
-        error("Querying `scope` is disallowed. Use `current_scope` instead.")
+        error("""
+            Querying a Task's `scope` field is disallowed.
+            The private `Core.current_scope()` function is better, though still an implenetation detail.""")
     else
         return getfield(t, field)
     end
