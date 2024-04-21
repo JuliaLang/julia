@@ -42,7 +42,11 @@ using namespace llvm;
 #include "julia_assert.h"
 #include "processor.h"
 
+#if JL_LLVM_VERSION >= 180000
+# include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupportPlugin.h>
+#else
 # include <llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h>
+#endif
 # include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 # include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
 # include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
