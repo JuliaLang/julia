@@ -82,6 +82,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
     ssaflags = ci.ssaflags = stmts.flag
     debuginfo = ir.debuginfo
     for metanode in ir.meta
+        metanode.head === :meta || continue
         push!(code, metanode)
         push!(codelocs, 1, 0, 0)
         push!(ssavaluetypes, Any)
