@@ -1076,7 +1076,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     store_ty = T_pjlvalue;
                 }
                 else {
-                    store_ty = PointerType::getWithSamePointeeType(T_pjlvalue, store_ty->getPointerAddressSpace());
+                    store_ty = PointerType::get(T_pjlvalue->getContext(), store_ty->getPointerAddressSpace());
                     store_val = builder.CreateBitCast(store_val, store_ty);
                 }
                 if (store_ty->getPointerAddressSpace() != AddressSpace::Tracked)
