@@ -1120,3 +1120,19 @@ end
         end
     end
 end
+
+@testset "aliasing check with reshaped subarrays" begin
+    C = rand(2,1)
+    V1 = @view C[1, :]
+    V2 = @view C[2, :]
+
+    @test !Base.mightalias(V1, V2)
+    @test !Base.mightalias(V1, permutedims(V2))
+    @test !Base.mightalias(permutedims(V1), V2)
+    @test !Base.mightalias(permutedims(V1), permutedims(V2))
+
+    @test Base.mightalias(V1, V1)
+    @test Base.mightalias(V1, permutedims(V1))
+    @test Base.mightalias(permutedims(V1), V1)
+    @test Base.mightalias(permutedims(V1), permutedims(V1))
+end
