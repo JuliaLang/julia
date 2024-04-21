@@ -27,7 +27,9 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
+#if JL_LLVM_VERSION < 180000
 #include <llvm/Transforms/Vectorize.h>
+#endif
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
