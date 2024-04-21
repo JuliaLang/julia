@@ -1902,6 +1902,7 @@ void jl_dump_native_impl(void *native_code,
         JL_TIMING(NATIVE_AOT, NATIVE_Write);
 
         object::Archive::Kind Kind = getDefaultForHost(TheTriple);
+#if JL_LLVM_VERSION >= 180000
 #define WRITE_ARCHIVE(fname, field, prefix, suffix) \
         if (fname) {\
             SmallVector<NewArchiveMember, 0> archive; \
@@ -1920,8 +1921,30 @@ void jl_dump_native_impl(void *native_code,
             for (size_t i = 0; i < filenames.size(); i++) { \
                 archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
             } \
-            handleAllErrors(writeArchive(fname, archive, true, Kind, true, false), reportWriterError); \
+            handleAllErrors(writeArchive(fname, archive, SymtabWritingMode::NormalSymtab, Kind, true, false), reportWriterError); \
         }
+#else
+#define WRITE_ARCHIVE(fname, field, prefix, suffix) \
+    if (fname) {\
+        SmallVector<NewArchiveMember, 0> archive; \
+        SmallVector<std::string, 16> filenames; \
+        SmallVector<StringRef, 16> buffers; \
+        for (size_t i = 0; i < threads; i++) { \
+            filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
+            buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
+        } \
+        filenames.push_back("metadata" prefix suffix); \
+        buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
+        if (z) { \
+            filenames.push_back("sysimg" prefix suffix); \
+            buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
+        } \
+        for (size_t i = 0; i < filenames.size(); i++) { \
+            archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
+        } \
+        handleAllErrors(writeArchive(fname, archive, true, Kind, true, false), reportWriterError); \
+    }
+#endif
 
         WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");
         WRITE_ARCHIVE(bc_fname, opt, "_opt", ".bc");
