@@ -182,7 +182,7 @@ end
     elseif field === :scope
         error("""
             Querying a Task's `scope` field is disallowed.
-            The private `Core.current_scope()` function is better, though still an implenetation detail.""")
+            The private `Core.current_scope()` function is better, though still an implementation detail.""")
     else
         return getfield(t, field)
     end
