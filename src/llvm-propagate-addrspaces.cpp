@@ -60,7 +60,7 @@ private:
 };
 
 static unsigned getValueAddrSpace(Value *V) {
-    return cast<PointerType>(V->getType())->getAddressSpace();
+    return V->getType()->getPointerAddressSpace();
 }
 
 static bool isSpecialAS(unsigned AS) {
@@ -139,7 +139,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
                 break;
             } else {
                 // Ok, we've reached a leaf - check if it is eligible for lifting
-                if (!CurrentV->getType()->isPointerTy() ||
+                if (!CurrentV->getType()->isPtrOrPtrVectorTy() ||
                     isSpecialAS(getValueAddrSpace(CurrentV))) {
                     // If not, poison all (recursive) users of this value, to prevent
                     // looking at them again in future iterations.

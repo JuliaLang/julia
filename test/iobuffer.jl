@@ -383,3 +383,8 @@ end
     seek(io,0)
     @test Base.read_sub(io,v,1,1) == [1,0]
 end
+
+@testset "with offset" begin
+    b = pushfirst!([0x02], 0x01)
+    @test take!(IOBuffer(b)) == [0x01, 0x02]
+end

@@ -525,6 +525,130 @@ for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Uni
     end
 end
 
+function kron(A::Hermitian{T}, B::Hermitian{S}) where {T<:Union{Real,Complex},S<:Union{Real,Complex}}
+    resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
+    C = Hermitian(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)), resultuplo)
+    return kron!(C, A, B)
+end
+
+function kron(A::Symmetric{T}, B::Symmetric{S}) where {T<:Number,S<:Number}
+    resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
+    C = Symmetric(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)), resultuplo)
+    return kron!(C, A, B)
+end
+
+function kron!(C::Hermitian{<:Union{Real,Complex}}, A::Hermitian{<:Union{Real,Complex}}, B::Hermitian{<:Union{Real,Complex}})
+    size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+    if ((A.uplo == 'U' || B.uplo == 'U') && C.uplo != 'U') || ((A.uplo == 'L' && B.uplo == 'L') && C.uplo != 'L')
+        throw(ArgumentError("C.uplo must match A.uplo and B.uplo, got $(C.uplo) $(A.uplo) $(B.uplo)"))
+    end
+    _hermkron!(C.data, A.data, B.data, conj, real, A.uplo, B.uplo)
+    return C
+end
+
+function kron!(C::Symmetric{<:Number}, A::Symmetric{<:Number}, B::Symmetric{<:Number})
+    size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+    if ((A.uplo == 'U' || B.uplo == 'U') && C.uplo != 'U') || ((A.uplo == 'L' && B.uplo == 'L') && C.uplo != 'L')
+        throw(ArgumentError("C.uplo must match A.uplo and B.uplo, got $(C.uplo) $(A.uplo) $(B.uplo)"))
+    end
+    _hermkron!(C.data, A.data, B.data, identity, identity, A.uplo, B.uplo)
+    return C
+end
+
+function _hermkron!(C, A, B, conj::TC, real::TR, Auplo, Buplo) where {TC,TR}
+    n_A = size(A, 1)
+    n_B = size(B, 1)
+    @inbounds if Auplo == 'U' && Buplo == 'U'
+        for j = 1:n_A
+            jnB = (j - 1) * n_B
+            for i = 1:(j-1)
+                Aij = A[i, j]
+                inB = (i - 1) * n_B
+                for l = 1:n_B
+                    for k = 1:(l-1)
+                        C[inB+k, jnB+l] = Aij * B[k, l]
+                        C[inB+l, jnB+k] = Aij * conj(B[k, l])
+                    end
+                    C[inB+l, jnB+l] = Aij * real(B[l, l])
+                end
+            end
+            Ajj = real(A[j, j])
+            for l = 1:n_B
+                for k = 1:(l-1)
+                    C[jnB+k, jnB+l] = Ajj * B[k, l]
+                end
+                C[jnB+l, jnB+l] = Ajj * real(B[l, l])
+            end
+        end
+    elseif Auplo == 'U' && Buplo == 'L'
+        for j = 1:n_A
+            jnB = (j - 1) * n_B
+            for i = 1:(j-1)
+                Aij = A[i, j]
+                inB = (i - 1) * n_B
+                for l = 1:n_B
+                    C[inB+l, jnB+l] = Aij * real(B[l, l])
+                    for k = (l+1):n_B
+                        C[inB+l, jnB+k] = Aij * conj(B[k, l])
+                        C[inB+k, jnB+l] = Aij * B[k, l]
+                    end
+                end
+            end
+            Ajj = real(A[j, j])
+            for l = 1:n_B
+                C[jnB+l, jnB+l] = Ajj * real(B[l, l])
+                for k = (l+1):n_B
+                    C[jnB+l, jnB+k] = Ajj * conj(B[k, l])
+                end
+            end
+        end
+    elseif Auplo == 'L' && Buplo == 'U'
+        for j = 1:n_A
+            jnB = (j - 1) * n_B
+            Ajj = real(A[j, j])
+            for l = 1:n_B
+                for k = 1:(l-1)
+                    C[jnB+k, jnB+l] = Ajj * B[k, l]
+                end
+                C[jnB+l, jnB+l] = Ajj * real(B[l, l])
+            end
+            for i = (j+1):n_A
+                conjAij = conj(A[i, j])
+                inB = (i - 1) * n_B
+                for l = 1:n_B
+                    for k = 1:(l-1)
+                        C[jnB+k, inB+l] = conjAij * B[k, l]
+                        C[jnB+l, inB+k] = conjAij * conj(B[k, l])
+                    end
+                    C[jnB+l, inB+l] = conjAij * real(B[l, l])
+                end
+            end
+        end
+    else #if Auplo == 'L' && Buplo == 'L'
+        for j = 1:n_A
+            jnB = (j - 1) * n_B
+            Ajj = real(A[j, j])
+            for l = 1:n_B
+                C[jnB+l, jnB+l] = Ajj * real(B[l, l])
+                for k = (l+1):n_B
+                    C[jnB+k, jnB+l] = Ajj * B[k, l]
+                end
+            end
+            for i = (j+1):n_A
+                Aij = A[i, j]
+                inB = (i - 1) * n_B
+                for l = 1:n_B
+                    C[inB+l, jnB+l] = Aij * real(B[l, l])
+                    for k = (l+1):n_B
+                        C[inB+k, jnB+l] = Aij * B[k, l]
+                        C[inB+l, jnB+k] = Aij * conj(B[k, l])
+                    end
+                end
+            end
+        end
+    end
+end
+
 (-)(A::Symmetric) = Symmetric(parentof_applytri(-, A), sym_uplo(A.uplo))
 (-)(A::Hermitian) = Hermitian(parentof_applytri(-, A), sym_uplo(A.uplo))
 

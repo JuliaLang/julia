@@ -1076,14 +1076,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     store_ty = T_pjlvalue;
                 }
                 else {
-                    #if JL_LLVM_VERSION >= 170000
-                    store_ty = PointerType::get(T_pjlvalue, cast<PointerType>(store_ty)->getAddressSpace());
-                    #else
-                    store_ty = PointerType::getWithSamePointeeType(T_pjlvalue, cast<PointerType>(store_ty)->getAddressSpace());
-                    #endif
+                    store_ty = PointerType::getWithSamePointeeType(T_pjlvalue, store_ty->getPointerAddressSpace());
                     store_val = builder.CreateBitCast(store_val, store_ty);
                 }
-                if (cast<PointerType>(store_ty)->getAddressSpace() != AddressSpace::Tracked)
+                if (store_ty->getPointerAddressSpace() != AddressSpace::Tracked)
                     store_val = builder.CreateAddrSpaceCast(store_val, pass.T_prjlvalue);
                 newstore = builder.CreateStore(store_val, slot.slot);
             }
