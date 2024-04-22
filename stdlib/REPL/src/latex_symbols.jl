@@ -138,7 +138,7 @@ const latex_symbols = Dict(
     "\\dalsegno"=>"𝄉",
     "\\dacapo"=>"𝄊",
     "\\segno"=>"𝄋",
-    "\\coda"=>"𝄌", 
+    "\\coda"=>"𝄌",
         # Holds and pauses
     "\\fermata"=>"𝄐",
     "\\fermatabelow"=>"𝄑",
