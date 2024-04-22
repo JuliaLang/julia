@@ -39,6 +39,9 @@
 # Buildkite: Ignore the entire .buildkite directory
 /.buildkite
 
+# Builtkite: json test data
+/test/results.json
+
 # Buildkite: Ignore the unencrypted repo_key
 repo_key
 

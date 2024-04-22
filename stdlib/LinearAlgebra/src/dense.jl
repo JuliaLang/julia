@@ -14,6 +14,7 @@ const NRM2_CUTOFF = 32
 const ISONE_CUTOFF = 2^21 # 2M
 
 function isone(A::AbstractMatrix)
+    require_one_based_indexing(A)  # multiplication not defined yet among offset matrices
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -106,6 +107,11 @@ norm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
 norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
+# Conservative assessment of types that have zero(T) defined for themselves
+haszero(::Type) = false
+haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
+@propagate_inbounds _zero(M::AbstractArray{T}, i, j) where {T} = haszero(T) ? zero(T) : zero(M[i,j])
+
 """
     triu!(M, k::Integer)
 
@@ -136,7 +142,7 @@ function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
@@ -173,12 +179,13 @@ function tril!(M::AbstractMatrix, k::Integer)
     require_one_based_indexing(M)
     m, n = size(M)
     for j in max(1, k + 1):n
-        @inbounds for i in 1:min(j - k - 1, m)
-            M[i,j] = zero(M[i,j])
+        for i in 1:min(j - k - 1, m)
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
 end
+
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 """
@@ -198,13 +205,27 @@ function fillband!(A::AbstractMatrix{T}, x, l, u) where T
     return A
 end
 
-diagind(m::Integer, n::Integer, k::Integer=0) =
+diagind(m::Integer, n::Integer, k::Integer=0) = diagind(IndexLinear(), m, n, k)
+diagind(::IndexLinear, m::Integer, n::Integer, k::Integer=0) =
     k <= 0 ? range(1-k, step=m+1, length=min(m+k, n)) : range(k*m+1, step=m+1, length=min(m, n-k))
 
+function diagind(::IndexCartesian, m::Integer, n::Integer, k::Integer=0)
+    Cstart = CartesianIndex(1 + max(0,-k), 1 + max(0,k))
+    Cstep = CartesianIndex(1, 1)
+    length = max(0, k <= 0 ? min(m+k, n) : min(m, n-k))
+    StepRangeLen(Cstart, Cstep, length)
+end
+
 """
-    diagind(M, k::Integer=0)
+    diagind(M::AbstractMatrix, k::Integer = 0, indstyle::IndexStyle = IndexLinear())
+    diagind(M::AbstractMatrix, indstyle::IndexStyle = IndexLinear())
 
 An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
+Optionally, an index style may be specified which determines the type of the range returned.
+If `indstyle isa IndexLinear` (default), this returns an `AbstractRange{Integer}`.
+On the other hand, if `indstyle isa IndexCartesian`, this returns an `AbstractRange{CartesianIndex{2}}`.
+
+If `k` is not provided, it is assumed to be `0` (corresponding to the main diagonal).
 
 See also: [`diag`](@ref), [`diagm`](@ref), [`Diagonal`](@ref).
 
@@ -216,14 +237,22 @@ julia> A = [1 2 3; 4 5 6; 7 8 9]
  4  5  6
  7  8  9
 
-julia> diagind(A,-1)
+julia> diagind(A, -1)
 2:4:6
+
+julia> diagind(A, IndexCartesian())
+StepRangeLen(CartesianIndex(1, 1), CartesianIndex(1, 1), 3)
 ```
+
+!!! compat "Julia 1.11"
+     Specifying an `IndexStyle` requires at least Julia 1.11.
 """
-function diagind(A::AbstractMatrix, k::Integer=0)
+function diagind(A::AbstractMatrix, k::Integer=0, indexstyle::IndexStyle = IndexLinear())
     require_one_based_indexing(A)
-    diagind(size(A,1), size(A,2), k)
+    diagind(indexstyle, size(A,1), size(A,2), k)
 end
+
+diagind(A::AbstractMatrix, indexstyle::IndexStyle) = diagind(A, 0, indexstyle)
 
 """
     diag(M, k::Integer=0)
@@ -246,7 +275,7 @@ julia> diag(A,1)
  6
 ```
 """
-diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
+diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A, k, IndexStyle(A))]
 
 """
     diagm(kv::Pair{<:Integer,<:AbstractVector}...)
@@ -308,7 +337,7 @@ function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}..
     mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
     nmax = mapreduce(x -> length(x.second) + max(0,Int(x.first)), max, kv; init=0)
     m, n = size
-    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch(lazy"invalid size=$size"))
     return m, n
 end
 function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
@@ -463,8 +492,8 @@ julia> reshape(kron(v,w), (length(w), length(v)))
 ```
 """
 function kron(A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) where {T,S}
-    R = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
-    return kron!(R, A, B)
+    C = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
+    return kron!(C, A, B)
 end
 function kron(a::AbstractVector{T}, b::AbstractVector{S}) where {T,S}
     c = Vector{promote_op(*,T,S)}(undef, length(a)*length(b))
@@ -490,7 +519,7 @@ end
 function schurpow(A::AbstractMatrix, p)
     if istriu(A)
         # Integer part
-        retmat = A ^ floor(p)
+        retmat = A ^ floor(Integer, p)
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)
@@ -501,7 +530,7 @@ function schurpow(A::AbstractMatrix, p)
     else
         S,Q,d = Schur{Complex}(schur(A))
         # Integer part
-        R = S ^ floor(p)
+        R = S ^ floor(Integer, p)
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)
@@ -906,6 +935,54 @@ end
 
 sqrt(A::AdjointAbsMat) = adjoint(sqrt(parent(A)))
 sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
+
+"""
+    cbrt(A::AbstractMatrix{<:Real})
+
+Computes the real-valued cube root of a real-valued matrix `A`. If `T = cbrt(A)`, then
+we have `T*T*T ≈ A`, see example given below.
+
+If `A` is symmetric, i.e., of type `HermOrSym{<:Real}`, then ([`eigen`](@ref)) is used to
+find the cube root. Otherwise, a specialized version of the p-th root algorithm [^S03] is
+utilized, which exploits the real-valued Schur decomposition ([`schur`](@ref))
+to compute the cube root.
+
+[^S03]:
+
+    Matthew I. Smith, "A Schur Algorithm for Computing Matrix pth Roots",
+    SIAM Journal on Matrix Analysis and Applications, vol. 24, 2003, pp. 971–989.
+    [doi:10.1137/S0895479801392697](https://doi.org/10.1137/s0895479801392697)
+
+# Examples
+```jldoctest
+julia> A = [0.927524 -0.15857; -1.3677 -1.01172]
+2×2 Matrix{Float64}:
+  0.927524  -0.15857
+ -1.3677    -1.01172
+
+julia> T = cbrt(A)
+2×2 Matrix{Float64}:
+  0.910077  -0.151019
+ -1.30257   -0.936818
+
+julia> T*T*T ≈ A
+true
+```
+"""
+function cbrt(A::AbstractMatrix{<:Real})
+    if checksquare(A) == 0
+        return copy(A)
+    elseif issymmetric(A)
+        return cbrt(Symmetric(A, :U))
+    else
+        S = schur(A)
+        return S.Z * _cbrt_quasi_triu!(S.T) * S.Z'
+    end
+end
+
+# Cube roots of adjoint and transpose matrices
+cbrt(A::AdjointAbsMat) = adjoint(cbrt(parent(A)))
+cbrt(A::TransposeAbsMat) = transpose(cbrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
@@ -1569,7 +1646,7 @@ function cond(A::AbstractMatrix, p::Real=2)
             end
         end
     end
-    throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
+    throw(ArgumentError(lazy"p-norm must be 1, 2 or Inf, got $p"))
 end
 
 ## Lyapunov and Sylvester equation

@@ -18,7 +18,7 @@ void missingPop2() {
 } // expected-warning{{Non-popped GC frame present at end of function}}
   // expected-note@-1{{Non-popped GC frame present at end of function}}
 
-void superflousPop() {
+void superfluousPop() {
   JL_GC_POP(); // expected-warning{{JL_GC_POP without corresponding push}}
 }              // expected-note@-1{{JL_GC_POP without corresponding push}}
 

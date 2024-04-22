@@ -364,13 +364,13 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     if isempty(X) && (get(io, :compact, false)::Bool || X isa Vector)
         return show(io, X)
     end
-    # 0) show summary before setting :compact
+    # 1) show summary before setting :compact
     summary(io, X)
     isempty(X) && return
     print(io, ":")
     show_circular(io, X) && return
 
-    # 1) compute new IOContext
+    # 2) compute new IOContext
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
@@ -385,7 +385,7 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
         println(io)
     end
 
-    # 2) update typeinfo
+    # 3) update typeinfo
     #
     # it must come after printing the summary, which can exploit :typeinfo itself
     # (e.g. views)
@@ -394,7 +394,7 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     # checking for current :typeinfo (this could be changed in the future)
     io = IOContext(io, :typeinfo => eltype(X))
 
-    # 2) show actual content
+    # 4) show actual content
     recur_io = IOContext(io, :SHOWN_SET => X)
     print_array(recur_io, X)
 end
@@ -554,7 +554,7 @@ function typeinfo_implicit(@nospecialize(T))
     end
     return isconcretetype(T) &&
         ((T <: Array && typeinfo_implicit(eltype(T))) ||
-         ((T <: Tuple || T <: Pair) && all(typeinfo_implicit, fieldtypes(T))) ||
+         ((T <: Tuple || T <: NamedTuple || T <: Pair) && all(typeinfo_implicit, fieldtypes(T))) ||
          (T <: AbstractDict && typeinfo_implicit(keytype(T)) && typeinfo_implicit(valtype(T))))
 end
 

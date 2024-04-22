@@ -16,8 +16,19 @@ including those which include `JULIA` in their names.
 
 !!! note
 
-    Some variables, such as [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) and [`JULIA_PROJECT`](@ref JULIA_PROJECT), need to be set before Julia
-    starts, therefore adding these to `~/.julia/config/startup.jl` is too late in the startup process.
+    It is recommended to avoid changing environment variables during runtime,
+    such as within a `~/.julia/config/startup.jl`.
+
+    One reason is that some julia language variables, such as [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS)
+    and [`JULIA_PROJECT`](@ref JULIA_PROJECT), need to be set before Julia starts.
+
+    Similarly, `__init__()` functions of user modules in the sysimage (via PackageCompiler) are
+    run before `startup.jl`, so setting environment variables in a `startup.jl` may be too late for
+    user code.
+
+    Further, changing environment variables during runtime can introduce data races into
+    otherwise benign code.
+
     In Bash, environment variables can either be set manually by running, e.g.,
     `export JULIA_NUM_THREADS=4` before starting Julia, or by adding the same command to
     `~/.bashrc` or `~/.bash_profile` to set the variable each time Bash is started.
@@ -125,23 +136,30 @@ as Julia's code loading mechanisms, look for package registries, installed
 packages, named environments, repo clones, cached compiled package images,
 configuration files, and the default location of the REPL's history file.
 
-Unlike the shell `PATH` variable but similar to [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH), empty entries in
-[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) are expanded to the default value of `DEPOT_PATH`. This allows
-easy appending, prepending, etc. of the depot path value in shell scripts regardless
-of whether [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is already set or not. For example, to prepend the
-directory `/foo/bar` to `DEPOT_PATH` just do
+Unlike the shell `PATH` variable but similar to [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
+empty entries in [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) are expanded to the default
+value of `DEPOT_PATH`, excluding the user depot. This allows easy overriding of the user
+depot, while still retaining access to resources that are bundled with Julia, like cache
+files, artifacts, etc. For example, to switch the user depot to `/foo/bar` just do
 ```sh
-export JULIA_DEPOT_PATH="/foo/bar:$JULIA_DEPOT_PATH"
+export JULIA_DEPOT_PATH="/foo/bar:"
 ```
-If the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is already set, its old value will be
-prepended with `/foo/bar`. On the other hand, if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is not set, then
-it will be set to `/foo/bar:` which will have the effect of prepending `/foo/bar` to
-the default depot path. If [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is set to the empty string, it expands
-to an empty `DEPOT_PATH` array. In other words, the empty string is interpreted as a
-zero-element array, not a one-element array of the empty string. This behavior was
-chosen so that it would be possible to set an empty depot path via the environment
-variable. If you want the default depot path, either unset the environment variable
-or if it must have a value, set it to the string `:`.
+All package operations, like cloning registrise or installing packages, will now write to
+`/foo/bar`, but since the empty entry is expanded to the default system depot, any bundled
+resources will still be available. If you really only want to use the depot at `/foo/bar`,
+and not load any bundled resources, simply set the environment variable to `/foo/bar`
+without the trailing colon.
+
+There are two exceptions to the above rule. First, if [`JULIA_DEPOT_PATH`](@ref
+JULIA_DEPOT_PATH) is set to the empty string, it expands to an empty `DEPOT_PATH` array. In
+other words, the empty string is interpreted as a zero-element array, not a one-element
+array of the empty string. This behavior was chosen so that it would be possible to set an
+empty depot path via the environment variable.
+
+Second, if no user depot is specified in [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), then
+the empty entry is expanded to the default depot *including* the user depot. This makes
+it possible to use the default depot, as if the environment variable was unset, by setting
+it to the string `:`.
 
 !!! note
 
@@ -239,6 +257,15 @@ If set to `true`, Pkg operations which use the git protocol will use an external
 ### [`JULIA_PKGRESOLVE_ACCURACY`](@id JULIA_PKGRESOLVE_ACCURACY)
 
 The accuracy of the package resolver. This should be a positive integer, the default is `1`.
+
+### [`JULIA_PKG_PRESERVE_TIERED_INSTALLED`](@id JULIA_PKG_PRESERVE_TIERED_INSTALLED)
+
+Change the default package installation strategy to `Pkg.PRESERVE_TIERED_INSTALLED`
+to let the package manager try to install versions of packages while keeping as many
+versions of packages already installed as possible.
+
+!!! compat "Julia 1.9"
+    This only affects Julia 1.9 and above.
 
 ## Network transport
 

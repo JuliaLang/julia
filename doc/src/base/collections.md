@@ -36,15 +36,15 @@ Fully implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `Number`
+  * [`Tuple`](@ref)
+  * [`Number`](@ref)
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
   * `EachLine`
-  * `AbstractString`
+  * [`AbstractString`](@ref)
   * [`Set`](@ref)
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
@@ -74,14 +74,14 @@ Fully implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `Number`
+  * [`Tuple`](@ref)
+  * [`Number`](@ref)
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
-  * `AbstractString`
+  * [`AbstractString`](@ref)
   * [`Set`](@ref)
   * [`NamedTuple`](@ref)
 
@@ -166,8 +166,8 @@ Partially implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `AbstractString`
+  * [`Tuple`](@ref)
+  * [`AbstractString`](@ref)
   * [`Dict`](@ref)
   * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
@@ -225,14 +225,15 @@ Base.valtype
 
 Fully implemented by:
 
-  * [`IdDict`](@ref)
   * [`Dict`](@ref)
+  * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
 
 Partially implemented by:
 
-  * [`BitSet`](@ref)
   * [`Set`](@ref)
+  * [`BitSet`](@ref)
+  * [`IdSet`](@ref)
   * [`EnvDict`](@ref Base.EnvDict)
   * [`Array`](@ref)
   * [`BitArray`](@ref)
@@ -246,6 +247,7 @@ Partially implemented by:
 Base.AbstractSet
 Base.Set
 Base.BitSet
+Base.IdSet
 Base.union
 Base.union!
 Base.intersect
@@ -255,6 +257,7 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.in!
 Base.:⊈
 Base.:⊊
 Base.issetequal
@@ -263,8 +266,10 @@ Base.isdisjoint
 
 Fully implemented by:
 
-  * [`BitSet`](@ref)
   * [`Set`](@ref)
+  * [`BitSet`](@ref)
+  * [`IdSet`](@ref)
+
 
 Partially implemented by:
 

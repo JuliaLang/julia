@@ -249,7 +249,7 @@
            ;; misc syntax forms
            ((import using)
             (string (car e) " " (string.join (map deparse-import-path (cdr e)) ", ")))
-           ((global local export) (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
+           ((global local export public) (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
            ((const)        (string "const " (deparse (cadr e))))
            ((top)          (deparse (cadr e)))
            ((core)         (string "Core." (deparse (cadr e))))

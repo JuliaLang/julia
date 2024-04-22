@@ -1,0 +1,22 @@
+From d2fc4f3b4d7f41527bc7dc8f62e9aa6229cfac89 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Wed, 17 Jan 2024 20:59:24 +0100
+Subject: [PATCH] Increase multithreading threshold by a factor of 50
+
+---
+ interface/gemv.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/interface/gemv.c b/interface/gemv.c
+index 1f07635799..2c121f1308 100644
+--- a/interface/gemv.c
++++ b/interface/gemv.c
+@@ -226,7 +226,7 @@ void CNAME(enum CBLAS_ORDER order,
+ 
+ #ifdef SMP
+ 
+-  if ( 1L * m * n < 2304L * GEMM_MULTITHREAD_THRESHOLD )
++  if ( 1L * m * n < 115200L * GEMM_MULTITHREAD_THRESHOLD )
+     nthreads = 1;
+   else
+     nthreads = num_cpu_avail(2);

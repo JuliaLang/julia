@@ -67,7 +67,7 @@ top:
 ; TYPED-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 ; TYPED-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 ; TYPED-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
-; TYPED-NEXT: %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* [[ptls_i8]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
+; TYPED-NEXT: %v = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_bytes(i8* [[ptls_i8]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
 ; TYPED-NEXT: [[V2:%.*]] = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
 ; TYPED-NEXT: [[V_HEADROOM:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)* addrspace(10)* [[V2]], i64 -1
 ; TYPED-NEXT: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* [[V_HEADROOM]] unordered, align 8, !tbaa !4
@@ -75,7 +75,7 @@ top:
 ; OPAQUE: %current_task = getelementptr inbounds ptr, ptr %0, i64 -12
 ; OPAQUE-NEXT: [[ptls_field:%.*]] = getelementptr inbounds ptr, ptr %current_task, i64 16
 ; OPAQUE-NEXT: [[ptls_load:%.*]] = load ptr, ptr [[ptls_field]], align 8, !tbaa !0
-; OPAQUE-NEXT: %v = call ptr addrspace(10) @julia.gc_alloc_bytes(ptr [[ptls_load]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
+; OPAQUE-NEXT: %v = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_bytes(ptr [[ptls_load]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
 ; OPAQUE-NEXT: [[V_HEADROOM:%.*]] = getelementptr inbounds ptr addrspace(10), ptr addrspace(10) %v, i64 -1
 ; OPAQUE-NEXT: store atomic ptr addrspace(10) @tag, ptr addrspace(10) [[V_HEADROOM]] unordered, align 8, !tbaa !4
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
@@ -100,7 +100,7 @@ top:
 ; TYPED-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 ; TYPED-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 ; TYPED-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
-; TYPED-NEXT: %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* [[ptls_i8]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
+; TYPED-NEXT: %v = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_bytes(i8* [[ptls_i8]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
 ; TYPED-NEXT: [[V2:%.*]] = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
 ; TYPED-NEXT: [[V_HEADROOM:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)* addrspace(10)* [[V2]], i64 -1
 ; TYPED-NEXT: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* [[V_HEADROOM]] unordered, align 8, !tbaa !4
@@ -108,7 +108,7 @@ top:
 ; OPAQUE: %current_task = getelementptr inbounds ptr, ptr %0, i64 -12
 ; OPAQUE-NEXT: [[ptls_field:%.*]] = getelementptr inbounds ptr, ptr %current_task, i64 16
 ; OPAQUE-NEXT: [[ptls_load:%.*]] = load ptr, ptr [[ptls_field]], align 8, !tbaa !0
-; OPAQUE-NEXT: %v = call ptr addrspace(10) @julia.gc_alloc_bytes(ptr [[ptls_load]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
+; OPAQUE-NEXT: %v = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_bytes(ptr [[ptls_load]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
 ; OPAQUE-NEXT: [[V_HEADROOM:%.*]] = getelementptr inbounds ptr addrspace(10), ptr addrspace(10) %v, i64 -1
 ; OPAQUE-NEXT: store atomic ptr addrspace(10) @tag, ptr addrspace(10) [[V_HEADROOM]] unordered, align 8, !tbaa !4
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)

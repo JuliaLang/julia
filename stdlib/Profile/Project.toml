@@ -1,8 +1,6 @@
 name = "Profile"
 uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
-
-[deps]
-Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+version = "1.11.0"
 
 [extras]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"

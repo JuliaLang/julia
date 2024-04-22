@@ -108,11 +108,9 @@ for op in (:+, :-)
 end
 
 # disambiguation between triangular and banded matrices, banded ones "dominate"
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix) = _mul!(C, A, B, MulAddMul())
-mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular) = _mul!(C, A, B, MulAddMul())
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
+_mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
     _mul!(C, A, B, MulAddMul(alpha, beta))
-mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
+_mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
     _mul!(C, A, B, MulAddMul(alpha, beta))
 
 function *(H::UpperHessenberg, B::Bidiagonal)
@@ -289,7 +287,7 @@ _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
 function fill!(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     xT = convert(eltype(A), x)
     (iszero(xT) || _small_enough(A)) && return fillstored!(A, xT)
-    throw(ArgumentError("array of type $(typeof(A)) and size $(size(A)) can
+    throw(ArgumentError(lazy"array of type $(typeof(A)) and size $(size(A)) can
     not be filled with $x, since some of its entries are constrained."))
 end
 

@@ -295,22 +295,9 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
             else
                 tupledepth = 0
             end
-            isgenerator = (t.name.name === :Generator && t.name.module === _topmod(t.name.module))
             for i = 1:length(tP)
                 tPi = tP[i]
                 cPi = cP[i + ntail]
-                if isgenerator
-                    let tPi = unwrap_unionall(tPi),
-                        cPi = unwrap_unionall(cPi)
-                        if isa(tPi, DataType) && isa(cPi, DataType) &&
-                            !isabstracttype(tPi) && !isabstracttype(cPi) &&
-                                sym_isless(cPi.name.name, tPi.name.name)
-                            # allow collect on (anonymous) Generators to nest, provided that their functions are appropriately ordered
-                            # TODO: is there a better way?
-                            continue
-                        end
-                    end
-                end
                 type_more_complex(tPi, cPi, sources, depth + 1, tupledepth, 0) && return true
             end
             return false
@@ -325,7 +312,7 @@ union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 function issimpleenoughtype(@nospecialize t)
     ut = unwrap_unionall(t)
     ut isa DataType && ut.name.wrapper == t && return true
-    return unionlen(t) + union_count_abstract(t) <= MAX_TYPEUNION_LENGTH &&
+    return max(unionlen(t), union_count_abstract(t) + 1) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
 
@@ -820,6 +807,7 @@ end
                         end
                         if usep
                             widen = rewrap_unionall(wr{p...}, wr)
+                            widen <: wr || (widen = wr) # sometimes there are cross-constraints on wr that we may lose in this process, but that would cause future calls to this to need to return Any, which is undesirable
                         end
                         simplify[j] = !usep
                     end

@@ -1,32 +1,41 @@
-Julia v1.11 Release Notes
+Julia v1.12 Release Notes
 ========================
 
 New language features
 ---------------------
-* `public` is a new keyword. Symbols marked with `public` are considered public
-  API. Symbols marked with `export` are now also treated as public API. The
-  difference between `public` and `export` is that `public` names do not become
-  available when `using` a package/module. ([#50105])
-* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
 
 Language changes
 ----------------
 
+ - When methods are replaced with exactly equivalent ones, the old method is no
+   longer deleted implicitly simultaneously, although the new method does take
+   priority and become more specific than the old method. Thus if the new
+   method is deleted later, the old method will resume operating. This can be
+   useful to mocking frameworks (such as in SparseArrays, Pluto, and Mocking,
+   among others), as they do not need to explicitly restore the old method.
+   While inference and compilation still must be repeated with this, it also
+   may pave the way for inference to be able to intelligently re-use the old
+   results, once the new method is deleted. ([#53415])
+
+ - Macro expansion will no longer eargerly recurse into into `Expr(:toplevel)`
+   expressions returned from macros. Instead, macro expansion of `:toplevel`
+   expressions will be delayed until evaluation time. This allows a later
+   expression within a given `:toplevel` expression to make use of macros
+   defined earlier in the same `:toplevel` expression. ([#53515])
+
 Compiler/Runtime improvements
 -----------------------------
-* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
-* A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
-  loads, primarily to be used within JLLs ([#50074]).
+
+- Generated LLVM IR now uses actual pointer types instead of passing pointers as integers.
+  This affects `llvmcall`: Inline LLVM IR should be updated to use `i8*` or `ptr` instead of
+  `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
+  IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
 
 Command-line option changes
 ---------------------------
 
-* The entry point for Julia has been standardized to `Main.main(ARGS)`. This must be explicitly opted into using the `@main` macro
-(see the docstring for futher details). When opted-in, and julia is invoked to run a script or expression
-(i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
-This is intended to unify script and compilation workflows, where code loading may happen
-in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
-difference between defining a `main` function and executing the code directly at the end of the script. ([50974])
+* The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
+  This `main` function should be declared using `@main` to indicate that it is an entry point.
 
 Multi-threading changes
 -----------------------
@@ -37,42 +46,56 @@ Build system changes
 New library functions
 ---------------------
 
-* The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
-* `hardlink(src, dst)` can be used to create hard links. ([#41639])
-* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
-* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
-* `eachrsplit(string, pattern)` iterates split substrings right to left.
+* `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
+* The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
+* `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
 
 New library features
 --------------------
+
+* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
+* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
 * `replace(string, pattern...)` now supports an optional `IO` argument to
   write the output to a stream rather than returning a string ([#48625]).
+* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
+* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
+  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
+  no longer required there for correctness to avoid data races ([#52461]).
+* After a process exits, `closewrite` will no longer be automatically called on
+  the stream passed to it. Call `wait` on the process instead to ensure the
+  content is fully written, then call `closewrite` manually to avoid
+  data-races. Or use the callback form of `open` to have all that handled
+  automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `filter` can now act on a `NamedTuple` ([#50795]).
+* `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
+  the uniquing checking ([#53474])
+* `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
 
 Standard library changes
 ------------------------
 
+#### StyledStrings
+
+#### JuliaSyntaxHighlighting
+
 #### Package Manager
 
 #### LinearAlgebra
+
+#### Logging
 
 #### Printf
 
 #### Profile
 
 #### Random
-* `rand` now supports sampling over `Tuple` types ([#35856], [#50251]).
-* `rand` now supports sampling over `Pair` types ([#28705]).
-* When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
-* Seedable random number generators from `Random` can now be seeded by a string, e.g.
-  `seed!(rng, "a random seed")` ([#51527]).
 
 #### REPL
 
-* Tab complete hints now show in lighter text while typing in the repl. To disable
-  set `Base.active_repl.options.hint_tab_completes = false` ([#51229])
-
 #### SuiteSparse
-
 
 #### SparseArrays
 
@@ -82,30 +105,21 @@ Standard library changes
 
 #### Statistics
 
-* Statistics is now an upgradeable standard library.([#46501])
-
 #### Distributed
-
-* `pmap` now defaults to using a `CachingPool` ([#33892]).
 
 #### Unicode
 
-
 #### DelimitedFiles
-
 
 #### InteractiveUtils
 
 Deprecated or removed
 ---------------------
 
-
 External dependencies
 ---------------------
-* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser.
 
 Tooling Improvements
 --------------------
-
 
 <!--- generated by NEWS-update.jl: -->

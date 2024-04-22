@@ -803,6 +803,84 @@ function _atthreads_dynamic_with_error(a)
 end
 @test_throws "user error in the loop body" _atthreads_dynamic_with_error(zeros(threadpoolsize()))
 
+####
+# :greedy
+###
+
+function _atthreads_greedy_schedule(n)
+    inc = Threads.Atomic{Int}(0)
+    flags = zeros(Int, n)
+    Threads.@threads :greedy for i = 1:n
+        Threads.atomic_add!(inc, 1)
+        flags[i] = 1
+    end
+    return inc[], flags
+end
+@test _atthreads_greedy_schedule(threadpoolsize()) == (threadpoolsize(), ones(threadpoolsize()))
+@test _atthreads_greedy_schedule(1) == (1, ones(1))
+@test _atthreads_greedy_schedule(10) == (10, ones(10))
+@test _atthreads_greedy_schedule(threadpoolsize() * 2) == (threadpoolsize() * 2, ones(threadpoolsize() * 2))
+
+# nested greedy schedule
+function _atthreads_greedy_greedy_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :greedy for _ = 1:threadpoolsize()
+        Threads.@threads :greedy for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_greedy_greedy_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_greedy_dynamic_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :greedy for _ = 1:threadpoolsize()
+        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_greedy_dynamic_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_dymamic_greedy_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :dynamic for _ = 1:threadpoolsize()
+        Threads.@threads :greedy for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_dymamic_greedy_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_static_greedy_schedule()
+    ids = zeros(Int, threadpoolsize())
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :static for i = 1:threadpoolsize()
+        ids[i] = Threads.threadid()
+        Threads.@threads :greedy for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return ids, inc[]
+end
+@test _atthreads_static_greedy_schedule() == (1:threadpoolsize(), threadpoolsize() * threadpoolsize())
+
+# errors inside @threads :greedy
+function _atthreads_greedy_with_error(a)
+    Threads.@threads :greedy for i in eachindex(a)
+        error("user error in the loop body")
+    end
+    a
+end
+@test_throws "user error in the loop body" _atthreads_greedy_with_error(zeros(threadpoolsize()))
+
+####
+# multi-argument loop
+####
+
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
 catch ex
@@ -1107,5 +1185,128 @@ function threadcall_threads()
 end
 @testset "threadcall + threads" begin
     threadcall_threads() #Shouldn't crash!
+end
+
+@testset "Wait multiple tasks" begin
+    convert_tasks(t, x) = x
+    convert_tasks(::Set{Task}, x::Vector{Task}) = Set{Task}(x)
+    convert_tasks(::Tuple{Task}, x::Vector{Task}) = tuple(x...)
+
+    function create_tasks()
+        tasks = Task[]
+        event = Threads.Event()
+        push!(tasks,
+              Threads.@spawn begin
+                  sleep(0.01)
+              end)
+        push!(tasks,
+              Threads.@spawn begin
+                  sleep(0.02)
+              end)
+        push!(tasks,
+              Threads.@spawn begin
+                  wait(event)
+              end)
+        return tasks, event
+    end
+
+    function teardown(tasks, event)
+        notify(event)
+        waitall(resize!(tasks, 3), throw=true)
+    end
+
+    for tasks_type in (Vector{Task}, Set{Task}, Tuple{Task})
+        @testset "waitany" begin
+            @testset "throw=false" begin
+                tasks, event = create_tasks()
+                wait(tasks[1])
+                wait(tasks[2])
+                done,  pending = waitany(convert_tasks(tasks_type, tasks); throw=false)
+                @test length(done) == 2
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test length(pending) == 1
+                @test tasks[3] ∈ pending
+                teardown(tasks, event)
+            end
+
+            @testset "throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                @test_throws CompositeException begin
+                    waitany(convert_tasks(tasks_type, tasks); throw=true)
+                end
+
+                teardown(tasks, event)
+            end
+        end
+
+        @testset "waitall" begin
+            @testset "All tasks succeed" begin
+                tasks, event = create_tasks()
+
+                wait(tasks[1])
+                wait(tasks[2])
+                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks))
+                @test !istaskdone(waiter)
+
+                notify(event)
+                done, pending = fetch(waiter)
+                @test length(done) == 3
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test tasks[3] ∈ done
+                @test length(pending) == 0
+            end
+
+            @testset "failfast=true, throw=false" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                wait(tasks[1])
+                wait(tasks[2])
+                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks); failfast=true, throw=false)
+
+                done, pending = fetch(waiter)
+                @test length(done) == 3
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test tasks[4] ∈ done
+                @test length(pending) == 1
+                @test tasks[3] ∈ pending
+
+                teardown(tasks, event)
+            end
+
+            @testset "failfast=false, throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                notify(event)
+
+                @test_throws CompositeException begin
+                    waitall(convert_tasks(tasks_type, tasks); failfast=false, throw=true)
+                end
+
+                @test all(istaskdone.(tasks))
+
+                teardown(tasks, event)
+            end
+
+            @testset "failfast=true, throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                @test_throws CompositeException begin
+                    waitall(convert_tasks(tasks_type, tasks); failfast=true, throw=true)
+                end
+
+                @test !istaskdone(tasks[3])
+
+                teardown(tasks, event)
+            end
+        end
+    end
 end
 end # main testset

@@ -4,7 +4,7 @@
 # This is used for tab substitution in the REPL.
 
 # The initial symbol listing was generated from the W3C symbol mapping file:
-#         http://www.w3.org/Math/characters/unicode.xml
+#         https://www.w3.org/Math/characters/unicode.xml
 # by the following Julia script:
 #=
 import REPL
@@ -984,17 +984,16 @@ const latex_symbols = Dict(
     "\\droang" => "̚",  # left angle above (non-spacing)
     "\\wideutilde" => "̰",  # under tilde accent (multiple characters and non-spacing)
     "\\not" => "̸",  # combining long solidus overlay
-    "\\upMu" => "Μ",  # capital mu, greek
-    "\\upNu" => "Ν",  # capital nu, greek
-    "\\upOmicron" => "Ο",  # capital omicron, greek
-    "\\upepsilon" => "ε",  # rounded small epsilon, greek
-    "\\upomicron" => "ο",  # small omicron, greek
-    "\\upvarbeta" => "ϐ",  # rounded small beta, greek
-    "\\upoldKoppa" => "Ϙ",  # greek letter archaic koppa
-    "\\upoldkoppa" => "ϙ",  # greek small letter archaic koppa
-    "\\upstigma" => "ϛ",  # greek small letter stigma
-    "\\upkoppa" => "ϟ",  # greek small letter koppa
-    "\\upsampi" => "ϡ",  # greek small letter sampi
+    "\\Mu" => "Μ",  # capital mu, greek
+    "\\Nu" => "Ν",  # capital nu, greek
+    "\\Omicron" => "Ο",  # capital omicron, greek
+    "\\omicron" => "ο",  # small omicron, greek
+    "\\varbeta" => "ϐ",  # rounded small beta, greek
+    "\\oldKoppa" => "Ϙ",  # greek letter archaic koppa
+    "\\oldkoppa" => "ϙ",  # greek small letter archaic koppa
+    "\\stigma" => "ϛ",  # greek small letter stigma
+    "\\koppa" => "ϟ",  # greek small letter koppa
+    "\\sampi" => "ϡ",  # greek small letter sampi
     "\\tieconcat" => "⁀",  # character tie, z notation sequence concatenation
     "\\leftharpoonaccent" => "⃐",  # combining left harpoon above
     "\\rightharpoonaccent" => "⃑",  # combining right harpoon above
@@ -2623,10 +2622,10 @@ const latex_symbols = Dict(
     "\\4/5" => "⅘", # vulgar fraction four fifths
     "\\1/6" => "⅙", # vulgar fraction one sixth
     "\\5/6" => "⅚", # vulgar fraction five sixths
-    "\\1/8" => "⅛", # vulgar fraction one eigth
-    "\\3/8" => "⅜", # vulgar fraction three eigths
-    "\\5/8" => "⅝", # vulgar fraction five eigths
-    "\\7/8" => "⅞", # vulgar fraction seventh eigths
+    "\\1/8" => "⅛", # vulgar fraction one eighth
+    "\\3/8" => "⅜", # vulgar fraction three eighths
+    "\\5/8" => "⅝", # vulgar fraction five eighths
+    "\\7/8" => "⅞", # vulgar fraction seventh eighths
     "\\1/" => "⅟", # fraction numerator one
     "\\0/3" => "↉", # vulgar fraction zero thirds
     "\\1/4" => "¼", # vulgar fraction one quarter

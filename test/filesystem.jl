@@ -40,3 +40,9 @@ import Base.Filesystem: S_IRUSR, S_IRGRP, S_IROTH
   @test S_IRUSR & ~S_IRGRP == S_IRUSR
   @test typeof(S_IRUSR) == typeof(S_IRGRP) == typeof(S_IROTH)
 end
+
+@testset "Base.Filesystem docstrings" begin
+  undoc = Docs.undocumented_names(Base.Filesystem)
+  @test_broken isempty(undoc)
+  @test undoc == [:File, :Filesystem, :cptree, :futime, :rename, :sendfile, :unlink]
+end

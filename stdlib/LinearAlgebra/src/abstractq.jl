@@ -18,6 +18,10 @@ transpose(Q::AbstractQ{<:Real}) = AdjointQ(Q)
 transpose(Q::AbstractQ) = error("transpose not implemented for $(typeof(Q)). Consider using adjoint instead of transpose.")
 adjoint(adjQ::AdjointQ) = adjQ.Q
 
+(^)(Q::AbstractQ, p::Integer) = p < 0 ? power_by_squaring(inv(Q), -p) : power_by_squaring(Q, p)
+@inline Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{1}) = Q
+@inline Base.literal_pow(::typeof(^), Q::AbstractQ, ::Val{-1}) = inv(Q)
+
 # promotion with AbstractMatrix, at least for equal eltypes
 promote_rule(::Type{<:AbstractMatrix{T}}, ::Type{<:AbstractQ{T}}) where {T} =
     (@inline; Union{AbstractMatrix{T},AbstractQ{T}})
@@ -149,13 +153,16 @@ end
 # generically, treat AbstractQ like a matrix with its definite size
 qsize_check(Q::AbstractQ, B::AbstractVecOrMat) =
     size(Q, 2) == size(B, 1) ||
-        throw(DimensionMismatch("second dimension of Q, $(size(Q,2)), must coincide with first dimension of B, $(size(B,1))"))
+        throw(DimensionMismatch(lazy"second dimension of Q, $(size(Q,2)), must coincide with first dimension of B, $(size(B,1))"))
 qsize_check(A::AbstractVecOrMat, Q::AbstractQ) =
     size(A, 2) == size(Q, 1) ||
-        throw(DimensionMismatch("second dimension of A, $(size(A,2)), must coincide with first dimension of Q, $(size(Q,1))"))
+        throw(DimensionMismatch(lazy"second dimension of A, $(size(A,2)), must coincide with first dimension of Q, $(size(Q,1))"))
 qsize_check(Q::AbstractQ, P::AbstractQ) =
     size(Q, 2) == size(P, 1) ||
-        throw(DimensionMismatch("second dimension of A, $(size(Q,2)), must coincide with first dimension of B, $(size(P,1))"))
+        throw(DimensionMismatch(lazy"second dimension of A, $(size(Q,2)), must coincide with first dimension of B, $(size(P,1))"))
+
+# mimic the AbstractArray fallback
+*(Q::AbstractQ{<:Number}) = Q
 
 (*)(Q::AbstractQ, J::UniformScaling) = Q*J.λ
 function (*)(Q::AbstractQ, b::Number)
@@ -314,7 +321,7 @@ function lmul!(A::QRPackedQ, B::AbstractVecOrMat)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
     if mA != mB
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA) but B has dimensions ($mB, $nB)"))
+        throw(DimensionMismatch(lazy"matrix A has dimensions ($mA,$nA) but B has dimensions ($mB, $nB)"))
     end
     Afactors = A.factors
     @inbounds begin
@@ -350,7 +357,7 @@ function lmul!(adjA::AdjointQ{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
     if mA != mB
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA) but B has dimensions ($mB, $nB)"))
+        throw(DimensionMismatch(lazy"matrix A has dimensions ($mA,$nA) but B has dimensions ($mB, $nB)"))
     end
     Afactors = A.factors
     @inbounds begin
@@ -381,7 +388,7 @@ function rmul!(A::AbstractVecOrMat, Q::QRPackedQ)
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
     if nA != mQ
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA) but matrix Q has dimensions ($mQ, $nQ)"))
+        throw(DimensionMismatch(lazy"matrix A has dimensions ($mA,$nA) but matrix Q has dimensions ($mQ, $nQ)"))
     end
     Qfactors = Q.factors
     @inbounds begin
@@ -417,7 +424,7 @@ function rmul!(A::AbstractVecOrMat, adjQ::AdjointQ{<:Any,<:QRPackedQ})
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
     if nA != mQ
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA) but matrix Q has dimensions ($mQ, $nQ)"))
+        throw(DimensionMismatch(lazy"matrix A has dimensions ($mA,$nA) but matrix Q has dimensions ($mQ, $nQ)"))
     end
     Qfactors = Q.factors
     @inbounds begin
@@ -518,10 +525,10 @@ rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, adjQ::AdjointQ{<:Any,<:HessenbergQ{T}}
 # flexible left-multiplication (and adjoint right-multiplication)
 qsize_check(Q::Union{QRPackedQ,QRCompactWYQ,HessenbergQ}, B::AbstractVecOrMat) =
     size(B, 1) in size(Q.factors) ||
-        throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of Q, $(size(Q.factors))"))
+        throw(DimensionMismatch(lazy"first dimension of B, $(size(B,1)), must equal one of the dimensions of Q, $(size(Q.factors))"))
 qsize_check(A::AbstractVecOrMat, adjQ::AdjointQ{<:Any,<:Union{QRPackedQ,QRCompactWYQ,HessenbergQ}}) =
     (Q = adjQ.Q; size(A, 2) in size(Q.factors) ||
-        throw(DimensionMismatch("second dimension of A, $(size(A,2)), must equal one of the dimensions of Q, $(size(Q.factors))")))
+        throw(DimensionMismatch(lazy"second dimension of A, $(size(A,2)), must equal one of the dimensions of Q, $(size(Q.factors))")))
 
 det(Q::HessenbergQ) = _det_tau(Q.τ)
 
@@ -557,10 +564,10 @@ size(Q::LQPackedQ) = (n = size(Q.factors, 2); return n, n)
 
 qsize_check(adjQ::AdjointQ{<:Any,<:LQPackedQ}, B::AbstractVecOrMat) =
     size(B, 1) in size(adjQ.Q.factors) ||
-        throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of Q, $(size(adjQ.Q.factors))"))
+        throw(DimensionMismatch(lazy"first dimension of B, $(size(B,1)), must equal one of the dimensions of Q, $(size(adjQ.Q.factors))"))
 qsize_check(A::AbstractVecOrMat, Q::LQPackedQ) =
     size(A, 2) in size(Q.factors) ||
-        throw(DimensionMismatch("second dimension of A, $(size(A,2)), must equal one of the dimensions of Q, $(size(Q.factors))"))
+        throw(DimensionMismatch(lazy"second dimension of A, $(size(A,2)), must equal one of the dimensions of Q, $(size(Q.factors))"))
 
 # in-place right-application of LQPackedQs
 # these methods require that the applied-to matrix's (A's) number of columns

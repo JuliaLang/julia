@@ -1,7 +1,3 @@
-```@meta
-EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/docs/src/index.md"
-```
-
 # Dates
 
 ```@meta
@@ -22,7 +18,7 @@ represents a continuously increasing machine timeline based on the UT second [^1
 [`DateTime`](@ref) type is not aware of time zones (*naive*, in Python parlance),
 analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
 can be added through the [TimeZones.jl package](https://github.com/JuliaTime/TimeZones.jl/), which
-compiles the [IANA time zone database](http://www.iana.org/time-zones). Both [`Date`](@ref) and
+compiles the [IANA time zone database](https://www.iana.org/time-zones). Both [`Date`](@ref) and
 [`DateTime`](@ref) are based on the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) standard, which follows the proleptic Gregorian calendar.
 One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last
 day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists.
@@ -343,12 +339,12 @@ First the mapping is loaded into the `LOCALES` variable:
 julia> french_months = ["janvier", "février", "mars", "avril", "mai", "juin",
                         "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 
-julia> french_monts_abbrev = ["janv","févr","mars","avril","mai","juin",
+julia> french_months_abbrev = ["janv","févr","mars","avril","mai","juin",
                               "juil","août","sept","oct","nov","déc"];
 
 julia> french_days = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
 
-julia> Dates.LOCALES["french"] = Dates.DateLocale(french_months, french_monts_abbrev, french_days, [""]);
+julia> Dates.LOCALES["french"] = Dates.DateLocale(french_months, french_months_abbrev, french_days, [""]);
 ```
 
  The above mentioned functions can then be used to perform the queries:

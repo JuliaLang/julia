@@ -23,7 +23,7 @@ You can also use a stream for large amounts of data:
     `HTML` is currently exported to maintain
     backwards compatibility, but this export
     is deprecated. It is recommended to use
-    this type as `Docs.HTML` or to explicitly
+    this type as [`Docs.HTML`](@ref) or to explicitly
     import it from `Docs`.
 """
 mutable struct HTML{T}
@@ -81,7 +81,7 @@ You can also use a stream for large amounts of data:
     `Text` is currently exported to maintain
     backwards compatibility, but this export
     is deprecated. It is recommended to use
-    this type as `Docs.Text` or to explicitly
+    this type as [`Docs.Text`](@ref) or to explicitly
     import it from `Docs`.
 """
 mutable struct Text{T}

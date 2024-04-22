@@ -93,13 +93,15 @@ UnionAll
   var: TypeVar
     name: Symbol T
     lb: Union{}
-    ub: Any
+    ub: abstract type Any
   body: UnionAll
     var: TypeVar
       name: Symbol N
       lb: Union{}
-      ub: Any
-    body: Array{T, N} <: DenseArray{T, N}
+      ub: abstract type Any
+    body: mutable struct Array{T, N} <: DenseArray{T, N}
+      ref::MemoryRef{T}
+      size::NTuple{N, Int64}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
@@ -179,13 +181,13 @@ TypeName
     var: TypeVar
       name: Symbol T
       lb: Union{}
-      ub: Any
+      ub: abstract type Any
     body: UnionAll
       var: TypeVar
         name: Symbol N
         lb: Union{}
-        ub: Any
-      body: Array{T, N} <: DenseArray{T, N}
+        ub: abstract type Any
+      body: mutable struct Array{T, N} <: DenseArray{T, N}
   cache: SimpleVector
     ...
 
@@ -519,10 +521,6 @@ than the other.)  Likewise, `Tuple{Int,Vararg{Int}}` is not a subtype of `Tuple{
 considered more specific. However, `morespecific` does get a bonus for length: in particular,
 `Tuple{Int,Int}` is more specific than `Tuple{Int,Vararg{Int}}`.
 
-If you're debugging how methods get sorted, it can be convenient to define the function:
-
-```julia
-type_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b)
-```
-
-which allows you to test whether tuple type `a` is more specific than tuple type `b`.
+Additionally, if 2 methods are defined with identical signatures, per type-equal, then they
+will instead by compared by order of addition, such that the later method is more specific
+than the earlier one.

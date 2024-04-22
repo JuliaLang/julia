@@ -35,6 +35,8 @@ if !@isdefined(testenv_defined)
         const rr_exename = ``
     end
 
+    const test_relocated_depot = haskey(ENV, "RELOCATEDEPOT")
+
     function addprocs_with_testenv(X; rr_allowed=true, kwargs...)
         exename = rr_allowed ? `$rr_exename $test_exename` : test_exename
         if X isa Integer

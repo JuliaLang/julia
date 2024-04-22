@@ -2,8 +2,7 @@
 
 # tests for accurate updating of method tables
 
-using Base: get_world_counter
-tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
+using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
 # test simple method replacement
@@ -258,15 +257,13 @@ end
 # avoid adding this to Base
 function equal(ci1::Core.CodeInfo, ci2::Core.CodeInfo)
     return ci1.code == ci2.code &&
-           ci1.codelocs == ci2.codelocs &&
+           ci1.debuginfo == ci2.debuginfo &&
            ci1.ssavaluetypes == ci2.ssavaluetypes &&
            ci1.ssaflags == ci2.ssaflags &&
            ci1.method_for_inference_limit_heuristics == ci2.method_for_inference_limit_heuristics &&
-           ci1.linetable == ci2.linetable &&
            ci1.slotnames == ci2.slotnames &&
            ci1.slotflags == ci2.slotflags &&
-           ci1.slottypes == ci2.slottypes &&
-           ci1.rettype == ci2.rettype
+           ci1.slottypes == ci2.slottypes
 end
 equal(p1::Pair, p2::Pair) = p1.second == p2.second && equal(p1.first, p2.first)
 
@@ -456,3 +453,27 @@ let e = ExceptionUnwrapping.X(nothing)
     @test ExceptionUnwrapping.result == [false, true]
     empty!(ExceptionUnwrapping.result)
 end
+
+fshadow() = 1
+gshadow() = fshadow()
+@test fshadow() === 1
+@test gshadow() === 1
+fshadow_m1 = which(fshadow, ())
+fshadow() = 2
+fshadow() = 3
+@test fshadow() === 3
+@test gshadow() === 3
+fshadow_m3 = which(fshadow, ())
+Base.delete_method(fshadow_m1)
+@test fshadow() === 3
+@test gshadow() === 3
+Base.delete_method(fshadow_m3)
+fshadow_m2 = which(fshadow, ())
+@test fshadow() === 2
+@test gshadow() === 2
+Base.delete_method(fshadow_m2)
+@test_throws MethodError(fshadow, (), Base.tls_world_age()) gshadow()
+@test Base.morespecific(fshadow_m3, fshadow_m2)
+@test Base.morespecific(fshadow_m2, fshadow_m1)
+@test Base.morespecific(fshadow_m3, fshadow_m1)
+@test !Base.morespecific(fshadow_m2, fshadow_m3)
