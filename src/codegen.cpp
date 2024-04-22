@@ -2110,8 +2110,16 @@ static void print_stack_crumbs(jl_codectx_t &ctx) {
         }
         if (caller) {
             if (jl_is_method_instance(caller)) {
+                while (std::get<CallFrames>(it->second).size() > 1) {
+                    auto &frame = std::get<CallFrames>(it->second).front();
+                    errs() << std::get<0>(frame) << "<inlined> \n";
+                    errs() << "In " << std::get<1>(frame) << ":" << std::get<unsigned int>(frame) << "\n";
+                    std::get<CallFrames>(it->second).pop_front();
+                }
+                auto &frame = std::get<CallFrames>(it->second).front();
                 jl_((jl_value_t*)caller);
-                errs() << "In " << std::get<2>(it->second) << ":" << (int32_t)std::get<unsigned int>(it->second) << "\n";
+                errs() << "In " << std::get<1>(frame) << ":" << std::get<unsigned int>(frame) << "\n";
+                std::get<CallFrames>(it->second).pop_front();
             }
         }
         else
@@ -2124,7 +2132,8 @@ static jl_value_t *StackFrame(
         jl_value_t *linfo,
         std::string fn_name,
         std::string filepath,
-        int32_t lineno) {
+        int32_t lineno,
+        jl_value_t *inlined) {
 
     jl_value_t *StackFrame = jl_get_global(jl_base_module, jl_symbol("StackFrame"));
     assert(StackFrame != nullptr);
@@ -2135,41 +2144,83 @@ static jl_value_t *StackFrame(
         /* line */ jl_box_int32(lineno),
         /* linfo */ (jl_value_t *)linfo,
         /* from_c */ jl_false,
-        /* inlined */ jl_false,
+        /* inlined */ inlined,
         /* pointer */ jl_box_uint64(0)
     };
 
     jl_value_t *frame = nullptr;
     JL_TRY {
         frame = jl_apply_generic(StackFrame, args, 7);
-    } JL_CATCH {}
+    } JL_CATCH {
+        jl_safe_printf("Error creating stack frame\n");
+    }
     return frame;
 }
 
-static size_t append_stack_crumbs(jl_array_t *out, jl_codectx_t &ctx, size_t pos) JL_NOTSAFEPOINT {
-    jl_method_instance_t *caller = ctx.linfo;
-    size_t i = pos;
+static void push_frames(jl_codectx_t &ctx, jl_method_instance_t *caller, jl_method_instance_t *callee, int no_debug=false) {
+    CallFrames frames;
+    auto it = ctx.emission_context.enqueuers.find(callee);
+    if (it != ctx.emission_context.enqueuers.end())
+        return;
+    if (no_debug) { // Used in tojlinvoke
+        frames.push_back({ctx.funcName, "", 0});
+        ctx.emission_context.enqueuers.insert({callee, {caller, std::move(frames)}});
+        return;
+    }
+    auto DL = ctx.builder.getCurrentDebugLocation();
+    auto filename = std::string(DL->getFilename());
+    auto line = DL->getLine();
+    auto fname = std::string(DL->getScope()->getSubprogram()->getName());
+    frames.push_back({fname, filename, line});
+    auto DI = DL.getInlinedAt();
+    while (DI) {
+        auto filename = std::string(DI->getFilename());
+        auto line = DI->getLine();
+        auto fname = std::string(DI->getScope()->getSubprogram()->getName());
+        if (fname.compare("__init__") == 0)
+            jl_breakpoint(jl_nothing);
+        frames.push_back({fname, filename, line});
+        DI = DI->getInlinedAt();
+    }
+    ctx.emission_context.enqueuers.insert({callee, {caller, std::move(frames)}});
+}
+
+static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT {
+    jl_method_instance_t *caller = (jl_method_instance_t*)jl_nothing; //nothing serves as a sentinel for the bottom for the stack
+    push_frames(ctx, ctx.linfo, (jl_method_instance_t*)jl_nothing);
+    jl_array_t *out = jl_alloc_array_1d(jl_array_any_type, 0);
+    JL_GC_PUSH1(&out);
 
     while (true) {
         auto it = ctx.emission_context.enqueuers.find(caller);
-        if (it == ctx.emission_context.enqueuers.end())
+        if (it != ctx.emission_context.enqueuers.end()) {
+            caller = std::get<jl_method_instance_t *>(it->second);
+        } else {
             break;
-        caller = std::get<jl_method_instance_t *>(it->second);
-        std::string fn_name = std::get<1>(it->second);
-        std::string filepath = std::get<2>(it->second);
-        int32_t lineno = (int32_t)std::get<unsigned int>(it->second);
-        if (!caller)
-            break;
-
-        if (out != nullptr) {
-            jl_value_t *frame = StackFrame((jl_value_t *)caller, fn_name, filepath, lineno);
-            if (frame == nullptr)
-                return SIZE_MAX;
-            jl_array_ptr_set(out, i, frame);
         }
-        i += 1;
+        if (caller) {
+            if (jl_is_method_instance(caller)) {
+                while (std::get<CallFrames>(it->second).size() > 1) {
+                    auto &frame = std::get<CallFrames>(it->second).front();
+                    jl_value_t *stackframe = StackFrame(jl_nothing, std::get<0>(frame), std::get<1>(frame), std::get<unsigned int>(frame), jl_true);
+                    if (stackframe == nullptr)
+                        print_stack_crumbs(ctx);
+                    jl_array_ptr_1d_push(out, stackframe);
+                    std::get<CallFrames>(it->second).pop_front();
+                }
+                auto &frame = std::get<CallFrames>(it->second).front();
+                jl_value_t *stackframe = StackFrame((jl_value_t *)caller, std::get<0>(frame), std::get<1>(frame), std::get<unsigned int>(frame), jl_false);
+                if (stackframe == nullptr)
+                    print_stack_crumbs(ctx);
+                jl_array_ptr_1d_push(out, stackframe);
+                std::get<CallFrames>(it->second).pop_front();
+            }
+        }
+        else
+            break;
     }
-    return i - pos;
+    JL_GC_POP();
+    return out;
 }
 
 static void print_stacktrace(jl_codectx_t &ctx) {
@@ -2179,23 +2230,8 @@ static void print_stacktrace(jl_codectx_t &ctx) {
     // Temporarily operate in the current age
     size_t last_age = ct->world_age;
     ct->world_age = jl_get_world_counter();
-
-    // Walk stack once to count
-    size_t stack_len = append_stack_crumbs(nullptr, ctx, 0);
-    jl_array_t *bt = jl_alloc_array_1d(jl_array_any_type, stack_len + 1);
+    jl_array_t* bt = build_stack_crumbs(ctx);
     JL_GC_PUSH1(&bt);
-
-    // Walk again to create StackFrames
-    std::string filepath(ctx.file);
-    std::string fn_name(ctx.funcName);
-    jl_array_ptr_set(bt, 0, StackFrame((jl_value_t *)ctx.linfo, fn_name, filepath, ctx.line));
-    if (append_stack_crumbs(bt, ctx, 1) == SIZE_MAX) {
-        // Encountered an error when creating StackFrames
-        print_stack_crumbs(ctx);
-        JL_GC_POP();
-        ct->world_age = last_age;
-        return;
-    }
 
     // Call `reinit_stdio` to get TTY IO objects (w/ color)
     jl_value_t *reinit_stdio = jl_get_global(jl_base_module, jl_symbol("_reinit_stdio"));
@@ -2211,12 +2247,14 @@ static void print_stacktrace(jl_codectx_t &ctx) {
         jl_value_t *args[2] = { base_stderr, (jl_value_t *)bt };
         jl_apply_generic(show_backtrace, args, 2);
     } JL_CATCH {
+        jl_safe_printf("Error showing backtrace\n");
         print_stack_crumbs(ctx);
     }
 
     fprintf(stderr, "\n");
     JL_GC_POP();
     ct->world_age = last_age;
+    abort();
     return;
 }
 
@@ -5212,12 +5250,8 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
                         ctx.call_targets[codeinst] = {cc, return_roots, trampoline_decl, specsig};
-                        if (ctx.params->no_dynamic_dispatch) {
-                            auto filename = std::string(ctx.builder.getCurrentDebugLocation()->getFilename());
-                            auto line = ctx.builder.getCurrentDebugLocation()->getLine();
-                            if ((ctx.emission_context.enqueuers.find(mi) == ctx.emission_context.enqueuers.end()))
-                                ctx.emission_context.enqueuers[mi] = std::make_tuple(ctx.linfo, ctx.funcName, std::move(filename), line);
-                        }
+                        if (ctx.params->no_dynamic_dispatch)
+                            push_frames(ctx, ctx.linfo, mi);
                     }
                 }
             }
@@ -5228,10 +5262,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         if (ctx.params->no_dynamic_dispatch) {
             if (lival.constant) {
                 arraylist_push(&new_invokes, lival.constant);
-                auto filename = std::string(ctx.builder.getCurrentDebugLocation()->getFilename());
-                auto line = ctx.builder.getCurrentDebugLocation()->getLine();
-                if ((ctx.emission_context.enqueuers.find((jl_method_instance_t*)lival.constant) == ctx.emission_context.enqueuers.end()))
-                    ctx.emission_context.enqueuers[(jl_method_instance_t*)lival.constant] = std::make_tuple(ctx.linfo, ctx.funcName, std::move(filename), line);
+                push_frames(ctx, ctx.linfo, (jl_method_instance_t*)lival.constant);
             } else if (rt != jl_bottom_type) {
                 errs() << "Dynamic call to unknown function";
                 errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
@@ -6717,8 +6748,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     if (params.params->no_dynamic_dispatch) {
         arraylist_push(&new_invokes, codeinst->def);
         // TODO: Debuginfo!
-        if ((ctx.emission_context.enqueuers.find(codeinst->def) == ctx.emission_context.enqueuers.end()))
-            ctx.emission_context.enqueuers[codeinst->def] = std::make_tuple(ctx.linfo, ctx.funcName, "", 0);
+        push_frames(ctx, ctx.linfo, codeinst->def, 1);
         // else if (rt != jl_bottom_type) {
         //     errs() << "Tried emitting dynamic dispatch from ";
         //     jl_(ctx.linfo);
@@ -9880,7 +9910,6 @@ jl_llvm_functions_t jl_emit_codeinst(
     return decls;
 }
 
-extern "C" void jl_breakpoint(jl_value_t *v);
 void jl_compile_workqueue(
     jl_codegen_params_t &params,
     CompilationPolicy policy)
@@ -9935,8 +9964,6 @@ void jl_compile_workqueue(
                     auto decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
                     if (result_m)
                         it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
-                    else
-                        jl_breakpoint((jl_value_t*)codeinst);
                 }
             }
             if (it != params.compiled_functions.end()) {
@@ -9960,7 +9987,6 @@ void jl_compile_workqueue(
                     auto it = params.compiled_functions.find(codeinst);
                     errs() << "Bailed out to invoke when compiling:";
                     jl_(codeinst->def);
-                    jl_breakpoint((jl_value_t*)codeinst);
                     if (it != params.compiled_functions.end()) {
                         errs() << it->second.second.functionObject << "\n";
                         errs() << it->second.second.specFunctionObject << "\n";
