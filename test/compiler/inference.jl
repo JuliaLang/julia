@@ -1097,7 +1097,7 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 
 # PR #28284, check that constants propagate through calls to new
 struct t28284
-  x::Int
+    x::Int
 end
 f28284() = Val(t28284(1))
 @inferred f28284()
