@@ -1109,7 +1109,7 @@ pcnfloat(x) = prevfloat(x), x, nextfloat(x)
 import Base.Math: COSH_SMALL_X, H_SMALL_X, H_MEDIUM_X, H_LARGE_X
 
 @testset "sinh" begin
-    for T in (Float32, Float64)
+    for T in (Float16, Float32, Float64)
         @test sinh(zero(T)) === zero(T)
         @test sinh(-zero(T)) === -zero(T)
         @test sinh(nextfloat(zero(T))) === nextfloat(zero(T))
@@ -1117,15 +1117,17 @@ import Base.Math: COSH_SMALL_X, H_SMALL_X, H_MEDIUM_X, H_LARGE_X
         @test sinh(T(1000)) === T(Inf)
         @test sinh(-T(1000)) === -T(Inf)
         @test isnan_type(T, sinh(T(NaN)))
-        for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
-            @test sinh(x) ≈ sinh(big(x)) rtol=eps(T)
-            @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(T)
+        if T ∈ (Float32, Float64)
+            for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
+                @test sinh(x) ≈ sinh(big(x)) rtol=eps(T)
+                @test sinh(-x) ≈ sinh(big(-x)) rtol=eps(T)
+            end
         end
     end
 end
 
 @testset "cosh" begin
-    for T in (Float32, Float64)
+    for T in (Float16, Float32, Float64)
         @test cosh(zero(T)) === one(T)
         @test cosh(-zero(T)) === one(T)
         @test cosh(nextfloat(zero(T))) === one(T)
@@ -1133,15 +1135,17 @@ end
         @test cosh(T(1000)) === T(Inf)
         @test cosh(-T(1000)) === T(Inf)
         @test isnan_type(T, cosh(T(NaN)))
-        for x in Iterators.flatten(pcnfloat.([COSH_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
-            @test cosh(x) ≈ cosh(big(x)) rtol=eps(T)
-            @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(T)
+        if T ∈ (Float32, Float64)
+            for x in Iterators.flatten(pcnfloat.([COSH_SMALL_X(T), H_MEDIUM_X(T), H_LARGE_X(T)]))
+                @test cosh(x) ≈ cosh(big(x)) rtol=eps(T)
+                @test cosh(-x) ≈ cosh(big(-x)) rtol=eps(T)
+            end
         end
     end
 end
 
 @testset "tanh" begin
-    for T in (Float32, Float64)
+    for T in (Float16, Float32, Float64)
         @test tanh(zero(T)) === zero(T)
         @test tanh(-zero(T)) === -zero(T)
         @test tanh(nextfloat(zero(T))) === nextfloat(zero(T))
@@ -1149,9 +1153,11 @@ end
         @test tanh(T(1000)) === one(T)
         @test tanh(-T(1000)) === -one(T)
         @test isnan_type(T, tanh(T(NaN)))
-        for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), T(1.0), H_MEDIUM_X(T)]))
-            @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
-            @test tanh(-x) ≈ -tanh(big(x)) rtol=eps(T)
+        if T ∈ (Float32, Float64)
+            for x in Iterators.flatten(pcnfloat.([H_SMALL_X(T), T(1.0), H_MEDIUM_X(T)]))
+                @test tanh(x) ≈ tanh(big(x)) rtol=eps(T)
+                @test tanh(-x) ≈ -tanh(big(x)) rtol=eps(T)
+            end
         end
     end
     @test tanh(18.0) ≈ tanh(big(18.0)) rtol=eps(Float64)
@@ -1159,7 +1165,7 @@ end
 end
 
 @testset "asinh" begin
-    for T in (Float32, Float64)
+    for T in (Float16, Float32, Float64)
         @test asinh(zero(T)) === zero(T)
         @test asinh(-zero(T)) === -zero(T)
         @test asinh(nextfloat(zero(T))) === nextfloat(zero(T))
@@ -1173,7 +1179,7 @@ end
 end
 
 @testset "acosh" begin
-    for T in (Float32, Float64)
+    for T in (Float16, Float32, Float64)
         @test_throws DomainError acosh(T(0.1))
         @test acosh(one(T)) === zero(T)
         @test isnan_type(T, acosh(T(NaN)))
@@ -1184,7 +1190,7 @@ end
 end
 
 @testset "atanh" begin
-    for T in (Float32, Float64)
+    for T in (Float16, Float32, Float64)
         @test_throws DomainError atanh(T(1.1))
         @test atanh(zero(T)) === zero(T)
         @test atanh(-zero(T)) === -zero(T)
@@ -1470,6 +1476,25 @@ end
     # two cases where we have observed > 1 ULP in the past
     @test 0.0013653274095082324^-97.60372292227069 == 4.088393948750035e279
     @test 8.758520413376658e-5^70.55863059215994 == 5.052076767078296e-287
+
+    # issue #53881
+    c53881 = 2.2844135865398217e222 # check correctness within 2 ULPs
+    @test prevfloat(1.0) ^ -Int64(2)^62 ≈ c53881 atol=2eps(c53881)
+    @test 2.0 ^ typemin(Int) == 0.0
+    @test (-1.0) ^ typemin(Int) == 1.0
+    Z = Int64(2)
+    E = prevfloat(1.0)
+    @test E ^ (-Z^54) ≈ 7.38905609893065
+    @test E ^ (-Z^62) ≈ 2.2844135865231613e222
+    @test E ^ (-Z^63) == Inf
+    @test abs(E ^ (Z^62-1) * E ^ (-Z^62+1) - 1) <= eps(1.0)
+    n, x = -1065564664, 0.9999997040311492
+    @test abs(x^n - Float64(big(x)^n)) / eps(x^n) == 0 # ULPs
+    @test E ^ (big(2)^100 + 1) == 0
+    @test E ^ 6705320061009595392 == nextfloat(0.0)
+    n = Int64(1024 / log2(E))
+    @test E^n == Inf
+    @test E^float(n) == Inf
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.

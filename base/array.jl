@@ -598,21 +598,6 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     end
 end
 
-function _one(unit::T, x::AbstractMatrix) where T
-    require_one_based_indexing(x)
-    m,n = size(x)
-    m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    # Matrix{T}(I, m, m)
-    I = zeros(T, m, m)
-    for i in 1:m
-        I[i,i] = unit
-    end
-    I
-end
-
-one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
-oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
-
 ## Conversions ##
 
 convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)::T

@@ -249,52 +249,52 @@ struct SyntacticallyDefined{T}
     x::T
 end
 
-import Core.Compiler: Const, getfield_notundefined
+import Core.Compiler: Const, getfield_notuninit
 for T = (Base.RefValue, Maybe) # both mutable and immutable
     for name = (Const(1), Const(:x))
-        @test getfield_notundefined(T{String}, name)
-        @test getfield_notundefined(T{Integer}, name)
-        @test getfield_notundefined(T{Union{String,Integer}}, name)
-        @test getfield_notundefined(Union{T{String},T{Integer}}, name)
-        @test !getfield_notundefined(T{Int}, name)
-        @test !getfield_notundefined(T{<:Integer}, name)
-        @test !getfield_notundefined(T{Union{Int32,Int64}}, name)
-        @test !getfield_notundefined(T, name)
+        @test getfield_notuninit(T{String}, name)
+        @test getfield_notuninit(T{Integer}, name)
+        @test getfield_notuninit(T{Union{String,Integer}}, name)
+        @test getfield_notuninit(Union{T{String},T{Integer}}, name)
+        @test !getfield_notuninit(T{Int}, name)
+        @test !getfield_notuninit(T{<:Integer}, name)
+        @test !getfield_notuninit(T{Union{Int32,Int64}}, name)
+        @test !getfield_notuninit(T, name)
     end
     # throw doesn't account for undefined behavior
     for name = (Const(0), Const(2), Const(1.0), Const(:y), Const("x"),
                 Float64, String, Nothing)
-        @test getfield_notundefined(T{String}, name)
-        @test getfield_notundefined(T{Int}, name)
-        @test getfield_notundefined(T{Integer}, name)
-        @test getfield_notundefined(T{<:Integer}, name)
-        @test getfield_notundefined(T{Union{Int32,Int64}}, name)
-        @test getfield_notundefined(T, name)
+        @test getfield_notuninit(T{String}, name)
+        @test getfield_notuninit(T{Int}, name)
+        @test getfield_notuninit(T{Integer}, name)
+        @test getfield_notuninit(T{<:Integer}, name)
+        @test getfield_notuninit(T{Union{Int32,Int64}}, name)
+        @test getfield_notuninit(T, name)
     end
     # should not be too conservative when field isn't known very well but object information is accurate
-    @test getfield_notundefined(T{String}, Int)
-    @test getfield_notundefined(T{String}, Symbol)
-    @test getfield_notundefined(T{Integer}, Int)
-    @test getfield_notundefined(T{Integer}, Symbol)
-    @test !getfield_notundefined(T{Int}, Int)
-    @test !getfield_notundefined(T{Int}, Symbol)
-    @test !getfield_notundefined(T{<:Integer}, Int)
-    @test !getfield_notundefined(T{<:Integer}, Symbol)
+    @test getfield_notuninit(T{String}, Int)
+    @test getfield_notuninit(T{String}, Symbol)
+    @test getfield_notuninit(T{Integer}, Int)
+    @test getfield_notuninit(T{Integer}, Symbol)
+    @test !getfield_notuninit(T{Int}, Int)
+    @test !getfield_notuninit(T{Int}, Symbol)
+    @test !getfield_notuninit(T{<:Integer}, Int)
+    @test !getfield_notuninit(T{<:Integer}, Symbol)
 end
 # should be conservative when object information isn't accurate
-@test !getfield_notundefined(Any, Const(1))
-@test !getfield_notundefined(Any, Const(:x))
+@test !getfield_notuninit(Any, Const(1))
+@test !getfield_notuninit(Any, Const(:x))
 # tuples and namedtuples should be okay if not given accurate information
 for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tuple,
                     NamedTuple{(:a, :b), Tuple{Int,Int}}, NamedTuple{(:x,),Tuple{Any}}, NamedTuple],
     FieldType = Any[Int, Symbol, Any]
-    @test getfield_notundefined(TupleType, FieldType)
+    @test getfield_notuninit(TupleType, FieldType)
 end
 # skip analysis on fields that are known to be defined syntactically
-@test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
-@test Core.Compiler.getfield_notundefined(Const(Main), Const(:var))
-@test Core.Compiler.getfield_notundefined(Const(Main), Const(42))
-# high-level tests for `getfield_notundefined`
+@test Core.Compiler.getfield_notuninit(SyntacticallyDefined{Float64}, Symbol)
+@test Core.Compiler.getfield_notuninit(Const(Main), Const(:var))
+@test Core.Compiler.getfield_notuninit(Const(Main), Const(42))
+# high-level tests for `getfield_notuninit`
 @test Base.infer_effects() do
     Maybe{Int}()
 end |> !Core.Compiler.is_consistent
@@ -904,7 +904,7 @@ end |> Core.Compiler.is_foldable_nothrow
 @test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
-@test Core.Compiler.getfield_notundefined(WrapperOneField{Float64}, Symbol)
+@test Core.Compiler.getfield_notuninit(WrapperOneField{Float64}, Symbol)
 @test Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
@@ -996,7 +996,7 @@ end
 let effects = Base.infer_effects() do
         isdefined(defined_ref, :x)
     end
-    @test Core.Compiler.is_consistent(effects)
+    @test !Core.Compiler.is_consistent(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
 let effects = Base.infer_effects() do

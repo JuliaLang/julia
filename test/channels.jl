@@ -638,3 +638,10 @@ end
         @test n_avail(c) == 0
     end
 end
+
+@testset "Task properties" begin
+    f() = rand(2,2)
+    t = Task(f)
+    @test_throws ErrorException("Querying `scope` is disallowed. Use `current_scope` instead.") t.scope
+    @test t.state == :runnable
+end
