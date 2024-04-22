@@ -108,6 +108,33 @@ end
     @test reverse(str2) == Base.AnnotatedString("esac", [(2:3, :label => "oomph")])
 end
 
+@testset "Unicode" begin
+    for words in (["ᲃase", "cɦɒnɡeȿ", "can", "CHⱯNGE", "Сodeunıts"],
+                  ["Сodeunıts", "ᲃase", "cɦɒnɡeȿ", "can", "CHⱯNGE"])
+        ann_words = [Base.AnnotatedString(w, [(1:ncodeunits(w), :i => i)])
+                     for (i, w) in enumerate(words)]
+        ann_str = join(ann_words, '-')
+        for transform in (lowercase, uppercase, titlecase)
+            t_words = map(transform, words)
+            ann_t_words = [Base.AnnotatedString(w, [(1:ncodeunits(w), :i => i)])
+                        for (i, w) in enumerate(t_words)]
+            ann_t_str = join(ann_t_words, '-')
+            t_ann_str = transform(ann_str)
+            @test String(ann_t_str) == String(t_ann_str)
+            @test Base.annotations(ann_t_str) == Base.annotations(t_ann_str)
+        end
+        for transform in (uppercasefirst, lowercasefirst)
+            t_words = vcat(transform(first(words)), words[2:end])
+            ann_t_words = [Base.AnnotatedString(w, [(1:ncodeunits(w), :i => i)])
+                        for (i, w) in enumerate(t_words)]
+            ann_t_str = join(ann_t_words, '-')
+            t_ann_str = transform(ann_str)
+            @test String(ann_t_str) == String(t_ann_str)
+            @test Base.annotations(ann_t_str) == Base.annotations(t_ann_str)
+        end
+    end
+end
+
 @testset "AnnotatedIOBuffer" begin
     aio = Base.AnnotatedIOBuffer()
     # Append-only writing

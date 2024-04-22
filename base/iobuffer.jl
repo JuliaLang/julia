@@ -260,22 +260,32 @@ bytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
 position(io::GenericIOBuffer) = io.ptr - io.offset - 1
 
 function skip(io::GenericIOBuffer, n::Integer)
-    seekto = io.ptr + n
-    n < 0 && return seek(io, seekto-1) # Does error checking
-    io.ptr = min(seekto, io.size+1)
-    return io
+    skip(io, clamp(n, Int))
+end
+function skip(io::GenericIOBuffer, n::Int)
+    if signbit(n)
+        seekto = clamp(widen(position(io)) + widen(n), Int)
+        seek(io, seekto) # Does error checking
+    else
+        n_max = io.size + 1 - io.ptr
+        io.ptr += min(n, n_max)
+        io
+    end
 end
 
 function seek(io::GenericIOBuffer, n::Integer)
+    seek(io, clamp(n, Int))
+end
+function seek(io::GenericIOBuffer, n::Int)
     if !io.seekable
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
     # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
     #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
-    #(n < 0 || n > io.size) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
-    #io.ptr = n+1
-    io.ptr = min(max(0, n)+io.offset, io.size)+1
+    #(n < 0 || n > io.size - io.offset) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
+    #io.ptr = n + io.offset + 1
+    io.ptr = clamp(n, 0, io.size - io.offset) + io.offset + 1
     return io
 end
 
@@ -458,7 +468,7 @@ function take!(io::IOBuffer)
         elseif io.writable
             data = view(io.data, io.offset+1:nbytes+io.offset)
         else
-            data = copyto!(StringVector(io.size), 1, io.data, io.offset + 1, nbytes)
+            data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
         end
     else
         nbytes = bytesavailable(io)

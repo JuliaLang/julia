@@ -301,8 +301,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
-        nothrow = isdefined(stmt.mod, stmt.name)
-        consistent = nothrow && isconst(stmt.mod, stmt.name)
+        nothrow = consistent = isdefinedconst_globalref(stmt)
         return (consistent, nothrow, nothrow)
     elseif isa(stmt, Expr)
         (; head, args) = stmt

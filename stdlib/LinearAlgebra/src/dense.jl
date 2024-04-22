@@ -14,6 +14,7 @@ const NRM2_CUTOFF = 32
 const ISONE_CUTOFF = 2^21 # 2M
 
 function isone(A::AbstractMatrix)
+    require_one_based_indexing(A)  # multiplication not defined yet among offset matrices
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -491,8 +492,8 @@ julia> reshape(kron(v,w), (length(w), length(v)))
 ```
 """
 function kron(A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) where {T,S}
-    R = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
-    return kron!(R, A, B)
+    C = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
+    return kron!(C, A, B)
 end
 function kron(a::AbstractVector{T}, b::AbstractVector{S}) where {T,S}
     c = Vector{promote_op(*,T,S)}(undef, length(a)*length(b))
