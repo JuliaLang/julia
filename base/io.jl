@@ -800,11 +800,11 @@ end
 
 @noinline unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
     unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
-unsafe_write(s::IO, p::Ptr, n::Integer) = Int(unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n)))
+unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
 function write(s::IO, x::Ref{T}) where {T}
     x isa Ptr && error("write cannot copy from a Ptr")
     if isbitstype(T)
-        unsafe_write(s, x, Core.sizeof(T))
+        Int(unsafe_write(s, x, Core.sizeof(T)))
     else
         write(s, x[])
     end
