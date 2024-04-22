@@ -2059,9 +2059,9 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
     end
     if !_track_dependencies[]
         if !path_maybe_dir && !isfile(path)
-            throw(ArgumentError("including $(repr(path)): No such file"))
+            throw(SystemError("including file $(repr(path))", Libc.ENOENT))
         elseif path_maybe_dir && !ispath(path)
-            throw(ArgumentError("including $(repr(path)): No such file or directory"))
+            throw(SystemError("including file or folder $(repr(path))", Libc.ENOENT))
         end
     else
         @lock require_lock begin
