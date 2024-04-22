@@ -87,7 +87,7 @@ Most iterators' `IteratorSize` category can be determined from their type. In th
 the generic `IteratorSize(iterator) = IteratorSize(typeof(iterator))` fallback applies.
 However, some iterators (e.g. [`Iterators.cycle`](@ref)) have a size category that can only
 be determined at runtime. In this case the `IteratorSize(itr)` method will not be type
-stable and the `IteratorSize(::Type)` method will return `SizeUnkown`.
+stable and the `IteratorSize(::Type)` method will return `SizeUnknown`.
 
 ```jldoctest
 julia> Base.IteratorSize(1:5)
