@@ -168,7 +168,7 @@ const latex_symbols = Dict(
     "\\sixtyfourthrest"=>"𝅁",
     "\\onehundredtwentyeighthrest"=>"𝅂",
         # Notes
-    "\\musicalbreve"=>"𝅜",
+    "\\musicbreve"=>"𝅜",
     "\\wholenote"=>"𝅝",
     "\\halfnote"=>"𝅗𝅥",
     "\\sixteenthnote"=>"𝅘𝅥𝅯",
