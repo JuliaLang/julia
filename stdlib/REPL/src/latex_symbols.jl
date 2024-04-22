@@ -124,10 +124,10 @@ const latex_symbols = Dict(
     "\\doubleflat" => "𝄫",
     "\\doublesharp" => "𝄪",
         # Bars
-    "\\singlebarline"=>"𝄀",
-    "\\doublebarline"=>"𝄁",
-    "\\finalbarline"=>"𝄂",
-    "\\reversefinalbarline"=>"𝄃",
+    "\\musicsinglebarline"=>"𝄀",
+    "\\musicdoublebarline"=>"𝄁",
+    "\\musicfinalbarline"=>"𝄂",
+    "\\musicreversefinalbarline"=>"𝄃",
         # Codas
     "\\leftrepeatsign"=>"𝄆",
     "\\rightrepeatsign"=>"𝄇",
@@ -187,10 +187,10 @@ const latex_symbols = Dict(
         # Ornaments
     "\\gracenoteslash"=>"𝆔",
     "\\gracenotenoslash"=>"𝆕",
-    "\\tr"=>"𝆖",
-    "\\turn"=>"𝆗",
-    "\\invertedturn"=>"𝆘",
-    "\\turnslash"=>"𝆙",
+    "\\musictr"=>"𝆖",
+    "\\musicturn"=>"𝆗",
+    "\\musicinvertedturn"=>"𝆘",
+    "\\musicturnslash"=>"𝆙",
         # Pedals
     "\\pedalmark"=>"𝆮",
     "\\pedalupmark"=>"𝆯",
