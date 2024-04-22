@@ -577,8 +577,6 @@ end
 # Drop incorrect line numbers produced by nested macro calls.
 docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)
 
-function lookup_doc()
-
 # iscallexpr checks if an expression is a :call expression. The call expression may be
 # also part of a :where expression, so it unwraps the :where layers until it reaches the
 # "actual" expression
