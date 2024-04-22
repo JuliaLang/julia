@@ -261,11 +261,11 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"module" || k == K"toplevel"
         # Both these forms can't be lowered here; they need to just be quoted
-        # and passed through to a call to eval2.
+        # and passed through to a call to eval.
         # TODO: Is compile() the right place to do this?
         # TODO: Restrict to toplevel only
         call = makenode(ctx, ex, K"call",
-                        makenode(ctx, ex, K"Value", JuliaLowering.eval2),
+                        makenode(ctx, ex, K"Value", JuliaLowering.eval),
                         makenode(ctx, ex, K"Value", ex))
         compile(ctx, call, needs_value, in_tail_pos)
     elseif k == K"local_def" || k == K"local"

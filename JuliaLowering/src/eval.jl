@@ -129,37 +129,40 @@ function to_lowered_expr(mod, var_info, ex)
 end
 
 #-------------------------------------------------------------------------------
-function eval2(mod, exs::AbstractVector)
-    res = nothing
-    for e in exs
-        res = eval2(mod, e)
-    end
-    return res
-end
-
-# Like eval(), but uses code lowering defined by this package
-function eval2(mod, ex::SyntaxTree)
+# Our version of eval takes our own data structures
+function Core.eval(mod::Module, ex::SyntaxTree)
     k = kind(ex)
     if k == K"toplevel"
-        return eval2(mod, children(ex))
-    elseif k == K"module"
-        m2 = Module(ex[1].name_val)
-        eval2(m2, children(ex[2]))
-        return m2
+        x = nothing
+        for e in children(ex)
+            x = eval(mod, e)
+        end
+        return x
     end
     linear_ir = lower(mod, ex)
     expr_form = to_lowered_expr(mod, linear_ir.var_info, linear_ir)
-    Base.eval(mod, expr_form)
+    eval(mod, expr_form)
 end
 
-#-------------------------------------------------------------------------------
-function include2(mod, filename)
-    path, prev = Base._include_dependency(mod, filename)
+"""
+    include(mod::Module, path::AbstractString)
+
+Evaluate the contents of the input source file in the global scope of module
+`mod`. Every module (except those defined with baremodule) has its own
+definition of `include()` omitting the `mod` argument, which evaluates the file
+in that module. Returns the result of the last evaluated expression of the
+input file. During including, a task-local include path is set to the directory
+containing the file. Nested calls to include will search relative to that path.
+This function is typically used to load source interactively, or to combine
+files in packages that are broken into multiple source files.
+"""
+function include(mod::Module, path::AbstractString)
+    path, prev = Base._include_dependency(mod, path)
     code = read(path, String)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     try
-        return include_string(mod, code; filename=path)
+        return include_string(mod, code, path)
     finally
         if prev === nothing
             delete!(tls, :SOURCE_PATH)
@@ -169,8 +172,12 @@ function include2(mod, filename)
     end
 end
 
-function include_string(mod, str; filename=nothing)
-    eval2(mod, parseall(SyntaxTree, str; filename=filename))
-end
+"""
+    include_string(mod::Module, code::AbstractString, filename::AbstractString="string")
 
+Like `include`, except reads code from the given string rather than from a file.
+"""
+function include_string(mod::Module, code::AbstractString, filename::AbstractString="string")
+    eval(mod, parseall(SyntaxTree, code; filename=filename))
+end
 
