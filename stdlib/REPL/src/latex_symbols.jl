@@ -212,8 +212,8 @@ const latex_symbols = Dict(
     "\\crescendo"=>"𝆒",
     "\\decrescendo"=>"𝆓",
         # Ornaments
-    "\\grace note slash"=>"𝆔",
-    "\\grace note no slash"=>"𝆕",
+    "\\gracenoteslash"=>"𝆔",
+    "\\gracenotenoslash"=>"𝆕",
     "\\tr"=>"𝆖",
     "\\turn"=>"𝆗",
     "\\invertedturn"=>"𝆘",
@@ -224,9 +224,9 @@ const latex_symbols = Dict(
     "\\endofstimme"=>"𝆨",
     "\\degreeslash"=>"𝆩",
         # Pedals
-    "\\pedal mark"=>"𝆮",
-    "\\pedal up mark"=>"𝆯",
-    "\\half pedal mark"=>"𝆰",
+    "\\pedalmark"=>"𝆮",
+    "\\pedalupmark"=>"𝆯",
+    "\\halfpedalmark"=>"𝆰",
         # Miscellaneous symbols
     "\\glissandoup"=>"𝆱",
     "\\glissandodown"=>"𝆲",
