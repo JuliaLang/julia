@@ -2719,9 +2719,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_gc_markqueue_t *mq_master = NULL;
     int master_tid = jl_atomic_load(&gc_master_tid);
-    if (master_tid == -1) {
-        return;
-    }
+    assert(master_tid != -1);
     mq_master = &gc_all_tls_states[master_tid]->mark_queue;
     void *new_obj;
     jl_gc_chunk_t c;
@@ -2812,61 +2810,49 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * Correctness argument for the mark-loop termination protocol.
  *
  * Safety properties:
- * - No work items shall be in any thread's queues when `gc_mark_loop_barrier` observes
+ * - No work items shall be in any thread's queues when `gc_should_mark` observes
  * that `gc_n_threads_marking` is zero.
  *
  * - No work item shall be stolen from the master thread (i.e. mutator thread which started
  * GC and which helped the `jl_n_markthreads` - 1 threads to mark) after
- * `gc_mark_loop_barrier` observes that `gc_n_threads_marking` is zero. This property is
+ * `gc_should_mark` observes that `gc_n_threads_marking` is zero. This property is
  * necessary because we call `gc_mark_loop_serial` after marking the finalizer list in
  * `_jl_gc_collect`, and want to ensure that we have the serial mark-loop semantics there,
  * and that no work is stolen from us at that point.
  *
  * Proof:
- * - Suppose the master thread observes that `gc_n_threads_marking` is zero in
- * `gc_mark_loop_barrier` and there is a work item left in one thread's queue at that point.
- * Since threads try to steal from all threads' queues, this implies that all threads must
- * have tried to steal from the queue which still has a work item left, but failed to do so,
- * which violates the semantics of Chase-Lev's work-stealing queue.
- *
- * - Let E1 be the event "master thread writes -1 to gc_master_tid" and E2 be the even
- * "master thread observes that `gc_n_threads_marking` is zero". Since we're using
- * sequentially consistent atomics, E1 => E2. Now suppose one thread which is spinning in
- * `gc_should_mark` tries to enter the mark-loop after E2. In order to do so, it must
- * increment `gc_n_threads_marking` to 1 in an event E3, and then read `gc_master_tid` in an
- * event E4. Since we're using sequentially consistent atomics, E3 => E4. Since we observed
- * `gc_n_threads_marking` as zero in E2, then E2 => E3, and we conclude E1 => E4, so that
- * the thread which is spinning in `gc_should_mark` must observe that `gc_master_tid` is -1
- * and therefore won't enter the mark-loop.
+ * - If a thread observes that `gc_n_threads_marking` is zero inside `gc_should_mark`, that
+ * means that no thread has work on their queue, this is guaranteed because a thread may only exit
+ * `gc_mark_and_steal` when its own queue is empty, this information is synchronized by the
+ * seq-cst fetch_add to a thread that is in `gc_should_mark`. `gc_queue_observer_lock`
+ * guarantees that once `gc_n_threads_marking` reaches zero, no thread will increment it again,
+ * because incrementing is only legal from inside the lock. Therefore, no thread will reenter
+ * the mark-loop after `gc_n_threads_marking` reaches zero.
  */
 
-int gc_should_mark(jl_ptls_t ptls)
+int gc_should_mark(void)
 {
     int should_mark = 0;
-    int n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
-    // fast path
-    if (n_threads_marking == 0) {
-        return 0;
-    }
     uv_mutex_lock(&gc_queue_observer_lock);
     while (1) {
-        int tid = jl_atomic_load(&gc_master_tid);
-        // fast path
-        if (tid == -1) {
-            break;
-        }
-        n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
-        // fast path
+        int n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
         if (n_threads_marking == 0) {
             break;
         }
+        int tid = jl_atomic_load_relaxed(&gc_master_tid);
+        assert(tid != -1);
         size_t work = gc_count_work_in_queue(gc_all_tls_states[tid]);
         for (tid = gc_first_tid; tid < gc_first_tid + jl_n_markthreads; tid++) {
-            work += gc_count_work_in_queue(gc_all_tls_states[tid]);
+            jl_ptls_t ptls2 = gc_all_tls_states[tid];
+            if (ptls2 == NULL) {
+                continue;
+            }
+            work += gc_count_work_in_queue(ptls2);
         }
         // if there is a lot of work left, enter the mark loop
         if (work >= 16 * n_threads_marking) {
-            jl_atomic_fetch_add(&gc_n_threads_marking, 1);
+            jl_atomic_fetch_add(&gc_n_threads_marking, 1); // A possibility would be to allow a thread that found lots
+                                                           // of work to increment this
             should_mark = 1;
             break;
         }
@@ -2878,9 +2864,7 @@ int gc_should_mark(jl_ptls_t ptls)
 
 void gc_wake_all_for_marking(jl_ptls_t ptls)
 {
-    jl_atomic_store(&gc_master_tid, ptls->tid);
     uv_mutex_lock(&gc_threads_lock);
-    jl_atomic_fetch_add(&gc_n_threads_marking, 1);
     uv_cond_broadcast(&gc_threads_cond);
     uv_mutex_unlock(&gc_threads_lock);
 }
@@ -2888,12 +2872,14 @@ void gc_wake_all_for_marking(jl_ptls_t ptls)
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
 {
     if (master) {
+        jl_atomic_store(&gc_master_tid, ptls->tid);
+        jl_atomic_fetch_add(&gc_n_threads_marking, 1);
         gc_wake_all_for_marking(ptls);
         gc_mark_and_steal(ptls);
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
     while (1) {
-        int should_mark = gc_should_mark(ptls);
+        int should_mark = gc_should_mark();
         if (!should_mark) {
             break;
         }
