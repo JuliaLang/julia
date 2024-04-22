@@ -123,15 +123,11 @@ const latex_symbols = Dict(
         # Accidentals
     "\\doubleflat" => "𝄫",
     "\\doublesharp" => "𝄪",
-    "\\quartertoneflat" => "𝄳",
-    "\\quartertonesharp" => "𝄲",
         # Bars
     "\\singlebarline"=>"𝄀",
     "\\doublebarline"=>"𝄁",
     "\\finalbarline"=>"𝄂",
     "\\reversefinalbarline"=>"𝄃",
-    "\\dashedbarline"=>"𝄄",
-    "\\shortbarline"=>"𝄅",
         # Codas
     "\\leftrepeatsign"=>"𝄆",
     "\\rightrepeatsign"=>"𝄇",
@@ -142,18 +138,9 @@ const latex_symbols = Dict(
         # Holds and pauses
     "\\fermata"=>"𝄐",
     "\\fermatabelow"=>"𝄑",
-    "\\breathmark"=>"𝄒",
-    "\\caesura"=>"𝄓",
         # Staff brackets
-    "\\brace"=>"𝄔",
-    "\\bracket"=>"𝄕",
-        # Staves
-    "\\onelinestaff"=>"𝄖",
-    "\\twolinestaff"=>"𝄗",
-    "\\threelinestaff"=>"𝄘",
-    "\\fourlinestaff"=>"𝄙",
-    "\\fivelinestaff"=>"𝄚",
-    "\\sixlinestaff"=>"𝄛",
+    "\\musicbrace"=>"𝄔",
+    "\\musicbracket"=>"𝄕",
         # Clefs
     "\\gclef"=>"𝄞",
     "\\gclefottavaalta"=>"𝄟",
@@ -162,10 +149,6 @@ const latex_symbols = Dict(
     "\\fclef"=>"𝄢",
     "\\fclefottavaalta"=>"𝄣",
     "\\fclefottavabassa"=>"𝄤",
-    "\\drumclef1"=>"𝄥",
-    "\\drumclef2"=>"𝄦",
-        # Rest
-    "\\multiplemeasurerest"=>"𝄩",
         # Time signatures
     "\\commontime"=>"𝄴",
     "\\cuttime"=>"𝄵",
@@ -184,12 +167,6 @@ const latex_symbols = Dict(
     "\\thirtysecondrest"=>"𝅀",
     "\\sixtyfourthrest"=>"𝅁",
     "\\onehundredtwentyeighthrest"=>"𝅂",
-        # Noteheads
-    "\\xnotehead"=>"𝅃",
-    "\\plusnotehead"=>"𝅄",
-    "\\circlexnotehead"=>"𝅅",
-    "\\voidnotehead"=>"𝅗",
-    "\\noteheadblack"=>"𝅘",
         # Notes
     "\\musicalbreve"=>"𝅜",
     "\\wholenote"=>"𝅝",
@@ -198,10 +175,6 @@ const latex_symbols = Dict(
     "\\thirtysecondnote"=>"𝅘𝅥𝅰",
     "\\sixtyfourthnote"=>"𝅘𝅥𝅱",
     "\\onehundredtwentyeighthnote"=>"𝅘𝅥𝅲",
-        # Tremolos
-    "\\fingeredtremolo1"=>"𝅪",
-    "\\fingeredtremolo2"=>"𝅫",
-    "\\fingeredtremolo3"=>"𝅬",
         # Articulation
     "\\arpeggiatoup"=>"𝆃",
     "\\arpeggiatodown"=>"𝆄",
@@ -218,11 +191,6 @@ const latex_symbols = Dict(
     "\\turn"=>"𝆗",
     "\\invertedturn"=>"𝆘",
     "\\turnslash"=>"𝆙",
-        # Analytics
-    "\\hauptstimme"=>"𝆦",
-    "\\nebenstimme"=>"𝆧",
-    "\\endofstimme"=>"𝆨",
-    "\\degreeslash"=>"𝆩",
         # Pedals
     "\\pedalmark"=>"𝆮",
     "\\pedalupmark"=>"𝆯",
@@ -230,55 +198,6 @@ const latex_symbols = Dict(
         # Miscellaneous symbols
     "\\glissandoup"=>"𝆱",
     "\\glissandodown"=>"𝆲",
-
-    #Mensural notation
-        # Mensural notes
-    "\\maxima"=>"𝆶",
-    "\\longa"=>"𝆷",
-    "\\brevis"=>"𝆸",
-    "\\semibreviswhite"=>"𝆹",
-    "\\semibrevisblack"=>"𝆺",
-    "\\minima"=>"𝆹𝅥",
-    "\\minimablack"=>"𝆺𝅥",
-    "\\semiminimawhite"=>"𝆹𝅥𝅮",
-    "\\semiminimablack"=>"𝆺𝅥𝅮",
-    "\\fusawhite"=>"𝆹𝅥𝅯",
-    "\\fusablack"=>"𝆺𝅥𝅯",
-        # Mensural rests
-    "\\longaperfectarest"=>"𝇁",
-    "\\longaimperfectarest"=>"𝇂",
-    "\\brevisrest"=>"𝇃",
-    "\\semibrevisrest"=>"𝇄",
-    "\\minimarest"=>"𝇅",
-    "\\semiminimarest"=>"𝇆",
-        # Mensural prolations
-    "\\tempusperfectumcumprolationeperfecta"=>"𝇇",
-    "\\tempusperfectumcumprolationeimperfecta"=>"𝇈",
-    "\\tempusperfectumcumprolationeperfectadiminution1"=>"𝇉",
-    "\\tempusimperfectumcumprolationeperfecta"=>"𝇊",
-    "\\tempusimperfectumcumprolationeimperfecta"=>"𝇋",
-    "\\tempusimperfectumcumprolationeimperfectadiminution1"=>"𝇌",
-    "\\tempusimperfectumcumprolationeimperfectadiminution2"=>"𝇍",
-    "\\tempusimperfectumcumprolationeimperfectadiminution-"=>"𝇎",
-
-    # Gregorian notation
-        # Clefs
-    "\\gregoriancclef"=>"𝇐",
-    "\\gregorianfclef"=>"𝇑",
-        # Accidental
-    "\\squareb"=>"𝇒",
-        # Notes
-    "\\virga"=>"𝇓",
-    "\\podatus"=>"𝇔",
-    "\\clivis"=>"𝇕",
-    "\\scandicus"=>"𝇖",
-    "\\climacus"=>"𝇗",
-    "\\torculus"=>"𝇘",
-    "\\porrectus"=>"𝇙",
-    "\\porrectusflexus"=>"𝇚",
-    "\\scandicusflexus"=>"𝇛",
-    "\\torculusresupinus"=>"𝇜",
-    "\\pessubpunctis"=>"𝇝",
 
     # Superscripts
     "\\^0" => "⁰",
