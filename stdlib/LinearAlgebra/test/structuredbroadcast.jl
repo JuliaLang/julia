@@ -17,10 +17,21 @@ using Test, LinearAlgebra
     M = Matrix(rand(N,N))
     structuredarrays = (D, B, T, U, L, M)
     fstructuredarrays = map(Array, structuredarrays)
+
+    # help functions used to ensure simple structured broadcast is stable
+    mul2(X) = (g(x) = X .* 2.0; @inferred(g(X)))
+    mult2(X) = (g(X) = X .* (2.0,); @inferred(g(X)))
+    mulinf(X) = (g(x) = x .* Inf; @inferred(g(X)))
+    lpow2(X) = (g(X) = X .^ 2; @inferred(g(X)))
+    lpow0(X) = (g(X) = X .^ 0; @inferred(g(X)))
+    pow2(X) = (g(x) = (two = 2; x.^two); @inferred(g(X)))
+    lpow_1(X) = (g(X) = X .^ -1; @inferred(g(X)))
+    powt2(X) = (g(X) = X .^ (2,); @inferred(g(X)))
+
     for (X, fX) in zip(structuredarrays, fstructuredarrays)
-        @test (Q = broadcast(sin, X); typeof(Q) == typeof(X) && Q == broadcast(sin, fX))
+        @test (Q = @inferred(broadcast(sin, X)); typeof(Q) == typeof(X) && Q == broadcast(sin, fX))
         @test broadcast!(sin, Z, X) == broadcast(sin, fX)
-        @test (Q = broadcast(cos, X); Q isa Matrix && Q == broadcast(cos, fX))
+        @test (Q = @inferred(broadcast(cos, X)); Q isa Matrix && Q == broadcast(cos, fX))
         @test broadcast!(cos, Z, X) == broadcast(cos, fX)
         @test (Q = broadcast(*, s, X); typeof(Q) == typeof(X) && Q == broadcast(*, s, fX))
         @test broadcast!(*, Z, s, X) == broadcast(*, s, fX)
@@ -29,18 +40,12 @@ using Test, LinearAlgebra
         @test (Q = broadcast(*, s, fV, fA, X); Q isa Matrix && Q == broadcast(*, s, fV, fA, fX))
         @test broadcast!(*, Z, s, fV, fA, X) == broadcast(*, s, fV, fA, fX)
 
-        @test X .* 2.0 == X .* (2.0,) == fX .* 2.0
-        @test X .* 2.0 isa typeof(X)
-        @test X .* (2.0,) isa typeof(X)
-        @test isequal(X .* Inf, fX .* Inf)
+        @test mul2(X)::typeof(X) == mult2(X)::typeof(X) == mult2(fX)
+        @test isequal(mulinf(X), mulinf(fX))
 
-        two = 2
-        @test X .^ 2 ==  X .^ (2,) == fX .^ 2 == X .^ two
-        @test X .^ 2 isa typeof(X)
-        @test X .^ (2,) isa typeof(X)
-        @test X .^ two isa typeof(X)
-        @test X .^ 0 == fX .^ 0
-        @test X .^ -1 == fX .^ -1
+        @test lpow2(X)::typeof(X) == powt2(X)::typeof(X) == pow2(X)::typeof(X) == lpow2(fX)
+        @test lpow0(X) == lpow0(fX)
+        @test lpow_1(X) == lpow_1(fX)
 
         for (Y, fY) in zip(structuredarrays, fstructuredarrays)
             @test broadcast(+, X, Y) == broadcast(+, fX, fY)
@@ -65,9 +70,9 @@ using Test, LinearAlgebra
     Ttris = typeof.((UpperTriangular(parent(UU)), LowerTriangular(parent(UU))))
     funittriangulars = map(Array, unittriangulars)
     for (X, fX, Ttri) in zip(unittriangulars, funittriangulars, Ttris)
-        @test (Q = broadcast(sin, X); typeof(Q) == Ttri && Q == broadcast(sin, fX))
+        @test (Q = @inferred(broadcast(sin, X)); typeof(Q) == Ttri && Q == broadcast(sin, fX))
         @test broadcast!(sin, Z, X) == broadcast(sin, fX)
-        @test (Q = broadcast(cos, X); Q isa Matrix && Q == broadcast(cos, fX))
+        @test (Q = @inferred(broadcast(cos, X)); Q isa Matrix && Q == broadcast(cos, fX))
         @test broadcast!(cos, Z, X) == broadcast(cos, fX)
         @test (Q = broadcast(*, s, X); typeof(Q) == Ttri && Q == broadcast(*, s, fX))
         @test broadcast!(*, Z, s, X) == broadcast(*, s, fX)
@@ -76,18 +81,14 @@ using Test, LinearAlgebra
         @test (Q = broadcast(*, s, fV, fA, X); Q isa Matrix && Q == broadcast(*, s, fV, fA, fX))
         @test broadcast!(*, Z, s, fV, fA, X) == broadcast(*, s, fV, fA, fX)
 
-        @test X .* 2.0 == X .* (2.0,) == fX .* 2.0
-        @test X .* 2.0 isa Ttri
-        @test X .* (2.0,) isa Ttri
-        @test isequal(X .* Inf, fX .* Inf)
+        @test mul2(X)::Ttri == mult2(X)::Ttri == mul2(fX)
+        @test isequal(mulinf(X), mulinf(fX))
 
         two = 2
-        @test X .^ 2 ==  X .^ (2,) == fX .^ 2 == X .^ two
-        @test X .^ 2 isa typeof(X) # special cased, as isstructurepreserving
-        @test X .^ (2,) isa Ttri
-        @test X .^ two isa Ttri
-        @test X .^ 0 == fX .^ 0
-        @test X .^ -1 == fX .^ -1
+        @test lpow2(X)::typeof(X) == # special cased, as isstructurepreserving
+              powt2(X)::Ttri == pow2(X)::Ttri == lpow2(fX)
+        @test lpow0(X) == lpow0(fX)
+        @test lpow_1(X) == lpow_1(fX)
 
         for (Y, fY) in zip(unittriangulars, funittriangulars)
             @test broadcast(+, X, Y) == broadcast(+, fX, fY)
@@ -335,6 +336,18 @@ end
         A = [1 3; 2 4]
         U = UpperTriangular([(i+j)*A for i in 1:3, j in 1:3])
         standardbroadcastingtests(U, UpperTriangular)
+    end
+end
+
+@testset "Issue 54087: size-1 structured matrix's broadcast" begin
+    Ns = 1, 3
+    D1, D2 = map(N->Diagonal(rand(N)), Ns)
+    B1, B2 = map(N->Bidiagonal(rand(N), rand(N - 1), :U), Ns)
+    T1, T2 = map(N->Tridiagonal(rand(N - 1), rand(N), rand(N - 1)), Ns)
+    Ss = [D1, D2, B1, B2, T1, T2]
+    MSs = Matrix.(Ss)
+    for ((S1, M1), (S2, M2)) in Iterators.product(zip(Ss, MSs), zip(Ss, MSs))
+        @test S1 .+ S2 == M1 .+ M2
     end
 end
 

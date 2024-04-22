@@ -78,7 +78,7 @@ find_uplo(bc::Broadcasted) = mapfoldl(find_uplo, merge_uplos, Broadcast.cat_nest
 function structured_broadcast_alloc(bc, ::Type{Bidiagonal}, ::Type{ElType}, n) where {ElType}
     uplo = n > 0 ? find_uplo(bc) : 'U'
     n1 = max(n - 1, 0)
-    if uplo == 'T'
+    if count_structedmatrix(Bidiagonal, bc) > 1 && uplo == 'T'
         return Tridiagonal(Array{ElType}(undef, n1), Array{ElType}(undef, n), Array{ElType}(undef, n1))
     end
     return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n1), uplo)
@@ -135,24 +135,36 @@ iszerodefined(::Type{<:Number}) = true
 iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
 iszerodefined(::Type{<:UniformScaling{T}}) where T = iszerodefined(T)
 
-fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
+count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_nested(bc); init = 0)
+
+function fzeropreserving(bc)
+    n = count_structedmatrix(StructuredMatrix, bc)
+    v = fzero(bc, Val(n==1))
+    !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0)
+end
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
 # expression is stable.  We can test the zero-preservability by applying the function
 # in cases where all other arguments are known scalars against a zero from the structured
 # matrix. If any non-structured matrix argument is not a known scalar, we give up.
-fzero(x::Number) = x
-fzero(::Type{T}) where T = T
-fzero(r::Ref) = r[]
-fzero(t::Tuple{Any}) = t[1]
-fzero(S::StructuredMatrix) = zero(eltype(S))
-fzero(::StructuredMatrix{<:AbstractMatrix{T}}) where {T<:Number} = haszero(T) ? zero(T)*I : missing
-fzero(x) = missing
-function fzero(bc::Broadcast.Broadcasted)
-    args = map(fzero, bc.args)
-    return any(ismissing, args) ? missing : bc.f(args...)
+fzero(x::Number, ::Val) = x
+fzero(::Type{T}, ::Val) where T = T
+fzero(r::Union{Ref,AbstractArray{<:Any,0}}, ::Val) = r[]
+fzero(t::Tuple{Any}, ::Val) = t[1]
+# The check below is tricky as size-1 `StructuredMatrix`s behave like scalar during broadcast.
+# So we have to check their size if there are more than 1 broadcasted arguments which <: StructuredMatrix.
+fzero(S::StructuredMatrix, ::Val{O}) where {O} = !O && isone(size(S, 1)) ? S[1, 1] : zero(eltype(S))
+fzero(S::StructuredMatrix{<:AbstractMatrix{T}}, ::Val{O}) where {T<:Number,O} = !O && isone(size(S, 1)) ? S[1, 1] : haszero(T) ? zero(T)*I : missing
+fzero(x, ::Val) = missing
+@inline function fzero(bc::Broadcast.Broadcasted, v::Val)
+    args = map(Base.Fix2(fzero, v), bc.args)
+    return anymissing(args) ? missing : bc.f(args...)
 end
+# force unroll to keep stability
+anymissing(x::Tuple{Any,Vararg}) = anymissing(Base.tail(x))
+anymissing(::Tuple{Missing,Vararg}) = true
+anymissing(::Tuple{}) = false
 
-function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
+Base.@constprop :aggressive function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
     inds = axes(bc)
     fzerobc = fzeropreserving(bc)
     if isstructurepreserving(bc) || (fzerobc && !(T <: Union{SymTridiagonal,UnitLowerTriangular,UnitUpperTriangular}))
