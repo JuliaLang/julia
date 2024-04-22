@@ -32,14 +32,15 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     code::SyntaxList{GraphType, Vector{NodeId}}
     next_var_id::Ref{Int}
+    is_toplevel_thunk::Bool
     return_type::Union{Nothing,NodeId}
     var_info::Dict{VarId,VarInfo}
     mod::Module
 end
 
-function LinearIRContext(ctx, return_type)
+function LinearIRContext(ctx, is_toplevel_thunk, return_type)
     LinearIRContext(ctx.graph, SyntaxList(ctx.graph), ctx.next_var_id,
-                    return_type, ctx.var_info, ctx.mod)
+                    is_toplevel_thunk, return_type, ctx.var_info, ctx.mod)
 end
 
 function is_valid_body_ir_argument(ex)
@@ -259,15 +260,6 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
         emit(ctx, ex)
         nothing
-    elseif k == K"module" || k == K"toplevel"
-        # Both these forms can't be lowered here; they need to just be quoted
-        # and passed through to a call to eval.
-        # TODO: Is compile() the right place to do this?
-        # TODO: Restrict to toplevel only
-        call = makenode(ctx, ex, K"call",
-                        makenode(ctx, ex, K"Value", JuliaLowering.eval),
-                        makenode(ctx, ex, K"Value", ex))
-        compile(ctx, call, needs_value, in_tail_pos)
     elseif k == K"local_def" || k == K"local"
         nothing
     else
@@ -371,7 +363,7 @@ function compile_lambda(outer_ctx, ex)
     lambda_info = ex.lambda_info
     return_type = nothing # FIXME
     # TODO: Add assignments for reassigned arguments to body using lambda_info.args
-    ctx = LinearIRContext(outer_ctx, return_type)
+    ctx = LinearIRContext(outer_ctx, lambda_info.is_toplevel_thunk, return_type)
     compile_body(ctx, ex[1])
     slot_rewrites = Dict{VarId,Int}()
     _add_slots!(slot_rewrites, ctx.var_info, (arg.var_id for arg in lambda_info.args))
@@ -391,7 +383,7 @@ function linearize_ir(ctx, ex)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
     # required to call reparent() ...
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.next_var_id,
-                           nothing, ctx.var_info, ctx.mod)
+                           false, nothing, ctx.var_info, ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     setattr!(graph, res.id, var_info=ctx.var_info)
     _ctx, res

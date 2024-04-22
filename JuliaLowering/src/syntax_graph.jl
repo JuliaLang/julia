@@ -81,6 +81,10 @@ function JuliaSyntax.children(graph::SyntaxGraph, id)
     @view graph.edges[graph.edge_ranges[id]]
 end
 
+function JuliaSyntax.children(graph::SyntaxGraph, id, r::UnitRange)
+    @view graph.edges[graph.edge_ranges[id][r]]
+end
+
 function JuliaSyntax.child(graph::SyntaxGraph, id::NodeId, i::Integer)
     graph.edges[graph.edge_ranges[id][i]]
 end
@@ -184,7 +188,7 @@ function Base.getindex(tree::SyntaxTree, i::Integer)
 end
 
 function Base.getindex(tree::SyntaxTree, r::UnitRange)
-    (child(tree, i) for i in r)
+    SyntaxList(tree.graph, children(tree.graph, tree.id, r))
 end
 
 Base.firstindex(tree::SyntaxTree) = 1
@@ -277,8 +281,10 @@ JuliaSyntax.source_location(tree::SyntaxTree) = source_location(sourceref(tree))
 JuliaSyntax.first_byte(tree::SyntaxTree) = first_byte(sourceref(tree))
 JuliaSyntax.last_byte(tree::SyntaxTree) = last_byte(sourceref(tree))
 
+const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId}
+
 function SyntaxTree(graph::SyntaxGraph, node::SyntaxNode)
-    ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=Union{SourceRef,NodeId},
+    ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
                        value=Any, name_val=String)
     id = _convert_nodes(freeze_attrs(graph), node)
     return SyntaxTree(graph, id)

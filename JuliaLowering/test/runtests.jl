@@ -1,6 +1,7 @@
 using Test
 
 using JuliaLowering
+using JuliaSyntax
 using JuliaLowering: @ast
 
 @testset "JuliaLowering.jl" begin
@@ -42,5 +43,53 @@ JuliaLowering.include_string(test_mod, """
 @test test_mod.y == 202
 @test JuliaLowering.include_string(test_mod, "x + y") == 303
 
+# module
+A = JuliaLowering.include_string(test_mod, """
+module A
+    function g()
+        return "hi"
+    end
+end
+""", "module_test")
+@test A isa Module
+@test A.g() == "hi"
+@test A.include isa Function
+@test A.Base === Base
+@test A.eval(:(x = -1)) == -1 && A.x == -1
+
+B = JuliaLowering.include_string(test_mod, """
+baremodule B
+end
+""", "baremodule_test")
+@test B.Core === Core
+@test !isdefined(B, :include)
+@test !isdefined(B, :Base)
+
+# using / import
+JuliaLowering.include_string(test_mod, """
+    using JuliaSyntax
+    using JuliaLowering: SyntaxTree
+    using JuliaLowering: SyntaxTree as st
+    import JuliaLowering: SyntaxTree as st1, SyntaxTree as st2
+""")
+@test test_mod.SyntaxTree === JuliaLowering.SyntaxTree
+@test test_mod.st === JuliaLowering.SyntaxTree
+@test test_mod.st1 === JuliaLowering.SyntaxTree
+@test test_mod.st2 === JuliaLowering.SyntaxTree
+@test test_mod.parsestmt === JuliaSyntax.parsestmt
+
+C = JuliaLowering.include_string(test_mod, """
+module C
+    module D
+        function f()
+            "hi"
+        end
+    end
+    module E
+        using ...C.D: f
+    end
+end
+""")
+@test C.D.f === C.E.f
 
 end

@@ -18,18 +18,19 @@ end
 struct DesugaringContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     next_var_id::Ref{VarId}
+    mod::Module
 end
 
-function DesugaringContext(ctx)
+function DesugaringContext(ctx, mod)
     graph = syntax_graph(ctx)
     ensure_attributes!(graph,
                        kind=Kind, syntax_flags=UInt16, green_tree=GreenNode,
-                       source_pos=Int, source=Union{SourceRef,NodeId},
+                       source_pos=Int, source=SourceAttrType,
                        value=Any, name_val=String,
                        scope_type=Symbol, # :hard or :soft
                        var_id=VarId,
                        lambda_info=LambdaInfo)
-    DesugaringContext(freeze_attrs(graph), Ref{VarId}(1))
+    DesugaringContext(freeze_attrs(graph), Ref{VarId}(1), mod)
 end
 
 #-------------------------------------------------------------------------------
@@ -382,6 +383,154 @@ function expand_function_def(ctx, ex)
     end
 end
 
+function _append_importpath(ctx, path_spec, path)
+    prev_was_dot = true
+    for component in children(path)
+        k = kind(component)
+        if k == K"quote"
+            # Permit quoted path components as in
+            # import A.(:b).:c
+            component = component[1]
+        end
+        @chk kind(component) in (K"Identifier", K".")
+        name = component.name_val
+        is_dot = kind(component) == K"."
+        if is_dot && !prev_was_dot
+            throw(LoweringError(component, "invalid import path: `.` in identifier path"))
+        end
+        prev_was_dot = is_dot
+        push!(path_spec, @ast(ctx, component, name::K"String"))
+    end
+    path_spec
+end
+
+function expand_import(ctx, ex)
+    is_using = kind(ex) == K"using"
+    if kind(ex[1]) == K":"
+        # import M: x.y as z, w
+        # (import (: (importpath M) (as (importpath x y) z) (importpath w)))
+        # =>
+        # (call module_import
+        #  false
+        #  (call core.svec "M")
+        #  (call core.svec  2 "x" "y" "z"  1 "w" "w"))
+        @chk numchildren(ex[1]) >= 2
+        from = ex[1][1]
+        @chk kind(from) == K"importpath"
+        from_path = @ast ctx from [K"call"
+            "svec"::K"core"
+            _append_importpath(ctx, SyntaxList(ctx), from)...
+        ]
+        paths = ex[1][2:end]
+    else
+        # import A.B
+        # (using (importpath A B))
+        # (call module_import true nothing (call core.svec 1 "w"))
+        @chk numchildren(ex) >= 1
+        from_path = nothing_(ctx, ex)
+        paths = children(ex)
+    end
+    path_spec = SyntaxList(ctx)
+    for path in paths
+        as_name = nothing
+        if kind(path) == K"as"
+            @chk numchildren(path) == 2
+            as_name = path[2]
+            @chk kind(as_name) == K"Identifier"
+            path = path[1]
+        end
+        @chk kind(path) == K"importpath"
+        push!(path_spec, @ast(ctx, path, numchildren(path)::K"Integer"))
+        _append_importpath(ctx, path_spec, path)
+        push!(path_spec, isnothing(as_name) ? nothing_(ctx, ex) :
+                         @ast(ctx, as_name, as_name.name_val::K"String"))
+    end
+    @ast ctx ex [
+        K"call"
+        module_import ::K"Value"
+        ctx.mod       ::K"Value"
+        is_using      ::K"Value"
+        from_path
+        [K"call"
+            "svec"::K"core"
+            path_spec...
+        ]
+    ]
+end
+
+function expand_module(ctx::DesugaringContext, ex::SyntaxTree)
+    modname_ex = ex[1]
+    @chk kind(modname_ex) == K"Identifier"
+    modname = modname_ex.name_val
+
+    std_defs = if !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
+        @ast ctx (@HERE) [
+            K"block"
+            [K"using"
+                [K"importpath"
+                    "Base"           ::K"Identifier"
+                ]
+            ]
+            [K"function"
+                [K"call"
+                    "eval"           ::K"Identifier"
+                    "x"              ::K"Identifier"
+                ]
+                [K"call"
+                    "eval"           ::K"core"      
+                    modname          ::K"Identifier"
+                    "x"              ::K"Identifier"
+                ]
+            ]
+            [K"function"
+                [K"call"
+                    "include"        ::K"Identifier"
+                    "x"              ::K"Identifier"
+                ]
+                [K"call"
+                    "_call_latest"   ::K"core"
+                    "include"        ::K"top"
+                    modname          ::K"Identifier"
+                    "x"              ::K"Identifier"
+                ]
+            ]
+            [K"function"
+                [K"call"
+                    "include"        ::K"Identifier"
+                    [K"::"
+                        "mapexpr"    ::K"Identifier"
+                        "Function"   ::K"top"
+                    ]
+                    "x"              ::K"Identifier"
+                ]
+                [K"call"
+                    "_call_latest"   ::K"core" 
+                    "include"        ::K"top" 
+                    "mapexpr"        ::K"Identifier" 
+                    modname          ::K"Identifier" 
+                    "x"              ::K"Identifier" 
+                ]
+            ]
+        ]
+    end
+
+    body = ex[2]
+    @chk kind(body) == K"block"
+
+    @ast ctx ex [
+        K"call"
+        eval_module ::K"Value"
+        ctx.mod     ::K"Value"
+        modname     ::K"String"
+        [K"inert"(body)
+            [K"toplevel"
+                std_defs
+                children(body)...
+            ]
+        ]
+    ]
+end
+
 function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
     k = kind(ex)
     if k == K"call"
@@ -417,6 +566,24 @@ function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
             "tuple"::K"core"
             expand_forms(ctx, children(ex))...
         ]
+    elseif k == K"module"
+        # TODO: check-toplevel
+        expand_module(ctx, ex)
+    elseif k == K"import" || k == K"using"
+        # TODO: check-toplevel
+        expand_import(ctx, ex)
+    elseif k == K"export" || k == K"public"
+        TODO(ex)
+    elseif k == K"toplevel"
+        # The toplevel form can't be lowered here - it needs to just be quoted
+        # and passed through to a call to eval.
+        # TODO: check-toplevel
+        @ast ctx ex [
+            K"call"
+            eval          ::K"Value"
+            ctx.mod       ::K"Value"
+            [K"inert" ex]
+        ]
     elseif !haschildren(ex)
         ex
     else
@@ -438,8 +605,8 @@ function expand_forms(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector})
     res
 end
 
-function expand_forms(ex::SyntaxTree)
-    ctx = DesugaringContext(ex)
+function expand_forms(mod::Module, ex::SyntaxTree)
+    ctx = DesugaringContext(ex, mod)
     res = expand_forms(ctx, reparent(ctx, ex))
     ctx, res
 end

@@ -20,7 +20,7 @@ function _makenode(graph::SyntaxGraph, srcref, head, children; attrs...)
     return SyntaxTree(graph, id)
 end
 
-function makenode(ctx, srcref, head, children::SyntaxTree...; attrs...)
+function makenode(ctx, srcref, head, children::Union{Nothing,SyntaxTree}...; attrs...)
     _makenode(syntax_graph(ctx), srcref, head, _node_ids(children...); attrs...)
 end
 
@@ -53,6 +53,13 @@ function makeleaf(ctx, srcref, kind)
     _makenode(syntax_graph(ctx), srcref, kind, nothing)
 end
 
+function _match_srcref(ex)
+    if Meta.isexpr(ex, :macrocall) && ex.args[1] == Symbol("@HERE")
+        QuoteNode(ex.args[2])
+    else
+        esc(ex)
+    end
+end
 
 function _match_kind_ex(defs, srcref, ex)
     kws = []
@@ -68,12 +75,7 @@ function _match_kind_ex(defs, srcref, ex)
         end
         if length(args) == 1
             srcref = Symbol("srcref_$(length(defs))")
-            ref_ex = if Meta.isexpr(args[1], :macrocall) && args[1].args[1] == Symbol("@HERE")
-                QuoteNode(args[1].args[2])
-            else
-                esc(args[1])
-            end
-            push!(defs, :($srcref = $ref_ex))
+            push!(defs, :($srcref = $(_match_srcref(args[1]))))
         elseif length(args) > 1
             error("Unexpected: extra srcref argument in `$ex`?")
         end
@@ -138,7 +140,7 @@ Any `kind` can be replaced with an expression of the form
 * `kind(attr=val)` - set an additional attribute
 * `kind(srcref; attr₁=val₁, attr₂=val₂)` - the general form
 
-In any place `srcref` is used, the special form `@HERE` can be used to instead
+In any place `srcref` is used, the special form `@HERE()` can be used to instead
 to indicate that the "primary" location of the source is the location where
 `@HERE` occurs.
 
@@ -170,7 +172,7 @@ to indicate that the "primary" location of the source is the location where
 macro ast(ctx, srcref, tree)
     defs = []
     push!(defs, :(ctx = $(esc(ctx))))
-    push!(defs, :(srcref = $(esc(srcref))))
+    push!(defs, :(srcref = $(_match_srcref(srcref))))
     ex = _expand_ast_tree(defs, :ctx, :srcref, tree)
     quote
         $(defs...)

@@ -1,13 +1,60 @@
 function lower(mod, ex)
-    ctx1, ex1 = expand_forms(ex)
-    ctx2, ex2 = resolve_scopes!(ctx1, mod, ex1)
+    ctx1, ex1 = expand_forms(mod, ex)
+    ctx2, ex2 = resolve_scopes!(ctx1, ex1)
     ctx3, ex3 = linearize_ir(ctx2, ex2)
     ex3
 end
 
+# CodeInfo constructor. TODO: Should be in Core?
+function _CodeInfo(code,
+         codelocs,
+         ssavaluetypes,
+         ssaflags,
+         method_for_inference_limit_heuristics,
+         linetable,
+         slotnames,
+         slotflags,
+         slottypes,
+         rettype,
+         parent,
+         edges,
+         min_world,
+         max_world,
+         inferred,
+         propagate_inbounds,
+         has_fcall,
+         nospecializeinfer,
+         inlining,
+         constprop,
+         purity,
+         inlining_cost)
+    @eval $(Expr(:new, :(Core.CodeInfo),
+           convert(Vector{Any}, code),
+           convert(Vector{Int32}, codelocs),
+           convert(Any, ssavaluetypes),
+           convert(Vector{UInt32}, ssaflags),
+           convert(Any, method_for_inference_limit_heuristics),
+           convert(Any, linetable),
+           convert(Vector{Symbol}, slotnames),
+           convert(Vector{UInt8}, slotflags),
+           convert(Any, slottypes),
+           convert(Any, rettype),
+           convert(Any, parent),
+           convert(Any, edges),
+           convert(UInt64, min_world),
+           convert(UInt64, max_world),
+           convert(Bool, inferred),
+           convert(Bool, propagate_inbounds),
+           convert(Bool, has_fcall),
+           convert(Bool, nospecializeinfer),
+           convert(UInt8, inlining),
+           convert(UInt8, constprop),
+           convert(UInt16, purity),
+           convert(UInt16, inlining_cost)))
+end
+
 # Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the
 # Julia runtime
-
 function to_code_info(ex, mod, funcname, var_info, slot_rewrites)
     input_code = children(ex)
     # Convert code to Expr and record low res locations in table
@@ -95,7 +142,11 @@ function to_lowered_expr(mod, var_info, ex)
     elseif k == K"return"
         Core.ReturnNode(to_lowered_expr(mod, var_info, ex[1]))
     elseif is_quoted(k)
-        TODO(ex, "Convert SyntaxTree to Expr")
+        if k == K"inert"
+            QuoteNode(ex[1])
+        else
+            TODO(ex, "Convert SyntaxTree to Expr")
+        end
     elseif k == K"lambda"
         funcname = ex.lambda_info.is_toplevel_thunk ?
             "top-level scope" :
@@ -127,6 +178,70 @@ function to_lowered_expr(mod, var_info, ex)
         Expr(head, map(e->to_lowered_expr(mod, var_info, e), children(ex))...)
     end
 end
+
+#-------------------------------------------------------------------------------
+# Runtime support functions called by lowering
+
+# Construct new bare module including only the "default names"
+#
+#     using Core
+#     const modname = modval
+#     public modname
+#
+# And run statments in the toplevel expression `body`
+function eval_module(parentmod, modname, body)
+    # Here we just use `eval()` with an Expr.
+    # If we wanted to avoid this we'd need to reproduce a lot of machinery from
+    # jl_eval_module_expr()
+    #
+    # 1. Register / deparent toplevel modules
+    # 2. Set binding in parent module
+    # 3. Deal with replacing modules
+    #    * Warn if replacing
+    #    * Root old module being replaced
+    # 4. Run __init__
+    #    * Also run __init__ for any children after parent is defined
+    # mod = @ccall jl_new_module(Symbol(modname)::Symbol, parentmod::Module)::Any
+    # ...
+    name = Symbol(modname)
+    eval(parentmod, :(
+        baremodule $name
+            $eval($name, $body)
+        end
+    ))
+end
+
+function module_import(into_mod::Module, is_using::Bool,
+                       from_mod::Union{Nothing,Core.SimpleVector}, paths::Core.SimpleVector)
+    # For now, this function converts our lowered representation back to Expr
+    # and calls eval() to avoid replicating all of the fiddly logic in
+    # jl_toplevel_eval_flex.
+    # FIXME: ccall Julia runtime functions directly?
+    #   * jl_module_using jl_module_use_as
+    #   * import_module jl_module_import_as
+    path_args = []
+    i = 1
+    while i < length(paths)
+        nsyms = paths[i]::Int
+        n = i + nsyms
+        path = Expr(:., [Symbol(paths[i+j]::String) for j = 1:nsyms]...)
+        as_name = paths[i+nsyms+1]
+        push!(path_args, isnothing(as_name) ? path :
+                         Expr(:as, path, Symbol(as_name)))
+        i += nsyms + 2
+    end
+    ex = if isnothing(from_mod)
+        Expr(is_using ? :using : :import,
+             path_args...)
+    else
+        from_path = Expr(:., [Symbol(s::String) for s in from_mod]...)
+        Expr(is_using ? :using : :import,
+             Expr(:(:), from_path, path_args...))
+    end
+    eval(into_mod, ex)
+    nothing
+end
+
 
 #-------------------------------------------------------------------------------
 # Our version of eval takes our own data structures

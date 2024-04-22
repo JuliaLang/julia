@@ -10,9 +10,6 @@ function _insert_kinds()
             # A literal Julia value of any kind, as might be inserted by the AST
             # during macro expansion
             "Value"
-            # Quoted symbol. Used to distinguish Symbol literals from AST
-            # literals of kind K"Identifier"
-            "Symbol"
             # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
             "inline"

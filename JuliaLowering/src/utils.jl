@@ -1,7 +1,7 @@
 # Error handling
 
-TODO(msg) = throw(ErrorException("Lowering TODO: $msg"))
-TODO(ex, msg) = throw(LoweringError(ex, "Lowering TODO: $msg"))
+TODO(msg::AbstractString) = throw(ErrorException("Lowering TODO: $msg"))
+TODO(ex::SyntaxTree, msg="") = throw(LoweringError(ex, "Lowering TODO: $msg"))
 
 # Errors found during lowering will result in LoweringError being thrown to
 # indicate the syntax causing the error.
@@ -58,55 +58,5 @@ end
 
 macro chk(ex, cond)
     _chk_code(ex, cond)
-end
-
-
-#-------------------------------------------------------------------------------
-# CodeInfo constructor. TODO: Should be in Core?
-function _CodeInfo(code,
-         codelocs,
-         ssavaluetypes,
-         ssaflags,
-         method_for_inference_limit_heuristics,
-         linetable,
-         slotnames,
-         slotflags,
-         slottypes,
-         rettype,
-         parent,
-         edges,
-         min_world,
-         max_world,
-         inferred,
-         propagate_inbounds,
-         has_fcall,
-         nospecializeinfer,
-         inlining,
-         constprop,
-         purity,
-         inlining_cost)
-    @eval $(Expr(:new, :(Core.CodeInfo),
-           convert(Vector{Any}, code),
-           convert(Vector{Int32}, codelocs),
-           convert(Any, ssavaluetypes),
-           convert(Vector{UInt32}, ssaflags),
-           convert(Any, method_for_inference_limit_heuristics),
-           convert(Any, linetable),
-           convert(Vector{Symbol}, slotnames),
-           convert(Vector{UInt8}, slotflags),
-           convert(Any, slottypes),
-           convert(Any, rettype),
-           convert(Any, parent),
-           convert(Any, edges),
-           convert(UInt64, min_world),
-           convert(UInt64, max_world),
-           convert(Bool, inferred),
-           convert(Bool, propagate_inbounds),
-           convert(Bool, has_fcall),
-           convert(Bool, nospecializeinfer),
-           convert(UInt8, inlining),
-           convert(UInt8, constprop),
-           convert(UInt16, purity),
-           convert(UInt16, inlining_cost)))
 end
 

@@ -133,11 +133,11 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
     implicit_toplevel_globals::Set{String}
 end
 
-function ScopeResolutionContext(ctx, mod::Module)
+function ScopeResolutionContext(ctx)
     graph = ensure_attributes(ctx.graph, lambda_locals=Set{VarId})
     ScopeResolutionContext(graph,
                            ctx.next_var_id,
-                           mod,
+                           ctx.mod,
                            Dict{String,VarId}(),
                            Vector{ScopeInfo}(),
                            Dict{VarId,VarInfo}(),
@@ -361,8 +361,8 @@ function resolve_scopes!(ctx::ScopeResolutionContext, ex)
     return thunk
 end
 
-function resolve_scopes!(ctx::DesugaringContext, mod::Module, ex)
-    ctx2 = ScopeResolutionContext(ctx, mod)
+function resolve_scopes!(ctx::DesugaringContext, ex)
+    ctx2 = ScopeResolutionContext(ctx)
     res = resolve_scopes!(ctx2, reparent(ctx2, ex))
     ctx2, res
 end

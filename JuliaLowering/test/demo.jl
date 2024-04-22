@@ -6,7 +6,7 @@ using JuliaLowering
 using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode
 
 function wrapscope(ex, scope_type)
-    makenode(ex, ex, K"block", ex; scope_type=scope_type)
+    makenode(ex, ex, K"scope_block", ex; scope_type=scope_type)
 end
 
 function softscope_test(ex)
@@ -14,6 +14,7 @@ function softscope_test(ex)
 end
 
 #-------------------------------------------------------------------------------
+# Demos of the prototype
 
 # src = """
 # let
@@ -57,15 +58,42 @@ end
 #     x + y
 # """
 
+src = """
+module A
+    function f(x)::Int
+        x + 1
+    end
+
+    b = f(2)
+end
+"""
+
+src = """
+function f()
+end
+"""
+
+src = """
+# import A.B: C.c as d, E.e as f
+# import JuliaLowering
+using JuliaLowering
+"""
+
+src = """
+module A
+    z = 1 + 1
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 # t = softscope_test(t)
 @info "Input code" ex
 
 in_mod = Main
-ctx, ex_desugar = JuliaLowering.expand_forms(ex)
+ctx, ex_desugar = JuliaLowering.expand_forms(in_mod, ex)
 @info "Desugared" ex_desugar
 
-ctx2, ex_scoped = JuliaLowering.resolve_scopes!(ctx, in_mod, ex_desugar)
+ctx2, ex_scoped = JuliaLowering.resolve_scopes!(ctx, ex_desugar)
 @info "Resolved scopes" ex_scoped
 
 ctx3, ex_compiled = JuliaLowering.linearize_ir(ctx2, ex_scoped)
@@ -73,6 +101,7 @@ ctx3, ex_compiled = JuliaLowering.linearize_ir(ctx2, ex_scoped)
 
 ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx2.var_info, ex_compiled)
 @info "CodeInfo" ex_expr
+
 x = 100
 y = 200
 eval_result = Base.eval(in_mod, ex_expr)
