@@ -112,24 +112,27 @@ static const char opts[]  =
     " --help-hidden              Print uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@.}]     Set <dir> as the active project/environment.\n"
-    "                            The default @. option will search through parent directories\n"
-    "                            until a Project.toml or JuliaProject.toml file is found.\n"
-    " -J, --sysimage <file>      Start up with the given system image file\n"
-    " -H, --home <dir>           Set location of `julia` executable\n"
-    " --startup-file={yes*|no}   Load `JULIA_DEPOT_PATH/config/startup.jl`; if `JULIA_DEPOT_PATH`\n"
-    "                            environment variable is unset, load `~/.julia/config/startup.jl`\n"
-    " --handle-signals={yes*|no} Enable or disable Julia's default signal handlers\n"
-    " --sysimage-native-code={yes*|no}\n"
-    "                            Use native code from system image if available\n"
-    " --compiled-modules={yes*|no|existing|strict}\n"
-    "                            Enable or disable incremental precompilation of modules\n"
-    "                            The `existing` option allows use of existing compiled modules that were\n"
-    "                            previously precompiled, but disallows creation of new precompile files.\n"
-    "                            The `strict` option is similar, but will error if no precompile file is found.\n"
-    " --pkgimages={yes*|no|existing}\n"
-    "                            Enable or disable usage of native code caching in the form of pkgimages\n"
-    "                            The `existing` option allows use of existing pkgimages but disallows creation of new ones ($)\n\n"
+    " --project[={<dir>|@.}]                        Set <dir> as the active project/environment.\n"
+    "                                               The default @. option will search through parent\n"
+    "                                               directories until a Project.toml or JuliaProject.toml\n"
+    "                                               file is found.\n"
+    " -J, --sysimage <file>                         Start up with the given system image file\n"
+    " -H, --home <dir>                              Set location of `julia` executable\n"
+    " --startup-file={yes*|no}                      Load `JULIA_DEPOT_PATH/config/startup.jl`; \n"
+    "                                               if `JULIA_DEPOT_PATH` environment variable is unset,\n"
+    "                                               load `~/.julia/config/startup.jl`\n"
+    " --handle-signals={yes*|no}                    Enable or disable Julia's default signal handlers\n"
+    " --sysimage-native-code={yes*|no}              Use native code from system image if available\n"
+    " --compiled-modules={yes*|no|existing|strict}  Enable or disable incremental precompilation of\n"
+    "                                               modules. The `existing` option allows use of existing\n"
+    "                                               compiled modules that were previously precompiled,\n"
+    "                                               but disallows creation of new precompile files.\n"
+    "                                               The `strict` option is similar, but will error if no\n"
+    "                                               precompile file is found.\n"
+    " --pkgimages={yes*|no|existing}                Enable or disable usage of native code caching in the\n"
+    "                                               form of pkgimages. The `existing` option allows use\n"
+    "                                               of existing pkgimages but disallows creation of new\n"
+    "                                               ones ($)\n\n"
 
     // actions
     " -e, --eval <expr>          Evaluate <expr>\n"
@@ -894,6 +897,7 @@ restart_switch:
                       "This is a bug, please report it.", c);
         }
     }
+
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
     int proc_args = *argcp < optind ? *argcp : optind;
