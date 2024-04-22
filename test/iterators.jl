@@ -252,7 +252,7 @@ end
 
         f = findall(isodd, Dict(1 => 2, 2 => 4, 3 => 6))
         @test isempty(f)
-        @test_throws isnothing(iterate(f)) # test isempty works correctly
+        @test isnothing(iterate(f)) # test isempty works correctly
 
         f = findall(isodd, Dict(1 => 2, 2 => 3, 3 => 4))
         @test only(f) == 2
