@@ -119,6 +119,167 @@ const latex_symbols = Dict(
     "\\euler" => "ℯ",
     "\\ohm" => "Ω",
 
+    # Music Symbols
+        # Accidentals
+    "\\doubleflat" => "𝄫",
+    "\\doublesharp" => "𝄪",
+    "\\quartertoneflat" => "𝄳",
+    "\\quartertonesharp" => "𝄲",
+        # Bars
+    "\\singlebarline"=>"𝄀",
+    "\\doublebarline"=>"𝄁",
+    "\\finalbarline"=>"𝄂",
+    "\\reversefinalbarline"=>"𝄃",
+    "\\dashedbarline"=>"𝄄",
+    "\\shortbarline"=>"𝄅",
+        # Codas
+    "\\leftrepeatsign"=>"𝄆",
+    "\\rightrepeatsign"=>"𝄇",
+    "\\dalsegno"=>"𝄉",
+    "\\dacapo"=>"𝄊",
+    "\\segno"=>"𝄋",
+    "\\coda"=>"𝄌", 
+        # Holds and pauses
+    "\\fermata"=>"𝄐",
+    "\\fermatabelow"=>"𝄑",
+    "\\breathmark"=>"𝄒",
+    "\\caesura"=>"𝄓",
+        # Staff brackets
+    "\\brace"=>"𝄔",
+    "\\bracket"=>"𝄕",
+        # Staves
+    "\\onelinestaff"=>"𝄖",
+    "\\twolinestaff"=>"𝄗",
+    "\\threelinestaff"=>"𝄘",
+    "\\fourlinestaff"=>"𝄙",
+    "\\fivelinestaff"=>"𝄚",
+    "\\sixlinestaff"=>"𝄛",
+        # Clefs
+    "\\gclef"=>"𝄞",
+    "\\gclefottavaalta"=>"𝄟",
+    "\\gclefottavabassa"=>"𝄠",
+    "\\cclef"=>"𝄡",
+    "\\fclef"=>"𝄢",
+    "\\fclefottavaalta"=>"𝄣",
+    "\\fclefottavabassa"=>"𝄤",
+    "\\drumclef1"=>"𝄥",
+    "\\drumclef2"=>"𝄦",
+        # Rest
+    "\\multiplemeasurerest"=>"𝄩",
+        # Time signatures
+    "\\commontime"=>"𝄴",
+    "\\cuttime"=>"𝄵",
+        # Octaves
+    "\\ottavaalta"=>"𝄶",
+    "\\ottavabassa"=>"𝄷",
+    "\\quindicesimaalta"=>"𝄸",
+    "\\quindicesimabassa"=>"𝄹",
+        # Rests
+    "\\multirest"=>"𝄺",
+    "\\wholerest"=>"𝄻",
+    "\\halfrest"=>"𝄼",
+    "\\quarterrest"=>"𝄽",
+    "\\eighthrest"=>"𝄾",
+    "\\sixteenthrest"=>"𝄿",
+    "\\thirtysecondrest"=>"𝅀",
+    "\\sixtyfourthrest"=>"𝅁",
+    "\\onehundredtwentyeighthrest"=>"𝅂",
+        # Noteheads
+    "\\xnotehead"=>"𝅃",
+    "\\plusnotehead"=>"𝅄",
+    "\\circlexnotehead"=>"𝅅",
+    "\\voidnotehead"=>"𝅗",
+    "\\noteheadblack"=>"𝅘",
+        # Notes
+    "\\musicalbreve"=>"𝅜",
+    "\\wholenote"=>"𝅝",
+    "\\halfnote"=>"𝅗𝅥",
+    "\\sixteenthnote"=>"𝅘𝅥𝅯",
+    "\\thirtysecondnote"=>"𝅘𝅥𝅰",
+    "\\sixtyfourthnote"=>"𝅘𝅥𝅱",
+    "\\onehundredtwentyeighthnote"=>"𝅘𝅥𝅲",
+        # Tremolos
+    "\\fingeredtremolo1"=>"𝅪",
+    "\\fingeredtremolo2"=>"𝅫",
+    "\\fingeredtremolo3"=>"𝅬",
+        # Articulation
+    "\\arpeggiatoup"=>"𝆃",
+    "\\arpeggiatodown"=>"𝆄",
+        # Dynamics
+    "\\piano"=>"𝆏",
+    "\\mezzo"=>"𝆐",
+    "\\forte"=>"𝆑",
+    "\\crescendo"=>"𝆒",
+    "\\decrescendo"=>"𝆓",
+        # Ornaments
+    "\\grace note slash"=>"𝆔",
+    "\\grace note no slash"=>"𝆕",
+    "\\tr"=>"𝆖",
+    "\\turn"=>"𝆗",
+    "\\invertedturn"=>"𝆘",
+    "\\turnslash"=>"𝆙",
+        # Analytics
+    "\\hauptstimme"=>"𝆦",
+    "\\nebenstimme"=>"𝆧",
+    "\\endofstimme"=>"𝆨",
+    "\\degreeslash"=>"𝆩",
+        # Pedals
+    "\\pedal mark"=>"𝆮",
+    "\\pedal up mark"=>"𝆯",
+    "\\half pedal mark"=>"𝆰",
+        # Miscellaneous symbols
+    "\\glissandoup"=>"𝆱",
+    "\\glissandodown"=>"𝆲",
+
+    #Mensural notation
+        # Mensural notes
+    "\\maxima"=>"𝆶",
+    "\\longa"=>"𝆷",
+    "\\brevis"=>"𝆸",
+    "\\semibreviswhite"=>"𝆹",
+    "\\semibrevisblack"=>"𝆺",
+    "\\minima"=>"𝆹𝅥",
+    "\\minimablack"=>"𝆺𝅥",
+    "\\semiminimawhite"=>"𝆹𝅥𝅮",
+    "\\semiminimablack"=>"𝆺𝅥𝅮",
+    "\\fusawhite"=>"𝆹𝅥𝅯",
+    "\\fusablack"=>"𝆺𝅥𝅯",
+        # Mensural rests
+    "\\longaperfectarest"=>"𝇁",
+    "\\longaimperfectarest"=>"𝇂",
+    "\\brevisrest"=>"𝇃",
+    "\\semibrevisrest"=>"𝇄",
+    "\\minimarest"=>"𝇅",
+    "\\semiminimarest"=>"𝇆",
+        # Mensural prolations
+    "\\tempusperfectumcumprolationeperfecta"=>"𝇇",
+    "\\tempusperfectumcumprolationeimperfecta"=>"𝇈",
+    "\\tempusperfectumcumprolationeperfectadiminution1"=>"𝇉",
+    "\\tempusimperfectumcumprolationeperfecta"=>"𝇊",
+    "\\tempusimperfectumcumprolationeimperfecta"=>"𝇋",
+    "\\tempusimperfectumcumprolationeimperfectadiminution1"=>"𝇌",
+    "\\tempusimperfectumcumprolationeimperfectadiminution2"=>"𝇍",
+    "\\tempusimperfectumcumprolationeimperfectadiminution-"=>"𝇎",
+
+    # Gregorian notation
+        # Clefs
+    "\\gregoriancclef"=>"𝇐",
+    "\\gregorianfclef"=>"𝇑",
+        # Accidental
+    "\\squareb"=>"𝇒",
+        # Notes
+    "\\virga"=>"𝇓",
+    "\\podatus"=>"𝇔",
+    "\\clivis"=>"𝇕",
+    "\\scandicus"=>"𝇖",
+    "\\climacus"=>"𝇗",
+    "\\torculus"=>"𝇘",
+    "\\porrectus"=>"𝇙",
+    "\\porrectusflexus"=>"𝇚",
+    "\\scandicusflexus"=>"𝇛",
+    "\\torculusresupinus"=>"𝇜",
+    "\\pessubpunctis"=>"𝇝",
+
     # Superscripts
     "\\^0" => "⁰",
     "\\^1" => "¹",
