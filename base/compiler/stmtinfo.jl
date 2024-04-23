@@ -13,6 +13,12 @@ struct CallMeta
     exct::Any
     effects::Effects
     info::CallInfo
+    argtypes_profitable::Union{Nothing,BitVector}
+    function CallMeta(rt::Any, exct::Any, effects::Effects, info::CallInfo,
+                      argtypes_profitable::Union{Nothing,BitVector}=nothing)
+        @nospecialize rt exct info
+        return new(rt, exct, effects, info, argtypes_profitable)
+    end
 end
 
 struct NoCallInfo <: CallInfo end

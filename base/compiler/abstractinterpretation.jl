@@ -39,6 +39,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     multiple_matches = napplicable > 1
     fargs = arginfo.fargs
     all_effects = EFFECTS_TOTAL
+    all_argtypes_profitable = false
 
     for i in 1:napplicable
         match = applicable[i]::MethodMatch
@@ -99,14 +100,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             this_rt = widenwrappedconditional(this_rt)
         else
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)
-            (; rt, exct, edge, effects, volatile_inf_result) = result
+            (; rt, exct, edge, effects, volatile_inf_result, argtypes_profitable) = result
             this_conditional = ignorelimited(rt)
             this_rt = widenwrappedconditional(rt)
             this_exct = exct
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
-            this_arginfo = ArgInfo(fargs, this_argtypes)
+            this_arginfo = ArgInfo(fargs, this_argtypes, argtypes_profitable)
             const_call_result = abstract_call_method_with_const_args(interp,
                 result, f, this_arginfo, si, match, sv)
             const_result = volatile_inf_result
@@ -139,6 +140,26 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
             end
             all_effects = merge_effects(all_effects, effects)
+            if all_argtypes_profitable === false
+                if argtypes_profitable !== nothing
+                    all_argtypes_profitable = falses(length(argtypes))
+                    @goto mark_all_argtypes_profitable
+                else
+                    @goto disable_all_argtypes_profitable
+                end
+            elseif all_argtypes_profitable isa BitVector
+                if argtypes_profitable !== nothing
+                    @label mark_all_argtypes_profitable
+                    length(all_argtypes_profitable) ≠ length(argtypes_profitable) &&
+                        @goto disable_all_argtypes_profitable
+                    for i = 1:length(all_argtypes_profitable)
+                        all_argtypes_profitable[i] |= argtypes_profitable[i]
+                    end
+                else
+                    @label disable_all_argtypes_profitable
+                    all_argtypes_profitable = true
+                end
+            end
             if const_result !== nothing
                 if const_results === nothing
                     const_results = fill!(Vector{Union{Nothing,ConstResult}}(undef, napplicable), nothing)
@@ -177,6 +198,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # there is unanalyzed candidate, widen type and effects to the top
         rettype = excttype = Any
         all_effects = Effects()
+        all_argtypes_profitable = true
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!all(matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -227,7 +249,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
     end
 
-    return CallMeta(rettype, excttype, all_effects, info)
+    return CallMeta(rettype, excttype, all_effects, info, all_argtypes_profitable isa Bool ? nothing : all_argtypes_profitable)
 end
 
 struct FailedMethodMatch
@@ -652,7 +674,8 @@ function abstract_call_method(interp::AbstractInterpreter,
         sparams = recomputed[2]::SimpleVector
     end
 
-    (; rt, exct, edge, effects, volatile_inf_result) = typeinf_edge(interp, method, sig, sparams, sv)
+    (; rt, exct, edge, effects, volatile_inf_result, argtypes_profitable) =
+        typeinf_edge(interp, method, sig, sparams, sv)
 
     if edge === nothing
         edgecycle = edgelimited = true
@@ -676,7 +699,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         end
     end
 
-    return MethodCallResult(rt, exct, edgecycle, edgelimited, edge, effects, volatile_inf_result)
+    return MethodCallResult(rt, exct, edgecycle, edgelimited, edge, effects; volatile_inf_result, argtypes_profitable)
 end
 
 function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
@@ -785,13 +808,15 @@ struct MethodCallResult
     edge::Union{Nothing,MethodInstance}
     effects::Effects
     volatile_inf_result::Union{Nothing,VolatileInferenceResult}
+    argtypes_profitable::Union{Nothing,BitVector}
     function MethodCallResult(@nospecialize(rt), @nospecialize(exct),
                               edgecycle::Bool,
                               edgelimited::Bool,
                               edge::Union{Nothing,MethodInstance},
-                              effects::Effects,
-                              volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
-        return new(rt, exct, edgecycle, edgelimited, edge, effects, volatile_inf_result)
+                              effects::Effects;
+                              volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing,
+                              argtypes_profitable::Union{Nothing,BitVector}=nothing)
+        return new(rt, exct, edgecycle, edgelimited, edge, effects, volatile_inf_result, argtypes_profitable)
     end
 end
 
@@ -1283,7 +1308,8 @@ function const_prop_call(interp::AbstractInterpreter,
         return nothing
     end
     # perform fresh constant prop'
-    inf_result = InferenceResult(mi, argtypes, overridden_by_const)
+    argsinfo = ArgtypeOverrideInfo(overridden_by_const)
+    inf_result = InferenceResult(mi, argtypes, argsinfo)
     frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
     if frame === nothing
         add_remark!(interp, sv, "[constprop] Could not retrieve the source")
@@ -1317,7 +1343,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
                                  conditional_argtypes::ConditionalSimpleArgtypes,
                                  cache_argtypes::Vector{Any})
     (; arginfo, sv) = conditional_argtypes
-    (; fargs, argtypes) = arginfo
+    (; fargs, argtypes, argtypes_profitable) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
     def = mi.def::Method
     nargs = Int(def.nargs)
@@ -1362,6 +1388,19 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
         end
     else
         given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
+    end
+    # XXX The argtype widening should probably be handled by `WidenedArgtypes`, but it would
+    # be fine to widen it here as well, since unused-ness ensures that the argtype has no
+    # contribution to the results like return type, effects, etc.
+    if argtypes_profitable !== nothing
+        for i = 1:length(given_argtypes)
+            if !argtypes_profitable[i]
+                cache_argtype = cache_argtypes[i]
+                if !(cache_argtype isa Const)
+                    given_argtypes[i] = cache_argtype
+                end
+            end
+        end
     end
     return pick_const_args!(𝕃, given_argtypes, cache_argtypes)
 end
@@ -2354,12 +2393,20 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::U
     return RTEffects(rt, Any, EFFECTS_UNKNOWN)
 end
 
-function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
+function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState,
+                                     check_argtype_profitability::Bool=true)
     if isa(e, SSAValue)
         return RTEffects(abstract_eval_ssavalue(e, sv), Union{}, EFFECTS_TOTAL)
     elseif isa(e, SlotNumber)
+        slotid = slot_id(e)
+        if check_argtype_profitability && sv isa InferenceState
+            argsinfo = sv.result.argsinfo
+            if argsinfo isa ArgtypeProfitability && slotid ≤ length(sv.result.argtypes)
+                argsinfo.profitable[slotid] |= true
+            end
+        end
         if vtypes !== nothing
-            vtyp = vtypes[slot_id(e)]
+            vtyp = vtypes[slotid]
             if !vtyp.undef
                 return RTEffects(vtyp.typ, Union{}, EFFECTS_TOTAL)
             end
@@ -2397,21 +2444,23 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsI
     return Any
 end
 
-function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
+function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState,
+                             check_argtype_profitability::Bool=true)
     if isa(e, Expr)
         return abstract_eval_value_expr(interp, e, sv)
     else
-        (;rt, effects) = abstract_eval_special_value(interp, e, vtypes, sv)
+        (;rt, effects) = abstract_eval_special_value(interp, e, vtypes, sv, check_argtype_profitability)
         merge_effects!(interp, sv, effects)
         return collect_limitations!(rt, sv)
     end
 end
 
-function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
+function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, vtypes::Union{VarTable,Nothing}, sv::AbsIntState,
+                          check_argtype_profitability::Bool=true)
     n = length(ea)
     argtypes = Vector{Any}(undef, n)
     @inbounds for i = 1:n
-        ai = abstract_eval_value(interp, ea[i], vtypes, sv)
+        ai = abstract_eval_value(interp, ea[i], vtypes, sv, check_argtype_profitability)
         if ai === Bottom
             return nothing
         end
@@ -2437,12 +2486,26 @@ end
 function abstract_eval_call(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
                             sv::AbsIntState)
     ea = e.args
-    argtypes = collect_argtypes(interp, ea, vtypes, sv)
+    argtypes = collect_argtypes(interp, ea, vtypes, sv, #=check_argtype_profitability=#false)
     if argtypes === nothing
         return RTEffects(Bottom, Any, Effects())
     end
     arginfo = ArgInfo(ea, argtypes)
-    (; rt, exct, effects) = abstract_call(interp, arginfo, sv)
+    (; rt, exct, effects, argtypes_profitable) = abstract_call(interp, arginfo, sv)
+    if sv isa InferenceState
+        argsinfo = sv.result.argsinfo
+        if argsinfo isa ArgtypeProfitability
+            for i = 1:length(ea)
+                e = ea[i]
+                if isa(e, SlotNumber)
+                    slotid = slot_id(e)
+                    if slotid ≤ length(sv.result.argtypes) && (argtypes_profitable === nothing || argtypes_profitable[i])
+                        argsinfo.profitable[slotid] |= true
+                    end
+                end
+            end
+        end
+    end
     return RTEffects(rt, exct, effects)
 end
 

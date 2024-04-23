@@ -581,7 +581,11 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
 
     maybe_validate_code(me.linfo, me.src, "inferred")
-    nothing
+
+    argsinfo = me.result.argsinfo
+    argsinfo isa ArgtypeProfitability && stack_analysis_result!(me.result, argsinfo)
+
+    return nothing
 end
 
 # record the backedges
@@ -800,11 +804,13 @@ struct EdgeCallResult
     edge::Union{Nothing,MethodInstance}
     effects::Effects
     volatile_inf_result::Union{Nothing,VolatileInferenceResult}
+    argtypes_profitable::Union{Nothing,BitVector}
     function EdgeCallResult(@nospecialize(rt), @nospecialize(exct),
                             edge::Union{Nothing,MethodInstance},
-                            effects::Effects,
-                            volatile_inf_result::Union{Nothing,VolatileInferenceResult} = nothing)
-        return new(rt, exct, edge, effects, volatile_inf_result)
+                            effects::Effects;
+                            volatile_inf_result::Union{Nothing,VolatileInferenceResult} = nothing,
+                            argtypes_profitable::Union{Nothing,BitVector} = nothing)
+        return new(rt, exct, edge, effects, volatile_inf_result, argtypes_profitable)
     end
 end
 
@@ -812,8 +818,11 @@ end
 function return_cached_result(::AbstractInterpreter, codeinst::CodeInstance, caller::AbsIntState)
     rt = cached_return_type(codeinst)
     effects = ipo_effects(codeinst)
+    argtypes_profitable = traverse_analysis_results(codeinst) do @nospecialize result
+        return result isa ArgtypeProfitability ? result.profitable : nothing
+    end
     update_valid_age!(caller, WorldRange(min_world(codeinst), max_world(codeinst)))
-    return EdgeCallResult(rt, codeinst.exctype, codeinst.def, effects)
+    return EdgeCallResult(rt, codeinst.exctype, codeinst.def, effects; argtypes_profitable)
 end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
@@ -869,7 +878,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, so we can use this local result destructively
         volatile_inf_result = isinferred ? VolatileInferenceResult(result) : nothing
-        return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
+        argtypes_profitable = (result.argsinfo::ArgtypeProfitability).profitable
+        return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects;
+            volatile_inf_result, argtypes_profitable)
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, Any, nothing, Effects())

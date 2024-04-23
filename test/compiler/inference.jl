@@ -5706,7 +5706,7 @@ end
 
 # inference local cache lookup with extended lattice elements that may be transformed
 # by `matching_cache_argtypes`
-@newinterp CachedConditionalInterp
+@newinterp LocalCacheInterp
 Base.@constprop :aggressive function func_cached_conditional(x, y)
     if x
         @noinline sin(y)
@@ -5719,9 +5719,79 @@ function test_func_cached_conditional(y)
     y₂ = func_cached_conditional(isa(y, Float64), y)
     return y₁, y₂
 end;
-let interp = CachedConditionalInterp();
+let interp = LocalCacheInterp()
     @test Base.infer_return_type(test_func_cached_conditional, (Any,); interp) == Tuple{Float64, Float64}
     @test count(interp.inf_cache) do result
         result.linfo.def.name === :func_cached_conditional
     end == 1
+end
+
+@noinline Base.@constprop :aggressive func_unused_constprop1(x, y) = Ref(sin(x)) # NOTE Ref(...) prevents semi-concrete interpretation
+function test_func_unused_constprop1(x)
+    x₁ = func_unused_constprop1(x, true)
+    x₂ = func_unused_constprop1(x, false)
+    return x₁, x₂
+end;
+let interp = LocalCacheInterp()
+    @test Base.infer_return_type(test_func_unused_constprop1, (Float64,); interp) == Tuple{Base.RefValue{Float64}, Base.RefValue{Float64}}
+    @test count(interp.inf_cache) do result
+        result.linfo.def.name === :func_unused_constprop1
+    end == 0
+end
+let interp = LocalCacheInterp() # exercise globally-cached cases
+    @test Base.infer_return_type(test_func_unused_constprop1, (Float64,); interp) == Tuple{Base.RefValue{Float64}, Base.RefValue{Float64}}
+    @test count(interp.inf_cache) do result
+        result.linfo.def.name === :func_unused_constprop1
+    end == 0
+end
+
+@noinline Base.@constprop :aggressive func_unused_constprop2(x, y) =
+    Ref(isa(x, Float64) ? sin(x) : y) # NOTE Ref(...) prevents semi-concrete interpretation
+function test_func_unused_constprop2(x)
+    x₁ = func_unused_constprop2(x, true)
+    x₂ = func_unused_constprop2(x, false)
+    return x₁, x₂
+end;
+let interp = LocalCacheInterp()
+    @test Base.infer_return_type(test_func_unused_constprop2, (Float64,); interp) == Tuple{Base.RefValue{Float64}, Base.RefValue{Float64}}
+    @test count(interp.inf_cache) do result
+        result.linfo.def.name === :func_unused_constprop2
+    end == 0
+end
+
+func_unused_constprop2_inter(x, y) = func_unused_constprop2(x, y)
+function test_func_unused_constprop2_inter(x)
+    x₁ = func_unused_constprop2_inter(x, true)
+    x₂ = func_unused_constprop2_inter(x, false)
+    return x₁, x₂
+end;
+let interp = LocalCacheInterp()
+    @test Base.infer_return_type(test_func_unused_constprop2_inter, (Float64,); interp) == Tuple{Base.RefValue{Float64}, Base.RefValue{Float64}}
+    @test count(interp.inf_cache) do result
+        result.linfo.def.name === :func_unused_constprop2_inter
+    end == 0
+end
+
+@noinline Base.@constprop :aggressive function func_unused_constprop3(x, y)
+    z = y
+    return Ref(sin(x)) # NOTE Ref(...) prevents semi-concrete interpretation
+end
+function test_func_unused_constprop3(x)
+    x₁ = func_unused_constprop3(x, true)
+    x₂ = func_unused_constprop3(x, false)
+    return x₁, x₂
+end;
+let interp = LocalCacheInterp()
+    @test Base.infer_return_type(test_func_unused_constprop3, (Float64,); interp) == Tuple{Base.RefValue{Float64}, Base.RefValue{Float64}}
+    @test_broken count(interp.inf_cache) do result
+        result.linfo.def.name === :func_unused_constprop3
+    end == 0
+end
+
+pr51693(x) = Ref(x)
+let interp = LocalCacheInterp()
+    @test Base.infer_return_type(pr51693, (Int,); interp) == Base.RefValue{Int}
+    @test count(interp.inf_cache) do result
+        result.linfo.def.name === :Ref
+    end == 0
 end
