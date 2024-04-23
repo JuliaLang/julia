@@ -130,4 +130,25 @@ IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
 IteratorEltype(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 IteratorEltype(::Type{Any}) = EltypeUnknown()
 
-IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
+function IteratorEltype(T::Type{Generator})
+    T_el = @infer_eltype(T)
+    return isconcretetype(T_el) ? HasEltype() : EltypeUnknown()
+end
+
+eltype(x::Generator) = IteratorEltype(x) == EltypeUnknown() ? Any : @infer_eltype(typeof(x))
+
+if isdefined(Core, :Compiler)
+    macro infer_eltype(T)
+        I = esc(T)
+        return quote
+            T_el = Core.Compiler.return_type(_iterator_upper_bound, Tuple{$I})
+            promote_typejoin_union(T_el)
+        end
+    end
+else
+    macro infer_eltype(T)
+        return quote
+            Any
+        end
+    end
+end
