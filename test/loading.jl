@@ -1559,7 +1559,7 @@ end
             @test include_dependency(dir) === nothing
             dir
         end
-        @test_throws SystemError("including file or directory $(repr(dir))") include_dependency(dir)
+        @test_throws SystemError("including file or folder $(repr(dir))") include_dependency(dir)
     end
 end
 
