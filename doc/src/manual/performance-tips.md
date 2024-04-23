@@ -1446,7 +1446,7 @@ the optimizer from trying to be too clever and defeat our benchmark):
 ```julia
 @noinline function inner(x, y)
     s = zero(eltype(x))
-    for i=eachindex(x)
+    for i in eachindex(x, y)
         @inbounds s += x[i]*y[i]
     end
     return s
@@ -1454,7 +1454,7 @@ end
 
 @noinline function innersimd(x, y)
     s = zero(eltype(x))
-    @simd for i = eachindex(x)
+    @simd for i in eachindex(x, y)
         @inbounds s += x[i] * y[i]
     end
     return s
