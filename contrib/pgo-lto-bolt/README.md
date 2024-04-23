@@ -3,8 +3,6 @@ BOLT only works on x86_64 and arch64 on Linux.
 DO NOT STRIP THE RESULTING .so FILES, https://github.com/llvm/llvm-project/issues/56738.
 If you really need to, try adding `-use-gnu-stack` to `BOLT_ARGS`.
 
-```
-
 To build a PGO+LTO+BOLT version of Julia run the following commands (`cd` into this directory first)
 ```bash
 make stage1
