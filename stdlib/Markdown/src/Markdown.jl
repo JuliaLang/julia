@@ -30,6 +30,8 @@ include("render/latex.jl")
 include("render/rst.jl")
 include("render/terminal/render.jl")
 
+include("util.jl")
+
 export @md_str, @doc_str
 
 parse(markdown::AbstractString; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
