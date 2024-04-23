@@ -146,8 +146,8 @@ IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
 IteratorEltype(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 IteratorEltype(::Type{Any}) = EltypeUnknown()
 
-function IteratorEltype(T::Type{Generator})
-    T_el = @infer_eltype(T)
+function IteratorEltype(t::Type{Generator{I,T}}) where {I,T}
+    T_el = @infer_eltype(t)
     return isconcretetype(T_el) ? HasEltype() : EltypeUnknown()
 end
 
