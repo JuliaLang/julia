@@ -1061,7 +1061,7 @@ function bytes2hex end
 
 function bytes2hex(itr)
     eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
-    b = Base.StringVector(2*length(itr))
+    b = Base.StringMemory(2*length(itr))
     @inbounds for (i, x) in enumerate(itr)
         b[2i - 1] = hex_chars[1 + x >> 4]
         b[2i    ] = hex_chars[1 + x & 0xf]

@@ -1516,7 +1516,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     add_inlining_backedge!(et, mi)
 
     # TODO: Should there be a special line number node for inlined finalizers?
-    inline_at = ir[SSAValue(idx)][:line][1]
+    inline_at = ir[SSAValue(idx)][:line]
     ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, di, mi, inline_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
@@ -2009,8 +2009,13 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     unionphis = Pair{Int,Any}[] # sorted
     compact = IncrementalCompact(ir, true)
     made_changes = false
-    for ((_, idx), stmt) in compact
+    for ((old_idx, idx), stmt) in compact
         if isa(stmt, PhiNode)
+            if reprocess_phi_node!(𝕃ₒ, compact, stmt, old_idx)
+                # Phi node has a single predecessor and was deleted
+                made_changes = true
+                continue
+            end
             push!(all_phis, idx)
             if is_some_union(compact.result[idx][:type])
                 push!(unionphis, Pair{Int,Any}(idx, Union{}))

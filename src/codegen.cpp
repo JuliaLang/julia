@@ -86,7 +86,7 @@ static bool jl_fpo_disabled(const Triple &TT) {
     // MSAN doesn't support FPO
     return true;
 #endif
-    if (TT.isOSLinux() || TT.isOSWindows() || TT.isOSFreeBSD()) {
+    if (TT.isOSLinux() || TT.isOSWindows() || TT.isOSFreeBSD() || TT.isOSOpenBSD()) {
         return true;
     }
     return false;
@@ -283,6 +283,7 @@ extern void _chkstk(void);
 
 // types
 struct jl_typecache_t {
+    Type *T_ptr;
     Type *T_size;
     Type *T_jlvalue;
     Type *T_pjlvalue;
@@ -304,7 +305,7 @@ struct jl_typecache_t {
     bool initialized;
 
     jl_typecache_t() :
-        T_jlvalue(nullptr), T_pjlvalue(nullptr), T_prjlvalue(nullptr),
+        T_ptr(nullptr), T_jlvalue(nullptr), T_pjlvalue(nullptr), T_prjlvalue(nullptr),
         T_ppjlvalue(nullptr), T_pprjlvalue(nullptr),
         T_jlgenericmemory(nullptr), T_jlarray(nullptr), T_pjlarray(nullptr),
         T_jlfunc(nullptr), T_jlfuncparams(nullptr), T_sigatomic(nullptr), T_ppint8(nullptr),
@@ -315,6 +316,7 @@ struct jl_typecache_t {
             return;
         }
         initialized = true;
+        T_ptr = getInt8PtrTy(context);
         T_ppint8 = PointerType::get(getInt8PtrTy(context), 0);
         T_sigatomic = Type::getIntNTy(context, sizeof(sig_atomic_t) * 8);
         T_size = DL.getIntPtrType(context);
@@ -1615,9 +1617,9 @@ static const auto &builtin_func_map() {
           { jl_f_memoryref_addr,          new JuliaFunction<>{XSTR(jl_f_memoryref), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefoffset_addr,    new JuliaFunction<>{XSTR(jl_f_memoryrefoffset), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefset_addr,       new JuliaFunction<>{XSTR(jl_f_memoryrefset), get_func_sig, get_func_attrs} },
-          { jl_f_memoryrefswap_addr,      new JuliaFunction<>{XSTR(jl_f_memoryswapset), get_func_sig, get_func_attrs} },
-          { jl_f_memoryrefreplace_addr,   new JuliaFunction<>{XSTR(jl_f_memoryreplaceset), get_func_sig, get_func_attrs} },
-          { jl_f_memoryrefmodify_addr,    new JuliaFunction<>{XSTR(jl_f_memorymodifyset), get_func_sig, get_func_attrs} },
+          { jl_f_memoryrefswap_addr,      new JuliaFunction<>{XSTR(jl_f_memoryrefswap), get_func_sig, get_func_attrs} },
+          { jl_f_memoryrefreplace_addr,   new JuliaFunction<>{XSTR(jl_f_memoryrefreplace), get_func_sig, get_func_attrs} },
+          { jl_f_memoryrefmodify_addr,    new JuliaFunction<>{XSTR(jl_f_memoryrefmodify), get_func_sig, get_func_attrs} },
           { jl_f_memoryrefsetonce_addr,   new JuliaFunction<>{XSTR(jl_f_memoryrefsetonce), get_func_sig, get_func_attrs} },
           { jl_f_memoryref_isassigned_addr,new JuliaFunction<>{XSTR(jl_f_memoryref_isassigned), get_func_sig, get_func_attrs} },
           { jl_f_apply_type_addr,         new JuliaFunction<>{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
@@ -3186,22 +3188,16 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     if (bp == NULL)
         return jl_cgval_t();
     bp = julia_binding_pvalue(ctx, bp);
+    jl_value_t *ty = nullptr;
     if (bnd) {
         jl_value_t *v = jl_atomic_load_acquire(&bnd->value); // acquire value for ty
-        if (v != NULL) {
-            if (bnd->constp)
-                return mark_julia_const(ctx, v);
-            LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-            setName(ctx.emission_context, v, jl_symbol_name(name));
-            v->setOrdering(order);
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
-            ai.decorateInst(v);
-            jl_value_t *ty = jl_atomic_load_relaxed(&bnd->ty);
-            return mark_julia_type(ctx, v, true, ty);
-        }
+        if (v != NULL && bnd->constp)
+            return mark_julia_const(ctx, v);
+        ty = jl_atomic_load_relaxed(&bnd->ty);
     }
-    // todo: use type info to avoid undef check
-    return emit_checked_var(ctx, bp, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
+    if (ty == nullptr)
+        ty = (jl_value_t*)jl_any_type;
+    return update_julia_type(ctx, emit_checked_var(ctx, bp, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
 }
 
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
@@ -5459,7 +5455,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
         }
         jl_binding_t *bnd = jl_get_binding(modu, name);
         if (bnd) {
-            if (jl_atomic_load_relaxed(&bnd->value) != NULL)
+            if (jl_atomic_load_acquire(&bnd->value) != NULL && bnd->constp)
                 return mark_julia_const(ctx, jl_true);
             Value *bp = julia_binding_gv(ctx, bnd);
             bp = julia_binding_pvalue(ctx, bp);
@@ -7377,6 +7373,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     if (ctx.emission_context.TargetTriple.isAArch64() || ctx.emission_context.TargetTriple.isARM() || ctx.emission_context.TargetTriple.isPPC64()) {
         if (nest) {
             emit_error(ctx, "cfunction: closures are not supported on this platform");
+            JL_GC_POP();
             return jl_cgval_t();
         }
     }

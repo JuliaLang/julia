@@ -51,9 +51,9 @@ end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
     si = StmtInfo(true) # TODO better job here?
-    (; rt, exct, effects, info) = abstract_call(interp, arginfo, si, irsv)
-    irsv.ir.stmts[irsv.curridx][:info] = info
-    return RTEffects(rt, exct, effects)
+    call = abstract_call(interp, arginfo, si, irsv)
+    irsv.ir.stmts[irsv.curridx][:info] = call.info
+    return call
 end
 
 function kill_block!(ir::IRCode, bb::Int)

@@ -22,6 +22,12 @@ function run_nonzero_page_utilization_test()
     @test any(page_utilization .> 0)
 end
 
+function run_pg_size_test()
+    page_size = @ccall jl_get_pg_size()::UInt64
+    # supported page sizes: 4KB and 16KB
+    @test page_size == (1 << 12) || page_size == (1 << 14)
+end
+
 # !!! note:
 #     Since we run our tests on 32bit OS as well we confine ourselves
 #     to parameters that allocate about 512MB of objects. Max RSS is lower
@@ -31,7 +37,11 @@ end
     run_gctest("gc/linkedlist.jl")
     run_gctest("gc/objarray.jl")
     run_gctest("gc/chunks.jl")
+end
+
+@testset "GC page metrics" begin
     run_nonzero_page_utilization_test()
+    run_pg_size_test()
 end
 
 @testset "Base.GC docstrings" begin

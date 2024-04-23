@@ -821,7 +821,7 @@ end
     mktempdir(f::Function, parent=tempdir(); prefix=$(repr(temp_prefix)))
 
 Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and remove the
-temporary directory all of its contents upon completion.
+temporary directory and all of its contents upon completion.
 
 See also: [`mktemp`](@ref), [`mkdir`](@ref).
 

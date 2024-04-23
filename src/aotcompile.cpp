@@ -1605,7 +1605,7 @@ void jl_dump_native_impl(void *native_code,
         TheTriple.setOSName(Str);
     }
     Optional<Reloc::Model> RelocModel;
-    if (TheTriple.isOSLinux() || TheTriple.isOSFreeBSD()) {
+    if (TheTriple.isOSLinux() || TheTriple.isOSFreeBSD() || TheTriple.isOSOpenBSD()) {
         RelocModel = Reloc::PIC_;
     }
 
