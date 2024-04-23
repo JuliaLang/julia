@@ -43,6 +43,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         similar(A::$t, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
         copy(A::$t) = $t(copy(A.data))
+        Base.unaliascopy(A::$t) = $t(Base.unaliascopy(A.data))
 
         real(A::$t{<:Real}) = A
         real(A::$t{<:Complex}) = (B = real(A.data); $t(B))
@@ -152,6 +153,8 @@ UnitUpperTriangular
 const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
 const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
 const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
+
+Base.dataids(A::UpperOrLowerTriangular) = Base.dataids(A.data)
 
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
@@ -513,21 +516,23 @@ tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
 # copy and scale
 function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular}}
-    checkbounds(A, axes(B)...)
+    @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
+    B2 = Base.unalias(A, B)
     for j = 1:n
         for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
-            @inbounds A[i,j] = B[i,j]
+            @inbounds A[i,j] = B2[i,j]
         end
     end
     return A
 end
 function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular}}
-    checkbounds(A, axes(B)...)
+    @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
+    B2 = Base.unalias(A, B)
     for j = 1:n
         for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
-            @inbounds A[i,j] = B[i,j]
+            @inbounds A[i,j] = B2[i,j]
         end
     end
     return A
@@ -749,6 +754,80 @@ for op in (:+, :-)
     end
     for TM1 in (:UpperTriangular, :UnitUpperTriangular), TM2 in (:UpperTriangular, :UnitUpperTriangular)
         @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
+    end
+end
+
+function kron(A::UpperTriangular{T}, B::UpperTriangular{S}) where {T<:Number,S<:Number}
+    C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
+    return kron!(C, A, B)
+end
+
+function kron(A::LowerTriangular{T}, B::LowerTriangular{S}) where {T<:Number,S<:Number}
+    C = LowerTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
+    return kron!(C, A, B)
+end
+
+function kron!(C::UpperTriangular{<:Number}, A::UpperTriangular{<:Number}, B::UpperTriangular{<:Number})
+    size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+    _triukron!(C.data, A.data, B.data)
+    return C
+end
+
+function kron!(C::LowerTriangular{<:Number}, A::LowerTriangular{<:Number}, B::LowerTriangular{<:Number})
+    size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+    _trilkron!(C.data, A.data, B.data)
+    return C
+end
+
+function _triukron!(C, A, B)
+    n_A = size(A, 1)
+    n_B = size(B, 1)
+    @inbounds for j = 1:n_A
+        jnB = (j - 1) * n_B
+        for i = 1:(j-1)
+            Aij = A[i, j]
+            inB = (i - 1) * n_B
+            for l = 1:n_B
+                for k = 1:l
+                    C[inB+k, jnB+l] = Aij * B[k, l]
+                end
+                for k = 1:(l-1)
+                    C[inB+l, jnB+k] = zero(eltype(C))
+                end
+            end
+        end
+        Ajj = A[j, j]
+        for l = 1:n_B
+            for k = 1:l
+                C[jnB+k, jnB+l] = Ajj * B[k, l]
+            end
+        end
+    end
+end
+
+function _trilkron!(C, A, B)
+    n_A = size(A, 1)
+    n_B = size(B, 1)
+    @inbounds for j = 1:n_A
+        jnB = (j - 1) * n_B
+        Ajj = A[j, j]
+        for l = 1:n_B
+            for k = l:n_B
+                C[jnB+k, jnB+l] = Ajj * B[k, l]
+            end
+        end
+        for i = (j+1):n_A
+            Aij = A[i, j]
+            inB = (i - 1) * n_B
+            for l = 1:n_B
+                for k = l:n_B
+                    C[inB+k, jnB+l] = Aij * B[k, l]
+                end
+                for k = (l+1):n_B
+                    C[inB+l, jnB+k] = zero(eltype(C))
+                end
+            end
+        end
     end
 end
 
@@ -1217,6 +1296,7 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function,
     if size(C) != size(B)
         throw(DimensionMismatch(lazy"size of output, $(size(C)), does not match size of right hand side, $(size(B))"))
     end
+    iszero(mA) && return C
     oA = oneunit(eltype(A))
     @inbounds if uploc == 'U'
         if isunitc == 'N'
@@ -1353,6 +1433,7 @@ function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA:
     if size(C) != size(B)
         throw(DimensionMismatch(lazy"size of output, $(size(C)), does not match size of right hand side, $(size(B))"))
     end
+    iszero(mA) && return C
     oA = oneunit(eltype(A))
     @inbounds if uploc == 'U'
         if isunitc == 'N'

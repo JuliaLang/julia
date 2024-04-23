@@ -291,6 +291,22 @@ function Base.copy(tB::Transpose{<:Any,<:Bidiagonal})
     return Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
 end
 
+# copyto! for matching axes
+function _copyto_banded!(A::Bidiagonal, B::Bidiagonal)
+    A.dv .= B.dv
+    if A.uplo == B.uplo
+        A.ev .= B.ev
+    elseif iszero(B.ev) # diagonal source
+        A.ev .= zero.(A.ev)
+    else
+        zeroband = istriu(A) ? "lower" : "upper"
+        uplo = A.uplo
+        throw(ArgumentError(string("cannot set the ",
+            zeroband, " bidiagonal band to a nonzero value for uplo=:", uplo)))
+    end
+    return A
+end
+
 iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
 isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
 function istriu(M::Bidiagonal, k::Integer=0)
@@ -332,6 +348,8 @@ function istril(M::Bidiagonal, k::Integer=0)
     end
 end
 isdiag(M::Bidiagonal) = iszero(M.ev)
+issymmetric(M::Bidiagonal) = isdiag(M) && all(issymmetric, M.dv)
+ishermitian(M::Bidiagonal) = isdiag(M) && all(ishermitian, M.dv)
 
 function tril!(M::Bidiagonal{T}, k::Integer=0) where T
     n = length(M.dv)

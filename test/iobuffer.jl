@@ -196,6 +196,31 @@ end
     @test position(skip(io, -3)) == 0
 end
 
+@testset "issue #53908" begin
+    @testset "offset $first" for first in (false, true)
+        b = collect(0x01:0x05)
+        sizehint!(b, 100; first) # make offset non zero
+        io = IOBuffer(b)
+        @test position(skip(io, 4)) == 4
+        @test position(skip(io, typemax(Int))) == 5
+        @test position(skip(io, typemax(Int128))) == 5
+        @test position(skip(io, typemax(Int32))) == 5
+        @test position(skip(io, typemin(Int))) == 0
+        @test position(skip(io, typemin(Int128))) == 0
+        @test position(skip(io, typemin(Int32))) == 0
+        @test position(skip(io, 4)) == 4
+        @test position(skip(io, -2)) == 2
+        @test position(skip(io, -2)) == 0
+        @test position(seek(io, -2)) == 0
+        @test position(seek(io, typemax(Int))) == 5
+        @test position(seek(io, typemax(Int128))) == 5
+        @test position(seek(io, typemax(Int32))) == 5
+        @test position(seek(io, typemin(Int))) == 0
+        @test position(seek(io, typemin(Int128))) == 0
+        @test position(seek(io, typemin(Int32))) == 0
+    end
+end
+
 @testset "pr #11554" begin
     io  = IOBuffer(SubString("***αhelloworldω***", 4, 16))
     io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), read=true, write=true)
@@ -357,4 +382,9 @@ end
     write(io,1)
     seek(io,0)
     @test Base.read_sub(io,v,1,1) == [1,0]
+end
+
+@testset "with offset" begin
+    b = pushfirst!([0x02], 0x01)
+    @test take!(IOBuffer(b)) == [0x01, 0x02]
 end

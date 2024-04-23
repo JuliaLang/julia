@@ -2349,7 +2349,9 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::U
     # but some of the result is likely to be valid anyways
     # and that may help generate better codegen
     abstract_call(interp, ArgInfo(nothing, at), StmtInfo(false), sv)
-    nothing
+    rt = e.args[1]
+    isa(rt, Type) || (rt = Any)
+    return RTEffects(rt, Any, EFFECTS_UNKNOWN)
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
@@ -2383,10 +2385,9 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
-    if e.head === :call
+    if e.head === :call && length(e.args) ≥ 1
         # TODO: We still have non-linearized cglobal
-        @assert e.args[1] === Core.tuple ||
-                e.args[1] === GlobalRef(Core, :tuple)
+        @assert e.args[1] === Core.tuple || e.args[1] === GlobalRef(Core, :tuple)
     else
         # Some of our tests expect us to handle invalid IR here and error later
         # - permit that for now.
@@ -2428,11 +2429,9 @@ end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sv::InferenceState)
     si = StmtInfo(!call_result_unused(sv, sv.currpc))
-    (; rt, exct, effects, info) = abstract_call(interp, arginfo, si, sv)
-    sv.stmt_info[sv.currpc] = info
-    # mark this call statement as DCE-eligible
-    # TODO better to do this in a single pass based on the `info` object at the end of abstractinterpret?
-    return RTEffects(rt, exct, effects)
+    call = abstract_call(interp, arginfo, si, sv)
+    sv.stmt_info[sv.currpc] = call.info
+    return call
 end
 
 function abstract_eval_call(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
@@ -2443,268 +2442,276 @@ function abstract_eval_call(interp::AbstractInterpreter, e::Expr, vtypes::Union{
         return RTEffects(Bottom, Any, Effects())
     end
     arginfo = ArgInfo(ea, argtypes)
-    return abstract_call(interp, arginfo, sv)
+    (; rt, exct, effects) = abstract_call(interp, arginfo, sv)
+    return RTEffects(rt, exct, effects)
 end
 
-function abstract_eval_the_exception(interp::AbstractInterpreter, sv::InferenceState)
-    return sv.handlers[sv.handler_at[sv.currpc][2]].exct
+function abstract_eval_new(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
+                           sv::AbsIntState)
+    𝕃ᵢ = typeinf_lattice(interp)
+    rt, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv), true)
+    ut = unwrap_unionall(rt)
+    exct = Union{ErrorException,TypeError}
+    if isa(ut, DataType) && !isabstracttype(ut)
+        ismutable = ismutabletype(ut)
+        fcount = datatype_fieldcount(ut)
+        nargs = length(e.args) - 1
+        has_any_uninitialized = (fcount === nothing || (fcount > nargs && (let t = rt
+                any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
+            end)))
+        if has_any_uninitialized
+            # allocation with undefined field is inconsistent always
+            consistent = ALWAYS_FALSE
+        elseif ismutable
+            # mutable allocation isn't `:consistent`, but we still have a chance that
+            # return type information later refines the `:consistent`-cy of the method
+            consistent = CONSISTENT_IF_NOTRETURNED
+        else
+            consistent = ALWAYS_TRUE # immutable allocation is consistent
+        end
+        if isconcretedispatch(rt)
+            nothrow = true
+            @assert fcount !== nothing && fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
+            ats = Vector{Any}(undef, nargs)
+            local anyrefine = false
+            local allconst = true
+            for i = 1:nargs
+                at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
+                ft = fieldtype(rt, i)
+                nothrow && (nothrow = ⊑(𝕃ᵢ, at, ft))
+                at = tmeet(𝕃ᵢ, at, ft)
+                at === Bottom && return RTEffects(Bottom, TypeError, EFFECTS_THROWS)
+                if ismutable && !isconst(rt, i)
+                    ats[i] = ft # can't constrain this field (as it may be modified later)
+                    continue
+                end
+                allconst &= isa(at, Const)
+                if !anyrefine
+                    anyrefine = has_nontrivial_extended_info(𝕃ᵢ, at) || # extended lattice information
+                                ⋤(𝕃ᵢ, at, ft) # just a type-level information, but more precise than the declared type
+                end
+                ats[i] = at
+            end
+            # For now, don't allow:
+            # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
+            #   with `const` fields if anything refined)
+            # - partially initialized Const/PartialStruct
+            if fcount == nargs
+                if consistent === ALWAYS_TRUE && allconst
+                    argvals = Vector{Any}(undef, nargs)
+                    for j in 1:nargs
+                        argvals[j] = (ats[j]::Const).val
+                    end
+                    rt = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), rt, argvals, nargs))
+                elseif anyrefine
+                    rt = PartialStruct(rt, ats)
+                end
+            end
+        else
+            rt = refine_partial_type(rt)
+            nothrow = false
+        end
+    else
+        consistent = ALWAYS_FALSE
+        nothrow = false
+    end
+    nothrow && (exct = Union{})
+    effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
+    return RTEffects(rt, exct, effects)
 end
-abstract_eval_the_exception(::AbstractInterpreter, ::IRInterpretationState) = Any
+
+function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
+                                sv::AbsIntState)
+    𝕃ᵢ = typeinf_lattice(interp)
+    rt, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv), true)
+    nothrow = false
+    if length(e.args) == 2 && isconcretedispatch(rt) && !ismutabletype(rt)
+        at = abstract_eval_value(interp, e.args[2], vtypes, sv)
+        n = fieldcount(rt)
+        if (isa(at, Const) && isa(at.val, Tuple) && n == length(at.val::Tuple) &&
+            (let t = rt, at = at
+                all(i::Int -> getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n)
+            end))
+            nothrow = isexact
+            rt = Const(ccall(:jl_new_structt, Any, (Any, Any), rt, at.val))
+        elseif (isa(at, PartialStruct) && ⊑(𝕃ᵢ, at, Tuple) && n > 0 &&
+                n == length(at.fields::Vector{Any}) && !isvarargtype(at.fields[end]) &&
+                (let t = rt, at = at
+                    all(i::Int -> ⊑(𝕃ᵢ, (at.fields::Vector{Any})[i], fieldtype(t, i)), 1:n)
+                end))
+            nothrow = isexact
+            rt = PartialStruct(rt, at.fields::Vector{Any})
+        end
+    else
+        rt = refine_partial_type(rt)
+    end
+    consistent = !ismutabletype(rt) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
+    effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
+    return RTEffects(rt, Any, effects)
+end
+
+function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
+                                          sv::AbsIntState)
+    𝕃ᵢ = typeinf_lattice(interp)
+    rt = Union{}
+    effects = Effects() # TODO
+    if length(e.args) >= 4
+        ea = e.args
+        argtypes = collect_argtypes(interp, ea, vtypes, sv)
+        if argtypes === nothing
+            rt = Bottom
+            effects = EFFECTS_THROWS
+        else
+            mi = frame_instance(sv)
+            rt = opaque_closure_tfunc(𝕃ᵢ, argtypes[1], argtypes[2], argtypes[3],
+                argtypes[4], argtypes[5:end], mi)
+            if isa(rt, PartialOpaque) && isa(sv, InferenceState) && !call_result_unused(sv, sv.currpc)
+                # Infer this now so that the specialization is available to
+                # optimization.
+                argtypes = most_general_argtypes(rt)
+                pushfirst!(argtypes, rt.env)
+                callinfo = abstract_call_opaque_closure(interp, rt,
+                    ArgInfo(nothing, argtypes), StmtInfo(true), sv, #=check=#false)
+                sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
+            end
+        end
+    end
+    return RTEffects(rt, Any, effects)
+end
+
+function abstract_eval_copyast(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
+                               sv::AbsIntState)
+    effects = EFFECTS_UNKNOWN
+    rt = abstract_eval_value(interp, e.args[1], vtypes, sv)
+    if rt isa Const && rt.val isa Expr
+        # `copyast` makes copies of Exprs
+        rt = Expr
+    end
+    return RTEffects(rt, Any, effects)
+end
+
+function abstract_eval_isdefined(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
+                                 sv::AbsIntState)
+    sym = e.args[1]
+    rt = Bool
+    effects = EFFECTS_TOTAL
+    exct = Union{}
+    isa(sym, Symbol) && (sym = GlobalRef(frame_module(sv), sym))
+    if isa(sym, SlotNumber) && vtypes !== nothing
+        vtyp = vtypes[slot_id(sym)]
+        if vtyp.typ === Bottom
+            rt = Const(false) # never assigned previously
+        elseif !vtyp.undef
+            rt = Const(true) # definitely assigned previously
+        end
+    elseif isa(sym, GlobalRef)
+        if InferenceParams(interp).assume_bindings_static
+            rt = Const(isdefined_globalref(sym))
+        elseif isdefinedconst_globalref(sym)
+            rt = Const(true)
+        else
+            effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
+        end
+    elseif isexpr(sym, :static_parameter)
+        n = sym.args[1]::Int
+        if 1 <= n <= length(sv.sptypes)
+            sp = sv.sptypes[n]
+            if !sp.undef
+                rt = Const(true)
+            elseif sp.typ === Bottom
+                rt = Const(false)
+            end
+        end
+    else
+        effects = EFFECTS_UNKNOWN
+    end
+    return RTEffects(rt, exct, effects)
+end
+
+function abstract_eval_throw_undef_if_not(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
+    condt = abstract_eval_value(interp, e.args[2], vtypes, sv)
+    condval = maybe_extract_const_bool(condt)
+    rt = Nothing
+    exct = UndefVarError
+    effects = EFFECTS_THROWS
+    if condval isa Bool
+        if condval
+            effects = EFFECTS_TOTAL
+            exct = Union{}
+        else
+            rt = Union{}
+        end
+    elseif !hasintersect(widenconst(condt), Bool)
+        rt = Union{}
+    end
+    return RTEffects(rt, exct, effects)
+end
+
+abstract_eval_the_exception(::AbstractInterpreter, sv::InferenceState) =
+    the_exception_info(sv.handlers[sv.handler_at[sv.currpc][2]].exct)
+abstract_eval_the_exception(::AbstractInterpreter, ::IRInterpretationState) = the_exception_info(Any)
+the_exception_info(@nospecialize t) = RTEffects(t, Union{}, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
+
+function abstract_eval_static_parameter(::AbstractInterpreter, e::Expr, sv::AbsIntState)
+    n = e.args[1]::Int
+    nothrow = false
+    if 1 <= n <= length(sv.sptypes)
+        sp = sv.sptypes[n]
+        rt = sp.typ
+        nothrow = !sp.undef
+    else
+        rt = Any
+    end
+    exct = nothrow ? Union{} : UndefVarError
+    effects = Effects(EFFECTS_TOTAL; nothrow)
+    return RTEffects(rt, exct, effects)
+end
 
 function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
                                       sv::AbsIntState)
-    effects = Effects()
     ehead = e.head
-    𝕃ᵢ = typeinf_lattice(interp)
-    ⊑ᵢ = ⊑(𝕃ᵢ)
-    exct = Any
     if ehead === :call
-        (; rt, exct, effects) = abstract_eval_call(interp, e, vtypes, sv)
-        t = rt
+        return abstract_eval_call(interp, e, vtypes, sv)
     elseif ehead === :new
-        t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv), true)
-        ut = unwrap_unionall(t)
-        exct = Union{ErrorException, TypeError}
-        if isa(ut, DataType) && !isabstracttype(ut)
-            ismutable = ismutabletype(ut)
-            fcount = datatype_fieldcount(ut)
-            nargs = length(e.args) - 1
-            has_any_uninitialized = (fcount === nothing || (fcount > nargs && (let t = t
-                    any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
-                end)))
-            if has_any_uninitialized
-                # allocation with undefined field is inconsistent always
-                consistent = ALWAYS_FALSE
-            elseif ismutable
-                # mutable allocation isn't `:consistent`, but we still have a chance that
-                # return type information later refines the `:consistent`-cy of the method
-                consistent = CONSISTENT_IF_NOTRETURNED
-            else
-                consistent = ALWAYS_TRUE # immutable allocation is consistent
-            end
-            if isconcretedispatch(t)
-                nothrow = true
-                @assert fcount !== nothing && fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
-                ats = Vector{Any}(undef, nargs)
-                local anyrefine = false
-                local allconst = true
-                for i = 1:nargs
-                    at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
-                    ft = fieldtype(t, i)
-                    nothrow && (nothrow = at ⊑ᵢ ft)
-                    at = tmeet(𝕃ᵢ, at, ft)
-                    at === Bottom && @goto always_throw
-                    if ismutable && !isconst(t, i)
-                        ats[i] = ft # can't constrain this field (as it may be modified later)
-                        continue
-                    end
-                    allconst &= isa(at, Const)
-                    if !anyrefine
-                        anyrefine = has_nontrivial_extended_info(𝕃ᵢ, at) || # extended lattice information
-                                    ⋤(𝕃ᵢ, at, ft) # just a type-level information, but more precise than the declared type
-                    end
-                    ats[i] = at
-                end
-                # For now, don't allow:
-                # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
-                #   with `const` fields if anything refined)
-                # - partially initialized Const/PartialStruct
-                if fcount == nargs
-                    if consistent === ALWAYS_TRUE && allconst
-                        argvals = Vector{Any}(undef, nargs)
-                        for j in 1:nargs
-                            argvals[j] = (ats[j]::Const).val
-                        end
-                        t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, argvals, nargs))
-                    elseif anyrefine
-                        t = PartialStruct(t, ats)
-                    end
-                end
-            else
-                t = refine_partial_type(t)
-                nothrow = false
-            end
-        else
-            consistent = ALWAYS_FALSE
-            nothrow = false
-        end
-        effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
-        nothrow && (exct = Union{})
+        return abstract_eval_new(interp, e, vtypes, sv)
     elseif ehead === :splatnew
-        t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv), true)
-        nothrow = false # TODO: More precision
-        if length(e.args) == 2 && isconcretedispatch(t) && !ismutabletype(t)
-            at = abstract_eval_value(interp, e.args[2], vtypes, sv)
-            n = fieldcount(t)
-            if (isa(at, Const) && isa(at.val, Tuple) && n == length(at.val::Tuple) &&
-                (let t = t, at = at
-                    all(i::Int->getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n)
-                end))
-                nothrow = isexact
-                t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
-            elseif (isa(at, PartialStruct) && at ⊑ᵢ Tuple && n > 0 && n == length(at.fields::Vector{Any}) && !isvarargtype(at.fields[end]) &&
-                    (let t = t, at = at, ⊑ᵢ = ⊑ᵢ
-                        all(i::Int->(at.fields::Vector{Any})[i] ⊑ᵢ fieldtype(t, i), 1:n)
-                    end))
-                nothrow = isexact
-                t = PartialStruct(t, at.fields::Vector{Any})
-            end
-        else
-            t = refine_partial_type(t)
-        end
-        consistent = !ismutabletype(t) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
-        effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
+        return abstract_eval_splatnew(interp, e, vtypes, sv)
     elseif ehead === :new_opaque_closure
-        t = Union{}
-        effects = Effects() # TODO
-        merge_effects!(interp, sv, effects)
-        if length(e.args) >= 4
-            ea = e.args
-            argtypes = collect_argtypes(interp, ea, vtypes, sv)
-            if argtypes === nothing
-                t = Bottom
-            else
-                mi = frame_instance(sv)
-                t = opaque_closure_tfunc(𝕃ᵢ, argtypes[1], argtypes[2], argtypes[3],
-                    argtypes[4], argtypes[5:end], mi)
-                if isa(t, PartialOpaque) && isa(sv, InferenceState) && !call_result_unused(sv, sv.currpc)
-                    # Infer this now so that the specialization is available to
-                    # optimization.
-                    argtypes = most_general_argtypes(t)
-                    pushfirst!(argtypes, t.env)
-                    callinfo = abstract_call_opaque_closure(interp, t,
-                        ArgInfo(nothing, argtypes), StmtInfo(true), sv, #=check=#false)
-                    sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
-                end
-            end
-        end
+        return abstract_eval_new_opaque_closure(interp, e, vtypes, sv)
     elseif ehead === :foreigncall
-        (; rt, exct, effects) = abstract_eval_foreigncall(interp, e, vtypes, sv)
-        t = rt
+        return abstract_eval_foreigncall(interp, e, vtypes, sv)
     elseif ehead === :cfunction
-        effects = EFFECTS_UNKNOWN
-        t = e.args[1]
-        isa(t, Type) || (t = Any)
-        abstract_eval_cfunction(interp, e, vtypes, sv)
+        return abstract_eval_cfunction(interp, e, vtypes, sv)
     elseif ehead === :method
-        t = (length(e.args) == 1) ? Any : Nothing
-        effects = EFFECTS_UNKNOWN
+        rt = (length(e.args) == 1) ? Any : Nothing
+        return RTEffects(rt, Any, EFFECTS_UNKNOWN)
     elseif ehead === :copyast
-        effects = EFFECTS_UNKNOWN
-        t = abstract_eval_value(interp, e.args[1], vtypes, sv)
-        if t isa Const && t.val isa Expr
-            # `copyast` makes copies of Exprs
-            t = Expr
-        end
+        return abstract_eval_copyast(interp, e, vtypes, sv)
     elseif ehead === :invoke || ehead === :invoke_modify
         error("type inference data-flow error: tried to double infer a function")
     elseif ehead === :isdefined
-        sym = e.args[1]
-        t = Bool
-        effects = EFFECTS_TOTAL
-        exct = Union{}
-        if isa(sym, SlotNumber) && vtypes !== nothing
-            vtyp = vtypes[slot_id(sym)]
-            if vtyp.typ === Bottom
-                t = Const(false) # never assigned previously
-            elseif !vtyp.undef
-                t = Const(true) # definitely assigned previously
-            end
-        elseif isa(sym, Symbol)
-            if isdefined(frame_module(sv), sym)
-                t = Const(true)
-            elseif InferenceParams(interp).assume_bindings_static
-                t = Const(false)
-            else
-                effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
-            end
-        elseif isa(sym, GlobalRef)
-            if isdefined(sym.mod, sym.name)
-                t = Const(true)
-            elseif InferenceParams(interp).assume_bindings_static
-                t = Const(false)
-            else
-                effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
-            end
-        elseif isexpr(sym, :static_parameter)
-            n = sym.args[1]::Int
-            if 1 <= n <= length(sv.sptypes)
-                sp = sv.sptypes[n]
-                if !sp.undef
-                    t = Const(true)
-                elseif sp.typ === Bottom
-                    t = Const(false)
-                end
-            end
-        else
-            effects = EFFECTS_UNKNOWN
-        end
+        return abstract_eval_isdefined(interp, e, vtypes, sv)
     elseif ehead === :throw_undef_if_not
-        condt = abstract_eval_value(interp, e.args[2], vtypes, sv)
-        condval = maybe_extract_const_bool(condt)
-        t = Nothing
-        exct = UndefVarError
-        effects = EFFECTS_THROWS
-        if condval isa Bool
-            if condval
-                effects = EFFECTS_TOTAL
-                exct = Union{}
-            else
-                t = Union{}
-            end
-        elseif !hasintersect(widenconst(condt), Bool)
-            t = Union{}
-        end
+        return abstract_eval_throw_undef_if_not(interp, e, vtypes, sv)
     elseif ehead === :boundscheck
-        t = Bool
-        exct = Union{}
-        effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
+        return RTEffects(Bool, Union{}, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
     elseif ehead === :the_exception
-        t = abstract_eval_the_exception(interp, sv)
-        exct = Union{}
-        effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
+        return abstract_eval_the_exception(interp, sv)
     elseif ehead === :static_parameter
-        n = e.args[1]::Int
-        nothrow = false
-        exct = UndefVarError
-        if 1 <= n <= length(sv.sptypes)
-            sp = sv.sptypes[n]
-            t = sp.typ
-            nothrow = !sp.undef
-        else
-            t = Any
-        end
-        if nothrow
-            exct = Union{}
-        end
-        effects = Effects(EFFECTS_TOTAL; nothrow)
+        return abstract_eval_static_parameter(interp, e, sv)
     elseif ehead === :gc_preserve_begin || ehead === :aliasscope
-        t = Any
-        exct = Union{}
-        effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, effect_free=EFFECT_FREE_GLOBALLY)
-    elseif ehead === :gc_preserve_end || ehead === :leave || ehead === :pop_exception || ehead === :global || ehead === :popaliasscope
-        t = Nothing
-        exct = Union{}
-        effects = Effects(EFFECTS_TOTAL; effect_free=EFFECT_FREE_GLOBALLY)
-    elseif ehead === :method
-        t = Method
-        exct = Union{}
-        effects = Effects(EFFECTS_TOTAL; effect_free=EFFECT_FREE_GLOBALLY)
+        return RTEffects(Any, Union{}, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, effect_free=EFFECT_FREE_GLOBALLY))
+    elseif ehead === :gc_preserve_end || ehead === :leave || ehead === :pop_exception ||
+           ehead === :global || ehead === :popaliasscope
+        return RTEffects(Nothing, Union{}, Effects(EFFECTS_TOTAL; effect_free=EFFECT_FREE_GLOBALLY))
     elseif ehead === :thunk
-        t = Any
-        effects = EFFECTS_UNKNOWN
-    elseif false
-        @label always_throw
-        t = Bottom
-        effects = EFFECTS_THROWS
-    else
-        t = abstract_eval_value_expr(interp, e, sv)
-        # N.B.: abstract_eval_value_expr can modify the global effects, but
-        # we move out any arguments with effects during SSA construction later
-        # and recompute the effects.
-        effects = EFFECTS_TOTAL
+        return RTEffects(Any, Any, EFFECTS_UNKNOWN)
     end
-    return RTEffects(t, exct, effects)
+    # N.B.: abstract_eval_value_expr can modify the global effects, but
+    # we move out any arguments with effects during SSA construction later
+    # and recompute the effects.
+    rt = abstract_eval_value_expr(interp, e, sv)
+    return RTEffects(rt, Any, EFFECTS_TOTAL)
 end
 
 # refine the result of instantiation of partially-known type `t` if some invariant can be assumed
@@ -2819,9 +2826,10 @@ function override_effects(effects::Effects, override::EffectsOverride)
 end
 
 isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
+isdefinedconst_globalref(g::GlobalRef) = isconst(g) && isdefined_globalref(g)
 
 function abstract_eval_globalref_type(g::GlobalRef)
-    if isdefined_globalref(g) && isconst(g)
+    if isdefinedconst_globalref(g)
         return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
     end
     ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
@@ -2840,18 +2848,22 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, sv::
         if is_mutation_free_argtype(rt)
             inaccessiblememonly = ALWAYS_TRUE
         end
-    elseif isdefined_globalref(g)
-        nothrow = true
     elseif InferenceParams(interp).assume_bindings_static
         consistent = inaccessiblememonly = ALWAYS_TRUE
-        rt = Union{}
+        if isdefined_globalref(g)
+            nothrow = true
+        else
+            rt = Union{}
+        end
+    elseif isdefinedconst_globalref(g)
+        nothrow = true
     end
     return RTEffects(rt, nothrow ? Union{} : UndefVarError, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))
 end
 
 function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, lhs::GlobalRef, @nospecialize(newty))
     effect_free = ALWAYS_FALSE
-    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty)
+    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, ignorelimited(newty))
     inaccessiblememonly = ALWAYS_FALSE
     if !nothrow
         sub_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
@@ -3056,7 +3068,6 @@ end
         return BasicStmtChange(nothing, rt, exct)
     end
     changes = nothing
-    stmt = stmt::Expr
     hd = stmt.head
     if hd === :(=)
         (; rt, exct) = abstract_eval_statement(interp, stmt.args[2], pc_vartable, frame)

@@ -866,7 +866,7 @@ if Sys.ARCH === :x86_64
     foo52079() = Core.Intrinsics.have_fma(Float64)
     if foo52079() == true
         let io = IOBuffer()
-            code_native(io,^,(Float64,Float64), dump_module=false)
+            code_native(io,Base.Math.exp_impl,(Float64,Float64,Val{:ℯ}), dump_module=false)
             str = String(take!(io))
             @test !occursin("fma_emulated", str)
             @test occursin("vfmadd", str)

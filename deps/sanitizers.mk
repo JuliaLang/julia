@@ -14,6 +14,8 @@ define copy_sanitizer_lib
 install-sanitizers: $$(addprefix $$(build_libdir)/, $$(notdir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH)))) | $$(build_shlibdir)
 $$(addprefix $$(build_shlibdir)/,$(2)): $$(addprefix $$(SANITIZER_LIB_PATH)/,$(2)) | $$(build_shlibdir)
 	-cp $$< $$@
+	$(if $(filter $(OS), Linux), \
+		-$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$$$ORIGIN' $$@ , 0)
 endef
 
 ifeq ($(USECLANG),1)
