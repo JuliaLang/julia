@@ -123,11 +123,6 @@ const latex_symbols = Dict(
         # Accidentals
     "\\doubleflat" => "𝄫",
     "\\doublesharp" => "𝄪",
-        # Bars
-    "\\musicsinglebarline"=>"𝄀",
-    "\\musicdoublebarline"=>"𝄁",
-    "\\musicfinalbarline"=>"𝄂",
-    "\\musicreversefinalbarline"=>"𝄃",
         # Codas
     "\\leftrepeatsign"=>"𝄆",
     "\\rightrepeatsign"=>"𝄇",
@@ -135,12 +130,6 @@ const latex_symbols = Dict(
     "\\dacapo"=>"𝄊",
     "\\segno"=>"𝄋",
     "\\coda"=>"𝄌",
-        # Holds and pauses
-    "\\fermata"=>"𝄐",
-    "\\fermatabelow"=>"𝄑",
-        # Staff brackets
-    "\\musicbrace"=>"𝄔",
-    "\\musicbracket"=>"𝄕",
         # Clefs
     "\\gclef"=>"𝄞",
     "\\gclefottavaalta"=>"𝄟",
@@ -149,14 +138,6 @@ const latex_symbols = Dict(
     "\\fclef"=>"𝄢",
     "\\fclefottavaalta"=>"𝄣",
     "\\fclefottavabassa"=>"𝄤",
-        # Time signatures
-    "\\commontime"=>"𝄴",
-    "\\cuttime"=>"𝄵",
-        # Octaves
-    "\\ottavaalta"=>"𝄶",
-    "\\ottavabassa"=>"𝄷",
-    "\\quindicesimaalta"=>"𝄸",
-    "\\quindicesimabassa"=>"𝄹",
         # Rests
     "\\multirest"=>"𝄺",
     "\\wholerest"=>"𝄻",
@@ -175,29 +156,6 @@ const latex_symbols = Dict(
     "\\thirtysecondnote"=>"𝅘𝅥𝅰",
     "\\sixtyfourthnote"=>"𝅘𝅥𝅱",
     "\\onehundredtwentyeighthnote"=>"𝅘𝅥𝅲",
-        # Articulation
-    "\\arpeggiatoup"=>"𝆃",
-    "\\arpeggiatodown"=>"𝆄",
-        # Dynamics
-    "\\piano"=>"𝆏",
-    "\\mezzo"=>"𝆐",
-    "\\forte"=>"𝆑",
-    "\\crescendo"=>"𝆒",
-    "\\decrescendo"=>"𝆓",
-        # Ornaments
-    "\\gracenoteslash"=>"𝆔",
-    "\\gracenotenoslash"=>"𝆕",
-    "\\musictr"=>"𝆖",
-    "\\musicturn"=>"𝆗",
-    "\\musicinvertedturn"=>"𝆘",
-    "\\musicturnslash"=>"𝆙",
-        # Pedals
-    "\\pedalmark"=>"𝆮",
-    "\\pedalupmark"=>"𝆯",
-    "\\halfpedalmark"=>"𝆰",
-        # Miscellaneous symbols
-    "\\glissandoup"=>"𝆱",
-    "\\glissandodown"=>"𝆲",
 
     # Superscripts
     "\\^0" => "⁰",
