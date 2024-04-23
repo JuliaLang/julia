@@ -1,5 +1,5 @@
-profiles-bolt
-bolt.build
+profiles-bolt*
+optimized.build
 toolchain
 
 bolt

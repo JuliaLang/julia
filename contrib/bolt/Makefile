@@ -35,7 +35,7 @@ BOLT_FLAGS := $\
 	"BOLT_LDFLAGS=-Wl,--emit-relocs"
 
 STAGE0_BUILD:=$(CURDIR)/toolchain
-STAGE1_BUILD:=$(CURDIR)/bolt.build
+STAGE1_BUILD:=$(CURDIR)/optimized.build
 
 STAGE0_BINARIES:=$(STAGE0_BUILD)/usr/bin/
 
