@@ -106,6 +106,22 @@ abstract type IteratorEltype end
 struct EltypeUnknown <: IteratorEltype end
 struct HasEltype <: IteratorEltype end
 
+if isdefined(Core, :Compiler)
+    macro infer_eltype(T)
+        I = esc(T)
+        return quote
+            T_el = Core.Compiler.return_type(_iterator_upper_bound, Tuple{$I})
+            promote_typejoin_union(T_el)
+        end
+    end
+else
+    macro infer_eltype(T)
+        return quote
+            Any
+        end
+    end
+end
+
 """
     IteratorEltype(itertype::Type) -> IteratorEltype
 
@@ -136,19 +152,3 @@ function IteratorEltype(T::Type{Generator})
 end
 
 eltype(x::Generator) = IteratorEltype(x) == EltypeUnknown() ? Any : @infer_eltype(typeof(x))
-
-if isdefined(Core, :Compiler)
-    macro infer_eltype(T)
-        I = esc(T)
-        return quote
-            T_el = Core.Compiler.return_type(_iterator_upper_bound, Tuple{$I})
-            promote_typejoin_union(T_el)
-        end
-    end
-else
-    macro infer_eltype(T)
-        return quote
-            Any
-        end
-    end
-end
