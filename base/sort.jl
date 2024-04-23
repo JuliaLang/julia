@@ -90,9 +90,9 @@ function issorted(itr;
     # Explicit branching because the compiler can't optimize away the
     # type instability of the `ord` call with Bool `rev` parameter.
     if rev === true
-        issorted(itr, ReverseOrdering(ord(lt,by,nothing,order)))
+        issorted(itr, ord(lt, by, true, order))
     else
-        issorted(itr, ord(lt,by,nothing,order))
+        issorted(itr, ord(lt, by, nothing, order))
     end
 end
 
