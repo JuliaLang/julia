@@ -652,7 +652,7 @@ end
     exc = try; include("./notarealfile.jl"); "unexpectedly reached!"; catch exc; exc; end
     @test exc isa SystemError
     exc.prefix
-end == "including file $(repr(joinpath(@__DIR__, "notarealfile.jl"))): No such file"
+end == "including file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
 
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
@@ -1549,7 +1549,7 @@ end
         end
 
         file = joinpath(depot, "dev", "non-existent.jl")
-        @test_throws SystemError("including file $(repr(file)): No such file") include(file)
+        @test_throws SystemError("including file $(repr(file))") include(file)
         touch(file)
         @test include_dependency(file) === nothing
         chmod(file, 0x000)
@@ -1559,7 +1559,7 @@ end
             @test include_dependency(dir) === nothing
             dir
         end
-        @test_throws SystemError("including $(repr(dir)): No such file or directory") include_dependency(dir)
+        @test_throws SystemError("including file or directory $(repr(dir))") include_dependency(dir)
     end
 end
 
