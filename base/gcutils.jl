@@ -109,7 +109,7 @@ Module with garbage collection utilities.
 """
 module GC
 
-public gc, enable, enable_finalizers, in_finalizer, @preserve, safepoint, enable_logging, logging_enabled
+public gc, enable, @preserve, safepoint, enable_logging, logging_enabled
 
 # mirrored from julia.h
 const GC_AUTO = 0
