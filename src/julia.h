@@ -31,8 +31,8 @@
 #  define jl_jmp_buf sigjmp_buf
 #  if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
 #    define MAX_ALIGN 8
-#  elif defined(_CPU_AARCH64_) || (JL_LLVM_VERSION >= 180000 && defined(_CPU_X86_64_))
-// int128 is 16 bytes aligned on aarch64 and on x86_64 with LLVM >= 18
+#  elif defined(_CPU_AARCH64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)))
+// int128 is 16 bytes aligned on aarch64 and on x86 with LLVM >= 18
 #    define MAX_ALIGN 16
 #  elif defined(_P64)
 // Generically we assume MAX_ALIGN is sizeof(void*)
@@ -43,7 +43,11 @@
 #else
 #  include "win32_ucontext.h"
 #  define jl_jmp_buf jmp_buf
-#  define MAX_ALIGN 8
+#  if JL_LLVM_VERSION >= 180000
+#    define MAX_ALIGN 16
+#  else
+#    define MAX_ALIGN 8
+#  endif
 #endif
 
 // Define the largest size (bytes) of a properly aligned object that the
