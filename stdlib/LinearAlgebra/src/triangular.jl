@@ -272,7 +272,7 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UpperTriangular, i::Integer, j::Integer) =
     i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
-Base._reverse(A::UpperTriangular, dims::Integer) = (reverse((Matrix(A)); dims))
+Base._reverse(A::UpperTriangular, dims::Integer) = reverse!(Matrix(A); dims)
 Base._reverse(A::UpperTriangular, dims::Colon) = LowerTriangular(reverse(A.data))
 Base._reverse!(A::UpperTriangular, dims::Colon) = UpperTriangular(reverse!(A.data); A)
     
