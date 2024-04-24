@@ -698,7 +698,7 @@ end
 end
 
 Base._reverse(A::Tridiagonal, dims) = reverse!(Matrix(A); dims)
-Base._reverse(A::Tridiagonal, dims::Colon) = Tridiagonal(reverse(A.dl), reverse(A.d), reverse(A.du))
+Base._reverse(A::Tridiagonal, dims::Colon) = Tridiagonal(reverse(A.du), reverse(A.d), reverse(A.dl))
 function Base._reverse!(A::Tridiagonal, dims::Colon)
     n = length(A.du) # == length(A.dl), & always 1-based
     # reverse and swap A.dl and A.du:
