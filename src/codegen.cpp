@@ -4162,7 +4162,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *theArgs = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
-                if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
+                if (ctx.params->no_dynamic_dispatch) {
                     // if we know the return type, we can assume the result is of that type
                     errs() << "ERROR: Dynamic call to Core._apply_iterate detected\n";
                     errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
@@ -5263,7 +5263,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             if (lival.constant) {
                 arraylist_push(&new_invokes, lival.constant);
                 push_frames(ctx, ctx.linfo, (jl_method_instance_t*)lival.constant);
-            } else if (rt != jl_bottom_type) {
+            } else {
                 errs() << "Dynamic call to unknown function";
                 errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
 
@@ -5325,7 +5325,7 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
             return mark_julia_type(ctx, oldnew, true, rt);
         }
     }
-    if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
+    if (ctx.params->no_dynamic_dispatch) {
         errs() << "ERROR: dynamic invoke modify call to";
         jl_(args[0]);
         errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
@@ -5442,7 +5442,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             }
         }
     }
-    if (ctx.params->no_dynamic_dispatch && rt != jl_bottom_type && ctx.rettype != jl_bottom_type) {
+    if (ctx.params->no_dynamic_dispatch) {
         // jl_code_instance_t * codeinst = jl_atomic_load_relaxed(&ctx.linfo->cache);
         // jl_((void*)jl_uncompress_ir(codeinst->def->def.method, codeinst, codeinst->inferred));
         errs() << "ERROR: Dynamic call to ";
