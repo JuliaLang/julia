@@ -254,7 +254,7 @@ end
     end
 end
 
-Base._reverse(A::Symmetric, dims::Integer) = (reverse((Matrix(A)); dims))
+Base._reverse(A::Symmetric, dims::Integer) = reverse!(Matrix(A); dims)
 Base._reverse(A::Symmetric, dims::Colon) = Symmetric(reverse(A.data), A.uplo == 'U' ? :L : :U)
 
 @propagate_inbounds function setindex!(A::Symmetric, v, i::Integer, j::Integer)
