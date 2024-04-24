@@ -1896,7 +1896,7 @@ let code = Any[
     ir = make_ircode(code; ssavaluetypes=Any[Union{}, Union{}, Any, Union{}])
 
     # Unfortunately `compute_basic_blocks` does not notice the `throw()` so it gives us
-    # the wrong CFG. Instead manually construct the intended CFG:
+    # a slightly imprecise CFG. Instead manually construct the CFG we need for this test:
     empty!(ir.cfg.blocks)
     push!(ir.cfg.blocks, BasicBlock(StmtRange(1,1), [], [2,4]))
     push!(ir.cfg.blocks, BasicBlock(StmtRange(2,2), [1], []))
