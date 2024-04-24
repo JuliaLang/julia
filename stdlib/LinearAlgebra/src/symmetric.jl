@@ -263,7 +263,7 @@ Base._reverse(A::Symmetric, dims::Colon) = Symmetric(reverse(A.data), A.uplo == 
 end
 
 Base._reverse(A::Hermitian, dims) = reverse!(Matrix(A); dims)
-Base._reverse(A::Hermitian, dims::Colon) = Hermitian(reverse!(Matrix(A)))
+Base._reverse(A::Hermitian, dims::Colon) = Hermitian(reverse(A.data), A.uplo == 'U' ? :L : :U)
 
 @propagate_inbounds function setindex!(A::Hermitian, v, i::Integer, j::Integer)
     if i != j
