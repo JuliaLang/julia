@@ -86,7 +86,7 @@ write(io, """
     end
     Core.Compiler.track_newly_inferred.x = false
     @eval Base begin
-        _assert_tostring(msg) = nothing
+        _assert_tostring(msg) = ""
         reinit_stdio() = nothing
         JuliaSyntax.enable_in_core!() = nothing
         set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
@@ -94,7 +94,7 @@ write(io, """
         @inline function invokelatest(f::F, args...; kwargs...) where F
             return f(args...; kwargs...)
         end
-        function sprint(f::F, args...; context=nothing, sizehint::Integer=0) where F<:Function
+        function sprint(f::F, args::Vararg{Any,N}; context=nothing, sizehint::Integer=0) where {F<:Function,N}
             s = IOBuffer(sizehint=sizehint)
             if context isa Tuple
                 f(IOContext(s, context...), args...)
@@ -121,7 +121,6 @@ write(io, """
         end
     end
     @eval Base.GMP begin
-
         function __init__()
             try
                 ccall((:__gmp_set_memory_functions, libgmp), Cvoid,
@@ -152,16 +151,6 @@ write(io, """
         issorted(itr;
             lt::T=isless, by::F=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where {T,F} =
             issorted(itr, ord(lt,by,rev,order))
-    end
-    @eval Base.Unicode begin
-        function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform::F = identity) where F
-            nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
-            buffer = Base.StringVector(nwords*4)
-            nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
-            nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
-            nbytes < 0 && utf8proc_error(nbytes)
-            return String(resize!(buffer, nbytes))
-        end
     end
     @eval Base.TOML begin
         function try_return_datetime(p, year, month, day, h, m, s, ms)
