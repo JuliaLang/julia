@@ -300,7 +300,7 @@ end
     return A
 end
 
-Base._reverse(A::LowerTriangular, dims) = LowerTriangular(reverse((Matrix(A)); dims))
+Base._reverse(A::LowerTriangular, dims) = reverse!(Matrix(A); dims)
 Base._reverse(A::LowerTriangular, dims::Colon) = LowerTriangular(reverse(Matrix(A)))
 Base._reverse!(A::LowerTriangular, dims::Colon) = (reverse!(A.data); A)
 
