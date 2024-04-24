@@ -884,6 +884,17 @@ end
     @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
 end
 
+@testset "Reverse operation on Bidiagonal" begin
+    n = 5
+    d = randn(n)
+    e = randn(n - 1)
+    B = Bidiagonal(d, e)
+    @test reverse(B, dims=1) == reverse(Matrix(B), dims=1)
+    @test reverse(B, dims=2) == reverse(Matrix(B), dims=2)
+    @test reverse(B) == reverse(Matrix(B))
+end
+
+
 @testset "Matrix conversion for non-numeric and undef" begin
     B = Bidiagonal(Vector{BigInt}(undef, 4), fill(big(3), 3), :U)
     M = Matrix(B)

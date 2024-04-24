@@ -830,6 +830,28 @@ end
     @test axes(B) === (ax, ax)
 end
 
+@testset "Reverse operation on Tridiagonal" begin
+    n = 5
+    d = randn(n)
+    dl = randn(n - 1)
+    du = randn(n - 1)
+    T = Tridiagonal(dl, d, du)
+    @test reverse(T, dims=1) == reverse(Matrix(T), dims=1)
+    @test reverse(T, dims=2) == reverse(Matrix(T), dims=2)
+    @test reverse(T) == reverse(Matrix(T))
+end
+
+@testset "Reverse operation on SymTridiagonal" begin
+    n = 5
+    d = randn(n)
+    dl = randn(n - 1)
+    ST = SymTridiagonal(d, dl)
+    @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
+    @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
+    @test reverse(ST) == reverse(Matrix(ST))
+end
+
+
 @testset "Matrix conversion for non-numeric and undef" begin
     T = Tridiagonal(fill(big(3), 3), Vector{BigInt}(undef, 4), fill(big(3), 3))
     M = Matrix(T)

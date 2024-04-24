@@ -269,6 +269,11 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UpperTriangular, i::Integer, j::Integer) =
     i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
+Base._reverse(A::UpperTriangular, dims::Integer) = (reverse((Matrix(A)); dims))
+Base._reverse(A::UpperTriangular, dims::Colon) = (reverse(Matrix(A)))
+Base._reverse!(A::UpperTriangular, dims::Colon) = UpperTriangular(reverse!(A.data); A)
+    
+
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
         iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
@@ -291,6 +296,10 @@ end
     end
     return A
 end
+
+Base._reverse(A::LowerTriangular, dims) = LowerTriangular(reverse((Matrix(A)); dims))
+Base._reverse(A::LowerTriangular, dims::Colon) = LowerTriangular(reverse(Matrix(A)))
+Base._reverse!(A::LowerTriangular, dims::Colon) = (reverse!(A.data); A)
 
 @propagate_inbounds function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j

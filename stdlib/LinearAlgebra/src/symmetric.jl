@@ -254,10 +254,18 @@ end
     end
 end
 
+Base._reverse(A::Symmetric, dims::Integer) = (reverse((Matrix(A)); dims))
+Base._reverse(A::Symmetric, dims::Colon) = Symmetric(reverse(Matrix(A)))
+Base._reverse!(A::Symmetric, dims::Colon) = (reverse!(A.data); A)
+
 @propagate_inbounds function setindex!(A::Symmetric, v, i::Integer, j::Integer)
     i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
     setindex!(A.data, v, i, j)
 end
+
+Base._reverse(A::Hermitian, dims) = Hermitian(reverse(Matrix(A)); dims)
+Base._reverse(A::Hermitian, dims::Colon) = Hermitian(reverse(Matrix(A)))
+Base._reverse!(A::Hermitian, dims::Colon) = (reverse!(A.data); A)
 
 @propagate_inbounds function setindex!(A::Hermitian, v, i::Integer, j::Integer)
     if i != j

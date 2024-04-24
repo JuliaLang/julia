@@ -458,6 +458,10 @@ end
     end
 end
 
+Base._reverse(A::SymTridiagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::SymTridiagonal, dims::Colon) = SymTridiagonal(reverse(A.dv), reverse(A.ev))
+Base._reverse!(A::SymTridiagonal, dims::Colon) = (reverse!(A.dv); reverse!(A.ev); A)
+
 @inline function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j
@@ -688,6 +692,10 @@ end
         return zero(T)
     end
 end
+
+Base._reverse(A::Tridiagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::Tridiagonal, dims::Colon) = Tridiagonal(reverse(A.dl), reverse(A.d), reverse(A.du))
+Base._reverse!(A::Tridiagonal, dims::Colon) = (reverse!(A.dl); reverse!(A.d); reverse!(A.du); A)
 
 @inline function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)

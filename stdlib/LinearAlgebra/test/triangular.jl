@@ -727,6 +727,22 @@ end
 # Issue 16196
 @test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(fill(1., 3), [1,2,3]) == fill(1., 3)
 
+
+@testset "Reverse operation on UpperTriangular" begin
+    A = UpperTriangular(randn(n, n))
+    @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+    @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+    @test reverse(A) == reverse(Matrix(A))
+end
+
+@testset "Reverse operation on LowerTriangular" begin
+    A = LowerTriangular(randn(n, n))
+    @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+    @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+    @test reverse(A) == reverse(Matrix(A))
+end
+
+
 # dimensional correctness:
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))

@@ -506,6 +506,21 @@ end
     end
 end
 
+@testset "Reverse operation on Symmetric" begin
+    A = Symmetric(randn(n, n))
+    @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+    @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+    @test reverse(A) == reverse(Matrix(A))
+end
+
+@testset "Reverse operation on Hermitian" begin
+    A = Hermitian(randn(ComplexF64, n, n))
+    @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+    @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+    @test reverse(A) == reverse(Matrix(A))
+end
+
+
 # bug identified in PR #52318: dot products of quaternionic Hermitian matrices,
 # or any number type where conj(a)*conj(b) ≠ conj(a*b):
 @testset "dot Hermitian quaternion #52318" begin

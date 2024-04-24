@@ -61,6 +61,16 @@ Random.seed!(1)
         @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
         @test_throws InexactError convert(Diagonal, ones(2,2))
+        
+        # Test reversing
+        # Test reversing along rows
+        @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
+
+        # Test reversing along columns
+        @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
+
+        # Test reversing the entire matrix
+        @test reverse(D) == reverse(Matrix(D))
     end
 
     @testset "Basic properties" begin
@@ -608,6 +618,15 @@ end
         end
     end
 end
+
+@testset "Test reverse" begin
+    d = randn(n)
+    D = Diagonal(d)
+    @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
+    @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
+    @test reverse(D) == reverse(Matrix(D))
+end
+
 
 @testset "inverse" begin
     for d in Any[randn(n), Int[], [1, 2, 3], [1im, 2im, 3im], [1//1, 2//1, 3//1], [1+1im//1, 2//1, 3im//1]]
