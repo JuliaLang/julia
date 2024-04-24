@@ -70,7 +70,7 @@ Random.seed!(1)
         @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
 
         # Test reversing the entire matrix
-        @test reverse(D) == reverse(Matrix(D))
+        @test reverse(D) == reverse(Matrix(D)) == reverse!(copy(D))
     end
 
     @testset "Basic properties" begin
