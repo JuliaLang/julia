@@ -545,12 +545,14 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                 aft <: mft && continue
                 # Generate isa check
                 isa_expr = Expr(:call, isa, argexprs[i], mft)
-                ssa = insert_node_here!(compact, NewInstruction(isa_expr, Bool, line))
+                isa_type = isa_tfunc(optimizer_lattice(interp), argextype(argexprs[i], compact), Const(mft))
+                ssa = insert_node_here!(compact, NewInstruction(isa_expr, isa_type, line))
                 if cond === true
                     cond = ssa
                 else
                     and_expr = Expr(:call, and_int, cond, ssa)
-                    cond = insert_node_here!(compact, NewInstruction(and_expr, Bool, line))
+                    and_type = and_int_tfunc(optimizer_lattice(interp), argextype(cond, compact), isa_type)
+                    cond = insert_node_here!(compact, NewInstruction(and_expr, and_type, line))
                 end
             end
             insert_node_here!(compact, NewInstruction(GotoIfNot(cond, next_cond_bb), Union{}, line))
