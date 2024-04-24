@@ -699,7 +699,19 @@ end
 
 Base._reverse(A::Tridiagonal, dims) = reverse!(Matrix(A); dims)
 Base._reverse(A::Tridiagonal, dims::Colon) = Tridiagonal(reverse(A.dl), reverse(A.d), reverse(A.du))
-Base._reverse!(A::Tridiagonal, dims::Colon) = (reverse!(A.dl); reverse!(A.d); reverse!(A.du); A)
+function Base._reverse!(A::Tridiagonal, dims::Colon)
+    n = length(A.du) # == length(A.dl), & always 1-based
+    # reverse and swap A.dl and A.du:
+    for i in 1:(n >> 1)
+        @inbounds A.dl[i], A.du[i], A.dl[n+1-i], A.du[n+1-i] = A.du[n+1-i], A.dl[n+1-i], A.du[i], A.dl[i]
+    end
+    if isodd(n) # swap middle element
+        i = (n >> 1) + 1
+        @inbounds A.dl[i], A.du[i] = A.du[i], A.dl[i]
+    end
+    reverse!(A.d)
+    return A
+end
 
 @inline function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
