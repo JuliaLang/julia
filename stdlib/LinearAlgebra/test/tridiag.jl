@@ -867,7 +867,7 @@ end
     T = Tridiagonal(dl, d, du)
     @test reverse(T, dims=1) == reverse(Matrix(T), dims=1)
     @test reverse(T, dims=2) == reverse(Matrix(T), dims=2)
-    @test reverse(T) == reverse(Matrix(T))
+    @test reverse(T) == reverse(Matrix(T)) == reverse!(copy(T))
 end
 
 @testset "Reverse operation on SymTridiagonal" begin
