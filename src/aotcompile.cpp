@@ -414,7 +414,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= this_world && this_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
-                if (from_invoke) {
+                if (from_invoke && jl_options.verbose_compilation) {
                     jl_safe_printf("Inferred invoke to: ");
                     jl_(mi);
                     jl_safe_printf("\n");
@@ -428,7 +428,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                     abort();
                 }
                 if (codeinst && !params.compiled_functions.count(codeinst)) {
-                    if (from_invoke) {
+                    if (from_invoke && jl_options.verbose_compilation) {
                         jl_safe_printf("Codegen for invoke to: ");
                         jl_(mi);
                         jl_safe_printf("\n");
