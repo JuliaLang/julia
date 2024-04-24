@@ -301,7 +301,6 @@ end
 
 Base._reverse(A::LowerTriangular, dims) = reverse!(Matrix(A); dims)
 Base._reverse(A::LowerTriangular, dims::Colon) = UpperTriangular(reverse(A.data))
-Base._reverse!(A::LowerTriangular, dims::Colon) = (reverse!(A.data); A)
 
 @propagate_inbounds function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
