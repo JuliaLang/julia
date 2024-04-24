@@ -359,7 +359,7 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
-clamp(x, Type{BigInt}) = convert(BigInt, x)
+clamp(x, ::Type{BigInt}) = convert(BigInt, x)
 
 isodd(x::BigInt) = MPZ.tstbit(x, 0)
 iseven(x::BigInt) = !isodd(x)
