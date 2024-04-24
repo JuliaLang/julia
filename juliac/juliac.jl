@@ -73,18 +73,6 @@ write(io, """
     ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
     (f::Base.RedirectStdStream)(io::Core.CoreSTDOUT) = Base._redirect_io_global(io, f.unix_fd)
-    Core.Compiler.track_newly_inferred.x = true
-    let mod = Base.include(Base.__toplevel__, "$absfile")
-        if !isa(mod, Module)
-            mod = Main
-        end
-        if $(output_type == "--output-exe") && isdefined(mod, :main)
-            precompile(mod.main, ())
-        end
-        precompile(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
-        precompile(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
-    end
-    Core.Compiler.track_newly_inferred.x = false
     @eval Base begin
         _assert_tostring(msg) = ""
         reinit_stdio() = nothing
@@ -171,6 +159,20 @@ write(io, """
             return Time(h, m, s, ms)
         end
     end
+
+    import Base.Experimental.entrypoint
+
+    let mod = Base.include(Base.__toplevel__, "$absfile")
+        if !isa(mod, Module)
+            mod = Main
+        end
+        if $(output_type == "--output-exe") && isdefined(mod, :main)
+            entrypoint(mod.main, ())
+        end
+        #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
+        #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
+    end
+
     let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
         if :LinearAlgebra in loaded
             using LinearAlgebra

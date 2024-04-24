@@ -124,6 +124,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                 JL_GC_PUSH1(&tt);
                 tt = jl_apply_tuple_type_v(&tt, 1);
                 jl_compile_hint((jl_tupletype_t*)tt);
+                if (jl_options.small_image)
+                    jl_add_entrypoint((jl_tupletype_t*)tt);
                 JL_GC_POP();
             }
         }
