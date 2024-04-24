@@ -263,7 +263,7 @@ Base._reverse!(A::Symmetric, dims::Colon) = (reverse!(A.data); A)
     setindex!(A.data, v, i, j)
 end
 
-Base._reverse(A::Hermitian, dims) = Hermitian(reverse(Matrix(A)); dims)
+Base._reverse(A::Hermitian, dims) = reverse!(Matrix(A); dims)
 Base._reverse(A::Hermitian, dims::Colon) = Hermitian(reverse(Matrix(A)))
 Base._reverse!(A::Hermitian, dims::Colon) = (reverse!(A.data); A)
 
