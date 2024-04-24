@@ -399,6 +399,51 @@ Get all annotations of `chr`, in the form of a vector of annotation pairs.
 """
 annotations(c::AnnotatedChar) = c.annotations
 
+## Character transformation helper function, c.f. `unicode.jl`.
+
+"""
+    annotated_chartransform(f::Function, str::AnnotatedString, state=nothing)
+
+Transform every character in `str` with `f`, adjusting annotation regions as
+appropriate. `f` must take one of two forms, either:
+- `f(c::Char) -> Char`, or
+- `f(c::Char, state) -> (Char, state)`.
+
+This works by comparing the number of code units of each character before and
+after transforming with `f`, recording and aggregating any differences, then
+applying them to the annotation regions.
+
+Returns an `AnnotatedString{String}` (regardless of the original underling
+string type of `str`).
+"""
+function annotated_chartransform(f::Function, str::AnnotatedString, state=nothing)
+    outstr = IOBuffer()
+    annots = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    bytepos = firstindex(str) - 1
+    offsets = [bytepos => 0]
+    for c in str.string
+        oldnb = ncodeunits(c)
+        bytepos += oldnb
+        if isnothing(state)
+            c = f(c)
+        else
+            c, state = f(c, state)
+        end
+        nb = write(outstr, c)
+        if nb != oldnb
+            push!(offsets, bytepos => last(last(offsets)) + nb - oldnb)
+        end
+    end
+    for annot in str.annotations
+        region, value = annot
+        start, stop = first(region), last(region)
+        start_offset = last(offsets[findlast(<=(start) ∘ first, offsets)::Int])
+        stop_offset  = last(offsets[findlast(<=(stop) ∘ first, offsets)::Int])
+        push!(annots, ((start + start_offset):(stop + stop_offset), value))
+    end
+    AnnotatedString(String(take!(outstr)), annots)
+end
+
 ## AnnotatedIOBuffer
 
 struct AnnotatedIOBuffer <: AbstractPipe
@@ -439,7 +484,8 @@ function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:A
     write(io.io, String(astr))
 end
 
-write(io::AnnotatedIOBuffer, c::AnnotatedChar) = write(io, AnnotatedString(c))
+write(io::AnnotatedIOBuffer, c::AnnotatedChar) =
+    write(io, AnnotatedString(string(c), map(a -> (1:ncodeunits(c), a), annotations(c))))
 write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
 write(io::AnnotatedIOBuffer, b::UInt8) = write(io.io, b)

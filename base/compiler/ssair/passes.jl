@@ -2009,8 +2009,13 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     unionphis = Pair{Int,Any}[] # sorted
     compact = IncrementalCompact(ir, true)
     made_changes = false
-    for ((_, idx), stmt) in compact
+    for ((old_idx, idx), stmt) in compact
         if isa(stmt, PhiNode)
+            if reprocess_phi_node!(𝕃ₒ, compact, stmt, old_idx)
+                # Phi node has a single predecessor and was deleted
+                made_changes = true
+                continue
+            end
             push!(all_phis, idx)
             if is_some_union(compact.result[idx][:type])
                 push!(unionphis, Pair{Int,Any}(idx, Union{}))

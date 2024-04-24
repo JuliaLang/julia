@@ -119,7 +119,7 @@ STRIP_EXPORTED_FUNCS := $(shell $(CPP_STDOUT) -I$(JULIAHOME)/src $(SRCDIR)/list_
 endif
 
 $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ \
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(SHIPFLAGS) $(LIB_OBJS) $(RPATH_LIB) -o $@ \
 		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia.$(JL_MAJOR_SHLIB_EXT) $@
 	@$(DSYMUTIL) $@
@@ -130,7 +130,7 @@ ifeq ($(OS), WINNT)
 endif
 
 $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h $(BUILDDIR)/julia.expmap | $(build_shlibdir) $(build_libdir)
-	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ \
+	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -shared $(DEBUGFLAGS) $(LIB_DOBJS) $(RPATH_LIB) -o $@ \
 		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(VERSIONSCRIPT) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-debug.$(JL_MAJOR_SHLIB_EXT) $@
 	@$(DSYMUTIL) $@

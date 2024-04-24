@@ -80,7 +80,7 @@ function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds
     @timeit "analysis" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
-    @timeit "execution" ir = batch_inline!(ir, todo, propagate_inbounds, OptimizationParams(state.interp))
+    @timeit "execution" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp)
     return ir
 end
 
@@ -522,7 +522,7 @@ assuming their order stays the same post-discovery in `ml_matches`.
 """
 function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                                union_split::UnionSplit, boundscheck::Symbol,
-                               todo_bbs::Vector{Tuple{Int,Int}}, params::OptimizationParams)
+                               todo_bbs::Vector{Tuple{Int,Int}}, interp::AbstractInterpreter)
     (; fully_covered, atype, cases, bbs) = union_split
     stmt, typ, line = compact.result[idx][:stmt], compact.result[idx][:type], compact.result[idx][:line]
     join_bb = bbs[end]
@@ -565,8 +565,10 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                 (isa(argex, SSAValue) || isa(argex, Argument)) || continue
                 aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
                 if !(aft <: mft)
+                    𝕃ₒ = optimizer_lattice(interp)
+                    narrowed_type = tmeet(𝕃ₒ, argextype(argex, compact), mft)
                     argexprs′[i] = insert_node_here!(compact,
-                        NewInstruction(PiNode(argex, mft), mft, line))
+                        NewInstruction(PiNode(argex, mft), narrowed_type, line))
                 end
             end
         end
@@ -605,7 +607,8 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
     return insert_node_here!(compact, NewInstruction(pn, typ, line))
 end
 
-function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, params::OptimizationParams)
+function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, interp::AbstractInterpreter)
+    params = OptimizationParams(interp)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     state = CFGInliningState(ir)
     for (idx, item) in todo
@@ -662,7 +665,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                 if isa(item, InliningTodo)
                     compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
-                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, params)
+                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, item, boundscheck, state.todo_bbs, interp)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact, 0)
@@ -1294,16 +1297,16 @@ end
 function handle_any_const_result!(cases::Vector{InliningCase},
     @nospecialize(result), match::MethodMatch, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-    allow_abstract::Bool, allow_typevars::Bool)
+    allow_typevars::Bool)
     if isa(result, ConcreteResult)
         return handle_concrete_result!(cases, result, match, info, state)
     elseif isa(result, SemiConcreteResult)
-        return handle_semi_concrete_result!(cases, result, match, info, flag, state; allow_abstract)
+        return handle_semi_concrete_result!(cases, result, match, info, flag, state)
     elseif isa(result, ConstPropResult)
-        return handle_const_prop_result!(cases, result, match, info, flag, state; allow_abstract, allow_typevars)
+        return handle_const_prop_result!(cases, result, match, info, flag, state; allow_typevars)
     else
         @assert result === nothing || result isa VolatileInferenceResult
-        return handle_match!(cases, match, argtypes, info, flag, state; allow_abstract, allow_typevars, volatile_inf_result = result)
+        return handle_match!(cases, match, argtypes, info, flag, state; allow_typevars, volatile_inf_result = result)
     end
 end
 
@@ -1368,7 +1371,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
                 handled_all_cases = false
             else
                 handled_all_cases &= handle_any_const_result!(cases,
-                    result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=false)
+                    result, match, argtypes, info, flag, state; allow_typevars=false)
             end
         end
         fully_covered &= split_fully_covered
@@ -1384,7 +1387,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             match = getsplit(info, i)[j]
             result = getresult(info, k)
             handled_all_cases &= handle_any_const_result!(cases,
-                result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=true)
+                result, match, argtypes, info, flag, state; allow_typevars=true)
         end
     elseif !isempty(cases)
         # if we've not seen all candidates, union split is valid only for dispatch tuples
@@ -1407,10 +1410,8 @@ end
 function handle_match!(cases::Vector{InliningCase},
     match::MethodMatch, argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt32,
     state::InliningState;
-    allow_abstract::Bool, allow_typevars::Bool,
-    volatile_inf_result::Union{Nothing,VolatileInferenceResult})
+    allow_typevars::Bool, volatile_inf_result::Union{Nothing,VolatileInferenceResult})
     spec_types = match.spec_types
-    allow_abstract || isdispatchtuple(spec_types) || return false
     # We may see duplicated dispatch signatures here when a signature gets widened
     # during abstract interpretation: for the purpose of inlining, we can just skip
     # processing this dispatch candidate (unless unmatched type parameters are present)
@@ -1423,10 +1424,9 @@ end
 
 function handle_const_prop_result!(cases::Vector{InliningCase}, result::ConstPropResult,
     match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-    allow_abstract::Bool, allow_typevars::Bool)
+    allow_typevars::Bool)
     mi = result.result.linfo
     spec_types = match.spec_types
-    allow_abstract || isdispatchtuple(spec_types) || return false
     if !validate_sparams(mi.sparam_vals)
         (allow_typevars && !may_have_fcalls(mi.def::Method)) || return false
     end
@@ -1460,11 +1460,9 @@ function semiconcrete_result_item(result::SemiConcreteResult,
 end
 
 function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult,
-    match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-    allow_abstract::Bool)
+    match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState)
     mi = result.mi
     spec_types = match.spec_types
-    allow_abstract || isdispatchtuple(spec_types) || return false
     validate_sparams(mi.sparam_vals) || return false
     item = semiconcrete_result_item(result, info, flag, state)
     item === nothing && return false

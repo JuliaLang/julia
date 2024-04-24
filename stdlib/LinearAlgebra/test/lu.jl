@@ -486,4 +486,17 @@ end
     LinearAlgebra.generic_lufact!(fill(Inf, 2, 2), check=false)
 end
 
+@testset "lu for empty matrices" begin
+    for T in (Float64, BigFloat)
+        A = fill(T(0.0), 0, 0)
+        v = fill(T(1.0), 0, 10)
+        @test A \ v ≈ lu(A) \ v
+        vt = permutedims(v)
+        @test vt / A ≈ vt / lu(A)
+        B = UpperTriangular(transpose(fill(complex(T(0.0)), 0, 0)'))
+        @test B \ v ≈ v
+        @test vt / B ≈ vt
+    end
+end
+
 end # module TestLU

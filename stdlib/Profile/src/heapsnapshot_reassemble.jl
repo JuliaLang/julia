@@ -92,7 +92,7 @@ function assemble_snapshot(in_prefix, io::IO)
     node_count = parse(Int, String(@view preamble[pos:endpos]))
 
     pos = last(findnext("edge_count\":", preamble, endpos)) + 1
-    endpos = findnext(==('}'), preamble, pos) - 1
+    endpos = findnext(==(','), preamble, pos) - 1
     edge_count = parse(Int, String(@view preamble[pos:endpos]))
 
     nodes = Nodes(node_count, edge_count)
@@ -137,7 +137,8 @@ function assemble_snapshot(in_prefix, io::IO)
     end
 
     _digits_buf = zeros(UInt8, ndigits(typemax(UInt)))
-    println(io, @view(preamble[1:end-2]), ",") # remove trailing "}\n", we don't end the snapshot here
+    println(io, @view(preamble[1:end-1]), ",") # remove trailing "}" to reopen the object
+
     println(io, "\"nodes\":[")
     for i in 1:length(nodes)
         i > 1 && println(io, ",")
@@ -182,12 +183,11 @@ function assemble_snapshot(in_prefix, io::IO)
             str_bytes = read(strings_io, str_size)
             str = String(str_bytes)
             if first
-                print_str_escape_json(io, str)
                 first = false
             else
                 print(io, ",\n")
-                print_str_escape_json(io, str)
             end
+            print_str_escape_json(io, str)
         end
     end
     print(io, "]}")
@@ -199,6 +199,19 @@ function assemble_snapshot(in_prefix, io::IO)
 
     @assert isempty(orphans) "Orphaned nodes: $(orphans), node count: $(length(nodes)), orphan node count: $(length(orphans))"
 
+    return nothing
+end
+
+"""
+    cleanup_streamed_files(prefix::AbstractString)
+
+Remove files streamed during `take_heap_snapshot` in streaming mode.
+"""
+function cleanup_streamed_files(prefix::AbstractString)
+    rm(string(prefix, ".metadata.json"))
+    rm(string(prefix, ".nodes"))
+    rm(string(prefix, ".edges"))
+    rm(string(prefix, ".strings"))
     return nothing
 end
 
@@ -221,6 +234,9 @@ function print_str_escape_json(stream::IO, s::AbstractString)
             print(stream, "\\t")
         elseif '\x00' <= c <= '\x1f'
             print(stream, "\\u", lpad(string(UInt16(c), base=16), 4, '0'))
+        elseif !isvalid(c)
+            # we have to do this because vscode's viewer doesn't like the replace character
+            print(stream, "[invalid unicode character]")
         else
             print(stream, c)
         end

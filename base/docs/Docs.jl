@@ -19,8 +19,9 @@ module Docs
 Functions, methods and types can be documented by placing a string before the definition:
 
     \"\"\"
-    # The Foo Function
-    `foo(x)`: Foo the living hell out of `x`.
+        foo(x)
+
+    Return a fooified version of `x`.
     \"\"\"
     foo(x) = ...
 

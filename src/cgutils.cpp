@@ -57,7 +57,7 @@ static Value *maybe_decay_untracked(jl_codectx_t &ctx, Value *V)
 static Value *decay_derived(jl_codectx_t &ctx, Value *V)
 {
     Type *T = V->getType();
-    if (cast<PointerType>(T)->getAddressSpace() == AddressSpace::Derived)
+    if (T->getPointerAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
     Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
@@ -68,7 +68,7 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
 static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
 {
     Type *T = V->getType();
-    if (cast<PointerType>(T)->getAddressSpace() != AddressSpace::Tracked)
+    if (T->getPointerAddressSpace() != AddressSpace::Tracked)
         return V;
     Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
@@ -295,7 +295,7 @@ void jl_debugcache_t::initialize(Module *m) {
 
 static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 {
-    unsigned AS = cast<PointerType>(V->getType())->getAddressSpace();
+    unsigned AS = V->getType()->getPointerAddressSpace();
     if (AS != AddressSpace::Tracked && AS != AddressSpace::Derived)
         return V;
     V = decay_derived(ctx, V);

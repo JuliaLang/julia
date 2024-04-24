@@ -48,9 +48,9 @@ const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 11
 const NUM_IR_FLAGS = 12 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
-    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_NOUB
+    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES | IR_FLAG_NOUB
 
-const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES
 
 const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
@@ -68,6 +68,9 @@ function flags_for_effects(effects::Effects)
     end
     if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW
+    end
+    if is_terminates(effects)
+        flags |= IR_FLAG_TERMINATES
     end
     if is_inaccessiblemem_or_argmemonly(effects)
         flags |= IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
@@ -156,7 +159,7 @@ function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
                              sv.unreachable, sv.bb_vartables, sv.insert_coverage)
 end
-function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
+function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
     nssavalues = src.ssavaluetypes
     if nssavalues isa Int
@@ -164,7 +167,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     else
         nssavalues = length(src.ssavaluetypes::Vector{Any})
     end
-    sptypes = sptypes_from_meth_instance(linfo)
+    sptypes = sptypes_from_meth_instance(mi)
     nslots = length(src.slotflags)
     slottypes = src.slottypes
     if slottypes === nothing
@@ -172,7 +175,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     end
     stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
     # cache some useful state computations
-    def = linfo.def
+    def = mi.def
     mod = isa(def, Method) ? def.module : def
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
@@ -186,13 +189,13 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
             for slot = 1:nslots
         ])
     end
-    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
+    return OptimizationState(mi, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
 end
-function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
+function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
     world = get_inference_world(interp)
-    src = retrieve_code_info(linfo, world)
+    src = retrieve_code_info(mi, world)
     src === nothing && return nothing
-    return OptimizationState(linfo, src, interp)
+    return OptimizationState(mi, src, interp)
 end
 
 function argextype end # imported by EscapeAnalysis
@@ -298,8 +301,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
-        nothrow = isdefined(stmt.mod, stmt.name)
-        consistent = nothrow && isconst(stmt.mod, stmt.name)
+        nothrow = consistent = isdefinedconst_globalref(stmt)
         return (consistent, nothrow, nothrow)
     elseif isa(stmt, Expr)
         (; head, args) = stmt
@@ -331,7 +333,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            removable = effect_free & nothrow
+            terminates = is_terminates(effects)
+            removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
         elseif head === :new
             return new_expr_effect_flags(𝕃ₒ, args, src)
@@ -342,7 +345,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            removable = effect_free & nothrow
+            terminates = is_terminates(effects)
+            removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
