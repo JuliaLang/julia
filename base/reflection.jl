@@ -18,7 +18,7 @@ julia> parentmodule(Base.Broadcast)
 Base
 ```
 """
-parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (Any,), m))
 
 is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
 
@@ -30,6 +30,7 @@ parent modules of `m` which is either a registered root module or which is its
 own parent module.
 """
 function moduleroot(m::Module)
+    @_total_meta
     while true
         is_root_module(m) && return m
         p = parentmodule(m)
@@ -63,6 +64,7 @@ julia> fullname(Main)
 ```
 """
 function fullname(m::Module)
+    @_total_meta
     mn = nameof(m)
     if m === Main || m === Base || m === Core
         return (mn,)
