@@ -860,24 +860,26 @@ end
 end
 
 @testset "Reverse operation on Tridiagonal" begin
-    n = 5:6
-    d = randn(n)
-    dl = randn(n - 1)
-    du = randn(n - 1)
-    T = Tridiagonal(dl, d, du)
-    @test reverse(T, dims=1) == reverse(Matrix(T), dims=1)
-    @test reverse(T, dims=2) == reverse(Matrix(T), dims=2)
-    @test reverse(T) == reverse(Matrix(T)) == reverse!(copy(T))
+    for n in 5,6
+        d = randn(n)
+        dl = randn(n - 1)
+        du = randn(n - 1)
+        T = Tridiagonal(dl, d, du)
+        @test reverse(T, dims=1) == reverse(Matrix(T), dims=1)
+        @test reverse(T, dims=2) == reverse(Matrix(T), dims=2)
+        @test reverse(T) == reverse(Matrix(T)) == reverse!(copy(T))
+    end
 end
 
 @testset "Reverse operation on SymTridiagonal" begin
-    n = 5:6
-    d = randn(n)
-    dl = randn(n - 1)
-    ST = SymTridiagonal(d, dl)
-    @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
-    @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
-    @test reverse(ST) == reverse(Matrix(ST))
+    for n  in 5,6
+        d = randn(n)
+        dl = randn(n - 1)
+        ST = SymTridiagonal(d, dl)
+        @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
+        @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
+        @test reverse(ST) == reverse(Matrix(ST))
+    end
 end
 
 
