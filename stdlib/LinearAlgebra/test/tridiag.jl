@@ -860,7 +860,7 @@ end
 end
 
 @testset "Reverse operation on Tridiagonal" begin
-    n = 5
+    n = 5:6
     d = randn(n)
     dl = randn(n - 1)
     du = randn(n - 1)
@@ -871,7 +871,7 @@ end
 end
 
 @testset "Reverse operation on SymTridiagonal" begin
-    n = 5
+    n = 5:6
     d = randn(n)
     dl = randn(n - 1)
     ST = SymTridiagonal(d, dl)
