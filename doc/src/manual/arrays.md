@@ -793,7 +793,7 @@ Indexing by a boolean vector `B` is effectively the same as indexing by the
 vector of integers that is returned by [`findall(B)`](@ref). Similarly, indexing
 by a `N`-dimensional boolean array is effectively the same as indexing by the
 vector of `CartesianIndex{N}`s where its values are `true`. A logical index
-must be a array of the same shape as the dimension(s) it indexes into, or it
+must be an array of the same shape as the dimension(s) it indexes into, or it
 must be the only index provided and match the shape of the one-dimensional
 reshaped view of the array it indexes into. It is generally more efficient
 to use boolean arrays as indices directly instead of first calling [`findall`](@ref).

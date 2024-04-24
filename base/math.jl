@@ -95,11 +95,10 @@ julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
  10
 ```
 """
-clamp(x::X, lo::L, hi::H) where {X,L,H} =
-    ifelse(x > hi, convert(promote_type(X,L,H), hi),
-           ifelse(x < lo,
-                  convert(promote_type(X,L,H), lo),
-                  convert(promote_type(X,L,H), x)))
+function clamp(x::X, lo::L, hi::H) where {X,L,H}
+    T = promote_type(X, L, H)
+    return (x > hi) ? convert(T, hi) : (x < lo) ? convert(T, lo) : convert(T, x)
+end
 
 """
     clamp(x, T)::T
@@ -120,7 +119,14 @@ julia> trunc(Int, 4pi^2)
 39
 ```
 """
-clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
+function clamp(x, ::Type{T}) where {T<:Integer}
+    # delegating to clamp(x, typemin(T), typemax(T)) would promote types
+    # this way, we avoid unnecessary conversions
+    # think of, e.g., clamp(big(2) ^ 200, Int16)
+    lo = typemin(T)
+    hi = typemax(T)
+    return (x > hi) ? hi : (x < lo) ? lo : convert(T, x)
+end
 
 
 """
@@ -1255,6 +1261,10 @@ function modf(x::T) where T<:IEEEFloat
     return (rx, ix)
 end
 
+@inline function use_power_by_squaring(n::Integer)
+    -2^12 <= n <= 3 * 2^13
+end
+
 # @constprop aggressive to help the compiler see the switch between the integer and float
 # variants for callers with constant `y`
 @constprop :aggressive function ^(x::Float64, y::Float64)
@@ -1267,24 +1277,33 @@ end
         y = sign(y)*0x1.8p62
     end
     yint = unsafe_trunc(Int64, y) # This is actually safe since julia freezes the result
-    y == yint && return @noinline x^yint
-    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x==0
-    x<0 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
-    !isfinite(x) && return x*(y>0 || isnan(x))           # x is inf or NaN
+    yisint = y == yint
+    if yisint
+        yint == 0 && return 1.0
+        use_power_by_squaring(yint) && return @noinline pow_body(x, yint)
+    end
+    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x === +0.0 or -0.0 (Inf * false === 0.0)
+    s = 1
+    if x < 0
+        !yisint && throw_exp_domainerror(x) # y isn't an integer
+        s = ifelse(isodd(yint), -1, 1)
+    end
+    !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x))           # x is inf or NaN
+    return copysign(pow_body(abs(x), y), s)
+end
+
+@assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
+    xu = reinterpret(UInt64, x)
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
         xu &= ~sign_mask(Float64)
         xu -= UInt64(52) << 52 # mess with the exponent
     end
-    return pow_body(xu, y)
-end
-
-@inline function pow_body(xu::UInt64, y::Float64)
     logxhi,logxlo = _log_ext(xu)
     xyhi, xylo = two_mul(logxhi,y)
     xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
-    return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
+    return @inline Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
 
 @constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
@@ -1308,12 +1327,29 @@ end
     return T(exp2(log2(abs(widen(x))) * y))
 end
 
-# compensated power by squaring
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
+    x^clamp(n, Int64)
+end
+@constprop :aggressive @inline function ^(x::Float64, n::Int64)
     n == 0 && return one(x)
-    return pow_body(x, n)
+    if use_power_by_squaring(n)
+        return pow_body(x, n)
+    else
+        s = ifelse(x < 0 && isodd(n), -1.0, 1.0)
+        x = abs(x)
+        y = float(n)
+        if y == n
+            return copysign(pow_body(x, y), s)
+        else
+            n2 = n % 1024
+            y = float(n - n2)
+            return pow_body(x, y) * copysign(pow_body(x, n2), s)
+        end
+    end
 end
 
+# compensated power by squaring
+# this method is only reliable for -2^20 < n < 2^20 (cf. #53881 #53886)
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0

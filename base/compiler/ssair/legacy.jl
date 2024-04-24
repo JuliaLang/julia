@@ -10,7 +10,7 @@ the original `ci::CodeInfo` are modified.
 """
 function inflate_ir!(ci::CodeInfo, mi::MethodInstance)
     sptypes = sptypes_from_meth_instance(mi)
-    argtypes, _ = matching_cache_argtypes(fallback_lattice, mi)
+    argtypes = matching_cache_argtypes(fallback_lattice, mi)
     return inflate_ir!(ci, sptypes, argtypes)
 end
 function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any})

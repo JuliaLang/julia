@@ -39,6 +39,12 @@ n = 5
         @test Q'*I ≈ Q.Q'*I rtol=2eps(real(T))
         @test I*Q ≈ Q.Q*I rtol=2eps(real(T))
         @test I*Q' ≈ I*Q.Q' rtol=2eps(real(T))
+        @test Q^3 ≈ Q*Q*Q
+        @test Q^2 ≈ Q*Q
+        @test Q^1 == Q
+        @test Q^(-1) == Q'
+        @test (Q')^(-1) == Q
+        @test (Q')^2 ≈ Q'*Q'
         @test abs(det(Q)) ≈ 1
         @test logabsdet(Q)[1] ≈ 0 atol=2n*eps(real(T))
         y = rand(T, n)

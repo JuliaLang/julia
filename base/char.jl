@@ -62,7 +62,14 @@ to an output stream, or `ncodeunits(string(c))` but computed efficiently.
     This method requires at least Julia 1.1. In Julia 1.0 consider
     using `ncodeunits(string(c))`.
 """
-ncodeunits(c::Char) = write(devnull, c) # this is surprisingly efficient
+function ncodeunits(c::Char)
+    u = reinterpret(UInt32, c)
+    # We care about how many trailing bytes are all zero
+    # subtract that from the total number of bytes
+    n_nonzero_bytes = sizeof(UInt32) - div(trailing_zeros(u), 0x8)
+    # Take care of '\0', which has an all-zero bitpattern
+    n_nonzero_bytes + iszero(u)
+end
 
 """
     codepoint(c::AbstractChar) -> Integer

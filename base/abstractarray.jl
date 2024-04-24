@@ -1221,6 +1221,23 @@ zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))),
 zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
 zero(x::AbstractArray) = map(zero, x)
 
+function _one(unit::T, mat::AbstractMatrix) where {T}
+    (rows, cols) = axes(mat)
+    (length(rows) == length(cols)) ||
+      throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
+    zer = zero(unit)::T
+    require_one_based_indexing(mat)
+    I = similar(mat, T)
+    fill!(I, zer)
+    for i ∈ rows
+        I[i, i] = unit
+    end
+    I
+end
+
+one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
+oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
+
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
 
