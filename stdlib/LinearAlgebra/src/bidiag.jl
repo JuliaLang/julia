@@ -185,7 +185,7 @@ end
 end
 
 Base._reverse(A::Bidiagonal, dims) = reverse!(Matrix(A); dims)
-Base._reverse(A::Bidiagonal, dims::Colon) = Bidiagonal(reverse(A.dv), reverse(A.ev), A.uplo)
+Base._reverse(A::Bidiagonal, dims::Colon) = Bidiagonal(reverse(A.dv), reverse(A.ev), A.uplo == 'U' ? :L : :U)
 Base._reverse!(A::Bidiagonal, dims::Colon) = (reverse!(A.dv); reverse!(A.ev); A)
 
 ## structured matrix methods ##
