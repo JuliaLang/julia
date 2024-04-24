@@ -91,7 +91,6 @@ Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Integer, j::Integer)
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
 
 Base._reverse(A::UpperHessenberg, dims) = reverse!(Matrix(A); dims)
-Base._reverse(A::UpperHessenberg, dims::Colon) = reverse(Matrix(A))
     
 Base.@propagate_inbounds function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1
