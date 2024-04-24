@@ -90,7 +90,7 @@ Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
 Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
 
-Base._reverse(A::UpperHessenberg, dims) = reverse(Matrix(A); dims)
+Base._reverse(A::UpperHessenberg, dims) = reverse!(Matrix(A); dims)
 Base._reverse(A::UpperHessenberg, dims::Colon) = (reverse(Matrix(A)), A.data)
     
 Base.@propagate_inbounds function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
