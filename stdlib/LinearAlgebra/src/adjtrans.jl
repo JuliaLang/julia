@@ -295,7 +295,7 @@ function Base.showarg(io::IO, v::Adjoint, toplevel)
     toplevel && print(io, " with eltype ", eltype(v))
     return nothing
 end
-function Base.show(io::IO, v::Adjoint)
+function Base.show(io::IO, v::Adjoint{<:Any, <:AbstractVector})
     print(io, "adjoint(")
     show(io, parent(v))
     print(io, ')')
@@ -307,7 +307,7 @@ function Base.showarg(io::IO, v::Transpose, toplevel)
     toplevel && print(io, " with eltype ", eltype(v))
     return nothing
 end
-function Base.show(io::IO, v::Transpose)
+function Base.show(io::IO, v::Transpose{<:Any, <:AbstractVector})
     print(io, "transpose(")
     show(io, parent(v))
     print(io, ')')
