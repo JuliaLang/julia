@@ -1096,12 +1096,14 @@ function f2_optrefine()
     end
     return true
 end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine; optimize=false))
 @test Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine))
 
 function f3_optrefine(x)
     @fastmath sqrt(x)
     return x
 end
+@test !Core.Compiler.is_consistent(Base.infer_effects(f2_optrefine; optimize=false))
 @test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine, (Float64,)))
 
 # Check that :consistent is properly modeled for throwing statements
