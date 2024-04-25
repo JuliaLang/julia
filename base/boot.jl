@@ -562,19 +562,21 @@ function _checked_mul_dims(m::Int, n::Int)
     return a, ovflw
 end
 function _checked_mul_dims(m::Int, d::Int...)
-   @_foldable_meta # the compiler needs to know this loop terminates
-   a = m
-   i = 1
-   ovflw = false
-   while Intrinsics.sle_int(i, nfields(d))
-     di = getfield(d, i)
-     b = Intrinsics.checked_smul_int(a, di)
-     ovflw = Intrinsics.or_int(ovflw, getfield(b, 2))
-     ovflw = Intrinsics.or_int(ovflw, Intrinsics.ule_int(typemax_Int, di))
-     a = getfield(b, 1)
-     i = Intrinsics.add_int(i, 1)
+    @_foldable_meta # the compiler needs to know this loop terminates
+    a = m
+    i = 1
+    ovflw = false
+    zero = a === 0
+    while Intrinsics.sle_int(i, nfields(d))
+        di = getfield(d, i)
+        b = Intrinsics.checked_smul_int(a, di)
+        zero = Intrinsics.or_int(zero, di === 0)
+        ovflw = Intrinsics.or_int(ovflw, getfield(b, 2))
+        ovflw = Intrinsics.or_int(ovflw, Intrinsics.ule_int(typemax_Int, di))
+        a = getfield(b, 1)
+        i = Intrinsics.add_int(i, 1)
    end
-   return a, ovflw
+   return a, Intrinsics.and_int(ovflw, Intrinsics.not_int(zero))
 end
 
 # convert a set of dims to a length, with overflow checking
