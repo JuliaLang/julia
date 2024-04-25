@@ -23,6 +23,19 @@ Base.@ccallable function main() :: Cint
     # println(Core.stdout, " 4 interpolants: $(rand(UInt128)) $(rand(UInt64)) $(rand(UInt32)) $(rand(UInt16))...") # broken
     # println(Core.stdout, " 5 interpolants: $(rand(UInt128)) $(rand(UInt64)) $(rand(UInt32)) $(rand(UInt16)) $(rand(UInt8))...") # broken
 
+    println(Core.stdout, "\nYou can also ", "concatenate", " strings")
+
+    # All mixed-type `println` appears to be broken for now:
+
+    # Print the interpolated result manually:
+    println(Core.stdout, "\nInteger big println tests:")
+    # println(Core.stdout, " 1 interpolant : ", rand(UInt)) # broken
+    # println(Core.stdout, " 1 interpolant : ", rand(UInt), "...") # broken
+    # println(Core.stdout, " 2 interpolants: ", rand(UInt), " ", rand(UInt), "...") # broken
+    # println(Core.stdout, " 3 interpolants: ", rand(UInt), " ", rand(UInt), " ", rand(UInt), "...") # broken
+    # println(Core.stdout, " 4 interpolants: ", rand(UInt), " ", rand(UInt), " ", rand(UInt), " ", rand(UInt), "...") # broken
+    # println(Core.stdout, " 5 interpolants: ", rand(UInt), " ", rand(UInt), " ", rand(UInt), " ", rand(UInt), " ", rand(UInt), "...") # broken
+
     return 0
 end
 
