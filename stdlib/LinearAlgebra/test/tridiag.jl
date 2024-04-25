@@ -872,14 +872,13 @@ end
 end
 
 @testset "Reverse operation on SymTridiagonal" begin
-    for n  in 5
-        d = randn(n)
-        dl = randn(n - 1)
-        ST = SymTridiagonal(d, dl)
-        @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
-        @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
-        @test reverse(ST) == reverse(Matrix(ST))
-    end
+    n = 5
+    d = randn(n)
+    dl = randn(n - 1)
+    ST = SymTridiagonal(d, dl)
+    @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
+    @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
+    @test reverse(ST) == reverse(Matrix(ST))
 end
 
 
