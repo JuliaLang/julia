@@ -18,7 +18,7 @@ julia> parentmodule(Base.Broadcast)
 Base
 ```
 """
-parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (Any,), m))
 
 is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
 
@@ -30,6 +30,7 @@ parent modules of `m` which is either a registered root module or which is its
 own parent module.
 """
 function moduleroot(m::Module)
+    @_total_meta
     while true
         is_root_module(m) && return m
         p = parentmodule(m)
@@ -63,6 +64,7 @@ julia> fullname(Main)
 ```
 """
 function fullname(m::Module)
+    @_total_meta
     mn = nameof(m)
     if m === Main || m === Base || m === Core
         return (mn,)
@@ -1003,12 +1005,15 @@ function datatype_fieldcount(t::DataType)
             return fieldcount(types)
         end
         return nothing
-    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+    elseif isabstracttype(t)
         return nothing
     end
-    if isdefined(t, :types)
+    if t.name === Tuple.name
+        isvatuple(t) && return nothing
         return length(t.types)
     end
+    # Equivalent to length(t.types), but `t.types` is lazy and we do not want
+    # to be forced to compute it.
     return length(t.name.names)
 end
 

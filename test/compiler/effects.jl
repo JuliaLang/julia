@@ -1102,7 +1102,7 @@ function f3_optrefine(x)
     @fastmath sqrt(x)
     return x
 end
-@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine))
+@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine, (Float64,)))
 
 # Check that :consistent is properly modeled for throwing statements
 const GLOBAL_MUTABLE_SWITCH = Ref{Bool}(false)
@@ -1390,10 +1390,13 @@ let; Base.Experimental.@force_compile; func52843(); end
 
 @noinline f53613() = @assert isdefined(@__MODULE__, :v53613)
 g53613() = f53613()
+h53613() = g53613()
 @test !Core.Compiler.is_consistent(Base.infer_effects(f53613))
-@test_broken !Core.Compiler.is_consistent(Base.infer_effects(g53613))
+@test !Core.Compiler.is_consistent(Base.infer_effects(g53613))
 @test_throws AssertionError f53613()
 @test_throws AssertionError g53613()
+@test_throws AssertionError h53613()
 global v53613 = nothing
 @test f53613() === nothing
 @test g53613() === nothing
+@test h53613() === nothing
