@@ -5443,10 +5443,29 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         }
     }
     if (ctx.params->no_dynamic_dispatch) {
-        // jl_code_instance_t * codeinst = jl_atomic_load_relaxed(&ctx.linfo->cache);
-        // jl_((void*)jl_uncompress_ir(codeinst->def->def.method, codeinst, codeinst->inferred));
         errs() << "ERROR: Dynamic call to ";
-        jl_(args[0]);
+        jl_jmp_buf *old_buf = jl_get_safe_restore();
+        jl_jmp_buf buf;
+        jl_set_safe_restore(&buf);
+        if (!jl_setjmp(buf, 0)) {
+            jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)args[0]);
+            jl_printf((JL_STREAM*)STDERR_FILENO,"(");
+            for (size_t i = 1; i < nargs; ++i) {
+                jl_value_t *typ = argv[i].typ;
+                if (!jl_is_concrete_type(typ)) // Print type in red
+                    jl_printf((JL_STREAM*)STDERR_FILENO, "\x1b[31m");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)argv[i].typ);
+                if (!jl_is_concrete_type(typ))
+                    jl_printf((JL_STREAM*)STDERR_FILENO, "\x1b[0m");
+                if (i != nargs-1)
+                    jl_printf((JL_STREAM*)STDERR_FILENO,", ");
+            }
+            jl_printf((JL_STREAM*)STDERR_FILENO,")\n");
+        }
+        else {
+            jl_printf((JL_STREAM*)STDERR_FILENO, "\n!!! ERROR while printing error -- ABORTING !!!\n");
+        }
+        jl_set_safe_restore(old_buf);
         errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
         print_stacktrace(ctx);
     }
