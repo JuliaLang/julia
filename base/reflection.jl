@@ -1005,12 +1005,15 @@ function datatype_fieldcount(t::DataType)
             return fieldcount(types)
         end
         return nothing
-    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+    elseif isabstracttype(t)
         return nothing
     end
-    if isdefined(t, :types)
+    if t.name === Tuple.name
+        isvatuple(t) && return nothing
         return length(t.types)
     end
+    # Equivalent to length(t.types), but `t.types` is lazy and we do not want
+    # to be forced to compute it.
     return length(t.name.names)
 end
 
