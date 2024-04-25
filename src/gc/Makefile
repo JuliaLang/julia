@@ -5,6 +5,7 @@ JULIASUPPORT := $(abspath $(JULIAHOME)/src/support)
 BUILDDIR := .
 # Get the name of the parent of BUILDDIR since there will be a few automatically generated files there
 SRCBUILDDIR := $(abspath $(BUILDDIR)/..)
+
 include $(JULIAHOME)/Make.inc
 
 JCFLAGS += $(CFLAGS)
@@ -32,9 +33,9 @@ $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 release: $(BUILDDIR)/libgc.a
 debug: $(BUILDDIR)/libgc-debug.a
