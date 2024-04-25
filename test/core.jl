@@ -7215,7 +7215,7 @@ end
 
 # issue #54244
 # test that zero sized array doesn't throw even with large axes
-bignum = Int==Int64 ? 2^32 : 2^16 
+bignum = Int==Int64 ? 2^32 : 2^16
 Array{Int}(undef, 0, bignum, bignum)
 Array{Int}(undef, bignum, bignum, 0)
 Array{Int}(undef, bignum, bignum, 0, bignum, bignum)
