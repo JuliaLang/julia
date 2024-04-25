@@ -2455,7 +2455,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
     jl_builtin_compilerbarrier = add_builtin_func("compilerbarrier", jl_f_compilerbarrier);
-    add_builtin_func("finalizer", jl_f_finalizer);
+    jl_builtin_finalizer = add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
     add_builtin_func("current_scope", jl_f_current_scope);

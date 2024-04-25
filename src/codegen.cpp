@@ -4927,6 +4927,41 @@ isdefined_unknown_idx:
         return true;
     }
 
+    else if (f == jl_builtin_finalizer) {
+        if (ctx.params->no_dynamic_dispatch && nargs == 2) {
+            // TODO: It would probably be preferable to add a `Core.finalizer_invoke()` intrinsic
+            //       that asks for a specific invoke of the finalizer, rather than a call.
+            //
+            //       That would allow `inlining` to inform us that we have a specific method target
+            //       even though the static object type here is not concrete.
+            int resolved = 0;
+            if (jl_is_concrete_type(argv[1].typ) && jl_is_concrete_type(argv[2].typ)) {
+                // TODO: This method lookup is pretty sloppy and probably uses the wrong world.
+                jl_value_t *types[2] = { argv[1].typ, argv[2].typ };
+                jl_tupletype_t *tt = (jl_tupletype_t *)jl_apply_tuple_type_v(types, 2);
+                size_t world = jl_atomic_load_acquire(&jl_world_counter);
+                jl_value_t *mi = jl_method_lookup_by_tt(tt, world, jl_nothing);
+                if (mi != jl_nothing) {
+                    arraylist_push(&new_invokes, mi);
+                    resolved = 1;
+                }
+            }
+            if (!resolved) {
+                errs() << "Dynamic call to finalizer ";
+                if (argv[1].constant) {
+                    jl_(argv[1].constant);
+                } else {
+                    errs() << "(unknown function)";
+                }
+                errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+
+                print_stacktrace(ctx);
+            }
+            // return false, since we didn't actually implement the call - we just lifted the dispatch
+            return false;
+        }
+    }
+
     return false;
 }
 
