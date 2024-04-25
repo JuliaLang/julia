@@ -4,8 +4,8 @@ using Random
 
 is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args...))
 
-⟷(a::T, b::T) where T <: {Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128} = a === b
-⟷(a::T, b::T) where T <: {BigInt} = a == b
+⟷(a::T, b::T) where T <: Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128} = a === b
+⟷(a::T, b::T) where T <: BigInt = a == b
 
 @testset "gcd/lcm" begin
     # All Integer data types take different code paths -- test all
