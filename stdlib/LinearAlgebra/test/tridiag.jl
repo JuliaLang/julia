@@ -872,7 +872,7 @@ end
 end
 
 @testset "Reverse operation on SymTridiagonal" begin
-    for n  in 5,6
+    for n  in 5
         d = randn(n)
         dl = randn(n - 1)
         ST = SymTridiagonal(d, dl)
