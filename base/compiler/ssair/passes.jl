@@ -2274,6 +2274,15 @@ function cfg_simplify!(ir::IRCode)
             elseif merge_into[idx] == 0 && is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
                 # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
                 # reference our predecessors.
+                #
+                # This is for situations like:
+                #   #1 - ...
+                #        goto #3 if not ...
+                #   #2 - (empty)
+                #   #3 - ϕ(#2 => true, #1 => false)
+                #
+                # where we rely on the empty basic block to disambiguate the ϕ-node's value
+
                 found_interference = false
                 preds = Int[ascend_eliminated_preds(bbs, pred) for pred in bb.preds]
                 for idx in bbs[succ].stmts
@@ -2331,8 +2340,11 @@ function cfg_simplify!(ir::IRCode)
                     end
                     curr = merged_succ[curr]
                 end
-                terminator = ir[SSAValue(ir.cfg.blocks[curr].stmts[end])][:stmt]
-                if isa(terminator, GotoNode) || isa(terminator, ReturnNode)
+                terminator = ir[SSAValue(bbs[curr].stmts[end])][:stmt]
+                is_throw = ir[SSAValue(bbs[curr].stmts[end])][:type] === Union{} && !isa(terminator, PhiNode)
+                if isa(terminator, GotoNode) || isa(terminator, ReturnNode) || is_throw
+                    # Only advance to next block if it's a successor
+                    # (avoid GotoNode, ReturnNode, throw()/Union{})
                     break
                 elseif isa(terminator, GotoIfNot)
                     if bb_rename_succ[terminator.dest] == 0
