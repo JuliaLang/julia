@@ -860,7 +860,7 @@ end
 end
 
 @testset "Reverse operation on Tridiagonal" begin
-    for n in 5,6
+    for n in 5:6
         d = randn(n)
         dl = randn(n - 1)
         du = randn(n - 1)
