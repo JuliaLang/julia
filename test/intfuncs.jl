@@ -193,6 +193,8 @@ end
     end
 end
 
+⟷(a::Tuple{T, T, T}, b::Tuple{T, T, T}) where T <: Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128} = a === b
+⟷(a::Tuple{T, T, T}, b::Tuple{T, T, T}) where T <: BigInt = a == b
 @testset "gcdx" begin
     for T in (Int8, Int16, Int32, Int64, Int128, BigInt)
         @test gcdx(T(5), T(12)) ⟷ (T(1), T(5), T(-2))
