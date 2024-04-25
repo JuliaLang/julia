@@ -2341,8 +2341,9 @@ function cfg_simplify!(ir::IRCode)
                     curr = merged_succ[curr]
                 end
                 terminator = ir[SSAValue(bbs[curr].stmts[end])][:stmt]
-                is_throw = ir[SSAValue(bbs[curr].stmts[end])][:type] === Union{} && !isa(terminator, PhiNode)
-                if isa(terminator, GotoNode) || isa(terminator, ReturnNode) || is_throw
+                is_terminator_or_phi = isterminator(terminator) || isa(terminator, PhiNode)
+                is_implicit_throw = ir[SSAValue(bbs[curr].stmts[end])][:type] === Union{} && !is_terminator_or_phi
+                if isa(terminator, GotoNode) || isa(terminator, ReturnNode) || is_implicit_throw
                     # Only advance to next block if it's a successor
                     # (avoid GotoNode, ReturnNode, throw()/Union{})
                     break

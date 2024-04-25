@@ -1911,3 +1911,26 @@ let code = Any[
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 3 # should have removed block 3
 end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Core.Argument(2), 3),
+        # block 2
+        GotoNode(4),
+        # block 3
+        ReturnNode(nothing),
+        # block 4
+        GotoIfNot(Core.Argument(2), 7),
+        # block 5
+        Expr(:call, :opaque),
+        GotoNode(7),
+        # block 6
+        ReturnNode(nothing),
+    ]
+    ir = make_ircode(code; ssavaluetypes=Any[Union{} for i = 1:7])
+
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 5 # should have merged block 2 into 4
+end
