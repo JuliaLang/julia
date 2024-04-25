@@ -7213,6 +7213,16 @@ end
 @test_throws ArgumentError Array{Int, 2}(undef, -10, 0)
 @test_throws ArgumentError Array{Int, 2}(undef, -1, -1)
 
+# issue #54244
+# test that zero sized array doesn't throw even with large axes
+bignum = Int==Int64 ? 2^32 : 2^16 
+Array{Int}(undef, 0, bignum, bignum)
+Array{Int}(undef, bignum, bignum, 0)
+Array{Int}(undef, bignum, bignum, 0, bignum, bignum)
+# but also test that it does throw if the axes multiply to a multiple of typemax(UInt)
+@test_throws ArgumentError Array{Int, 2}(undef, bignum, bignum)
+@test_throws ArgumentError Array{Int, 2}(undef, 1, bignum, bignum)
+
 # issue #28812
 @test Tuple{Vararg{Array{T} where T,3}} === Tuple{Array,Array,Array}
 
