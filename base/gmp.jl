@@ -658,11 +658,6 @@ end
 powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function gcdx(a::BigInt, b::BigInt)
-    if iszero(b) # shortcut this to ensure consistent results with gcdx(a,b)
-        return a < 0 ? (-a,-ONE,b) : (a,one(BigInt),b)
-        # we don't return the globals ONE and ZERO in case the user wants to
-        # mutate the result
-    end
     g, s, t = MPZ.gcdext(a, b)
     if t == 0
         # work around a difference in some versions of GMP
