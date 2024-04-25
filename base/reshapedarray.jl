@@ -35,8 +35,6 @@ end
 length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
-## reshape(::Array, ::Dims) returns an Array, except for isbitsunion eltypes (issue #28611)
-# reshaping to same # of dimensions
 @eval function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
     throw_dmrsa(dims, len) =
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
@@ -44,7 +42,6 @@ eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedI
     if len != length(a)
         throw_dmrsa(dims, length(a))
     end
-    isbitsunion(T) && return ReshapedArray(a, dims, ())
     if N == M && dims == size(a)
         return a
     end
