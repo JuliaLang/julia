@@ -704,12 +704,8 @@ function Base._reverse!(A::Tridiagonal, dims::Colon)
     n == length(A.dl) || throw(DimensionMismatch("Diagonals have different lengths"))
     Base.require_one_based_indexing(A.dl, A.du)
     # reverse and swap A.dl and A.du:
-    for i in 1:(n >> 1)
-        @inbounds A.dl[i], A.du[i], A.dl[n+1-i], A.du[n+1-i] = A.du[n+1-i], A.dl[n+1-i], A.du[i], A.dl[i]
-    end
-    if isodd(n) # swap middle element
-        i = (n >> 1) + 1
-        @inbounds A.dl[i], A.du[i] = A.du[i], A.dl[i]
+    @inbounds for i in 1:n
+        A.dl[i], A.du[n+1-i] = A.du[n+1-i], A.dl[i]
     end
     reverse!(A.d)
     return A
