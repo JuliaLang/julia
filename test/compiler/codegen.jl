@@ -873,3 +873,17 @@ if Sys.ARCH === :x86_64
         end
     end
 end
+
+#Check if we aren't emitting the store with the wrong TBAA metadata
+
+foo54166(x,i,y) = x[i] = y
+let io = IOBuffer()
+    code_llvm(io,foo54166, (Vector{Union{Missing,Int}}, Int, Int), dump_module=true, raw=true)
+    str = String(take!(io))
+    @test !occursin("jtbaa_unionselbyte", str)
+    @test occursin("jtbaa_arrayselbyte", str)
+end
+
+ex54166 = Union{Missing, Int64}[missing -2; missing -2];
+dims54166 = (1,2)
+@test (minimum(ex54166; dims=dims54166)[1] === missing)

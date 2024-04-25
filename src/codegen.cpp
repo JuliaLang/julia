@@ -3875,7 +3875,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
         ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, idx0);
         *ret = union_store(ctx, data, ptindex, val, cmp, ety,
-            ctx.tbaa().tbaa_arraybuf, nullptr, ctx.tbaa().tbaa_arrayselbyte,
+            ctx.tbaa().tbaa_arraybuf, ctx.tbaa().tbaa_arrayselbyte,
             Order, FailOrder,
             nullptr, issetmemory, isreplacememory, isswapmemory, ismodifymemory, issetmemoryonce,
             modifyop, fname);
