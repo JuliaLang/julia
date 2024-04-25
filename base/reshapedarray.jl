@@ -135,7 +135,17 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
     _any_colon(post...) && throw1(dims)
-    sz, remainder = divrem(length(A), prod(pre)*prod(post))
+    len = length(A)
+    sz, remainder = if iszero(len)
+        (0, 0)
+    else
+        let pr = Core.checked_dims(pre..., post...)  # safe product
+            if iszero(pr)
+                throw2(A, dims)
+            end
+            divrem(len, pr)
+        end
+    end::NTuple{2,Int}
     remainder == 0 || throw2(A, dims)
     (pre..., Int(sz), post...)
 end
