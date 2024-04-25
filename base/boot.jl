@@ -566,17 +566,18 @@ function _checked_mul_dims(m::Int, d::Int...)
     a = m
     i = 1
     ovflw = false
-    zero = a === 0
+    neg = Intrinsics.ule_int(typemax_Int, m)
+    zero = false # if m==0 we won't have overflow since we go left to right
     while Intrinsics.sle_int(i, nfields(d))
         di = getfield(d, i)
         b = Intrinsics.checked_smul_int(a, di)
         zero = Intrinsics.or_int(zero, di === 0)
         ovflw = Intrinsics.or_int(ovflw, getfield(b, 2))
-        ovflw = Intrinsics.or_int(ovflw, Intrinsics.ule_int(typemax_Int, di))
+        neg = Intrinsics.or_int(neg, Intrinsics.ule_int(typemax_Int, di))
         a = getfield(b, 1)
         i = Intrinsics.add_int(i, 1)
    end
-   return a, Intrinsics.and_int(ovflw, Intrinsics.not_int(zero))
+   return a, Intrinsics.or_int(neg, Intrinsics.and_int(ovflw, Intrinsics.not_int(zero)))
 end
 
 # convert a set of dims to a length, with overflow checking
