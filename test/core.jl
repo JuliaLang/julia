@@ -7729,13 +7729,17 @@ struct ContainsPointerNopadding{T}
 end
 
 @test !Base.datatype_haspadding(PointerNopadding{Symbol})
+@test Base.datatype_isbitsegal(PointerNopadding{Int})
 @test !Base.datatype_haspadding(PointerNopadding{Int})
+@test Base.datatype_isbitsegal(PointerNopadding{Int})
 # Sanity check to make sure the meaning of haspadding didn't change.
-@test Base.datatype_haspadding(PointerNopadding{Any})
+@test !Base.datatype_haspadding(PointerNopadding{Any})
+@test !Base.datatype_isbitsegal(PointerNopadding{Any})
 @test !Base.datatype_haspadding(Tuple{PointerNopadding{Symbol}})
 @test !Base.datatype_haspadding(Tuple{PointerNopadding{Int}})
 @test !Base.datatype_haspadding(ContainsPointerNopadding{Symbol})
-@test Base.datatype_haspadding(ContainsPointerNopadding{Int})
+@test !Base.datatype_haspadding(ContainsPointerNopadding{Int})
+@test !Base.datatype_isbitsegal(ContainsPointerNopadding{Int})
 
 # Test the codegen optimized version as well as the unoptimized version of `jl_egal`
 @noinline unopt_jl_egal(@nospecialize(a), @nospecialize(b)) =

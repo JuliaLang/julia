@@ -3352,6 +3352,58 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
     return phi;
 }
 
+struct egal_desc {
+    size_t offset;
+    size_t nrepeats;
+    size_t data_bytes;
+    size_t padding_bytes;
+};
+
+template <typename callback>
+static size_t emit_masked_bits_compare(callback &emit_desc, jl_datatype_t *aty, egal_desc &current_desc)
+{
+    // Memcmp, but with masked padding
+    size_t data_bytes = 0;
+    size_t padding_bytes = 0;
+    size_t nfields = jl_datatype_nfields(aty);
+    size_t total_size = jl_datatype_size(aty);
+    for (size_t i = 0; i < nfields; ++i) {
+        size_t offset = jl_field_offset(aty, i);
+        size_t fend = i == nfields - 1 ? total_size : jl_field_offset(aty, i + 1);
+        size_t fsz = jl_field_size(aty, i);
+        jl_datatype_t *fty = (jl_datatype_t*)jl_field_type(aty, i);
+        if (jl_field_isptr(aty, i) || !fty->layout->flags.haspadding) {
+            // The field has no internal padding
+            data_bytes += fsz;
+            if (offset + fsz == fend) {
+                // The field has no padding after. Merge this into the current
+                // comparison range and go to next field.
+            } else {
+                padding_bytes = fend - offset - fsz;
+                // Found padding. Either merge this into the current comparison
+                // range, or emit the old one and start a new one.
+                if (current_desc.data_bytes == data_bytes &&
+                        current_desc.padding_bytes == padding_bytes) {
+                    // Same as the previous range, just note that down, so we
+                    // emit this as a loop.
+                    current_desc.nrepeats += 1;
+                } else {
+                    if (current_desc.nrepeats != 0)
+                        emit_desc(current_desc);
+                    current_desc.nrepeats = 1;
+                    current_desc.data_bytes = data_bytes;
+                    current_desc.padding_bytes = padding_bytes;
+                }
+                data_bytes = 0;
+            }
+        } else {
+            // The field may have internal padding. Recurse this.
+            data_bytes += emit_masked_bits_compare(emit_desc, fty, current_desc);
+        }
+    }
+    return data_bytes;
+}
+
 static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2)
 {
     ++EmittedBitsCompares;
@@ -3390,7 +3442,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
     if (at->isAggregateType()) { // Struct or Array
         jl_datatype_t *sty = (jl_datatype_t*)arg1.typ;
         size_t sz = jl_datatype_size(sty);
-        if (sz > 512 && !sty->layout->flags.haspadding) {
+        if (sz > 512 && !sty->layout->flags.haspadding && sty->layout->flags.isbitsegal) {
             Value *varg1 = arg1.ispointer() ? data_pointer(ctx, arg1) :
                 value_to_pointer(ctx, arg1).V;
             Value *varg2 = arg2.ispointer() ? data_pointer(ctx, arg2) :
@@ -3426,6 +3478,89 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 ai.decorateInst(answer);
             }
             return ctx.builder.CreateICmpEQ(answer, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
+        }
+        else if (sz > 512 && jl_struct_try_layout(sty) && sty->layout->flags.isbitsegal) {
+            Type *TInt8 = getInt8Ty(ctx.builder.getContext());
+            Type *TpInt8 = getInt8PtrTy(ctx.builder.getContext());
+            Type *TInt1 = getInt1Ty(ctx.builder.getContext());
+            Value *varg1 = arg1.ispointer() ? data_pointer(ctx, arg1) :
+                value_to_pointer(ctx, arg1).V;
+            Value *varg2 = arg2.ispointer() ? data_pointer(ctx, arg2) :
+                value_to_pointer(ctx, arg2).V;
+            varg1 = emit_pointer_from_objref(ctx, varg1);
+            varg2 = emit_pointer_from_objref(ctx, varg2);
+            varg1 = emit_bitcast(ctx, varg1, TpInt8);
+            varg2 = emit_bitcast(ctx, varg2, TpInt8);
+
+            Value *answer = nullptr;
+            auto emit_desc = [&](egal_desc desc) {
+                Value *ptr1 = varg1;
+                Value *ptr2 = varg2;
+                if (desc.offset != 0) {
+                    ptr1 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, ptr1, desc.offset);
+                    ptr2 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, ptr2, desc.offset);
+                }
+
+                Value *new_ptr1 = ptr1;
+                Value *endptr1 = nullptr;
+                BasicBlock *postBB = nullptr;
+                BasicBlock *loopBB = nullptr;
+                PHINode *answerphi = nullptr;
+                if (desc.nrepeats != 1) {
+                    // Set up loop
+                    endptr1 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, ptr1, desc.nrepeats * (desc.data_bytes + desc.padding_bytes));;
+
+                    BasicBlock *currBB = ctx.builder.GetInsertBlock();
+                    loopBB = BasicBlock::Create(ctx.builder.getContext(), "egal_loop", ctx.f);
+                    postBB = BasicBlock::Create(ctx.builder.getContext(), "post", ctx.f);
+                    ctx.builder.CreateBr(loopBB);
+
+                    ctx.builder.SetInsertPoint(loopBB);
+                    answerphi = ctx.builder.CreatePHI(TInt1, 2);
+                    answerphi->addIncoming(answer ? answer : ConstantInt::get(TInt1, 1), currBB);
+                    answer = answerphi;
+
+                    PHINode *itr1 = ctx.builder.CreatePHI(ptr1->getType(), 2);
+                    PHINode *itr2 = ctx.builder.CreatePHI(ptr2->getType(), 2);
+
+                    new_ptr1 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, itr1, desc.data_bytes + desc.padding_bytes);
+                    itr1->addIncoming(ptr1, currBB);
+                    itr1->addIncoming(new_ptr1, loopBB);
+
+                    Value *new_ptr2 = ctx.builder.CreateConstInBoundsGEP1_32(TInt8, itr2, desc.data_bytes + desc.padding_bytes);
+                    itr2->addIncoming(ptr2, currBB);
+                    itr2->addIncoming(new_ptr2, loopBB);
+
+                    ptr1 = itr1;
+                    ptr2 = itr2;
+                }
+
+                // Emit memcmp. TODO: LLVM has a pass to expand this for additional
+                // performance.
+                Value *this_answer = ctx.builder.CreateCall(prepare_call(memcmp_func),
+                    { ptr1,
+                      ptr2,
+                      ConstantInt::get(ctx.types().T_size, desc.data_bytes) });
+                this_answer = ctx.builder.CreateICmpEQ(this_answer, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
+                answer = answer ? ctx.builder.CreateAnd(answer, this_answer) : this_answer;
+                if (endptr1) {
+                    answerphi->addIncoming(answer, loopBB);
+                    Value *loopend = ctx.builder.CreateICmpEQ(new_ptr1, endptr1);
+                    ctx.builder.CreateCondBr(loopend, postBB, loopBB);
+                    ctx.builder.SetInsertPoint(postBB);
+                }
+            };
+            egal_desc current_desc = {0};
+            size_t trailing_data_bytes = emit_masked_bits_compare(emit_desc, sty, current_desc);
+            assert(current_desc.nrepeats != 0);
+            emit_desc(current_desc);
+            if (trailing_data_bytes != 0) {
+                current_desc.nrepeats = 1;
+                current_desc.data_bytes = trailing_data_bytes;
+                current_desc.padding_bytes = 0;
+                emit_desc(current_desc);
+            }
+            return answer;
         }
         else {
             jl_svec_t *types = sty->types;
