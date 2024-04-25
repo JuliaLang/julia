@@ -506,6 +506,13 @@ end
     @test B == A .* A'
 end
 
+@testset "show" begin
+    for t in ([1,2], [1 2; 3 4])
+        @test repr(transpose(t)) == "transpose($(repr(t)))"
+        @test repr(adjoint(t)) == "adjoint($(repr(t)))"
+    end
+end
+
 @testset "test show methods for $t of Factorizations" for t in (adjoint, transpose)
     A = randn(ComplexF64, 4, 4)
     F = lu(A)
