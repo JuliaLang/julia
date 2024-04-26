@@ -398,7 +398,11 @@ int u8_escape_wchar(char *buf, size_t sz, uint32_t ch)
     else if (ch == L'\\')
         return buf_put2c(buf, "\\\\");
     else if (ch < 32 || ch == 0x7f)
+#if defined(__MINGW32__) && defined(_WIN32) || defined(__MINGW64__) && defined(_WIN64)
+        return __mingw_snprintf(buf, sz, "\\x%.2hhx", (unsigned char)ch);
+#else
         return snprintf(buf, sz, "\\x%.2hhx", (unsigned char)ch);
+#endif
     else if (ch > 0xFFFF)
         return snprintf(buf, sz, "\\U%.8x", (uint32_t)ch);
     else if (ch >= 0x80)
