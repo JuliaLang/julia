@@ -397,7 +397,7 @@ function show_limited(io::IO, mime::MIME, x)
         show(IOContext(LimitIO(io, SHOW_MAXIMUM_BYTES)), mime, x)
     catch e
         e isa LimitIOException || rethrow()
-        print(io, "…[printing stopped after displaying $(e.maxbytes) bytes]")
+        printstyled(io, "…[printing stopped after displaying $(e.maxbytes) bytes]"; color=:light_yellow, bold=true)
     end
 end
 
