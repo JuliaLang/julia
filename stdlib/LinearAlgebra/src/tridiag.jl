@@ -701,7 +701,6 @@ Base._reverse(A::Tridiagonal, dims) = reverse!(Matrix(A); dims)
 Base._reverse(A::Tridiagonal, dims::Colon) = Tridiagonal(reverse(A.du), reverse(A.d), reverse(A.dl))
 function Base._reverse!(A::Tridiagonal, dims::Colon)
     n = length(A.du) # == length(A.dl), & always 1-based
-    Base.require_one_based_indexing(A.dl, A.du)
     # reverse and swap A.dl and A.du:
     @inbounds for i in 1:n
         A.dl[i], A.du[n+1-i] = A.du[n+1-i], A.dl[i]
