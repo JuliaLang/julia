@@ -132,9 +132,10 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(
         "may have at most one omitted dimension specified by `Colon()`")))
     @noinline throw2(A, dims) = throw(DimensionMismatch(string("array size $(length(A)) ",
         "must be divisible by the product of the new dimensions $dims")))
-    pre = _before_colon(dims...)
+    pre = _before_colon(dims...)::Tuple{Vararg{Int}}
     post = _after_colon(dims...)
     _any_colon(post...) && throw1(dims)
+    post::Tuple{Vararg{Int}}
     len = length(A)
     sz, remainder = if iszero(len)
         (0, 0)
@@ -147,7 +148,7 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(
         end
     end::NTuple{2,Int}
     remainder == 0 || throw2(A, dims)
-    (pre..., Int(sz), post...)
+    (pre..., Int(sz), post...)::Tuple{Int,Vararg{Int}}
 end
 @inline _any_colon() = false
 @inline _any_colon(dim::Colon, tail...) = true
