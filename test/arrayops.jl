@@ -3219,7 +3219,7 @@ end
 
     @test_throws DimensionMismatch reshape(mem, 10, 10)
     @test_throws DimensionMismatch reshape(mem, 5)
-    @test_throws BoundsError unsafe_vector(mem, 1:10, 1:10)
+    @test_throws BoundsError view(mem, 1:10, 1:10)
     @test_throws BoundsError unsafe_vector(mem, 1:11)
     @test_throws BoundsError unsafe_vector(mem, 3:11)
     @test_throws BoundsError unsafe_vector(mem, 0:4)
