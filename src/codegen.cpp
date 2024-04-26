@@ -3492,6 +3492,12 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
             varg1 = emit_bitcast(ctx, varg1, TpInt8);
             varg2 = emit_bitcast(ctx, varg2, TpInt8);
 
+            // See above for why we want to do this
+            SmallVector<Value*, 0> gc_uses;
+            gc_uses.append(get_gc_roots_for(ctx, arg1));
+            gc_uses.append(get_gc_roots_for(ctx, arg2));
+            OperandBundleDef OpBundle("jl_roots", gc_uses);
+
             Value *answer = nullptr;
             auto emit_desc = [&](egal_desc desc) {
                 Value *ptr1 = varg1;
@@ -3540,7 +3546,8 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 Value *this_answer = ctx.builder.CreateCall(prepare_call(memcmp_func),
                     { ptr1,
                       ptr2,
-                      ConstantInt::get(ctx.types().T_size, desc.data_bytes) });
+                      ConstantInt::get(ctx.types().T_size, desc.data_bytes) },
+                    ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
                 this_answer = ctx.builder.CreateICmpEQ(this_answer, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
                 answer = answer ? ctx.builder.CreateAnd(answer, this_answer) : this_answer;
                 if (endptr1) {
