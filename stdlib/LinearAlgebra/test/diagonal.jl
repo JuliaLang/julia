@@ -61,7 +61,7 @@ Random.seed!(1)
         @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
         @test_throws InexactError convert(Diagonal, ones(2,2))
-        
+
         # Test reversing
         # Test reversing along rows
         @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
