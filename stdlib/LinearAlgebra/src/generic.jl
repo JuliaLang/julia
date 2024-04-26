@@ -600,6 +600,9 @@ true
 """
 function norm(itr, p::Real=2)
     isempty(itr) && return float(norm(zero(eltype(itr))))
+    v, s = iterate(itr)
+    !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
+        "cannot evaluate norm recursively if the initial element is identical to that of the container"))
     if p == 2
         return norm2(itr)
     elseif p == 1
@@ -656,9 +659,6 @@ julia> norm(-2, Inf)
     end
 end
 norm(::Missing, p::Real=2) = missing
-
-norm(c::AbstractChar, p::Real=2) =
-    throw(ArgumentError(lazy"Cannot compute norm for object of type $(typeof(c))"))
 
 # special cases of opnorm
 function opnorm1(A::AbstractMatrix{T}) where T
