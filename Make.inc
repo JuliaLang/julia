@@ -482,7 +482,7 @@ endif
 
 FC := $(CROSS_COMPILE)gfortran
 
-# Note: Supporting only macOS Yosemite and above
+# Note: Supporting only macOS Mojave and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 ifneq ($(APPLE_ARCH),arm64)

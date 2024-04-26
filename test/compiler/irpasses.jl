@@ -1836,3 +1836,78 @@ let code = Any[
     @test made_changes
     @test (ir[Core.SSAValue(length(ir.stmts))][:flag] & Core.Compiler.IR_FLAG_REFINED) != 0
 end
+
+# JuliaLang/julia#52991: statements that may not :terminate should not be deleted
+@noinline Base.@assume_effects :effect_free :nothrow function issue52991(n)
+    local s = 0
+    try
+        while true
+            yield()
+            if n - rand(1:10) > 0
+                s += 1
+            else
+                break
+            end
+        end
+    catch
+    end
+    return s
+end
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(issue52991, (Int,)))
+let src = code_typed1((Int,)) do x
+        issue52991(x)
+        nothing
+    end
+    @test count(isinvoke(:issue52991), src.code) == 1
+end
+let t = @async begin
+        issue52991(11) # this call never terminates
+        nothing
+    end
+    sleep(1)
+    if istaskdone(t)
+        ok = false
+    else
+        ok = true
+        schedule(t, InterruptException(); error=true)
+    end
+    @test ok
+end
+
+# JuliaLang/julia47664
+@test !fully_eliminated() do
+    any(isone, Iterators.repeated(0))
+end
+@test !fully_eliminated() do
+    all(iszero, Iterators.repeated(0))
+end
+
+## Test that cfg_simplify respects implicit `unreachable` terminators
+let code = Any[
+        # block 1
+        GotoIfNot(Core.Argument(2), 4),
+        # block 2
+        Expr(:call, Base.throw, "error"), # an implicit `unreachable` terminator
+        # block 3
+        Expr(:call, :opaque),
+        # block 4
+        ReturnNode(nothing),
+    ]
+    ir = make_ircode(code; ssavaluetypes=Any[Union{}, Union{}, Any, Union{}])
+
+    # Unfortunately `compute_basic_blocks` does not notice the `throw()` so it gives us
+    # a slightly imprecise CFG. Instead manually construct the CFG we need for this test:
+    empty!(ir.cfg.blocks)
+    push!(ir.cfg.blocks, BasicBlock(StmtRange(1,1), [], [2,4]))
+    push!(ir.cfg.blocks, BasicBlock(StmtRange(2,2), [1], []))
+    push!(ir.cfg.blocks, BasicBlock(StmtRange(3,3), [], []))
+    push!(ir.cfg.blocks, BasicBlock(StmtRange(4,4), [1], []))
+    empty!(ir.cfg.index)
+    append!(ir.cfg.index, Int[2,3,4])
+    ir.stmts.stmt[1] = GotoIfNot(Core.Argument(2), 4)
+
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 3 # should have removed block 3
+end

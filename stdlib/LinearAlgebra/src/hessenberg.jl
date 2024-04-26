@@ -66,6 +66,9 @@ similar(H::UpperHessenberg, ::Type{T}, dims::Dims{N}) where {T,N} = similar(H.da
 AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H)
 AbstractMatrix{T}(H::UpperHessenberg{T}) where {T} = copy(H)
 
+Base.dataids(A::UpperHessenberg) = Base.dataids(parent(A))
+Base.unaliascopy(A::UpperHessenberg) = UpperHessenberg(Base.unaliascopy(parent(A)))
+
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
 real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))

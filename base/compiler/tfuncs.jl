@@ -392,20 +392,13 @@ end
     return isdefined_tfunc(𝕃, arg1, sym)
 end
 @nospecs function isdefined_tfunc(𝕃::AbstractLattice, arg1, sym)
-    if isa(arg1, Const)
-        arg1t = typeof(arg1.val)
-    else
-        arg1t = widenconst(arg1)
-    end
-    if isType(arg1t)
-        return Bool
-    end
+    arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(arg1.parameters[1]) : widenconst(arg1)
     a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
             hasintersect(widenconst(sym), Symbol) || return Bottom
             if isa(sym, Const) && isa(sym.val, Symbol) && isa(arg1, Const) &&
-               isdefined(arg1.val::Module, sym.val::Symbol)
+               isdefinedconst_globalref(GlobalRef(arg1.val::Module, sym.val::Symbol))
                 return Const(true)
             end
         elseif isa(sym, Const)
@@ -431,9 +424,8 @@ end
             elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
             elseif isa(arg1, Const)
-                arg1v = (arg1::Const).val
-                if !ismutable(arg1v) || isdefined(arg1v, idx) || isconst(typeof(arg1v), idx)
-                    return Const(isdefined(arg1v, idx))
+                if !ismutabletype(a1) || isconst(a1, idx)
+                    return Const(isdefined(arg1.val, idx))
                 end
             elseif !isvatuple(a1)
                 fieldT = fieldtype(a1, idx)
@@ -990,7 +982,7 @@ end
     # If we have s00 being a const, we can potentially refine our type-based analysis above
     if isa(s00, Const) || isconstType(s00)
         if !isa(s00, Const)
-            sv = s00.parameters[1]
+            sv = (s00::DataType).parameters[1]
         else
             sv = s00.val
         end
@@ -1000,15 +992,16 @@ end
                 isa(sv, Module) && return false
                 isa(nval, Int) || return false
             end
-            return isdefined(sv, nval)
+            return isdefined_tfunc(𝕃, s00, name) === Const(true)
         end
         boundscheck && return false
         # If bounds checking is disabled and all fields are assigned,
         # we may assume that we don't throw
         isa(sv, Module) && return false
         name ⊑ Int || name ⊑ Symbol || return false
-        for i = 1:fieldcount(typeof(sv))
-            isdefined(sv, i) || return false
+        typeof(sv).name.n_uninitialized == 0 && return true
+        for i = (datatype_min_ninitialized(typeof(sv)) + 1):nfields(sv)
+            isdefined_tfunc(𝕃, s00, Const(i)) === Const(true) || return false
         end
         return true
     end
@@ -1247,27 +1240,22 @@ end
     return rewrap_unionall(R, s00)
 end
 
-@nospecs function getfield_notundefined(typ0, name)
-    if isa(typ0, Const) && isa(name, Const)
-        typv = typ0.val
-        namev = name.val
-        isa(typv, Module) && return true
-        if isa(namev, Symbol) || isa(namev, Int)
-            # Fields are not allowed to transition from defined to undefined, so
-            # even if the field is not const, all we need to check here is that
-            # it is defined here.
-            return isdefined(typv, namev)
-        end
+@nospecs function getfield_notuninit(typ0, name)
+    if isa(typ0, Const)
+        # If the object is Const, then we know exactly the bit patterns that
+        # must be returned by getfield if not an error
+        return true
     end
     typ0 = widenconst(typ0)
     typ = unwrap_unionall(typ0)
     if isa(typ, Union)
-        return getfield_notundefined(rewrap_unionall(typ.a, typ0), name) &&
-               getfield_notundefined(rewrap_unionall(typ.b, typ0), name)
+        return getfield_notuninit(rewrap_unionall(typ.a, typ0), name) &&
+               getfield_notuninit(rewrap_unionall(typ.b, typ0), name)
     end
     isa(typ, DataType) || return false
-    if typ.name === Tuple.name || typ.name === _NAMEDTUPLE_NAME
-        # tuples and named tuples can't be instantiated with undefined fields,
+    isabstracttype(typ) && !isconstType(typ) && return false # cannot say anything about abstract types
+    if typ.name.n_uninitialized == 0
+        # Types such as tuples and named tuples that can't be instantiated with undefined fields,
         # so we don't need to be conservative here
         return true
     end
@@ -2439,25 +2427,16 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     # consistent if the first arg is immutable
     na = length(argtypes)
     2 ≤ na ≤ 3 || return EFFECTS_THROWS
-    obj, sym = argtypes
-    wobj = unwrapva(obj)
+    wobj, sym = argtypes
+    wobj = unwrapva(wobj)
+    sym = unwrapva(sym)
     consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
     if is_immutable_argtype(wobj)
         consistent = ALWAYS_TRUE
-    else
-        # Bindings/fields are not allowed to transition from defined to undefined, so even
-        # if the object is not immutable, we can prove `:consistent`-cy if it is defined:
-        if isa(wobj, Const) && isa(sym, Const)
-            objval = wobj.val
-            symval = sym.val
-            if isa(objval, Module)
-                if isa(symval, Symbol) && isdefined(objval, symval)
-                    consistent = ALWAYS_TRUE
-                end
-            elseif (isa(symval, Symbol) || isa(symval, Int)) && isdefined(objval, symval)
-                consistent = ALWAYS_TRUE
-            end
-        end
+    elseif isdefined_tfunc(𝕃, wobj, sym) isa Const
+        # Some bindings/fields are not allowed to transition from defined to undefined or the reverse, so even
+        # if the object is not immutable, we can prove `:consistent`-cy of this:
+        consistent = ALWAYS_TRUE
     end
     nothrow = isdefined_nothrow(𝕃, argtypes)
     if hasintersect(widenconst(wobj), Module)
@@ -2486,11 +2465,11 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     # taint `:consistent` if accessing `isbitstype`-type object field that may be initialized
     # with undefined value: note that we don't need to taint `:consistent` if accessing
     # uninitialized non-`isbitstype` field since it will simply throw `UndefRefError`
-    # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
+    # NOTE `getfield_notuninit` conservatively checks if this field is never initialized
     # with undefined value to avoid tainting `:consistent` too aggressively
     # TODO this should probably taint `:noub`, however, it would hinder concrete eval for
     # `REPLInterpreter` that can ignore `:consistent-cy`, causing worse completions
-    if !(length(argtypes) ≥ 2 && getfield_notundefined(obj, argtypes[2]))
+    if !(length(argtypes) ≥ 2 && getfield_notuninit(obj, argtypes[2]))
         consistent = ALWAYS_FALSE
     end
     noub = ALWAYS_TRUE
@@ -3125,7 +3104,7 @@ end
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            return isdefined(M, s)
+            return isdefinedconst_globalref(GlobalRef(M, s))
         end
     end
     return false
@@ -3198,9 +3177,9 @@ end
 end
 
 function global_assignment_nothrow(M::Module, s::Symbol, @nospecialize(newty))
-    if isdefined(M, s) && !isconst(M, s)
+    if !isconst(M, s)
         ty = ccall(:jl_get_binding_type, Any, (Any, Any), M, s)
-        return ty === nothing || newty ⊑ ty
+        return ty isa Type && widenconst(newty) <: ty
     end
     return false
 end
@@ -3216,7 +3195,7 @@ end
 end
 @nospecs function get_binding_type_tfunc(𝕃::AbstractLattice, M, s)
     if get_binding_type_effect_free(M, s)
-        return Const(Core.get_binding_type((M::Const).val, (s::Const).val))
+        return Const(Core.get_binding_type((M::Const).val::Module, (s::Const).val::Symbol))
     end
     return Type
 end

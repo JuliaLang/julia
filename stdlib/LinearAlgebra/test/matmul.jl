@@ -216,6 +216,18 @@ end
     end
 end
 
+@testset "generic_matvecmul for vectors of matrices" begin
+    x = [1 2 3; 4 5 6]
+    A = reshape([x,2x,3x,4x],2,2)
+    b = [x, 2x]
+    for f in (adjoint, transpose)
+        c = f(A) * b
+        for i in eachindex(c)
+            @test c[i] == sum(f(A)[i, j] * b[j] for j in eachindex(b))
+        end
+    end
+end
+
 @testset "generic_matmatmul for matrices of vectors" begin
     B = Matrix{Vector{Int}}(undef, 2, 2)
     B[1, 1] = [1, 2]

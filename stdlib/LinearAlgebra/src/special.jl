@@ -307,6 +307,92 @@ isdiag(A::HermOrSym{<:Any,<:Diagonal}) = isdiag(parent(A))
 dot(x::AbstractVector, A::RealHermSymComplexSym{<:Real,<:Diagonal}, y::AbstractVector) =
     dot(x, A.data, y)
 
+# O(N) implementations using the banded structure
+function copyto!(dest::BandedMatrix, src::BandedMatrix)
+    if axes(dest) == axes(src)
+        _copyto_banded!(dest, src)
+    else
+        @invoke copyto!(dest::AbstractMatrix, src::AbstractMatrix)
+    end
+    return dest
+end
+function _copyto_banded!(T::Tridiagonal, D::Diagonal)
+    T.d .= D.diag
+    T.dl .= zero.(T.dl)
+    T.du .= zero.(T.du)
+    return T
+end
+function _copyto_banded!(SymT::SymTridiagonal, D::Diagonal)
+    issymmetric(D) || throw(ArgumentError("cannot copy a non-symmetric Diagonal matrix to a SymTridiagonal"))
+    SymT.dv .= D.diag
+    _ev = _evview(SymT)
+    _ev .= zero.(_ev)
+    return SymT
+end
+function _copyto_banded!(B::Bidiagonal, D::Diagonal)
+    B.dv .= D.diag
+    B.ev .= zero.(B.ev)
+    return B
+end
+function _copyto_banded!(D::Diagonal, B::Bidiagonal)
+    isdiag(B) ||
+        throw(ArgumentError("cannot copy a Bidiagonal with a non-zero off-diagonal band to a Diagonal"))
+    D.diag .= B.dv
+    return D
+end
+function _copyto_banded!(D::Diagonal, T::Tridiagonal)
+    isdiag(T) ||
+        throw(ArgumentError("cannot copy a Tridiagonal with a non-zero off-diagonal band to a Diagonal"))
+    D.diag .= T.d
+    return D
+end
+function _copyto_banded!(D::Diagonal, SymT::SymTridiagonal)
+    isdiag(SymT) ||
+        throw(ArgumentError("cannot copy a SymTridiagonal with a non-zero off-diagonal band to a Diagonal"))
+    # we broadcast identity for numbers using the fact that symmetric(x::Number) = x
+    # this potentially allows us to access faster copyto! paths
+    _symmetric = eltype(SymT) <: Number ? identity : symmetric
+    D.diag .= _symmetric.(SymT.dv)
+    return D
+end
+function _copyto_banded!(T::Tridiagonal, B::Bidiagonal)
+    T.d .= B.dv
+    if B.uplo == 'U'
+        T.du .= B.ev
+        T.dl .= zero.(T.dl)
+    else
+        T.dl .= B.ev
+        T.du .= zero.(T.du)
+    end
+    return T
+end
+function _copyto_banded!(SymT::SymTridiagonal, B::Bidiagonal)
+    issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Bidiagonal matrix to a SymTridiagonal"))
+    SymT.dv .= B.dv
+    _ev = _evview(SymT)
+    _ev .= zero.(_ev)
+    return SymT
+end
+function _copyto_banded!(B::Bidiagonal, T::Tridiagonal)
+    if B.uplo == 'U' && !iszero(T.dl)
+        throw(ArgumentError("cannot copy a Tridiagonal with a non-zero subdiagonal to a Bidiagonal with uplo=:U"))
+    elseif B.uplo == 'L' && !iszero(T.du)
+        throw(ArgumentError("cannot copy a Tridiagonal with a non-zero superdiagonal to a Bidiagonal with uplo=:L"))
+    end
+    B.dv .= T.d
+    B.ev .= B.uplo == 'U' ? T.du : T.dl
+    return B
+end
+function _copyto_banded!(B::Bidiagonal, SymT::SymTridiagonal)
+    isdiag(SymT) ||
+        throw(ArgumentError("cannot copy a SymTridiagonal with a non-zero off-diagonal band to a Bidiagonal"))
+    # we broadcast identity for numbers using the fact that symmetric(x::Number) = x
+    # this potentially allows us to access faster copyto! paths
+    _symmetric = eltype(SymT) <: Number ? identity : symmetric
+    B.dv .= _symmetric.(SymT.dv)
+    return B
+end
+
 # equals and approx equals methods for structured matrices
 # SymTridiagonal == Tridiagonal is already defined in tridiag.jl
 

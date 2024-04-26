@@ -157,8 +157,10 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
         print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs; lineprinter)
         return nothing
     end
-    matches = Base._methods_by_ftype(Base.signature_type(f, tt), #=lim=#-1, world)::Vector
-    for match in matches
+    tt = Base.signature_type(f, tt)
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && Base.raise_match_failure(:code_warntype, tt)
+    for match in matches.matches
         match = match::Core.MethodMatch
         (src, rettype) = Core.Compiler.typeinf_code(interp, match, optimize)
         mi = Core.Compiler.specialize_method(match)

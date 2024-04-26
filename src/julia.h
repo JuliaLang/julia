@@ -574,7 +574,10 @@ typedef struct {
         // metadata bit only for GenericMemory eltype layout
         uint16_t arrayelem_isboxed : 1;
         uint16_t arrayelem_isunion : 1;
-        uint16_t padding : 11;
+        // If set, this type's egality can be determined entirely by comparing
+        // the non-padding bits of this datatype.
+        uint16_t isbitsegal : 1;
+        uint16_t padding : 10;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
