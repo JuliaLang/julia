@@ -197,3 +197,18 @@ let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
         end
     end
 end
+
+empty!(Core.ARGS)
+empty!(Base.ARGS)
+empty!(LOAD_PATH)
+empty!(DEPOT_PATH)
+empty!(Base.TOML_CACHE.d)
+Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+Base.ACTIVE_PROJECT[] = nothing
+@eval Base begin
+    PROGRAM_FILE = ""
+end
+@eval Sys begin
+    BINDIR = ""
+    STDLIB = ""
+end
