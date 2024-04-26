@@ -139,6 +139,7 @@ Base.reshape
 Base.dropdims
 Base.vec
 Base.SubArray
+Base.unsafe_vector
 ```
 
 ## Concatenation and permutation

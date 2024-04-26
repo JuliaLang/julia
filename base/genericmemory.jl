@@ -299,17 +299,17 @@ end
     end
 
     """
-        view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo})
+        unsafe_vector(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo, Colon})
 
     Create a vector `v::Vector{T}` backed by the specified indices of `m`. It is only safe to
     resize `v` if `m` is subseqently not used.
     """
-    function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
-        isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
+    function unsafe_vector(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
+        isempty(inds) && return T[] # needed to allow unsafe_vector(Memory{T}(undef, 0), 2:1)
         @boundscheck checkbounds(m, inds)
         ref = MemoryRef(m, first(inds)) # @inbounds would be safe here but does not help performance.
         dims = (Int(length(inds)),)
         $(Expr(:new, :(Array{T, 1}), :ref, :dims))
     end
 end
-view(m::GenericMemory, inds::Colon) = view(m, eachindex(m))
+unsafe_vector(m::GenericMemory, inds::Colon) = unsafe_vector(m, eachindex(m))

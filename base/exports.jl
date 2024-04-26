@@ -986,6 +986,7 @@ export
     pointer,
     pointer_from_objref,
     unsafe_wrap,
+    unsafe_vector,
     unsafe_string,
     reenable_sigint,
     unsafe_copyto!,
