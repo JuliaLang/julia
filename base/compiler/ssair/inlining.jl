@@ -555,7 +555,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
                     cond = insert_node_here!(compact, NewInstruction(and_expr, and_type, line))
                 end
             end
-            insert_node_here!(compact, NewInstruction(GotoIfNot(cond, next_cond_bb), Union{}, line))
+            insert_node_here!(compact, NewInstruction(GotoIfNot(cond, next_cond_bb), Any, line))
         end
         bb = next_cond_bb - 1
         finish_current_bb!(compact, 0)
@@ -588,7 +588,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
             push!(pn.edges, bb)
             push!(pn.values, val)
             insert_node_here!(compact,
-                NewInstruction(GotoNode(join_bb), Union{}, line))
+                NewInstruction(GotoNode(join_bb), Any, line))
         else
             insert_node_here!(compact,
                 NewInstruction(ReturnNode(), Union{}, line))
@@ -601,7 +601,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
         ssa = insert_node_here!(compact, NewInstruction(stmt, typ, line))
         push!(pn.edges, bb)
         push!(pn.values, ssa)
-        insert_node_here!(compact, NewInstruction(GotoNode(join_bb), Union{}, line))
+        insert_node_here!(compact, NewInstruction(GotoNode(join_bb), Any, line))
         finish_current_bb!(compact, 0)
     end
 
