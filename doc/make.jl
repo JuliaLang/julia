@@ -6,7 +6,6 @@ empty!(DEPOT_PATH)
 push!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
 push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
 using Pkg
-Pkg.update()
 Pkg.instantiate()
 
 using Documenter
