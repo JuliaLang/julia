@@ -46,7 +46,54 @@ end
         end
         String(_unsafe_take!(s))
     end
-    show(io::IO, T::Type) = print(io, "Type")
+    function show_typeish(io::IO, @nospecialize(T))
+        if T isa Type
+            show(io, T)
+        elseif T isa TypeVar
+            print(io, (T::TypeVar).name)
+        else
+            print(io, "?")
+        end
+    end
+    function show(io::IO, T::Type)
+        if T isa DataType
+            print(io, T.name.name)
+            if T !== T.name.wrapper && length(T.parameters) > 0
+                print(io, "{")
+                first = true
+                for p in T.parameters
+                    if !first
+                        print(io, ", ")
+                    end
+                    first = false
+                    if p isa Int
+                        show(io, p)
+                    elseif p isa Type
+                        show(io, p)
+                    elseif p isa Symbol
+                        print(io, ":")
+                        print(io, p)
+                    elseif p isa TypeVar
+                        print(io, p.name)
+                    else
+                        print(io, "?")
+                    end
+                end
+                print(io, "}")
+            end
+        elseif T isa Union
+            print(io, "Union{")
+            show_typeish(io, T.a)
+            print(io, ", ")
+            show_typeish(io, T.b)
+            print(io, "}")
+        elseif T isa UnionAll
+            print(io, T.body::Type)
+            print(io, " where ")
+            print(io, T.var.name)
+        end
+    end
+    show_type_name(io::IO, tn::Core.TypeName) = print(io, tn.name)
 end
 @eval Base.Unicode begin
     function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform::F = identity) where F
