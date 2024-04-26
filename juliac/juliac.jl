@@ -61,9 +61,11 @@ is_small_image() = static_call_graph ? `--small-image=yes` : ``
 is_strict() = strict ? `--no-dispatch-precompile=yes` : ``
 is_verbose() = verbose ? `--verbose-compilation=yes` : ``
 cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(is_small_image()) $(is_strict()) $(is_verbose()) $(joinpath(@__DIR__,"buildscript.jl")) $absfile $output_type`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
-result = run(cmd)
 
-result.exitcode == 0 || error("Failed to compile $file")
+if !success(pipeline(cmd; stdout, stderr))
+    println(stderr, "\nFailed to compile $file")
+    exit(1)
+end
 
 run(`cc $(cflags) -g -c -o $init_path $(joinpath(@__DIR__, "init.c"))`)
 
