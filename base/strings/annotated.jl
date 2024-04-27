@@ -509,9 +509,45 @@ function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int},
 end
 
 function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, offset::Int = position(io))
-    for (region, annot) in annotations
-        region = first(region)+offset:last(region)+offset
-        push!(io.annotations, (region, annot))
+    # The most basic (but correct) approach would be just to push
+    # each of `annotations` to `io.annotations`, adjusting the region by
+    # `offset`. However, there is a specific common case probably worth
+    # optimising, which is when an existing styles are just extended.
+    # To handle this efficiently and conservatively, we look to see if
+    # there's a run at the end of `io.annotations` that matches annotations
+    # at the start of `annotations`. If so, this run of annotations is merged.
+    run = 0
+    if !isempty(io.annotations) && last(first(last(io.annotations))) == offset
+        for i in reverse(axes(annotations, 1))
+            annot = annotations[i]
+            first(first(annot)) == 1 || continue
+            if last(annot) == last(last(io.annotations))
+                valid_run = true
+                for runlen in 1:i
+                    new_range, new_annot = annotations[begin+runlen-1]
+                    old_range, old_annot = io.annotations[end-i+runlen]
+                    if last(old_range) != offset || first(new_range) != 1 || old_annot != new_annot
+                        valid_run = false
+                        break
+                    end
+                end
+                if valid_run
+                    run = i
+                    break
+                end
+            end
+        end
+    end
+    for runindex in 0:run-1
+        old_index = lastindex(io.annotations) - run + 1 + runindex
+        old_region, annot = io.annotations[old_index]
+        new_region, _ = annotations[begin+runindex]
+        io.annotations[old_index] = (first(old_region):last(new_region)+offset, annot)
+    end
+    for index in run+1:lastindex(annotations)
+        region, annot = annotations[index]
+        start, stop = first(region), last(region)
+        push!(io.annotations, (start+offset:stop+offset, annot))
     end
 end
 

@@ -191,4 +191,22 @@ end
     @test write(newaio, seek(aio, 5)) == 6
     @test read(seekstart(newaio), String) == "abyss abbie abbie"
     @test sort(Base.annotations(newaio)) == sort(vcat(Base.annotations(aio), [(13:13, :tag => 2), (14:16, :hey => 'a'), (17:17, :tag => 2)]))
+    # The `_insert_annotations!` cautious-merging optimisation
+    aio = Base.AnnotatedIOBuffer()
+    @test write(aio, Base.AnnotatedChar('a', [:a => 1, :b => 2])) == 1
+    @test Base.annotations(aio) == [(1:1, :a => 1), (1:1, :b => 2)]
+    @test write(aio, Base.AnnotatedChar('b', [:a => 1, :b => 2])) == 1
+    @test Base.annotations(aio) == [(1:2, :a => 1), (1:2, :b => 2)]
+    let aio2 = copy(aio) # A different start makes merging too risky to do.
+        @test write(aio2, Base.AnnotatedChar('c', [:a => 0, :b => 2])) == 1
+        @test Base.annotations(aio2) == [(1:2, :a => 1), (1:2, :b => 2), (3:3, :a => 0), (3:3, :b => 2)]
+    end
+    let aio2 = copy(aio) # Merging some run of the most recent annotations is fine though.
+        @test write(aio2, Base.AnnotatedChar('c', [:b => 2])) == 1
+        @test Base.annotations(aio2) == [(1:2, :a => 1), (1:3, :b => 2)]
+    end
+    let aio2 = copy(aio) # ...and any subsequent annotations after a matching run can just be copied over.
+        @test write(aio2, Base.AnnotatedChar('c', [:b => 2, :c => 3, :d => 4])) == 1
+        @test Base.annotations(aio2) == [(1:2, :a => 1), (1:3, :b => 2), (3:3, :c => 3), (3:3, :d => 4)]
+    end
 end
