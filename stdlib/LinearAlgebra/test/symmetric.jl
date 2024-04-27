@@ -264,8 +264,11 @@ end
                     @testset "inverse edge case with complex Hermitian" begin
                         # Hermitian matrix, where inv(lu(A)) generates non-real diagonal elements
                         for T in (ComplexF32, ComplexF64)
-                            A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
-                            H = Hermitian(A)
+                            # data should have nonvanishing imaginary parts on the diagonal
+                            M = T[0.279982+0.988074im  0.770011+0.870555im
+                                    0.138001+0.889728im  0.177242+0.701413im]
+                            H = Hermitian(M)
+                            A = Matrix(H)
                             @test inv(H) ≈ inv(A)
                             @test ishermitian(Matrix(inv(H)))
                         end
