@@ -129,7 +129,6 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             add_flag!(inst, IR_FLAG_NOTHROW)
             if condval
                 inst[:stmt] = nothing
-                inst[:type] = Any
                 kill_edge!(irsv, bb, stmt.dest)
             else
                 inst[:stmt] = GotoNode(stmt.dest)
@@ -177,6 +176,9 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         rt = argextype(stmt.val, irsv.ir)
     elseif isa(stmt, PhiCNode)
         # Currently not modeled
+        return false
+    elseif isa(stmt, EnterNode)
+        # TODO: Propagate scope type changes
         return false
     elseif isa(stmt, ReturnNode)
         # Handled at the very end
