@@ -255,36 +255,6 @@ annotatedstring(c::AnnotatedChar) =
 
 AnnotatedString(s::SubString{<:AnnotatedString}) = annotatedstring(s)
 
-"""
-    annotatedstring_optimize!(str::AnnotatedString)
-
-Merge contiguous identical annotations in `str`.
-"""
-function annotatedstring_optimize!(s::AnnotatedString)
-    last_seen = Dict{Pair{Symbol, Any}, Int}()
-    i = 1
-    while i <= length(s.annotations)
-        region, keyval = s.annotations[i]
-        prev = get(last_seen, keyval, 0)
-        if prev > 0
-            lregion, _ = s.annotations[prev]
-            if last(lregion) + 1 == first(region)
-                s.annotations[prev] =
-                    setindex(s.annotations[prev],
-                             first(lregion):last(region),
-                             1)
-                deleteat!(s.annotations, i)
-            else
-                delete!(last_seen, keyval)
-            end
-        else
-            last_seen[keyval] = i
-            i += 1
-        end
-    end
-    s
-end
-
 function repeat(str::AnnotatedString, r::Integer)
     r == 0 && return one(AnnotatedString)
     r == 1 && return str
@@ -292,19 +262,19 @@ function repeat(str::AnnotatedString, r::Integer)
     annotations = Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}()
     len = ncodeunits(str)
     fullregion = firstindex(str):lastindex(str)
-    for (region, annot) in str.annotations
-        if region == fullregion
-            push!(annotations, (firstindex(unannot):lastindex(unannot), annot))
+    if allequal(first, str.annotations) && first(first(str.annotations)) == fullregion
+        newfullregion = firstindex(unannot):lastindex(unannot)
+        for (_, annot) in str.annotations
+            push!(annotations, (newfullregion, annot))
         end
-    end
-    for offset in 0:len:(r-1)*len
-        for (region, annot) in str.annotations
-            if region != fullregion
+    else
+        for offset in 0:len:(r-1)*len
+            for (region, annot) in str.annotations
                 push!(annotations, (region .+ offset, annot))
             end
         end
     end
-    AnnotatedString(unannot, annotations) |> annotatedstring_optimize!
+    AnnotatedString(unannot, annotations)
 end
 
 repeat(str::SubString{<:AnnotatedString}, r::Integer) =
@@ -335,14 +305,9 @@ reverse(s::SubString{<:AnnotatedString}) = reverse(AnnotatedString(s))
 function _annotate!(annlist::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any}))
     label, val = labelval
     if val === nothing
-        indices = searchsorted(annlist, (range,), by=first)
-        labelindex = filter(i -> first(annlist[i][2]) === label, indices)
-        for index in Iterators.reverse(labelindex)
-            deleteat!(annlist, index)
-        end
+        deleteat!(annlist, findall(ann -> ann[1] == range && first(ann[2]) === label, annlist))
     else
-        sortedindex = searchsortedlast(annlist, (range,), by=first) + 1
-        insert!(annlist, sortedindex, (range, Pair{Symbol, Any}(label, val)))
+        push!(annlist, (range, Pair{Symbol, Any}(label, val)))
     end
 end
 
@@ -521,7 +486,7 @@ end
 function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, span::UnitRange{Int})
     # Clear out any overlapping pre-existing annotations.
     filter!(((region, _),) -> first(region) < first(span) || last(region) > last(span), annotations)
-    extras = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    extras = Tuple{Int, Tuple{UnitRange{Int}, Pair{Symbol, Any}}}[]
     for i in eachindex(annotations)
         region, annot = annotations[i]
         # Test for partial overlap
@@ -532,30 +497,21 @@ function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int},
             # If `span` fits exactly within `region`, then we've only copied over
             # the beginning overhang, but also need to conserve the end overhang.
             if first(region) < first(span) && last(span) < last(region)
-                push!(extras, (last(span)+1:last(region), annot))
+                push!(extras, (i, (last(span)+1:last(region), annot)))
             end
         end
-        # Insert any extra entries in the appropriate position
-        for entry in extras
-            sortedindex = searchsortedlast(annotations, (first(entry),), by=first) + 1
-            insert!(annotations, sortedindex, entry)
-        end
+    end
+    # Insert any extra entries in the appropriate position
+    for (offset, (i, entry)) in enumerate(extras)
+        insert!(annotations, i + offset, entry)
     end
     annotations
 end
 
 function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, offset::Int = position(io))
-    if !eof(io)
-        for (region, annot) in annotations
-            region = first(region)+offset:last(region)+offset
-            sortedindex = searchsortedlast(io.annotations, (region,), by=first) + 1
-            insert!(io.annotations, sortedindex, (region, annot))
-        end
-    else
-        for (region, annot) in annotations
-            region = first(region)+offset:last(region)+offset
-            push!(io.annotations, (region, annot))
-        end
+    for (region, annot) in annotations
+        region = first(region)+offset:last(region)+offset
+        push!(io.annotations, (region, annot))
     end
 end
 
