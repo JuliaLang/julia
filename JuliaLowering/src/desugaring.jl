@@ -92,19 +92,115 @@ function assigned_name(ex)
 end
 
 #-------------------------------------------------------------------------------
-# TODO: Lowering pass 1.1:
-# Aim of this pass is to do some super simple normalizations to make
-# desugaring-proper easier to write. The kinds of things like identifier
-# normalization which would require extra logic to pervade the remaining
-# desugaring.
-#
-# * Identifier normalization
-#   - Strip var""
-#   - Operator -> Identifier if necessary
-# * Strip "container" nodes
-#   - K"char"
-#   - K"parens" nodes
-# * Quasiquote expansion
+# Lowering pass 1.1: Simple normalizations and quote expansion
+function _contains_active_interp(ex, depth)
+    k = kind(ex)
+    if k == K"$" && depth == 0
+        return true
+    end
+    inner_depth = k == K"quote" ? depth + 1 :
+                  k == K"$"     ? depth - 1 :
+                  depth
+    return any(_contains_active_interp(c, inner_depth) for c in children(ex))
+end
+
+function expand_interpolation(ctx, interp_ctx_var, ex)
+    @ast ctx ex [K"call"
+        interpolate_value::K"Value"
+        interp_ctx_var
+        ex::K"Value"
+        expand_forms_0(ctx, ex)
+    ]
+end
+
+function expand_quote_content(ctx, interp_ctx_var, ex, depth)
+    if !_contains_active_interp(ex, depth)
+        return @ast ctx ex [K"call"
+            interpolate_copy_ast::K"Value"
+            interp_ctx_var
+            ex::K"Value"
+        ]
+    end
+
+    # We have an interpolation deeper in the tree somewhere - expand to an
+    # expression 
+    inner_depth = kind(ex) == K"quote" ? depth + 1 :
+                  kind(ex) == K"$"     ? depth - 1 :
+                  depth
+    expanded_children = SyntaxList(ctx)
+    for e in children(ex)
+        if kind(e) == K"$" && inner_depth == 0
+            for x in children(e)
+                push!(expanded_children, expand_interpolation(ctx, interp_ctx_var, x))
+            end
+        else
+            push!(expanded_children, expand_quote_content(ctx, interp_ctx_var, e, inner_depth))
+        end
+    end
+
+    return @ast ctx ex [K"call"
+        interpolate_node::K"Value"
+        interp_ctx_var
+        ex::K"Value"
+        expanded_children...
+    ]
+end
+
+function expand_quote(ctx, ex)
+    interp_ctx_var = ssavar(ctx, ex)
+    expanded = if kind(ex) == K"$"
+        @chk numchildren(ex) == 1
+        e1 = ex[1]
+        if kind(e1) == K"..."
+            throw(LoweringError(e1, "`...` expression outside of call"))
+        end
+        expand_interpolation(ctx, interp_ctx_var, e1)
+    else
+        expand_quote_content(ctx, interp_ctx_var, ex, 0)
+    end
+    @ast ctx ex [K"block"
+        [K"="
+           interp_ctx_var
+           [K"call"
+               InterpolationContext::K"Value"
+               ctx.mod::K"Value"
+           ]
+        ]
+        expanded
+    ]
+end
+
+"""
+The aim of this pass is to do some super simple normalizations to make
+desugaring-proper easier to write. The kinds of things like identifier
+normalization which would require extra logic to pervade the remaining
+desugaring.
+"""
+function expand_forms_0(ctx::DesugaringContext, ex::SyntaxTree)
+    k = kind(ex)
+    if k == K"var" || k == K"char" || k == K"parens"
+        # Strip "container" nodes
+        @chk numchildren(ex) == 1
+        ex[1]
+    elseif is_operator(k) && !haschildren(ex) # FIXME do in JuliaSyntax?
+        @ast ctx ex ex.name_val::K"Identifier"
+    elseif k == K"quote"
+        @chk numchildren(ex) == 1
+        expand_quote(ctx, ex[1])
+    elseif !haschildren(ex)
+        ex
+    else
+        mapchildren(e->expand_forms_0(ctx,e), ctx, ex)
+    end
+end
+
+function expand_forms_0(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector})
+    res = SyntaxList(ctx)
+    for e in exs
+        push!(res, expand_forms_0(ctx, e))
+    end
+    res
+end
 
 #-------------------------------------------------------------------------------
 # Lowering Pass 1.2 - desugaring
@@ -607,7 +703,8 @@ end
 
 function expand_forms(mod::Module, ex::SyntaxTree)
     ctx = DesugaringContext(ex, mod)
-    res = expand_forms(ctx, reparent(ctx, ex))
-    ctx, res
+    ex1 = expand_forms_0(ctx, reparent(ctx, ex))
+    ex2 = expand_forms(ctx, ex1)
+    ctx, ex2
 end
 

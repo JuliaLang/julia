@@ -200,10 +200,12 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"block" || k == K"scope_block"
         nc = numchildren(ex)
+        res = nothing
         for i in 1:nc
             islast = i == nc
-            compile(ctx, ex[i], islast && needs_value, islast && in_tail_pos)
+            res = compile(ctx, ex[i], islast && needs_value, islast && in_tail_pos)
         end
+        res
     elseif k == K"return"
         compile(ctx, ex[1], true, true)
         nothing

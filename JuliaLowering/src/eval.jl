@@ -143,7 +143,7 @@ function to_lowered_expr(mod, var_info, ex)
         Core.ReturnNode(to_lowered_expr(mod, var_info, ex[1]))
     elseif is_quoted(k)
         if k == K"inert"
-            QuoteNode(ex[1])
+            ex[1]
         else
             TODO(ex, "Convert SyntaxTree to Expr")
         end
@@ -182,6 +182,64 @@ end
 #-------------------------------------------------------------------------------
 # Runtime support functions called by lowering
 
+struct InterpolationContext{Graph} <: AbstractLoweringContext
+    mod::Module
+    graph::Graph
+end
+
+function InterpolationContext(mod)
+    graph = SyntaxGraph()
+    ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
+                       value=Any, name_val=String, mod=Module)
+    InterpolationContext(mod, freeze_attrs(graph))
+end
+
+# Produce interpolated node for `$x` syntax
+function interpolate_value(ctx, srcref, x)
+    if x isa SyntaxTree
+        if x.graph === ctx.graph
+            x
+        else
+            copy_ast(ctx, x)
+        end
+    else
+        makeleaf(ctx, sourceref(srcref), K"Value", x)
+    end
+end
+
+# Produce node corresponding to `srcref` when there was an interpolation among
+# `children`
+function interpolate_node(ctx::InterpolationContext, srcref, children...)
+    makenode(ctx, sourceref(srcref), head(srcref), children...; mod=ctx.mod)
+end
+
+function copy_ast(ctx, ex; new_attrs...)
+    if haschildren(ex)
+        cs = SyntaxList(ctx)
+        for e in children(ex)
+            push!(cs, interpolate_copy_ast(ctx, e))
+        end
+        ex2 = makenode(ctx, sourceref(ex), head(ex), cs; new_attrs...)
+    else
+        ex2 = makeleaf(ctx, sourceref(ex), head(ex); new_attrs...)
+    end
+    for (name,attr) in pairs(ex.graph.attributes)
+        if (name !== :source && name !== :kind && name !== :syntax_flags) &&
+                haskey(attr, ex.id)
+            attr2 = getattr(ex2.graph, name, nothing)
+            if !isnothing(attr2)
+                attr2[ex2.id] = attr[ex.id]
+            end
+        end
+    end
+    return ex2
+end
+
+# Copy AST `ex` into `ctx.graph`
+function interpolate_copy_ast(ctx, ex)
+    copy_ast(ctx, ex; mod=ctx.mod)
+end
+
 # Construct new bare module including only the "default names"
 #
 #     using Core
@@ -211,6 +269,7 @@ function eval_module(parentmod, modname, body)
     ))
 end
 
+# Evaluate content of `import` or `using` statement
 function module_import(into_mod::Module, is_using::Bool,
                        from_mod::Union{Nothing,Core.SimpleVector}, paths::Core.SimpleVector)
     # For now, this function converts our lowered representation back to Expr

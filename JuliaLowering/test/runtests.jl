@@ -2,7 +2,10 @@ using Test
 
 using JuliaLowering
 using JuliaSyntax
+using JuliaSyntax: sourcetext
 using JuliaLowering: @ast
+
+include("utils.jl")
 
 @testset "JuliaLowering.jl" begin
 
@@ -91,5 +94,29 @@ module C
 end
 """)
 @test C.D.f === C.E.f
+
+# Syntax quoting & interpolation
+ex = JuliaLowering.include_string(test_mod, """
+begin
+    x = 10
+    y = :(g(z))
+    quote
+        f(\$(x+1), \$y)
+    end
+end
+""")
+@test ex ~ @ast_ [K"block"
+    [K"call"
+        "f"::K"Identifier"
+        11::K"Value"
+        [K"call"
+            "g"::K"Identifier"
+            "z"::K"Identifier"
+        ]
+    ]
+]
+@test sourcetext(ex[1]) == "f(\$(x+1), \$y)"
+@test sourcetext(ex[1][2]) == "x+1"
+@test sourcetext(ex[1][3]) == "g(z)"
 
 end

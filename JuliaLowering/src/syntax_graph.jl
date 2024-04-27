@@ -204,6 +204,10 @@ function attrnames(tree::SyntaxTree)
     [name for (name, value) in pairs(attrs) if haskey(value, tree.id)]
 end
 
+function setattr!(ex::SyntaxTree; attrs...)
+    setattr!(ex.graph, ex.id; attrs...)
+end
+
 # JuliaSyntax tree API
 
 function JuliaSyntax.haschildren(tree::SyntaxTree)
@@ -248,6 +252,7 @@ JuliaSyntax.last_byte(src::SourceRef) = src.first_byte + span(src.green_tree) - 
 JuliaSyntax.filename(src::SourceRef) = filename(src.file)
 JuliaSyntax.source_location(::Type{LineNumberNode}, src::SourceRef) = source_location(LineNumberNode, src.file, src.first_byte)
 JuliaSyntax.source_location(src::SourceRef) = source_location(src.file, src.first_byte)
+JuliaSyntax.sourcetext(src::SourceRef) = src.file[first_byte(src):last_byte(src)]
 
 # TODO: Adding these methods to support LineNumberNode is kind of hacky but we
 # can remove these after JuliaLowering becomes self-bootstrapping for macros
@@ -280,6 +285,7 @@ JuliaSyntax.source_location(::Type{LineNumberNode}, tree::SyntaxTree) = source_l
 JuliaSyntax.source_location(tree::SyntaxTree) = source_location(sourceref(tree))
 JuliaSyntax.first_byte(tree::SyntaxTree) = first_byte(sourceref(tree))
 JuliaSyntax.last_byte(tree::SyntaxTree) = last_byte(sourceref(tree))
+JuliaSyntax.sourcetext(tree::SyntaxTree) = sourcetext(sourceref(tree))
 
 const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId}
 

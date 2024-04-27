@@ -85,6 +85,16 @@ module A
 end
 """
 
+src = """
+begin
+    x = 10
+    y = :(g(z))
+    quote
+        f(\$(x+1), \$y)
+    end
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 # t = softscope_test(t)
 @info "Input code" ex

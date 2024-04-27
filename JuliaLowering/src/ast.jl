@@ -41,7 +41,6 @@ function makeleaf(ctx, srcref, kind, value; kws...)
         val = kind == K"Integer" ? convert(Int,     value) :
               kind == K"Float"   ? convert(Float64, value) :
               kind == K"String"  ? convert(String,  value) :
-              kind == K"Symbol"  ? convert(String,  value) :
               kind == K"Char"    ? convert(Char,    value) :
               kind == K"Value"   ? value                   :
               error("Unexpected leaf kind `$kind`")
@@ -49,8 +48,8 @@ function makeleaf(ctx, srcref, kind, value; kws...)
     end
 end
 
-function makeleaf(ctx, srcref, kind)
-    _makenode(syntax_graph(ctx), srcref, kind, nothing)
+function makeleaf(ctx, srcref, kind; kws...)
+    _makenode(syntax_graph(ctx), srcref, kind, nothing; kws...)
 end
 
 function _match_srcref(ex)
@@ -190,10 +189,9 @@ function mapchildren(f, ctx, ex)
     else
         ex2 = makeleaf(ctx, ex, head(ex))
     end
-    # Copy all attributes.
-    # TODO: Make this type stable and efficient
-    for v in values(ex.graph.attributes)
-        if haskey(v, ex.id)
+    # TODO: Make this faster?
+    for (k,v) in pairs(ex2.graph.attributes)
+        if (k !== :source && k !== :kind && k !== :syntax_flags) && haskey(v, ex.id)
             v[ex2.id] = v[ex.id]
         end
     end
@@ -223,8 +221,7 @@ end
 
 # Create a new SSA variable
 function ssavar(ctx::AbstractLoweringContext, srcref)
-    id = makenode(ctx, srcref, K"SSAValue", var_id=new_var_id(ctx))
-    return id
+    makenode(ctx, srcref, K"SSAValue", var_id=new_var_id(ctx))
 end
 
 # Assign `ex` to an SSA variable.
