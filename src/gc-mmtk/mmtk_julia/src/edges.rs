@@ -17,7 +17,7 @@ pub enum JuliaVMEdge {
 unsafe impl Send for JuliaVMEdge {}
 
 impl Edge for JuliaVMEdge {
-    fn load(&self) -> ObjectReference {
+    fn load(&self) -> Option<ObjectReference> {
         match self {
             JuliaVMEdge::Simple(e) => e.load(),
             JuliaVMEdge::Offset(e) => e.load(),
@@ -74,9 +74,10 @@ impl OffsetEdge {
 }
 
 impl Edge for OffsetEdge {
-    fn load(&self) -> ObjectReference {
+    fn load(&self) -> Option<ObjectReference> {
         let middle = unsafe { (*self.slot_addr).load(atomic::Ordering::Relaxed) };
         let begin = middle - self.offset;
+        debug_assert!(!begin.is_zero());
         ObjectReference::from_raw_address(begin)
     }
 

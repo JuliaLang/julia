@@ -62,25 +62,28 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         copy_context: &mut GCWorkerCopyContext<JuliaVM>,
     ) -> ObjectReference {
         let bytes = Self::get_current_size(from);
-        let from_start_ref = ObjectReference::from_raw_address(Self::ref_to_object_start(from));
-        let header_offset =
-            from.to_raw_address().as_usize() - from_start_ref.to_raw_address().as_usize();
+        let from_addr = from.to_raw_address();
+        let from_start = Self::ref_to_object_start(from);
+        let header_offset = from_addr - from_start;
 
         let dst = if header_offset == 8 {
             // regular object
-            copy_context.alloc_copy(from_start_ref, bytes, 16, 8, semantics)
+            // Note: The `from` reference is not used by any allocator currently in MMTk core.
+            copy_context.alloc_copy(from, bytes, 16, 8, semantics)
         } else if header_offset == 16 {
             // buffer should not be copied
             unimplemented!();
         } else {
             unimplemented!()
         };
+        // `alloc_copy` should never return zero.
+        debug_assert!(!dst.is_zero());
 
-        let src = Self::ref_to_object_start(from);
+        let src = from_start;
         unsafe {
             std::ptr::copy_nonoverlapping::<u8>(src.to_ptr(), dst.to_mut_ptr(), bytes);
         }
-        let to_obj = ObjectReference::from_raw_address(dst + header_offset);
+        let to_obj = unsafe { ObjectReference::from_raw_address_unchecked(dst + header_offset) };
 
         trace!("Copying object from {} to {}", from, to_obj);
 
@@ -99,7 +102,7 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         {
             use atomic::Ordering;
             unsafe {
-                libc::memset(from_start_ref.to_raw_address().to_mut_ptr(), 0, bytes);
+                libc::memset(from_start.to_mut_ptr(), 0, bytes);
             }
 
             Self::LOCAL_FORWARDING_BITS_SPEC.store_atomic::<JuliaVM, u8>(
@@ -160,7 +163,9 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
 
     #[inline(always)]
     fn address_to_ref(address: Address) -> ObjectReference {
-        ObjectReference::from_raw_address(address)
+        // `address` is a result of `ref_to_address(object)`, where `object` cannot be NULL.
+        debug_assert!(!address.is_zero());
+        unsafe { ObjectReference::from_raw_address_unchecked(address) }
     }
 
     #[inline(always)]

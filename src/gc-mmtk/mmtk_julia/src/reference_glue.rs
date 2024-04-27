@@ -26,40 +26,54 @@ impl Finalizable for JuliaFinalizableObject {
         self.set_reference(trace.trace_object(self.get_reference()));
         if !self.2 {
             // not a void pointer
-            trace.trace_object(ObjectReference::from_raw_address(self.1));
+            debug_assert!(!self.1.is_zero());
+            let objref = unsafe { ObjectReference::from_raw_address_unchecked(self.1) };
+            trace.trace_object(objref);
         }
     }
 }
 
 pub struct VMReferenceGlue {}
 
-impl ReferenceGlue<JuliaVM> for VMReferenceGlue {
-    type FinalizableType = JuliaFinalizableObject;
-    fn set_referent(reference: ObjectReference, referent: ObjectReference) {
+impl VMReferenceGlue {
+    fn load_referent_raw(reference: ObjectReference) -> *mut mmtk_jl_value_t {
+        let reff = reference.to_raw_address().to_ptr::<mmtk_jl_weakref_t>();
+        unsafe { (*reff).value }
+    }
+
+    fn set_referent_raw(reference: ObjectReference, referent_raw: *mut mmtk_jl_value_t) {
+        let reff = reference.to_raw_address().to_mut_ptr::<mmtk_jl_weakref_t>();
         unsafe {
-            let reff = reference.to_raw_address().to_mut_ptr::<mmtk_jl_weakref_t>();
-            let referent_raw = referent.to_raw_address().to_mut_ptr::<mmtk_jl_value_t>();
             (*reff).value = referent_raw;
         }
     }
+}
+
+impl ReferenceGlue<JuliaVM> for VMReferenceGlue {
+    type FinalizableType = JuliaFinalizableObject;
+
+    fn set_referent(reference: ObjectReference, referent: ObjectReference) {
+        Self::set_referent_raw(reference, referent.to_raw_address().to_mut_ptr());
+    }
 
     fn clear_referent(new_reference: ObjectReference) {
-        Self::set_referent(new_reference, unsafe {
-            ObjectReference::from_raw_address(Address::from_mut_ptr(jl_nothing))
-        });
+        Self::set_referent_raw(new_reference, unsafe { jl_nothing });
     }
 
-    fn get_referent(object: ObjectReference) -> ObjectReference {
-        let referent;
-        unsafe {
-            let reff = object.to_raw_address().to_mut_ptr::<mmtk_jl_weakref_t>();
-            referent = ObjectReference::from_raw_address(Address::from_mut_ptr((*reff).value));
+    fn get_referent(object: ObjectReference) -> Option<ObjectReference> {
+        let value = Self::load_referent_raw(object);
+        if value == unsafe { jl_nothing } {
+            return None;
+        } else {
+            debug_assert!(
+                !value.is_null(),
+                "A weak reference {} contains null referent pointer",
+                object
+            );
+            let objref =
+                unsafe { ObjectReference::from_raw_address_unchecked(Address::from_ptr(value)) };
+            Some(objref)
         }
-        referent
-    }
-
-    fn is_referent_cleared(referent: ObjectReference) -> bool {
-        unsafe { referent.to_raw_address().to_mut_ptr() == jl_nothing }
     }
 
     fn enqueue_references(_references: &[ObjectReference], _tls: VMWorkerThread) {}

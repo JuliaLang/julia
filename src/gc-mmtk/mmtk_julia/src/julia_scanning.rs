@@ -4,7 +4,6 @@ use crate::edges::JuliaVMEdge;
 use crate::edges::OffsetEdge;
 use crate::julia_types::*;
 use crate::object_model::mmtk_jl_array_ndims;
-use crate::JuliaVM;
 use crate::JULIA_BUFF_TAG;
 use crate::UPCALLS;
 use memoffset::offset_of;
@@ -416,27 +415,34 @@ fn get_stack_addr(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
     }
 }
 
-use mmtk::vm::edge_shape::Edge;
-
 #[inline(always)]
 pub fn process_edge<EV: EdgeVisitor<JuliaVMEdge>>(closure: &mut EV, slot: Address) {
     let simple_edge = SimpleEdge::from_address(slot);
-    debug_assert!(
-        simple_edge.load().is_null()
-            || mmtk::memory_manager::is_in_mmtk_spaces::<JuliaVM>(simple_edge.load()),
-        "Object {:?} in slot {:?} is not mapped address",
-        simple_edge.load(),
-        simple_edge
-    );
 
-    // captures wrong edges before creating the work
-    debug_assert!(
-        simple_edge.load().to_raw_address().as_usize() % 16 == 0
-            || simple_edge.load().to_raw_address().as_usize() % 8 == 0,
-        "Object {:?} in slot {:?} is not aligned to 8 or 16",
-        simple_edge.load(),
-        simple_edge
-    );
+    #[cfg(debug_assertions)]
+    {
+        use crate::JuliaVM;
+        use mmtk::vm::edge_shape::Edge;
+
+        if let Some(objref) = simple_edge.load() {
+            debug_assert!(
+                mmtk::memory_manager::is_in_mmtk_spaces::<JuliaVM>(objref),
+                "Object {:?} in slot {:?} is not mapped address",
+                objref,
+                simple_edge
+            );
+
+            let raw_addr_usize = objref.to_raw_address().as_usize();
+
+            // captures wrong edges before creating the work
+            debug_assert!(
+                raw_addr_usize % 16 == 0 || raw_addr_usize % 8 == 0,
+                "Object {:?} in slot {:?} is not aligned to 8 or 16",
+                objref,
+                simple_edge
+            );
+        }
+    }
 
     closure.visit_edge(JuliaVMEdge::Simple(simple_edge));
 }
@@ -485,13 +491,20 @@ pub fn process_offset_edge<EV: EdgeVisitor<JuliaVMEdge>>(
     offset: usize,
 ) {
     let offset_edge = OffsetEdge::new_with_offset(slot, offset);
-    debug_assert!(
-        offset_edge.load().is_null()
-            || mmtk::memory_manager::is_in_mmtk_spaces::<JuliaVM>(offset_edge.load()),
-        "Object {:?} in slot {:?} is not mapped address",
-        offset_edge.load(),
-        offset_edge
-    );
+    #[cfg(debug_assertions)]
+    {
+        use crate::JuliaVM;
+        use mmtk::vm::edge_shape::Edge;
+
+        if let Some(objref) = offset_edge.load() {
+            debug_assert!(
+                mmtk::memory_manager::is_in_mmtk_spaces::<JuliaVM>(objref),
+                "Object {:?} in slot {:?} is not mapped address",
+                objref,
+                offset_edge
+            );
+        }
+    }
 
     closure.visit_edge(JuliaVMEdge::Offset(offset_edge));
 }
@@ -603,5 +616,6 @@ pub fn mmtk_jl_bt_num_uintvals(bt_entry: *mut mmtk_jl_bt_element_t) -> usize {
 
 pub fn mmtk_jl_bt_entry_jlvalue(bt_entry: *mut mmtk_jl_bt_element_t, i: usize) -> ObjectReference {
     let entry = unsafe { (*bt_entry.add(2 + i)).__bindgen_anon_1.jlvalue };
-    ObjectReference::from_raw_address(Address::from_mut_ptr(entry))
+    debug_assert!(!entry.is_null());
+    unsafe { ObjectReference::from_raw_address_unchecked(Address::from_mut_ptr(entry)) }
 }
