@@ -203,6 +203,7 @@ let n = 10
 end
 
 @testset "Reverse operation on UpperHessenberg" begin
+    n = 5
     A = UpperHessenberg(randn(n, n))
     @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
     @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
