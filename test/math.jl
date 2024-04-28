@@ -352,6 +352,140 @@ end
     end
 end
 
+
+# these methods, although invoked by other tests,
+# aren't picked up by coverage, so we test them
+# explicitly
+@testset "Constants for special values" begin
+    # log
+    @test Base.Math.logb(Float32, Val(2))  == 1.4426950408889634 
+    @test Base.Math.logb(Float32, Val(:ℯ)) == 1.0
+    @test Base.Math.logb(Float32, Val(10)) == 0.4342944819032518
+    @test Base.Math.logbU(Float64, Val(2))  == 1.4426950408889634 
+    @test Base.Math.logbU(Float64, Val(:ℯ)) == 1.0
+    @test Base.Math.logbU(Float64, Val(10)) == 0.4342944819032518
+    @test Base.Math.logbL(Float64, Val(2))  == 2.0355273740931033e-17
+    @test Base.Math.logbL(Float64, Val(:ℯ)) == 0.0
+    @test Base.Math.logbL(Float64, Val(10)) == 1.098319650216765e-17
+    # hyperbolics
+    @test Base.Math.H_SMALL_X(Float64) == 2.0^-28
+    @test Base.Math.H_MEDIUM_X(Float64) == 22.0
+    @test Base.Math.H_LARGE_X(Float64) == 709.7822265633563
+    @test Base.Math.H_SMALL_X(Float32) == 2f-12
+    @test Base.Math.H_MEDIUM_X(Float32) == 9f0
+    @test Base.Math.H_LARGE_X(Float32) == 88.72283f0
+
+    @test Base.Math.SINH_SMALL_X(Float64) == 2.1
+    @test Base.Math.SINH_SMALL_X(Float32) == 3.0f0
+
+    @test Base.Math.TANH_LARGE_X(Float64) == 44.0
+    @test Base.Math.TANH_LARGE_X(Float32) == 18.0f0
+    @test Base.Math.TANH_SMALL_X(Float64) == 1.0
+    @test Base.Math.TANH_SMALL_X(Float32) == 1.3862944f0
+
+    @test Base.Math.AH_LN2(Float64) == 6.93147180559945286227e-01
+    @test Base.Math.AH_LN2(Float32) == 6.9314718246f-01
+
+    # exponentials
+    @test Base.Math.MAGIC_ROUND_CONST(Float64) == 6.755399441055744e15
+    @test Base.Math.MAGIC_ROUND_CONST(Float32) == 1.048576f7
+
+    @test Base.Math.MAX_EXP(Val(2), Float32) == 128.0f0
+    @test Base.Math.MAX_EXP(Val(2), Float64) == 1024.0
+    @test Base.Math.MAX_EXP(Val(:ℯ), Float32) == 88.72284f0
+    @test Base.Math.MAX_EXP(Val(:ℯ), Float64) == 709.7827128933841
+    @test Base.Math.MAX_EXP(Val(10), Float32) == 38.53184f0
+    @test Base.Math.MAX_EXP(Val(10), Float64) == 308.25471555991675
+
+    @test Base.Math.MIN_EXP(Val(2), Float32) == -150.0f0
+    @test Base.Math.MIN_EXP(Val(2), Float64) == -1075.0
+    @test Base.Math.MIN_EXP(Val(:ℯ), Float32) == -103.97208f0
+    @test Base.Math.MIN_EXP(Val(:ℯ), Float64) == -745.1332191019412
+    @test Base.Math.MIN_EXP(Val(10), Float32) == -45.1545f0
+    @test Base.Math.MIN_EXP(Val(10), Float64) == -323.60724533877976
+
+    @test Base.Math.SUBNORM_EXP(Val(2), Float32) == 126.00001f0
+    @test Base.Math.SUBNORM_EXP(Val(2), Float64) == 1022.0
+    @test Base.Math.SUBNORM_EXP(Val(:ℯ), Float32) == 87.33655f0
+    @test Base.Math.SUBNORM_EXP(Val(:ℯ), Float64) == 708.3964185322641
+    @test Base.Math.SUBNORM_EXP(Val(10), Float32) == 37.92978f0
+    @test Base.Math.SUBNORM_EXP(Val(10), Float64) == 307.6526555685887
+
+    @test Base.Math.LogBo256INV(Val(2), Float64) == 256.0
+    @test Base.Math.LogBo256INV(Val(:ℯ), Float64) == 369.3299304675746
+    @test Base.Math.LogBo256INV(Val(10), Float64) == 850.4135922911647
+
+    @test Base.Math.LogBo256U(Val(2), Float64) == -0.00390625
+    @test Base.Math.LogBo256U(Val(:ℯ), Float64) == -0.002707606173999011
+    @test Base.Math.LogBo256U(Val(10), Float64) == -0.0011758984204561784
+    @test Base.Math.LogBo256L(Val(2), Float64) == 0.0
+    @test Base.Math.LogBo256L(Val(:ℯ), Float64) == -6.327543041662719e-14
+    @test Base.Math.LogBo256L(Val(10), Float64) == -1.0624811566412999e-13
+
+    @test Base.Math.LogBINV(Val(2), Float32) == 1.0f0
+    @test Base.Math.LogBINV(Val(:ℯ), Float32) == 1.442695f0
+    @test Base.Math.LogBINV(Val(10), Float32) == 3.321928f0
+
+    @test Base.Math.LogBU(Val(2), Float32) == -1.0f0
+    @test Base.Math.LogBU(Val(:ℯ), Float32) == -0.69314575f0
+    @test Base.Math.LogBU(Val(10), Float32) == -0.3010254f0
+    @test Base.Math.LogBL(Val(2), Float32) == 0.0f0
+    @test Base.Math.LogBL(Val(:ℯ), Float32) == -1.4286068f-6
+    @test Base.Math.LogBL(Val(10), Float32) == -4.605039f-6
+
+    @test Base.Math.LogB(Val(2), Float16) == -1.0f0
+    @test Base.Math.LogB(Val(:ℯ), Float16) == -0.6931472f0
+    @test Base.Math.LogB(Val(10), Float16) == -0.30103f0
+
+    @test Base.Math.MAX_EXP(Float64) ==  709.7827128933845   # log 2^1023*(2-2^-52)
+    @test Base.Math.MIN_EXP(Float64) == -37.42994775023705   # log 2^-54
+    @test Base.Math.MAX_EXP(Float32) ==  88.72284f0          # log 2^127 *(2-2^-23)
+    @test Base.Math.MIN_EXP(Float32) == -17.32868f0          # log 2^-25
+    @test Base.Math.MAX_EXP(Float16) ==  Float16(11.09)      # log 2^15 *(2-2^-10)
+    @test Base.Math.MIN_EXP(Float16) == -Float16(8.32)       # log 2^-12
+
+    @test Base.Math.Ln2INV(Float64) == 1.4426950408889634
+    @test Base.Math.Ln2(Float64) == -0.6931471805599453
+    @test Base.Math.Ln2INV(Float32) == 1.442695f0
+    @test Base.Math.Ln2(Float32) == -0.6931472f0
+
+    # trigonometry
+    @test Base.Math.ATAN_1_O_2_HI(Float64) == 4.63647609000806093515e-01 # atan(0.5).hi
+    @test Base.Math.ATAN_2_O_2_HI(Float64) == 7.85398163397448278999e-01 # atan(1.0).hi
+    @test Base.Math.ATAN_3_O_2_HI(Float64) == 9.82793723247329054082e-01 # atan(1.5).hi
+    @test Base.Math.ATAN_INF_HI(Float64) == 1.57079632679489655800e+00 # atan(Inf).hi
+
+    @test Base.Math.ATAN_1_O_2_HI(Float32) == 4.6364760399f-01 # atan(0.5).hi
+    @test Base.Math.ATAN_2_O_2_HI(Float32) == 7.8539812565f-01 # atan(1.0).hi
+    @test Base.Math.ATAN_3_O_2_HI(Float32) == 9.8279368877f-01 # atan(1.5).hi
+    @test Base.Math.ATAN_INF_HI(Float32) == 1.5707962513f+00 # atan(Inf).hi
+
+    @test Base.Math.ATAN_1_O_2_LO(Float64) == 2.26987774529616870924e-17 # atan(0.5).lo
+    @test Base.Math.ATAN_2_O_2_LO(Float64) == 3.06161699786838301793e-17 # atan(1.0).lo
+    @test Base.Math.ATAN_3_O_2_LO(Float64) == 1.39033110312309984516e-17 # atan(1.5).lo
+    @test Base.Math.ATAN_INF_LO(Float64) == 6.12323399573676603587e-17 # atan(Inf).lo
+
+    @test Base.Math.ATAN_1_O_2_LO(Float32) == 5.0121582440f-09  # atan(0.5).lo
+    @test Base.Math.ATAN_2_O_2_LO(Float32) == 3.7748947079f-08  # atan(1.0).lo
+    @test Base.Math.ATAN_3_O_2_LO(Float32) == 3.4473217170f-08  # atan(1.5).lo
+    @test Base.Math.ATAN_INF_LO(Float32) == 7.5497894159f-08  # atan(Inf).lo
+
+    @test Base.Math.ATAN2_PI_LO(Float32) == -8.7422776573f-08
+    @test Base.Math.ATAN2_RATIO_BIT_SHIFT(Float32) == 23
+    @test Base.Math.ATAN2_RATIO_THRESHOLD(Float32) == 26
+
+    @test Base.Math.ATAN2_PI_LO(Float64) == 1.2246467991473531772E-16
+    @test Base.Math.ATAN2_RATIO_BIT_SHIFT(Float64) == 20
+    @test Base.Math.ATAN2_RATIO_THRESHOLD(Float64) == 60
+
+    @test Base.Math.PIO2_HI(Float32) == 1.5707962513f+00
+    @test Base.Math.PIO2_LO(Float32) == 7.5497894159f-08
+    @test Base.Math.PIO2_HI(Float64) == 1.57079632679489655800e+00
+    @test Base.Math.PIO2_LO(Float64) == 6.12323399573676603587e-17
+    @test Base.Math.ACOS_PI(Float32) == 3.1415925026f+00
+    @test Base.Math.ACOS_PI(Float64) == 3.14159265358979311600e+00
+end
+
 @testset "exponential functions" for T in (Float64, Float32, Float16)
     for (func, invfunc) in ((exp2, log2), (exp, log), (exp10, log10))
         @testset "$T $func accuracy" begin
