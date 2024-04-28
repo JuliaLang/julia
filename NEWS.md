@@ -87,6 +87,8 @@ Standard library changes
 
 #### LinearAlgebra
 
+* `rank` can now take a QRPivoted matrix ([#53214]) to allow rank computation on QR-factorized matrices.
+
 #### Logging
 
 #### Printf
