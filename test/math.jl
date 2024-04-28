@@ -358,10 +358,10 @@ end
 # explicitly
 @testset "Constants for special values" begin
     # log
-    @test Base.Math.logb(Float32, Val(2))  == 1.4426950408889634 
+    @test Base.Math.logb(Float32, Val(2))  == 1.4426950408889634
     @test Base.Math.logb(Float32, Val(:ℯ)) == 1.0
     @test Base.Math.logb(Float32, Val(10)) == 0.4342944819032518
-    @test Base.Math.logbU(Float64, Val(2))  == 1.4426950408889634 
+    @test Base.Math.logbU(Float64, Val(2))  == 1.4426950408889634
     @test Base.Math.logbU(Float64, Val(:ℯ)) == 1.0
     @test Base.Math.logbU(Float64, Val(10)) == 0.4342944819032518
     @test Base.Math.logbL(Float64, Val(2))  == 2.0355273740931033e-17
