@@ -836,4 +836,13 @@ end
             @test t === @inferred circshift(t, i)
         end
     end
+    @testset "length-two" begin
+        t = (10, 20)
+        for i ∈ -4:2:4
+            @test t === @inferred circshift(t, i)
+        end
+        for i ∈ -5:2:5
+            @test reverse(t) === @inferred circshift(t, i)
+        end
+    end
 end
