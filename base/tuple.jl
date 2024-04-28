@@ -694,7 +694,8 @@ foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)
 
 circshift(::Tuple{}, ::Integer) = ()
-function circshift(x::Tuple, shift::Integer)
+circshift(t::Tuple{Any}, ::Integer) = t
+function circshift(x::Tuple{Any,Any,Vararg{Any}}, shift::Integer)
     @inline
     j = mod1(shift, length(x))
     ntuple(k -> getindex(x, k-j+ifelse(k>j,0,length(x))), Val(length(x)))

@@ -832,6 +832,8 @@ end
     @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
     @test_throws MethodError circshift(t1, 'a')
     for i ∈ -2:2
-        @test () === @inferred circshift((), i)
+        for t ∈ ((), (7,))
+            @test t === @inferred circshift(t, i)
+        end
     end
 end
