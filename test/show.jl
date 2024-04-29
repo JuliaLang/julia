@@ -248,6 +248,7 @@ end
 @test repr(:(∓ 1)) == ":(∓1)"
 @test repr(:(± 1)) == ":(±1)"
 
+is_juliarepr(x) = eval(Meta.parse(repr(x))) == x
 for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:ref, :f, Expr(:(=), :x, 1)),
            Expr(:vect, 1, 2, Expr(:kw, :x, 1)),
@@ -260,7 +261,7 @@ for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:call, :*, 0, :x01),
            Expr(:call, :*, 0, :b01),
            Expr(:call, :*, 0, :o01)]
-    @test eval(Meta.parse(repr(ex))) == ex
+    @test is_juliarepr(ex)
 end
 
 @test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
@@ -294,8 +295,8 @@ end
 @test_repr "3:4:5"
 let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
     ex1 = Expr(:call, :(:), 1)
-    @test eval(Meta.parse(repr(ex4))) == ex4
-    @test eval(Meta.parse(repr(ex1))) == ex1
+    @test is_juliarepr(ex4)
+    @test is_juliarepr(ex1)
 end
 
 # Complex
@@ -1716,7 +1717,6 @@ let x = TypeVar(:_, Number), y = TypeVar(:_, Number)
 end
 
 
-is_juliarepr(x) = eval(Meta.parse(repr(x))) == x
 @testset "unionall types" begin
     X = TypeVar(gensym())
     Y = TypeVar(gensym(), Ref, Ref)
@@ -2199,7 +2199,7 @@ end
 
 # issue #30927
 Z = Array{Float64}(undef,0,0)
-@test eval(Meta.parse(repr(Z))) == Z
+@test is_juliarepr(Z)
 
 @testset "show undef" begin
     # issue  #33204 - Parseable `repr` for `undef`
@@ -2256,7 +2256,7 @@ end
 
 @testset "0-dimensional Array. Issue #31481" begin
     for x in (zeros(Int32), collect('b'), fill(nothing), BitArray(0))
-        @test eval(Meta.parse(repr(x))) == x
+        @test is_juliarepr(x)
     end
     @test showstr(zeros(Int32)) == "fill(0)"
     @test showstr(collect('b')) == "fill('b')"
