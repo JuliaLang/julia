@@ -74,6 +74,12 @@ ms = Dates.Millisecond(1)
                          Dates.Hour(4), Dates.Second(10)) == Dates.DateTime(1, 2, 1, 4, 0, 10)
 end
 
+@testset "DateTime construction from Date and Time" begin
+    @test Dates.DateTime(Dates.Date(2023, 08, 07), Dates.Time(12)) == Dates.DateTime(2023, 08, 07, 12, 0, 0, 0)
+    @test_throws InexactError Dates.DateTime(Dates.Date(2023, 08, 07), Dates.Time(12, 0, 0, 0, 42))
+    @test_throws InexactError Dates.DateTime(Dates.Date(2023, 08, 07), Dates.Time(12, 0, 0, 0, 0, 42))
+end
+
 @testset "Date construction by parts" begin
     test = Dates.Date(Dates.UTD(734869))
     @test Dates.Date(2013) == test
@@ -257,7 +263,7 @@ end
 
 @testset "issue #31524" begin
     dt1 = Libc.strptime("%Y-%M-%dT%H:%M:%SZ", "2018-11-16T10:26:14Z")
-    dt2 = Base.Libc.TmStruct(14, 30, 5, 10, 1, 99, 3, 40, 0)
+    dt2 = Libc.TmStruct(14, 30, 5, 10, 1, 99, 3, 40, 0)
 
     time = Time(dt1)
     @test typeof(time) == Time
@@ -271,6 +277,11 @@ end
     @test typeof(datetime) == DateTime
     @test datetime == Dates.DateTime(1999, 2, 10, 5, 30, 14)
 
+end
+
+@testset "timer" begin
+    @test hasmethod(Timer, (Period,))
+    @test hasmethod(Timer, (Function, Period))
 end
 
 @testset "timedwait" begin

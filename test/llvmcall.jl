@@ -147,13 +147,21 @@ module ObjLoadTest
     using Base: llvmcall, @ccallable
     using Test
     didcall = false
+    """    jl_the_callback()
+
+    Sets the global didcall when it did the call
+    """
     @ccallable Cvoid function jl_the_callback()
         global didcall
         didcall = true
         nothing
     end
+    @test_throws(ErrorException("@ccallable was already defined for this method name"),
+                 @eval @ccallable Cvoid jl_the_callback(not_the_method::Int) = "other")
     # Make sure everything up until here gets compiled
-    jl_the_callback(); didcall = false
+    @test jl_the_callback() === nothing
+    @test jl_the_callback(1) == "other"
+    didcall = false
     function do_the_call()
         llvmcall(
             ("""declare void @jl_the_callback()
@@ -201,6 +209,23 @@ module CcallableRetTypeTest
     @test do_the_call() === 42.0
 end
 
+# Issue #48093 - test that non-external globals are not deduplicated
+function kernel()
+    Base.llvmcall(("""
+        @shmem = internal global i8 0, align 8
+        define void @entry() {
+            store i8 1, i8* @shmem
+            ret void
+        }""", "entry"), Cvoid, Tuple{})
+    Base.llvmcall(("""
+        @shmem = internal global i8 0, align 8
+        define i8 @entry() {
+            %1 = load i8, i8* @shmem
+            ret i8 %1
+        }""", "entry"), UInt8, Tuple{})
+end
+@test kernel() == 0x00
+
 # If this test breaks, you've probably broken Cxx.jl - please check
 module LLVMCallFunctionTest
     using Base: llvmcall
@@ -233,3 +258,17 @@ end
 # issue 34166
 f34166(x) = Base.llvmcall("ret i$(Sys.WORD_SIZE) %0", Int, (Int,), x)
 @test_throws ErrorException f34166(1)
+
+# Test that codegen can construct constant LLVMPtr #38864
+struct MyStruct
+    kern::UInt64
+    ptr::Core.LLVMPtr{UInt8,1}
+end
+MyStruct(kern) = MyStruct(kern, reinterpret(Core.LLVMPtr{UInt8,1}, 0))
+MyStruct() = MyStruct(0)
+s = MyStruct()
+
+# ensure LLVMPtr properly subtypes
+@test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
+@test s.kern == 0
+@test reinterpret(Int, s.ptr) == 0

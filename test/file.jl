@@ -15,37 +15,82 @@ subdir = joinpath(dir, "adir")
 mkdir(subdir)
 subdir2 = joinpath(dir, "adir2")
 mkdir(subdir2)
-@test_throws Base._UVError("mkdir", Base.UV_EEXIST) mkdir(file)
+@test_throws Base._UVError("mkdir($(repr(file)); mode=0o777)", Base.UV_EEXIST) mkdir(file)
 let err = nothing
     try
         mkdir(file)
     catch err
         io = IOBuffer()
         showerror(io, err)
-        @test startswith(String(take!(io)), "IOError: mkdir: file already exists (EEXIST)")
+        @test startswith(String(take!(io)), "IOError: mkdir") && err.code == Base.UV_EEXIST
     end
 end
 
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
+    @test stat(dirlink) == stat(subdir)
+    @test readdir(dirlink) == readdir(subdir)
+    @test map(o->o.names, Base.Filesystem._readdirx(dirlink)) == map(o->o.names, Base.Filesystem._readdirx(subdir))
+    @test realpath.(Base.Filesystem._readdirx(dirlink)) == realpath.(Base.Filesystem._readdirx(subdir))
+
     # relative link
-    cd(subdir)
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
     reldir = joinpath("..", "adir2")
     symlink(reldir, relsubdirlink)
-    cd(pwd_)
+    @test stat(relsubdirlink) == stat(subdir2)
+    @test readdir(relsubdirlink) == readdir(subdir2)
+    @test Base.Filesystem._readdirx(relsubdirlink) == Base.Filesystem._readdirx(subdir2)
+
+    # creation of symlink to directory that does not yet exist
+    new_dir = joinpath(subdir, "new_dir")
+    foo_file = joinpath(subdir, "new_dir", "foo")
+    nedlink = joinpath(subdir, "nonexistent_dirlink")
+    symlink("new_dir", nedlink; dir_target=true)
+    try
+        readdir(nedlink)
+        @test false
+    catch e
+        @test isa(e, Base.IOError)
+        # It's surprisingly difficult to know what numeric value this will be across platforms
+        # so we'll just check the string representation instead. :(
+        @test endswith(e.msg, "(ENOENT)")
+    end
+    mkdir(new_dir)
+    touch(foo_file)
+    @test readdir(new_dir) == readdir(nedlink)
+    @test realpath.(Base.Filesystem._readdirx(new_dir)) == realpath.(Base.Filesystem._readdirx(nedlink))
+
+    rm(foo_file)
+    rm(new_dir)
+    rm(nedlink)
 end
 
-if !Sys.iswindows()
-    link = joinpath(dir, "afilelink.txt")
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    link = joinpath(dir, "afilesymlink.txt")
     symlink(file, link)
+    @test stat(file) == stat(link)
+
     # relative link
-    cd(subdir)
-    rellink = joinpath(subdir, "rel_afilelink.txt")
+    rellink = joinpath(subdir, "rel_afilesymlink.txt")
     relfile = joinpath("..", "afile.txt")
     symlink(relfile, rellink)
-    cd(pwd_)
+    @test stat(rellink) == stat(file)
+end
+
+@testset "hardlink" begin
+    link = joinpath(dir, "afilehardlink.txt")
+    hardlink(file, link)
+    @test stat(file) == stat(link)
+
+    # when the destination exists
+    @test_throws Base.IOError hardlink(file, link)
+
+    rm(link)
+
+    # the source file does not exist
+    missing_file = joinpath(dir, "for-sure-missing-file.txt")
+    @test_throws Base.IOError hardlink(missing_file, link)
 end
 
 using Random
@@ -56,10 +101,12 @@ using Random
     temps = map(1:100) do _
         path, io = mktemp(cleanup=false)
         close(io)
-        rm(path, force=true)
         return path
     end
     @test allunique(temps)
+    foreach(temps) do path
+        rm(path, force=true)
+    end
 end
 
 @testset "tempname with parent" begin
@@ -70,6 +117,19 @@ end
         @test dirname(t) == d
     end
     @test_throws ArgumentError tempname(randstring())
+
+    # 38873: check that `TMPDIR` being set does not
+    # override the parent argument to `tempname`.
+    mktempdir() do d
+        withenv("TMPDIR"=>tempdir()) do
+            t = tempname(d)
+            @test dirname(t) == d
+        end
+    end
+    @test_throws ArgumentError tempname(randstring())
+end
+@testset "tempname with suffix" begin
+    @test !isfile(tempname(suffix = "_foo.txt"))
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -140,7 +200,7 @@ end
             t = i % 2 == 0 ? mktempfile() : mktempdir()
             push!(temps, t)
             @test ispath(t)
-            @test length(TEMP_CLEANUP) == i 
+            @test length(TEMP_CLEANUP) == i
             @test TEMP_CLEANUP_MAX[] == n
             # delete 1/3 of the temp paths
             i % 3 == 0 && rm(t, recursive=true, force=true)
@@ -302,7 +362,7 @@ chmod(file, filemode(file) | 0o222)
 @test filesize(file) == 0
 
 # issue #26685
-@test !isfile("http://google.com")
+@test !isfile("https://google.com")
 
 if Sys.iswindows()
     permissions = 0o444
@@ -362,9 +422,8 @@ function test_stat_error(stat::Function, pth)
     end
     ex = try; stat(pth); false; catch ex; ex; end::Base.IOError
     @test ex.code == (pth isa AbstractString ? Base.UV_EACCES : Base.UV_EBADF)
-    @test startswith(ex.msg, "stat: ")
     pth isa AbstractString || (pth = Base.INVALID_OS_HANDLE)
-    @test endswith(ex.msg, repr(pth))
+    @test startswith(ex.msg, "stat($(repr(pth)))")
     nothing
 end
 @testset "stat errors" begin # PR 32031
@@ -443,8 +502,8 @@ cp(newfile, c_file)
 
 @test isdir(c_subdir)
 @test isfile(c_file)
-@test_throws SystemError rm(c_tmpdir)
-@test_throws SystemError rm(c_tmpdir, force=true)
+@test_throws Base.IOError rm(c_tmpdir)
+@test_throws Base.IOError rm(c_tmpdir, force=true)
 
 # create temp dir in specific directory
 d_tmpdir = mktempdir(c_tmpdir)
@@ -459,14 +518,40 @@ close(f)
 
 rm(c_tmpdir, recursive=true)
 @test !isdir(c_tmpdir)
-@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir)
+@test_throws Base._UVError("unlink($(repr(c_tmpdir)))", Base.UV_ENOENT) rm(c_tmpdir)
 @test rm(c_tmpdir, force=true) === nothing
-@test_throws Base._UVError("unlink", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
+@test_throws Base._UVError("unlink($(repr(c_tmpdir)))", Base.UV_ENOENT) rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
+
+# Some operations can return multiple different error codes depending on the system environment.
+function throws_matching_exception(f::Function, acceptable_exceptions::AbstractVector)
+    try
+        f()
+        @error "No exception was thrown."
+        return false
+    catch ex
+        if ex in acceptable_exceptions
+            return true
+        else
+            @error "The thrown exception is not in the list of acceptable exceptions" acceptable_exceptions exception=(ex, catch_backtrace())
+            return false
+        end
+    end
+end
+function throws_matching_uv_error(f::Function, pfx::AbstractString, codes::AbstractVector{<:Integer})
+    acceptable_exceptions = multiple_uv_errors(pfx, codes)
+    return throws_matching_exception(f, acceptable_exceptions)
+end
+function multiple_uv_errors(pfx::AbstractString, codes::AbstractVector{<:Integer})
+    return [Base._UVError(pfx, code) for code in codes]
+end
 
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
-    if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
+    uid = Libc.geteuid()
+    @test stat(file).uid == uid
+    @test uid == Libc.getuid()
+    if uid == 0 # root user
         chown(file, -2, -1)  # Change the file owner to nobody
         @test stat(file).uid != 0
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
@@ -476,8 +561,12 @@ if !Sys.iswindows()
         @test stat(file).gid == 0
         @test stat(file).uid == 0
     else
-        @test_throws Base._UVError("chown", Base.UV_EPERM) chown(file, -2, -1)  # Non-root user cannot change ownership to another user
-        @test_throws Base._UVError("chown", Base.UV_EPERM) chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        @test throws_matching_uv_error("chown($(repr(file)), -2, -1)", [Base.UV_EPERM, Base.UV_EINVAL]) do
+            chown(file, -2, -1)  # Non-root user cannot change ownership to another user
+        end
+        @test throws_matching_uv_error("chown($(repr(file)), -1, -2)", [Base.UV_EPERM, Base.UV_EINVAL]) do
+            chown(file, -1, -2)  # Non-root user cannot change group to a group they are not a member of (eg: nogroup)
+        end
     end
 else
     # test that chown doesn't cause any errors for Windows
@@ -516,13 +605,25 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "invalid read/write flags" begin
+    @test try
+        open("this file is not expected to exist", read=false, write=false)
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test endswith(sprint(showerror, e), "Invalid argument")
+        true
+    end
+end
+
 @testset "quoting filenames" begin
     @test try
         open("this file is not expected to exist")
         false
     catch e
         isa(e, SystemError) || rethrow()
-        @test sprint(showerror, e) == "SystemError: opening file \"this file is not expected to exist\": No such file or directory"
+        @test e.errnum == 2
+        @test startswith(sprint(showerror, e), "SystemError: opening file \"this file is not expected to exist\"")
         true
     end
 end
@@ -543,9 +644,11 @@ end
     MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:9
         local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
-        @test withenv(var => tmp) do
-            tempdir()
-        end == tmp
+        no_error_logging() do
+            @test withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        end
     end
 end
 
@@ -675,7 +778,7 @@ let
     @test a_stat.size == b_stat.size
     @test a_stat.size == c_stat.size
 
-    @test parse(Int, match(r"mode=(.*),", sprint(show, a_stat)).captures[1]) == a_stat.mode
+    @test parse(Int, split(sprint(show, a_stat),"mode: ")[2][1:8]) == a_stat.mode
 
     close(af)
     rm(afile)
@@ -688,13 +791,13 @@ end
 mktempdir() do tmpdir
     # rename file
     file = joinpath(tmpdir, "afile.txt")
-    files_stat = stat(file)
     close(open(file, "w")) # like touch, but lets the operating system update
+    files_stat = stat(file)
     # the timestamp for greater precision on some platforms (windows)
 
     newfile = joinpath(tmpdir, "bfile.txt")
     mv(file, newfile)
-    newfile_stat = stat(file)
+    newfile_stat = stat(newfile)
 
     @test !ispath(file)
     @test isfile(newfile)
@@ -926,10 +1029,10 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
                      Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=true))
         # cp
-        @test_throws Base._UVError("open", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
-        @test_throws Base._UVError("open", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
+        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
+        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base._UVError("open", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
+        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
 end
 
@@ -1170,7 +1273,7 @@ let f = open(file, "w")
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
-        f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:open, Cint, (Cstring, Cint, UInt32...), file, Base.Filesystem.JL_O_RDONLY))
     end
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
@@ -1194,7 +1297,7 @@ else
 end
 using Downloads: download
 @test_throws ArgumentError download("good", "ba\0d")
-@test_throws ArgumentError download("ba\0d", "good")
+@test_throws ArgumentError download("ba\0d", tempname())
 
 ###################
 #     walkdir     #
@@ -1302,7 +1405,7 @@ cd(dirwalk) do
     @test files == ["file1", "file2"]
 
     rm(joinpath("sub_dir1"), recursive=true)
-    @test_throws(Base._UVError("readdir", Base.UV_ENOENT, "with ", repr(joinpath(".", "sub_dir1"))),
+    @test_throws(Base._UVError("readdir($(repr(joinpath(".", "sub_dir1"))))", Base.UV_ENOENT),
                  take!(chnl_error)) # throws an error because sub_dir1 do not exist
 
     root, dirs, files = take!(chnl_noerror)
@@ -1322,7 +1425,7 @@ cd(dirwalk) do
         symlink("foo", foo)
 
         let files = walkdir(joinpath(".", "sub_dir3"); follow_symlinks=true)
-            @test_throws Base._UVError("stat", Base.UV_ELOOP, "for file ", repr(foo)) take!(files)
+            @test_throws Base._UVError("stat($(repr(foo)))", Base.UV_ELOOP)  take!(files)
         end
         root, dirs, files = take!(walkdir(joinpath(".", "sub_dir3"); follow_symlinks=false))
         @test root == joinpath(".", "sub_dir3")
@@ -1342,6 +1445,10 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
+            @test issorted(Base.Filesystem._readdirx())
+            @test map(o->o.name, Base.Filesystem._readdirx()) == readdir()
+            @test map(o->o.path, Base.Filesystem._readdirx()) == readdir(join=true)
+            @test count(isfile, readdir(join=true)) == count(isfile, Base.Filesystem._readdirx())
         end
     end
 end
@@ -1349,11 +1456,9 @@ end
 ############
 # Clean up #
 ############
-if !Sys.iswindows()
+if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     rm(link)
     rm(rellink)
-end
-if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     rm(dirlink)
     rm(relsubdirlink)
 end
@@ -1372,7 +1477,7 @@ rm(dir)
 ####################
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
-    name2 = joinpath(dir, "bannanas")
+    name2 = joinpath(dir, "bananas")
     @test !ispath(name1)
     @test touch(name1) == name1
     @test isfile(name1)
@@ -1424,6 +1529,31 @@ let n = tempname()
     @test read(io) == UInt8[0x41]
     close(io); close(w)
     rm(n)
+end
+
+# PR #39906
+if !Sys.iswindows()
+    @testset "rm empty directories without read permissions" begin
+        mktempdir() do d
+            mkdir(joinpath(d, "nonempty"))
+            touch(joinpath(d, "nonempty", "a"))
+            mkdir(joinpath(d, "empty_outer"))
+            mkdir(joinpath(d, "empty_outer", "empty_inner"))
+
+            chmod(joinpath(d, "nonempty"), 0o333)
+            chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
+
+            # Test that an empty directory, even when we can't read its contents, is deletable
+            rm(joinpath(d, "empty_outer"); recursive=true)
+            @test !isdir(joinpath(d, "empty_outer"))
+
+            # But a non-empty directory is not
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
+            chmod(joinpath(d, "nonempty"), 0o777)
+            rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test !isdir(joinpath(d, "nonempty"))
+        end
+    end
 end
 
 @test_throws ArgumentError mkpath("fakepath", mode = -1)
@@ -1512,33 +1642,170 @@ end
                 rm(d, recursive=true)
                 @test !ispath(d)
                 @test isempty(readdir())
-                @test_throws Base._UVError("readdir", Base.UV_ENOENT, "with ", repr(d)) readdir(d)
-                @test_throws Base._UVError("cwd", Base.UV_ENOENT) readdir(join=true)
+                @test_throws Base._UVError("readdir($(repr(d)))", Base.UV_ENOENT) readdir(d)
+                @test_throws Base._UVError("pwd()", Base.UV_ENOENT) readdir(join=true)
             end
         end
     end
 end
 
-@testset "chmod/isexecutable" begin
+if Sys.isunix()
+    @testset "mkfifo" begin
+        mktempdir() do dir
+            path = Libc.mkfifo(joinpath(dir, "fifo"))
+            @sync begin
+                @async write(path, "hello")
+                cat_exec = `$(Base.julia_cmd()) --startup-file=no -e "write(stdout, read(ARGS[1]))"`
+                @test read(`$cat_exec $path`, String) == "hello"
+            end
+
+            existing_file = joinpath(dir, "existing")
+            write(existing_file, "")
+            @test_throws SystemError Libc.mkfifo(existing_file)
+        end
+    end
+else
+    @test_throws(
+        "mkfifo: Operation not supported",
+        Libc.mkfifo(joinpath(pwd(), "dummy_path")),
+    )
+end
+
+@testset "chmod/isexecutable/isreadable/iswritable" begin
     mktempdir() do dir
-        mkdir(joinpath(dir, "subdir"))
+        subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
 
-        # Test that we can actually set the executable bit on all platforms.
+        @test !ispath(subdir)
+        mkdir(subdir)
+        @test ispath(subdir)
+
+        @test !ispath(fpath)
         touch(fpath)
+        @test ispath(fpath)
+
+        # Test that we can actually set the executable/readable/writeable bit on all platforms.
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
         chmod(fpath, 0o755)
         @test Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
+        chmod(fpath, 0o444)
+        @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test !Sys.iswritable(fpath)
+        chmod(fpath, 0o244)
+        @test !Sys.isexecutable(fpath)
+        @test !Sys.isreadable(fpath) skip=Sys.iswindows()
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
 
         # Ensure that, on Windows, where inheritance is default,
         # chmod still behaves as we expect.
         if Sys.iswindows()
-            chmod(joinpath(dir, "subdir"), 0o666)
-            @test Sys.isexecutable(fpath)
+            chmod(subdir, 0o666)
+            @test !Sys.isexecutable(fpath)
+            @test Sys.isreadable(fpath)
+            @test_skip Sys.iswritable(fpath)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
         chmod(dir, 0o777; recursive=true)
     end
+end
+
+if Sys.iswindows()
+@testset "mkdir/rm permissions" begin
+    # test delete permission in system folders (i.e. implicitly test chmod permissions)
+    # issue #38433
+    @test withenv("TMP" => "C:\\") do
+        mktempdir() do dir end
+    end === nothing
+    # same as above, but test rm explicitly
+    tmp = mkdir(tempname("C:\\"))
+    @test rm(tmp) === nothing
+end
+end
+
+# Unusually for structs, we test this explicitly because the fields of StatStruct
+# is part of its documentation, and therefore cannot change.
+@testset "StatStruct has promised fields" begin
+    f, io = mktemp()
+    s = stat(f)
+    @test s isa Base.StatStruct
+
+    @test s.desc isa Union{String, Base.OS_HANDLE}
+    @test s.size isa Int64
+    @test s.device isa UInt
+    @test s.inode isa UInt
+    @test s.mode isa UInt
+    @test s.nlink isa Int
+    @test s.uid isa UInt
+    @test s.gid isa UInt
+    @test s.rdev isa UInt
+    @test s.blksize isa Int64
+    @test s.blocks isa Int64
+    @test s.mtime isa Float64
+    @test s.ctime isa Float64
+end
+
+@testset "StatStruct show's extended details" begin
+    f, io = mktemp()
+    s = stat(f)
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(")
+    @test endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for ")
+    @test rstrip(stat_show_str_multi) == stat_show_str_multi # no trailing \n
+    @test occursin(repr(f), stat_show_str)
+    @test occursin(repr(f), stat_show_str_multi)
+    if Sys.iswindows()
+        @test occursin("mode: 0o100666 (-rw-rw-rw-)", stat_show_str)
+        @test occursin("mode: 0o100666 (-rw-rw-rw-)\n", stat_show_str_multi)
+    else
+        @test occursin("mode: 0o100600 (-rw-------)", stat_show_str)
+        @test occursin("mode: 0o100600 (-rw-------)\n", stat_show_str_multi)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
+    d = mktempdir()
+    s = stat(d)
+    stat_show_str = sprint(show, s)
+    stat_show_str_multi = sprint(show, MIME("text/plain"), s)
+    @test startswith(stat_show_str, "StatStruct(")
+    @test endswith(stat_show_str, ")")
+    @test startswith(stat_show_str_multi, "StatStruct for ")
+    @test rstrip(stat_show_str_multi) == stat_show_str_multi # no trailing \n
+    @test occursin(repr(d), stat_show_str)
+    @test occursin(repr(d), stat_show_str_multi)
+    if Sys.iswindows()
+        @test occursin("mode: 0o040666 (drw-rw-rw-)", stat_show_str)
+        @test occursin("mode: 0o040666 (drw-rw-rw-)\n", stat_show_str_multi)
+    else
+        @test occursin("mode: 0o040700 (drwx------)", stat_show_str)
+        @test occursin("mode: 0o040700 (drwx------)\n", stat_show_str_multi)
+    end
+    if Sys.iswindows() == false
+        @test !isnothing(Base.Filesystem.getusername(s.uid))
+        @test !isnothing(Base.Filesystem.getgroupname(s.gid))
+    end
+end
+
+@testset "diskstat() works" begin
+    # Sanity check assuming disk is smaller than 32PB
+    PB = Int64(2)^44
+
+    dstat = diskstat()
+    @test dstat.total < 32PB
+    @test dstat.used + dstat.available == dstat.total
+    @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
+    # Test diskstat(::AbstractString)
+    dstat = diskstat(pwd())
+    @test dstat.total < 32PB
+    @test dstat.used + dstat.available == dstat.total
 end

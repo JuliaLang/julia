@@ -52,9 +52,6 @@ end
 
 # foreach
 let a = []
-    foreach(()->push!(a,0))
-    @test a == [0]
-    a = []
     foreach(x->push!(a,x), [1,5,10])
     @test a == [1,5,10]
     a = []
@@ -132,6 +129,25 @@ end
 let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
     gen2 = Iterators.filter(x->x[1] % 2 == 0 && x[2] % 2 == 0, (x,y) for x in 1:10, y in 1:10)
     @test collect(gen) == collect(gen2)
+end
+
+# keys of a generator for find* and arg* (see #34678)
+@test keys(x^2 for x in -1:0.5:1) == 1:5
+@test findall(!iszero, x^2 for x in -1:0.5:1) == [1, 2, 4, 5]
+@test argmin(x^2 for x in -1:0.5:1) == 3
+
+# findall return type, see #45495
+let gen = (i for i in 1:3);
+    @test @inferred(findall(x -> true, gen))::Vector{Int} == [1, 2, 3]
+    @test @inferred(findall(x -> false, gen))::Vector{Int} == Int[]
+    @test @inferred(findall(x -> x < 0, gen))::Vector{Int} == Int[]
+end
+let d = Dict()
+    d[7]=2
+    d[3]=6
+    @test @inferred(sort(findall(x -> true, d)))::Vector{Int} == [3, 7]
+    @test @inferred(sort(findall(x -> false, d)))::Vector{Any} == []
+    @test @inferred(sort(findall(x -> x < 0, d)))::Vector{Any} == []
 end
 
 # inference on vararg generator of a type (see #22907 comments)

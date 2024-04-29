@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Test, Base.BinaryPlatforms, Base.BinaryPlatforms.CPUID
 
 @testset "CPUID" begin
@@ -261,21 +263,25 @@ end
     @test parse_dl_name_version("libgfortran.so.3.4", "linux") == ("libgfortran", v"3.4")
     @test_throws ArgumentError parse_dl_name_version("libgfortran.so.3.4a", "linux")
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "linux")
+    @test_throws ArgumentError parse_dl_name_version("libgfortranso", "linux")
     @test parse_dl_name_version("libgfortran.so", "freebsd") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.so.3", "freebsd") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.so.3.4", "freebsd") == ("libgfortran", v"3.4")
     @test_throws ArgumentError parse_dl_name_version("libgfortran.so.3.4a", "freebsd")
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "freebsd")
+    @test_throws ArgumentError parse_dl_name_version("libgfortranso", "freebsd")
     @test parse_dl_name_version("libgfortran.dylib", "macos") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran.3.dylib", "macos") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran.3.4.dylib", "macos") == ("libgfortran", v"3.4")
     @test parse_dl_name_version("libgfortran.3.4a.dylib", "macos") == ("libgfortran.3.4a", nothing)
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "macos")
+    @test_throws ArgumentError parse_dl_name_version("libgfortrandylib", "macos")
     @test parse_dl_name_version("libgfortran.dll", "windows") == ("libgfortran", nothing)
     @test parse_dl_name_version("libgfortran-3.dll", "windows") == ("libgfortran", v"3")
     @test parse_dl_name_version("libgfortran-3.4.dll", "windows") == ("libgfortran", v"3.4")
     @test parse_dl_name_version("libgfortran-3.4a.dll", "windows") == ("libgfortran-3.4a", nothing)
     @test_throws ArgumentError parse_dl_name_version("libgfortran", "windows")
+    @test_throws ArgumentError parse_dl_name_version("libgfortrandll", "windows")
 end
 
 @testset "Sys.is* overloading" begin
@@ -309,8 +315,9 @@ end
         P("x86_64", "linux"; libgfortran_version=v"5") => "linux8",
 
         # Ambiguity test
-        P("aarch64", "linux"; libgfortran_version=v"3") => "linux4",
+        P("aarch64", "linux"; libgfortran_version=v"3") => "linux3",
         P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18") => "linux5",
+        P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18", foo="bar") => "linux9",
 
         # OS test
         P("x86_64", "macos"; libgfortran_version=v"3") => "mac4",
@@ -321,8 +328,9 @@ end
     @test select_platform(platforms, P("x86_64", "linux"; libgfortran_version=v"4")) == "linux7"
 
     # Ambiguity test
-    @test select_platform(platforms, P("aarch64", "linux")) == "linux5"
-    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3")) == "linux5"
+    @test select_platform(platforms, P("aarch64", "linux")) == "linux3"
+    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3")) == "linux3"
+    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18")) === "linux5"
     @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"4")) === nothing
 
     @test select_platform(platforms, P("x86_64", "macos")) == "mac4"
@@ -333,6 +341,22 @@ end
 
     # Sorry, Alex. ;)
     @test select_platform(platforms, P("x86_64", "freebsd")) === nothing
+
+    # The new "most complete match" algorithm deals with ambiguities as follows:
+    platforms = Dict(
+        P("x86_64", "linux") => "normal",
+        P("x86_64", "linux"; sanitize="memory") => "sanitized",
+    )
+    @test select_platform(platforms, P("x86_64", "linux")) == "normal"
+    @test select_platform(platforms, P("x86_64", "linux"; sanitize="memory")) == "sanitized"
+
+    # Ties are broken by reverse-sorting by triplet:
+    platforms = Dict(
+        P("x86_64", "linux"; libgfortran_version=v"3") => "libgfortran3",
+        P("x86_64", "linux"; libgfortran_version=v"4") => "libgfortran4",
+    )
+    @test select_platform(platforms, P("x86_64", "linux")) == "libgfortran4"
+    @test select_platform(platforms, P("x86_64", "linux"; libgfortran_version=v"3")) == "libgfortran3"
 end
 
 @testset "Custom comparators" begin
@@ -362,7 +386,7 @@ end
 
 
     # Next, an asymmetric comparison strategy.  We'll create a "less than or equal to" constraint
-    # that uses the `{a,b}_requested` paramters to determine which number represents the limit.
+    # that uses the `{a,b}_requested` parameters to determine which number represents the limit.
     function less_than_constraint(a::String, b::String, a_requested::Bool, b_requested::Bool)
         a = parse(Int, a)
         b = parse(Int, b)

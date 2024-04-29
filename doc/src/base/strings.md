@@ -1,6 +1,7 @@
 # [Strings](@id lib-strings)
 
 ```@docs
+Core.AbstractString
 Core.AbstractChar
 Core.Char
 Base.codepoint
@@ -14,12 +15,20 @@ Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString
+Base.LazyString
+Base.@lazy_str
+Base.AnnotatedString
+Base.AnnotatedChar
+Base.annotatedstring
+Base.annotations
+Base.annotate!
 Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
 Base.codeunit
 Base.codeunits
 Base.ascii
+Base.Regex
 Base.@r_str
 Base.SubstitutionString
 Base.@s_str
@@ -32,6 +41,8 @@ Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
 Base.match
 Base.eachmatch
+Base.RegexMatch
+Base.keys(::RegexMatch)
 Base.isless(::AbstractString, ::AbstractString)
 Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
@@ -45,7 +56,9 @@ Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
-Base.replace(s::AbstractString, ::Pair)
+Base.replace(::IO, s::AbstractString, ::Pair...)
+Base.eachsplit
+Base.eachrsplit
 Base.split
 Base.rsplit
 Base.strip
@@ -63,10 +76,12 @@ Base.uppercasefirst
 Base.lowercasefirst
 Base.join
 Base.chop
+Base.chopprefix
+Base.chopsuffix
 Base.chomp
 Base.thisind
-Base.nextind
-Base.prevind
+Base.nextind(::AbstractString, ::Integer, ::Integer)
+Base.prevind(::AbstractString, ::Integer, ::Integer)
 Base.textwidth
 Base.isascii
 Base.iscntrl
@@ -80,5 +95,6 @@ Base.isspace
 Base.isuppercase
 Base.isxdigit
 Base.escape_string
+Base.escape_raw_string
 Base.unescape_string
 ```

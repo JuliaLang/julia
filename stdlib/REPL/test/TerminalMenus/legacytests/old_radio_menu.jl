@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # This file tests the legacy Julia 1.0-1.5 extension interface of TerminalMenus
 # They are run with `warn=false` to avoid triggering test failures.
 
@@ -35,8 +36,8 @@ TerminalMenus.writeLine(buf, radio_menu, 1, true)
 
 # Test using stdin
 radio_menu = RadioMenu(string.(1:10), warn=false)
-@test simulate_input(3, radio_menu, :down, :down, :enter)
+@test simulate_input(radio_menu, :down, :down, :enter) == 3
 radio_menu = RadioMenu(["single option"], warn=false)
-@test simulate_input(1, radio_menu, :up, :up, :down, :up, :enter)
+@test simulate_input(radio_menu, :up, :up, :down, :up, :enter) == 1
 radio_menu = RadioMenu(string.(1:3), pagesize=1, warn=false)
-@test simulate_input(3, radio_menu, :down, :down, :down, :down, :enter)
+@test simulate_input(radio_menu, :down, :down, :down, :down, :enter) == 3

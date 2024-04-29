@@ -1,3 +1,10 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+"""
+`Base.TOML` is an undocumented internal part of Julia's TOML parser
+implementation.  Users should call the documented interface in the
+TOML.jl standard library instead (by `import TOML` or `using TOML`).
+"""
 module TOML
 
 using Base: IdSet
@@ -78,7 +85,7 @@ mutable struct Parser
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
 
-    # Get's populated with the Dates stdlib if it exists
+    # Gets populated with the Dates stdlib if it exists
     Dates::Union{Module, Nothing}
 end
 
@@ -102,7 +109,7 @@ function Parser(str::String; filepath=nothing)
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
-            get(Base.loaded_modules, DATES_PKGID, nothing),
+            isdefined(Base, :maybe_root_module) ? Base.maybe_root_module(DATES_PKGID) : nothing,
         )
     startup(l)
     return l
@@ -192,6 +199,7 @@ end
     # Inline tables
     ErrExpectedCommaBetweenItemsInlineTable
     ErrTrailingCommaInlineTable
+    ErrInlineTableRedefine
 
     # Numbers
     ErrUnderscoreNotSurroundedByDigits
@@ -200,6 +208,7 @@ end
     ErrLeadingDot
     ErrNoTrailingDigitAfterDot
     ErrTrailingUnderscoreNumber
+    ErrSignInNonBase10Number
 
     # DateTime
     ErrParsingDateTime
@@ -224,9 +233,10 @@ const err_message = Dict(
     ErrEmptyBareKey                         => "bare key cannot be empty",
     ErrExpectedNewLineKeyValue              => "expected newline after key value pair",
     ErrNewLineInString                      => "newline character in single quoted string",
-    ErrUnexpectedEndString                  => "string literal ened unexpectedly",
+    ErrUnexpectedEndString                  => "string literal ended unexpectedly",
     ErrExpectedEndOfTable                   => "expected end of table ']'",
     ErrAddKeyToInlineTable                  => "tried to add a new key to an inline table",
+    ErrInlineTableRedefine                  => "inline table overwrote key from other table",
     ErrArrayTreatedAsDictionary             => "tried to add a key to an array",
     ErrAddArrayToStaticArray                => "tried to append to a statically defined array",
     ErrGenericValueError                    => "failed to parse value",
@@ -240,9 +250,10 @@ const err_message = Dict(
     ErrExpectedEqualAfterKey                => "expected equal sign after key",
     ErrNoTrailingDigitAfterDot              => "expected digit after dot",
     ErrOverflowError                        => "overflowed when parsing integer",
-    ErrInvalidUnicodeScalar                 => "invalid uncidode scalar",
+    ErrInvalidUnicodeScalar                 => "invalid unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
-    ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value"
+    ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value",
+    ErrSignInNonBase10Number                => "number not in base 10 is not allowed to have a sign",
 )
 
 for err in instances(ErrorType)
@@ -319,12 +330,12 @@ function Base.showerror(io::IO, err::ParserError)
     printstyled(io, " error: "; color=Base.error_color())
     println(io, format_error_message_for_err_type(err))
     # In this case we want the arrow to point one character
-    pos = err.pos
+    pos = err.pos::Int
     err.type == ErrUnexpectedEofExpectedValue && (pos += 1)
-    str1, err1 = point_to_line(err.str, pos, pos, io)
+    str1, err1 = point_to_line(err.str::String, pos, pos, io)
     @static if VERSION <= v"1.6.0-DEV.121"
         # See https://github.com/JuliaLang/julia/issues/36015
-        format_fixer = get(io, :color, false) == true ? "\e[0m" : ""
+        format_fixer = get(io, :color, false)::Bool == true ? "\e[0m" : ""
         println(io, "$format_fixer  ", str1)
         print(io, "$format_fixer  ", err1)
     else
@@ -361,7 +372,7 @@ end
 @inline peek(l::Parser) = l.current_char
 
 # Return true if the character was accepted. When a character
-# is accepted it get's eaten and we move to the next character
+# is accepted it gets eaten and we move to the next character
 @inline function accept(l::Parser, f::Union{Function, Char})::Bool
     c = peek(l)
     c == EOF_CHAR && return false
@@ -465,7 +476,7 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         l.active_table = l.root
         @try parse_table(l)
         skip_ws_comment(l)
-        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
+        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
@@ -473,7 +484,7 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         @try parse_entry(l, l.active_table)
         skip_ws_comment(l)
         # SPEC: "There must be a newline (or EOF) after a key/value pair."
-        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
+        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             c = eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
@@ -482,7 +493,7 @@ end
 
 function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
-        d::TOMLDict
+        d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector
@@ -561,6 +572,10 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
 
     skip_ws(l)
     value = @try parse_value(l)
+    # Not allowed to overwrite a value with an inline dict
+    if value isa Dict && haskey(d, last_key_part)
+        return ParserError(ErrInlineTableRedefine)
+    end
     # TODO: Performance, hashing `last_key_part` again here
     d[last_key_part] = value
     return
@@ -601,7 +616,7 @@ function _parse_key(l::Parser)
     else
         set_marker!(l)
         if accept_batch(l, isvalid_barekey_char)
-            if !(peek(l) == '.' || peek(l) == ' ' || peek(l) == ']' || peek(l) == '=')
+            if !(peek(l) == '.' || iswhitespace(peek(l)) || peek(l) == ']' || peek(l) == '=')
                 c = eat_char(l)
                 return ParserError(ErrInvalidBareKeyCharacter, c)
             end
@@ -655,12 +670,22 @@ end
 #########
 
 function push!!(v::Vector, el)
+    # Since these types are typically non-inferable, they are a big invalidation risk,
+    # and since it's used by the package-loading infrastructure the cost of invalidation
+    # is high. Therefore, this is written to reduce the "exposed surface area": e.g., rather
+    # than writing `T[el]` we write it as `push!(Vector{T}(undef, 1), el)` so that there
+    # is no ambiguity about what types of objects will be created.
     T = eltype(v)
-    if el isa T || typeof(el) === T
+    t = typeof(el)
+    if el isa T || t === T
         push!(v, el::T)
         return v
+    elseif T === Union{}
+        out = Vector{t}(undef, 1)
+        out[1] = el
+        return out
     else
-        if typeof(T) === Union
+        if T isa Union
             newT = Any
         else
             newT = Union{T, typeof(el)}
@@ -673,7 +698,7 @@ end
 
 function parse_array(l::Parser)::Err{Vector}
     skip_ws_nl(l)
-    array = Union{}[]
+    array = Vector{Union{}}()
     empty_array = accept(l, ']')
     while !empty_array
         v = @try parse_value(l)
@@ -739,7 +764,7 @@ isvalid_binary(c::Char) = '0' <= c <= '1'
 
 const ValidSigs = Union{typeof.([isvalid_hex, isvalid_oct, isvalid_binary, isdigit])...}
 # This function eats things accepted by `f` but also allows eating `_` in between
-# digits. Retruns if it ate at lest one character and if it ate an underscore
+# digits. Returns if it ate at lest one character and if it ate an underscore
 function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=true)::Err{Tuple{Bool, Bool}}
     contains_underscore = false
     at_least_one = false
@@ -777,9 +802,11 @@ function parse_number_or_date_start(l::Parser)
 
     set_marker!(l)
     sgn = 1
+    parsed_sign = false
     if accept(l, '+')
-        # do nothing
+        parsed_sign = true
     elseif accept(l, '-')
+        parsed_sign = true
         sgn = -1
     end
     if accept(l, 'i')
@@ -799,18 +826,19 @@ function parse_number_or_date_start(l::Parser)
         if ok_end_value(peek(l))
             return Int64(0)
         elseif accept(l, 'x')
+            parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_hex(l, contains_underscore)
         elseif accept(l, 'o')
+            parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_oct(l, contains_underscore)
         elseif accept(l, 'b')
+            parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
             return parse_local_time(l)
-        elseif peek(l) !== '.'
-            return ParserError(ErrLeadingZeroNotAllowedInteger)
         end
     end
 
@@ -826,7 +854,7 @@ function parse_number_or_date_start(l::Parser)
     ate, contains_underscore = @try accept_batch_underscore(l, isdigit, readed_zero)
     read_underscore |= contains_underscore
     if (read_digit || ate) && ok_end_value(peek(l))
-        return parse_int(l, contains_underscore)
+        return parse_integer(l, contains_underscore)
     end
     # Done with integers here
 
@@ -887,6 +915,30 @@ function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
     return v
 end
 
+for (name, T1, T2, n1, n2) in (("integer", Int64,  Int128,  17,  33),
+                               ("hex", UInt64, UInt128, 18,  34),
+                               ("oct", UInt64, UInt128, 24,  45),
+                               ("bin", UInt64, UInt128, 66, 130),
+                               )
+    @eval function $(Symbol("parse_", name))(l::Parser, contains_underscore, base=nothing)::Err{Union{$(T1), $(T2), BigInt}}
+        s = take_string_or_substring(l, contains_underscore)
+        len = length(s)
+        v = try
+            if len ≤ $(n1)
+                Base.parse($(T1), s; base)
+            elseif $(n1) < len ≤ $(n2)
+                Base.parse($(T2), s; base)
+            else
+                Base.parse(BigInt, s; base)
+            end
+        catch e
+            e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+            error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+        end
+        return v
+    end
+end
+
 
 ##########################
 # Date / Time / DateTime #
@@ -923,21 +975,21 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
 function parse_datetime(l)
     # Year has already been eaten when we reach here
-    year = parse_int(l, false)::Int64
+    year = @try parse_int(l, false)
     year in 0:9999 || return ParserError(ErrParsingDateTime)
 
     # Month
     accept(l, '-') || return ParserError(ErrParsingDateTime)
     set_marker!(l)
     @try accept_two(l, isdigit)
-    month = parse_int(l, false)
+    month = @try parse_int(l, false)
     month in 1:12 || return ParserError(ErrParsingDateTime)
     accept(l, '-') || return ParserError(ErrParsingDateTime)
 
     # Day
     set_marker!(l)
     @try accept_two(l, isdigit)
-    day = parse_int(l, false)
+    day = @try parse_int(l, false)
     # Verify the real range in the constructor below
     day in 1:31 || return ParserError(ErrParsingDateTime)
 
@@ -974,9 +1026,10 @@ function parse_datetime(l)
 end
 
 function try_return_datetime(p, year, month, day, h, m, s, ms)
-    if p.Dates !== nothing
+    Dates = p.Dates
+    if Dates !== nothing
         try
-            return p.Dates.DateTime(year, month, day, h, m, s, ms)
+            return Dates.DateTime(year, month, day, h, m, s, ms)
         catch
             return ParserError(ErrParsingDateTime)
         end
@@ -986,9 +1039,10 @@ function try_return_datetime(p, year, month, day, h, m, s, ms)
 end
 
 function try_return_date(p, year, month, day)
-    if p.Dates !== nothing
+    Dates = p.Dates
+    if Dates !== nothing
         try
-            return p.Dates.Date(year, month, day)
+            return Dates.Date(year, month, day)
         catch
             return ParserError(ErrParsingDateTime)
         end
@@ -998,7 +1052,7 @@ function try_return_date(p, year, month, day)
 end
 
 function parse_local_time(l::Parser)
-    h = parse_int(l, false)
+    h = @try parse_int(l, false)
     h in 0:23 || return ParserError(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)
     # TODO: Could potentially parse greater accuracy for the
@@ -1007,9 +1061,10 @@ function parse_local_time(l::Parser)
 end
 
 function try_return_time(p, h, m, s, ms)
-    if p.Dates !== nothing
+    Dates = p.Dates
+    if Dates !== nothing
         try
-            return p.Dates.Time(h, m, s, ms)
+            return Dates.Time(h, m, s, ms)
         catch
             return ParserError(ErrParsingDateTime)
         end
@@ -1059,7 +1114,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
         end
         # DateTime in base only manages 3 significant digits in fractional
         # second
-        fractional_second = parse_int(l, false)
+        fractional_second = parse_int(l, false)::Int64
         # Truncate off the rest eventual digits
         accept_batch(l, isdigit)
     end
@@ -1131,7 +1186,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
                     if !accept_n(l, n, isvalid_hex)
                         return ParserError(ErrInvalidUnicodeScalar)
                     end
-                    codepoint = parse_int(l, false, 16)
+                    codepoint = parse_int(l, false, 16)::Int64
                     #=
                     Unicode Scalar Value
                     ---------------------
@@ -1152,7 +1207,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
 end
 
 function take_chunks(l::Parser, unescape::Bool)::String
-    nbytes = sum(length, l.chunks)
+    nbytes = sum(length, l.chunks; init=0)
     str = Base._string_n(nbytes)
     offset = 1
     for chunk in l.chunks

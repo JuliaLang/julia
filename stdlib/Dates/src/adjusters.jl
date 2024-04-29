@@ -2,10 +2,12 @@
 
 ### truncation
 Base.trunc(dt::Date, p::Type{Year}) = Date(UTD(totaldays(year(dt), 1, 1)))
+Base.trunc(dt::Date, p::Type{Quarter}) = firstdayofquarter(dt)
 Base.trunc(dt::Date, p::Type{Month}) = firstdayofmonth(dt)
 Base.trunc(dt::Date, p::Type{Day}) = dt
 
 Base.trunc(dt::DateTime, p::Type{Year}) = DateTime(trunc(Date(dt), Year))
+Base.trunc(dt::DateTime, p::Type{Quarter}) = DateTime(trunc(Date(dt), Quarter))
 Base.trunc(dt::DateTime, p::Type{Month}) = DateTime(trunc(Date(dt), Month))
 Base.trunc(dt::DateTime, p::Type{Day}) = DateTime(Date(dt))
 Base.trunc(dt::DateTime, p::Type{Hour}) = dt - Minute(dt) - Second(dt) - Millisecond(dt)
@@ -27,7 +29,7 @@ Truncates the value of `dt` according to the provided `Period` type.
 
 # Examples
 ```jldoctest
-julia> trunc(Dates.DateTime("1996-01-01T12:30:00"), Dates.Day)
+julia> trunc(DateTime("1996-01-01T12:30:00"), Day)
 1996-01-01T00:00:00
 ```
 """
@@ -41,7 +43,7 @@ Adjusts `dt` to the Monday of its week.
 
 # Examples
 ```jldoctest
-julia> Dates.firstdayofweek(DateTime("1996-01-05T12:30:00"))
+julia> firstdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-01T00:00:00
 ```
 """
@@ -57,7 +59,7 @@ Adjusts `dt` to the Sunday of its week.
 
 # Examples
 ```jldoctest
-julia> Dates.lastdayofweek(DateTime("1996-01-05T12:30:00"))
+julia> lastdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-07T00:00:00
 ```
 """
@@ -73,7 +75,7 @@ Adjusts `dt` to the first day of its month.
 
 # Examples
 ```jldoctest
-julia> Dates.firstdayofmonth(DateTime("1996-05-20"))
+julia> firstdayofmonth(DateTime("1996-05-20"))
 1996-05-01T00:00:00
 ```
 """
@@ -89,7 +91,7 @@ Adjusts `dt` to the last day of its month.
 
 # Examples
 ```jldoctest
-julia> Dates.lastdayofmonth(DateTime("1996-05-20"))
+julia> lastdayofmonth(DateTime("1996-05-20"))
 1996-05-31T00:00:00
 ```
 """
@@ -108,7 +110,7 @@ Adjusts `dt` to the first day of its year.
 
 # Examples
 ```jldoctest
-julia> Dates.firstdayofyear(DateTime("1996-05-20"))
+julia> firstdayofyear(DateTime("1996-05-20"))
 1996-01-01T00:00:00
 ```
 """
@@ -124,7 +126,7 @@ Adjusts `dt` to the last day of its year.
 
 # Examples
 ```jldoctest
-julia> Dates.lastdayofyear(DateTime("1996-05-20"))
+julia> lastdayofyear(DateTime("1996-05-20"))
 1996-12-31T00:00:00
 ```
 """
@@ -143,10 +145,10 @@ Adjusts `dt` to the first day of its quarter.
 
 # Examples
 ```jldoctest
-julia> Dates.firstdayofquarter(DateTime("1996-05-20"))
+julia> firstdayofquarter(DateTime("1996-05-20"))
 1996-04-01T00:00:00
 
-julia> Dates.firstdayofquarter(DateTime("1996-08-20"))
+julia> firstdayofquarter(DateTime("1996-08-20"))
 1996-07-01T00:00:00
 ```
 """
@@ -166,10 +168,10 @@ Adjusts `dt` to the last day of its quarter.
 
 # Examples
 ```jldoctest
-julia> Dates.lastdayofquarter(DateTime("1996-05-20"))
+julia> lastdayofquarter(DateTime("1996-05-20"))
 1996-06-30T00:00:00
 
-julia> Dates.lastdayofquarter(DateTime("1996-08-20"))
+julia> lastdayofquarter(DateTime("1996-08-20"))
 1996-09-30T00:00:00
 ```
 """
@@ -202,6 +204,41 @@ function adjust(df::DateFunction, start, step, limit)
     throw(ArgumentError("Adjustment limit reached: $limit iterations"))
 end
 
+"""
+    adjust(df, start[, step, limit]) -> TimeType
+    adjust(df, start) -> TimeType
+
+Adjusts the date in `start` until the `f::Function` passed using `df` returns `true`.
+The optional `step` parameter dictates the change in `start` on every iteration.
+If `limit` iterations occur, then an [`ArgumentError`](@ref) is thrown.
+
+The default values for parameters `start` and `limit` are 1 Day and 10,000 respectively.
+
+# Examples
+```jldoctest
+julia> Dates.adjust(date -> month(date) == 10, Date(2022, 1, 1), step=Month(3), limit=10)
+2022-10-01
+
+julia> Dates.adjust(date -> year(date) == 2025, Date(2022, 1, 1), step=Year(1), limit=4)
+2025-01-01
+
+julia> Dates.adjust(date -> day(date) == 15, Date(2022, 1, 1), step=Year(1), limit=3)
+ERROR: ArgumentError: Adjustment limit reached: 3 iterations
+Stacktrace:
+[...]
+
+julia> Dates.adjust(date -> month(date) == 10, Date(2022, 1, 1))
+2022-10-01
+
+julia> Dates.adjust(date -> year(date) == 2025, Date(2022, 1, 1))
+2025-01-01
+
+julia> Dates.adjust(date -> year(date) == 2224, Date(2022, 1, 1))
+ERROR: ArgumentError: Adjustment limit reached: 10000 iterations
+Stacktrace:
+[...]
+```
+"""
 function adjust(func::Function, start; step::Period=Day(1), limit::Int=10000)
     return adjust(DateFunction(func, start), start, step, limit)
 end
@@ -219,13 +256,13 @@ pursue before throwing an error (given that `f::Function` is never satisfied).
 
 # Examples
 ```jldoctest
-julia> Date(date -> Dates.week(date) == 20, 2010, 01, 01)
+julia> Date(date -> week(date) == 20, 2010, 01, 01)
 2010-05-17
 
-julia> Date(date -> Dates.year(date) == 2010, 2000, 01, 01)
+julia> Date(date -> year(date) == 2010, 2000, 01, 01)
 2010-01-01
 
-julia> Date(date -> Dates.month(date) == 10, 2000, 01, 01; limit = 5)
+julia> Date(date -> month(date) == 10, 2000, 01, 01; limit = 5)
 ERROR: ArgumentError: Adjustment limit reached: 5 iterations
 Stacktrace:
 [...]
@@ -246,10 +283,10 @@ pursue before throwing an error (in the case that `f::Function` is never satisfi
 
 # Examples
 ```jldoctest
-julia> DateTime(dt -> Dates.second(dt) == 40, 2010, 10, 20, 10; step = Dates.Second(1))
+julia> DateTime(dt -> second(dt) == 40, 2010, 10, 20, 10; step = Second(1))
 2010-10-20T10:00:40
 
-julia> DateTime(dt -> Dates.hour(dt) == 20, 2010, 10, 20, 10; step = Dates.Hour(1), limit = 5)
+julia> DateTime(dt -> hour(dt) == 20, 2010, 10, 20, 10; step = Hour(1), limit = 5)
 ERROR: ArgumentError: Adjustment limit reached: 5 iterations
 Stacktrace:
 [...]
@@ -289,13 +326,13 @@ arguments are provided, the default step will be `Millisecond(1)` instead of `Se
 
 # Examples
 ```jldoctest
-julia> Dates.Time(t -> Dates.minute(t) == 30, 20)
+julia> Time(t -> minute(t) == 30, 20)
 20:30:00
 
-julia> Dates.Time(t -> Dates.minute(t) == 0, 20)
+julia> Time(t -> minute(t) == 0, 20)
 20:00:00
 
-julia> Dates.Time(t -> Dates.hour(t) == 10, 3; limit = 5)
+julia> Time(t -> hour(t) == 10, 3; limit = 5)
 ERROR: ArgumentError: Adjustment limit reached: 5 iterations
 Stacktrace:
 [...]

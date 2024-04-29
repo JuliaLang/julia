@@ -37,23 +37,27 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
                 `xsel --input --clipboard` :
                 `xsel -c`,
             :xclip => `xclip -silent -in -selection clipboard`,
+            :wlclipboard => `wl-copy`
         )
     const _clipboard_paste = Dict(
             :xsel  => Sys.islinux() ?
                 `xsel --nodetach --output --clipboard` :
                 `xsel -p`,
             :xclip => `xclip -quiet -out -selection clipboard`,
+            :wlclipboard => `wl-paste`
         )
     function clipboardcmd()
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
-        for cmd in (:xclip, :xsel)
-            success(pipeline(`which $cmd`, devnull)) && return _clipboardcmd = cmd
+        for cmd in (:xclip, :xsel, :wlclipboard)
+            # wl-clipboard ships wl-copy/paste individually
+            c = cmd === :wlclipboard ? Symbol("wl-copy") : cmd
+            success(pipeline(`which $c`, devnull)) && return _clipboardcmd = cmd
         end
         pkgs = @static if Sys.KERNEL === :FreeBSD
             "x11/xsel or x11/xclip"
         else
-            "xsel or xclip"
+            "xsel or xclip or wl-clipboard"
         end
         error("no clipboard command found, please install $pkgs")
     end
@@ -79,14 +83,14 @@ elseif Sys.iswindows()
         x_u16 = Base.cwstring(x)
         pdata = Ptr{UInt16}(C_NULL)
         function cleanup(cause)
-            errno = cause == :success ? UInt32(0) : Libc.GetLastError()
+            errno = cause === :success ? UInt32(0) : Libc.GetLastError()
             if cause !== :OpenClipboard
                 if cause !== :success && pdata != C_NULL
                     ccall((:GlobalFree, "kernel32"), stdcall, Cint, (Ptr{UInt16},), pdata)
                 end
                 ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror(:CloseClipboard) # this should never fail
             end
-            cause == :success || Base.windowserror(cause, errno)
+            cause === :success || Base.windowserror(cause, errno)
             nothing
         end
         ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && return Base.windowserror(:OpenClipboard)
@@ -96,28 +100,28 @@ elseif Sys.iswindows()
         pdata == C_NULL && return cleanup(:GlobalAlloc)
         plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), pdata)
         plock == C_NULL && return cleanup(:GlobalLock)
-        ccall(:memcpy, Ptr{UInt16}, (Ptr{UInt16}, Ptr{UInt16}, Csize_t), plock, x_u16, sizeof(x_u16))
+        GC.@preserve x_u16 memcpy(plock, Base.unsafe_convert(Ptr{UInt16}, Base.cconvert(Ptr{UInt16}, x_u16)), sizeof(x_u16))
         unlock = ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), pdata)
         (unlock == 0 && Libc.GetLastError() == 0) || return cleanup(:GlobalUnlock) # this should never fail
-        pset = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint, Ptr{UInt16}), 13, pdata)
+        pset = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint, Ptr{UInt16}), 13, pdata) # CF_UNICODETEXT
         pdata != pset && return cleanup(:SetClipboardData)
         cleanup(:success)
     end
     clipboard(x) = clipboard(sprint(print, x)::String)
     function clipboard()
         function cleanup(cause)
-            errno = cause == :success ? UInt32(0) : Libc.GetLastError()
+            errno = cause === :success ? UInt32(0) : Libc.GetLastError()
             if cause !== :OpenClipboard
                 ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror(:CloseClipboard) # this should never fail
             end
-            if cause !== :success && (cause !== :GetClipboardData || errno != 0)
+            if cause !== :success && !(cause === :GetClipboardData && (errno == 0x8004006A || errno == 0x800401D3)) # ignore DV_E_CLIPFORMAT and CLIPBRD_E_BAD_DATA from GetClipboardData
                 Base.windowserror(cause, errno)
             end
             ""
         end
         ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && return Base.windowserror(:OpenClipboard)
         ccall(:SetLastError, stdcall, Cvoid, (UInt32,), 0) # allow distinguishing if the clipboard simply didn't have text
-        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint,), 13)
+        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint,), 13) # CF_UNICODETEXT
         pdata == C_NULL && return cleanup(:GetClipboardData)
         plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), pdata)
         plock == C_NULL && return cleanup(:GlobalLock)
@@ -150,7 +154,7 @@ Send a printed form of `x` to the operating system clipboard ("copy").
 clipboard(x)
 
 """
-    clipboard() -> AbstractString
+    clipboard() -> String
 
 Return a string with the contents of the operating system clipboard ("paste").
 """

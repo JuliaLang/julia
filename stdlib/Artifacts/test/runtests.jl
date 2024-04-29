@@ -1,5 +1,91 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+import Base: SHA1
+
 using Artifacts, Test, Base.BinaryPlatforms
-using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform
+using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform, load_overrides
+using TOML
+
+# prepare for the package tests by ensuring the required artifacts are downloaded now
+artifacts_dir = mktempdir()
+run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl")) $(artifacts_dir)`, "TERM"=>"dumb"))
+
+@testset "Load Overrides" begin
+    """
+        create_test_overrides_toml(temp_dir::String)
+
+    Create "Overrides.toml" in the given `temp_dir`.
+    """
+    function create_test_overrides_toml(temp_dir::String)
+        # Define the overrides
+        overrides = Dict(
+            "78f35e74ff113f02274ce60dab6e92b4546ef806" => "/path/to/replacement",
+            "c76f8cda85f83a06d17de6c57aabf9e294eb2537" => "fb886e813a4aed4147d5979fcdf27457d20aa35d",
+            "d57dbccd-ca19-4d82-b9b8-9d660942965b" => Dict(
+                "c_simple" => "/path/to/c_simple_dir",
+                "libfoo" => "fb886e813a4aed4147d5979fcdf27457d20aa35d"
+            )
+        )
+
+        # Get the artifacts directory
+        artifacts_dir = joinpath(temp_dir, "artifacts")
+
+        # Ensure the artifacts directory exists
+        isdir(artifacts_dir) || mkdir(artifacts_dir)
+
+        # Get the path to the Overrides.toml file
+        overrides_path = joinpath(artifacts_dir, "Overrides.toml")
+
+        # Create the Overrides.toml file
+        open(overrides_path, "w") do io
+            TOML.print(io, overrides)
+        end
+    end
+
+    # Specify the expected test result when depot path does not exist or no overriding happened
+    empty_output = Dict{Symbol, Any}(
+        :UUID => Dict{Base.UUID, Dict{String, Union{SHA1, String}}}(),
+        :hash => Dict{SHA1, Union{SHA1, String}}()
+    )
+
+    # Specify the expected test result when overriding happened
+    expected_output = Dict{Symbol, Any}(
+        :UUID => Dict{Base.UUID, Dict{String, Union{SHA1, String}}}(Base.UUID("d57dbccd-ca19-4d82-b9b8-9d660942965b") => Dict("c_simple" => "/path/to/c_simple_dir", "libfoo" => SHA1("fb886e813a4aed4147d5979fcdf27457d20aa35d"))),
+        :hash => Dict{SHA1, Union{SHA1, String}}(SHA1("78f35e74ff113f02274ce60dab6e92b4546ef806") => "/path/to/replacement", SHA1("c76f8cda85f83a06d17de6c57aabf9e294eb2537") => SHA1("fb886e813a4aed4147d5979fcdf27457d20aa35d"))
+    )
+
+    # Test `load_overrides()` works with *no* "Overrides.toml" file
+    @test load_overrides() == empty_output
+
+    # Create a temporary directory
+    mktempdir() do temp_dir
+        # Back up the old `DEPOT_PATH``
+        old_depot_path = copy(Base.DEPOT_PATH)
+
+        # Set `DEPOT_PATH` to that directory
+        empty!(Base.DEPOT_PATH)
+        push!(Base.DEPOT_PATH, temp_dir)
+
+        try
+            # Create "Overrides.toml" for the test
+            create_test_overrides_toml(temp_dir)
+
+            # Test `load_overrides()` works *with* "Overrides.toml" file but non-nothing ARTIFACT_OVERRIDES[]
+            @test load_overrides() == empty_output
+
+            # Test `load_overrides()` works *with* "Overrides.toml" file with force parameter, which overrides even when `ARTIFACT_OVERRIDES[] !== nothing``
+            @test load_overrides(force=true) == expected_output
+        finally # Make sure `DEPOT_PATH` will be restored to the status quo in the event of a bug
+            # Restore the old `DEPOT_PATH` to avoid messing with any other code
+            empty!(Base.DEPOT_PATH)
+            append!(Base.DEPOT_PATH, old_depot_path)
+        end
+    end
+    # Temporary directory and test "Overrides.toml" file will be automatically deleted when out of scope
+    # This means after this block, the system *should* behave like this test never happened.
+
+    # Test the "Overrides.toml" file is cleared back to the status quo
+    @test load_overrides(force=true) == empty_output
+end
 
 @testset "Artifact Paths" begin
     mktempdir() do tempdir
@@ -76,44 +162,106 @@ end
 end
 
 @testset "Artifact Slash-indexing" begin
-    mktempdir() do tempdir
-        with_artifacts_directory(tempdir) do
-            exeext = Sys.iswindows() ? ".exe" : ""
+    with_artifacts_directory(artifacts_dir) do
+        exeext = Sys.iswindows() ? ".exe" : ""
 
-            # simple lookup, gives us the directory for `c_simple` for the current architecture
-            c_simple_dir = artifact"c_simple"
-            @test isdir(c_simple_dir)
-            c_simple_exe_path = joinpath(c_simple_dir, "bin", "c_simple$(exeext)")
-            @test isfile(c_simple_exe_path)
+        # simple lookup, gives us the directory for `HelloWorldC` for the current architecture
+        HelloWorldC_dir = artifact"HelloWorldC"
+        @test isdir(HelloWorldC_dir)
+        HelloWorldC_exe_path = joinpath(HelloWorldC_dir, "bin", "hello_world$(exeext)")
+        @test isfile(HelloWorldC_exe_path)
 
-            # Simple slash-indexed lookup
-            c_simple_bin_path = artifact"c_simple/bin"
-            @test isdir(c_simple_bin_path)
-            # Test that forward and backward slash are equivalent
-            @test artifact"c_simple\\bin" == artifact"c_simple/bin"
+        # Simple slash-indexed lookup
+        HelloWorldC_bin_path = artifact"HelloWorldC/bin"
+        @test isdir(HelloWorldC_bin_path)
+        # Test that forward and backward slash are equivalent
+        @test artifact"HelloWorldC\\bin" == artifact"HelloWorldC/bin"
 
-            # Dynamically-computed lookup; not done at compile-time
-            generate_artifact_name() = "c_simple"
-            c_simple_dir = @artifact_str(generate_artifact_name())
-            @test isdir(c_simple_dir)
-            c_simple_exe_path = joinpath(c_simple_dir, "bin", "c_simple$(exeext)")
-            @test isfile(c_simple_exe_path)
+        # Dynamically-computed lookup; not done at compile-time
+        generate_artifact_name() = "HelloWorldC"
+        HelloWorldC_dir = @artifact_str(generate_artifact_name())
+        @test isdir(HelloWorldC_dir)
+        HelloWorldC_exe_path = joinpath(HelloWorldC_dir, "bin", "hello_world$(exeext)")
+        @test isfile(HelloWorldC_exe_path)
 
-            # Dynamically-computed slash-indexing:
-            generate_bin_path(pathsep) = "c_simple$(pathsep)bin$(pathsep)c_simple$(exeext)"
-            @test isfile(@artifact_str(generate_bin_path("/")))
-            @test isfile(@artifact_str(generate_bin_path("\\")))
-        end
+        # Dynamically-computed slash-indexing:
+        generate_bin_path(pathsep) = "HelloWorldC$(pathsep)bin$(pathsep)hello_world$(exeext)"
+        @test isfile(@artifact_str(generate_bin_path("/")))
+        @test isfile(@artifact_str(generate_bin_path("\\")))
     end
 end
 
 @testset "@artifact_str Platform passing" begin
-    mktempdir() do tempdir
-        with_artifacts_directory(tempdir) do
-            win64 = Platform("x86_64", "windows")
-            mac64 = Platform("x86_64", "macos")
-            @test basename(@artifact_str("c_simple", win64)) == "444cecb70ff39e8961dd33e230e151775d959f37"
-            @test basename(@artifact_str("c_simple", mac64)) == "7ba74e239348ea6c060f994c083260be3abe3095"
+    with_artifacts_directory(artifacts_dir) do
+        win64 = Platform("x86_64", "windows")
+        mac64 = Platform("x86_64", "macos")
+        @test basename(@artifact_str("HelloWorldC", win64)) == "2f1a6d4f82cd1eea785a5141b992423c09491f1b"
+        @test basename(@artifact_str("HelloWorldC", mac64)) == "f8ab5a03697f9afc82210d8a2be1d94509aea8bc"
+    end
+end
+
+@testset "artifact_hash()" begin
+    # Use the Linus OS on an ARMv7L architecture for the tests to make tests reproducible
+    armv7l_linux = Platform("armv7l", "linux")
+
+    # Check the first key in Artifacts.toml is hashed correctly
+    @test artifact_hash("HelloWorldC", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
+            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
+
+    # Check the second key in Artifacts.toml is hashed correctly
+    @test artifact_hash("socrates", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
+            SHA1("43563e7631a7eafae1f9f8d9d332e3de44ad7239")
+
+    # Check artifact_hash() works for any AbstractString
+    @test artifact_hash(SubString("HelloWorldC0", 1, 11), joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
+            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
+end
+
+@testset "select_downloadable_artifacts()" begin
+    armv7l_linux = Platform("armv7l", "linux")
+    artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux)
+    @test length(keys(artifacts)) == 1
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "5a8288c8a30578c0d0f24a9cded29579517ce7a8"
+
+    artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux, include_lazy=true)
+    @test length(keys(artifacts)) == 2
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "5a8288c8a30578c0d0f24a9cded29579517ce7a8"
+    @test artifacts["socrates"]["git-tree-sha1"] == "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
+end
+
+@testset "@artifact_str install errors" begin
+    for imports in ("Artifacts, Pkg", "Pkg, Pkg.Artifacts", "Pkg.Artifacts")
+        mktempdir() do tempdir
+            with_artifacts_directory(tempdir) do
+                ex = @test_throws ErrorException artifact"HelloWorldC"
+                @test startswith(ex.value.msg, "Artifact \"HelloWorldC\" was not found ")
+                ex = @test_throws ErrorException artifact"socrates"
+                @test startswith(ex.value.msg, "Artifact \"socrates\" is a lazy artifact; ")
+
+                # Can install if we load `Pkg` or `Pkg.Artifacts`
+                anon = Module(:__anon__)
+                Core.eval(anon, Meta.parse("using $(imports), Test"))
+                # Ensure that we get the expected exception, since this test runs with --depwarn=error
+                Core.eval(anon, quote
+                    try
+                        artifact"socrates"
+                        @assert false "this @artifact_str macro invocation should have failed!"
+                    catch e
+                        @test startswith("using Pkg instead of using LazyArtifacts is deprecated", e.msg)
+                    end
+                end)
+            end
         end
     end
+end
+
+@testset "`Artifacts.artifact_names` and friends" begin
+    n = length(Artifacts.artifact_names)
+    @test length(Base.project_names) == n
+    @test length(Base.manifest_names) == 2n # there are two manifest names per project name
+    @test length(Base.preferences_names) == n
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Artifacts))
 end

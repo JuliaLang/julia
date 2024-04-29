@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-import Base64:
+using Base64:
+    Base64,
     Base64EncodePipe,
     base64encode,
     Base64DecodePipe,
@@ -87,6 +88,21 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
 
     # issue #32397
     @test String(base64decode(longEncodedText)) == longDecodedText;
+
+    # Optional padding
+    @test base64decode("AQ==") == base64decode("AQ")
+    @test base64decode("zzzzAQ==") == base64decode("zzzzAQ")
+    @test base64decode("AQI=") == base64decode("AQI")
+
+    # Too short, 6 bits do not cover a full byte.
+    @test_throws ArgumentError base64decode("a")
+    @test_throws ArgumentError base64decode("a===")
+    @test_throws ArgumentError base64decode("ZZZZa")
+    @test_throws ArgumentError base64decode("ZZZZa===")
+
+    # Bit padding should be ignored, which means that `jl` and `jk` should give the same result.
+    @test base64decode("jl") == base64decode("jk") == base64decode("jk==") == [142]
+    @test base64decode("Aa") == base64decode("AS") == base64decode("AS==") == [1]
 end
 
 @testset "Random data" begin
@@ -126,4 +142,8 @@ end
     for _ in 1:1000
         @test String(base64decode(splace(longEncodedText))) == longDecodedText
     end
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Base64))
 end

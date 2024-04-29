@@ -44,7 +44,12 @@ end
     @testset for T in (Float16, Float32, Float64, BigFloat)
         t = true
         f = false
-
+        @testset "equality" begin
+            @test isequal(T(0.0)*im, T(0.0))
+            @test !isequal(T(0.0)*im, T(-0.0))
+            @test isequal(Complex(T(-0.0), T(0.0)), T(-0.0))
+            @test !isequal(T(-0.0)*im, T(-0.0))
+        end
         @testset "add and subtract" begin
             @test isequal(T(+0.0) + im, Complex(T(+0.0), T(+1.0)))
             @test isequal(T(-0.0) + im, Complex(T(-0.0), T(+1.0)))
@@ -123,6 +128,8 @@ end
             @test atanh(x) ≈ atanh(big(x))
             @test cis(real(x)) ≈ cis(real(big(x)))
             @test cis(x) ≈ cis(big(x))
+            @test cispi(real(x)) ≈ cispi(real(big(x)))
+            @test cispi(x) ≈ cispi(big(x))
             @test cos(x) ≈ cos(big(x))
             @test cosh(x) ≈ cosh(big(x))
             @test exp(x) ≈ exp(big(x))
@@ -376,6 +383,7 @@ import Base.Math.@horner
     @test isequal(log1p(complex(-2, 1e-10)), log(1 + complex(-2, 1e-10)))
     @test isequal(log1p(complex(1, Inf)), complex(Inf, pi/2))
     @test isequal(log1p(complex(1, -Inf)), complex(Inf, -pi/2))
+    @test isequal(log1p(complex(1e-200, 5e-175)), complex(1e-200, 5e-175))
 
     for z in (1e-10+1e-9im, 1e-10-1e-9im, -1e-10+1e-9im, -1e-10-1e-9im)
         @test log1p(z) ≈ @horner(z, 0, 1, -0.5, 1/3, -0.25, 0.2)
@@ -918,6 +926,22 @@ end
     @test cis(1.0+0.0im) ≈ 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
     @test cis(pi) ≈ -1.0+0.0im
     @test cis(pi/2) ≈ 0.0+1.0im
+    @test cispi(false) == 1
+    @test cispi(true) == -1
+    @test cispi(-1) == -1
+    @test cispi(0) == 1
+    @test cispi(1) == -1
+    @test cispi(2) == 1
+    @test cispi(0.0) == cispi(0)
+    @test cispi(1.0) == cispi(1)
+    @test cispi(2.0) == cispi(2)
+    @test cispi(0.5) == im
+    @test cispi(1.5) == -im
+    @test cispi(0.25) ≈ cis(π/4)
+    @test cispi(0.0+0.0im) == cispi(0)
+    @test cispi(1.0+0.0im) == cispi(1)
+    @test cispi(2.0+0.0im) == cispi(2)
+    @test cispi(5im) ≈ exp(-5pi) rtol=1e-10 # https://github.com/JuliaLang/julia/pull/45945
 end
 
 @testset "exp2" begin
@@ -1022,7 +1046,7 @@ end
 @testset "corner cases of division, issue #22983" begin
     # These results abide by ISO/IEC 10967-3:2006(E) and
     # mathematical definition of division of complex numbers.
-    for T in (Float32, Float64, BigFloat)
+    for T in (Float16, Float32, Float64, BigFloat)
         @test isequal(one(T) / zero(Complex{T}), one(Complex{T}) / zero(Complex{T}))
         @test isequal(one(T) / zero(Complex{T}), Complex{T}(NaN, NaN))
         @test isequal(one(Complex{T}) / zero(T), Complex{T}(Inf, NaN))
@@ -1033,7 +1057,7 @@ end
 end
 
 @testset "division by Inf, issue#23134" begin
-    @testset "$T" for T in (Float32, Float64, BigFloat)
+    @testset "$T" for T in (Float16, Float32, Float64, BigFloat)
         @test isequal(one(T) / complex(T(Inf)),         complex(zero(T), -zero(T)))
         @test isequal(one(T) / complex(T(Inf), one(T)), complex(zero(T), -zero(T)))
         @test isequal(one(T) / complex(T(Inf), T(NaN)), complex(zero(T), -zero(T)))
@@ -1071,16 +1095,10 @@ end
         @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
 
         # divide complex by complex Inf
-        if T == Float64
-            @test_broken isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
-            @test_broken isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
-        elseif T == Float32
-            @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
-            @test_broken isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
-        else
-            @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
-            @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
-        end
+        @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(complex(T(Inf)) / complex(T(Inf), T(-Inf)), complex(T(NaN), T(NaN)))
+        @test isequal(complex(T(NaN)) / complex(T(-Inf), T(Inf)), complex(T(NaN), T(NaN)))
     end
 end
 
@@ -1188,9 +1206,12 @@ end
 # complex with non-concrete eltype
 @test_throws ErrorException complex(Union{Complex{Int}, Nothing}[])
 
-@testset "ispow2" begin
+@testset "ispow2 and iseven/isodd" begin
     @test ispow2(4+0im)
     @test ispow2(0.25+0im)
     @test !ispow2(4+5im)
     @test !ispow2(7+0im)
+    @test iseven(6+0im) && !isodd(6+0im)
+    @test !iseven(7+0im) && isodd(7+0im)
+    @test !iseven(6+1im) && !isodd(7+1im)
 end

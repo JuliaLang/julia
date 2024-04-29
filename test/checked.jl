@@ -3,7 +3,7 @@
 # Checked integer arithmetic
 
 import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
-             checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+             checked_div, checked_rem, checked_fld, checked_mod, checked_cld, checked_pow,
              add_with_overflow, sub_with_overflow, mul_with_overflow
 
 # checked operations
@@ -166,6 +166,19 @@ import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
     @test checked_cld(typemin(T), T(1)) === typemin(T)
     @test_throws DivideError checked_cld(typemin(T), T(0))
     @test_throws DivideError checked_cld(typemin(T), T(-1))
+
+    @test checked_pow(T(1), T(0)) === T(1)
+    @test checked_pow(typemax(T), T(0)) === T(1)
+    @test checked_pow(typemin(T), T(0)) === T(1)
+    @test checked_pow(T(1), T(1)) === T(1)
+    @test checked_pow(T(1), typemax(T)) === T(1)
+    @test checked_pow(T(2), T(2)) === T(4)
+    @test_throws OverflowError checked_pow(T(2), typemax(T))
+    @test_throws OverflowError checked_pow(T(-2), typemax(T))
+    @test_throws OverflowError checked_pow(typemax(T), T(2))
+    @test_throws OverflowError checked_pow(typemin(T), T(2))
+    @test_throws DomainError checked_pow(T(2), -T(1))
+    @test_throws DomainError checked_pow(-T(2), -T(1))
 end
 
 @testset for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
@@ -296,12 +309,27 @@ end
     @test checked_cld(true, true) === true
     @test checked_cld(false, true) === false
     @test_throws DivideError checked_cld(true, false)
+
+    @test checked_pow(true, 1) === true
+    @test checked_pow(true, 1000000) === true
+    @test checked_pow(false, 1000000) === false
 end
 @testset "BigInt" begin
     @test checked_abs(BigInt(-1)) == BigInt(1)
     @test checked_abs(BigInt(1)) == BigInt(1)
     @test checked_neg(BigInt(-1)) == BigInt(1)
     @test checked_neg(BigInt(1)) == BigInt(-1)
+    @test checked_add(BigInt(1), BigInt(1)) == BigInt(2)
+    @test checked_sub(BigInt(1), BigInt(2)) == BigInt(-1)
+    @test checked_mul(BigInt(2), BigInt(10)) == BigInt(20)
+    @test checked_div(BigInt(10), BigInt(2)) == BigInt(5)
+    @test checked_rem(BigInt(9), BigInt(4)) == BigInt(1)
+    @test checked_fld(BigInt(10), BigInt(3)) == BigInt(3)
+    @test checked_mod(BigInt(9), BigInt(4)) == BigInt(1)
+    @test checked_cld(BigInt(10), BigInt(3)) == BigInt(4)
+
+    @test checked_pow(BigInt(2), 2) == BigInt(4)
+    @test checked_pow(BigInt(2), 100) == BigInt(1267650600228229401496703205376)
 end
 
 @testset "Additional tests" begin
@@ -333,4 +361,24 @@ end
     @test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
     @test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
 
+end
+
+@testset "Multiple arguments for add, mul" begin
+    @test checked_add(1, 2, 3) === 6
+    @test checked_add(1, 2, 3, 4) === 10
+    @test checked_add(1, 2, 3, 4, 5) === 15
+    @test checked_add(1, 2, 3, 4, 5, 6) === 21
+    @test checked_add(1, 2, 3, 4, 5, 6, 7) === 28
+    @test checked_add(1, 2, 3, 4, 5, 6, 7, 8) === 36
+
+    @test checked_mul(1, 2, 3) === 6
+    @test checked_mul(1, 2, 3, 4) === 24
+    @test checked_mul(1, 2, 3, 4, 5) === 120
+    @test checked_mul(1, 2, 3, 4, 5, 6) === 720
+    @test checked_mul(1, 2, 3, 4, 5, 6, 7) === 5040
+    @test checked_mul(1, 2, 3, 4, 5, 6, 7, 8) === 40320
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Base.Checked))
 end

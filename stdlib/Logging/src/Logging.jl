@@ -8,11 +8,13 @@ and available by default.
 """
 module Logging
 
+using StyledStrings
+
 # Import the CoreLogging implementation into Logging as new const bindings.
 # Doing it this way (rather than with import) makes these symbols accessible to
 # tab completion.
 for sym in [
-    :LogLevel, :BelowMinLevel, :Debug, :Info, :Warn, :Error, :AboveMaxLevel,
+    :LogLevel,
     :AbstractLogger,
     :NullLogger,
     :handle_message, :shouldlog, :min_enabled_level, :catch_exceptions,
@@ -29,6 +31,47 @@ for sym in [
     @eval const $sym = Base.CoreLogging.$sym
 end
 
+# LogLevel aliases (re-)documented here (JuliaLang/julia#40978)
+"""
+    Debug
+
+Alias for [`LogLevel(-1000)`](@ref LogLevel).
+"""
+const Debug = Base.CoreLogging.Debug
+"""
+    Info
+
+Alias for [`LogLevel(0)`](@ref LogLevel).
+"""
+const Info = Base.CoreLogging.Info
+"""
+    Warn
+
+Alias for [`LogLevel(1000)`](@ref LogLevel).
+"""
+const Warn = Base.CoreLogging.Warn
+"""
+    Error
+
+Alias for [`LogLevel(2000)`](@ref LogLevel).
+"""
+const Error = Base.CoreLogging.Error
+"""
+    BelowMinLevel
+
+Alias for [`LogLevel(-1_000_001)`](@ref LogLevel).
+"""
+const BelowMinLevel = Base.CoreLogging.BelowMinLevel
+"""
+    AboveMaxLevel
+
+Alias for [`LogLevel(1_000_001)`](@ref LogLevel).
+"""
+const AboveMaxLevel = Base.CoreLogging.AboveMaxLevel
+
+using Base.CoreLogging:
+    closed_stream
+
 export
     AbstractLogger,
     LogLevel,
@@ -43,7 +86,13 @@ export
     global_logger,
     disable_logging,
     SimpleLogger,
-    ConsoleLogger
+    ConsoleLogger,
+    BelowMinLevel,
+    Debug,
+    Info,
+    Warn,
+    Error,
+    AboveMaxLevel
 
 include("ConsoleLogger.jl")
 
@@ -56,7 +105,7 @@ include("ConsoleLogger.jl")
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
 
 function __init__()
-    global_logger(ConsoleLogger(stderr))
+    global_logger(ConsoleLogger())
 end
 
 end

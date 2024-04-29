@@ -93,6 +93,7 @@ end
         #  with resizing of b
         b = view(UInt8[0, 0, 0], 1:0)
         @test_throws MethodError readbytes!(file, b, 2)
+        @test !islocked(file.lock) # Issue #37218
         @test isempty(b)
     end
 end
@@ -115,6 +116,24 @@ end
         b = Vector{UInt8}(undef, 4)
         @test readbytes!(io, b) == 4
         @test b == 0x01:0x04
+    end
+end
+
+@testset "read!/write(::IO, A::StridedArray)" begin
+    s1 = reshape(view(rand(UInt8, 16), 1:16), 2, 2, 2, 2)
+    s2 = view(s1, 1:2, 1:2, 1:2, 1:2)
+    s3 = view(s1, 1:2, 1:2, 1, 1:2)
+    mktemp() do path, io
+        b = Vector{UInt8}(undef, 17)
+        for s::StridedArray in (s3, s1, s2)
+            @test write(io, s) == length(s)
+            seek(io, 0)
+            @test readbytes!(io, b) == length(s)
+            seek(io, 0)
+            @test view(b, 1:length(s)) == vec(s)
+            @test read!(io, fill!(deepcopy(s), 0)) == s
+            seek(io, 0)
+        end
     end
 end
 

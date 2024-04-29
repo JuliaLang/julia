@@ -61,8 +61,11 @@ function preserve_handle(x)
 end
 function unpreserve_handle(x)
     lock(preserve_handle_lock)
-    v = uvhandles[x]::Int
-    if v == 1
+    v = get(uvhandles, x, 0)::Int
+    if v == 0
+        unlock(preserve_handle_lock)
+        error("unbalanced call to unpreserve_handle for $(typeof(x))")
+    elseif v == 1
         pop!(uvhandles, x)
     else
         uvhandles[x] = v - 1
@@ -74,12 +77,18 @@ end
 ## Libuv error handling ##
 
 struct IOError <: Exception
-    msg::AbstractString
+    msg::String
     code::Int32
     IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end
 
-showerror(io::IO, e::IOError) = print(io, "IOError: ", e.msg)
+function showerror(io::IO, e::IOError)
+    print(io, "IOError: ", e.msg)
+    if e.code == UV_ENOENT && '~' in e.msg
+        print(io, "\nMany shells expand '~' to the home directory in unquoted strings. To replicate this behavior, call",
+                  " `expanduser` to expand the '~' character to the user’s home directory.")
+    end
+end
 
 function _UVError(pfx::AbstractString, code::Integer)
     code = Int32(code)
@@ -100,6 +109,18 @@ uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)
 
 eventloop() = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
 
+function uv_unref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_unref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
+
+function uv_ref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_ref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
+
 function process_events()
     return ccall(:jl_process_events, Int32, ())
 end
@@ -107,14 +128,15 @@ end
 function uv_alloc_buf end
 function uv_readcb end
 function uv_writecb_task end
+function uv_shutdowncb_task end
 function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
 
 function reinit_stdio()
-    global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
-    global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
-    global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+    global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))::IO
+    global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
+    global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO
     opts = JLOptions()
     if opts.color != 0
         have_color = (opts.color == 1)
@@ -129,21 +151,21 @@ function reinit_stdio()
 end
 
 """
-    stdin
+    stdin::IO
 
 Global variable referring to the standard input stream.
 """
 :stdin
 
 """
-    stdout
+    stdout::IO
 
 Global variable referring to the standard out stream.
 """
 :stdout
 
 """
-    stderr
+    stderr::IO
 
 Global variable referring to the standard error stream.
 """

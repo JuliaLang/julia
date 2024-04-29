@@ -33,8 +33,8 @@ function latex(io::IO, header::Header{l}) where l
 end
 
 function latex(io::IO, code::Code)
+    occursin("\\end{verbatim}", code.code) && error("Cannot include \"\\end{verbatim}\" in a latex code block")
     wrapblock(io, "verbatim") do
-        # TODO latex escape
         println(io, code.code)
     end
 end
@@ -167,6 +167,20 @@ function latexesc(io, s::AbstractString)
     end
 end
 
+"""
+    latex([io::IO], md)
+
+Output the contents of the Markdown object `md` in LaTeX format, either
+writing to an (optional) `io` stream or returning a string.
+
+One can alternatively use `show(io, "text/latex", md)` or `repr("text/latex", md)`.
+
+# Examples
+```jldoctest
+julia> latex(md"hello _world_")
+"hello \\\\emph{world}\\n\\n"
+```
+"""
 latex(md) = sprint(latex, md)
 latexinline(md) = sprint(latexinline, md)
 latexesc(s) = sprint(latexesc, s)
