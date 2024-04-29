@@ -516,32 +516,53 @@ const ⋅ = dot
 const × = cross
 export ⋅, ×
 
-wrapper_char(::AbstractArray) = 'N'
-wrapper_char(::Adjoint) = 'C'
-wrapper_char(::Adjoint{<:Real}) = 'T'
-wrapper_char(::Transpose) = 'T'
-wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
-wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
-wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
+# Separate the char corresponding to the wrapper from that corresponding to the uplo
+# In most cases, the former may be constant-propagated, while the latter usually can't be.
+# This improves type-inference in wrap for Symmetric/Hermitian matrices
+struct WrapperChar <: AbstractChar
+    wrapperchar :: Char
+    isuppertri :: Bool
+end
+function Base.Char(w::WrapperChar)
+    T = w.wrapperchar
+    if T ∉ ('S', 'H')
+        T
+    else
+        _isuppertri(w) ? uppercase(T) : lowercase(T)
+    end
+end
+Base.codepoint(w::WrapperChar) = codepoint(Char(w))
+WrapperChar(n::UInt32) = WrapperChar(Char(n), true)
+_isuppertri(w::WrapperChar) = w.isuppertri
+_isuppertri(x::AbstractChar) = isuppercase(x) # compatibility with earlier Char-based implementation
+_getuplo(x) = _isuppertri(x) ? (:U) : (:L)
+
+wrapper_char(::AbstractArray) = WrapperChar('N')
+wrapper_char(::Adjoint) = WrapperChar('C')
+wrapper_char(::Adjoint{<:Real}) = WrapperChar('T')
+wrapper_char(::Transpose) = WrapperChar('T')
+wrapper_char(A::Hermitian) =  WrapperChar('H', A.uplo == 'U')
+wrapper_char(A::Hermitian{<:Real}) = WrapperChar('S', A.uplo == 'U')
+wrapper_char(A::Symmetric) = WrapperChar('S', A.uplo == 'U')
+
+_getwrapperchar(x) = x
+_getwrapperchar(x::WrapperChar) = x.wrapperchar
 
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     # merge the result of this before return, so that we can type-assert the return such
     # that even if the tmerge is inaccurate, inference can still identify that the
     # `_generic_matmatmul` signature still matches and doesn't require missing backedges
-    B = if tA == 'N'
+    tAwc = _getwrapperchar(tA)
+    B = if tAwc == 'N'
         A
-    elseif tA == 'T'
+    elseif tAwc == 'T'
         transpose(A)
-    elseif tA == 'C'
+    elseif tAwc == 'C'
         adjoint(A)
-    elseif tA == 'H'
-        Hermitian(A, :U)
-    elseif tA == 'h'
-        Hermitian(A, :L)
-    elseif tA == 'S'
-        Symmetric(A, :U)
-    else # tA == 's'
-        Symmetric(A, :L)
+    elseif tAwc ∈ ('H', 'h')
+        Hermitian(A, _getuplo(tA) #= unwrap a WrapperChar =#)
+    elseif tAwc ∈ ('S', 's')
+        Symmetric(A, _getuplo(tA) #= unwrap a WrapperChar =#)
     end
     return B::AbstractVecOrMat
 end
