@@ -1860,6 +1860,14 @@ end
         @test_throws ArgumentError reshape([7], (b, :, b))
         @test reshape([], (b, :, b)) isa Array{<:Any, 3}
     end
+    for iterator ∈ (7:6, 7:7, 7:8)
+        for it ∈ (iterator, map(BigInt, iterator))
+            @test reshape(it, (:, Int(length(it)))) isa AbstractMatrix
+            @test reshape(it, (Int(length(it)), :)) isa AbstractMatrix
+            @test reshape(it, (1, :))               isa AbstractMatrix
+            @test reshape(it, (:, 1))               isa AbstractMatrix
+        end
+    end
 end
 
 @testset "strides for ReshapedArray" begin

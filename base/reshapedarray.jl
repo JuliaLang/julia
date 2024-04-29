@@ -137,18 +137,19 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(
     _any_colon(post...) && throw1(dims)
     post::Tuple{Vararg{Int}}
     len = length(A)
-    sz, remainder = if iszero(len)
-        (0, 0)
+    sz, is_exact = if iszero(len)
+        (0, true)
     else
         let pr = Core.checked_dims(pre..., post...)  # safe product
             if iszero(pr)
                 throw2(A, dims)
             end
-            divrem(len, pr)
+            (quo, rem) = divrem(len, pr)
+            (Int(quo), iszero(rem))
         end
-    end::NTuple{2,Int}
-    remainder == 0 || throw2(A, dims)
-    (pre..., Int(sz), post...)::Tuple{Int,Vararg{Int}}
+    end::Tuple{Int,Bool}
+    is_exact || throw2(A, dims)
+    (pre..., sz, post...)::Tuple{Int,Vararg{Int}}
 end
 @inline _any_colon() = false
 @inline _any_colon(dim::Colon, tail...) = true
