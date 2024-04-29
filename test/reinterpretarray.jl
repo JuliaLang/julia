@@ -588,3 +588,23 @@ end
 
     @test_throws ArgumentError reinterpret(Tuple{Int32, Int64}, (Int16(1), Int64(4)))
 end
+
+let R = reinterpret(Float32, ComplexF32[1.0f0+2.0f0*im, 4.0f0+3.0f0*im])
+    @test !isassigned(R, 0)
+    @test isassigned(R, 1)
+    @test isassigned(R, 4)
+    @test isassigned(R, Int8(2), Int16(1), Int32(1), Int64(1))
+    @test !isassigned(R, 1, 2)
+    @test !isassigned(R, 5)
+    @test Array(R)::Vector{Float32} == [1.0f0, 2.0f0, 4.0f0, 3.0f0]
+end
+
+let R = reinterpret(reshape, Float32, ComplexF32[1.0f0+2.0f0*im, 4.0f0+3.0f0*im])
+    @test !isassigned(R, 0)
+    @test isassigned(R, 1)
+    @test isassigned(R, 4)
+    @test isassigned(R, Int8(2), Int16(2), Int32(1), Int64(1))
+    @test !isassigned(R, 1, 1, 2)
+    @test !isassigned(R, 5)
+    @test Array(R)::Matrix{Float32} == [1.0f0 4.0f0; 2.0f0 3.0f0]
+end

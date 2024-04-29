@@ -53,7 +53,6 @@ push!(c::CompositeException, ex) = push!(c.exceptions, ex)
 pushfirst!(c::CompositeException, ex) = pushfirst!(c.exceptions, ex)
 isempty(c::CompositeException) = isempty(c.exceptions)
 iterate(c::CompositeException, state...) = iterate(c.exceptions, state...)
-eltype(::Type{CompositeException}) = Any
 
 function showerror(io::IO, ex::CompositeException)
     if !isempty(ex)
@@ -154,8 +153,7 @@ const _state_index = findfirst(==(:_state), fieldnames(Task))
 @eval function load_state_acquire(t)
     # TODO: Replace this by proper atomic operations when available
     @GC.preserve t llvmcall($("""
-        %ptr = inttoptr i$(Sys.WORD_SIZE) %0 to i8*
-        %rv = load atomic i8, i8* %ptr acquire, align 8
+        %rv = load atomic i8, i8* %0 acquire, align 8
         ret i8 %rv
         """), UInt8, Tuple{Ptr{UInt8}},
         Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
@@ -181,7 +179,9 @@ end
         # TODO: this field name should be deprecated in 2.0
         return t._isexception ? t.result : nothing
     elseif field === :scope
-        error("Querying `scope` is disallowed. Use `current_scope` instead.")
+        error("""
+            Querying a Task's `scope` field is disallowed.
+            The private `Core.current_scope()` function is better, though still an implementation detail.""")
     else
         return getfield(t, field)
     end
@@ -356,13 +356,165 @@ function _wait2(t::Task, waiter::Task)
     nothing
 end
 
-function wait(t::Task)
-    t === current_task() && error("deadlock detected: cannot wait on current task")
+"""
+    wait(t::Task; throw=true)
+
+Wait for a `Task` to finish.
+
+The keyword `throw` (defaults to `true`) controls whether a failed task results
+in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed task.
+
+Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
+"""
+function wait(t::Task; throw=true)
+    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     _wait(t)
-    if istaskfailed(t)
-        throw(TaskFailedException(t))
+    if throw && istaskfailed(t)
+        Core.throw(TaskFailedException(t))
     end
     nothing
+end
+
+# Wait multiple tasks
+
+"""
+    waitany(tasks; throw=true) -> (done_tasks, remaining_tasks)
+
+Wait until at least one of the given tasks have been completed.
+
+If `throw` is `true`, throw `CompositeException` when one of the
+completed tasks completes with an exception.
+
+The return value consists of two task vectors. The first one consists of
+completed tasks, and the other consists of uncompleted tasks.
+
+!!! warning
+    This may scale poorly compared to writing code that uses multiple individual tasks that
+    each runs serially, since this needs to scan the list of `tasks` each time and
+    synchronize with each one every time this is called. Or consider using
+    [`waitall(tasks; failfast=true)`](@ref waitall) instead.
+"""
+waitany(tasks; throw=true) = _wait_multiple(tasks, throw)
+
+"""
+    waitall(tasks; failfast=true, throw=true) -> (done_tasks, remaining_tasks)
+
+Wait until all the given tasks have been completed.
+
+If `failfast` is `true`, the function will return when at least one of the
+given tasks is finished by exception. If `throw` is `true`, throw
+`CompositeException` when one of the completed tasks has failed.
+
+`failfast` and `throw` keyword arguments work independently; when only
+`throw=true` is specified, this function waits for all the tasks to complete.
+
+The return value consists of two task vectors. The first one consists of
+completed tasks, and the other consists of uncompleted tasks.
+"""
+waitall(tasks; failfast=true, throw=true) = _wait_multiple(tasks, throw, true, failfast)
+
+function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false)
+    tasks = Task[]
+
+    for t in waiting_tasks
+        t isa Task || error("Expected an iterator of `Task` object")
+        push!(tasks, t)
+    end
+
+    if (all && !failfast) || length(tasks) <= 1
+        exception = false
+        # Force everything to finish synchronously for the case of waitall
+        # with failfast=false
+        for t in tasks
+            _wait(t)
+            exception |= istaskfailed(t)
+        end
+        if exception && throwexc
+            exceptions = [TaskFailedException(t) for t in tasks if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        else
+            return tasks, Task[]
+        end
+    end
+
+    exception = false
+    nremaining::Int = length(tasks)
+    done_mask = falses(nremaining)
+    for (i, t) in enumerate(tasks)
+        if istaskdone(t)
+            done_mask[i] = true
+            exception |= istaskfailed(t)
+            nremaining -= 1
+        else
+            done_mask[i] = false
+        end
+    end
+
+    if nremaining == 0
+        return tasks, Task[]
+    elseif any(done_mask) && (!all || (failfast && exception))
+        if throwexc && (!all || failfast) && exception
+            exceptions = [TaskFailedException(t) for t in tasks[done_mask] if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        else
+            return tasks[done_mask], tasks[.~done_mask]
+        end
+    end
+
+    chan = Channel{Int}(Inf)
+    sentinel = current_task()
+    waiter_tasks = fill(sentinel, length(tasks))
+
+    for (i, done) in enumerate(done_mask)
+        done && continue
+        t = tasks[i]
+        if istaskdone(t)
+            done_mask[i] = true
+            exception |= istaskfailed(t)
+            nremaining -= 1
+            exception && failfast && break
+        else
+            waiter = @task put!(chan, i)
+            waiter.sticky = false
+            _wait2(t, waiter)
+            waiter_tasks[i] = waiter
+        end
+    end
+
+    while nremaining > 0
+        i = take!(chan)
+        t = tasks[i]
+        waiter_tasks[i] = sentinel
+        done_mask[i] = true
+        exception |= istaskfailed(t)
+        nremaining -= 1
+
+        # stop early if requested, unless there is something immediately
+        # ready to consume from the channel (using a race-y check)
+        if (!all || (failfast && exception)) && !isready(chan)
+            break
+        end
+    end
+
+    close(chan)
+
+    if nremaining == 0
+        return tasks, Task[]
+    else
+        remaining_mask = .~done_mask
+        for i in findall(remaining_mask)
+            waiter = waiter_tasks[i]
+            donenotify = tasks[i].donenotify::ThreadSynchronizer
+            @lock donenotify Base.list_deletefirst!(donenotify.waitq, waiter)
+        end
+        done_tasks = tasks[done_mask]
+        if throwexc && exception
+            exceptions = [TaskFailedException(t) for t in done_tasks if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        else
+            return done_tasks, tasks[remaining_mask]
+        end
+    end
 end
 
 """
@@ -899,11 +1051,15 @@ end
 
 A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
+
+Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 """
 function yield(t::Task, @nospecialize(x=nothing))
-    (t._state === task_state_runnable && t.queue === nothing) || error("yield: Task not runnable")
+    current = current_task()
+    t === current && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
+    (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
     t.result = x
-    enq_work(current_task())
+    enq_work(current)
     set_next_task(t)
     return try_yieldto(ensure_rescheduled)
 end

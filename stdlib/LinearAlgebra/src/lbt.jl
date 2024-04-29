@@ -247,11 +247,11 @@ If the given `symbol_name` is not contained within the list of exported symbols,
 function lbt_find_backing_library(symbol_name, interface::Symbol;
                                   config::LBTConfig = lbt_get_config())
     if interface ∉ (:ilp64, :lp64)
-        throw(ArgumentError("Invalid interface specification: '$(interface)'"))
+        throw(ArgumentError(lazy"Invalid interface specification: '$(interface)'"))
     end
     symbol_idx = findfirst(s -> s == symbol_name, config.exported_symbols)
     if symbol_idx === nothing
-        throw(ArgumentError("Invalid exported symbol name '$(symbol_name)'"))
+        throw(ArgumentError(lazy"Invalid exported symbol name '$(symbol_name)'"))
     end
     # Convert to zero-indexed
     symbol_idx -= 1

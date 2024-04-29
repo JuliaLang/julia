@@ -826,7 +826,7 @@ end
     @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
 end
 
-@testset "multiplication with Symmetric/Hermitian" begin
+@testset "multiplication/division with Symmetric/Hermitian" begin
     for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
         A = randn(T, n, n); A = A'A
@@ -839,6 +839,10 @@ end
             @test *(transform1(D), transform2(H)) ≈ *(transform1(Matrix(D)), transform2(Matrix(H)))
             @test *(transform1(S), transform2(D)) ≈ *(transform1(Matrix(S)), transform2(Matrix(D)))
             @test *(transform1(S), transform2(H)) ≈ *(transform1(Matrix(S)), transform2(Matrix(H)))
+            @test (transform1(H)/D) * D ≈ transform1(H)
+            @test (transform1(S)/D) * D ≈ transform1(S)
+            @test D * (D\transform2(H)) ≈ transform2(H)
+            @test D * (D\transform2(S)) ≈ transform2(S)
         end
     end
 end
@@ -1281,6 +1285,30 @@ end
     D = Diagonal([1,2])
     @test LinearAlgebra.uppertriangular(D) === D
     @test LinearAlgebra.lowertriangular(D) === D
+end
+
+@testset "mul/div with an adjoint vector" begin
+    A = [1.0;;]
+    x = [1.0]
+    yadj = Diagonal(A) \ x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+    yadj = Diagonal(A) * x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+end
+
+@testset "Matrix conversion for non-numeric and undef" begin
+    D = Diagonal(Vector{BigInt}(undef, 4))
+    M = Matrix(D)
+    D[diagind(D)] .= 4
+    M[diagind(M)] .= 4
+    @test diag(D) == diag(M)
+
+    D = Diagonal(fill(Diagonal([1,3]), 2))
+    M = Matrix{eltype(D)}(D)
+    @test M isa Matrix{eltype(D)}
+    @test M == D
 end
 
 end # module TestDiagonal

@@ -1225,10 +1225,21 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             bb = compact.active_result_bb - 1
             bbs = scope_mapping[bb]
             if isexpr(stmt, :leave) && bbs != SSAValue(0)
-                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, bbs)])
-            else
-                update_scope_mapping!(scope_mapping, bb+1, bbs)
+                # Here we want to count the number of scopes that we're leaving,
+                # which is the same as the number of EnterNodes being referenced
+                # by `stmt.args`. Which have :scope set. In practice, the frontend
+                # does emit these in order, so we could simply go to the last one,
+                # but we want to avoid making that semantic assumption.
+                for i = 1:length(stmt.args)
+                    scope = stmt.args[i]
+                    scope === nothing && continue
+                    enter = compact[scope][:inst]
+                    @assert isa(enter, EnterNode)
+                    isdefined(enter, :scope) || continue
+                    bbs = scope_mapping[block_for_inst(compact, bbs)]
+                end
             end
+            update_scope_mapping!(scope_mapping, bb+1, bbs)
         end
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         is_setfield = is_isdefined = is_finalizer = is_keyvalue_get = false
@@ -1496,7 +1507,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     end
 
     src_inlining_policy(inlining.interp, src, info, IR_FLAG_NULL) || return false
-    src = retrieve_ir_for_inlining(code, src)
+    src, di = retrieve_ir_for_inlining(code, src)
 
     # For now: Require finalizer to only have one basic block
     length(src.cfg.blocks) == 1 || return false
@@ -1505,8 +1516,8 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     add_inlining_backedge!(et, mi)
 
     # TODO: Should there be a special line number node for inlined finalizers?
-    inlined_at = ir[SSAValue(idx)][:line]
-    ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, mi, inlined_at, argexprs)
+    inline_at = ir[SSAValue(idx)][:line]
+    ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, di, mi, inline_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
     ssa_rename = Vector{Any}(undef, length(src.stmts))
@@ -1518,12 +1529,8 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
             ssa_rename[ssa.id]
         end
         stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, ssa_substitute)
-        newline = inst[:line]
-        if newline != 0
-            newline += ssa_substitute.linetable_offset
-        end
         ssa_rename[idx′] = insert_node!(ir, idx,
-            NewInstruction(inst; stmt=stmt′, line=newline),
+            NewInstruction(inst; stmt=stmt′, line=(ssa_substitute.inlined_at[1], ssa_substitute.inlined_at[2], Int32(idx′))),
             attach_after)
     end
 
@@ -2002,8 +2009,13 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     unionphis = Pair{Int,Any}[] # sorted
     compact = IncrementalCompact(ir, true)
     made_changes = false
-    for ((_, idx), stmt) in compact
+    for ((old_idx, idx), stmt) in compact
         if isa(stmt, PhiNode)
+            if reprocess_phi_node!(𝕃ₒ, compact, stmt, old_idx)
+                # Phi node has a single predecessor and was deleted
+                made_changes = true
+                continue
+            end
             push!(all_phis, idx)
             if is_some_union(compact.result[idx][:type])
                 push!(unionphis, Pair{Int,Any}(idx, Union{}))
@@ -2262,6 +2274,15 @@ function cfg_simplify!(ir::IRCode)
             elseif merge_into[idx] == 0 && is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
                 # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
                 # reference our predecessors.
+                #
+                # This is for situations like:
+                #   #1 - ...
+                #        goto #3 if not ...
+                #   #2 - (empty)
+                #   #3 - ϕ(#2 => true, #1 => false)
+                #
+                # where we rely on the empty basic block to disambiguate the ϕ-node's value
+
                 found_interference = false
                 preds = Int[ascend_eliminated_preds(bbs, pred) for pred in bb.preds]
                 for idx in bbs[succ].stmts
@@ -2319,10 +2340,9 @@ function cfg_simplify!(ir::IRCode)
                     end
                     curr = merged_succ[curr]
                 end
-                terminator = ir[SSAValue(ir.cfg.blocks[curr].stmts[end])][:stmt]
-                if isa(terminator, GotoNode) || isa(terminator, ReturnNode)
-                    break
-                elseif isa(terminator, GotoIfNot)
+                terminator = ir[SSAValue(bbs[curr].stmts[end])][:stmt]
+
+                if isa(terminator, GotoIfNot)
                     if bb_rename_succ[terminator.dest] == 0
                         push!(worklist, terminator.dest)
                     end
@@ -2330,6 +2350,20 @@ function cfg_simplify!(ir::IRCode)
                     catchbb = terminator.catch_dest
                     if bb_rename_succ[catchbb] == 0
                         push!(worklist, catchbb)
+                    end
+                elseif isa(terminator, GotoNode) || isa(terminator, ReturnNode)
+                    # No implicit fall through. Schedule from work list.
+                    break
+                else
+                    is_bottom = ir[SSAValue(bbs[curr].stmts[end])][:type] === Union{}
+                    if is_bottom && !isa(terminator, PhiNode) && terminator !== nothing
+                        # If this is a regular statement (not PhiNode/GotoNode/GotoIfNot
+                        # or the `nothing` special case deletion marker),
+                        # and the type is Union{}, then this may be a terminator.
+                        # Ordinarily we normalize with ReturnNode(), but this is not
+                        # required. In any case, we do not fall through, so we
+                        # do not need to schedule the fall-through block.
+                        break
                     end
                 end
                 ncurr = curr + 1

@@ -115,7 +115,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                     continue; // skip this field (it is #undef)
                 }
             }
-            if (!ft->layout->flags.haspadding) {
+            if (!ft->layout->flags.haspadding && ft->layout->flags.isbitsegal) {
                 if (!bits_equal(ao, bo, ft->layout->size))
                     return 0;
             }
@@ -284,7 +284,7 @@ inline int jl_egal__bits(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t
     if (sz == 0)
         return 1;
     size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0 || !dt->layout->flags.haspadding)
+    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal))
         return bits_equal(a, b, sz);
     return compare_fields(a, b, dt);
 }
@@ -394,7 +394,7 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
     if (sz == 0)
         return ~h;
     size_t f, nf = jl_datatype_nfields(dt);
-    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->npointers == 0)) {
+    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal && dt->layout->npointers == 0)) {
         // operate element-wise if there are unused bits inside,
         // otherwise just take the whole data block at once
         // a few select pointers (notably symbol) also have special hash values
@@ -1219,6 +1219,8 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
             tt = ((jl_tvar_t*)tt)->ub;
         if (tt == (jl_value_t*)jl_any_type)
             return (jl_value_t*)jl_any_type;
+        if (tt == (jl_value_t*)jl_bottom_type)
+            return (jl_value_t*)jl_bottom_type;
         JL_GC_PUSH1(&f);
         if (jl_is_symbol(f))
             f = jl_box_long(field_index+1);
@@ -2510,7 +2512,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
-    add_builtin("LineInfoNode", (jl_value_t*)jl_lineinfonode_type);
+    add_builtin("LegacyLineInfoNode", (jl_value_t*)jl_lineinfonode_type);
+    add_builtin("DebugInfo", (jl_value_t*)jl_debuginfo_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("GotoIfNot", (jl_value_t*)jl_gotoifnot_type);
     add_builtin("EnterNode", (jl_value_t*)jl_enternode_type);

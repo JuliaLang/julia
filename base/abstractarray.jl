@@ -1218,7 +1218,25 @@ end
 copymutable(itr) = collect(itr)
 
 zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
 zero(x::AbstractArray) = map(zero, x)
+
+function _one(unit::T, mat::AbstractMatrix) where {T}
+    (rows, cols) = axes(mat)
+    (length(rows) == length(cols)) ||
+      throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
+    zer = zero(unit)::T
+    require_one_based_indexing(mat)
+    I = similar(mat, T)
+    fill!(I, zer)
+    for i ∈ rows
+        I[i, i] = unit
+    end
+    I
+end
+
+one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
+oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
@@ -1649,13 +1667,15 @@ eltypeof(x::AbstractArray) = eltype(x)
 
 promote_eltypeof() = error()
 promote_eltypeof(v1) = eltypeof(v1)
-promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
+promote_eltypeof(v1, v2) = promote_type(eltypeof(v1), eltypeof(v2))
+promote_eltypeof(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltypeof(y)), promote_eltypeof(v1, v2), vs...))
 promote_eltypeof(v1::T, vs::T...) where {T} = eltypeof(v1)
 promote_eltypeof(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 promote_eltype() = error()
 promote_eltype(v1) = eltype(v1)
-promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+promote_eltype(v1, v2) = promote_type(eltype(v1), eltype(v2))
+promote_eltype(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltype(y)), promote_eltype(v1, v2), vs...))
 promote_eltype(v1::T, vs::T...) where {T} = eltype(T)
 promote_eltype(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 

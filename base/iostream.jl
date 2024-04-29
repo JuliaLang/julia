@@ -292,12 +292,15 @@ function open(fname::String; lock = true,
     if !lock
         s._dolock = false
     end
-    systemerror("opening file $(repr(fname))",
-                ccall(:ios_file, Ptr{Cvoid},
-                      (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
+    if ccall(:ios_file, Ptr{Cvoid},
+             (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+             s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL
+        systemerror("opening file $(repr(fname))")
+    end
     if flags.append
-        systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
+        if ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
+            systemerror("seeking to end of file $fname")
+        end
     end
     return s
 end
@@ -446,8 +449,8 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
-    delim ≤ '\x7f' ? readuntil_string(s, delim % UInt8, keep) :
-    String(unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
+    isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
+    String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)

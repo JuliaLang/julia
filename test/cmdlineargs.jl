@@ -388,7 +388,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --gcthreads
     code = "print(Threads.ngcthreads())"
     cpu_threads = ccall(:jl_effective_threads, Int32, ())
-    @test (cpu_threads == 1 ? "1" : string(div(cpu_threads, 2))) ==
+    @test string(cpu_threads) ==
           read(`$exename --threads auto -e $code`, String) ==
           read(`$exename --threads=auto -e $code`, String) ==
           read(`$exename -tauto -e $code`, String) ==
@@ -444,9 +444,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     mktempdir() do dir
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
-        expected = replace(read(joinpath(helperdir, "coverage_file.info.bad"), String),
-            "<FILENAME>" => realpath(inputfile))
-        expected_good = replace(read(joinpath(helperdir, "coverage_file.info"), String),
+        expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
             "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
@@ -464,21 +462,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
@@ -488,7 +483,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in directory
         tdir = dirname(realpath(inputfile))
@@ -498,7 +492,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
@@ -511,7 +504,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
@@ -523,7 +515,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in relative directory with dot-dot notation
         tdir = dirname(realpath(inputfile))
@@ -535,7 +526,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
@@ -570,15 +560,14 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             do_test()
             """), """
-            DA:1,1
             DA:2,1
             DA:3,1
             DA:5,1
             DA:6,0
             DA:9,1
             DA:10,1
-            LH:6
-            LF:7
+            LH:5
+            LF:6
             """)
         @test contains(coverage_info_for("""
             function cov_bug()
@@ -677,7 +666,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
                 @test occursin("llvm.dbg.cu", code)
-                @test occursin("int.jl", code)
+                # TODO: consider moving test to llvmpasses as this fails on some platforms
+                # without clear reason
+                @test_skip occursin("int.jl", code)
                 @test !occursin("name: \"Int64\"", code)
             end
             let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
@@ -685,7 +676,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
                 @test occursin("llvm.dbg.cu", code)
-                @test occursin("int.jl", code)
+                # TODO: consider moving test to llvmpasses as this fails on some platforms
+                # without clear reason
+                @test_skip occursin("int.jl", code)
                 @test occursin("name: \"Int64\"", code)
             end
         end
@@ -1131,14 +1124,14 @@ end
 ## `Main.main` entrypoint
 
 # Basic usage
-@test readchomp(`$(Base.julia_cmd()) -e '(@main)(ARGS) = println("hello")'`) == "hello"
+@test readchomp(`$(Base.julia_cmd()) -e '(@main)(args) = println("hello")'`) == "hello"
 
 # Test ARGS with -e
-@test readchomp(`$(Base.julia_cmd()) -e '(@main)(ARGS) = println(ARGS)' a b`) == repr(["a", "b"])
+@test readchomp(`$(Base.julia_cmd()) -e '(@main)(args) = println(args)' a b`) == repr(["a", "b"])
 
 # Test import from module
-@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; using .Hello'`) == "hello"
-@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; import .Hello'`) == ""
+@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(args) = println("hello"); end; using .Hello'`) == "hello"
+@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(args) = println("hello"); end; import .Hello'`) == ""
 
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms

@@ -27,6 +27,15 @@ throw
 
 ## native julia error handling ##
 
+# This is `Experimental.@max_methods 2 function error end`, which is not available at this point in bootstrap.
+# NOTE It is important to always be able to infer the return type of `error` as `Union{}`,
+# but there's a hitch when a package globally sets `@max_methods 1` and it causes inference
+# for `error(::Any)` to fail (JuliaLang/julia#54029).
+# This definition site `@max_methods 2` setting overrides any global `@max_methods 1` settings
+# on package side, guaranteeing that return type inference on `error` is successful always.
+function error end
+typeof(error).name.max_methods = UInt8(2)
+
 """
     error(message::AbstractString)
 
@@ -162,7 +171,7 @@ end
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
     @noinline
-    throw(MethodError(Core.kwcall, (kw, args...)))
+    throw(MethodError(Core.kwcall, (kw, args...), tls_world_age()))
 end
 
 ## system error handling ##
@@ -228,14 +237,14 @@ macro assert(ex, msgs...)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = quote
-            msg = $(Expr(:quote,msg))
-            isdefined(Main, :Base) ? Main.Base.string(msg) :
-                (Core.println(msg); "Error during bootstrap. See stdout.")
-        end
+        msg = :(_assert_tostring($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
+
+# this may be overridden in contexts where `string(::Expr)` doesn't work
+_assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
+    (Core.println(msg); "Error during bootstrap. See stdout.")
 
 struct ExponentialBackOff
     n::Int
