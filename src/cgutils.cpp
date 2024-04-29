@@ -57,7 +57,7 @@ static Value *maybe_decay_untracked(jl_codectx_t &ctx, Value *V)
 static Value *decay_derived(jl_codectx_t &ctx, Value *V)
 {
     Type *T = V->getType();
-    if (cast<PointerType>(T)->getAddressSpace() == AddressSpace::Derived)
+    if (T->getPointerAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
     Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
@@ -68,7 +68,7 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
 static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
 {
     Type *T = V->getType();
-    if (cast<PointerType>(T)->getAddressSpace() != AddressSpace::Tracked)
+    if (T->getPointerAddressSpace() != AddressSpace::Tracked)
         return V;
     Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
@@ -295,7 +295,7 @@ void jl_debugcache_t::initialize(Module *m) {
 
 static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 {
-    unsigned AS = cast<PointerType>(V->getType())->getAddressSpace();
+    unsigned AS = V->getType()->getPointerAddressSpace();
     if (AS != AddressSpace::Tracked && AS != AddressSpace::Derived)
         return V;
     V = decay_derived(ctx, V);
@@ -690,6 +690,8 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
         return getDoubleTy(ctxt);
     if (bt == (jl_value_t*)jl_bfloat16_type)
         return getBFloatTy(ctxt);
+    if (jl_is_cpointer_type(bt))
+        return PointerType::get(getInt8Ty(ctxt), 0);
     if (jl_is_llvmpointer_type(bt)) {
         jl_value_t *as_param = jl_tparam1(bt);
         int as;
@@ -2198,7 +2200,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             }
             else if (!isboxed) {
                 assert(jl_is_concrete_type(jltype));
-                needloop = ((jl_datatype_t*)jltype)->layout->flags.haspadding;
+                needloop = ((jl_datatype_t*)jltype)->layout->flags.haspadding ||
+                          !((jl_datatype_t*)jltype)->layout->flags.isbitsegal;
                 Value *SameType = emit_isa(ctx, cmp, jltype, Twine()).first;
                 if (SameType != ConstantInt::getTrue(ctx.builder.getContext())) {
                     BasicBlock *SkipBB = BasicBlock::Create(ctx.builder.getContext(), "skip_xchg", ctx.f);
@@ -3723,7 +3726,7 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg
 
 static jl_cgval_t union_store(jl_codectx_t &ctx,
         Value *ptr, Value *ptindex, jl_cgval_t rhs, jl_cgval_t cmp,
-        jl_value_t *jltype, MDNode *tbaa, MDNode *aliasscope, MDNode *tbaa_tindex,
+        jl_value_t *jltype, MDNode *tbaa, MDNode *tbaa_tindex,
         AtomicOrdering Order, AtomicOrdering FailOrder,
         Value *needlock, bool issetfield, bool isreplacefield, bool isswapfield, bool ismodifyfield, bool issetfieldonce,
         const jl_cgval_t *modifyop, const Twine &fname)
@@ -3781,7 +3784,7 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
     }
     Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jltype);
     tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_unionselbyte);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_tindex);
     ai.decorateInst(ctx.builder.CreateAlignedStore(tindex, ptindex, Align(1)));
     // copy data
     if (!rhs.isghost) {
@@ -3837,7 +3840,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
                 emit_bitcast(ctx, addr, getInt8PtrTy(ctx.builder.getContext())),
                 ConstantInt::get(ctx.types().T_size, fsz1));
         setNameWithField(ctx.emission_context, ptindex, get_objname, sty, idx0, Twine(".tindex_ptr"));
-        return union_store(ctx, addr, ptindex, rhs, cmp, jfty, tbaa, nullptr, ctx.tbaa().tbaa_unionselbyte,
+        return union_store(ctx, addr, ptindex, rhs, cmp, jfty, tbaa, ctx.tbaa().tbaa_unionselbyte,
             Order, FailOrder,
             needlock, issetfield, isreplacefield, isswapfield, ismodifyfield, issetfieldonce,
             modifyop, fname);

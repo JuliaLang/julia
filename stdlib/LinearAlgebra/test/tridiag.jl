@@ -788,6 +788,35 @@ using .Main.SizedArrays
     end
 end
 
+@testset "copyto! between SymTridiagonal and Tridiagonal" begin
+    ev, dv = [1:4;], [1:5;]
+    S = SymTridiagonal(dv, ev)
+    T = Tridiagonal(zero(ev), zero(dv), zero(ev))
+    @test copyto!(T, S) == S
+    @test copyto!(zero(S), T) == T
+
+    ev2 = [1:5;]
+    S = SymTridiagonal(dv, ev2)
+    T = Tridiagonal(zeros(length(ev2)-1), zero(dv), zeros(length(ev2)-1))
+    @test copyto!(T, S) == S
+    @test copyto!(zero(S), T) == T
+
+    T2 = Tridiagonal(ones(length(ev)), zero(dv), zero(ev))
+    @test_throws "cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
+
+    @testset "mismatched sizes" begin
+        dv2 = [4; @view dv[2:end]]
+        @test copyto!(S, SymTridiagonal([4], Int[])) == SymTridiagonal(dv2, ev)
+        @test copyto!(T, SymTridiagonal([4], Int[])) == Tridiagonal(ev, dv2, ev)
+        @test copyto!(S, Tridiagonal(Int[], [4], Int[])) == SymTridiagonal(dv2, ev)
+        @test copyto!(T, Tridiagonal(Int[], [4], Int[])) == Tridiagonal(ev, dv2, ev)
+        @test copyto!(S, SymTridiagonal(Int[], Int[])) == SymTridiagonal(dv, ev)
+        @test copyto!(T, SymTridiagonal(Int[], Int[])) == Tridiagonal(ev, dv, ev)
+        @test copyto!(S, Tridiagonal(Int[], Int[], Int[])) == SymTridiagonal(dv, ev)
+        @test copyto!(T, Tridiagonal(Int[], Int[], Int[])) == Tridiagonal(ev, dv, ev)
+    end
+end
+
 @testset "copyto! with UniformScaling" begin
     @testset "Tridiagonal" begin
         @testset "Fill" begin
@@ -828,6 +857,14 @@ end
     @test axes(B) === (ax, ax)
     B = SymTridiagonal(dv, uv)
     @test axes(B) === (ax, ax)
+end
+
+@testset "Matrix conversion for non-numeric and undef" begin
+    T = Tridiagonal(fill(big(3), 3), Vector{BigInt}(undef, 4), fill(big(3), 3))
+    M = Matrix(T)
+    T[diagind(T)] .= 4
+    M[diagind(M)] .= 4
+    @test diag(T) == diag(M)
 end
 
 end # module TestTridiagonal

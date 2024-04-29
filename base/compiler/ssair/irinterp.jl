@@ -51,9 +51,9 @@ end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
     si = StmtInfo(true) # TODO better job here?
-    (; rt, exct, effects, info) = abstract_call(interp, arginfo, si, irsv)
-    irsv.ir.stmts[irsv.curridx][:info] = info
-    return RTEffects(rt, exct, effects)
+    call = abstract_call(interp, arginfo, si, irsv)
+    irsv.ir.stmts[irsv.curridx][:info] = call.info
+    return call
 end
 
 function kill_block!(ir::IRCode, bb::Int)
@@ -129,7 +129,6 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             add_flag!(inst, IR_FLAG_NOTHROW)
             if condval
                 inst[:stmt] = nothing
-                inst[:type] = Any
                 kill_edge!(irsv, bb, stmt.dest)
             else
                 inst[:stmt] = GotoNode(stmt.dest)
@@ -177,6 +176,9 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         rt = argextype(stmt.val, irsv.ir)
     elseif isa(stmt, PhiCNode)
         # Currently not modeled
+        return false
+    elseif isa(stmt, EnterNode)
+        # TODO: Propagate scope type changes
         return false
     elseif isa(stmt, ReturnNode)
         # Handled at the very end
@@ -325,7 +327,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             delete!(ssa_refined, idx)
         end
         check_ret!(stmt, idx)
-        is_terminator_or_phi = (isa(stmt, PhiNode) || isterminator(stmt))
+        is_terminator_or_phi = (isa(stmt, PhiNode) || stmt === nothing || isterminator(stmt))
         if typ === Bottom && !(idx == lstmt && is_terminator_or_phi)
             return true
         end

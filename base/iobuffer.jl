@@ -42,7 +42,7 @@ end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
 StringMemory(n::Integer) = unsafe_wrap(Memory{UInt8}, _string_n(n))
-StringVector(n::Integer) = wrap(Array, StringMemory(n))
+StringVector(n::Integer) = view(StringMemory(n), 1:n)::Vector{UInt8}
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
@@ -260,22 +260,32 @@ bytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
 position(io::GenericIOBuffer) = io.ptr - io.offset - 1
 
 function skip(io::GenericIOBuffer, n::Integer)
-    seekto = io.ptr + n
-    n < 0 && return seek(io, seekto-1) # Does error checking
-    io.ptr = min(seekto, io.size+1)
-    return io
+    skip(io, clamp(n, Int))
+end
+function skip(io::GenericIOBuffer, n::Int)
+    if signbit(n)
+        seekto = clamp(widen(position(io)) + widen(n), Int)
+        seek(io, seekto) # Does error checking
+    else
+        n_max = io.size + 1 - io.ptr
+        io.ptr += min(n, n_max)
+        io
+    end
 end
 
 function seek(io::GenericIOBuffer, n::Integer)
+    seek(io, clamp(n, Int))
+end
+function seek(io::GenericIOBuffer, n::Int)
     if !io.seekable
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
     # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
     #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
-    #(n < 0 || n > io.size) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
-    #io.ptr = n+1
-    io.ptr = min(max(0, n)+io.offset, io.size)+1
+    #(n < 0 || n > io.size - io.offset) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
+    #io.ptr = n + io.offset + 1
+    io.ptr = clamp(n, 0, io.size - io.offset) + io.offset + 1
     return io
 end
 
@@ -456,16 +466,16 @@ function take!(io::IOBuffer)
         if nbytes == 0 || io.reinit
             data = StringVector(0)
         elseif io.writable
-            data = wrap(Array, MemoryRef(io.data, io.offset + 1), nbytes)
+            data = view(io.data, io.offset+1:nbytes+io.offset)
         else
-            data = copyto!(StringVector(io.size), 1, io.data, io.offset + 1, nbytes)
+            data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
         end
     else
         nbytes = bytesavailable(io)
         if nbytes == 0
             data = StringVector(0)
         elseif io.writable
-            data = wrap(Array, MemoryRef(io.data, io.ptr), nbytes)
+            data = view(io.data, io.ptr:io.ptr+nbytes-1)
         else
             data = read!(io, data)
         end
@@ -491,11 +501,7 @@ state.  This should only be used internally for performance-critical
 It might save an allocation compared to `take!` (if the compiler elides the
 Array allocation), as well as omits some checks.
 """
-_unsafe_take!(io::IOBuffer) =
-    wrap(Array, io.size == io.offset ?
-        MemoryRef(Memory{UInt8}()) :
-        MemoryRef(io.data, io.offset + 1),
-        io.size - io.offset)
+_unsafe_take!(io::IOBuffer) = view(io.data, io.offset+1:io.size)
 
 function write(to::IO, from::GenericIOBuffer)
     written::Int = bytesavailable(from)

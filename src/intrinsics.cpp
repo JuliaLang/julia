@@ -17,6 +17,7 @@ STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
 STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
 STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
 STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
+STATISTIC(Emitted_pointerarith, "Number of pointer arithmetic calls emitted");
 STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
 STATISTIC(Emitted_atomic_pointerref, "Number of atomic_pointerref calls emitted");
 STATISTIC(Emitted_atomic_pointerop, "Number of atomic_pointerop calls emitted");
@@ -625,10 +626,14 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
             vx = ctx.builder.CreateZExt(vx, llvmt);
         } else if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
             vx = ctx.builder.CreatePtrToInt(vx, llvmt);
-            setName(ctx.emission_context, vx, "bitcast_coercion");
+            if (isa<Instruction>(vx) && !vx->hasName())
+                // CreatePtrToInt may undo an IntToPtr
+                setName(ctx.emission_context, vx, "bitcast_coercion");
         } else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
             vx = emit_inttoptr(ctx, vx, llvmt);
-            setName(ctx.emission_context, vx, "bitcast_coercion");
+            if (isa<Instruction>(vx) && !vx->hasName())
+                // emit_inttoptr may undo an PtrToInt
+                setName(ctx.emission_context, vx, "bitcast_coercion");
         } else {
             vx = emit_bitcast(ctx, vx, llvmt);
             setName(ctx.emission_context, vx, "bitcast_coercion");
@@ -741,7 +746,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 
     if (ety == (jl_value_t*)jl_any_type) {
         Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e, e.typ);
-        setName(ctx.emission_context, thePtr, "unbox_any_ptr");
+        if (isa<Instruction>(thePtr) && !thePtr->hasName())
+            setName(ctx.emission_context, thePtr, "unbox_any_ptr");
         LoadInst *load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, thePtr, im1), Align(align_nb));
         setName(ctx.emission_context, load, "any_unbox");
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
@@ -851,6 +857,34 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         }
     }
     return e;
+}
+
+// ptr + offset
+// ptr - offset
+static jl_cgval_t emit_pointerarith(jl_codectx_t &ctx, intrinsic f,
+                                    ArrayRef<jl_cgval_t> argv)
+{
+    jl_value_t *ptrtyp = argv[0].typ;
+    jl_value_t *offtyp = argv[1].typ;
+    if (!jl_is_cpointer_type(ptrtyp) || offtyp != (jl_value_t *)jl_ulong_type)
+        return emit_runtime_call(ctx, f, argv, argv.size());
+    assert(f == add_ptr || f == sub_ptr);
+
+    Value *ptr = emit_unbox(ctx, ctx.types().T_ptr, argv[0], ptrtyp);
+    Value *off = emit_unbox(ctx, ctx.types().T_size, argv[1], offtyp);
+    if (f == sub_ptr)
+        off = ctx.builder.CreateNeg(off);
+    Value *ans = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), ptr, off);
+
+    if (jl_is_concrete_type(ptrtyp)) {
+        return mark_julia_type(ctx, ans, false, ptrtyp);
+    }
+    else {
+        Value *box = emit_allocobj(ctx, (jl_datatype_t *)ptrtyp, true);
+        setName(ctx.emission_context, box, "ptr_box");
+        init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
+        return mark_julia_type(ctx, box, true, (jl_datatype_t *)ptrtyp);
+    }
 }
 
 static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
@@ -1270,6 +1304,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         ++Emitted_pointerset;
         assert(nargs == 4);
         return emit_pointerset(ctx, argv);
+
+    case add_ptr:
+    case sub_ptr:
+        ++Emitted_pointerarith;
+        assert(nargs == 2);
+        return emit_pointerarith(ctx, f, argv);
+
     case atomic_fence:
         ++Emitted_atomic_fence;
         assert(nargs == 1);
@@ -1436,26 +1477,6 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     case udiv_int: return ctx.builder.CreateUDiv(x, y);
     case srem_int: return ctx.builder.CreateSRem(x, y);
     case urem_int: return ctx.builder.CreateURem(x, y);
-
-    // LLVM will not fold ptrtoint+arithmetic+inttoptr to GEP. The reason for this
-    // has to do with alias analysis. When adding two integers, either one of them
-    // could be the pointer base. With getelementptr, it is clear which of the
-    // operands is the pointer base. We also have this information at the julia
-    // level. Thus, to not lose information, we need to have a separate intrinsic
-    // for pointer arithmetic which lowers to getelementptr.
-    case add_ptr: {
-        return ctx.builder.CreatePtrToInt(
-            ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()),
-                emit_inttoptr(ctx, x, getInt8PtrTy(ctx.builder.getContext())), y), t);
-
-    }
-
-    case sub_ptr: {
-        return ctx.builder.CreatePtrToInt(
-            ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()),
-                emit_inttoptr(ctx, x, getInt8PtrTy(ctx.builder.getContext())), ctx.builder.CreateNeg(y)), t);
-
-    }
 
     case neg_float: return math_builder(ctx)().CreateFNeg(x);
     case neg_float_fast: return math_builder(ctx, true)().CreateFNeg(x);

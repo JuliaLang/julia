@@ -1516,7 +1516,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     add_inlining_backedge!(et, mi)
 
     # TODO: Should there be a special line number node for inlined finalizers?
-    inline_at = ir[SSAValue(idx)][:line][1]
+    inline_at = ir[SSAValue(idx)][:line]
     ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, di, mi, inline_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
@@ -2009,8 +2009,13 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     unionphis = Pair{Int,Any}[] # sorted
     compact = IncrementalCompact(ir, true)
     made_changes = false
-    for ((_, idx), stmt) in compact
+    for ((old_idx, idx), stmt) in compact
         if isa(stmt, PhiNode)
+            if reprocess_phi_node!(𝕃ₒ, compact, stmt, old_idx)
+                # Phi node has a single predecessor and was deleted
+                made_changes = true
+                continue
+            end
             push!(all_phis, idx)
             if is_some_union(compact.result[idx][:type])
                 push!(unionphis, Pair{Int,Any}(idx, Union{}))
@@ -2269,6 +2274,15 @@ function cfg_simplify!(ir::IRCode)
             elseif merge_into[idx] == 0 && is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
                 # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
                 # reference our predecessors.
+                #
+                # This is for situations like:
+                #   #1 - ...
+                #        goto #3 if not ...
+                #   #2 - (empty)
+                #   #3 - ϕ(#2 => true, #1 => false)
+                #
+                # where we rely on the empty basic block to disambiguate the ϕ-node's value
+
                 found_interference = false
                 preds = Int[ascend_eliminated_preds(bbs, pred) for pred in bb.preds]
                 for idx in bbs[succ].stmts
@@ -2326,10 +2340,9 @@ function cfg_simplify!(ir::IRCode)
                     end
                     curr = merged_succ[curr]
                 end
-                terminator = ir[SSAValue(ir.cfg.blocks[curr].stmts[end])][:stmt]
-                if isa(terminator, GotoNode) || isa(terminator, ReturnNode)
-                    break
-                elseif isa(terminator, GotoIfNot)
+                terminator = ir[SSAValue(bbs[curr].stmts[end])][:stmt]
+
+                if isa(terminator, GotoIfNot)
                     if bb_rename_succ[terminator.dest] == 0
                         push!(worklist, terminator.dest)
                     end
@@ -2337,6 +2350,20 @@ function cfg_simplify!(ir::IRCode)
                     catchbb = terminator.catch_dest
                     if bb_rename_succ[catchbb] == 0
                         push!(worklist, catchbb)
+                    end
+                elseif isa(terminator, GotoNode) || isa(terminator, ReturnNode)
+                    # No implicit fall through. Schedule from work list.
+                    break
+                else
+                    is_bottom = ir[SSAValue(bbs[curr].stmts[end])][:type] === Union{}
+                    if is_bottom && !isa(terminator, PhiNode) && terminator !== nothing
+                        # If this is a regular statement (not PhiNode/GotoNode/GotoIfNot
+                        # or the `nothing` special case deletion marker),
+                        # and the type is Union{}, then this may be a terminator.
+                        # Ordinarily we normalize with ReturnNode(), but this is not
+                        # required. In any case, we do not fall through, so we
+                        # do not need to schedule the fall-through block.
+                        break
                     end
                 end
                 ncurr = curr + 1

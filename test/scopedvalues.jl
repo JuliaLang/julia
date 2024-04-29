@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.ScopedValues
+
+include("compiler/irutils.jl")
 
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
@@ -159,4 +162,10 @@ end
 
 let code = code_typed(with_macro_slot_cross)[1][1].code
     @test !any(x->isa(x, Core.PhiCNode), code)
+end
+
+# inline constant scoped values
+const inlineable_const_sv = ScopedValue(1)
+@test fully_eliminated(; retval=(inlineable_const_sv => 1)) do
+    inlineable_const_sv => 1
 end

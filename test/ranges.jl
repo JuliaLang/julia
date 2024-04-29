@@ -314,6 +314,13 @@ end
             twiceprecision_is_normalized(Base.TwicePrecision{Float64}(rand_twiceprecision(Float32)))
         end
     end
+
+    @testset "displaying a complex range (#52713)" begin
+        r = 1.0*(1:5) .+ im
+        @test startswith(repr(r), repr(first(r)))
+        @test endswith(repr(r), repr(last(r)))
+        @test occursin(repr(step(r)), repr(r))
+    end
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
