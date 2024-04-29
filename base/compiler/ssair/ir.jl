@@ -1933,7 +1933,10 @@ function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, id
     stmt = inst[:stmt]
     stmt === nothing && return false
     inst[:type] === Bottom && return false
-    has_flag(inst, IR_FLAGS_REMOVABLE) || return false
+    if !has_flag(inst, IR_FLAGS_REMOVABLE)
+        add_flag!(inst, IR_FLAG_UNUSED)
+        return false
+    end
     foreachssa(stmt) do val::SSAValue
         if compact.used_ssas[val.id] == 1
             if val.id < idx || in_worklist
