@@ -622,8 +622,6 @@ void gc_stats_big_obj(void);
 // For debugging
 void gc_count_pool(void);
 
-size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
-
 JL_DLLEXPORT void jl_enable_gc_logging(int enable);
 JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void);
 void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT;
