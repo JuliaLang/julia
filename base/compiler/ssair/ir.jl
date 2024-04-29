@@ -2064,9 +2064,11 @@ function non_dce_finish!(compact::IncrementalCompact)
     result_idx = compact.result_idx
     resize!(compact.result, result_idx - 1)
     just_fixup!(compact)
-    bb = compact.cfg_transform.result_bbs[end]
-    compact.cfg_transform.result_bbs[end] = BasicBlock(bb,
-                StmtRange(first(bb.stmts), result_idx-1))
+    if !did_just_finish_bb(compact)
+        # Finish the bb now
+        finish_current_bb!(compact, 0)
+    end
+    result_bbs = resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
     compact.renamed_new_nodes = true
     nothing
 end
@@ -2078,7 +2080,7 @@ function finish(compact::IncrementalCompact)
 end
 
 function complete(compact::IncrementalCompact)
-    result_bbs = resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
+    result_bbs = compact.cfg_transform.result_bbs
     cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
     if should_check_ssa_counts()
         oracle_check(compact)
