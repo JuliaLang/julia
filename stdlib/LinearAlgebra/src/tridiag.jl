@@ -157,7 +157,8 @@ axes(M::SymTridiagonal) = (ax = axes(M.dv, 1); (ax, ax))
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
 
-copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
+# copyto! for matching axes
+_copyto_banded!(dest::SymTridiagonal, src::SymTridiagonal) =
     (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
 
 #Elementary operations
@@ -606,7 +607,13 @@ similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), sim
 similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(M.d, T, dims)
 
 # Operations on Tridiagonal matrices
-copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
+# copyto! for matching axes
+function _copyto_banded!(dest::Tridiagonal, src::Tridiagonal)
+    copyto!(dest.dl, src.dl)
+    copyto!(dest.d, src.d)
+    copyto!(dest.du, src.du)
+    dest
+end
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
@@ -980,4 +987,22 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
         end
     end
     return B
+end
+
+# combinations of Tridiagonal and Symtridiagonal
+# copyto! for matching axes
+function _copyto_banded!(A::Tridiagonal, B::SymTridiagonal)
+    Bev = _evview(B)
+    A.du .= Bev
+    # Broadcast identity for numbers to access the faster copyto! path
+    # This uses the fact that transpose(x::Number) = x and symmetric(x::Number) = x
+    A.dl .= (eltype(B) <: Number ? identity : transpose).(Bev)
+    A.d .= (eltype(B) <: Number ? identity : symmetric).(B.dv)
+    return A
+end
+function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
+    issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal"))
+    A.dv .= B.d
+    _evview(A) .= B.du
+    return A
 end

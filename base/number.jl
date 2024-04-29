@@ -316,7 +316,7 @@ zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 """
     one(x)
-    one(T::type)
+    one(T::Type)
 
 Return a multiplicative identity for `x`: a value such that
 `one(x)*x == x*one(x) == x`. If the multiplicative identity can

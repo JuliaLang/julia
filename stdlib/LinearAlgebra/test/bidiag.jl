@@ -834,6 +834,26 @@ end
     end
 end
 
+@testset "copyto!" begin
+    ev, dv = [1:4;], [1:5;]
+    B = Bidiagonal(dv, ev, :U)
+    B2 = copyto!(zero(B), B)
+    @test B2 == B
+    for (ul1, ul2) in ((:U, :L), (:L, :U))
+        B3 = Bidiagonal(dv, zero(ev), ul1)
+        B2 = Bidiagonal(zero(dv), zero(ev), ul2)
+        @test copyto!(B2, B3) == B3
+    end
+
+    @testset "mismatched sizes" begin
+        dv2 = [4; @view dv[2:end]]
+        @test copyto!(B, Bidiagonal([4], Int[], :U)) == Bidiagonal(dv2, ev, :U)
+        @test copyto!(B, Bidiagonal([4], Int[], :L)) == Bidiagonal(dv2, ev, :U)
+        @test copyto!(B, Bidiagonal(Int[], Int[], :U)) == Bidiagonal(dv, ev, :U)
+        @test copyto!(B, Bidiagonal(Int[], Int[], :L)) == Bidiagonal(dv, ev, :U)
+    end
+end
+
 @testset "copyto! with UniformScaling" begin
     @testset "Fill" begin
         for len in (4, InfiniteArrays.Infinity())

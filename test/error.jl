@@ -111,8 +111,8 @@ end
             for name in names(mod, all=true)
                 isdefined(mod, name) || continue
                 value = getfield(mod, name)
-
                 if value isa Module
+                    value === Main && continue
                     test_exceptions(value, visited)
                 elseif value isa Type
                     str = string(value)
