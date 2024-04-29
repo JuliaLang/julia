@@ -10,8 +10,6 @@ end
 
 # first a few multiline show functions for types defined before the MIME type:
 
-show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
-
 function show(io::IO, ::MIME"text/plain", r::LinRange)
     isempty(r) && return show(io, r)
     # show for LinRange, e.g.
