@@ -25,6 +25,17 @@ and a value (`Any`), paired together as a `Pair{Symbol, <:Any}`.
 Labels do not need to be unique, the same region can hold multiple annotations
 with the same label.
 
+Code written for `AnnotatedString`s in general should conserve the following
+properties:
+- Which characters an annotation is applied to
+- The order in which annotations are applied to each character
+
+Additional semantics may be introduced by specific uses of `AnnotatedString`s.
+
+A corollary of these rules is that adjacent, consecutively placed, annotations
+with identical labels and values are equivalent to a single annotation spanning
+the combined range.
+
 See also [`AnnotatedChar`](@ref), [`annotatedstring`](@ref),
 [`annotations`](@ref), and [`annotate!`](@ref).
 
@@ -317,6 +328,9 @@ end
 
 Annotate a `range` of `str` (or the entire string) with a labeled value (`label` => `value`).
 To remove existing `label` annotations, use a value of `nothing`.
+
+The order in which annotations are applied to `str` is semantically meaningful,
+as described in [`AnnotatedString`](@ref).
 """
 annotate!(s::AnnotatedString, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any})) =
     (_annotate!(s.annotations, range, labelval); s)
@@ -348,6 +362,9 @@ annotations that overlap with `position` will be returned.
 
 Annotations are provided together with the regions they apply to, in the form of
 a vector of region–annotation tuples.
+
+In accordance with the semantics documented in [`AnnotatedString`](@ref), the
+order of annotations returned matches the order in which they were applied.
 
 See also: `annotate!`.
 """
@@ -483,6 +500,15 @@ function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
     nb
 end
 
+"""
+    _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, span::UnitRange{Int})
+
+Erase the presence of `annotations` within a certain `span`.
+
+This operates by removing all elements of `annotations` that are entirely
+contained in `span`, truncating ranges that partially overlap, and splitting
+annotations that subsume `span` to just exist either side of `span`.
+"""
 function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, span::UnitRange{Int})
     # Clear out any overlapping pre-existing annotations.
     filter!(((region, _),) -> first(region) < first(span) || last(region) > last(span), annotations)
@@ -508,14 +534,24 @@ function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int},
     annotations
 end
 
+"""
+    _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, offset::Int = position(io))
+
+Register new `annotations` in `io`, applying an `offset` to their regions.
+
+The largely consists of simply shifting the regions of `annotations` by `offset`
+and pushing them onto `io`'s annotations. However, when it is possible to merge
+the new annotations with recent annotations in accordance with the semantics
+outlined in [`AnnotatedString`](@ref), we do so. More specifically, when there
+is a run of the most recent annotations that are also present as the first
+`annotations`, with the same value and adjacent regions, the new annotations are
+merged into the existing recent annotations by simply extending their range.
+
+This is implemented so that one can say write an `AnnotatedString` to an
+`AnnotatedIOBuffer` one character at a time without needlessly producing a
+new annotation for each character.
+"""
 function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, offset::Int = position(io))
-    # The most basic (but correct) approach would be just to push
-    # each of `annotations` to `io.annotations`, adjusting the region by
-    # `offset`. However, there is a specific common case probably worth
-    # optimising, which is when an existing styles are just extended.
-    # To handle this efficiently and conservatively, we look to see if
-    # there's a run at the end of `io.annotations` that matches annotations
-    # at the start of `annotations`. If so, this run of annotations is merged.
     run = 0
     if !isempty(io.annotations) && last(first(last(io.annotations))) == offset
         for i in reverse(axes(annotations, 1))
