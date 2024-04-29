@@ -114,8 +114,6 @@ top:
 preheader:
 ; CHECK-NEXT: [[ALLOC:[0-9]+]] = MemoryDef([[PGCSTACK]])
 
-; TYPED-NEXT: %alloc = call {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 0, {} addrspace(10)* @tag)
-; TYPED-NEXT: %[[BCAST:.*]] = bitcast {} addrspace(10)* %alloc to i8 addrspace(10)*
 
 ; OPAQUE-NEXT: %alloc = call ptr addrspace(10) @julia.gc_alloc_obj(ptr %current_task, i64 0, ptr addrspace(10) @tag)
 

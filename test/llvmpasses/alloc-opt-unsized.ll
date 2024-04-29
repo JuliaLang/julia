@@ -27,15 +27,6 @@ entry:
   ret void
 }
 
-; TYPED:   %[[i0:.+]] = alloca {} addrspace(10)*, i64 1000, align 16
-; TYPED:   %[[i1:.+]] = bitcast {} addrspace(10)** %[[i0]] to i8*
-; TYPED:   %i18 = bitcast i8* %[[i1]] to {}*
-; TYPED:   %_malloccache.i = bitcast {}* %i18 to {} addrspace(10)**
-; TYPED:   %i23 = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %_malloccache.i, i64 %iv.i
-; TYPED:   store {} addrspace(10)* %arg, {} addrspace(10)** %i23, align 8
-; TYPED:   %i24 = bitcast {} addrspace(10)** %_malloccache.i to {}*
-; TYPED:   %l = load {} addrspace(10)*, {} addrspace(10)** %i23, align 8
-
 ; OPAQUE:   %[[i0:.+]] = alloca ptr addrspace(10), i64 1000, align 16
 ; OPAQUE:   %i23 = getelementptr inbounds ptr addrspace(10), ptr %i18, i64 %iv.i
 ; OPAQUE:   store ptr addrspace(10) %arg, ptr %i23, align 8

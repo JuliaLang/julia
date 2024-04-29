@@ -18,29 +18,20 @@ declare i32 @rooting_callee({} addrspace(12)*, {} addrspace(12)*)
 define void @gc_frame_lowering(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @gc_frame_lowering
-; TYPED: %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
-; TYPED:  %pgcstack = call {}*** @julia.get_pgcstack()
 
 ; OPAQUE: %gcframe = call ptr @julia.new_gc_frame(i32 2)
 ; OPAQUE:  %pgcstack = call ptr @julia.get_pgcstack()
     %pgcstack = call {}*** @julia.get_pgcstack()
-; TYPED-NEXT: call void @julia.push_gc_frame({} addrspace(10)** %gcframe, i32 2)
-; TYPED-NEXT: call {} addrspace(10)* @jl_box_int64
 
 ; OPAQUE-NEXT: call void @julia.push_gc_frame(ptr %gcframe, i32 2)
 ; OPAQUE-NEXT: call ptr addrspace(10) @jl_box_int64
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
-; TYPED: [[GEP0:%.*]] = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 [[GEPSLOT0:[0-9]+]])
-; TYPED-NEXT: store {} addrspace(10)* %aboxed, {} addrspace(10)** [[GEP0]]
 
 ; OPAQUE: [[GEP0:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 [[GEPSLOT0:[0-9]+]])
 ; OPAQUE-NEXT: store ptr addrspace(10) %aboxed, ptr [[GEP0]]
     %bboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %b)
 ; CHECK-NEXT: %bboxed =
 ; Make sure the same gc slot isn't re-used
-; TYPED-NOT: call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 [[GEPSLOT0]])
-; TYPED: [[GEP1:%.*]] = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 [[GEPSLOT1:[0-9]+]])
-; TYPED-NEXT: store {} addrspace(10)* %bboxed, {} addrspace(10)** [[GEP1]]
 
 ; OPAQUE-NOT: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 [[GEPSLOT0]])
 ; OPAQUE: [[GEP1:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 [[GEPSLOT1:[0-9]+]])
@@ -49,7 +40,6 @@ top:
 ; CHECK-NEXT: call void @boxed_simple
     call void @boxed_simple({} addrspace(10)* %aboxed,
                             {} addrspace(10)* %bboxed)
-; TYPED-NEXT: call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
 ; OPAQUE-NEXT: call void @julia.pop_gc_frame(ptr %gcframe)
     ret void
 }
@@ -60,15 +50,6 @@ top:
     %pgcstack = call {}*** @julia.get_pgcstack()
     %0 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; TYPED: %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; TYPED-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
-; TYPED-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
-; TYPED-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
-; TYPED-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
-; TYPED-NEXT: %v = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_bytes(i8* [[ptls_i8]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
-; TYPED-NEXT: [[V2:%.*]] = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
-; TYPED-NEXT: [[V_HEADROOM:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)* addrspace(10)* [[V2]], i64 -1
-; TYPED-NEXT: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* [[V_HEADROOM]] unordered, align 8, !tbaa !4
 
 ; OPAQUE: %current_task = getelementptr inbounds ptr, ptr %0, i64 -12
 ; OPAQUE-NEXT: [[ptls_field:%.*]] = getelementptr inbounds ptr, ptr %current_task, i64 16
@@ -77,7 +58,6 @@ top:
 ; OPAQUE-NEXT: [[V_HEADROOM:%.*]] = getelementptr inbounds ptr addrspace(10), ptr addrspace(10) %v, i64 -1
 ; OPAQUE-NEXT: store atomic ptr addrspace(10) @tag, ptr addrspace(10) [[V_HEADROOM]] unordered, align 8, !tbaa !4
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
-; TYPED-NEXT: ret {} addrspace(10)* %v
 ; OPAQUE-NEXT: ret ptr addrspace(10) %v
     ret {} addrspace(10)* %v
 }
@@ -93,15 +73,6 @@ top:
     %pgcstack = call {}*** @julia.get_pgcstack()
     %0 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; TYPED: %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; TYPED-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
-; TYPED-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
-; TYPED-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
-; TYPED-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
-; TYPED-NEXT: %v = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_bytes(i8* [[ptls_i8]], [[SIZE_T:i.[0-9]+]] 8, i64 {{.*}} @tag {{.*}})
-; TYPED-NEXT: [[V2:%.*]] = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
-; TYPED-NEXT: [[V_HEADROOM:%.*]] = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)* addrspace(10)* [[V2]], i64 -1
-; TYPED-NEXT: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* [[V_HEADROOM]] unordered, align 8, !tbaa !4
 
 ; OPAQUE: %current_task = getelementptr inbounds ptr, ptr %0, i64 -12
 ; OPAQUE-NEXT: [[ptls_field:%.*]] = getelementptr inbounds ptr, ptr %current_task, i64 16
@@ -110,16 +81,12 @@ top:
 ; OPAQUE-NEXT: [[V_HEADROOM:%.*]] = getelementptr inbounds ptr addrspace(10), ptr addrspace(10) %v, i64 -1
 ; OPAQUE-NEXT: store atomic ptr addrspace(10) @tag, ptr addrspace(10) [[V_HEADROOM]] unordered, align 8, !tbaa !4
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 8, {} addrspace(10)* @tag)
-; TYPED-NEXT: %v64 = bitcast {} addrspace(10)* %v to i64 addrspace(10)*
 ; OPAQUE-NEXT: %v64 = bitcast ptr addrspace(10) %v to ptr addrspace(10)
     %v64 = bitcast {} addrspace(10)* %v to i64 addrspace(10)*
-; TYPED-NEXT: %loadedval = load i64, i64 addrspace(10)* %v64, align 8, !range !7
 ; OPAQUE-NEXT: %loadedval = load i64, ptr addrspace(10) %v64, align 8, !range !7
     %loadedval = load i64, i64 addrspace(10)* %v64, align 8, !range !0, !invariant.load !1
-; TYPED-NEXT: store i64 %loadedval, i64 addrspace(10)* %v64, align 8, !noalias !8
 ; OPAQUE-NEXT: store i64 %loadedval, ptr addrspace(10) %v64, align 8, !noalias !8
     store i64 %loadedval, i64 addrspace(10)* %v64, align 8, !noalias !2
-; TYPED-NEXT: %lv2 = load i64, i64 addrspace(10)* %v64, align 8, !tbaa !11, !range !7
 ; OPAQUE-NEXT: %lv2 = load i64, ptr addrspace(10) %v64, align 8, !tbaa !11, !range !7
     %lv2 = load i64, i64 addrspace(10)* %v64, align 8, !range !0, !tbaa !4
 ; CHECK-NEXT: ret void

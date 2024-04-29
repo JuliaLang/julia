@@ -25,16 +25,12 @@ preheader:
   br label %loop
 ; CHECK: loop:
 loop:
-; TYPED-NEXT: %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
 ; OPAQUE-NEXT: %alloc = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag)
   %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
-; TYPED-NEXT: %derived = addrspacecast {} addrspace(10)* %alloc to {} addrspace(11)*
 ; OPAQUE-NEXT: %derived = addrspacecast ptr addrspace(10) %alloc to ptr addrspace(11)
   %derived = addrspacecast {} addrspace(10)* %alloc to {} addrspace(11)*
-; TYPED-NEXT: %ptr = bitcast {} addrspace(11)* %derived to {} addrspace(10)* addrspace(11)*
 ; OPAQUE-NEXT: %ptr = bitcast ptr addrspace(11) %derived to ptr addrspace(11)
   %ptr = bitcast {} addrspace(11)* %derived to {} addrspace(10)* addrspace(11)*
-; TYPED-NEXT: store {} addrspace(10)* %obj, {} addrspace(10)* addrspace(11)* %ptr, align 8
 ; OPAQUE-NEXT: store ptr addrspace(10) %obj, ptr addrspace(11) %ptr, align 8
   store {} addrspace(10)* %obj, {} addrspace(10)* addrspace(11)* %ptr, align 8
   br i1 %ret, label %return, label %loop
@@ -59,13 +55,11 @@ preheader:
   br label %loop
 ; CHECK: loop:
 loop:
-; TYPED-NEXT: %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
 ; OPAQUE-NEXT: %alloc = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag)
   %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
   br label %other
 ; CHECK: other:
 other:
-; TYPED-NEXT: %phi = phi {} addrspace(10)* [ %alloc, %loop ]
 ; OPAQUE-NEXT: %phi = phi ptr addrspace(10) [ %alloc, %loop ]
   %phi = phi {} addrspace(10)* [ %alloc, %loop ]
   br i1 %ret, label %return, label %loop

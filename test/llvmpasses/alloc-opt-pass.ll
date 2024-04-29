@@ -7,7 +7,6 @@
 ; Test that the gc_preserve intrinsics are deleted directly.
 
 ; CHECK-LABEL: @preserve_branches
-; TYPED: call {}*** @julia.ptls_states()
 ; OPAQUE: call ptr @julia.ptls_states()
 ; CHECK: L1:
 ; CHECK-NOT: @llvm.julia.gc_preserve_begin
@@ -41,10 +40,8 @@ L3:
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @preserve_branches2
-; TYPED: call {}*** @julia.ptls_states()
 ; OPAQUE: call ptr @julia.ptls_states()
 ; CHECK: L1:
-; TYPED-NEXT: @llvm.julia.gc_preserve_begin{{.*}}{} addrspace(10)* %v2
 ; OPAQUE-NEXT: @llvm.julia.gc_preserve_begin{{.*}}ptr addrspace(10) %v2
 ; CHECK-NEXT: @external_function()
 ; CHECK-NEXT: br i1 %b2, label %L2, label %L3
@@ -105,15 +102,11 @@ declare token @llvm.julia.gc_preserve_begin(...)
 declare void @llvm.julia.gc_preserve_end(token)
 
 ; CHECK-LABEL: @memref_collision
-; TYPED: call {}*** @julia.ptls_states()
 ; OPAQUE: call ptr @julia.ptls_states()
-; TYPED-NOT: store {}
 ; OPAQUE-NOT: store ptr
 ; CHECK: store i
-; TYPED-NOT: store {}
 ; OPAQUE-NOT: store ptr
 ; CHECK: L1:
-; TYPED: load {}
 ; OPAQUE: load ptr
 ; CHECK: L2:
 ; CHECK: load i

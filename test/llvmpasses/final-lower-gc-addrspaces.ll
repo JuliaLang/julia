@@ -23,11 +23,8 @@ attributes #0 = { allocsize(1) }
 define void @gc_frame_addrspace(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @gc_frame_addrspace
-; TYPED: %0 = alloca {} addrspace(10)*, i32 4, align 16, addrspace(5)
 ; OPAQUE: %0 = alloca ptr addrspace(10), i32 4, align 16, addrspace(5)
-; TYPED: %gcframe = addrspacecast {} addrspace(10)* addrspace(5)* %0 to {} addrspace(10)**
 ; OPAQUE: %gcframe = addrspacecast ptr addrspace(5) %0 to ptr
-; TYPED: %1 = bitcast {} addrspace(10)** %gcframe to i8*
   %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
   %pgcstack = call {}*** @julia.get_pgcstack()
   call void @julia.push_gc_frame({} addrspace(10)** %gcframe, i32 2)
