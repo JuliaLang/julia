@@ -398,6 +398,8 @@ float(::Type{Union{}}, slurp...) = Union{}(0.0)
 Return the nearest integral value of type `T` whose absolute value is
 less than or equal to the absolute value of `x`. If the value is not representable by `T`,
 an arbitrary value will be returned.
+"Arbitrary" here means that it is not only dependent on the CPU architecture or
+the julia version, but also possibly different on every invocation.
 See also [`trunc`](@ref).
 
 # Examples
@@ -405,7 +407,7 @@ See also [`trunc`](@ref).
 julia> unsafe_trunc(Int, -2.2)
 -2
 
-julia> unsafe_trunc(Int, NaN)
+julia> unsafe_trunc(Int, NaN) # possibly different on every invocation
 -9223372036854775808
 ```
 """
