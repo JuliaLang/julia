@@ -30,6 +30,15 @@ mul_wrappers = [
     h(A) = LinearAlgebra.wrap(LinearAlgebra._unwrap(A), LinearAlgebra.wrapper_char(A))
     @test @inferred(h(transpose(A))) === transpose(A)
     @test @inferred(h(adjoint(A))) === transpose(A)
+
+    M = rand(2,2)
+    for S in (Symmetric(M), Hermitian(M))
+        @test @inferred((A -> LinearAlgebra.wrap(parent(A), LinearAlgebra.wrapper_char(A)))(S)) === Symmetric(M)
+    end
+    M = rand(ComplexF64,2,2)
+    for S in (Symmetric(M), Hermitian(M))
+        @test @inferred((A -> LinearAlgebra.wrap(parent(A), LinearAlgebra.wrapper_char(A)))(S)) === S
+    end
 end
 
 @testset "matrices with zero dimensions" begin
