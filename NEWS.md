@@ -163,6 +163,11 @@ Standard library changes
 * Packages that specialize matrix-matrix `mul!` with a method signature of the form `mul!(::AbstractMatrix, ::MyMatrix, ::AbstractMatrix, ::Number, ::Number)` no longer encounter method ambiguities when interacting with `LinearAlgebra`. Previously, ambiguities used to arise when multiplying a `MyMatrix` with a structured matrix type provided by LinearAlgebra, such as `AbstractTriangular`, which used to necessitate additional methods to resolve such ambiguities. Similar sources of ambiguities have also been removed for matrix-vector `mul!` operations ([#52837]).
 * `lu` and `issuccess(::LU)` now accept an `allowsingular` keyword argument. When set to `true`, a valid factorization with rank-deficient U factor will be treated as success instead of throwing an error. Such factorizations are now shown by printing the factors together with a "rank-deficient" note rather than printing a "Failed Factorization" message ([#52957]).
 
+#### Logging
+
+* Log messages now support `AnnotatedString`s in log messages, allowing for `StyledStrings`-prettified messages.
+* Log level styling is now defined in terms of `StyledStrings` faces, namely `log_error`, `log_warn`, `log_info`, and `log_debug`.
+
 #### Random
 
 * `rand` now supports sampling over `Tuple` types ([#35856], [#50251]).
