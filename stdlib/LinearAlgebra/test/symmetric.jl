@@ -532,6 +532,31 @@ end
             @test kron(Sl,Su) == kron(MSl,MSu)
         end
     end
+    @testset "non-strided" begin
+        @testset "diagonal" begin
+            for ST1 in (Symmetric, Hermitian), uplo1 in (:L, :U)
+                m = ST1(Matrix{BigFloat}(undef,2,2), uplo1)
+                m.data[1,1] = 1
+                m.data[2,2] = 3
+                m.data[1+(uplo1==:L), 1+(uplo1==:U)] = 2
+                A = Array(m)
+                for ST2 in (Symmetric, Hermitian), uplo2 in (:L, :U)
+                    id = ST2(I(2), uplo2)
+                    @test m + id == id + m == A + id
+                end
+            end
+        end
+        @testset "unit triangular" begin
+            for ST1 in (Symmetric, Hermitian), uplo1 in (:L, :U)
+                H1 = ST1(UnitUpperTriangular(big.(rand(Int8,4,4))), uplo1)
+                M1 = Matrix(H1)
+                for ST2 in (Symmetric, Hermitian), uplo2 in (:L, :U)
+                    H2 = ST2(UnitUpperTriangular(big.(rand(Int8,4,4))), uplo2)
+                    @test H1 + H2 == M1 + Matrix(H2)
+                end
+            end
+        end
+    end
 end
 
 # bug identified in PR #52318: dot products of quaternionic Hermitian matrices,

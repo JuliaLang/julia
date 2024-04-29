@@ -947,3 +947,6 @@ end
 function Base.muladd(A::Diagonal, B::Diagonal, z::Diagonal)
     Diagonal(A.diag .* B.diag .+ z.diag)
 end
+
+uppertriangular(D::Diagonal) = D
+lowertriangular(D::Diagonal) = D
