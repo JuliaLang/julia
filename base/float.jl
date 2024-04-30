@@ -464,6 +464,20 @@ round(x::IEEEFloat, ::RoundingMode{:Down})    = floor_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Up})      = ceil_llvm(x)
 round(x::IEEEFloat, ::RoundingMode{:Nearest}) = rint_llvm(x)
 
+rounds_up(x, ::RoundingMode{:Down}) = false
+rounds_up(x, ::RoundingMode{:Up}) = true
+rounds_up(x, ::RoundingMode{:ToZero}) = x < 0
+rounds_up(x, ::RoundingMode{:FromZero}) = x > 0
+function round(::Type{T}, x, r::Union{RoundingMode{:ToZero}, RoundingMode{:FromZero}, RoundingMode{:Up}, RoundingMode{:Down}}) where {T<:AbstractFloat}
+    x_int = round(x, r)
+    x_t = convert(T, x_int)
+    if rounds_up(x, r)
+        x_t < x ? nextfloat(x_t) : x_t
+    else
+        x_t > x ? prevfloat(x_t) : x_t
+    end
+end
+
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
 promote_rule(::Type{Float64}, ::Type{Float16}) = Float64
