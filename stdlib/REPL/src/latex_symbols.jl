@@ -151,7 +151,7 @@ const latex_symbols = Dict(
     # Music Symbols - Notes
     "\\noteDoubleWhole" => "𝅜",
     "\\noteWhole" => "𝅝",
-    "\\notehalf" => "𝅗𝅥",
+    "\\noteHalf" => "𝅗𝅥",
     "\\noteQuarter" => "𝅘𝅥",
     "\\note8th" => "𝅘𝅥𝅮",
     "\\note16th" => "𝅘𝅥𝅯",
