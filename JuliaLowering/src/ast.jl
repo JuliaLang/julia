@@ -180,15 +180,30 @@ macro ast(ctx, srcref, tree)
 end
 
 function mapchildren(f, ctx, ex)
-    if haschildren(ex)
-        cs = SyntaxList(ctx)
-        for e in children(ex)
-            push!(cs, f(e))
-        end
-        ex2 = makenode(ctx, ex, head(ex), cs)
-    else
-        ex2 = makeleaf(ctx, ex, head(ex))
+    if !haschildren(ex)
+        return ex
     end
+    orig_children = children(ex)
+    cs = nothing
+    for (i,e) in enumerate(orig_children)
+        c = f(e)
+        if isnothing(cs)
+            if c == e
+                continue
+            else
+                cs = SyntaxList(ctx)
+                append!(cs, orig_children[1:i-1])
+            end
+        end
+        push!(cs::SyntaxList, c)
+    end
+    if isnothing(cs)
+        # This function should be allocation-free if no children were changed
+        # by the mapping.
+        return ex
+    end
+    cs::SyntaxList
+    ex2 = makenode(ctx, ex, head(ex), cs)
     # TODO: Make this faster?
     for (k,v) in pairs(ex2.graph.attributes)
         if (k !== :source && k !== :kind && k !== :syntax_flags) && haskey(v, ex.id)
