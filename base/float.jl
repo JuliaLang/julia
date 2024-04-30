@@ -466,8 +466,8 @@ round(x::IEEEFloat, ::RoundingMode{:Nearest}) = rint_llvm(x)
 
 rounds_up(x, ::RoundingMode{:Down}) = false
 rounds_up(x, ::RoundingMode{:Up}) = true
-rounds_up(x, ::RoundingMode{:ToZero}) = x < 0
-rounds_up(x, ::RoundingMode{:FromZero}) = x > 0
+rounds_up(x, ::RoundingMode{:ToZero}) = signbit(x)
+rounds_up(x, ::RoundingMode{:FromZero}) = !signbit(x)
 function round(::Type{T}, x, r::Union{RoundingMode{:ToZero}, RoundingMode{:FromZero}, RoundingMode{:Up}, RoundingMode{:Down}}) where {T<:AbstractFloat}
     x_int = round(x, r)
     x_t = convert(T, x_int)
