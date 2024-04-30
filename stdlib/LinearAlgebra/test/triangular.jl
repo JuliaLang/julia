@@ -998,6 +998,14 @@ end
     end
 end
 
+@testset "uppertriangular/lowertriangular" begin
+    M = rand(2,2)
+    @test LinearAlgebra.uppertriangular(M) === UpperTriangular(M)
+    @test LinearAlgebra.lowertriangular(M) === LowerTriangular(M)
+    @test LinearAlgebra.uppertriangular(UnitUpperTriangular(M)) === UnitUpperTriangular(M)
+    @test LinearAlgebra.lowertriangular(UnitLowerTriangular(M)) === UnitLowerTriangular(M)
+end
+
 @testset "arithmetic with partly uninitialized matrices" begin
     @testset "$(typeof(A))" for A in (Matrix{BigFloat}(undef,2,2), Matrix{Complex{BigFloat}}(undef,2,2)')
         A[2,1] = eltype(A) <: Complex ? 4 + 3im : 4

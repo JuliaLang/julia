@@ -44,8 +44,10 @@ const IR_FLAG_NOUB        = one(UInt32) << 9
 const IR_FLAG_EFIIMO      = one(UInt32) << 10
 # This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 11
+# This statement has no users and may be deleted if flags get refined to IR_FLAGS_REMOVABLE
+const IR_FLAG_UNUSED      = one(UInt32) << 12
 
-const NUM_IR_FLAGS = 12 # sync with julia.h
+const NUM_IR_FLAGS = 13 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
     IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES | IR_FLAG_NOUB

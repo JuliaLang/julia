@@ -1240,54 +1240,6 @@ end
     return rewrap_unionall(R, s00)
 end
 
-@nospecs function getfield_notuninit(typ0, name)
-    if isa(typ0, Const)
-        # If the object is Const, then we know exactly the bit patterns that
-        # must be returned by getfield if not an error
-        return true
-    end
-    typ0 = widenconst(typ0)
-    typ = unwrap_unionall(typ0)
-    if isa(typ, Union)
-        return getfield_notuninit(rewrap_unionall(typ.a, typ0), name) &&
-               getfield_notuninit(rewrap_unionall(typ.b, typ0), name)
-    end
-    isa(typ, DataType) || return false
-    isabstracttype(typ) && !isconstType(typ) && return false # cannot say anything about abstract types
-    if typ.name.n_uninitialized == 0
-        # Types such as tuples and named tuples that can't be instantiated with undefined fields,
-        # so we don't need to be conservative here
-        return true
-    end
-    if !isa(name, Const)
-        isvarargtype(name) && return false
-        if !hasintersect(widenconst(name), Union{Int,Symbol})
-            return true # no undefined behavior if thrown
-        end
-        # field isn't known precisely, but let's check if all the fields can't be
-        # initialized with undefined value so to avoid being too conservative
-        fcnt = fieldcount_noerror(typ)
-        fcnt === nothing && return false
-        all(i::Int->is_undefref_fieldtype(fieldtype(typ,i)), (datatype_min_ninitialized(typ)+1):fcnt) && return true
-        return false
-    end
-    name = name.val
-    if isa(name, Symbol)
-        fidx = fieldindex(typ, name, false)
-        fidx === nothing && return true # no undefined behavior if thrown
-    elseif isa(name, Int)
-        fidx = name
-    else
-        return true # no undefined behavior if thrown
-    end
-    fcnt = fieldcount_noerror(typ)
-    fcnt === nothing && return false
-    0 < fidx ≤ fcnt || return true # no undefined behavior if thrown
-    fidx ≤ datatype_min_ninitialized(typ) && return true # always defined
-    ftyp = fieldtype(typ, fidx)
-    is_undefref_fieldtype(ftyp) && return true # always initialized
-    return false
-end
 # checks if a field of this type is guaranteed to be defined to a value
 # and that access to an uninitialized field will cause an `UndefRefError` or return zero
 # - is_undefref_fieldtype(String) === true
@@ -2462,16 +2414,6 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     # :consistent if the argtype is immutable
     consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
         ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
-    # taint `:consistent` if accessing `isbitstype`-type object field that may be initialized
-    # with undefined value: note that we don't need to taint `:consistent` if accessing
-    # uninitialized non-`isbitstype` field since it will simply throw `UndefRefError`
-    # NOTE `getfield_notuninit` conservatively checks if this field is never initialized
-    # with undefined value to avoid tainting `:consistent` too aggressively
-    # TODO this should probably taint `:noub`, however, it would hinder concrete eval for
-    # `REPLInterpreter` that can ignore `:consistent-cy`, causing worse completions
-    if !(length(argtypes) ≥ 2 && getfield_notuninit(obj, argtypes[2]))
-        consistent = ALWAYS_FALSE
-    end
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)

@@ -281,21 +281,21 @@ diag(A::Hermitian) = hermitian.(diag(parent(A)), sym_uplo(A.uplo))
 
 function applytri(f, A::HermOrSym)
     if A.uplo == 'U'
-        f(UpperTriangular(A.data))
+        f(uppertriangular(A.data))
     else
-        f(LowerTriangular(A.data))
+        f(lowertriangular(A.data))
     end
 end
 
 function applytri(f, A::HermOrSym, B::HermOrSym)
     if A.uplo == B.uplo == 'U'
-        f(UpperTriangular(A.data), UpperTriangular(B.data))
+        f(uppertriangular(A.data), uppertriangular(B.data))
     elseif A.uplo == B.uplo == 'L'
-        f(LowerTriangular(A.data), LowerTriangular(B.data))
+        f(lowertriangular(A.data), lowertriangular(B.data))
     elseif A.uplo == 'U'
-        f(UpperTriangular(A.data), UpperTriangular(_conjugation(B)(B.data)))
+        f(uppertriangular(A.data), uppertriangular(_conjugation(B)(B.data)))
     else # A.uplo == 'L'
-        f(UpperTriangular(_conjugation(A)(A.data)), UpperTriangular(B.data))
+        f(uppertriangular(_conjugation(A)(A.data)), uppertriangular(B.data))
     end
 end
 parentof_applytri(f, args...) = applytri(parent ∘ f, args...)

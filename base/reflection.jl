@@ -2100,6 +2100,7 @@ end
 """
     Base.infer_effects(
         f, types=default_tt(f);
+        optimize::Bool=true,
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> effects::Effects
 
@@ -2108,6 +2109,7 @@ Returns the possible computation effects of the function call specified by `f` a
 # Arguments
 - `f`: The function to analyze.
 - `types` (optional): The argument types of the function. Defaults to the default tuple type of `f`.
+- `optimize` (optional): Whether to run additional effects refinements based on post-optimization analysis.
 - `world` (optional): The world counter to use for the analysis. Defaults to the current world counter.
 - `interp` (optional): The abstract interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
 
@@ -2155,6 +2157,7 @@ signature, the `:nothrow` bit gets tainted.
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
 """
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
+                       optimize::Bool=true,
                        world::UInt=get_world_counter(),
                        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     check_generated_context(world)
@@ -2171,7 +2174,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     end
     for match in matches.matches
         match = match::Core.MethodMatch
-        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#true)
+        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#optimize)
         frame === nothing && return Core.Compiler.Effects()
         effects = Core.Compiler.merge_effects(effects, frame.result.ipo_effects)
     end

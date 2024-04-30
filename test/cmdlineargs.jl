@@ -1124,14 +1124,14 @@ end
 ## `Main.main` entrypoint
 
 # Basic usage
-@test readchomp(`$(Base.julia_cmd()) -e '(@main)(ARGS) = println("hello")'`) == "hello"
+@test readchomp(`$(Base.julia_cmd()) -e '(@main)(args) = println("hello")'`) == "hello"
 
 # Test ARGS with -e
-@test readchomp(`$(Base.julia_cmd()) -e '(@main)(ARGS) = println(ARGS)' a b`) == repr(["a", "b"])
+@test readchomp(`$(Base.julia_cmd()) -e '(@main)(args) = println(args)' a b`) == repr(["a", "b"])
 
 # Test import from module
-@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; using .Hello'`) == "hello"
-@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(ARGS) = println("hello"); end; import .Hello'`) == ""
+@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(args) = println("hello"); end; using .Hello'`) == "hello"
+@test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(args) = println("hello"); end; import .Hello'`) == ""
 
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms

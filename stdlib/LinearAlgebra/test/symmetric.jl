@@ -264,8 +264,11 @@ end
                     @testset "inverse edge case with complex Hermitian" begin
                         # Hermitian matrix, where inv(lu(A)) generates non-real diagonal elements
                         for T in (ComplexF32, ComplexF64)
-                            A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
-                            H = Hermitian(A)
+                            # data should have nonvanishing imaginary parts on the diagonal
+                            M = T[0.279982+0.988074im  0.770011+0.870555im
+                                    0.138001+0.889728im  0.177242+0.701413im]
+                            H = Hermitian(M)
+                            A = Matrix(H)
                             @test inv(H) ≈ inv(A)
                             @test ishermitian(Matrix(inv(H)))
                         end
@@ -527,6 +530,31 @@ end
             @test Su - Sl == -(Sl - Su) == MSu - MSl
             @test kron(Su,Sl) == kron(MSu,MSl)
             @test kron(Sl,Su) == kron(MSl,MSu)
+        end
+    end
+    @testset "non-strided" begin
+        @testset "diagonal" begin
+            for ST1 in (Symmetric, Hermitian), uplo1 in (:L, :U)
+                m = ST1(Matrix{BigFloat}(undef,2,2), uplo1)
+                m.data[1,1] = 1
+                m.data[2,2] = 3
+                m.data[1+(uplo1==:L), 1+(uplo1==:U)] = 2
+                A = Array(m)
+                for ST2 in (Symmetric, Hermitian), uplo2 in (:L, :U)
+                    id = ST2(I(2), uplo2)
+                    @test m + id == id + m == A + id
+                end
+            end
+        end
+        @testset "unit triangular" begin
+            for ST1 in (Symmetric, Hermitian), uplo1 in (:L, :U)
+                H1 = ST1(UnitUpperTriangular(big.(rand(Int8,4,4))), uplo1)
+                M1 = Matrix(H1)
+                for ST2 in (Symmetric, Hermitian), uplo2 in (:L, :U)
+                    H2 = ST2(UnitUpperTriangular(big.(rand(Int8,4,4))), uplo2)
+                    @test H1 + H2 == M1 + Matrix(H2)
+                end
+            end
         end
     end
 end
