@@ -193,6 +193,13 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         rt = argextype(stmt, irsv.ir)
     end
     if rt !== nothing
+        if has_flag(inst, IR_FLAG_UNUSED)
+            # Don't bother checking the type if we know it's unused
+            if has_flag(inst, IR_FLAGS_REMOVABLE)
+                inst[:stmt] = nothing
+            end
+            return false
+        end
         if isa(rt, Const)
             inst[:type] = rt
             if is_inlineable_constant(rt.val) && has_flag(inst, IR_FLAGS_REMOVABLE)

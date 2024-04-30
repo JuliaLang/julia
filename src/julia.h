@@ -284,7 +284,7 @@ typedef union __jl_purity_overrides_t {
 } _jl_purity_overrides_t;
 
 #define NUM_EFFECTS_OVERRIDES 9
-#define NUM_IR_FLAGS 12
+#define NUM_IR_FLAGS 13
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
