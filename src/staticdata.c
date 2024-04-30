@@ -960,7 +960,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 if (jl_is_svec(m->specializations))
                     jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->specializations), (jl_value_t*)m, 0, 1);
 
-                //record_field_change((jl_value_t **)((jl_method_t*)v)->roots, jl_emptysvec);
+                record_field_change((jl_value_t **)&((jl_method_t*)v)->roots, NULL);
             } else if (jl_typetagis(v, jl_typename_type)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
                 if (tn->mt != NULL && !(tn->mt->frozen)){

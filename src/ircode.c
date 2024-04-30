@@ -1028,6 +1028,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms)
         size_t namelen = strlen(namestr) + 1;
         len += namelen;
     }
+    // TODO: Handle "?" special-case
     jl_value_t *str = jl_alloc_string(len);
     len = 0;
     for (i = 0; i < nsyms; i++) {
