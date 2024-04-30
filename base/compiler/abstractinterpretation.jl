@@ -2820,7 +2820,8 @@ function override_effects(effects::Effects, override::EffectsOverride)
         inaccessiblememonly = override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
         noub = override.noub ? ALWAYS_TRUE :
                override.noub_if_noinbounds && effects.noub !== ALWAYS_TRUE ? NOUB_IF_NOINBOUNDS :
-               effects.noub)
+               effects.noub,
+        nonoverlayed = override.nonoverlayed ? true : effects.nonoverlayed)
 end
 
 isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))

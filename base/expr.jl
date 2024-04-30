@@ -479,7 +479,7 @@ CodeInfo(
 !!! compat "Julia 1.10"
     The usage within a function body requires at least Julia 1.10.
 
-!!! compact "Julia 1.11"
+!!! compat "Julia 1.11"
     The code block annotation requires at least Julia 1.11.
 
 !!! warning
@@ -505,6 +505,7 @@ The following `setting`s are supported.
 - `:inaccessiblememonly`
 - `:noub`
 - `:noub_if_noinbounds`
+- `:nonoverlayed`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -674,6 +675,10 @@ any other effect assertions (such as `:consistent` or `:effect_free`) as well, b
 not model this, and they assume the absence of undefined behavior.
 
 ---
+## `:nonoverlayed`
+TODO.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -793,6 +798,8 @@ function compute_assumed_setting(override::EffectsOverride, @nospecialize(settin
         return EffectsOverride(override; noub = val)
     elseif setting === :noub_if_noinbounds
         return EffectsOverride(override; noub_if_noinbounds = val)
+    elseif setting === :nonoverlayed
+        return EffectsOverride(override; nonoverlayed = val)
     elseif setting === :foldable
         consistent = effect_free = terminates_globally = noub = val
         return EffectsOverride(override; consistent, effect_free, terminates_globally, noub)
@@ -810,10 +817,11 @@ function compute_assumed_setting(override::EffectsOverride, @nospecialize(settin
 end
 
 function form_purity_expr(override::EffectsOverride)
-    return Expr(:purity,
-        override.consistent, override.effect_free, override.nothrow,
-        override.terminates_globally, override.terminates_locally, override.notaskstate,
-        override.inaccessiblememonly, override.noub, override.noub_if_noinbounds)
+    ex = Expr(:purity)
+    for i = 1:Core.Compiler.NUM_EFFECTS_OVERRIDES
+        push!(ex.args, getfield(override, i))
+    end
+    return ex
 end
 
 """

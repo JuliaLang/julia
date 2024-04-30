@@ -329,6 +329,7 @@ function encode_effects_override(eo::EffectsOverride)
     eo.inaccessiblememonly && (e |= (0x0001 << 6))
     eo.noub                && (e |= (0x0001 << 7))
     eo.noub_if_noinbounds  && (e |= (0x0001 << 8))
+    eo.nonoverlayed        && (e |= (0x0001 << 9))
     return e
 end
 
@@ -342,7 +343,8 @@ function decode_effects_override(e::UInt16)
         !iszero(e & (0x0001 << 5)),
         !iszero(e & (0x0001 << 6)),
         !iszero(e & (0x0001 << 7)),
-        !iszero(e & (0x0001 << 8)))
+        !iszero(e & (0x0001 << 8)),
+        !iszero(e & (0x0001 << 9)))
 end
 
 decode_statement_effects_override(ssaflag::UInt32) =

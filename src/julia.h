@@ -279,11 +279,12 @@ typedef union __jl_purity_overrides_t {
         uint16_t ipo_inaccessiblememonly : 1;
         uint16_t ipo_noub                : 1;
         uint16_t ipo_noub_if_noinbounds  : 1;
+        uint16_t ipo_nonoverlayed        : 1;
     } overrides;
     uint16_t bits;
 } _jl_purity_overrides_t;
 
-#define NUM_EFFECTS_OVERRIDES 9
+#define NUM_EFFECTS_OVERRIDES 10
 #define NUM_IR_FLAGS 13
 
 // This type describes a single function body
