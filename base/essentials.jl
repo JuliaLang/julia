@@ -180,22 +180,11 @@ macro isdefined(s::Symbol)
     return Expr(:escape, Expr(:isdefined, s))
 end
 
-"""
-    nameof(m::Module) -> Symbol
-
-Get the name of a `Module` as a [`Symbol`](@ref).
-
-# Examples
-```jldoctest
-julia> nameof(Base.Broadcast)
-:Broadcast
-```
-"""
-nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+_nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 function _is_internal(__module__)
     if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
-       nameof(__module__) === :Base
+       _nameof(__module__) === :Base
         return true
     end
     return false
@@ -374,6 +363,19 @@ default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
     memoryrefget(memoryref(memoryref(A), i, @_boundscheck), default_access_order(A), false))
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
+
+"""
+    nameof(m::Module) -> Symbol
+
+Get the name of a `Module` as a [`Symbol`](@ref).
+
+# Examples
+```jldoctest
+julia> nameof(Base.Broadcast)
+:Broadcast
+```
+"""
+nameof(m::Module) = (@_total_meta; ccall(:jl_module_name, Ref{Symbol}, (Any,), m))
 
 function iterate end
 

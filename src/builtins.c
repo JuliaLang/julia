@@ -115,7 +115,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                     continue; // skip this field (it is #undef)
                 }
             }
-            if (!ft->layout->flags.haspadding) {
+            if (!ft->layout->flags.haspadding && ft->layout->flags.isbitsegal) {
                 if (!bits_equal(ao, bo, ft->layout->size))
                     return 0;
             }
@@ -284,7 +284,7 @@ inline int jl_egal__bits(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t
     if (sz == 0)
         return 1;
     size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0 || !dt->layout->flags.haspadding)
+    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal))
         return bits_equal(a, b, sz);
     return compare_fields(a, b, dt);
 }
@@ -394,7 +394,7 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
     if (sz == 0)
         return ~h;
     size_t f, nf = jl_datatype_nfields(dt);
-    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->npointers == 0)) {
+    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal && dt->layout->npointers == 0)) {
         // operate element-wise if there are unused bits inside,
         // otherwise just take the whole data block at once
         // a few select pointers (notably symbol) also have special hash values
