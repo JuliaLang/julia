@@ -338,6 +338,10 @@ The [`RoundingMode`](@ref) `r` controls the direction of the rounding; the defau
 of 0.5) being rounded to the nearest even integer. Note that `round` may give incorrect
 results if the global rounding mode is changed (see [`rounding`](@ref)).
 
+When rounding to a floating point type, will round to integers representable by that type
+(and Inf) rather than true integers. Inf is treated as one ulp greater than the
+`floatmax(T)` for purposes of determining "nearest", similar to [`convert`](@ref).
+
 # Examples
 ```jldoctest
 julia> round(1.7)
@@ -363,6 +367,12 @@ julia> round(123.456; sigdigits=2)
 
 julia> round(357.913; sigdigits=4, base=2)
 352.0
+
+julia> round(Float16, typemax(UInt128))
+Inf16
+
+julia> floor(Float16, typemax(UInt128))
+Float16(6.55e4)
 ```
 
 !!! note
