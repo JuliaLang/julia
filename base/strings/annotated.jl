@@ -159,6 +159,22 @@ function getindex(s::AnnotatedString, i::Integer)
     end
 end
 
+# To make `AnnotatedString`s repr-evaluable, we need to override
+# the generic `AbstractString` 2-arg show method.
+
+function show(io::IO, s::A) where {A <: AnnotatedString}
+    show(io, A)
+    print(io, '(')
+    show(io, s.string)
+    print(io, ", ")
+    show(IOContext(io, :typeinfo => typeof(annotations(s))), annotations(s))
+    print(io, ')')
+end
+
+# But still use the generic `AbstractString` fallback for the 3-arg show.
+show(io::IO, ::MIME"text/plain", s::AnnotatedString) =
+    invoke(show, Tuple{IO, AbstractString}, io, s)
+
 ## AbstractChar interface ##
 
 ncodeunits(c::AnnotatedChar) = ncodeunits(c.char)

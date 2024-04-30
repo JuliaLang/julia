@@ -2547,7 +2547,7 @@ function require_stdlib(uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
         run_package_callbacks(uuidkey)
     else
         # if the user deleted their bundled depot, next try to load it completely normally
-        newm = _require(uuidkey)
+        newm = _require_prelocked(uuidkey)
     end
     return newm
     end

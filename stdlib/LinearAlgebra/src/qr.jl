@@ -535,6 +535,13 @@ function ldiv!(A::QRCompactWY{T}, B::AbstractMatrix{T}) where {T}
     return B
 end
 
+function rank(A::QRPivoted; atol::Real=0, rtol::Real=min(size(A)...) * eps(real(float(one(eltype(A.Q))))) * iszero(atol))
+    m = min(size(A)...)
+    m == 0 && return 0
+    tol = max(atol, rtol*abs(A.R[1,1]))
+    return something(findfirst(i -> abs(A.R[i,i]) <= tol, 1:m), m+1) - 1
+end
+
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractMatrix{T}, rcond::Real) where {T<:BlasFloat}
     require_one_based_indexing(B)

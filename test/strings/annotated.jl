@@ -58,6 +58,10 @@
                              (3:3, :val => 2)])),
              Base.AnnotatedString("abc", [(1:2, :val => 1),
                                   (2:3, :val => 2)]))
+    @test chopprefix(sprint(show, str), "Base.") ==
+        "AnnotatedString{String}(\"some string\", [(1:4, :thing => 0x01), (1:11, :all => 0x03), (6:11, :other => 0x02)])"
+    @test eval(Meta.parse(repr(str))) == str
+    @test sprint(show, MIME("text/plain"), str) == "\"some string\""
 end
 
 @testset "AnnotatedChar" begin

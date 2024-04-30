@@ -5725,3 +5725,6 @@ let interp = CachedConditionalInterp();
         result.linfo.def.name === :func_cached_conditional
     end == 1
 end
+
+# fieldcount on `Tuple` should constant fold, even though `.fields` not const
+@test fully_eliminated(Base.fieldcount, Tuple{Type{Tuple{Nothing, Int, Int}}})
