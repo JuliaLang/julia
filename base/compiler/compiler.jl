@@ -48,7 +48,7 @@ struct EffectsOverride
     inaccessiblememonly::Bool
     noub::Bool
     noub_if_noinbounds::Bool
-    nonoverlayed::Bool
+    consistent_overlay::Bool
 end
 function EffectsOverride(
     override::EffectsOverride =
@@ -62,7 +62,7 @@ function EffectsOverride(
     inaccessiblememonly::Bool = override.inaccessiblememonly,
     noub::Bool = override.noub,
     noub_if_noinbounds::Bool = override.noub_if_noinbounds,
-    nonoverlayed::Bool = override.nonoverlayed)
+    consistent_overlay::Bool = override.consistent_overlay)
     return EffectsOverride(
         consistent,
         effect_free,
@@ -73,7 +73,7 @@ function EffectsOverride(
         inaccessiblememonly,
         noub,
         noub_if_noinbounds,
-        nonoverlayed)
+        consistent_overlay)
 end
 const NUM_EFFECTS_OVERRIDES = 10 # sync with julia.h
 

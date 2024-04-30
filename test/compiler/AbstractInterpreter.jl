@@ -135,25 +135,28 @@ Base.@assume_effects :total totalcall(f, args...) = f(args...)
 end |> only === Nothing
 
 # override `:native_executable` to allow concrete-eval for overlay-ed methods
-Base.@assume_effects :foldable function gpucompiler384(x::Int)
-    1 < x < 20 || error("x is too big")
-    return factorial(x)
+function myfactorial(x::Int, raise)
+    res = 1
+    0 ≤ x < 20 || raise("x is too big")
+    Base.@assume_effects :terminates_locally while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
 end
-@overlay OVERLAY_MT Base.@assume_effects :foldable :nonoverlayed function gpucompiler384(x::Int)
-    1 < x < 20 || raise_on_gpu("x is too big")
-    return factorial(x)
-end
-@noinline raise_on_gpu(x) = #=do something with GPU=# error(x)
-call_gpucompiler384(x) = gpucompiler384(x)
+raise_on_gpu1(x) = error(x)
+@overlay OVERLAY_MT @noinline raise_on_gpu1(x) = #=do something with GPU=# error(x)
+raise_on_gpu2(x) = error(x)
+@overlay OVERLAY_MT @noinline Base.@assume_effects :consistent_overlay raise_on_gpu2(x) = #=do something with GPU=# error(x)
+cpu_factorial(x::Int) = myfactorial(x, error)
+gpu_factorial1(x::Int) = myfactorial(x, raise_on_gpu1)
+gpu_factorial2(x::Int) = myfactorial(x, raise_on_gpu2)
 
-@test Base.infer_effects(gpucompiler384, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
-@test Base.infer_effects(call_gpucompiler384, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
-
+@test Base.infer_effects(cpu_factorial, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
+@test Base.infer_effects(gpu_factorial1, (Int,); interp=MTOverlayInterp()) |> !Core.Compiler.is_nonoverlayed
+@test Base.infer_effects(gpu_factorial2, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_consistent_overlay
 @test Base.infer_return_type(; interp=MTOverlayInterp()) do
-    Val(gpucompiler384(3))
-end == Val{6}
-@test Base.infer_return_type(; interp=MTOverlayInterp()) do
-    Val(call_gpucompiler384(3))
+    Val(gpu_factorial2(3))
 end == Val{6}
 
 # GPUCompiler needs accurate inference through kwfunc with the overlay of `Core.throw_inexacterror`

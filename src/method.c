@@ -479,7 +479,7 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
                         li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
                         li->purity.overrides.ipo_noub = jl_unbox_bool(jl_exprarg(ma, 7));
                         li->purity.overrides.ipo_noub_if_noinbounds = jl_unbox_bool(jl_exprarg(ma, 8));
-                        li->purity.overrides.ipo_nonoverlayed = jl_unbox_bool(jl_exprarg(ma, 9));
+                        li->purity.overrides.ipo_consistent_overlay = jl_unbox_bool(jl_exprarg(ma, 9));
                     }
                 }
                 else
