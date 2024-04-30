@@ -376,13 +376,13 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA,
     # The check is only on the wrapper type, so we may extract that from a WrapperChar
     if all_in(('N', 'T', 'C'), map(_getwrapperchar, (tA, tB)))
         if tA == 'T' && tB == 'N' && A === B
-            return syrk_wrapper!(C, 'T', A, _add)
+            return syrk_wrapper!(C, oftype(tA, 'T'), A, _add)
         elseif tA == 'N' && tB == 'T' && A === B
-            return syrk_wrapper!(C, 'N', A, _add)
+            return syrk_wrapper!(C, oftype(tA, 'N'), A, _add)
         elseif tA == 'C' && tB == 'N' && A === B
-            return herk_wrapper!(C, 'C', A, _add)
+            return herk_wrapper!(C, oftype(tA, 'C'), A, _add)
         elseif tA == 'N' && tB == 'C' && A === B
-            return herk_wrapper!(C, 'N', A, _add)
+            return herk_wrapper!(C, oftype(tA, 'N'), A, _add)
         else
             return gemm_wrapper!(C, tA, tB, A, B, _add)
         end
@@ -446,18 +446,19 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar
     mA == 0 && return y
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
+    tA_ = _getwrapperchar(tA)
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
         stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
         !iszero(stride(x, 1)) && # We only check input's stride here.
-        if tA in ('N', 'T', 'C')
+        if _in(tA_, ('N', 'T', 'C'))
             return BLAS.gemv!(tA, alpha, A, x, beta, y)
-        elseif tA in ('S', 's')
+        elseif _in(tA_, ('S', 's'))
             return BLAS.symv!(tA == 'S' ? 'U' : 'L', alpha, A, x, beta, y)
-        elseif tA in ('H', 'h')
+        elseif _in(tA_, ('H', 'h'))
             return BLAS.hemv!(tA == 'H' ? 'U' : 'L', alpha, A, x, beta, y)
         end
     end
-    if tA in ('S', 's', 'H', 'h')
+    if _in(tA_, ('S', 's', 'H', 'h'))
         # re-wrap again and use plain ('N') matvec mul algorithm,
         # because _generic_matvecmul! can't handle the HermOrSym cases specifically
         return _generic_matvecmul!(y, 'N', wrap(A, tA), x, MulAddMul(α, β))
@@ -476,14 +477,15 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     mA == 0 && return y
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
+    tA_ = _getwrapperchar(tA)
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
         stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
-        stride(y, 1) == 1 && tA == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
+        stride(y, 1) == 1 && tA_ == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
         !iszero(stride(x, 1))
         BLAS.gemv!(tA, alpha, reinterpret(T, A), x, beta, reinterpret(T, y))
         return y
     else
-        Anew, ta = tA in ('S', 's', 'H', 'h') ? (wrap(A, tA), 'N') : (A, tA)
+        Anew, ta = _in(tA_, ('S', 's', 'H', 'h')) ? (wrap(A, tA), oftype(tA, 'N')) : (A, tA)
         return _generic_matvecmul!(y, ta, Anew, x, MulAddMul(α, β))
     end
 end
@@ -499,18 +501,19 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     mA == 0 && return y
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
+    tA_ = _getwrapperchar(tA)
     @views if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
         stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
-        !iszero(stride(x, 1)) && tA in ('N', 'T', 'C')
+        !iszero(stride(x, 1)) && _in(tA_, ('N', 'T', 'C'))
         xfl = reinterpret(reshape, T, x) # Use reshape here.
         yfl = reinterpret(reshape, T, y)
         BLAS.gemv!(tA, alpha, A, xfl[1, :], beta, yfl[1, :])
         BLAS.gemv!(tA, alpha, A, xfl[2, :], beta, yfl[2, :])
         return y
-    elseif tA in ('S', 's', 'H', 'h')
+    elseif _in(tA, ('S', 's', 'H', 'h'))
         # re-wrap again and use plain ('N') matvec mul algorithm,
         # because _generic_matvecmul! can't handle the HermOrSym cases specifically
-        return _generic_matvecmul!(y, 'N', wrap(A, tA), x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, oftype(tA, 'N'), wrap(A, tA), x, MulAddMul(α, β))
     else
         return _generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
     end
@@ -717,9 +720,10 @@ parameters must satisfy `length(ir_dest) == length(ir_src)` and
 See also [`copy_transpose!`](@ref) and [`copy_adjoint!`](@ref).
 """
 function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
-    if tM == 'N'
+    tM_ = _getwrapperchar(tM)
+    if tM_ == 'N'
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
-    elseif tM == 'T'
+    elseif tM_ == 'T'
         copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
     else
         copy_adjoint!(B, ir_dest, jr_dest, M, jr_src, ir_src)
@@ -748,11 +752,12 @@ range parameters must satisfy `length(ir_dest) == length(jr_src)` and
 See also [`copyto!`](@ref) and [`copy_adjoint!`](@ref).
 """
 function copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
-    if tM == 'N'
+    tM_ = _getwrapperchar(tM)
+    if tM_ == 'N'
         copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
         copyto!(B, ir_dest, jr_dest, M, jr_src, ir_src)
-        tM == 'C' && conj!(@view B[ir_dest, jr_dest])
+        tM_ == 'C' && conj!(@view B[ir_dest, jr_dest])
     end
     B
 end
@@ -765,7 +770,8 @@ end
 
 @inline function generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
                                     _add::MulAddMul = MulAddMul())
-    Anew, ta = tA in ('S', 's', 'H', 'h') ? (wrap(A, tA), 'N') : (A, tA)
+    tA_ = _getwrapperchar(tA)
+    Anew, ta = _in(tA_, ('S', 's', 'H', 'h')) ? (wrap(A, tA), oftype(tA, 'N')) : (A, tA)
     return _generic_matvecmul!(C, ta, Anew, B, _add)
 end
 
