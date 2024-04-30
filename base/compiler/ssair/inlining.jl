@@ -823,7 +823,7 @@ end
 end
 @inline function get_local_result(inf_result::InferenceResult)
     effects = inf_result.ipo_effects
-    if is_foldable_nothrow(effects)
+    if is_foldable_no_throw(effects)
         res = inf_result.result
         if isa(res, Const) && is_inlineable_constant(res.val)
             # use constant calling convention
@@ -987,7 +987,7 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
     if isa(case, ConstantCase)
         ir[SSAValue(idx)][:stmt] = case.val
     elseif isa(case, InvokeCase)
-        is_foldable_nothrow(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
+        is_foldable_no_throw(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
         isinvoke && rewrite_invoke_exprargs!(stmt)
         if stmt.head === :invoke
             stmt.args[1] = case.invoke
@@ -1379,7 +1379,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
         fully_covered &= split_fully_covered
     end
 
-    (handled_all_cases & fully_covered) || (joint_effects = Effects(joint_effects; nothrow=false))
+    (handled_all_cases & fully_covered) || (joint_effects = Effects(joint_effects; no_throw=false))
 
     if handled_all_cases
         if revisit_idx !== nothing
@@ -1561,7 +1561,7 @@ function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::Finalize
         return nothing
     end
 
-    # Only inline finalizers that are known nothrow and notls.
+    # Only inline finalizers that are known no_throw and notls.
     # This avoids having to set up state for finalizer isolation
     is_finalizer_inlineable(info.effects) || return nothing
 
@@ -1676,13 +1676,13 @@ function early_inline_special_case(
         val = type.val
         is_inlineable_constant(val) || return nothing
         if isa(f, IntrinsicFunction)
-            if is_pure_intrinsic_infer(f) && intrinsic_nothrow(f, argtypes[2:end])
+            if is_pure_intrinsic_infer(f) && intrinsic_no_throw(f, argtypes[2:end])
                 return SomeCase(quoted(val))
             end
         elseif contains_is(_PURE_BUILTINS, f)
             return SomeCase(quoted(val))
         elseif contains_is(_EFFECT_FREE_BUILTINS, f)
-            if _builtin_nothrow(optimizer_lattice(state.interp), f, argtypes[2:end], type)
+            if _builtin_no_throw(optimizer_lattice(state.interp), f, argtypes[2:end], type)
                 return SomeCase(quoted(val))
             end
         elseif f === Core.get_binding_type
@@ -1741,7 +1741,7 @@ function late_inline_special_case!(
     elseif length(argtypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
-        if isa(type, Const) && _builtin_nothrow(optimizer_lattice(state.interp), <:, Any[argtypes[3], argtypes[2]], type)
+        if isa(type, Const) && _builtin_no_throw(optimizer_lattice(state.interp), <:, Any[argtypes[3], argtypes[2]], type)
             return SomeCase(quoted(type.val))
         end
         subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])

@@ -1077,12 +1077,12 @@ function exponent(x::T) where T<:IEEEFloat
     return k - exponent_bias(T)
 end
 
-# Like exponent, but assumes the nothrow precondition. For
+# Like exponent, but assumes the no_throw precondition. For
 # internal use only. Could be written as
-# @assume_effects :nothrow exponent()
+# @assume_effects :no_throw exponent()
 # but currently this form is easier on the compiler.
 function _exponent_finite_nonzero(x::T) where T<:IEEEFloat
-    # @precond :nothrow !isnan(x) && !isinf(x) && !iszero(x)
+    # @precond :no_throw !isnan(x) && !isinf(x) && !iszero(x)
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     k = rem(xs >> significand_bits(T), Int)
     if k == 0 # x is subnormal

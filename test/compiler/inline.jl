@@ -154,8 +154,8 @@ end
 end
 
 # check that ismutabletype(type) can be fully eliminated
-f_mutable_nothrow(s::String) = Val{typeof(s).name.flags}
-@test fully_eliminated(f_mutable_nothrow, (String,))
+f_mutable_no_throw(s::String) = Val{typeof(s).name.flags}
+@test fully_eliminated(f_mutable_no_throw, (String,))
 
 # check that ifelse can be fully eliminated
 function f_ifelse(x)
@@ -348,7 +348,7 @@ end
 @test Core.Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
 @test !Core.Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
 
-# More nothrow modeling for apply_type
+# More no_throw modeling for apply_type
 f_apply_type_typeof(x) = (Ref{typeof(x)}; nothing)
 @test fully_eliminated(f_apply_type_typeof, Tuple{Any})
 @test fully_eliminated(f_apply_type_typeof, Tuple{Vector})
@@ -1216,14 +1216,14 @@ let src = code_typed1(Tuple{Int}) do x
 end
 
 # Test that we can inline a finalizer for a struct that does not otherwise escape
-@noinline nothrow_side_effect(x) =
+@noinline no_throw_side_effect(x) =
     Base.@assume_effects :total !:effect_free @ccall jl_(x::Any)::Cvoid
-@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(nothrow_side_effect, (Nothing,)))
+@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(no_throw_side_effect, (Nothing,)))
 
 mutable struct DoAllocNoEscape
     function DoAllocNoEscape()
         finalizer(new()) do this
-            nothrow_side_effect(nothing)
+            no_throw_side_effect(nothing)
         end
     end
 end
@@ -1243,7 +1243,7 @@ let src = code_typed1() do
         for i = 1:1000
             obj = DoAllocNoEscapeInter()
             finalizer(obj) do this
-                nothrow_side_effect(nothing)
+                no_throw_side_effect(nothing)
             end
         end
     end
@@ -1252,7 +1252,7 @@ end
 
 function register_finalizer!(obj)
     finalizer(obj) do this
-        nothrow_side_effect(nothing)
+        no_throw_side_effect(nothing)
     end
 end
 let src = code_typed1() do
@@ -1266,7 +1266,7 @@ end
 
 function genfinalizer(val)
     return function (this)
-        nothrow_side_effect(val)
+        no_throw_side_effect(val)
     end
 end
 let src = code_typed1() do
@@ -1322,8 +1322,8 @@ end
 mutable struct DoAllocNoEscapeSparam{T}
     x
     @inline function finalizer_sparam(d::DoAllocNoEscapeSparam{T}) where {T}
-        nothrow_side_effect(nothing)
-        nothrow_side_effect(T)
+        no_throw_side_effect(nothing)
+        no_throw_side_effect(T)
     end
     @inline function DoAllocNoEscapeSparam(x::T) where {T}
         finalizer(finalizer_sparam, new{T}(x))
@@ -1335,16 +1335,16 @@ let src = code_typed1(Tuple{Any}) do x
         end
     end
     @test count(x->isexpr(x, :static_parameter), src.code) == 0 # A bad inline might leave left-over :static_parameter
-    nnothrow_invokes = count(isinvoke(:nothrow_side_effect), src.code)
+    nno_throw_invokes = count(isinvoke(:no_throw_side_effect), src.code)
     @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) ==
-          count(iscall((src, nothrow_side_effect)), src.code) == 2 - nnothrow_invokes
+          count(iscall((src, no_throw_side_effect)), src.code) == 2 - nno_throw_invokes
     # TODO: Our effect modeling is not yet strong enough to fully eliminate this
     @test_broken count(isnew, src.code) == 0
 end
 
 # Test finalizer varargs
 function varargs_finalizer(args...)
-    nothrow_side_effect(args[1])
+    no_throw_side_effect(args[1])
 end
 mutable struct DoAllocNoEscapeNoVarargs
     function DoAllocNoEscapeNoInline()
@@ -1360,7 +1360,7 @@ end
 
 # Test noinline finalizer
 @noinline function noinline_finalizer(d)
-    nothrow_side_effect(nothing)
+    no_throw_side_effect(nothing)
 end
 mutable struct DoAllocNoEscapeNoInline
     function DoAllocNoEscapeNoInline()
@@ -1382,9 +1382,9 @@ mutable struct DoAllocNoEscapeBranch
     function DoAllocNoEscapeBranch(val::Int)
         finalizer(new(val)) do this
             if this.val > 500
-                nothrow_side_effect(this.val)
+                no_throw_side_effect(this.val)
             else
-                nothrow_side_effect(nothing)
+                no_throw_side_effect(nothing)
             end
         end
     end
@@ -1402,7 +1402,7 @@ const FINALIZATION_COUNT = Ref(0)
 init_finalization_count!() = FINALIZATION_COUNT[] = 0
 get_finalization_count() = FINALIZATION_COUNT[]
 @noinline add_finalization_count!(x) = FINALIZATION_COUNT[] += x
-@noinline Base.@assume_effects :nothrow safeprint(io::IO, x...) = (@nospecialize; print(io, x...))
+@noinline Base.@assume_effects :no_throw safeprint(io::IO, x...) = (@nospecialize; print(io, x...))
 @test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(add_finalization_count!, (Int,)))
 
 mutable struct DoAllocWithField
@@ -1658,20 +1658,20 @@ using Core.Compiler: is_declared_inline, is_declared_noinline
         @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
     end
     # Base.@assume_effects
-    let Base.@assume_effects :notaskstate f(::Any; x::Int=1) = 2x
-        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
+    let Base.@assume_effects :no_task_state f(::Any; x::Int=1) = 2x
+        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).no_task_state
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).no_task_state
     end
     # propagate multiple metadata also
-    let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
+    let @inline Base.@assume_effects :no_task_state Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
         @test is_declared_inline(only(methods(f)))
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
         @test is_declared_inline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test only(methods(f)).nospecialize == -1
         @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
-        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
+        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).no_task_state
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).no_task_state
     end
 end
 
@@ -1921,8 +1921,8 @@ let src = code_typed1((NewInstruction,Any,Any,CallInfo)) do newinst, stmt, type,
     @test count(isnew, src.code) == 1
 end
 
-# Test that inlining can still use nothrow information from concrete-eval
-# even if the result itself is too big to be inlined, and nothrow is not
+# Test that inlining can still use no_throw information from concrete-eval
+# even if the result itself is too big to be inlined, and no_throw is not
 # known without concrete-eval
 const THE_BIG_TUPLE = ntuple(identity, 1024);
 function return_the_big_tuple(err::Bool)
@@ -2146,7 +2146,7 @@ f50612(x) = UInt32(x)
 
 # move inlineable constant values into statement position during `compact!`-ion
 # so that we don't inline DCE-eligibile calls
-Base.@assume_effects :nothrow function erase_before_inlining(x, y)
+Base.@assume_effects :no_throw function erase_before_inlining(x, y)
     z = sin(y)
     if x
         return "julia"
@@ -2188,7 +2188,7 @@ function issue53062(cond)
         return -1
     end
 end
-@test !Core.Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
+@test !Core.Compiler.is_no_throw(Base.infer_effects(issue53062, (Bool,)))
 @test issue53062(false) == -1
 @test_throws MethodError issue53062(true)
 

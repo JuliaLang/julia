@@ -8084,7 +8084,7 @@ end
 @test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,)))
 @test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int)))
 
-# Test that a nothrow-globalref doesn't get outlined during lowering
+# Test that a no_throw-globalref doesn't get outlined during lowering
 module WellKnownGlobal
     global well_known = 1
 end

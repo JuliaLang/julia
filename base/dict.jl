@@ -242,7 +242,7 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
     index, sh = hashindex(key, sz)
     keys = h.keys
 
-    @assume_effects :terminates_locally :noub @inbounds while true
+    @assume_effects :terminates_locally :no_ub @inbounds while true
         isslotempty(h,index) && return -1
         if sh == h.slots[index]
             k = keys[index]
@@ -474,7 +474,7 @@ end
 
 function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
-    return index < 0 ? throw(KeyError(key)) : @assume_effects :noub @inbounds h.vals[index]::V
+    return index < 0 ? throw(KeyError(key)) : @assume_effects :no_ub @inbounds h.vals[index]::V
 end
 
 """
@@ -870,7 +870,7 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
     end
     @noinline Base.@assume_effects :effect_free :terminates_globally KeyValue.set(
         dict::PersistentDict{K, V}, key, val) where {K, V} = @inline _keyvalueset(dict, key, val)
-    @noinline Base.@assume_effects :nothrow :effect_free :terminates_globally KeyValue.set(
+    @noinline Base.@assume_effects :no_throw :effect_free :terminates_globally KeyValue.set(
         dict::PersistentDict{K, V}, key::K, val::V) where {K, V} = @inline _keyvalueset(dict, key, val)
     global function _keyvalueset(dict::PersistentDict{K, V}, key, val) where {K, V}
         trie = dict.trie
@@ -881,7 +881,7 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
     end
     @noinline Base.@assume_effects :effect_free :terminates_globally KeyValue.set(
         dict::PersistentDict{K, V}, key) where {K, V} = @inline _keyvalueset(dict, key)
-    @noinline Base.@assume_effects :nothrow :effect_free :terminates_globally KeyValue.set(
+    @noinline Base.@assume_effects :no_throw :effect_free :terminates_globally KeyValue.set(
         dict::PersistentDict{K, V}, key::K) where {K, V} = @inline _keyvalueset(dict, key)
     global function _keyvalueset(dict::PersistentDict{K, V}, key) where {K, V}
         trie = dict.trie

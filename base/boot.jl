@@ -277,12 +277,12 @@ macro _foldable_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#true,
         #=:effect_free=#true,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
-        #=:notaskstate=#true,
-        #=:inaccessiblememonly=#true,
-        #=:noub=#true,
+        #=:no_task_state=#true,
+        #=:inaccessible_mem_only=#true,
+        #=:no_ub=#true,
         #=:noub_if_noinbounds=#false))
 end
 

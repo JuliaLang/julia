@@ -2162,7 +2162,7 @@ end
 # issue #51823
 @test "include" in test_complete_context("inc", Main)[1]
 
-# REPL completions should not try to concrete-evaluate !:noub methods
+# REPL completions should not try to concrete-evaluate !:no_ub methods
 function very_unsafe_method(i::Int)
     xs = Any[]
     @inbounds xs[i]
@@ -2187,13 +2187,13 @@ for (DictT, KeyT) = Any[(Dict{Symbol,Any}, Symbol),
         effects = Base.infer_effects(getindex, (DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter())
         @test Core.Compiler.is_effect_free(effects)
         @test Core.Compiler.is_terminates(effects)
-        @test Core.Compiler.is_noub(effects)
+        @test Core.Compiler.is_no_ub(effects)
         effects = Base.infer_effects((DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter()) do d, key
             key in keys(d)
         end
         @test Core.Compiler.is_effect_free(effects)
         @test Core.Compiler.is_terminates(effects)
-        @test Core.Compiler.is_noub(effects)
+        @test Core.Compiler.is_no_ub(effects)
     end
 end
 

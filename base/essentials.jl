@@ -195,12 +195,12 @@ macro _total_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#true,
         #=:effect_free=#true,
-        #=:nothrow=#true,
+        #=:no_throw=#true,
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
-        #=:notaskstate=#true,
-        #=:inaccessiblememonly=#true,
-        #=:noub=#true,
+        #=:no_task_state=#true,
+        #=:inaccessible_mem_only=#true,
+        #=:no_ub=#true,
         #=:noub_if_noinbounds=#false))
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
@@ -208,12 +208,12 @@ macro _foldable_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#true,
         #=:effect_free=#true,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
-        #=:notaskstate=#true,
-        #=:inaccessiblememonly=#true,
-        #=:noub=#true,
+        #=:no_task_state=#true,
+        #=:inaccessible_mem_only=#true,
+        #=:no_ub=#true,
         #=:noub_if_noinbounds=#false))
 end
 # can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
@@ -221,12 +221,12 @@ macro _terminates_locally_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#false,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#false,
         #=:terminates_locally=#true,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#false,
+        #=:no_task_state=#false,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#false,
         #=:noub_if_noinbounds=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally` (supposed to be used for bootstrapping)
@@ -234,38 +234,38 @@ macro _terminates_globally_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#false,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#true,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#false,
+        #=:no_task_state=#false,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#false,
         #=:noub_if_noinbounds=#false))
 end
-# can be used in place of `@assume_effects :terminates_globally :notaskstate` (supposed to be used for bootstrapping)
-macro _terminates_globally_notaskstate_meta()
+# can be used in place of `@assume_effects :terminates_globally :no_task_state` (supposed to be used for bootstrapping)
+macro _terminates_globally_no_task_state_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#false,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#true,
-        #=:notaskstate=#true,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#false,
+        #=:no_task_state=#true,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#false,
         #=:noub_if_noinbounds=#false))
 end
-# can be used in place of `@assume_effects :terminates_globally :noub` (supposed to be used for bootstrapping)
-macro _terminates_globally_noub_meta()
+# can be used in place of `@assume_effects :terminates_globally :no_ub` (supposed to be used for bootstrapping)
+macro _terminates_globally_no_ub_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#false,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#true,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#true,
+        #=:no_task_state=#false,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#true,
         #=:noub_if_noinbounds=#false))
 end
 # can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
@@ -273,64 +273,64 @@ macro _effect_free_terminates_locally_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#true,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#false,
         #=:terminates_locally=#true,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#false,
+        #=:no_task_state=#false,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#false,
         #=:noub_if_noinbounds=#false))
 end
-# can be used in place of `@assume_effects :nothrow :noub` (supposed to be used for bootstrapping)
-macro _nothrow_noub_meta()
+# can be used in place of `@assume_effects :no_throw :no_ub` (supposed to be used for bootstrapping)
+macro _no_throw_no_ub_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#false,
-        #=:nothrow=#true,
+        #=:no_throw=#true,
         #=:terminates_globally=#false,
         #=:terminates_locally=#false,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#true,
+        #=:no_task_state=#false,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#true,
         #=:noub_if_noinbounds=#false))
 end
-# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
-macro _nothrow_meta()
+# can be used in place of `@assume_effects :no_throw` (supposed to be used for bootstrapping)
+macro _no_throw_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#false,
-        #=:nothrow=#true,
+        #=:no_throw=#true,
         #=:terminates_globally=#false,
         #=:terminates_locally=#false,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#false,
+        #=:no_task_state=#false,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#false,
         #=:noub_if_noinbounds=#false))
 end
-# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
-macro _noub_meta()
+# can be used in place of `@assume_effects :no_throw` (supposed to be used for bootstrapping)
+macro _no_ub_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#false,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#false,
         #=:terminates_locally=#false,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#true,
+        #=:no_task_state=#false,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#true,
         #=:noub_if_noinbounds=#false))
 end
-# can be used in place of `@assume_effects :notaskstate` (supposed to be used for bootstrapping)
-macro _notaskstate_meta()
+# can be used in place of `@assume_effects :no_task_state` (supposed to be used for bootstrapping)
+macro _no_task_state_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#false,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#false,
         #=:terminates_locally=#false,
-        #=:notaskstate=#true,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#false,
+        #=:no_task_state=#true,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#false,
         #=:noub_if_noinbounds=#false))
 end
 # can be used in place of `@assume_effects :noub_if_noinbounds` (supposed to be used for bootstrapping)
@@ -338,12 +338,12 @@ macro _noub_if_noinbounds_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
         #=:effect_free=#false,
-        #=:nothrow=#false,
+        #=:no_throw=#false,
         #=:terminates_globally=#false,
         #=:terminates_locally=#false,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false,
-        #=:noub=#false,
+        #=:no_task_state=#false,
+        #=:inaccessible_mem_only=#false,
+        #=:no_ub=#false,
         #=:noub_if_noinbounds=#true))
 end
 

@@ -980,7 +980,7 @@ julia> Base.fieldindex(Foo, :z, false)
 ```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
-    return err ? _fieldindex_maythrow(T, name) : _fieldindex_nothrow(T, name)
+    return err ? _fieldindex_maythrow(T, name) : _fieldindex_no_throw(T, name)
 end
 
 function _fieldindex_maythrow(T::DataType, name::Symbol)
@@ -989,7 +989,7 @@ function _fieldindex_maythrow(T::DataType, name::Symbol)
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, true)+1)
 end
 
-function _fieldindex_nothrow(T::DataType, name::Symbol)
+function _fieldindex_no_throw(T::DataType, name::Symbol)
     @_total_meta
     @noinline
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, false)+1)
@@ -1800,7 +1800,7 @@ end
 function _builtin_exception_type(interp::Core.Compiler.AbstractInterpreter,
                                  @nospecialize(f::Core.Builtin), @nospecialize(types))
     effects = _builtin_effects(interp, f, types)
-    return Core.Compiler.is_nothrow(effects) ? Union{} : Any
+    return Core.Compiler.is_no_throw(effects) ? Union{} : Any
 end
 
 check_generated_context(world::UInt) =
@@ -2146,7 +2146,7 @@ julia> Base.infer_effects(f2, (Integer,))
 This case is pretty much the same as with `f1`, but there's a key difference to note. For
 `f2`, the argument type is limited to `Int`, while the argument type is given as `Tuple{Integer}`.
 Because of this, taking into account the chance of the method error entailed by the call
-signature, the `:nothrow` bit gets tainted.
+signature, the `:no_throw` bit gets tainted.
 
 !!! warning
     The `Base.infer_effects` function should not be used from generated functions;
@@ -2170,7 +2170,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     effects = Core.Compiler.EFFECTS_TOTAL
     if _may_throw_methoderror(matches)
         # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-        effects = Core.Compiler.Effects(effects; nothrow=false)
+        effects = Core.Compiler.Effects(effects; no_throw=false)
     end
     for match in matches.matches
         match = match::Core.MethodMatch

@@ -9,25 +9,25 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
     world = frame_world(parent)
     effects = decode_effects(ci.ipo_purity_bits)
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
-        (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
+        (is_non_overlayed(interp) || is_non_overlayed(effects)))
         args = collect_const_args(argtypes, #=start=#1)
         value = try
             Core._call_in_world_total(world, args...)
         catch
-            return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, is_noub(effects)))
+            return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, is_no_ub(effects)))
         end
         return Pair{Any,Tuple{Bool,Bool}}(Const(value), (true, true))
     else
         mi = ci.def
         if is_constprop_edge_recursed(mi, parent)
-            return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
+            return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_no_throw(effects), is_no_ub(effects)))
         end
         newirsv = IRInterpretationState(interp, ci, mi, argtypes, world)
         if newirsv !== nothing
             newirsv.parent = parent
             return ir_abstract_constant_propagation(interp, newirsv)
         end
-        return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
+        return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_no_throw(effects), is_no_ub(effects)))
     end
 end
 
@@ -145,11 +145,11 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
             add_flag!(inst, flags_for_effects(effects))
         elseif head === :invoke
-            rt, (nothrow, noub) = abstract_eval_invoke_inst(interp, inst, irsv)
-            if nothrow
+            rt, (no_throw, no_ub) = abstract_eval_invoke_inst(interp, inst, irsv)
+            if no_throw
                 add_flag!(inst, IR_FLAG_NOTHROW)
             end
-            if noub
+            if no_ub
                 add_flag!(inst, IR_FLAG_NOUB)
             end
         elseif head === :throw_undef_if_not
@@ -421,17 +421,17 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
     end
 
-    nothrow = noub = true
+    no_throw = no_ub = true
     for idx = 1:length(ir.stmts)
         if ir[SSAValue(idx)][:stmt] === nothing
             # skip `nothing` statement, which might be inserted as a dummy node,
-            # e.g. by `finish_current_bb!` without explicitly marking it as `:nothrow`
+            # e.g. by `finish_current_bb!` without explicitly marking it as `:no_throw`
             continue
         end
         flag = ir[SSAValue(idx)][:flag]
-        nothrow &= has_flag(flag, IR_FLAG_NOTHROW)
-        noub &= has_flag(flag, IR_FLAG_NOUB)
-        (nothrow | noub) || break
+        no_throw &= has_flag(flag, IR_FLAG_NOTHROW)
+        no_ub &= has_flag(flag, IR_FLAG_NOUB)
+        (no_throw | no_ub) || break
     end
 
     if last(irsv.valid_worlds) >= get_world_counter()
@@ -440,7 +440,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         store_backedges(frame_instance(irsv), irsv.edges)
     end
 
-    return Pair{Any,Tuple{Bool,Bool}}(maybe_singleton_const(ultimate_rt), (nothrow, noub))
+    return Pair{Any,Tuple{Bool,Bool}}(maybe_singleton_const(ultimate_rt), (no_throw, no_ub))
 end
 
 function ir_abstract_constant_propagation(interp::NativeInterpreter, irsv::IRInterpretationState)

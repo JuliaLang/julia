@@ -265,7 +265,7 @@ end
 
 function is_result_constabi_eligible(result::InferenceResult)
     result_type = result.result
-    return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
+    return isa(result_type, Const) && is_foldable_no_throw(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
 function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
                       can_discard_trees::Bool=may_discard_trees(interp))
@@ -431,22 +431,22 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     if is_effect_overridden(override, :effect_free)
         ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
     end
-    if is_effect_overridden(override, :nothrow)
-        ipo_effects = Effects(ipo_effects; nothrow=true)
+    if is_effect_overridden(override, :no_throw)
+        ipo_effects = Effects(ipo_effects; no_throw=true)
     end
     if is_effect_overridden(override, :terminates_globally)
         ipo_effects = Effects(ipo_effects; terminates=true)
     end
-    if is_effect_overridden(override, :notaskstate)
-        ipo_effects = Effects(ipo_effects; notaskstate=true)
+    if is_effect_overridden(override, :no_task_state)
+        ipo_effects = Effects(ipo_effects; no_task_state=true)
     end
-    if is_effect_overridden(override, :inaccessiblememonly)
-        ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
+    if is_effect_overridden(override, :inaccessible_mem_only)
+        ipo_effects = Effects(ipo_effects; inaccessible_mem_only=ALWAYS_TRUE)
     end
-    if is_effect_overridden(override, :noub)
-        ipo_effects = Effects(ipo_effects; noub=ALWAYS_TRUE)
-    elseif is_effect_overridden(override, :noub_if_noinbounds) && ipo_effects.noub !== ALWAYS_TRUE
-        ipo_effects = Effects(ipo_effects; noub=NOUB_IF_NOINBOUNDS)
+    if is_effect_overridden(override, :no_ub)
+        ipo_effects = Effects(ipo_effects; no_ub=ALWAYS_TRUE)
+    elseif is_effect_overridden(override, :noub_if_noinbounds) && ipo_effects.no_ub !== ALWAYS_TRUE
+        ipo_effects = Effects(ipo_effects; no_ub=NOUB_IF_NOINBOUNDS)
     end
     return ipo_effects
 end
@@ -466,12 +466,12 @@ function adjust_effects(sv::InferenceState)
     if sv.exc_bestguess === Bottom
         # if the exception type of this frame is known to be `Bottom`,
         # this frame is known to be safe
-        ipo_effects = Effects(ipo_effects; nothrow=true)
+        ipo_effects = Effects(ipo_effects; no_throw=true)
     end
     if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv, #=include_va=#true)) do i::Int
             return is_mutation_free_argtype(sv.slottypes[i])
         end
-        ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
+        ipo_effects = Effects(ipo_effects; inaccessible_mem_only=ALWAYS_TRUE)
     end
     if is_consistent_if_notreturned(ipo_effects) && is_identity_free_argtype(rt)
         # in a case when the :consistent-cy here is only tainted by mutable allocations
@@ -480,21 +480,21 @@ function adjust_effects(sv::InferenceState)
         consistent = ipo_effects.consistent & ~CONSISTENT_IF_NOTRETURNED
         ipo_effects = Effects(ipo_effects; consistent)
     end
-    if is_consistent_if_inaccessiblememonly(ipo_effects)
-        if is_inaccessiblememonly(ipo_effects)
-            consistent = ipo_effects.consistent & ~CONSISTENT_IF_INACCESSIBLEMEMONLY
+    if is_consistent_if_inaccessible_mem_only(ipo_effects)
+        if is_inaccessible_mem_only(ipo_effects)
+            consistent = ipo_effects.consistent & ~CONSISTENT_IF_INACCESSIBLE_MEM_ONLY
             ipo_effects = Effects(ipo_effects; consistent)
         elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
-        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+        else # `:inaccessible_mem_only` is already tainted, there will be no chance to refine this
             ipo_effects = Effects(ipo_effects; consistent=ALWAYS_FALSE)
         end
     end
-    if is_effect_free_if_inaccessiblememonly(ipo_effects)
-        if is_inaccessiblememonly(ipo_effects)
-            effect_free = ipo_effects.effect_free & ~EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+    if is_effect_free_if_inaccessible_mem_only(ipo_effects)
+        if is_inaccessible_mem_only(ipo_effects)
+            effect_free = ipo_effects.effect_free & ~EFFECT_FREE_IF_INACCESSIBLE_MEM_ONLY
             ipo_effects = Effects(ipo_effects; effect_free)
         elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
-        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+        else # `:inaccessible_mem_only` is already tainted, there will be no chance to refine this
             ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_FALSE)
         end
     end
@@ -509,7 +509,7 @@ function adjust_effects(sv::InferenceState)
 end
 
 function refine_exception_type(@nospecialize(exc_bestguess), ipo_effects::Effects)
-    ipo_effects.nothrow && return Bottom
+    ipo_effects.no_throw && return Bottom
     return exc_bestguess
 end
 

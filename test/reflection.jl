@@ -1054,19 +1054,19 @@ end
     let effects = Base.infer_effects(maybe_effectful, (Any,)) # union split
         @test !Core.Compiler.is_consistent(effects)
         @test !Core.Compiler.is_effect_free(effects)
-        @test !Core.Compiler.is_nothrow(effects)
+        @test !Core.Compiler.is_no_throw(effects)
         @test !Core.Compiler.is_terminates(effects)
-        @test !Core.Compiler.is_nonoverlayed(effects)
+        @test !Core.Compiler.is_non_overlayed(effects)
     end
     # should account for MethodError
-    @test Base.infer_effects(issue41694, (Float64,)) |> !Core.Compiler.is_nothrow # definitive dispatch error
-    @test Base.infer_effects(issue41694, (Integer,)) |> !Core.Compiler.is_nothrow # possible dispatch error
-    @test Base.infer_effects(f_no_methods) |> !Core.Compiler.is_nothrow # no possible matching methods
-    @test Base.infer_effects(ambig_effects_test, (Int,Int)) |> !Core.Compiler.is_nothrow # ambiguity error
-    @test Base.infer_effects(ambig_effects_test, (Int,Any)) |> !Core.Compiler.is_nothrow # ambiguity error
+    @test Base.infer_effects(issue41694, (Float64,)) |> !Core.Compiler.is_no_throw # definitive dispatch error
+    @test Base.infer_effects(issue41694, (Integer,)) |> !Core.Compiler.is_no_throw # possible dispatch error
+    @test Base.infer_effects(f_no_methods) |> !Core.Compiler.is_no_throw # no possible matching methods
+    @test Base.infer_effects(ambig_effects_test, (Int,Int)) |> !Core.Compiler.is_no_throw # ambiguity error
+    @test Base.infer_effects(ambig_effects_test, (Int,Any)) |> !Core.Compiler.is_no_throw # ambiguity error
     # builtins
-    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_foldable_nothrow
-    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_nothrow
+    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_foldable_no_throw
+    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_no_throw
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
     @test (Base.infer_effects(Core.Intrinsics.mul_int, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end

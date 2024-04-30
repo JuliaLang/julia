@@ -487,7 +487,7 @@ CodeInfo(
     incorrect answers, or other hard to track bugs). Use with care and only as a
     last resort if absolutely required. Even in such a case, you SHOULD take all
     possible steps to minimize the strength of the effect assertion (e.g.,
-    do not use `:total` if `:nothrow` would have been sufficient).
+    do not use `:total` if `:no_throw` would have been sufficient).
 
 In general, each `setting` value makes an assertion about the behavior of the
 function, without requiring the compiler to prove that this behavior is indeed
@@ -498,12 +498,12 @@ assumption (which would cause undefined behavior).
 The following `setting`s are supported.
 - `:consistent`
 - `:effect_free`
-- `:nothrow`
+- `:no_throw`
 - `:terminates_globally`
 - `:terminates_locally`
-- `:notaskstate`
-- `:inaccessiblememonly`
-- `:noub`
+- `:no_task_state`
+- `:inaccessible_mem_only`
+- `:no_ub`
 - `:noub_if_noinbounds`
 - `:foldable`
 - `:removable`
@@ -577,22 +577,22 @@ were not executed.
     valid for all world ages and limit use of this assertion accordingly.
 
 ---
-## `:nothrow`
+## `:no_throw`
 
-The `:nothrow` settings asserts that this method does not throw an exception
+The `:no_throw` settings asserts that this method does not throw an exception
 (i.e. will either always return a value or never return).
 
 !!! note
-    It is permissible for `:nothrow` annotated methods to make use of exception
+    It is permissible for `:no_throw` annotated methods to make use of exception
     handling internally as long as the exception is not rethrown out of the
     method itself.
 
 !!! note
     If the execution of a method may raise `MethodError`s and similar exceptions, then
-    the method is not considered as `:nothrow`.
+    the method is not considered as `:no_throw`.
     However, note that environment-dependent errors like `StackOverflowError` or `InterruptException`
     are not modeled by this effect and thus a method that may result in `StackOverflowError`
-    does not necessarily need to be `!:nothrow` (although it should usually be `!:terminates` too).
+    does not necessarily need to be `!:no_throw` (although it should usually be `!:terminates` too).
 
 ---
 ## `:terminates_globally`
@@ -621,22 +621,22 @@ non-termination if the method calls some other method that does not terminate.
     `:terminates_globally` implies `:terminates_locally`.
 
 ---
-## `:notaskstate`
+## `:no_task_state`
 
-The `:notaskstate` setting asserts that the method does not use or modify the
+The `:no_task_state` setting asserts that the method does not use or modify the
 local task state (task local storage, RNG state, etc.) and may thus be safely
 moved between tasks without observable results.
 
 !!! note
     The implementation of exception handling makes use of state stored in the
     task object. However, this state is currently not considered to be within
-    the scope of `:notaskstate` and is tracked separately using the `:nothrow`
+    the scope of `:no_task_state` and is tracked separately using the `:no_throw`
     effect.
 
 !!! note
-    The `:notaskstate` assertion concerns the state of the *currently running task*.
+    The `:no_task_state` assertion concerns the state of the *currently running task*.
     If a reference to a `Task` object is obtained by some other means that
-    does not consider which task is *currently* running, the `:notaskstate`
+    does not consider which task is *currently* running, the `:no_task_state`
     effect need not be tainted. This is true, even if said task object happens
     to be `===` to the currently running task.
 
@@ -644,13 +644,13 @@ moved between tasks without observable results.
     Access to task state usually also results in the tainting of other effects,
     such as `:effect_free` (if task state is modified) or `:consistent` (if
     task state is used in the computation of the result). In particular,
-    code that is not `:notaskstate`, but is `:effect_free` and `:consistent`
+    code that is not `:no_task_state`, but is `:effect_free` and `:consistent`
     may still be dead-code-eliminated and thus promoted to `:total`.
 
 ---
-## `:inaccessiblememonly`
+## `:inaccessible_mem_only`
 
-The `:inaccessiblememonly` setting asserts that the method does not access or modify
+The `:inaccessible_mem_only` setting asserts that the method does not access or modify
 externally accessible mutable memory. This means the method can access or modify mutable
 memory for newly allocated objects that is not accessible by other methods or top-level
 execution before return from the method, but it can not access or modify any mutable
@@ -663,12 +663,12 @@ global state or mutable memory pointed to by its arguments.
     - `setfield!` call that changes a field of a global mutable variable
 
 !!! note
-    This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
+    This `:inaccessible_mem_only` assertion covers any other methods called by the annotated method.
 
 ---
-## `:noub`
+## `:no_ub`
 
-The `:noub` setting asserts that the method will not execute any undefined behavior
+The `:no_ub` setting asserts that the method will not execute any undefined behavior
 (for any input). Note that undefined behavior may technically cause the method to violate
 any other effect assertions (such as `:consistent` or `:effect_free`) as well, but we do
 not model this, and they assume the absence of undefined behavior.
@@ -682,10 +682,10 @@ currently equivalent to the following `setting`s:
 - `:consistent`
 - `:effect_free`
 - `:terminates_globally`
-- `:noub`
+- `:no_ub`
 
 !!! note
-    This list in particular does not include `:nothrow`. The compiler will still
+    This list in particular does not include `:no_throw`. The compiler will still
     attempt constant propagation and note any thrown error at compile time. Note
     however, that by the `:consistent`-cy requirements, any such annotated call
     must consistently throw given the same argument values.
@@ -701,7 +701,7 @@ This setting is a convenient shortcut for the set of effects that the compiler
 requires to be guaranteed to delete a call whose result is unused at compile time.
 It is currently equivalent to the following `setting`s:
 - `:effect_free`
-- `:nothrow`
+- `:no_throw`
 - `:terminates_globally`
 
 ---
@@ -711,11 +711,11 @@ This `setting` is the maximum possible set of effects. It currently implies
 the following other `setting`s:
 - `:consistent`
 - `:effect_free`
-- `:nothrow`
+- `:no_throw`
 - `:terminates_globally`
-- `:notaskstate`
-- `:inaccessiblememonly`
-- `:noub`
+- `:no_task_state`
+- `:inaccessible_mem_only`
+- `:no_ub`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -730,7 +730,7 @@ the following other `setting`s:
 ## Negated effects
 
 Effect names may be prefixed by `!` to indicate that the effect should be removed
-from an earlier meta effect. For example, `:total !:nothrow` indicates that while
+from an earlier meta effect. For example, `:total !:no_throw` indicates that while
 the call is generally total, it may however throw.
 """
 macro assume_effects(args...)
@@ -779,41 +779,41 @@ function compute_assumed_setting(override::EffectsOverride, @nospecialize(settin
         return EffectsOverride(override; consistent = val)
     elseif setting === :effect_free
         return EffectsOverride(override; effect_free = val)
-    elseif setting === :nothrow
-        return EffectsOverride(override; nothrow = val)
+    elseif setting === :no_throw || setting === :nothrow
+        return EffectsOverride(override; no_throw = val)
     elseif setting === :terminates_globally
         return EffectsOverride(override; terminates_globally = val)
     elseif setting === :terminates_locally
         return EffectsOverride(override; terminates_locally = val)
-    elseif setting === :notaskstate
-        return EffectsOverride(override; notaskstate = val)
-    elseif setting === :inaccessiblememonly
-        return EffectsOverride(override; inaccessiblememonly = val)
-    elseif setting === :noub
-        return EffectsOverride(override; noub = val)
+    elseif setting === :no_task_state || setting === :notaskstate
+        return EffectsOverride(override; no_task_state = val)
+    elseif setting === :inaccessible_mem_only || setting === :inaccessiblememonly
+        return EffectsOverride(override; inaccessible_mem_only = val)
+    elseif setting === :no_ub || setting === :noub
+        return EffectsOverride(override; no_ub = val)
     elseif setting === :noub_if_noinbounds
         return EffectsOverride(override; noub_if_noinbounds = val)
     elseif setting === :foldable
-        consistent = effect_free = terminates_globally = noub = val
-        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub)
+        consistent = effect_free = terminates_globally = no_ub = val
+        return EffectsOverride(override; consistent, effect_free, terminates_globally, no_ub)
     elseif setting === :removable
-        effect_free = nothrow = terminates_globally = val
-        return EffectsOverride(override; effect_free, nothrow, terminates_globally)
+        effect_free = no_throw = terminates_globally = val
+        return EffectsOverride(override; effect_free, no_throw, terminates_globally)
     elseif setting === :total
-        consistent = effect_free = nothrow = terminates_globally = notaskstate =
-            inaccessiblememonly = noub = val
+        consistent = effect_free = no_throw = terminates_globally = no_task_state =
+            inaccessible_mem_only = no_ub = val
         return EffectsOverride(override;
-            consistent, effect_free, nothrow, terminates_globally, notaskstate,
-            inaccessiblememonly, noub)
+            consistent, effect_free, no_throw, terminates_globally, no_task_state,
+            inaccessible_mem_only, no_ub)
     end
     return nothing
 end
 
 function form_purity_expr(override::EffectsOverride)
     return Expr(:purity,
-        override.consistent, override.effect_free, override.nothrow,
-        override.terminates_globally, override.terminates_locally, override.notaskstate,
-        override.inaccessiblememonly, override.noub, override.noub_if_noinbounds)
+        override.consistent, override.effect_free, override.no_throw,
+        override.terminates_globally, override.terminates_locally, override.no_task_state,
+        override.inaccessible_mem_only, override.no_ub, override.noub_if_noinbounds)
 end
 
 """

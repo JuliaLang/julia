@@ -66,7 +66,7 @@ mutable struct HAMT{K, V}
     HAMT{K, V}() where {K, V} = new{K,V}(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 0), zero(BITMAP))
 end
 
-Base.@assume_effects :nothrow :effect_free function init_hamt(K, V, k, v)
+Base.@assume_effects :no_throw :effect_free function init_hamt(K, V, k, v)
     # For a single element we can't have a 'hash-collision
     trie = HAMT{K,V}(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 1), zero(BITMAP))
     trie.data[1] = Leaf{K,V}(k,v)
@@ -155,7 +155,7 @@ as the current `level`.
 If a copy function is provided `copyf` use the return `top` for the
 new persistent tree.
 """
-@inline @Base.assume_effects :noub :terminates_locally function path(trie::HAMT{K,V}, key, h::HashState, copy=false) where {K, V}
+@inline @Base.assume_effects :no_ub :terminates_locally function path(trie::HAMT{K,V}, key, h::HashState, copy=false) where {K, V}
     if copy
         trie = top = HAMT{K,V}(Base.copy(trie.data), trie.bitmap)
     else
@@ -173,7 +173,7 @@ new persistent tree.
             end
             if copy
                 next = HAMT{K,V}(Base.copy(next.data), next.bitmap)
-                # :noub because entry_index is guaranteed to be inbounds for trie.data
+                # :no_ub because entry_index is guaranteed to be inbounds for trie.data
                 @inbounds trie.data[i] = next
             end
             trie = next::HAMT{K,V}

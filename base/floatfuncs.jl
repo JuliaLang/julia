@@ -307,7 +307,7 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             return aandbfinite ? c : abhi+c
         end
         (iszero(a) || iszero(b)) && return abhi+c
-        # The checks above satisfy exponent's nothrow precondition
+        # The checks above satisfy exponent's no_throw precondition
         bias = Math._exponent_finite_nonzero(a) + Math._exponent_finite_nonzero(b)
         c_denorm = ldexp(c, -bias)
         if isfinite(c_denorm)

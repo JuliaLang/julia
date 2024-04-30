@@ -723,7 +723,7 @@ function finish_phi_nest!(compact::IncrementalCompact, nest::PhiNest)
                 # Replace Core.ifelse(%cond, %a, %b) with %a
                 compact[lf.ssa] = only_result
 
-                # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
+                # Note: Core.ifelse(%cond, %a, %b) has observable effects (!no_throw), but since
                 # we have not deleted the preceding statement that this was derived from, this
                 # replacement is safe, i.e. it will not affect the effects observed.
                 continue
@@ -1066,7 +1066,7 @@ end
 #  %Targ = apply_type(Foo, ft)
 #  %x    = new(%Targ, %farg)
 #
-# and if possible refines the nothrowness of the new expr based on it.
+# and if possible refines the no_throwness of the new expr based on it.
 function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::Int,
                               @nospecialize(Targ), @nospecialize(farg))
     isa(Targ, SSAValue) || return false
@@ -1104,13 +1104,13 @@ function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompa
     if has_flag(inst, IR_FLAGS_REMOVABLE)
         return # already accurate
     end
-    (consistent, removable, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
+    (consistent, removable, no_throw) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
     if consistent
         add_flag!(inst, IR_FLAG_CONSISTENT)
     end
     if removable
         add_flag!(inst, IR_FLAGS_REMOVABLE)
-    elseif nothrow
+    elseif no_throw
         add_flag!(inst, IR_FLAG_NOTHROW)
     end
     return nothing
@@ -1537,7 +1537,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     return true
 end
 
-is_nothrow(ir::IRCode, ssa::SSAValue) = has_flag(ir[ssa], IR_FLAG_NOTHROW)
+is_no_throw(ir::IRCode, ssa::SSAValue) = has_flag(ir[ssa], IR_FLAG_NOTHROW)
 
 function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Union{Nothing,Int} = nothing)
     worklist = Int[from_bb]
@@ -1568,7 +1568,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     #    uses and the finalizer registration block. The insertion block must
     #    be dominated by the finalizer registration block.
     # 4. The path from the finalizer registration to the finalizer inlining
-    #    location is nothrow
+    #    location is no_throw
     #
     # TODO: We could relax item 3, by inlining the finalizer multiple times.
 
@@ -1625,11 +1625,11 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
             reachable_blocks(ir.cfg, finalizer_bb, bb_insert_block)
 
         # Check #4
-        function check_range_nothrow(ir::IRCode, s::Int, e::Int)
+        function check_range_no_throw(ir::IRCode, s::Int, e::Int)
             return all(s:e) do sidx::Int
                 sidx == finalizer_idx && return true
                 sidx == idx && return true
-                return is_nothrow(ir, SSAValue(sidx))
+                return is_no_throw(ir, SSAValue(sidx))
             end
         end
         for bb in blocks
@@ -1642,7 +1642,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
             if bb == finalizer_bb
                 s = finalizer_idx
             end
-            check_range_nothrow(ir, s, e) || return nothing
+            check_range_no_throw(ir, s, e) || return nothing
         end
     end
 
@@ -1852,13 +1852,13 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 idx == newidx && continue # this is allocation
                 # verify this statement won't throw, otherwise it can't be eliminated safely
                 ssa = SSAValue(idx)
-                if is_nothrow(ir, ssa)
+                if is_no_throw(ir, ssa)
                     ir[ssa][:stmt] = nothing
                 else
                     # We can't eliminate this statement, because it might still
                     # throw an error, but we can mark it as effect-free since we
                     # know we have removed all uses of the mutable allocation.
-                    # As a result, if we ever do prove nothrow, we can delete
+                    # As a result, if we ever do prove no_throw, we can delete
                     # this statement then.
                     add_flag!(ir[ssa], IR_FLAG_EFFECT_FREE)
                 end

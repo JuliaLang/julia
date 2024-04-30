@@ -25,8 +25,8 @@ using ._TOP_MOD:     # Base definitions
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
     Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
-    argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
-    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
+    argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_no_throw,
+    is_meta_expr_head, isbitstype, isexpr, println, setfield!_no_throw, singleton_type,
     try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
@@ -978,7 +978,7 @@ end
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
-is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
+is_no_throw(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
 # something like below: it essentially incorporates forward escape propagation in our default
@@ -1137,18 +1137,18 @@ function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
         #     # TODO add `FinalizerEscape` ?
         # end
     end
-    # NOTE array allocations might have been proven as nothrow (https://github.com/JuliaLang/julia/pull/43565)
-    nothrow = is_nothrow(astate.ir, pc)
-    name_info = nothrow ? ⊥ : ThrownEscape(pc)
+    # NOTE array allocations might have been proven as no_throw (https://github.com/JuliaLang/julia/pull/43565)
+    no_throw = is_no_throw(astate.ir, pc)
+    name_info = no_throw ? ⊥ : ThrownEscape(pc)
     add_escape_change!(astate, name, name_info)
     add_liveness_change!(astate, name, pc)
     for i = 1:nargs
         # we should escape this argument if it is directly called,
-        # otherwise just impose ThrownEscape if not nothrow
+        # otherwise just impose ThrownEscape if not no_throw
         if argtypes[i] === Any
             arg_info = ⊤
         else
-            arg_info = nothrow ? ⊥ : ThrownEscape(pc)
+            arg_info = no_throw ? ⊥ : ThrownEscape(pc)
         end
         add_escape_change!(astate, args[5+i], arg_info)
         add_liveness_change!(astate, args[5+i], pc)
@@ -1174,7 +1174,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
             arg = args[i]
             push!(argtypes, isexpr(arg, :call) ? Any : argextype(arg, ir))
         end
-        if intrinsic_nothrow(f, argtypes)
+        if intrinsic_no_throw(f, argtypes)
             add_liveness_changes!(astate, pc, args, 2)
         else
             add_fallback_changes!(astate, pc, args, 2)
@@ -1193,7 +1193,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
         # we escape statements with the `ThrownEscape` property using the effect-freeness
         # computed by `stmt_effect_flags` invoked within inlining
         # TODO throwness ≠ "effect-free-ness"
-        if is_nothrow(astate.ir, pc)
+        if is_no_throw(astate.ir, pc)
             add_liveness_changes!(astate, pc, args, 2)
         else
             add_fallback_changes!(astate, pc, args, 2)
@@ -1300,7 +1300,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
             add_liveness_change!(astate, arg, pc)
         end
     end
-    if !is_nothrow(astate.ir, pc)
+    if !is_no_throw(astate.ir, pc)
         add_thrown_escapes!(astate, pc, args)
     end
 end
@@ -1453,12 +1453,12 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     # also propagate escape information imposed on the return value of this `setfield!`
     ssainfo = estate[SSAValue(pc)]
     add_escape_change!(astate, val, ssainfo)
-    # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
+    # compute the throwness of this setfield! call here since builtin_no_throw doesn't account for that
     @label add_thrown_escapes
-    if length(args) == 4 && setfield!_nothrow(astate.𝕃ₒ,
+    if length(args) == 4 && setfield!_no_throw(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
         return true
-    elseif length(args) == 3 && setfield!_nothrow(astate.𝕃ₒ,
+    elseif length(args) == 3 && setfield!_no_throw(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir))
         return true
     else

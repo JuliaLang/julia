@@ -127,7 +127,7 @@ This internal macro converts:
 - `getindex(xs::Tuple, i::Int)` -> `__safe_getindex(xs, i)`
 - `setindex!(xs::Vector{T}, x, i::Int)` -> `__safe_setindex!(xs, x, i)`
 to tell the compiler that indexing operations within the applied expression are always
-inbounds and do not need to taint `:consistent` and `:nothrow`.
+inbounds and do not need to taint `:consistent` and `:no_throw`.
 """
 macro _safeindex(ex)
     return esc(_safeindex(ex))
@@ -350,7 +350,7 @@ copy
 @eval function copy(a::Array{T}) where {T}
     # `jl_genericmemory_copy_slice` only throws when the size exceeds the max allocation
     # size, but since we're copying an existing array, we're guaranteed that this will not happen.
-    @_nothrow_meta
+    @_no_throw_meta
     ref = a.ref
     newmem = ccall(:jl_genericmemory_copy_slice, Ref{Memory{T}}, (Any, Ptr{Cvoid}, Int), ref.mem, ref.ptr_or_offset, length(a))
     return $(Expr(:new, :(typeof(a)), :(Core.memoryref(newmem)), :(a.size)))
@@ -980,9 +980,9 @@ function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     return A
 end
 
-__safe_setindex!(A::Vector{Any}, @nospecialize(x), i::Int) = (@inline; @_nothrow_noub_meta;
+__safe_setindex!(A::Vector{Any}, @nospecialize(x), i::Int) = (@inline; @_no_throw_no_ub_meta;
     memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
-__safe_setindex!(A::Vector{T}, x::T, i::Int) where {T} = (@inline; @_nothrow_noub_meta;
+__safe_setindex!(A::Vector{T}, x::T, i::Int) where {T} = (@inline; @_no_throw_no_ub_meta;
     memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
 __safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
     __safe_setindex!(A, convert(T, x)::T, i))
@@ -1043,7 +1043,7 @@ end
 array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
 
 function _growbeg!(a::Vector, delta::Integer)
-    @_noub_meta
+    @_no_ub_meta
     delta = Int(delta)
     delta == 0 && return # avoid attempting to index off the end
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
@@ -1087,7 +1087,7 @@ function _growbeg!(a::Vector, delta::Integer)
 end
 
 function _growend!(a::Vector, delta::Integer)
-    @_noub_meta
+    @_no_ub_meta
     delta = Int(delta)
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
@@ -1131,7 +1131,7 @@ function _growend!(a::Vector, delta::Integer)
 end
 
 function _growat!(a::Vector, i::Integer, delta::Integer)
-    @_terminates_globally_noub_meta
+    @_terminates_globally_no_ub_meta
     delta = Int(delta)
     i = Int(i)
     i == 1 && return _growbeg!(a, delta)
@@ -1734,11 +1734,11 @@ julia> insert!(Any[1:6;], 3, "here")
 ```
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
-    @_noub_meta
+    @_no_ub_meta
     # Throw convert error before changing the shape of the array
     _item = item isa T ? item : convert(T, item)::T
     _growat!(a, i, 1)
-    # :noub, because _growat! already did bound check
+    # :no_ub, because _growat! already did bound check
     @inbounds a[i] = _item
     return a
 end

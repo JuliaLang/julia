@@ -328,7 +328,7 @@ add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->B
 end
 add_tfunc(Core.ifelse, 3, 3, ifelse_tfunc, 1)
 
-@nospecs function ifelse_nothrow(𝕃::AbstractLattice, cond, x, y)
+@nospecs function ifelse_no_throw(𝕃::AbstractLattice, cond, x, y)
     ⊑ = partialorder(𝕃)
     return cond ⊑ Bool
 end
@@ -370,14 +370,14 @@ end
 end
 add_tfunc(===, 2, 2, egal_tfunc, 1)
 
-function isdefined_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
+function isdefined_no_throw(𝕃::AbstractLattice, argtypes::Vector{Any})
     if length(argtypes) ≠ 2
-        # TODO prove nothrow when ordering is specified
+        # TODO prove no_throw when ordering is specified
         return false
     end
-    return isdefined_nothrow(𝕃, argtypes[1], argtypes[2])
+    return isdefined_no_throw(𝕃, argtypes[1], argtypes[2])
 end
-@nospecs function isdefined_nothrow(𝕃::AbstractLattice, x, name)
+@nospecs function isdefined_no_throw(𝕃::AbstractLattice, x, name)
     ⊑ = partialorder(𝕃)
     isvarargtype(x) && return false
     isvarargtype(name) && return false
@@ -445,7 +445,7 @@ end
 
 add_tfunc(isdefined, 2, 3, isdefined_tfunc, 1)
 
-function sizeof_nothrow(@nospecialize(x))
+function sizeof_no_throw(@nospecialize(x))
     if isa(x, Const)
         if !isa(x.val, Type) || x.val === DataType
             return true
@@ -453,8 +453,8 @@ function sizeof_nothrow(@nospecialize(x))
     end
     xu = unwrap_unionall(x)
     if isa(xu, Union)
-        return sizeof_nothrow(rewrap_unionall(xu.a, x)) &&
-               sizeof_nothrow(rewrap_unionall(xu.b, x))
+        return sizeof_no_throw(rewrap_unionall(xu.a, x)) &&
+               sizeof_no_throw(rewrap_unionall(xu.b, x))
     end
     t, exact, isconcrete = instanceof_tfunc(x, false)
     if t === Bottom
@@ -590,7 +590,7 @@ add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVec
     end
     return TypeVar
 end
-@nospecs function typebound_nothrow(𝕃::AbstractLattice, b)
+@nospecs function typebound_no_throw(𝕃::AbstractLattice, b)
     ⊑ = partialorder(𝕃)
     b = widenconst(b)
     (b ⊑ TypeVar) && return true
@@ -599,11 +599,11 @@ end
     end
     return false
 end
-@nospecs function typevar_nothrow(𝕃::AbstractLattice, n, lb, ub)
+@nospecs function typevar_no_throw(𝕃::AbstractLattice, n, lb, ub)
     ⊑ = partialorder(𝕃)
     n ⊑ Symbol || return false
-    typebound_nothrow(𝕃, lb) || return false
-    typebound_nothrow(𝕃, ub) || return false
+    typebound_no_throw(𝕃, lb) || return false
+    typebound_no_throw(𝕃, ub) || return false
     return true
 end
 add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
@@ -728,7 +728,7 @@ end
 add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 5)
 
-@nospecs function compilerbarrier_nothrow(setting, val)
+@nospecs function compilerbarrier_no_throw(setting, val)
     return isa(setting, Const) && contains_is((:type, :const, :conditional), setting.val)
 end
 
@@ -808,7 +808,7 @@ add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
 end
 add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
 
-@nospecs function typeassert_nothrow(𝕃::AbstractLattice, v, t)
+@nospecs function typeassert_no_throw(𝕃::AbstractLattice, v, t)
     ⊑ = partialorder(𝕃)
     # ty, exact = instanceof_tfunc(t, true)
     # return exact && v ⊑ ty
@@ -854,7 +854,7 @@ end
 end
 add_tfunc(isa, 2, 2, isa_tfunc, 1)
 
-@nospecs function isa_nothrow(𝕃::AbstractLattice, obj, typ)
+@nospecs function isa_no_throw(𝕃::AbstractLattice, obj, typ)
     ⊑ = partialorder(𝕃)
     return typ ⊑ Type
 end
@@ -877,7 +877,7 @@ end
 end
 add_tfunc(<:, 2, 2, subtype_tfunc, 10)
 
-@nospecs function subtype_nothrow(𝕃::AbstractLattice, lty, rty)
+@nospecs function subtype_no_throw(𝕃::AbstractLattice, lty, rty)
     ⊑ = partialorder(𝕃)
     return lty ⊑ Type && rty ⊑ Type
 end
@@ -950,7 +950,7 @@ function getfield_boundscheck(argtypes::Vector{Any})
     return :unsafe
 end
 
-function getfield_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, boundscheck::Symbol=getfield_boundscheck(argtypes))
+function getfield_no_throw(𝕃::AbstractLattice, argtypes::Vector{Any}, boundscheck::Symbol=getfield_boundscheck(argtypes))
     boundscheck === :unsafe && return false
     ordering = Const(:not_atomic)
     if length(argtypes) == 3
@@ -969,9 +969,9 @@ function getfield_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, boundsch
     if ordering !== :not_atomic # TODO: this is assuming not atomic
         return false
     end
-    return getfield_nothrow(𝕃, argtypes[1], argtypes[2], !(boundscheck === :off))
+    return getfield_no_throw(𝕃, argtypes[1], argtypes[2], !(boundscheck === :off))
 end
-@nospecs function getfield_nothrow(𝕃::AbstractLattice, s00, name, boundscheck::Bool)
+@nospecs function getfield_no_throw(𝕃::AbstractLattice, s00, name, boundscheck::Bool)
     # If we don't have boundscheck off and don't know the field, don't even bother
     if boundscheck
         isa(name, Const) || return false
@@ -1009,8 +1009,8 @@ end
     s0 = widenconst(s00)
     s = unwrap_unionall(s0)
     if isa(s, Union)
-        return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
-               getfield_nothrow(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
+        return getfield_no_throw(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
+               getfield_no_throw(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
     elseif isType(s) && isTypeDataType(s.parameters[1])
         s = s0 = DataType
     end
@@ -1279,16 +1279,16 @@ function _mutability_errorcheck(@nospecialize objt0)
     return true
 end
 
-@nospecs function setfield!_nothrow(𝕃::AbstractLattice, s00, name, v, order)
-    order === Const(:not_atomic) || return false # currently setfield!_nothrow is assuming not atomic
-    return setfield!_nothrow(𝕃, s00, name, v)
+@nospecs function setfield!_no_throw(𝕃::AbstractLattice, s00, name, v, order)
+    order === Const(:not_atomic) || return false # currently setfield!_no_throw is assuming not atomic
+    return setfield!_no_throw(𝕃, s00, name, v)
 end
-@nospecs function setfield!_nothrow(𝕃::AbstractLattice, s00, name, v)
+@nospecs function setfield!_no_throw(𝕃::AbstractLattice, s00, name, v)
     s0 = widenconst(s00)
     s = unwrap_unionall(s0)
     if isa(s, Union)
-        return setfield!_nothrow(𝕃, rewrap_unionall(s.a, s00), name, v) &&
-               setfield!_nothrow(𝕃, rewrap_unionall(s.b, s00), name, v)
+        return setfield!_no_throw(𝕃, rewrap_unionall(s.a, s00), name, v) &&
+               setfield!_no_throw(𝕃, rewrap_unionall(s.b, s00), name, v)
     elseif isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
@@ -1409,7 +1409,7 @@ add_tfunc(modifyfield!, 4, 5, modifyfield!_tfunc, 3)
 add_tfunc(replacefield!, 4, 6, replacefield!_tfunc, 3)
 add_tfunc(setfieldonce!, 3, 5, setfieldonce!_tfunc, 3)
 
-@nospecs function fieldtype_nothrow(𝕃::AbstractLattice, s0, name)
+@nospecs function fieldtype_no_throw(𝕃::AbstractLattice, s0, name)
     s0 === Bottom && return true # unreachable
     ⊑ = partialorder(𝕃)
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
@@ -1425,20 +1425,20 @@ add_tfunc(setfieldonce!, 3, 5, setfieldonce!_tfunc, 3)
 
     su = unwrap_unionall(s0)
     if isa(su, Union)
-        return fieldtype_nothrow(𝕃, rewrap_unionall(su.a, s0), name) &&
-               fieldtype_nothrow(𝕃, rewrap_unionall(su.b, s0), name)
+        return fieldtype_no_throw(𝕃, rewrap_unionall(su.a, s0), name) &&
+               fieldtype_no_throw(𝕃, rewrap_unionall(su.b, s0), name)
     end
 
     s, exact = instanceof_tfunc(s0, false)
     s === Bottom && return false # always
-    return _fieldtype_nothrow(s, exact, name)
+    return _fieldtype_no_throw(s, exact, name)
 end
 
-function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
+function _fieldtype_no_throw(@nospecialize(s), exact::Bool, name::Const)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        a = _fieldtype_nothrow(u.a, exact, name)
-        b = _fieldtype_nothrow(u.b, exact, name)
+        a = _fieldtype_no_throw(u.a, exact, name)
+        b = _fieldtype_no_throw(u.b, exact, name)
         return exact ? (a || b) : (a && b)
     end
     u isa DataType || return false
@@ -1607,7 +1607,7 @@ valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 
-function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
+function apply_type_no_throw(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     rt === Type && return false
     length(argtypes) >= 1 || return false
     headtypetype = argtypes[1]
@@ -2118,7 +2118,7 @@ end
     return true
 end
 
-function memoryref_builtin_common_nothrow(argtypes::Vector{Any})
+function memoryref_builtin_common_no_throw(argtypes::Vector{Any})
     if length(argtypes) == 1
         memtype = widenconst(argtypes[1])
         return memtype ⊑ GenericMemory
@@ -2146,7 +2146,7 @@ function memoryref_builtin_common_nothrow(argtypes::Vector{Any})
     end
 end
 
-function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize f)
+function memoryrefop_builtin_common_no_throw(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize f)
     ismemoryset = f === memoryrefset!
     nargs = ismemoryset ? 4 : 3
     length(argtypes) == nargs || return false
@@ -2177,20 +2177,20 @@ end
 end
 
 # Query whether the given builtin is guaranteed not to throw given the argtypes
-@nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
+@nospecs function _builtin_no_throw(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
     ⊑ = partialorder(𝕃)
     if f === memoryref
-        return memoryref_builtin_common_nothrow(argtypes)
+        return memoryref_builtin_common_no_throw(argtypes)
     elseif f === memoryrefoffset
         length(argtypes) == 1 || return false
         memtype = widenconst(argtypes[1])
         return memtype ⊑ GenericMemoryRef
     elseif f === memoryrefset!
-        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
+        return memoryrefop_builtin_common_no_throw(𝕃, argtypes, f)
     elseif f === memoryrefget
-        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
+        return memoryrefop_builtin_common_no_throw(𝕃, argtypes, f)
     elseif f === memoryref_isassigned
-        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
+        return memoryrefop_builtin_common_no_throw(𝕃, argtypes, f)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
@@ -2202,59 +2202,59 @@ end
     (na ≠ 0 && isvarargtype(argtypes[end])) && return false
     if f === Core._typevar
         na == 3 || return false
-        return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
+        return typevar_no_throw(𝕃, argtypes[1], argtypes[2], argtypes[3])
     elseif f === invoke
         return false
     elseif f === getfield
-        return getfield_nothrow(𝕃, argtypes)
+        return getfield_no_throw(𝕃, argtypes)
     elseif f === setfield!
         if na == 3
-            return setfield!_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
+            return setfield!_no_throw(𝕃, argtypes[1], argtypes[2], argtypes[3])
         elseif na == 4
-            return setfield!_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3], argtypes[4])
+            return setfield!_no_throw(𝕃, argtypes[1], argtypes[2], argtypes[3], argtypes[4])
         end
         return false
     elseif f === fieldtype
         na == 2 || return false
-        return fieldtype_nothrow(𝕃, argtypes[1], argtypes[2])
+        return fieldtype_no_throw(𝕃, argtypes[1], argtypes[2])
     elseif f === apply_type
-        return apply_type_nothrow(𝕃, argtypes, rt)
+        return apply_type_no_throw(𝕃, argtypes, rt)
     elseif f === isa
         na == 2 || return false
-        return isa_nothrow(𝕃, nothing, argtypes[2])
+        return isa_no_throw(𝕃, nothing, argtypes[2])
     elseif f === (<:)
         na == 2 || return false
-        return subtype_nothrow(𝕃, argtypes[1], argtypes[2])
+        return subtype_no_throw(𝕃, argtypes[1], argtypes[2])
     elseif f === UnionAll
         return na == 2 && (argtypes[1] ⊑ TypeVar && argtypes[2] ⊑ Type)
     elseif f === isdefined
-        return isdefined_nothrow(𝕃, argtypes)
+        return isdefined_no_throw(𝕃, argtypes)
     elseif f === Core.sizeof
         na == 1 || return false
-        return sizeof_nothrow(argtypes[1])
+        return sizeof_no_throw(argtypes[1])
     elseif f === Core.ifelse
         na == 3 || return false
-        return ifelse_nothrow(𝕃, argtypes[1], nothing, nothing)
+        return ifelse_no_throw(𝕃, argtypes[1], nothing, nothing)
     elseif f === typeassert
         na == 2 || return false
-        return typeassert_nothrow(𝕃, argtypes[1], argtypes[2])
+        return typeassert_no_throw(𝕃, argtypes[1], argtypes[2])
     elseif f === getglobal
         if na == 2
-            return getglobal_nothrow(argtypes[1], argtypes[2])
+            return getglobal_no_throw(argtypes[1], argtypes[2])
         elseif na == 3
-            return getglobal_nothrow(argtypes[1], argtypes[2], argtypes[3])
+            return getglobal_no_throw(argtypes[1], argtypes[2], argtypes[3])
         end
         return false
     elseif f === setglobal!
         if na == 3
-            return setglobal!_nothrow(argtypes[1], argtypes[2], argtypes[3])
+            return setglobal!_no_throw(argtypes[1], argtypes[2], argtypes[3])
         elseif na == 4
-            return setglobal!_nothrow(argtypes[1], argtypes[2], argtypes[3], argtypes[4])
+            return setglobal!_no_throw(argtypes[1], argtypes[2], argtypes[3], argtypes[4])
         end
         return false
     elseif f === Core.get_binding_type
         na == 2 || return false
-        return get_binding_type_nothrow(𝕃, argtypes[1], argtypes[2])
+        return get_binding_type_no_throw(𝕃, argtypes[1], argtypes[2])
     elseif f === donotdelete
         return true
     elseif f === Core.finalizer
@@ -2263,12 +2263,12 @@ end
         return true
     elseif f === Core.compilerbarrier
         na == 2 || return false
-        return compilerbarrier_nothrow(argtypes[1], nothing)
+        return compilerbarrier_no_throw(argtypes[1], nothing)
     end
     return false
 end
 
-# known to be always effect-free (in particular nothrow)
+# known to be always effect-free (in particular no_throw)
 const _PURE_BUILTINS = Any[
     tuple,
     svec,
@@ -2296,7 +2296,7 @@ const _CONSISTENT_BUILTINS = Any[
     donotdelete
 ]
 
-# known to be effect-free (but not necessarily nothrow)
+# known to be effect-free (but not necessarily no_throw)
 const _EFFECT_FREE_BUILTINS = [
     fieldtype,
     apply_type,
@@ -2382,7 +2382,7 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     wobj, sym = argtypes
     wobj = unwrapva(wobj)
     sym = unwrapva(sym)
-    consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
+    consistent = CONSISTENT_IF_INACCESSIBLE_MEM_ONLY
     if is_immutable_argtype(wobj)
         consistent = ALWAYS_TRUE
     elseif isdefined_tfunc(𝕃, wobj, sym) isa Const
@@ -2390,15 +2390,15 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
         # if the object is not immutable, we can prove `:consistent`-cy of this:
         consistent = ALWAYS_TRUE
     end
-    nothrow = isdefined_nothrow(𝕃, argtypes)
+    no_throw = isdefined_no_throw(𝕃, argtypes)
     if hasintersect(widenconst(wobj), Module)
-        inaccessiblememonly = ALWAYS_FALSE
+        inaccessible_mem_only = ALWAYS_FALSE
     elseif is_mutation_free_argtype(wobj)
-        inaccessiblememonly = ALWAYS_TRUE
+        inaccessible_mem_only = ALWAYS_TRUE
     else
-        inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+        inaccessible_mem_only = INACCESSIBLEMEM_OR_ARGMEMONLY
     end
-    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
+    return Effects(EFFECTS_TOTAL; consistent, no_throw, inaccessible_mem_only)
 end
 
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
@@ -2406,57 +2406,57 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     obj = argtypes[1]
     if isvarargtype(obj)
         return Effects(EFFECTS_TOTAL;
-            consistent=CONSISTENT_IF_INACCESSIBLEMEMONLY,
-            nothrow=false,
-            inaccessiblememonly=ALWAYS_FALSE,
-            noub=ALWAYS_FALSE)
+            consistent=CONSISTENT_IF_INACCESSIBLE_MEM_ONLY,
+            no_throw=false,
+            inaccessible_mem_only=ALWAYS_FALSE,
+            no_ub=ALWAYS_FALSE)
     end
     # :consistent if the argtype is immutable
     consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
-        ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
-    noub = ALWAYS_TRUE
+        ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLE_MEM_ONLY
+    no_ub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
-    nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
-    if !nothrow
+    no_throw = getfield_no_throw(𝕃, argtypes, bcheck)
+    if !no_throw
         if bcheck !== :on
-            # If we cannot independently prove inboundsness, taint `:noub`.
+            # If we cannot independently prove inboundsness, taint `:no_ub`.
             # The inbounds-ness assertion requires dynamic reachability,
-            # while `:noub` needs to be true for all input values.
+            # while `:no_ub` needs to be true for all input values.
             # However, as a special exception, we do allow literal `:boundscheck`.
-            # `:noub` will be tainted in any caller using `@inbounds`
+            # `:no_ub` will be tainted in any caller using `@inbounds`
             # based on the `:noinbounds` effect.
             # N.B. We do not taint for `--check-bounds=no` here.
             # That is handled in concrete evaluation.
-            noub = ALWAYS_FALSE
+            no_ub = ALWAYS_FALSE
         end
     end
     if hasintersect(widenconst(obj), Module)
-        inaccessiblememonly = getglobal_effects(argtypes, rt).inaccessiblememonly
+        inaccessible_mem_only = getglobal_effects(argtypes, rt).inaccessible_mem_only
     elseif is_mutation_free_argtype(obj)
-        inaccessiblememonly = ALWAYS_TRUE
+        inaccessible_mem_only = ALWAYS_TRUE
     else
-        inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+        inaccessible_mem_only = INACCESSIBLEMEM_OR_ARGMEMONLY
     end
-    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly, noub)
+    return Effects(EFFECTS_TOTAL; consistent, no_throw, inaccessible_mem_only, no_ub)
 end
 
 function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
     2 ≤ length(argtypes) ≤ 3 || return EFFECTS_THROWS
-    consistent = inaccessiblememonly = ALWAYS_FALSE
-    nothrow = false
+    consistent = inaccessible_mem_only = ALWAYS_FALSE
+    no_throw = false
     M, s = argtypes[1], argtypes[2]
-    if (length(argtypes) == 3 ? getglobal_nothrow(M, s, argtypes[3]) : getglobal_nothrow(M, s))
-        nothrow = true
-        # typeasserts below are already checked in `getglobal_nothrow`
+    if (length(argtypes) == 3 ? getglobal_no_throw(M, s, argtypes[3]) : getglobal_no_throw(M, s))
+        no_throw = true
+        # typeasserts below are already checked in `getglobal_no_throw`
         Mval, sval = (M::Const).val::Module, (s::Const).val::Symbol
         if isconst(Mval, sval)
             consistent = ALWAYS_TRUE
             if is_mutation_free_argtype(rt)
-                inaccessiblememonly = ALWAYS_TRUE
+                inaccessible_mem_only = ALWAYS_TRUE
             end
         end
     end
-    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
+    return Effects(EFFECTS_TOTAL; consistent, no_throw, inaccessible_mem_only)
 end
 
 """
@@ -2476,8 +2476,8 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     end
 
     # if this builtin call deterministically throws,
-    # don't bother to taint the other effects other than :nothrow:
-    # note this is safe only if we accounted for :noub already
+    # don't bother to taint the other effects other than :no_throw:
+    # note this is safe only if we accounted for :no_ub already
     rt === Bottom && return EFFECTS_THROWS
 
     if f === isdefined
@@ -2493,19 +2493,19 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         setting = argtypes[1]
         return Effects(EFFECTS_TOTAL;
             consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
-            nothrow = compilerbarrier_nothrow(setting, nothing))
+            no_throw = compilerbarrier_no_throw(setting, nothing))
     elseif f === Core.current_scope
-        nothrow = true
+        no_throw = true
         if length(argtypes) != 0
             if length(argtypes) != 1 || !isvarargtype(argtypes[1])
                 return EFFECTS_THROWS
             end
-            nothrow = false
+            no_throw = false
         end
         return Effects(EFFECTS_TOTAL;
             consistent = ALWAYS_FALSE,
-            notaskstate = false,
-            nothrow
+            no_task_state = false,
+            no_throw
         )
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
@@ -2513,40 +2513,40 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         elseif f === memoryref || f === memoryrefoffset
             consistent = ALWAYS_TRUE
         elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
-            consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
+            consistent = CONSISTENT_IF_INACCESSIBLE_MEM_ONLY
         elseif f === Core._typevar
             consistent = CONSISTENT_IF_NOTRETURNED
         else
             consistent = ALWAYS_FALSE
         end
         if f === setfield! || f === memoryrefset!
-            effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+            effect_free = EFFECT_FREE_IF_INACCESSIBLE_MEM_ONLY
         elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
             effect_free = ALWAYS_TRUE
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt)
+        no_throw = (isempty(argtypes) || !isvarargtype(argtypes[end])) && builtin_no_throw(𝕃, f, argtypes, rt)
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
-            inaccessiblememonly = ALWAYS_TRUE
+            inaccessible_mem_only = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
-            inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+            inaccessible_mem_only = INACCESSIBLEMEM_OR_ARGMEMONLY
         else
-            inaccessiblememonly = ALWAYS_FALSE
+            inaccessible_mem_only = ALWAYS_FALSE
         end
         if f === memoryref || f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
-            noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
+            no_ub = memoryop_no_ub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
-            noub = ALWAYS_TRUE
+            no_ub = ALWAYS_TRUE
         end
-        return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly, noub)
+        return Effects(EFFECTS_TOTAL; consistent, effect_free, no_throw, inaccessible_mem_only, no_ub)
     end
 end
 
 
-function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
+function memoryop_no_ub(@nospecialize(f), argtypes::Vector{Any})
     nargs = length(argtypes)
-    nargs == 0 && return true # must throw and noub
+    nargs == 0 && return true # must throw and no_ub
     lastargtype = argtypes[end]
     isva = isvarargtype(lastargtype)
     if f === memoryref
@@ -2564,12 +2564,12 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     end
     if nargs == expected_nargs && !isva
         boundscheck = widenconditional(lastargtype)
-        hasintersect(widenconst(boundscheck), Bool) || return true # must throw and noub
+        hasintersect(widenconst(boundscheck), Bool) || return true # must throw and no_ub
         boundscheck isa Const && boundscheck.val === true && return true
     elseif nargs > expected_nargs + 1
-        return true # must throw and noub
+        return true # must throw and no_ub
     elseif !isva
-        return true # must throw and noub
+        return true # must throw and no_ub
     end
     return false
 end
@@ -2601,14 +2601,14 @@ end
 current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
 
 """
-    builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
+    builtin_no_throw(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
 
 Compute throw-ness of a builtin function call. `argtypes` should not include `f` itself.
 """
-function builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
+function builtin_no_throw(𝕃::AbstractLattice, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
     rt === Bottom && return false
     contains_is(_PURE_BUILTINS, f) && return true
-    return _builtin_nothrow(𝕃, f, argtypes, rt)
+    return _builtin_no_throw(𝕃, f, argtypes, rt)
 end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
@@ -2681,7 +2681,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
     return tf[3](𝕃ᵢ, argtypes...)
 end
 
-# Query whether the given intrinsic is nothrow
+# Query whether the given intrinsic is no_throw
 
 _iszero(@nospecialize x) = x === Intrinsics.xor_int(x, x)
 _isneg1(@nospecialize x) = _iszero(Intrinsics.not_int(x))
@@ -2696,7 +2696,7 @@ function builtin_exct(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes
     return Any
 end
 
-function div_nothrow(f::IntrinsicFunction, @nospecialize(arg1), @nospecialize(arg2))
+function div_no_throw(f::IntrinsicFunction, @nospecialize(arg1), @nospecialize(arg2))
     isa(arg2, Const) || return false
 
     den_val = arg2.val
@@ -2745,7 +2745,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         if !(warg1 === warg2 && isprimitivetype(warg1))
             return Union{TypeError, DivideError}
         end
-        if !div_nothrow(f, arg1, arg2)
+        if !div_no_throw(f, arg1, arg2)
             return DivideError
         end
         return Union{}
@@ -2825,7 +2825,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     return Union{}
 end
 
-function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
+function intrinsic_no_throw(f::IntrinsicFunction, argtypes::Vector{Any})
     return intrinsic_exct(SimpleInferenceLattice.instance, f, argtypes) === Union{}
 end
 
@@ -2839,8 +2839,8 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 
-# whether `f` is effect free if nothrow
-function intrinsic_effect_free_if_nothrow(@nospecialize f)
+# whether `f` is effect free if no_throw
+function intrinsic_effect_free_if_no_throw(@nospecialize f)
     return f === Intrinsics.pointerref ||
            f === Intrinsics.have_fma ||
            is_pure_intrinsic_infer(f)
@@ -2858,9 +2858,9 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         consistent = ALWAYS_TRUE
     end
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes)
-    inaccessiblememonly = ALWAYS_TRUE
-    return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
+    no_throw = (isempty(argtypes) || !isvarargtype(argtypes[end])) && intrinsic_no_throw(f, argtypes)
+    inaccessible_mem_only = ALWAYS_TRUE
+    return Effects(EFFECTS_TOTAL; consistent, effect_free, no_throw, inaccessible_mem_only)
 end
 
 # TODO: this function is a very buggy and poor model of the return_type function
@@ -3029,7 +3029,7 @@ function typename_static(@nospecialize(t))
     return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
 end
 
-function global_order_nothrow(@nospecialize(o), loading::Bool, storing::Bool)
+function global_order_no_throw(@nospecialize(o), loading::Bool, storing::Bool)
     o isa Const || return false
     sym = o.val
     if sym isa Symbol
@@ -3038,11 +3038,11 @@ function global_order_nothrow(@nospecialize(o), loading::Bool, storing::Bool)
     end
     return false
 end
-@nospecs function getglobal_nothrow(M, s, o)
-    global_order_nothrow(o, #=loading=#true, #=storing=#false) || return false
-    return getglobal_nothrow(M, s)
+@nospecs function getglobal_no_throw(M, s, o)
+    global_order_no_throw(o, #=loading=#true, #=storing=#false) || return false
+    return getglobal_no_throw(M, s)
 end
-@nospecs function getglobal_nothrow(M, s)
+@nospecs function getglobal_no_throw(M, s)
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
@@ -3104,21 +3104,21 @@ add_tfunc(Core.replaceglobal!, 4, 6, replaceglobal!_tfunc, 3)
 add_tfunc(Core.setglobalonce!, 3, 5, setglobalonce!_tfunc, 3)
 
 
-@nospecs function setglobal!_nothrow(M, s, newty, o)
-    global_order_nothrow(o, #=loading=#false, #=storing=#true) || return false
-    return setglobal!_nothrow(M, s, newty)
+@nospecs function setglobal!_no_throw(M, s, newty, o)
+    global_order_no_throw(o, #=loading=#false, #=storing=#true) || return false
+    return setglobal!_no_throw(M, s, newty)
 end
-@nospecs function setglobal!_nothrow(M, s, newty)
+@nospecs function setglobal!_no_throw(M, s, newty)
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if isa(M, Module) && isa(s, Symbol)
-            return global_assignment_nothrow(M, s, newty)
+            return global_assignment_no_throw(M, s, newty)
         end
     end
     return false
 end
 
-function global_assignment_nothrow(M::Module, s::Symbol, @nospecialize(newty))
+function global_assignment_no_throw(M::Module, s::Symbol, @nospecialize(newty))
     if !isconst(M, s)
         ty = ccall(:jl_get_binding_type, Any, (Any, Any), M, s)
         return ty isa Type && widenconst(newty) <: ty
@@ -3143,7 +3143,7 @@ end
 end
 add_tfunc(Core.get_binding_type, 2, 2, get_binding_type_tfunc, 0)
 
-@nospecs function get_binding_type_nothrow(𝕃::AbstractLattice, M, s)
+@nospecs function get_binding_type_no_throw(𝕃::AbstractLattice, M, s)
     ⊑ = partialorder(𝕃)
     return M ⊑ Module && s ⊑ Symbol
 end
@@ -3161,15 +3161,15 @@ function foreigncall_effects(@specialize(abstract_eval), e::Expr)
     name = args[1]
     isa(name, QuoteNode) && (name = name.value)
     if name === :jl_alloc_genericmemory
-        nothrow = new_genericmemory_nothrow(abstract_eval, args)
-        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
+        no_throw = new_genericmemory_no_throw(abstract_eval, args)
+        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, no_throw)
     elseif name === :jl_genericmemory_copy_slice
-        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow=false)
+        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, no_throw=false)
     end
     return EFFECTS_UNKNOWN
 end
 
-function new_genericmemory_nothrow(@nospecialize(abstract_eval), args::Vector{Any})
+function new_genericmemory_no_throw(@nospecialize(abstract_eval), args::Vector{Any})
     length(args) ≥ 1+FOREIGNCALL_ARG_START || return false
     mtype = instanceof_tfunc(abstract_eval(args[FOREIGNCALL_ARG_START]))[1]
     isa(mtype, DataType) || return false

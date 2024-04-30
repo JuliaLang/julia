@@ -104,7 +104,7 @@ function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
 end
 
-# This is @assume_effects :effect_free :nothrow :terminates_globally @ccall jl_alloc_string(n::Csize_t)::Ref{String},
+# This is @assume_effects :effect_free :no_throw :terminates_globally @ccall jl_alloc_string(n::Csize_t)::Ref{String},
 # but the macro is not available at this time in bootstrap, so we write it manually.
 @eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String}, Expr(:call, Expr(:core, :svec), :Csize_t), 1, QuoteNode((:ccall,0x000e)), :(convert(Csize_t, n))))
 
@@ -511,8 +511,8 @@ getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(
     return ss
 end
 
-# nothrow because we know the start and end indices are valid
-@assume_effects :nothrow length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+# no_throw because we know the start and end indices are valid
+@assume_effects :no_throw length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 
 # effects needed because @inbounds
 @assume_effects :consistent :effect_free @inline function length(s::String, i::Int, j::Int)

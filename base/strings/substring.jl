@@ -214,7 +214,7 @@ end
     return n
 end
 
-@assume_effects :nothrow @inline function __unsafe_string!(out, s::String, offs::Integer)
+@assume_effects :no_throw @inline function __unsafe_string!(out, s::String, offs::Integer)
     n = sizeof(s)
     GC.@preserve s out unsafe_copyto!(pointer(out, offs), pointer(s), n)
     return n
@@ -226,14 +226,14 @@ end
     return n
 end
 
-@assume_effects :nothrow @inline function __unsafe_string!(out, s::Symbol, offs::Integer)
+@assume_effects :no_throw @inline function __unsafe_string!(out, s::Symbol, offs::Integer)
     n = sizeof(s)
     GC.@preserve s out unsafe_copyto!(pointer(out, offs), unsafe_convert(Ptr{UInt8},s), n)
     return n
 end
 
-# nothrow needed here because for v in a can't prove the indexing is inbounds.
-@assume_effects :foldable :nothrow string(a::Union{Char, String, Symbol}...) = _string(a...)
+# no_throw needed here because for v in a can't prove the indexing is inbounds.
+@assume_effects :foldable :no_throw string(a::Union{Char, String, Symbol}...) = _string(a...)
 
 string(a::Union{Char, String, SubString{String}, Symbol}...) = _string(a...)
 
@@ -267,7 +267,7 @@ function _string(a::Union{Char, String, SubString{String}, Symbol}...)
 end
 
 # don't assume effects for general integers since we cannot know their implementation
-# not nothrow because r<0 throws
+# not no_throw because r<0 throws
 @assume_effects :foldable repeat(s::String, r::BitInteger) = @invoke repeat(s::String, r::Integer)
 
 function repeat(s::Union{String, SubString{String}}, r::Integer)

@@ -1838,7 +1838,7 @@ let code = Any[
 end
 
 # JuliaLang/julia#52991: statements that may not :terminate should not be deleted
-@noinline Base.@assume_effects :effect_free :nothrow function issue52991(n)
+@noinline Base.@assume_effects :effect_free :no_throw function issue52991(n)
     local s = 0
     try
         while true

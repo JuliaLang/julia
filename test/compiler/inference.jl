@@ -779,7 +779,7 @@ f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
 @test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Type{Union{Int,String}}]
 let fieldtype_tfunc(@nospecialize args...) =
         Core.Compiler.fieldtype_tfunc(Core.Compiler.fallback_lattice, args...),
-    fieldtype_nothrow(@nospecialize(s0), @nospecialize(name)) = Core.Compiler.fieldtype_nothrow(
+    fieldtype_no_throw(@nospecialize(s0), @nospecialize(name)) = Core.Compiler.fieldtype_no_throw(
         Core.Compiler.SimpleInferenceLattice.instance, s0, name)
     @test fieldtype_tfunc(Union{}, :x) == Union{}
     @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
@@ -791,22 +791,22 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
     @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Any
     @test fieldtype_tfunc(Type{<:Tuple}, Any) == Any
-    @test fieldtype_nothrow(Type{Base.RefValue{<:Real}}, Const(:x))
-    @test !fieldtype_nothrow(Type{Union{}}, Const(:x))
-    @test !fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Int32} where {T<:Real}, Const(:x))
-    @test !fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Int32}, Const(:x))
-    @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Int32}), Const(:x))
-    @test !fieldtype_nothrow(Type{Union{Base.RefValue{T}, Int32}} where {T<:Real}, Const(:x)) # improvable?
-    @test fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Type{Base.RefValue{Any}}} where {T<:Real}, Const(:x))
-    @test fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Type{Base.RefValue{Any}}}, Const(:x))
-    @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Base.RefValue{Any}}), Const(:x))
-    @test fieldtype_nothrow(Type{Union{Base.RefValue{T}, Base.RefValue{Any}}} where {T<:Real}, Const(:x))
-    @test !fieldtype_nothrow(Type{Tuple{}}, Const(1))
-    @test fieldtype_nothrow(Type{Tuple{Int}}, Const(1))
-    @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(1))
-    @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(2))
-    @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
-    @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
+    @test fieldtype_no_throw(Type{Base.RefValue{<:Real}}, Const(:x))
+    @test !fieldtype_no_throw(Type{Union{}}, Const(:x))
+    @test !fieldtype_no_throw(Union{Type{Base.RefValue{T}}, Int32} where {T<:Real}, Const(:x))
+    @test !fieldtype_no_throw(Union{Type{Base.RefValue{<:Real}}, Int32}, Const(:x))
+    @test fieldtype_no_throw(Const(Union{Base.RefValue{<:Real}, Int32}), Const(:x))
+    @test !fieldtype_no_throw(Type{Union{Base.RefValue{T}, Int32}} where {T<:Real}, Const(:x)) # improvable?
+    @test fieldtype_no_throw(Union{Type{Base.RefValue{T}}, Type{Base.RefValue{Any}}} where {T<:Real}, Const(:x))
+    @test fieldtype_no_throw(Union{Type{Base.RefValue{<:Real}}, Type{Base.RefValue{Any}}}, Const(:x))
+    @test fieldtype_no_throw(Const(Union{Base.RefValue{<:Real}, Base.RefValue{Any}}), Const(:x))
+    @test fieldtype_no_throw(Type{Union{Base.RefValue{T}, Base.RefValue{Any}}} where {T<:Real}, Const(:x))
+    @test !fieldtype_no_throw(Type{Tuple{}}, Const(1))
+    @test fieldtype_no_throw(Type{Tuple{Int}}, Const(1))
+    @test fieldtype_no_throw(Type{Tuple{Vararg{Int}}}, Const(1))
+    @test fieldtype_no_throw(Type{Tuple{Vararg{Int}}}, Const(2))
+    @test fieldtype_no_throw(Type{Tuple{Vararg{Int}}}, Const(42))
+    @test !fieldtype_no_throw(Type{<:Tuple{Vararg{Int}}}, Const(1))
     @test TypeVar <: fieldtype_tfunc(Any, Any)
 end
 
@@ -1524,24 +1524,24 @@ let nfields_tfunc(@nospecialize xs...) =
         Core.Compiler.nfields_tfunc(Core.Compiler.fallback_lattice, xs...)
     sizeof_tfunc(@nospecialize xs...) =
         Core.Compiler.sizeof_tfunc(Core.Compiler.fallback_lattice, xs...)
-    sizeof_nothrow(@nospecialize xs...) =
-        Core.Compiler.sizeof_nothrow(xs...)
+    sizeof_no_throw(@nospecialize xs...) =
+        Core.Compiler.sizeof_no_throw(xs...)
     @test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
     @test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
-    @test sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
-    @test sizeof_nothrow(Const(Ptr))
-    @test sizeof_nothrow(Type{Ptr})
-    @test sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
-    @test !sizeof_nothrow(Const(Tuple))
-    @test sizeof_nothrow(Type{Vector{Int}})
-    @test !sizeof_nothrow(Type{Union{Int, String}})
-    @test sizeof_nothrow(String)
-    @test !sizeof_nothrow(Type{String})
+    @test sizeof_no_throw(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
+    @test sizeof_no_throw(Const(Ptr))
+    @test sizeof_no_throw(Type{Ptr})
+    @test sizeof_no_throw(Type{Union{Ptr{Int}, Int}})
+    @test !sizeof_no_throw(Const(Tuple))
+    @test sizeof_no_throw(Type{Vector{Int}})
+    @test !sizeof_no_throw(Type{Union{Int, String}})
+    @test sizeof_no_throw(String)
+    @test !sizeof_no_throw(Type{String})
     @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
     let PT = Core.Compiler.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
         @test sizeof_tfunc(PT) === Const(16)
         @test nfields_tfunc(PT) === Const(2)
-        @test sizeof_nothrow(PT)
+        @test sizeof_no_throw(PT)
     end
     @test nfields_tfunc(Type) === Int
     @test nfields_tfunc(Number) === Int
@@ -1836,46 +1836,46 @@ let setfield!_tfunc(@nospecialize xs...) =
     @test setfield!_tfunc(ABCDconst, Const(2), Any) === Union{}
     @test setfield!_tfunc(ABCDconst, Const(4), Any) === Union{}
 end
-let setfield!_nothrow(@nospecialize xs...) =
-        Core.Compiler.setfield!_nothrow(Core.Compiler.SimpleInferenceLattice.instance, xs...)
-    @test setfield!_nothrow(Base.RefValue{Int}, Const(:x), Int)
-    @test setfield!_nothrow(Base.RefValue{Int}, Const(1), Int)
-    @test setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int)
-    @test setfield!_nothrow(Base.RefValue{Any}, Const(1), Int)
-    @test setfield!_nothrow(XY{Any,Any}, Const(:x), Int)
-    @test setfield!_nothrow(XY{Any,Any}, Const(:x), Any)
-    @test setfield!_nothrow(XY{Int,Float64}, Const(:x), Int)
-    @test setfield!_nothrow(ABCDconst, Const(:c), Any)
-    @test setfield!_nothrow(ABCDconst, Const(3), Any)
-    @test !setfield!_nothrow(XY{Int,Float64}, Symbol, Any)
-    @test !setfield!_nothrow(XY{Int,Float64}, Int, Any)
-    @test !setfield!_nothrow(Base.RefValue{Int}, Const(:x), Any)
-    @test !setfield!_nothrow(Base.RefValue{Int}, Const(1), Any)
-    @test !setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int, Symbol)
-    @test !setfield!_nothrow(Base.RefValue{Any}, Symbol, Int)
-    @test !setfield!_nothrow(Base.RefValue{Any}, Int, Int)
-    @test !setfield!_nothrow(XY{Int,Float64}, Const(:y), Int)
-    @test !setfield!_nothrow(XY{Int,Float64}, Symbol, Int)
-    @test !setfield!_nothrow(XY{Int,Float64}, Int, Int)
-    @test !setfield!_nothrow(ABCDconst, Const(:a), Any)
-    @test !setfield!_nothrow(ABCDconst, Const(:b), Any)
-    @test !setfield!_nothrow(ABCDconst, Const(:d), Any)
-    @test !setfield!_nothrow(ABCDconst, Symbol, Any)
-    @test !setfield!_nothrow(ABCDconst, Const(1), Any)
-    @test !setfield!_nothrow(ABCDconst, Const(2), Any)
-    @test !setfield!_nothrow(ABCDconst, Const(4), Any)
-    @test !setfield!_nothrow(ABCDconst, Int, Any)
-    @test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int)
-    @test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(:x), Int)
-    @test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int)
-    @test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(1), Int)
-    @test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int)
-    @test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Symbol, Int)
-    @test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Int, Int)
-    @test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Int, Int)
-    @test !setfield!_nothrow(Any, Symbol, Int)
-    @test !setfield!_nothrow(Any, Int, Int)
-    @test !setfield!_nothrow(Any, Any, Int)
+let setfield!_no_throw(@nospecialize xs...) =
+        Core.Compiler.setfield!_no_throw(Core.Compiler.SimpleInferenceLattice.instance, xs...)
+    @test setfield!_no_throw(Base.RefValue{Int}, Const(:x), Int)
+    @test setfield!_no_throw(Base.RefValue{Int}, Const(1), Int)
+    @test setfield!_no_throw(Base.RefValue{Any}, Const(:x), Int)
+    @test setfield!_no_throw(Base.RefValue{Any}, Const(1), Int)
+    @test setfield!_no_throw(XY{Any,Any}, Const(:x), Int)
+    @test setfield!_no_throw(XY{Any,Any}, Const(:x), Any)
+    @test setfield!_no_throw(XY{Int,Float64}, Const(:x), Int)
+    @test setfield!_no_throw(ABCDconst, Const(:c), Any)
+    @test setfield!_no_throw(ABCDconst, Const(3), Any)
+    @test !setfield!_no_throw(XY{Int,Float64}, Symbol, Any)
+    @test !setfield!_no_throw(XY{Int,Float64}, Int, Any)
+    @test !setfield!_no_throw(Base.RefValue{Int}, Const(:x), Any)
+    @test !setfield!_no_throw(Base.RefValue{Int}, Const(1), Any)
+    @test !setfield!_no_throw(Base.RefValue{Any}, Const(:x), Int, Symbol)
+    @test !setfield!_no_throw(Base.RefValue{Any}, Symbol, Int)
+    @test !setfield!_no_throw(Base.RefValue{Any}, Int, Int)
+    @test !setfield!_no_throw(XY{Int,Float64}, Const(:y), Int)
+    @test !setfield!_no_throw(XY{Int,Float64}, Symbol, Int)
+    @test !setfield!_no_throw(XY{Int,Float64}, Int, Int)
+    @test !setfield!_no_throw(ABCDconst, Const(:a), Any)
+    @test !setfield!_no_throw(ABCDconst, Const(:b), Any)
+    @test !setfield!_no_throw(ABCDconst, Const(:d), Any)
+    @test !setfield!_no_throw(ABCDconst, Symbol, Any)
+    @test !setfield!_no_throw(ABCDconst, Const(1), Any)
+    @test !setfield!_no_throw(ABCDconst, Const(2), Any)
+    @test !setfield!_no_throw(ABCDconst, Const(4), Any)
+    @test !setfield!_no_throw(ABCDconst, Int, Any)
+    @test !setfield!_no_throw(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int)
+    @test !setfield!_no_throw(Union{Base.RefValue,Some{Any}}, Const(:x), Int)
+    @test !setfield!_no_throw(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int)
+    @test !setfield!_no_throw(Union{Base.RefValue,Some{Any}}, Const(1), Int)
+    @test !setfield!_no_throw(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int)
+    @test !setfield!_no_throw(Union{Base.RefValue,Some{Any}}, Symbol, Int)
+    @test !setfield!_no_throw(Union{Base.RefValue{Any},Some{Any}}, Int, Int)
+    @test !setfield!_no_throw(Union{Base.RefValue,Some{Any}}, Int, Int)
+    @test !setfield!_no_throw(Any, Symbol, Int)
+    @test !setfield!_no_throw(Any, Int, Int)
+    @test !setfield!_no_throw(Any, Any, Int)
 end
 
 struct Foo_22708
@@ -3512,7 +3512,7 @@ let N = TypeVar(:N)
         Core.Compiler.PartialTypeVar(N, true, true),
         Core.Compiler.Const(Any)]
     rt = Type{Tuple{Vararg{Any,N}}}
-    @test Core.Compiler.apply_type_nothrow(𝕃, argtypes, rt)
+    @test Core.Compiler.apply_type_no_throw(𝕃, argtypes, rt)
 end
 
 # issue #33768
@@ -3805,7 +3805,7 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 # Issue #36710 - sizeof(::UnionAll) tfunc correctness
 @test (sizeof(Ptr),) == sizeof.((Ptr,)) == sizeof.((Ptr{Cvoid},))
 @test Core.Compiler.sizeof_tfunc(Core.Compiler.fallback_lattice, UnionAll) === Int
-@test !Core.Compiler.sizeof_nothrow(UnionAll)
+@test !Core.Compiler.sizeof_no_throw(UnionAll)
 
 @test only(Base.return_types(Core._expr)) === Expr
 @test only(Base.return_types(Core.svec, (Any,))) === Core.SimpleVector
@@ -3874,9 +3874,9 @@ f_apply_cglobal(args...) = cglobal(args...)
 @test only(Base.return_types(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}})) == Union{}
 
 # issue #37532
-@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{Int}}, Int])
-@test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{T}} where T, Ptr])
-@test !Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr}, Ptr])
+@test Core.Compiler.intrinsic_no_throw(Core.bitcast, Any[Type{Ptr{Int}}, Int])
+@test Core.Compiler.intrinsic_no_throw(Core.bitcast, Any[Type{Ptr{T}} where T, Ptr])
+@test !Core.Compiler.intrinsic_no_throw(Core.bitcast, Any[Type{Ptr}, Ptr])
 f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 @test Base.return_types(f37532, Tuple{Any, Int}) == Any[Int]
 
@@ -4957,23 +4957,23 @@ type_level_recurse_entry() = Val{type_level_recurse1(1)}()
 f_no_bail_effects_any(x::Any) = x
 f_no_bail_effects_any(x::NamedTuple{(:x,), Tuple{Any}}) = getfield(x, 1)
 g_no_bail_effects_any(x::Any) = f_no_bail_effects_any(x)
-@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
+@test Core.Compiler.is_foldable_no_throw(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
 
 # issue #48374
 @test (() -> Union{<:Nothing})() == Nothing
 
 # :static_parameter accuracy
 unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = @isdefined(T) ? T::Type : nothing
-unknown_sparam_nothrow1(x::Ref{T}) where T = @isdefined(T) ? T::Type : nothing
-unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = @isdefined(T) ? T::Type : nothing
+unknown_sparam_no_throw1(x::Ref{T}) where T = @isdefined(T) ? T::Type : nothing
+unknown_sparam_no_throw2(x::Ref{Ref{T}}) where T = @isdefined(T) ? T::Type : nothing
 @test only(Base.return_types(unknown_sparam_throw, (Type{Int},))) == Type{Int}
 @test only(Base.return_types(unknown_sparam_throw, (Type{<:Integer},))) == Type{<:Integer}
 @test only(Base.return_types(unknown_sparam_throw, (Type,))) == Union{Nothing, Type}
 @test_broken only(Base.return_types(unknown_sparam_throw, (Nothing,))) === Nothing
 @test_broken only(Base.return_types(unknown_sparam_throw, (Union{Type{Int},Nothing},))) === Union{Nothing,Type{Int}}
 @test only(Base.return_types(unknown_sparam_throw, (Any,))) === Union{Nothing,Type}
-@test only(Base.return_types(unknown_sparam_nothrow1, (Ref,))) === Type
-@test only(Base.return_types(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,))) === Type
+@test only(Base.return_types(unknown_sparam_no_throw1, (Ref,))) === Type
+@test only(Base.return_types(unknown_sparam_no_throw2, (Ref{Ref{T}} where T,))) === Type
 
 struct Issue49027{Ty<:Number}
     x::Ty
@@ -5180,7 +5180,7 @@ let 𝕃 = Core.Compiler.SimpleInferenceLattice.instance
         Union{Type{String},Type{Int}}]
     rt = Type{Issue49785{<:Any, Int}}
     # the following should not throw
-    @test !Core.Compiler.apply_type_nothrow(𝕃, argtypes, rt)
+    @test !Core.Compiler.apply_type_no_throw(𝕃, argtypes, rt)
     @test code_typed() do
         S = Union{Type{String},Type{Int}}[Int][1]
         map(T -> Issue49785{S,T}, (a = S,))
@@ -5354,7 +5354,7 @@ end
 @test Base.return_types(completely_dead_try_catch) |> only === Int
 @test fully_eliminated(completely_dead_try_catch)
 
-function nothrow_try_catch()
+function no_throw_try_catch()
     try
         1+1
     catch
@@ -5362,8 +5362,8 @@ function nothrow_try_catch()
     end
     return 1
 end
-@test Base.return_types(nothrow_try_catch) |> only === Int
-@test fully_eliminated(nothrow_try_catch)
+@test Base.return_types(no_throw_try_catch) |> only === Int
+@test fully_eliminated(no_throw_try_catch)
 
 may_error(b) = Base.inferencebarrier(b) && error()
 function phic_type1()
@@ -5566,15 +5566,15 @@ function foo_typed_throw_metherr()
 end
 @test Base.return_types(foo_typed_throw_metherr) |> only === Float64
 
-# refine `exct` when `:nothrow` is proven
-Base.@assume_effects :nothrow function sin_nothrow(x::Float64)
+# refine `exct` when `:no_throw` is proven
+Base.@assume_effects :no_throw function sin_no_throw(x::Float64)
     x == Inf && return zero(x)
     return sin(x)
 end
-@test Base.infer_exception_type(sin_nothrow, (Float64,)) == Union{}
+@test Base.infer_exception_type(sin_no_throw, (Float64,)) == Union{}
 @test Base.return_types((Float64,)) do x
     try
-        return sin_nothrow(x)
+        return sin_no_throw(x)
     catch err
         return err
     end
@@ -5584,7 +5584,7 @@ Base.@constprop :aggressive function sin_maythrow(x::Float64, maythrow::Bool)
     if maythrow
         return sin(x)
     else
-        return @noinline sin_nothrow(x)
+        return @noinline sin_no_throw(x)
     end
 end
 @test Base.return_types((Float64,)) do x

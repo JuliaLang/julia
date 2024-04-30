@@ -40,12 +40,12 @@ abstract type AbstractInterpreter end
 struct EffectsOverride
     consistent::Bool
     effect_free::Bool
-    nothrow::Bool
+    no_throw::Bool
     terminates_globally::Bool
     terminates_locally::Bool
-    notaskstate::Bool
-    inaccessiblememonly::Bool
-    noub::Bool
+    no_task_state::Bool
+    inaccessible_mem_only::Bool
+    no_ub::Bool
     noub_if_noinbounds::Bool
 end
 function EffectsOverride(
@@ -53,22 +53,22 @@ function EffectsOverride(
         EffectsOverride(false, false, false, false, false, false, false, false, false);
     consistent::Bool = override.consistent,
     effect_free::Bool = override.effect_free,
-    nothrow::Bool = override.nothrow,
+    no_throw::Bool = override.no_throw,
     terminates_globally::Bool = override.terminates_globally,
     terminates_locally::Bool = override.terminates_locally,
-    notaskstate::Bool = override.notaskstate,
-    inaccessiblememonly::Bool = override.inaccessiblememonly,
-    noub::Bool = override.noub,
+    no_task_state::Bool = override.no_task_state,
+    inaccessible_mem_only::Bool = override.inaccessible_mem_only,
+    no_ub::Bool = override.no_ub,
     noub_if_noinbounds::Bool = override.noub_if_noinbounds)
     return EffectsOverride(
         consistent,
         effect_free,
-        nothrow,
+        no_throw,
         terminates_globally,
         terminates_locally,
-        notaskstate,
-        inaccessiblememonly,
-        noub,
+        no_task_state,
+        inaccessible_mem_only,
+        no_ub,
         noub_if_noinbounds)
 end
 const NUM_EFFECTS_OVERRIDES = 9 # sync with julia.h

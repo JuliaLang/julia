@@ -33,16 +33,16 @@ const IR_FLAG_REFINED     = one(UInt32) << 4
 const IR_FLAG_CONSISTENT  = one(UInt32) << 5
 # This statement is proven :effect_free
 const IR_FLAG_EFFECT_FREE = one(UInt32) << 6
-# This statement is proven :nothrow
+# This statement is proven :no_throw
 const IR_FLAG_NOTHROW     = one(UInt32) << 7
 # This statement is proven :terminates
 const IR_FLAG_TERMINATES  = one(UInt32) << 8
-# This statement is proven :noub
+# This statement is proven :no_ub
 const IR_FLAG_NOUB        = one(UInt32) << 9
 # TODO: Both of these should eventually go away once
-# This statement is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+# This statement is :effect_free == EFFECT_FREE_IF_INACCESSIBLE_MEM_ONLY
 const IR_FLAG_EFIIMO      = one(UInt32) << 10
-# This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
+# This statement is :inaccessible_mem_only == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 11
 # This statement has no users and may be deleted if flags get refined to IR_FLAGS_REMOVABLE
 const IR_FLAG_UNUSED      = one(UInt32) << 12
@@ -65,10 +65,10 @@ function flags_for_effects(effects::Effects)
     end
     if is_effect_free(effects)
         flags |= IR_FLAG_EFFECT_FREE
-    elseif is_effect_free_if_inaccessiblememonly(effects)
+    elseif is_effect_free_if_inaccessible_mem_only(effects)
         flags |= IR_FLAG_EFIIMO
     end
-    if is_nothrow(effects)
+    if is_no_throw(effects)
         flags |= IR_FLAG_NOTHROW
     end
     if is_terminates(effects)
@@ -77,7 +77,7 @@ function flags_for_effects(effects::Effects)
     if is_inaccessiblemem_or_argmemonly(effects)
         flags |= IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
     end
-    if is_noub(effects)
+    if is_no_ub(effects)
         flags |= IR_FLAG_NOUB
     end
     return flags
@@ -290,9 +290,9 @@ end
 
 """
     stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
-        (consistent::Bool, removable::Bool, nothrow::Bool)
+        (consistent::Bool, removable::Bool, no_throw::Bool)
 
-Returns a tuple of `(:consistent, :removable, :nothrow)` flags for a given statement.
+Returns a tuple of `(:consistent, :removable, :no_throw)` flags for a given statement.
 """
 function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.
@@ -303,15 +303,15 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
-        nothrow = consistent = isdefinedconst_globalref(stmt)
-        return (consistent, nothrow, nothrow)
+        no_throw = consistent = isdefinedconst_globalref(stmt)
+        return (consistent, no_throw, no_throw)
     elseif isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
             sptypes = isa(src, IRCode) ? src.sptypes : src.ir.sptypes
-            nothrow = !sptypes[args[1]::Int].undef
-            return (true, nothrow, nothrow)
+            no_throw = !sptypes[args[1]::Int].undef
+            return (true, no_throw, no_throw)
         end
         if head === :call
             f = argextype(args[1], src)
@@ -320,8 +320,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             if f === UnionAll
                 # TODO: This is a weird special case - should be determined in inference
                 argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-                nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
-                return (true, nothrow, nothrow)
+                no_throw = _builtin_no_throw(𝕃ₒ, f, argtypes, rt)
+                return (true, no_throw, no_throw)
             end
             if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
@@ -334,10 +334,10 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             effects = builtin_effects(𝕃ₒ, f, argtypes, rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
-            nothrow = is_nothrow(effects)
+            no_throw = is_no_throw(effects)
             terminates = is_terminates(effects)
-            removable = effect_free & nothrow & terminates
-            return (consistent, removable, nothrow)
+            removable = effect_free & no_throw & terminates
+            return (consistent, removable, no_throw)
         elseif head === :new
             return new_expr_effect_flags(𝕃ₒ, args, src)
         elseif head === :foreigncall
@@ -346,10 +346,10 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             end
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
-            nothrow = is_nothrow(effects)
+            no_throw = is_no_throw(effects)
             terminates = is_terminates(effects)
-            removable = effect_free & nothrow & terminates
-            return (consistent, removable, nothrow)
+            removable = effect_free & no_throw & terminates
+            return (consistent, removable, no_throw)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
             typ = argextype(args[1], src)
@@ -379,13 +379,13 @@ end
 function recompute_effects_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt),
                                  src::Union{IRCode,IncrementalCompact})
     flag = IR_FLAG_NULL
-    (consistent, removable, nothrow) = stmt_effect_flags(𝕃ₒ, stmt, rt, src)
+    (consistent, removable, no_throw) = stmt_effect_flags(𝕃ₒ, stmt, rt, src)
     if consistent
         flag |= IR_FLAG_CONSISTENT
     end
     if removable
         flag |= IR_FLAGS_REMOVABLE
-    elseif nothrow
+    elseif no_throw
         flag |= IR_FLAG_NOTHROW
     end
     if !(isexpr(stmt, :call) || isexpr(stmt, :invoke))
@@ -594,8 +594,8 @@ mutable struct PostOptAnalysisState
     all_retpaths_consistent::Bool
     all_effect_free::Bool
     effect_free_if_argmem_only::Union{Nothing,Bool}
-    all_nothrow::Bool
-    all_noub::Bool
+    all_no_throw::Bool
+    all_no_ub::Bool
     any_conditional_ub::Bool
     function PostOptAnalysisState(result::InferenceResult, ir::IRCode)
         inconsistent = BitSetBoundedMinPrioritySet(length(ir.stmts))
@@ -609,14 +609,14 @@ end
 
 give_up_refinements!(sv::PostOptAnalysisState) =
     sv.all_retpaths_consistent = sv.all_effect_free = sv.effect_free_if_argmem_only =
-    sv.all_nothrow = sv.all_noub = false
+    sv.all_no_throw = sv.all_no_ub = false
 
 function any_refinable(sv::PostOptAnalysisState)
     effects = sv.result.ipo_effects
     return ((!is_consistent(effects) & sv.all_retpaths_consistent) |
             (!is_effect_free(effects) & sv.all_effect_free) |
-            (!is_nothrow(effects) & sv.all_nothrow) |
-            (!is_noub(effects) & sv.all_noub))
+            (!is_no_throw(effects) & sv.all_no_throw) |
+            (!is_no_ub(effects) & sv.all_no_ub))
 end
 
 struct GetNativeEscapeCache{CodeCache}
@@ -634,7 +634,7 @@ function ((; code_cache)::GetNativeEscapeCache)(mi::MethodInstance)
         return argescapes
     end
     effects = decode_effects(codeinst.ipo_purity_bits)
-    if is_effect_free(effects) && is_inaccessiblememonly(effects)
+    if is_effect_free(effects) && is_inaccessible_mem_only(effects)
         # We might not have run EA on simple frames without any escapes (e.g. when optimization
         # is skipped when result is constant-folded by abstract interpretation). If those
         # frames aren't inlined, the accuracy of EA for caller context takes a big hit.
@@ -659,15 +659,15 @@ function refine_effects!(interp::AbstractInterpreter, sv::PostOptAnalysisState)
     sv.result.ipo_effects = Effects(effects;
         consistent = sv.all_retpaths_consistent ? ALWAYS_TRUE : effects.consistent,
         effect_free = sv.all_effect_free ? ALWAYS_TRUE :
-                      sv.effect_free_if_argmem_only === true ? EFFECT_FREE_IF_INACCESSIBLEMEMONLY : effects.effect_free,
-        nothrow = sv.all_nothrow ? true : effects.nothrow,
-        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
+                      sv.effect_free_if_argmem_only === true ? EFFECT_FREE_IF_INACCESSIBLE_MEM_ONLY : effects.effect_free,
+        no_throw = sv.all_no_throw ? true : effects.no_throw,
+        no_ub = sv.all_no_ub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.no_ub)
     return true
 end
 
 function is_ipo_dataflow_analysis_profitable(effects::Effects)
     return !(is_consistent(effects) && is_effect_free(effects) &&
-             is_nothrow(effects) && is_noub(effects))
+             is_no_throw(effects) && is_no_ub(effects))
 end
 
 function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
@@ -743,7 +743,7 @@ function validate_mutable_arg_escapes!(estate::EscapeAnalysis.EscapeState, sv::P
     return true
 end
 
-function is_conditional_noub(inst::Instruction, sv::PostOptAnalysisState)
+function is_conditional_no_ub(inst::Instruction, sv::PostOptAnalysisState)
     stmt = inst[:stmt]
     iscall_with_boundscheck(stmt, sv) || return false
     barg = stmt.args[end]::SSAValue
@@ -777,13 +777,13 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
             sv.all_effect_free = false
         end
     end
-    sv.all_nothrow &= has_flag(flag, IR_FLAG_NOTHROW)
+    sv.all_no_throw &= has_flag(flag, IR_FLAG_NOTHROW)
     if !has_flag(flag, IR_FLAG_NOUB)
         # Special case: `:boundscheck` into `getfield` or memory operations is `:noub_if_noinbounds`
-        if is_conditional_noub(inst, sv)
+        if is_conditional_no_ub(inst, sv)
             sv.any_conditional_ub = true
         else
-            sv.all_noub = false
+            sv.all_no_ub = false
         end
     end
 end
@@ -1085,8 +1085,8 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         if !(i in sv.unreachable)
             if isa(expr, GotoIfNot)
                 # Replace this live GotoIfNot with:
-                # - no-op if :nothrow and the branch target is unreachable
-                # - cond if :nothrow and both targets are unreachable
+                # - no-op if :no_throw and the branch target is unreachable
+                # - cond if :no_throw and both targets are unreachable
                 # - typeassert if must-throw
                 block = block_for_inst(sv.cfg, i)
                 if ssavaluetypes[i] === Bottom

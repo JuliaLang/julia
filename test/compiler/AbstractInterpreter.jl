@@ -63,10 +63,10 @@ end |> only === Union{Float64,Nothing}
 # effect analysis should figure out that the overlayed method is used
 @test Base.infer_effects((Float64,); interp=MTOverlayInterp()) do x
     strangesin(x)
-end |> !Core.Compiler.is_nonoverlayed
+end |> !Core.Compiler.is_non_overlayed
 @test Base.infer_effects((Any,); interp=MTOverlayInterp()) do x
     @invoke strangesin(x::Float64)
-end |> !Core.Compiler.is_nonoverlayed
+end |> !Core.Compiler.is_non_overlayed
 
 # account for overlay possibility in unanalyzed matching method
 callstrange(::Float64) = strangesin(x)
@@ -77,20 +77,20 @@ let interp = MTOverlayInterp(Set{Any}())
     @test matches !== nothing
     @test Core.Compiler.length(matches) == 2
     if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
-        @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
+        @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_non_overlayed
         @test "Call inference reached maximally imprecise information. Bailing on." in interp.meta
     else
-        @warn "`nonoverlayed` test for inference bailing out is skipped since the method match sort order is changed."
+        @warn "`non_overlayed` test for inference bailing out is skipped since the method match sort order is changed."
     end
 end
 
 # but it should never apply for the native compilation
 @test Base.infer_effects((Float64,)) do x
     strangesin(x)
-end |> Core.Compiler.is_nonoverlayed
+end |> Core.Compiler.is_non_overlayed
 @test Base.infer_effects((Any,)) do x
     @invoke strangesin(x::Float64)
-end |> Core.Compiler.is_nonoverlayed
+end |> Core.Compiler.is_non_overlayed
 
 # fallback to the internal method table
 @test Base.return_types((Int,); interp=MTOverlayInterp()) do x

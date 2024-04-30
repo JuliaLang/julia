@@ -1023,13 +1023,13 @@ for f in (() -> `a b c`, () -> `a a$("bb")a $("c")`)
     effects = Base.infer_effects(f)
     @test Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_terminates(effects)
-    @test Core.Compiler.is_noub(effects)
+    @test Core.Compiler.is_no_ub(effects)
     @test !Core.Compiler.is_consistent(effects)
 end
 let effects = Base.infer_effects(x -> `a $x`, (Any,))
     @test !Core.Compiler.is_effect_free(effects)
     @test !Core.Compiler.is_terminates(effects)
-    @test !Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_no_ub(effects)
     @test !Core.Compiler.is_consistent(effects)
 end
 

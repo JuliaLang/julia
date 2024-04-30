@@ -108,7 +108,7 @@ end
     @test_throws Returns(false) throw(Returns(false))
 end
 # Test printing of Fail results
-include("nothrow_testset.jl")
+include("no_throw_testset.jl")
 
 let fails = @testset NoThrowTestSet begin
         # 1 - Fail - wrong exception
@@ -1023,7 +1023,7 @@ let code = quote
             @test fails[2] isa Test.LogTestFailure
         end
     end
-    incl = "include($(repr(joinpath(@__DIR__, "nothrow_testset.jl"))))"
+    incl = "include($(repr(joinpath(@__DIR__, "no_throw_testset.jl"))))"
     cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=yes -e 'using Test' -e $incl -e $code`
     @test success(pipeline(cmd))
 end
