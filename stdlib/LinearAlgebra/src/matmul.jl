@@ -405,7 +405,6 @@ end
 # Complex matrix times (transposed) real matrix. Reinterpret the first matrix to real for efficiency.
 Base.@constprop :aggressive function generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
                     _add::MulAddMul=MulAddMul()) where {T<:BlasReal}
-    special_cases = ('N', 'T', 'C')
     # if all(in(('N', 'T', 'C')), (tA, tB)), but we unroll the implementation to enable constprop
     # The check is only on the wrapper type, so we may extract that from a WrapperChar
     if all_in(('N', 'T', 'C'), map(_getwrapperchar, (tA, tB)))
