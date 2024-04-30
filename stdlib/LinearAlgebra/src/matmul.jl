@@ -596,7 +596,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
     return gemm_wrapper!(C, tA, tAt, A, A, _add)
 end
 
-function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
+Base.@constprop :aggressive function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
                       A::StridedVecOrMat{T},
                       B::StridedVecOrMat{T}) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
@@ -611,7 +611,7 @@ function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
     end
 end
 
-function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
+Base.@constprop :aggressive function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
                        A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                        _add = MulAddMul()) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
@@ -651,7 +651,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
 end
 
-function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
+ Base.@constprop :aggressive function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
                        A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
                        _add = MulAddMul()) where {T<:BlasReal}
     mA, nA = lapack_size(tA, A)
@@ -681,13 +681,15 @@ function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::Abs
 
     alpha, beta = promote(_add.alpha, _add.beta, zero(T))
 
+    tA_ = _getwrapperchar(tA)
+
     # Make-sure reinterpret-based optimization is BLAS-compatible.
     if (alpha isa Union{Bool,T} &&
         beta isa Union{Bool,T} &&
         stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
         stride(A, 2) >= size(A, 1) &&
         stride(B, 2) >= size(B, 1) &&
-        stride(C, 2) >= size(C, 1) && tA == 'N')
+        stride(C, 2) >= size(C, 1) && tA_ == 'N')
         BLAS.gemm!(tA, tB, alpha, reinterpret(T, A), B, beta, reinterpret(T, C))
         return C
     end
