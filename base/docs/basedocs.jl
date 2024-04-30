@@ -1057,10 +1057,13 @@ used to guarantee that an opened file is closed:
 f = open("file")
 try
     operate_on_file(f)
+catch
+    println("Zoinks!  An error occurred!)
 finally
     close(f)
 end
 ```
+(`finally` can also be used without a `catch` block.)
 """
 kw"try", kw"catch"
 
