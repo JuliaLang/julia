@@ -120,42 +120,42 @@ const latex_symbols = Dict(
     "\\ohm" => "Ω",
 
     # Music Symbols
-        # Accidentals
+    # Music Symbols - Accidentals
     "\\doubleflat" => "𝄫",
     "\\doublesharp" => "𝄪",
-        # Codas
-    "\\leftrepeatsign"=>"𝄆",
-    "\\rightrepeatsign"=>"𝄇",
-    "\\dalsegno"=>"𝄉",
-    "\\dacapo"=>"𝄊",
-    "\\segno"=>"𝄋",
-    "\\coda"=>"𝄌",
-        # Clefs
-    "\\gclef"=>"𝄞",
-    "\\gclefottavaalta"=>"𝄟",
-    "\\gclefottavabassa"=>"𝄠",
-    "\\cclef"=>"𝄡",
-    "\\fclef"=>"𝄢",
-    "\\fclefottavaalta"=>"𝄣",
-    "\\fclefottavabassa"=>"𝄤",
-        # Rests
-    "\\multirest"=>"𝄺",
-    "\\wholerest"=>"𝄻",
-    "\\halfrest"=>"𝄼",
-    "\\quarterrest"=>"𝄽",
-    "\\eighthrest"=>"𝄾",
-    "\\sixteenthrest"=>"𝄿",
-    "\\thirtysecondrest"=>"𝅀",
-    "\\sixtyfourthrest"=>"𝅁",
-    "\\onehundredtwentyeighthrest"=>"𝅂",
-        # Notes
-    "\\musicbreve"=>"𝅜",
-    "\\wholenote"=>"𝅝",
-    "\\halfnote"=>"𝅗𝅥",
-    "\\sixteenthnote"=>"𝅘𝅥𝅯",
-    "\\thirtysecondnote"=>"𝅘𝅥𝅰",
-    "\\sixtyfourthnote"=>"𝅘𝅥𝅱",
-    "\\onehundredtwentyeighthnote"=>"𝅘𝅥𝅲",
+    # Music Symbols - Codas
+    "\\leftrepeatsign" => "𝄆",
+    "\\rightrepeatsign" => "𝄇",
+    "\\dalsegno" => "𝄉",
+    "\\dacapo" => "𝄊",
+    "\\segno" => "𝄋",
+    "\\coda" => "𝄌",
+    # Music Symbols - Clefs
+    "\\gclef" => "𝄞",
+    "\\gclef8va" => "𝄟",
+    "\\gclef8vb" => "𝄠",
+    "\\cclef" => "𝄡",
+    "\\fclef" => "𝄢",
+    "\\fclef8va" => "𝄣",
+    "\\fclef8vb" => "𝄤",
+     # Music Symbols - Rests
+    "\\multirest" => "𝄺",
+    "\\wholerest" => "𝄻",
+    "\\halfrest" => "𝄼",
+    "\\quarterrest" => "𝄽",
+    "\\eighthrest" => "𝄾",
+    "\\sixteenthrest" => "𝄿",
+    "\\thirtysecondrest" => "𝅀",
+    "\\sixtyfourthrest" => "𝅁",
+    "\\onehundredtwentyeighthrest" => "𝅂",
+    # Music Symbols - Notes
+    "\\musicbreve" => "𝅜",
+    "\\wholenote" => "𝅝",
+    "\\halfnote" => "𝅗𝅥",
+    "\\sixteenthnote" => "𝅘𝅥𝅯",
+    "\\thirtysecondnote" => "𝅘𝅥𝅰",
+    "\\sixtyfourthnote" => "𝅘𝅥𝅱",
+    "\\onehundredtwentyeighthnote" => "𝅘𝅥𝅲",
 
     # Superscripts
     "\\^0" => "⁰",
