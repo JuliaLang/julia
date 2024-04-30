@@ -533,6 +533,8 @@ function Base.Char(w::WrapperChar)
 end
 Base.codepoint(w::WrapperChar) = codepoint(Char(w))
 WrapperChar(n::UInt32) = WrapperChar(Char(n), true)
+Base.uppercase(w::WrapperChar) = uppercase(w.wrapperchar)
+Base.lowercase(w::WrapperChar) = lowercase(w.wrapperchar)
 _isuppertri(w::WrapperChar) = w.isuppertri
 _isuppertri(x::AbstractChar) = isuppercase(x) # compatibility with earlier Char-based implementation
 _getuplo(x) = _isuppertri(x) ? (:U) : (:L)
@@ -545,23 +547,20 @@ wrapper_char(A::Hermitian) =  WrapperChar('H', A.uplo == 'U')
 wrapper_char(A::Hermitian{<:Real}) = WrapperChar('S', A.uplo == 'U')
 wrapper_char(A::Symmetric) = WrapperChar('S', A.uplo == 'U')
 
-_getwrapperchar(x) = x
-_getwrapperchar(x::WrapperChar) = x.wrapperchar
-
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     # merge the result of this before return, so that we can type-assert the return such
     # that even if the tmerge is inaccurate, inference can still identify that the
     # `_generic_matmatmul` signature still matches and doesn't require missing backedges
-    tAwc = _getwrapperchar(tA)
-    B = if tAwc == 'N'
+    tA_uc = uppercase(tA)
+    B = if tA_uc == 'N'
         A
-    elseif tAwc == 'T'
+    elseif tA_uc == 'T'
         transpose(A)
-    elseif tAwc == 'C'
+    elseif tA_uc == 'C'
         adjoint(A)
-    elseif tAwc ∈ ('H', 'h')
+    elseif tA_uc == 'H'
         Hermitian(A, _getuplo(tA) #= unwrap a WrapperChar =#)
-    elseif tAwc ∈ ('S', 's')
+    elseif tA_uc == 'S'
         Symmetric(A, _getuplo(tA) #= unwrap a WrapperChar =#)
     end
     return B::AbstractVecOrMat
