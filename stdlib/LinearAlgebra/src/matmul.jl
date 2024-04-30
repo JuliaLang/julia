@@ -446,19 +446,19 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar
     mA == 0 && return y
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
-    tA_ = uppercase(tA) # potentially convert a WrapperChar to a Char
+    tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
         stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
         !iszero(stride(x, 1)) && # We only check input's stride here.
-        if _in(tA_, ('N', 'T', 'C'))
+        if _in(tA_uc, ('N', 'T', 'C'))
             return BLAS.gemv!(tA, alpha, A, x, beta, y)
-        elseif tA_ == 'S'
+        elseif tA_uc == 'S'
             return BLAS.symv!(tA == 'S' ? 'U' : 'L', alpha, A, x, beta, y)
-        elseif tA_ == 'H'
+        elseif tA_uc == 'H'
             return BLAS.hemv!(tA == 'H' ? 'U' : 'L', alpha, A, x, beta, y)
         end
     end
-    if _in(tA_, ('S', 'H'))
+    if _in(tA_uc, ('S', 'H'))
         # re-wrap again and use plain ('N') matvec mul algorithm,
         # because _generic_matvecmul! can't handle the HermOrSym cases specifically
         return _generic_matvecmul!(y, oftype(tA, 'N'), wrap(A, tA), x, MulAddMul(α, β))
