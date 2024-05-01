@@ -2651,8 +2651,10 @@ function abstract_eval_throw_undef_if_not(interp::AbstractInterpreter, e::Expr, 
     return RTEffects(rt, exct, effects)
 end
 
-abstract_eval_the_exception(::AbstractInterpreter, sv::InferenceState) =
-    the_exception_info(sv.handlers[sv.handler_at[sv.currpc][2]].exct)
+function abstract_eval_the_exception(::AbstractInterpreter, sv::InferenceState)
+    (;handlers, handler_at) = sv.handler_info::HandlerInfo
+    return the_exception_info(handlers[handler_at[sv.currpc][2]].exct)
+end
 abstract_eval_the_exception(::AbstractInterpreter, ::IRInterpretationState) = the_exception_info(Any)
 the_exception_info(@nospecialize t) = RTEffects(t, Union{}, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
 
@@ -3159,22 +3161,21 @@ end
 
 function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct), frame::InferenceState)
     𝕃ₚ = ipo_lattice(interp)
-    cur_hand = frame.handler_at[frame.currpc][1]
-    if cur_hand == 0
+    handler = gethandler(frame)
+    if handler === nothing
         if !⊑(𝕃ₚ, exct, frame.exc_bestguess)
             frame.exc_bestguess = tmerge(𝕃ₚ, frame.exc_bestguess, exct)
             update_cycle_worklists!(frame) do caller::InferenceState, caller_pc::Int
-                caller_handler = caller.handler_at[caller_pc][1]
-                caller_exct = caller_handler == 0 ?
-                    caller.exc_bestguess : caller.handlers[caller_handler].exct
+                caller_handler = gethandler(caller, caller_pc)
+                caller_exct = caller_handler === nothing ?
+                    caller.exc_bestguess : caller_handler.exct
                 return caller_exct !== Any
             end
         end
     else
-        handler_frame = frame.handlers[cur_hand]
-        if !⊑(𝕃ₚ, exct, handler_frame.exct)
-            handler_frame.exct = tmerge(𝕃ₚ, handler_frame.exct, exct)
-            enter = frame.src.code[handler_frame.enter_idx]::EnterNode
+        if !⊑(𝕃ₚ, exct, handler.exct)
+            handler.exct = tmerge(𝕃ₚ, handler.exct, exct)
+            enter = frame.src.code[handler.enter_idx]::EnterNode
             exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
             push!(frame.ip, exceptbb)
         end
@@ -3184,9 +3185,9 @@ end
 function propagate_to_error_handler!(currstate::VarTable, frame::InferenceState, 𝕃ᵢ::AbstractLattice)
     # If this statement potentially threw, propagate the currstate to the
     # exception handler, BEFORE applying any state changes.
-    cur_hand = frame.handler_at[frame.currpc][1]
-    if cur_hand != 0
-        enter = frame.src.code[frame.handlers[cur_hand].enter_idx]::EnterNode
+    curr_hand = gethandler(frame)
+    if curr_hand !== nothing
+        enter = frame.src.code[curr_hand.enter_idx]::EnterNode
         exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
         if update_bbstate!(𝕃ᵢ, frame, exceptbb, currstate)
             push!(frame.ip, exceptbb)
@@ -3333,7 +3334,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     if isdefined(stmt, :scope)
                         scopet = abstract_eval_value(interp, stmt.scope, currstate, frame)
-                        handler = frame.handlers[frame.handler_at[frame.currpc+1][1]]
+                        handler = gethandler(frame, frame.currpc+1)::TryCatchFrame
                         @assert handler.scopet !== nothing
                         if !⊑(𝕃ᵢ, scopet, handler.scopet)
                             handler.scopet = tmerge(𝕃ᵢ, scopet, handler.scopet)

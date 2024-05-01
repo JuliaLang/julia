@@ -2576,13 +2576,13 @@ end
 
 function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
     pc = sv.currpc
+    handler_info = sv.handler_info
     while true
-        handleridx = sv.handler_at[pc][1]
-        if handleridx == 0
+        pchandler = gethandler(sv, pc)
+        if pchandler === nothing
             # No local scope available - inherited from the outside
             return Any
         end
-        pchandler = sv.handlers[handleridx]
         # Remember that we looked at this handler, so we get re-scheduled
         # if the scope information changes
         isdefined(pchandler, :scope_uses) || (pchandler.scope_uses = Int[])
