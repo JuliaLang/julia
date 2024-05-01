@@ -411,7 +411,7 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA,
             return BLAS.hemm!('R', tB == 'H' ? 'U' : 'L', alpha, B, A, beta, C)
         end
     end
-    return @stable_muladdmul _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
+    return _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
 end
 # legacy method
 Base.@constprop :aggressive generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
@@ -424,7 +424,7 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedVecOrMat{Compl
     if all(in(('N', 'T', 'C')), (tA, tB))
         gemm_wrapper!(C, tA, tB, A, B, α, β)
     else
-        @stable_muladdmul _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
+        _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
     end
 end
 # legacy method
@@ -635,7 +635,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         stride(C, 2) >= size(C, 1))
         return BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
     end
-    @stable_muladdmul _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
+    _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
 end
 # legacy method
 gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
@@ -668,7 +668,7 @@ function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::Abs
         BLAS.gemm!(tA, tB, alpha, reinterpret(T, A), B, beta, reinterpret(T, C))
         return C
     end
-    @stable_muladdmul _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
+    _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
 end
 # legacy method
 gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
