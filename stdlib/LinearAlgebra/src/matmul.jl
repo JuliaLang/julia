@@ -373,7 +373,7 @@ all_in(chars, (tA, tB)) = _in(tA, chars) && _in(tB, chars)
 Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                                     _add::MulAddMul=MulAddMul()) where {T<:BlasFloat}
     # if all(in(('N', 'T', 'C')), (tA, tB)), but we unroll the implementation to enable constprop
-    # We convert the chars to uppercase to potentially unwrap a WraperChar,
+    # We convert the chars to uppercase to potentially unwrap a WrapperChar,
     # and extract the char corresponding to the wrapper type
     tA_uc, tB_uc = uppercase(tA), uppercase(tB)
     if all_in(('N', 'T', 'C'), map(uppercase, (tA_uc, tB_uc)))
@@ -408,7 +408,7 @@ end
 Base.@constprop :aggressive function generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
                     _add::MulAddMul=MulAddMul()) where {T<:BlasReal}
     # if all(in(('N', 'T', 'C')), (tA, tB)), but we unroll the implementation to enable constprop
-    # We convert the chars to uppercase to potentially unwrap a WraperChar,
+    # We convert the chars to uppercase to potentially unwrap a WrapperChar,
     # and extract the char corresponding to the wrapper type
     if all_in(('N', 'T', 'C'), map(uppercase, (tA, tB)))
         gemm_wrapper!(C, tA, tB, A, B, _add)
@@ -612,7 +612,7 @@ Base.@constprop :aggressive function gemm_wrapper(tA::AbstractChar, tB::Abstract
     mB, nB = lapack_size(tB, B)
     C = similar(B, T, mA, nB)
     # if all(in(('N', 'T', 'C')), (tA, tB)), but we unroll the implementation to enable constprop
-    # We convert the chars to uppercase to potentially unwrap a WraperChar,
+    # We convert the chars to uppercase to potentially unwrap a WrapperChar,
     # and extract the char corresponding to the wrapper type
     if all_in(('N', 'T', 'C'), map(uppercase, (tA, tB)))
         gemm_wrapper!(C, tA, tB, A, B)
