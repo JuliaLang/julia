@@ -373,29 +373,31 @@ all_in(chars, (tA, tB)) = _in(tA, chars) && _in(tB, chars)
 Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                                     _add::MulAddMul=MulAddMul()) where {T<:BlasFloat}
     # if all(in(('N', 'T', 'C')), (tA, tB)), but we unroll the implementation to enable constprop
-    # The check is only on the wrapper type, so we may extract that from a WrapperChar
-    if all_in(('N', 'T', 'C'), map(uppercase, (tA, tB)))
-        if tA == 'T' && tB == 'N' && A === B
-            return syrk_wrapper!(C, oftype(tA, 'T'), A, _add)
-        elseif tA == 'N' && tB == 'T' && A === B
-            return syrk_wrapper!(C, oftype(tA, 'N'), A, _add)
-        elseif tA == 'C' && tB == 'N' && A === B
-            return herk_wrapper!(C, oftype(tA, 'C'), A, _add)
-        elseif tA == 'N' && tB == 'C' && A === B
-            return herk_wrapper!(C, oftype(tA, 'N'), A, _add)
+    # We convert the chars to uppercase to potentially unwrap a WraperChar,
+    # and extract the char corresponding to the wrapper type
+    tA_uc, tB_uc = uppercase(tA), uppercase(tB)
+    if all_in(('N', 'T', 'C'), map(uppercase, (tA_uc, tB_uc)))
+        if tA_uc == 'T' && tB_uc == 'N' && A === B
+            return syrk_wrapper!(C, 'T', A, _add)
+        elseif tA_uc == 'N' && tB_uc == 'T' && A === B
+            return syrk_wrapper!(C, 'N', A, _add)
+        elseif tA_uc == 'C' && tB_uc == 'N' && A === B
+            return herk_wrapper!(C, 'C', A, _add)
+        elseif tA_uc == 'N' && tB_uc == 'C' && A === B
+            return herk_wrapper!(C, 'N', A, _add)
         else
             return gemm_wrapper!(C, tA, tB, A, B, _add)
         end
     end
     alpha, beta = promote(_add.alpha, _add.beta, zero(T))
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
-        if uppercase(tA) == 'S' && tB == 'N'
+        if tA_uc == 'S' && tB_uc == 'N'
             return BLAS.symm!('L', tA == 'S' ? 'U' : 'L', alpha, A, B, beta, C)
-        elseif uppercase(tB) == 'S' && tA == 'N'
+        elseif tB_uc == 'S' && tA_uc == 'N'
             return BLAS.symm!('R', tB == 'S' ? 'U' : 'L', alpha, B, A, beta, C)
-        elseif uppercase(tA) == 'H' && tB == 'N'
+        elseif tA_uc == 'H' && tB_uc == 'N'
             return BLAS.hemm!('L', tA == 'H' ? 'U' : 'L', alpha, A, B, beta, C)
-        elseif uppercase(tB) == 'H' && tA == 'N'
+        elseif tB_uc == 'H' && tA_uc == 'N'
             return BLAS.hemm!('R', tB == 'H' ? 'U' : 'L', alpha, B, A, beta, C)
         end
     end
@@ -406,7 +408,8 @@ end
 Base.@constprop :aggressive function generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
                     _add::MulAddMul=MulAddMul()) where {T<:BlasReal}
     # if all(in(('N', 'T', 'C')), (tA, tB)), but we unroll the implementation to enable constprop
-    # The check is only on the wrapper type, so we may extract that from a WrapperChar
+    # We convert the chars to uppercase to potentially unwrap a WraperChar,
+    # and extract the char corresponding to the wrapper type
     if all_in(('N', 'T', 'C'), map(uppercase, (tA, tB)))
         gemm_wrapper!(C, tA, tB, A, B, _add)
     else
@@ -519,15 +522,17 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     end
 end
 
-function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T},
+# the aggressive constprop pushes tA and tB into gemm_wrapper!, which is needed for wrap calls within it
+Base.@constprop :aggressive function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T},
         _add = MulAddMul()) where {T<:BlasFloat}
     nC = checksquare(C)
-    if tA == 'T'
+    tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
+    if tA_uc == 'T'
         (nA, mA) = size(A,1), size(A,2)
-        tAt = 'N'
+        tAt = oftype(tA, 'N')
     else
         (mA, nA) = size(A,1), size(A,2)
-        tAt = 'T'
+        tAt = oftype(tA, 'T')
     end
     if nC != mA
         throw(DimensionMismatch(lazy"output matrix has size: $(nC), but should have size $(mA)"))
@@ -557,10 +562,12 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
     return gemm_wrapper!(C, tA, tAt, A, A, _add)
 end
 
-function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
+# the aggressive constprop pushes tA and tB into gemm_wrapper!, which is needed for wrap calls within it
+Base.@constprop :aggressive function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
         _add = MulAddMul()) where {T<:BlasReal}
     nC = checksquare(C)
-    if tA == 'C'
+    tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
+    if tA_uc == 'C'
         (nA, mA) = size(A,1), size(A,2)
         tAt = oftype(tA, 'N')
     else
@@ -605,8 +612,8 @@ Base.@constprop :aggressive function gemm_wrapper(tA::AbstractChar, tB::Abstract
     mB, nB = lapack_size(tB, B)
     C = similar(B, T, mA, nB)
     # if all(in(('N', 'T', 'C')), (tA, tB)), but we unroll the implementation to enable constprop
-    # The check is only on the wrapper type, so we may extract that from a WrapperChar
-    # map uppercase to potentially convert a WrapperChar to a Char
+    # We convert the chars to uppercase to potentially unwrap a WraperChar,
+    # and extract the char corresponding to the wrapper type
     if all_in(('N', 'T', 'C'), map(uppercase, (tA, tB)))
         gemm_wrapper!(C, tA, tB, A, B)
     else
@@ -729,10 +736,10 @@ parameters must satisfy `length(ir_dest) == length(ir_src)` and
 See also [`copy_transpose!`](@ref) and [`copy_adjoint!`](@ref).
 """
 function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
-    tM_ = uppercase(tM) # potentially convert a WrapperChar to a Char
-    if tM_ == 'N'
+    tM_uc = uppercase(tM) # potentially convert a WrapperChar to a Char
+    if tM_uc == 'N'
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
-    elseif tM_ == 'T'
+    elseif tM_uc == 'T'
         copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
     else
         copy_adjoint!(B, ir_dest, jr_dest, M, jr_src, ir_src)
@@ -761,12 +768,12 @@ range parameters must satisfy `length(ir_dest) == length(jr_src)` and
 See also [`copyto!`](@ref) and [`copy_adjoint!`](@ref).
 """
 function copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
-    tM_ = uppercase(tM) # potentially convert a WrapperChar to a Char
-    if tM_ == 'N'
+    tM_uc = uppercase(tM) # potentially convert a WrapperChar to a Char
+    if tM_uc == 'N'
         copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
         copyto!(B, ir_dest, jr_dest, M, jr_src, ir_src)
-        tM_ == 'C' && conj!(@view B[ir_dest, jr_dest])
+        tM_uc == 'C' && conj!(@view B[ir_dest, jr_dest])
     end
     B
 end

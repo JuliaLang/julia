@@ -519,6 +519,7 @@ export ⋅, ×
 # Separate the char corresponding to the wrapper from that corresponding to the uplo
 # In most cases, the former may be constant-propagated, while the latter usually can't be.
 # This improves type-inference in wrap for Symmetric/Hermitian matrices
+# A WrapperChar is equivalent to `isuppertri ? uppercase(wrapperchar) : lowercase(wrapperchar)`
 struct WrapperChar <: AbstractChar
     wrapperchar :: Char
     isuppertri :: Bool
@@ -533,16 +534,18 @@ function Base.Char(w::WrapperChar)
 end
 Base.codepoint(w::WrapperChar) = codepoint(Char(w))
 WrapperChar(n::UInt32) = WrapperChar(Char(n), true)
+# We extract the wrapperchar so that the result may be constant-propagated
+# This doesn't return a value of the same type on purpose
 Base.uppercase(w::WrapperChar) = uppercase(w.wrapperchar)
 Base.lowercase(w::WrapperChar) = lowercase(w.wrapperchar)
 _isuppertri(w::WrapperChar) = w.isuppertri
 _isuppertri(x::AbstractChar) = isuppercase(x) # compatibility with earlier Char-based implementation
 _getuplo(x) = _isuppertri(x) ? (:U) : (:L)
 
-wrapper_char(::AbstractArray) = WrapperChar('N')
-wrapper_char(::Adjoint) = WrapperChar('C')
-wrapper_char(::Adjoint{<:Real}) = WrapperChar('T')
-wrapper_char(::Transpose) = WrapperChar('T')
+wrapper_char(::AbstractArray) = 'N'
+wrapper_char(::Adjoint) = 'C'
+wrapper_char(::Adjoint{<:Real}) = 'T'
+wrapper_char(::Transpose) = 'T'
 wrapper_char(A::Hermitian) =  WrapperChar('H', A.uplo == 'U')
 wrapper_char(A::Hermitian{<:Real}) = WrapperChar('S', A.uplo == 'U')
 wrapper_char(A::Symmetric) = WrapperChar('S', A.uplo == 'U')
