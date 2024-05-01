@@ -464,7 +464,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar
     if _in(tA_uc, ('S', 'H'))
         # re-wrap again and use plain ('N') matvec mul algorithm,
         # because _generic_matvecmul! can't handle the HermOrSym cases specifically
-        return _generic_matvecmul!(y, oftype(tA, 'N'), wrap(A, tA), x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, 'N', wrap(A, tA), x, MulAddMul(α, β))
     else
         return _generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
     end
@@ -516,7 +516,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     elseif _in(tA_uc, ('S', 'H'))
         # re-wrap again and use plain ('N') matvec mul algorithm,
         # because _generic_matvecmul! can't handle the HermOrSym cases specifically
-        return _generic_matvecmul!(y, oftype(tA, 'N'), wrap(A, tA), x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, 'N', wrap(A, tA), x, MulAddMul(α, β))
     else
         return _generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
     end
@@ -530,10 +530,10 @@ Base.@constprop :aggressive function syrk_wrapper!(C::StridedMatrix{T}, tA::Abst
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     if tA_uc == 'T'
         (nA, mA) = size(A,1), size(A,2)
-        tAt = oftype(tA, 'N')
+        tAt = 'N'
     else
         (mA, nA) = size(A,1), size(A,2)
-        tAt = oftype(tA, 'T')
+        tAt = 'T'
     end
     if nC != mA
         throw(DimensionMismatch(lazy"output matrix has size: $(nC), but should have size $(mA)"))
@@ -571,10 +571,10 @@ Base.@constprop :aggressive function herk_wrapper!(C::Union{StridedMatrix{T}, St
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     if tA_uc == 'C'
         (nA, mA) = size(A,1), size(A,2)
-        tAt = oftype(tA, 'N')
+        tAt = 'N'
     else
         (mA, nA) = size(A,1), size(A,2)
-        tAt = oftype(tA, 'C')
+        tAt = 'C'
     end
     if nC != mA
         throw(DimensionMismatch(lazy"output matrix has size: $(nC), but should have size $(mA)"))
