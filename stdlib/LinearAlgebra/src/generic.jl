@@ -110,7 +110,7 @@ end
 
 function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAddMul)
     if length(C) != length(X)
-        throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
+        throw(DimensionMismatch(lazy"first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
         @inbounds _modify!(_add, X[IX] * s, C, IC)
@@ -120,7 +120,7 @@ end
 
 function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAddMul)
     if length(C) != length(X)
-        throw(DimensionMismatch("first array has length $(length(C)) which does not
+        throw(DimensionMismatch(lazy"first array has length $(length(C)) which does not
 match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
@@ -748,7 +748,7 @@ function opnorm(A::AbstractMatrix, p::Real=2)
     elseif p == Inf
         return opnormInf(A)
     else
-        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+        throw(ArgumentError(lazy"invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
 end
 
@@ -886,7 +886,7 @@ dot(x::Number, y::Number) = conj(x) * y
 function dot(x::AbstractArray, y::AbstractArray)
     lx = length(x)
     if lx != length(y)
-        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
+        throw(DimensionMismatch(lazy"first array has length $(lx) which does not match the length of the second, $(length(y))."))
     end
     if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
@@ -1464,7 +1464,7 @@ julia> axpy!(2, x, y)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
     n = length(x)
     if n != length(y)
-        throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $n, but y has length $(length(y))"))
     end
     iszero(α) && return y
     for (IY, IX) in zip(eachindex(y), eachindex(x))
@@ -1475,7 +1475,7 @@ end
 
 function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
     if length(rx) != length(ry)
-        throw(DimensionMismatch("rx has length $(length(rx)), but ry has length $(length(ry))"))
+        throw(DimensionMismatch(lazy"rx has length $(length(rx)), but ry has length $(length(ry))"))
     elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
         throw(BoundsError(x, rx))
     elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
@@ -1509,7 +1509,7 @@ julia> axpby!(2, x, 2, y)
 """
 function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     if length(x) != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     iszero(α) && isone(β) && return y
     for (IX, IY) in zip(eachindex(x), eachindex(y))
@@ -1549,7 +1549,7 @@ function rotate!(x::AbstractVector, y::AbstractVector, c, s)
     require_one_based_indexing(x, y)
     n = length(x)
     if n != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     @inbounds for i = 1:n
         xi, yi = x[i], y[i]
@@ -1572,7 +1572,7 @@ function reflect!(x::AbstractVector, y::AbstractVector, c, s)
     require_one_based_indexing(x, y)
     n = length(x)
     if n != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     @inbounds for i = 1:n
         xi, yi = x[i], y[i]
@@ -1613,7 +1613,7 @@ Multiplies `A` in-place by a Householder reflection on the left. It is equivalen
     require_one_based_indexing(x)
     m, n = size(A, 1), size(A, 2)
     if length(x) != m
-        throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
+        throw(DimensionMismatch(lazy"reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
     m == 0 && return A
     @inbounds for j = 1:n
@@ -1943,7 +1943,7 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     BLAS.chkuplo(uplo)
     m,n = size(A)
     m1,n1 = size(B)
-    (m1 < m || n1 < n) && throw(DimensionMismatch("B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
     if uplo == 'U'
         for j=1:n
             for i=1:min(j,m)

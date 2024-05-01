@@ -4,7 +4,8 @@
 module Unicode
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
-             convert, isvalid, ismalformed, isoverlong, iterate
+             convert, isvalid, ismalformed, isoverlong, iterate,
+             AnnotatedString, AnnotatedChar, annotated_chartransform
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -271,6 +272,8 @@ julia> textwidth("March")
 """
 textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init=0)
 
+textwidth(s::AnnotatedString) = textwidth(s.string)
+
 """
     lowercase(c::AbstractChar)
 
@@ -290,6 +293,8 @@ julia> lowercase('Ö')
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
     T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
 
+lowercase(c::AnnotatedChar) = AnnotatedChar(lowercase(c.char), annotations(c))
+
 """
     uppercase(c::AbstractChar)
 
@@ -308,6 +313,8 @@ julia> uppercase('ê')
 """
 uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+
+uppercase(c::AnnotatedChar) = AnnotatedChar(uppercase(c.char), annotations(c))
 
 """
     titlecase(c::AbstractChar)
@@ -331,6 +338,8 @@ julia> uppercase('ǆ')
 """
 titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
+
+titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 
 ############################################################################
 
@@ -606,6 +615,7 @@ julia> uppercase("Julia")
 ```
 """
 uppercase(s::AbstractString) = map(uppercase, s)
+uppercase(s::AnnotatedString) = annotated_chartransform(uppercase, s)
 
 """
     lowercase(s::AbstractString)
@@ -621,6 +631,7 @@ julia> lowercase("STRINGS AND THINGS")
 ```
 """
 lowercase(s::AbstractString) = map(lowercase, s)
+lowercase(s::AnnotatedString) = annotated_chartransform(lowercase, s)
 
 """
     titlecase(s::AbstractString; [wordsep::Function], strict::Bool=true) -> String
@@ -669,6 +680,23 @@ function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Boo
     return String(take!(b))
 end
 
+# TODO: improve performance characteristics, room for a ~10x improvement.
+function titlecase(s::AnnotatedString; wordsep::Function = !isletter, strict::Bool=true)
+    initial_state = (; startword = true, state = Ref{Int32}(0),
+             c0 = eltype(s)(zero(UInt32)), wordsep, strict)
+    annotated_chartransform(s, initial_state) do c, state
+        if isgraphemebreak!(state.state, state.c0, c) && state.wordsep(c)
+            state = Base.setindex(state, true, :startword)
+            cnew = c
+        else
+            cnew = state.startword ? titlecase(c) : state.strict ? lowercase(c) : c
+            state = Base.setindex(state, false, :startword)
+        end
+        state = Base.setindex(state, c, :c0)
+        cnew, state
+    end
+end
+
 """
     uppercasefirst(s::AbstractString) -> String
 
@@ -693,6 +721,17 @@ function uppercasefirst(s::AbstractString)
     string(c′, SubString(s, nextind(s, 1)))
 end
 
+# TODO: improve performance characteristics, room for a ~5x improvement.
+function uppercasefirst(s::AnnotatedString)
+    annotated_chartransform(s, true) do c, state
+        if state
+            (titlecase(c), false)
+        else
+            (c, state)
+        end
+    end
+end
+
 """
     lowercasefirst(s::AbstractString)
 
@@ -713,6 +752,17 @@ function lowercasefirst(s::AbstractString)
     c′ = lowercase(c)
     c == c′ ? convert(String, s) :
     string(c′, SubString(s, nextind(s, 1)))
+end
+
+# TODO: improve performance characteristics, room for a ~5x improvement.
+function lowercasefirst(s::AnnotatedString)
+    annotated_chartransform(s, true) do c, state
+        if state
+            (lowercase(c), false)
+        else
+            (c, state)
+        end
+    end
 end
 
 ############################################################################

@@ -77,6 +77,8 @@ New library features
 Standard library changes
 ------------------------
 
+* `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
+
 #### StyledStrings
 
 #### JuliaSyntaxHighlighting
@@ -84,6 +86,8 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+
+* `rank` can now take a `QRPivoted` matrix to allow rank estimation via QR factorization ([#54283]).
 
 #### Logging
 

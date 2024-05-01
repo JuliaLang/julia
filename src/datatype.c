@@ -180,6 +180,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
                                            uint32_t npointers,
                                            uint32_t alignment,
                                            int haspadding,
+                                           int isbitsegal,
                                            int arrayelem,
                                            jl_fielddesc32_t desc[],
                                            uint32_t pointers[]) JL_NOTSAFEPOINT
@@ -226,6 +227,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     flddesc->nfields = nfields;
     flddesc->alignment = alignment;
     flddesc->flags.haspadding = haspadding;
+    flddesc->flags.isbitsegal = isbitsegal;
     flddesc->flags.fielddesc_type = fielddesc_type;
     flddesc->flags.arrayelem_isboxed = arrayelem == 1;
     flddesc->flags.arrayelem_isunion = arrayelem == 2;
@@ -504,6 +506,7 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
     int isunboxed = jl_islayout_inline(eltype, &elsz, &al) && (kind != (jl_value_t*)jl_atomic_sym || jl_is_datatype(eltype));
     int isunion = isunboxed && jl_is_uniontype(eltype);
     int haspadding = 1; // we may want to eventually actually compute this more precisely
+    int isbitsegal = 0;
     int nfields = 0; // aka jl_is_layout_opaque
     int npointers = 1;
     int zi;
@@ -562,7 +565,7 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
     else
         arrayelem = 0;
     assert(!st->layout);
-    st->layout = jl_get_layout(elsz, nfields, npointers, al, haspadding, arrayelem, NULL, pointers);
+    st->layout = jl_get_layout(elsz, nfields, npointers, al, haspadding, isbitsegal, arrayelem, NULL, pointers);
     st->zeroinit = zi;
     //st->has_concrete_subtype = 1;
     //st->isbitstype = 0;
@@ -621,18 +624,17 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // if we have no fields, we can trivially skip the rest
         if (st == jl_symbol_type || st == jl_string_type) {
             // opaque layout - heap-allocated blob
-            static const jl_datatype_layout_t opaque_byte_layout = {0, 0, 1, -1, 1, {0}};
+            static const jl_datatype_layout_t opaque_byte_layout = {0, 0, 1, -1, 1, { .haspadding = 0, .fielddesc_type=0, .isbitsegal=1, .arrayelem_isboxed=0, .arrayelem_isunion=0 }};
             st->layout = &opaque_byte_layout;
             return;
         }
         else if (st == jl_simplevector_type || st == jl_module_type) {
-            static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), {0}};
+            static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), { .haspadding = 0, .fielddesc_type=0, .isbitsegal=1, .arrayelem_isboxed=0, .arrayelem_isunion=0 }};
             st->layout = &opaque_ptr_layout;
             return;
         }
         else {
-            // reuse the same layout for all singletons
-            static const jl_datatype_layout_t singleton_layout = {0, 0, 0, -1, 1, {0}};
+            static const jl_datatype_layout_t singleton_layout = {0, 0, 0, -1, 1, { .haspadding = 0, .fielddesc_type=0, .isbitsegal=1, .arrayelem_isboxed=0, .arrayelem_isunion=0 }};
             st->layout = &singleton_layout;
         }
     }
@@ -673,6 +675,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         size_t alignm = 1;
         int zeroinit = 0;
         int haspadding = 0;
+        int isbitsegal = 1;
         int homogeneous = 1;
         int needlock = 0;
         uint32_t npointers = 0;
@@ -687,19 +690,30 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     throw_ovf(should_malloc, desc, st, fsz);
                 desc[i].isptr = 0;
                 if (jl_is_uniontype(fld)) {
-                    haspadding = 1;
                     fsz += 1; // selector byte
                     zeroinit = 1;
+                    // TODO: Some unions could be bits comparable.
+                    isbitsegal = 0;
                 }
                 else {
                     uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->flags.haspadding)
                         haspadding = 1;
+                    if (!((jl_datatype_t*)fld)->layout->flags.isbitsegal)
+                        isbitsegal = 0;
                     if (i >= nfields - st->name->n_uninitialized && fld_npointers &&
                         fld_npointers * sizeof(void*) != fsz) {
-                        // field may be undef (may be uninitialized and contains pointer),
-                        // and contains non-pointer fields of non-zero sizes.
-                        haspadding = 1;
+                        // For field types that contain pointers, we allow inlinealloc
+                        // as long as the field type itself is always fully initialized.
+                        // In such a case, we use the first pointer in the inlined field
+                        // as the #undef marker (if it is zero, we treat the whole inline
+                        // struct as #undef). However, we do not zero-initialize the whole
+                        // struct, so the non-pointer parts of the inline allocation may
+                        // be arbitrary, but still need to compare egal (because all #undef)
+                        // representations are egal. Because of this, we cannot bitscompare
+                        // them.
+                        // TODO: Consider zero-initializing the whole struct.
+                        isbitsegal = 0;
                     }
                     if (!zeroinit)
                         zeroinit = ((jl_datatype_t*)fld)->zeroinit;
@@ -715,8 +729,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 zeroinit = 1;
                 npointers++;
                 if (!jl_pointer_egal(fld)) {
-                    // this somewhat poorly named flag says whether some of the bits can be non-unique
-                    haspadding = 1;
+                    isbitsegal = 0;
                 }
             }
             if (isatomic && fsz > MAX_ATOMIC_SIZE)
@@ -777,7 +790,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             }
         }
         assert(ptr_i == npointers);
-        st->layout = jl_get_layout(sz, nfields, npointers, alignm, haspadding, 0, desc, pointers);
+        st->layout = jl_get_layout(sz, nfields, npointers, alignm, haspadding, isbitsegal, 0, desc, pointers);
         if (should_malloc) {
             free(desc);
             if (npointers)
@@ -931,7 +944,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     bt->ismutationfree = 1;
     bt->isidentityfree = 1;
     bt->isbitstype = (parameters == jl_emptysvec);
-    bt->layout = jl_get_layout(nbytes, 0, 0, alignm, 0, 0, NULL, NULL);
+    bt->layout = jl_get_layout(nbytes, 0, 0, alignm, 0, 1, 0, NULL, NULL);
     bt->instance = NULL;
     return bt;
 }
@@ -954,6 +967,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->alignment = sizeof(void *);
     layout->npointers = haspointers;
     layout->flags.haspadding = 1;
+    layout->flags.isbitsegal = 0;
     layout->flags.fielddesc_type = 3;
     layout->flags.padding = 0;
     layout->flags.arrayelem_isboxed = 0;

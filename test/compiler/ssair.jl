@@ -589,27 +589,6 @@ end
     @test show(devnull, ir) === nothing
 end
 
-@testset "IncrementalCompact statefulness" begin
-    foo(i) = i == 1 ? 1 : 2
-    ir = only(Base.code_ircode(foo, (Int,)))[1]
-    compact = Core.Compiler.IncrementalCompact(ir)
-
-    # set up first iterator
-    x = Core.Compiler.iterate(compact)
-    x = Core.Compiler.iterate(compact, x[2])
-
-    # set up second iterator
-    x = Core.Compiler.iterate(compact)
-
-    # consume remainder
-    while x !== nothing
-        x = Core.Compiler.iterate(compact, x[2])
-    end
-
-    ir = Core.Compiler.complete(compact)
-    @test Core.Compiler.verify_ir(ir) === nothing
-end
-
 # insert_node! operations
 # =======================
 
@@ -825,3 +804,10 @@ end
 @test_throws ErrorException f_must_throw_phinode_edge()
 global global_error_switch = false
 @test f_must_throw_phinode_edge() == 1
+
+# Test roundtrip of debuginfo compression
+let cl = Int32[32, 1, 1, 1000, 240, 230]
+    str = ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), 378, cl, 2)::String;
+    cl2 = ccall(:jl_uncompress_codelocs, Any, (Any, Int), str, 2)
+    @test cl == cl2
+end

@@ -619,7 +619,7 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t requested_flags, uint8_t actua
         actual_flags &= ~1;
     }
 
-    // 2. Check all flags, execept opt level must be exact
+    // 2. Check all flags, except opt level must be exact
     uint8_t mask = (1 << OPT_LEVEL)-1;
     if ((actual_flags & mask) != (requested_flags & mask))
         return 0;

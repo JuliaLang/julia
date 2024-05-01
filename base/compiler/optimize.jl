@@ -44,13 +44,15 @@ const IR_FLAG_NOUB        = one(UInt32) << 9
 const IR_FLAG_EFIIMO      = one(UInt32) << 10
 # This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 11
+# This statement has no users and may be deleted if flags get refined to IR_FLAGS_REMOVABLE
+const IR_FLAG_UNUSED      = one(UInt32) << 12
 
-const NUM_IR_FLAGS = 12 # sync with julia.h
+const NUM_IR_FLAGS = 13 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
-    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_NOUB
+    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES | IR_FLAG_NOUB
 
-const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES
 
 const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
@@ -68,6 +70,9 @@ function flags_for_effects(effects::Effects)
     end
     if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW
+    end
+    if is_terminates(effects)
+        flags |= IR_FLAG_TERMINATES
     end
     if is_inaccessiblemem_or_argmemonly(effects)
         flags |= IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
@@ -298,8 +303,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
-        nothrow = isdefined(stmt.mod, stmt.name)
-        consistent = nothrow && isconst(stmt.mod, stmt.name)
+        nothrow = consistent = isdefinedconst_globalref(stmt)
         return (consistent, nothrow, nothrow)
     elseif isa(stmt, Expr)
         (; head, args) = stmt
@@ -331,7 +335,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            removable = effect_free & nothrow
+            terminates = is_terminates(effects)
+            removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
         elseif head === :new
             return new_expr_effect_flags(𝕃ₒ, args, src)
@@ -342,7 +347,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            removable = effect_free & nothrow
+            terminates = is_terminates(effects)
+            removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
@@ -826,31 +832,38 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
 
     stmt_inconsistent = scan_inconsistency!(inst, sv)
 
-    if stmt_inconsistent && inst.idx == lstmt
-        if isa(stmt, ReturnNode) && isdefined(stmt, :val)
+    if stmt_inconsistent
+        if !has_flag(inst[:flag], IR_FLAG_NOTHROW)
+            # Taint :consistent if this statement may raise since :consistent requires
+            # consistent termination. TODO: Separate :consistent_return and :consistent_termination from :consistent.
             sv.all_retpaths_consistent = false
-        elseif isa(stmt, GotoIfNot)
-            # Conditional Branch with inconsistent condition.
-            # If we do not know this function terminates, taint consistency, now,
-            # :consistent requires consistent termination. TODO: Just look at the
-            # inconsistent region.
-            if !sv.result.ipo_effects.terminates
+        end
+        if inst.idx == lstmt
+            if isa(stmt, ReturnNode) && isdefined(stmt, :val)
                 sv.all_retpaths_consistent = false
-            elseif visit_conditional_successors(sv.lazypostdomtree, sv.ir, bb) do succ::Int
-                       return any_stmt_may_throw(sv.ir, succ)
-                   end
-                # check if this `GotoIfNot` leads to conditional throws, which taints consistency
-                sv.all_retpaths_consistent = false
-            else
-                (; cfg, domtree) = get!(sv.lazyagdomtree)
-                for succ in iterated_dominance_frontier(cfg, BlockLiveness(sv.ir.cfg.blocks[bb].succs, nothing), domtree)
-                    if succ == length(cfg.blocks)
-                        # Phi node in the virtual exit -> We have a conditional
-                        # return. TODO: Check if all the retvals are egal.
-                        sv.all_retpaths_consistent = false
-                    else
-                        visit_bb_phis!(sv.ir, succ) do phiidx::Int
-                            push!(sv.inconsistent, phiidx)
+            elseif isa(stmt, GotoIfNot)
+                # Conditional Branch with inconsistent condition.
+                # If we do not know this function terminates, taint consistency, now,
+                # :consistent requires consistent termination. TODO: Just look at the
+                # inconsistent region.
+                if !sv.result.ipo_effects.terminates
+                    sv.all_retpaths_consistent = false
+                elseif visit_conditional_successors(sv.lazypostdomtree, sv.ir, bb) do succ::Int
+                        return any_stmt_may_throw(sv.ir, succ)
+                    end
+                    # check if this `GotoIfNot` leads to conditional throws, which taints consistency
+                    sv.all_retpaths_consistent = false
+                else
+                    (; cfg, domtree) = get!(sv.lazyagdomtree)
+                    for succ in iterated_dominance_frontier(cfg, BlockLiveness(sv.ir.cfg.blocks[bb].succs, nothing), domtree)
+                        if succ == length(cfg.blocks)
+                            # Phi node in the virtual exit -> We have a conditional
+                            # return. TODO: Check if all the retvals are egal.
+                            sv.all_retpaths_consistent = false
+                        else
+                            visit_bb_phis!(sv.ir, succ) do phiidx::Int
+                                push!(sv.inconsistent, phiidx)
+                            end
                         end
                     end
                 end

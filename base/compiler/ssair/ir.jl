@@ -1601,17 +1601,15 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         end
 
         values = process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
-        # Don't remove the phi node if it is before the definition of its value
-        # because doing so can create forward references. This should only
-        # happen with dead loops, but can cause problems when optimization
-        # passes look at all code, dead or not. This check should be
-        # unnecessary when DCE can remove those dead loops entirely, so this is
-        # just to be safe.
-        before_def = isassigned(values, 1) && (v = values[1]; isa(v, OldSSAValue)) && idx < v.id
-        if length(edges) == 1 && isassigned(values, 1) && !before_def &&
-                length(cfg_transforms_enabled ?
-                    result_bbs[bb_rename_succ[active_bb]].preds :
-                    compact.ir.cfg.blocks[active_bb].preds) == 1
+
+        # Quick egality check for PhiNode that may be replaced with its incoming
+        # value without needing to set the `Refined` flag. We can't do the actual
+        # refinement check, because we do not have access to the lattice here.
+        # Users may call `reprocess_phi_node!` inside the compaction loop to
+        # revisit PhiNodes with the proper lattice refinement check.
+        if may_replace_phi(values, cfg_transforms_enabled ?
+                result_bbs[bb_rename_succ[active_bb]] :
+                compact.ir.cfg.blocks[active_bb], idx) && argextype(values[1], compact) === inst[:type]
             # There's only one predecessor left - just replace it
             v = values[1]
             @assert !isa(v, NewSSAValue)
@@ -1660,6 +1658,38 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         ssa_rename[idx] = stmt
     end
     return result_idx
+end
+
+function may_replace_phi(values::Vector{Any}, phi_bb::BasicBlock, idx::Int)
+    length(values) == 1 || return false
+    isassigned(values, 1) || return false
+    length(phi_bb.preds) == 1 || return false
+
+    # Don't remove the phi node if it is before the definition of its value
+    # because doing so can create forward references. This should only
+    # happen with dead loops, but can cause problems when optimization
+    # passes look at all code, dead or not. This check should be
+    # unnecessary when DCE can remove those dead loops entirely, so this is
+    # just to be safe.
+    v = values[1]
+    before_def = isa(v, OldSSAValue) && idx < v.id
+    return !before_def
+end
+
+function reprocess_phi_node!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, phi::PhiNode, old_idx::Int)
+    phi_bb = compact.active_result_bb
+    did_just_finish_bb(compact) && (phi_bb -= 1)
+    may_replace_phi(phi.values, compact.cfg_transform.result_bbs[phi_bb], compact.idx) || return false
+
+    # There's only one predecessor left - just replace it
+    v = phi.values[1]
+    if !⊑(𝕃ₒ, compact[compact.ssa_rename[old_idx]][:type], argextype(v, compact))
+        v = Refined(v)
+    end
+    compact.ssa_rename[old_idx] = v
+
+    delete_inst_here!(compact)
+    return true
 end
 
 function resize!(compact::IncrementalCompact, nnewnodes::Int)
@@ -1903,7 +1933,10 @@ function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, id
     stmt = inst[:stmt]
     stmt === nothing && return false
     inst[:type] === Bottom && return false
-    has_flag(inst, IR_FLAGS_REMOVABLE) || return false
+    if !has_flag(inst, IR_FLAGS_REMOVABLE)
+        add_flag!(inst, IR_FLAG_UNUSED)
+        return false
+    end
     foreachssa(stmt) do val::SSAValue
         if compact.used_ssas[val.id] == 1
             if val.id < idx || in_worklist
@@ -2034,9 +2067,11 @@ function non_dce_finish!(compact::IncrementalCompact)
     result_idx = compact.result_idx
     resize!(compact.result, result_idx - 1)
     just_fixup!(compact)
-    bb = compact.cfg_transform.result_bbs[end]
-    compact.cfg_transform.result_bbs[end] = BasicBlock(bb,
-                StmtRange(first(bb.stmts), result_idx-1))
+    if !did_just_finish_bb(compact)
+        # Finish the bb now
+        finish_current_bb!(compact, 0)
+    end
+    result_bbs = resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
     compact.renamed_new_nodes = true
     nothing
 end
@@ -2048,7 +2083,7 @@ function finish(compact::IncrementalCompact)
 end
 
 function complete(compact::IncrementalCompact)
-    result_bbs = resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
+    result_bbs = compact.cfg_transform.result_bbs
     cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
     if should_check_ssa_counts()
         oracle_check(compact)

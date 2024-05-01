@@ -1234,7 +1234,6 @@ JL_DLLEXPORT jl_string_t *jl_compress_codelocs(int32_t firstline, jl_value_t *co
 #undef SETMIN
 #undef SETMAX
     }
-    min.line = min.to = min.pc = firstline <= 0 ? INT32_MAX : firstline;
     int32_t header[3];
     header[0] = min.line > max.line ? 0 : min.line;
     header[1] = min.line > max.line ? 0 : max.line - min.line;

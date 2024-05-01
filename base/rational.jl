@@ -555,7 +555,7 @@ lcm(x::Rational, y::Rational) = unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.
 function gcdx(x::Rational, y::Rational)
     c = gcd(x, y)
     if iszero(c.num)
-        a, b = one(c.num), c.num
+        a, b = zero(c.num), c.num
     elseif iszero(c.den)
         a = ifelse(iszero(x.den), one(c.den), c.den)
         b = ifelse(iszero(y.den), one(c.den), c.den)

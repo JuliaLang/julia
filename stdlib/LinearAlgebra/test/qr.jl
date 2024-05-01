@@ -528,4 +528,16 @@ end
     end
 end
 
+@testset "issue #53214" begin
+    # Test that the rank of a QRPivoted matrix is computed correctly
+    @test rank(qr([1.0 0.0; 0.0 1.0], ColumnNorm())) == 2
+    @test rank(qr([1.0 0.0; 0.0 0.9], ColumnNorm()), rtol=0.95) == 1
+    @test rank(qr([1.0 0.0; 0.0 0.9], ColumnNorm()), atol=0.95) == 1
+    @test rank(qr([1.0 0.0; 0.0 1.0], ColumnNorm()), rtol=1.01) == 0
+    @test rank(qr([1.0 0.0; 0.0 1.0], ColumnNorm()), atol=1.01) == 0
+
+    @test rank(qr([1.0 2.0; 2.0 4.0], ColumnNorm())) == 1
+    @test rank(qr([1.0 2.0 3.0; 4.0 5.0 6.0 ; 7.0 8.0 9.0], ColumnNorm())) == 2
+end
+
 end # module TestQR
