@@ -15,7 +15,7 @@ install-sanitizers: $$(addprefix $$(build_libdir)/, $$(notdir $$(call pathsearch
 $$(addprefix $$(build_shlibdir)/,$(2)): $$(addprefix $$(SANITIZER_LIB_PATH)/,$(2)) | $$(build_shlibdir)
 	-cp $$< $$@
 	$(if $(filter $(OS), Linux), \
-		-$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$$$ORIGIN' $$@ , 0)
+		  -$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$$$ORIGIN' $$@ , 0)
 endef
 
 ifeq ($(USECLANG),1)

@@ -22,7 +22,11 @@
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Target/TargetOptions.h>
-#include <llvm/Support/Host.h>
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Host.h>
+#else
+#include <llvm/ADT/Host.h>
+#endif
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Object/SymbolSize.h>
 
@@ -2210,7 +2214,11 @@ static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
         auto ptr = I->getOperand(0);
         if (ty->getPointerAddressSpace() == ptr->getType()->getPointerAddressSpace())
             return ctx.builder.CreateBitCast(ptr, ty);
+        #if JL_LLVM_VERSION >= 170000
+        else
+        #else
         else if (cast<PointerType>(ty)->hasSameElementTypeAs(cast<PointerType>(ptr->getType())))
+        #endif
             return ctx.builder.CreateAddrSpaceCast(ptr, ty);
     }
     ++EmittedIntToPtrs;
@@ -4962,7 +4970,9 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         break;
     case jl_returninfo_t::SRet:
         result = emit_static_alloca(ctx, getAttributeAtIndex(returninfo.attrs, 1, Attribute::StructRet).getValueAsType());
+        #if JL_LLVM_VERSION < 170000
         assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
+        #endif
         argvals[idx] = result;
         idx++;
         break;
@@ -6824,7 +6834,9 @@ static void emit_cfunc_invalidate(
     case jl_returninfo_t::SRet: {
         if (return_roots) {
             Value *root1 = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
+            #if JL_LLVM_VERSION < 170000
             assert(cast<PointerType>(root1->getType())->isOpaqueOrPointeeTypeMatches(get_returnroots_type(ctx, return_roots)));
+            #endif
             root1 = ctx.builder.CreateConstInBoundsGEP2_32(get_returnroots_type(ctx, return_roots), root1, 0, 0);
             ctx.builder.CreateStore(gf_ret, root1);
         }
@@ -7247,11 +7259,15 @@ static Function* gen_cfun_wrapper(
                 if (jlfunc_sret) {
                     result = emit_static_alloca(ctx, getAttributeAtIndex(returninfo.attrs, 1, Attribute::StructRet).getValueAsType());
                     setName(ctx.emission_context, result, "sret");
+                    #if JL_LLVM_VERSION < 170000
                     assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
+                    #endif
                 } else {
                     result = emit_static_alloca(ctx, get_unionbytes_type(ctx.builder.getContext(), returninfo.union_bytes));
                     setName(ctx.emission_context, result, "result_union");
+                    #if JL_LLVM_VERSION < 170000
                     assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
+                    #endif
                 }
             }
             args.push_back(result);
@@ -7311,7 +7327,9 @@ static Function* gen_cfun_wrapper(
             theFptr = ctx.builder.CreateSelect(age_ok, theFptr, gf_thunk);
         }
 
+        #if JL_LLVM_VERSION < 170000
         assert(cast<PointerType>(theFptr->getType())->isOpaqueOrPointeeTypeMatches(returninfo.decl.getFunctionType()));
+        #endif
         CallInst *call = ctx.builder.CreateCall(
             returninfo.decl.getFunctionType(),
             theFptr, ArrayRef<Value*>(args));
@@ -7684,7 +7702,9 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     case jl_returninfo_t::Ghosts:
         break;
     case jl_returninfo_t::SRet:
+        #if JL_LLVM_VERSION < 170000
         assert(cast<PointerType>(ftype->getParamType(0))->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(f.attrs, 1, Attribute::StructRet).getValueAsType()));
+        #endif
         result = ctx.builder.CreateAlloca(getAttributeAtIndex(f.attrs, 1, Attribute::StructRet).getValueAsType());
         setName(ctx.emission_context, result, "sret");
         args[idx] = result;
@@ -7979,8 +7999,6 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
 
 static void emit_sret_roots(jl_codectx_t &ctx, bool isptr, Value *Src, Type *T, Value *Shadow, Type *ShadowT, unsigned count)
 {
-    if (isptr && !cast<PointerType>(Src->getType())->isOpaqueOrPointeeTypeMatches(T))
-        Src = ctx.builder.CreateBitCast(Src, T->getPointerTo(Src->getType()->getPointerAddressSpace()));
     unsigned emitted = TrackWithShadow(Src, T, isptr, Shadow, ShadowT, ctx.builder); //This comes from Late-GC-Lowering??
     assert(emitted == count); (void)emitted; (void)count;
 }
@@ -7988,6 +8006,10 @@ static void emit_sret_roots(jl_codectx_t &ctx, bool isptr, Value *Src, Type *T, 
 static DISubroutineType *
 get_specsig_di(jl_codectx_t &ctx, jl_debugcache_t &debuginfo, jl_value_t *rt, jl_value_t *sig, DIBuilder &dbuilder)
 {
+    #if JL_LLVM_VERSION < 170000
+    if (isptr && !cast<PointerType>(Src->getType())->isOpaqueOrPointeeTypeMatches(T))
+         Src = ctx.builder.CreateBitCast(Src, T->getPointerTo(Src->getType()->getPointerAddressSpace()));
+    #endif
     size_t nargs = jl_nparams(sig); // TODO: if this is a Varargs function, our debug info for the `...` var may be misleading
     SmallVector<Metadata*, 0> ditypes(nargs + 1);
     ditypes[0] = julia_type_to_di(ctx, debuginfo, rt, &dbuilder, false);
@@ -10101,7 +10123,9 @@ char jl_using_perf_jitevents = 0;
 
 int jl_is_timing_passes = 0;
 
+#if JL_LLVM_VERSION < 170000
 int jl_opaque_ptrs_set = 0;
+#endif
 
 extern "C" void jl_init_llvm(void)
 {
@@ -10152,6 +10176,7 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
+    #if JL_LLVM_VERSION < 170000
     // we want the opaque-pointers to be opt-in, per LLVMContext, for this release
     // so change the default value back to pre-14.x, without changing the NumOccurrences flag for it
     clopt = llvmopts.lookup("opaque-pointers");
@@ -10160,6 +10185,7 @@ extern "C" void jl_init_llvm(void)
     } else {
         jl_opaque_ptrs_set = 1;
     }
+    #endif
 
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)

@@ -60,7 +60,11 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
     if (T->getPointerAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
+    #if JL_LLVM_VERSION >= 170000
+    Type *NewT = PointerType::get(T, AddressSpace::Derived);
+    #else
     Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
+    #endif
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -70,7 +74,11 @@ static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
     Type *T = V->getType();
     if (T->getPointerAddressSpace() != AddressSpace::Tracked)
         return V;
+    #if JL_LLVM_VERSION >= 170000
+    Type *NewT = PointerType::get(T, AddressSpace::Derived);
+    #else
     Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
+    #endif
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -586,7 +594,11 @@ static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
     if (isa<PointerType>(jl_value) &&
         v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
         // Cast to the proper address space
+        #if JL_LLVM_VERSION >= 170000
+        Type *jl_value_addr = PointerType::get(jl_value, v->getType()->getPointerAddressSpace());
+        #else
         Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
+        #endif
         ++EmittedPointerBitcast;
         return ctx.builder.CreateBitCast(v, jl_value_addr);
     }
@@ -1008,6 +1020,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     if (sz == 0)
         return;
     assert(align_dst && "align must be specified");
+    #if JL_LLVM_VERSION < 170000
     // If the types are small and simple, use load and store directly.
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
     // that interferes with other optimizations.
@@ -1039,7 +1052,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
             dst = emit_bitcast(ctx, dst, srcty);
         }
         else if (dstel->isSized() && dstel->isSingleValueType() &&
-                 DL.getTypeStoreSize(dstel) == sz) {
+                DL.getTypeStoreSize(dstel) == sz) {
             directel = dstel;
             src = emit_bitcast(ctx, src, dstty);
         }
@@ -1054,6 +1067,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
             return;
         }
     }
+    #endif
     ++EmittedMemcpys;
 
     // the memcpy intrinsic does not allow to specify different alias tags
@@ -3466,7 +3480,11 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
     for (auto *User : Val->users()) {
         if (isa<GetElementPtrInst>(User)) {
             GetElementPtrInst *Inst = cast<GetElementPtrInst>(User);
+            #if JL_LLVM_VERSION >= 170000
+            Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
+            #else
             Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
+            #endif
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
         else if (isa<IntrinsicInst>(User)) {
@@ -3475,7 +3493,11 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
         }
         else if (isa<BitCastInst>(User)) {
             BitCastInst *Inst = cast<BitCastInst>(User);
+            #if JL_LLVM_VERSION >= 170000
+            Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
+            #else
             Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
+            #endif
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
     }
@@ -3522,7 +3544,11 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 Value *decayed = decay_derived(ctx, box);
                 AllocaInst *originalAlloca = cast<AllocaInst>(vinfo.V);
                 box->takeName(originalAlloca);
+                #if JL_LLVM_VERSION >= 170000
+                decayed = maybe_bitcast(ctx, decayed, PointerType::get(originalAlloca->getType(), AddressSpace::Derived));
+                #else
                 decayed = maybe_bitcast(ctx, decayed, PointerType::getWithSamePointeeType(originalAlloca->getType(), AddressSpace::Derived));
+                #endif
                 // Warning: Very illegal IR here temporarily
                 originalAlloca->mutateType(decayed->getType());
                 recursively_adjust_ptr_type(originalAlloca, 0, AddressSpace::Derived);
