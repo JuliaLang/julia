@@ -523,6 +523,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
 end
 
 # the aggressive constprop pushes tA and tB into gemm_wrapper!, which is needed for wrap calls within it
+# to be concretely inferred
 Base.@constprop :aggressive function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T},
         _add = MulAddMul()) where {T<:BlasFloat}
     nC = checksquare(C)
@@ -563,6 +564,7 @@ Base.@constprop :aggressive function syrk_wrapper!(C::StridedMatrix{T}, tA::Abst
 end
 
 # the aggressive constprop pushes tA and tB into gemm_wrapper!, which is needed for wrap calls within it
+# to be concretely inferred
 Base.@constprop :aggressive function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
         _add = MulAddMul()) where {T<:BlasReal}
     nC = checksquare(C)
