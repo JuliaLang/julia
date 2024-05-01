@@ -66,22 +66,19 @@ structured_broadcast_alloc(bc, ::Type{Diagonal}, ::Type{ElType}, n) where {ElTyp
 # Bidiagonal is tricky as we need to know if it's upper or lower. The promotion
 # system will return Tridiagonal when there's more than one Bidiagonal, but when
 # there's only one, we need to make figure out upper or lower
-# the Val flag checks if only one Bidiagonal is encountered in the broadcast expression,
-# in which case we may preserve the type of the array
-merge_uplos(::Tuple{Nothing, Val{A}}, ::Tuple{Nothing, Val{B}}) where {A,B} = (nothing, Val(A & B))
-merge_uplos(a::Tuple{Any,Val{A}}, ::Tuple{Nothing, Val{B}}) where {A,B} = (first(a), Val(A & B))
-merge_uplos(::Tuple{Nothing, Val{A}}, b::Tuple{Any,Val{B}}) where {A,B} = (first(b), Val(A & B))
-merge_uplos(a::Tuple{Any,Val}, b::Tuple{Any,Val}) = (first(a) == first(b) ? first(a) : 'T', Val(false))
+merge_uplos(::Nothing, ::Nothing) = nothing
+merge_uplos(a, ::Nothing) = a
+merge_uplos(::Nothing, b) = b
+merge_uplos(a, b) = a == b ? a : 'T'
 
-find_uplo(a::Bidiagonal) = (a.uplo, Val(true))
-find_uplo(a) = (nothing, Val(true))
-find_uplo(bc::Broadcasted) = mapfoldl(find_uplo, merge_uplos, Broadcast.cat_nested(bc), init=(nothing, Val(true)))
+find_uplo(a::Bidiagonal) = a.uplo
+find_uplo(a) = nothing
+find_uplo(bc::Broadcasted) = mapfoldl(find_uplo, merge_uplos, Broadcast.cat_nested(bc), init=nothing)
 
 function structured_broadcast_alloc(bc, ::Type{Bidiagonal}, ::Type{ElType}, n) where {ElType}
-    uplo, val = find_uplo(bc)
-    uplo = n > 0 ? uplo : 'U'
+    uplo = n > 0 ? find_uplo(bc) : 'U'
     n1 = max(n - 1, 0)
-    if val isa Val{false} && uplo == 'T'
+    if count_structedmatrix(Bidiagonal, bc) > 1 && uplo == 'T'
         return Tridiagonal(Array{ElType}(undef, n1), Array{ElType}(undef, n), Array{ElType}(undef, n1))
     end
     return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n1), uplo)
@@ -137,6 +134,8 @@ iszerodefined(::Type) = false
 iszerodefined(::Type{<:Number}) = true
 iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
 iszerodefined(::Type{<:UniformScaling{T}}) where T = iszerodefined(T)
+
+count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_nested(bc); init = 0)
 
 fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
