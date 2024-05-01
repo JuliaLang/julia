@@ -1288,7 +1288,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     return ci
 end
 
-const NullDebugInfo = DebugInfo(:none)
+import Core: NullDebugInfo
 
 if Int === Int64
 const OtherInt = Int32
