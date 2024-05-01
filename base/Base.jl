@@ -495,6 +495,8 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
+include("staticint.jl")
+
 # metaprogramming
 include("meta.jl")
 
