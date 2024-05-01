@@ -89,13 +89,13 @@ Base.@assume_effects :terminates_globally function recur_termination1(x)
     0 ≤ x < 20 || error("bad fact")
     return x * recur_termination1(x-1)
 end
-@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
 @test Core.Compiler.is_terminates(Base.infer_effects(recur_termination1, (Int,)))
 function recur_termination2()
     Base.@assume_effects :total !:terminates_globally
     recur_termination1(12)
 end
-@test_broken fully_eliminated(recur_termination2)
+@test fully_eliminated(recur_termination2)
 @test fully_eliminated() do; recur_termination2(); end
 
 Base.@assume_effects :terminates_globally function recur_termination21(x)
@@ -104,15 +104,15 @@ Base.@assume_effects :terminates_globally function recur_termination21(x)
     return recur_termination22(x)
 end
 recur_termination22(x) = x * recur_termination21(x-1)
-@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
-@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
 @test Core.Compiler.is_terminates(Base.infer_effects(recur_termination21, (Int,)))
 @test Core.Compiler.is_terminates(Base.infer_effects(recur_termination22, (Int,)))
 function recur_termination2x()
     Base.@assume_effects :total !:terminates_globally
     recur_termination21(12) + recur_termination22(12)
 end
-@test_broken fully_eliminated(recur_termination2x)
+@test fully_eliminated(recur_termination2x)
 @test fully_eliminated() do; recur_termination2x(); end
 
 # anonymous function support for `@assume_effects`

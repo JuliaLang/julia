@@ -864,7 +864,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         update_valid_age!(caller, frame.valid_worlds)
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
-        effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
+        effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
+            adjust_effects(effects_for_cycle(frame.ipo_effects), method)
         exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, so we can use this local result destructively
@@ -877,10 +878,15 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.valid_worlds)
-    effects = adjust_effects(Effects(), method)
+    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     return EdgeCallResult(frame.bestguess, exc_bestguess, nothing, effects)
 end
+
+# The `:terminates` effect bit must be conservatively tainted unless recursion cycle has
+# been fully resolved. As for other effects, there's no need to taint them at this moment
+# because they will be tainted as we try to resolve the cycle.
+effects_for_cycle(effects::Effects) = Effects(effects; terminates=false)
 
 function cached_return_type(code::CodeInstance)
     rettype = code.rettype

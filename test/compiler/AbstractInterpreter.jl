@@ -152,9 +152,17 @@ function CC.concrete_eval_eligible(interp::Issue48097Interp,
 end
 @overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
 issue48097(; kwargs...) = return 42
-@test_broken fully_eliminated(; interp=Issue48097Interp(), retval=42) do
+@test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
     issue48097(; a=1f0, b=1.0)
 end
+
+# https://github.com/JuliaLang/julia/issues/52938
+@newinterp Issue52938Interp
+@MethodTable ISSUE_52938_MT
+CC.method_table(interp::Issue52938Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), ISSUE_52938_MT)
+inner52938(x, types::Type, args...; kwargs...) = x
+outer52938(x) = @inline inner52938(x, Tuple{}; foo=Ref(42), bar=1)
+@test fully_eliminated(outer52938, (Any,); interp=Issue52938Interp(), retval=Argument(2))
 
 # Should not concrete-eval overlayed methods in semi-concrete interpretation
 @newinterp OverlaySinInterp
