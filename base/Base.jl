@@ -406,6 +406,9 @@ using .ScopedValues
 include("logging.jl")
 using .CoreLogging
 
+# metaprogramming
+include("meta.jl")
+
 include("env.jl")
 
 # functions defined in Random
@@ -494,9 +497,6 @@ include("combinatorics.jl")
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
-
-# metaprogramming
-include("meta.jl")
 
 # Stack frames and traces
 include("stacktraces.jl")
