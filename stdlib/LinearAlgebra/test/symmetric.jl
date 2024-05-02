@@ -532,8 +532,7 @@ end
 end
 
 @testset "Reverse operation on Symmetric" begin
-    n = 5
-    A = Symmetric(randn(n, n))
+    A = Symmetric(randn(5, 5))
     @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
     @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
     @test reverse(A) == reverse(Matrix(A))
