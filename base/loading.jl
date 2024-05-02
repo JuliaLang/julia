@@ -2273,7 +2273,7 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         run_package_callbacks(uuidkey)
     else
         m = get(loaded_modules, uuidkey, nothing)
-        if m !== nothing
+        if m !== nothing && !haskey(explicit_loaded_modules, uuidkey)
             explicit_loaded_modules[uuidkey] = m
             run_package_callbacks(uuidkey)
         end
