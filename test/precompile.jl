@@ -1331,6 +1331,25 @@ precompile_test_harness("package_callbacks") do dir
     finally
         pop!(Base.package_callbacks)
     end
+    Test5_module = :Teste4095a85
+    write(joinpath(dir, "$(Test5_module).jl"),
+    """
+    module $(Test5_module)
+    end
+    """)
+    Base.compilecache(Base.PkgId("$(Test5_module)"))
+    cnt = 0
+    push!(Base.package_callbacks, _->(cnt += 1))
+    try
+        @eval using $(Symbol(Test5_module))
+        @eval using $(Symbol(Test5_module))
+        @eval using $(Symbol(Test5_module))
+        @eval using $(Symbol(Test5_module))
+        @eval using $(Symbol(Test5_module))
+        @test cnt == 1
+    finally
+        pop!(Base.package_callbacks)
+    end
 end
 
 # Issue #19960
