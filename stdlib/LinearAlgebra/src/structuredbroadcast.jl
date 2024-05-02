@@ -172,7 +172,7 @@ isvalidstructbc(dest, bc::Broadcasted{T}) where {T<:StructuredMatrixStyle} =
     (isstructurepreserving(bc) || fzeropreserving(bc))
 
 isvalidstructbc(dest::Bidiagonal, bc::Broadcasted{StructuredMatrixStyle{Bidiagonal}}) =
-    (size(dest, 1) < 2 || first(find_uplo(bc)) == dest.uplo) &&
+    (size(dest, 1) < 2 || find_uplo(bc) == dest.uplo) &&
     (isstructurepreserving(bc) || fzeropreserving(bc))
 
 function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
