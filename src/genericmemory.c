@@ -193,6 +193,7 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
     }
     int how = jl_genericmemory_how(m);
     size_t mlength = m->length;
+    jl_gc_count_freed(mlength);
     m->length = 0;
     if (how != 0) {
         jl_value_t *o = jl_genericmemory_data_owner_field(m);
