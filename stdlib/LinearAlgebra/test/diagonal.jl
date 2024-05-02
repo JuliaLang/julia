@@ -620,8 +620,7 @@ end
 end
 
 @testset "Test reverse" begin
-    d = randn(n)
-    D = Diagonal(d)
+    D = Diagonal(randn(5))
     @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
     @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
     @test reverse(D) == reverse(Matrix(D))
