@@ -1058,7 +1058,7 @@ f = open("file")
 try
     operate_on_file(f)
 catch
-    println("Zoinks!  An error occurred!)
+    println("Zoinks!  An error occurred!")
 finally
     close(f)
 end
