@@ -12,6 +12,8 @@
     @test "a" * str == Base.AnnotatedString("asome string")
     @test str * "a" == Base.AnnotatedString("some stringa")
     @test str * str == Base.AnnotatedString("some stringsome string")
+    @test str[3:4] == SubString("me")
+    @test SubString("me") == str[3:4]
     Base.annotate!(str, 1:4, :thing => 0x01)
     Base.annotate!(str, 6:11, :other => 0x02)
     Base.annotate!(str, 1:11, :all => 0x03)
@@ -21,6 +23,8 @@
     #  └───┰─────┘
     #     :all
     @test str[3:4] == SubString(str, 3, 4)
+    @test str[3:4] != SubString("me")
+    @test SubString("me") != str[3:4]
     @test Base.AnnotatedString(str[3:4]) ==
         Base.AnnotatedString("me", [(1:2, :thing => 0x01), (1:2, :all => 0x03)])
     @test Base.AnnotatedString(str[3:6]) ==

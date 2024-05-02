@@ -192,6 +192,24 @@ cmp(a::AnnotatedString, b::AnnotatedString) = cmp(a.string, b.string)
 ==(a::AnnotatedString, b::AbstractString) = isempty(a.annotations) && a.string == b
 ==(a::AbstractString, b::AnnotatedString) = isempty(b.annotations) && a == b.string
 
+# To prevent substring equality from hitting the generic fallback
+
+function ==(a::SubString{<:AnnotatedString}, b::SubString{<:AnnotatedString})
+    SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) ==
+        SubString(b.string.string, b.offset, b.ncodeunits, Val(:noshift)) &&
+        annotations(a) == annotations(b)
+end
+
+==(a::SubString{<:AnnotatedString}, b::AnnotatedString) =
+    annotations(a) == annotations(b) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b.string
+
+==(a::SubString{<:AnnotatedString}, b::AbstractString) =
+    isempty(annotations(a)) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b
+
+==(a::AbstractString, b::SubString{<:AnnotatedString}) = b == a
+
+==(a::AnnotatedString, b::SubString{<:AnnotatedString}) = b == a
+
 """
     annotatedstring(values...)
 
