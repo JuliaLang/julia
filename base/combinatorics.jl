@@ -25,7 +25,7 @@ function factorial_lookup(
     idx < 0 && throw(DomainError(n, "`n` must not be negative."))
     idx > lim && throw(OverflowError(lazy"$n is too large to look up in the table; consider using `factorial(big($n))` instead"))
     idx == 0 && return one(n)
-    @inbounds f = getfield(table, idx)
+    f = getfield(table, idx)
     return oftype(n, f)
 end
 
