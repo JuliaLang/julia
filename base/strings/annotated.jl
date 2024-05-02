@@ -518,6 +518,24 @@ function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
     nb
 end
 
+# So that read/writes with `IOContext` (and any similar `AbstractPipe` wrappers)
+# work as expected.
+function write(io::AbstractPipe, s::Union{AnnotatedString, SubString{<:AnnotatedString}})
+    if pipe_writer(io) isa AnnotatedIOBuffer
+        write(pipe_writer(io), s)
+    else
+        invoke(write, Tuple{IO, typeof(s)}, io, s)
+    end::Int
+end
+# Can't be part of the `Union` above because it introduces method ambiguities
+function write(io::AbstractPipe, c::AnnotatedChar)
+    if pipe_writer(io) isa AnnotatedIOBuffer
+        write(pipe_writer(io), c)
+    else
+        invoke(write, Tuple{IO, typeof(c)}, io, c)
+    end::Int
+end
+
 """
     _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, span::UnitRange{Int})
 
