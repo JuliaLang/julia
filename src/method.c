@@ -420,6 +420,10 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     jl_code_info_t *li = NULL;
     JL_GC_PUSH1(&li);
     li = jl_new_code_info_uninit();
+
+    jl_expr_t *arglist = (jl_expr_t*)jl_exprarg(ir, 0);
+    li->nargs = jl_array_len(arglist);
+
     assert(jl_is_expr(ir));
     jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ir, 2);
 
@@ -642,6 +646,8 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->constprop = 0;
     src->inlining = 0;
     src->purity.bits = 0;
+    src->nargs = 0;
+    src->isva = 0;
     src->inlining_cost = UINT16_MAX;
     return src;
 }
@@ -770,6 +776,9 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
                 }
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
             }
+            // TODO: This should ideally be in the lambda expression,
+            // but currently our isva determination is non-syntactic
+            func->isva = def->isva;
         }
 
         // If this generated function has an opaque closure, cache it for
@@ -953,6 +962,8 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         jl_array_ptr_set(copy, i, st);
     }
     src = jl_copy_code_info(src);
+    src->isva = m->isva; // TODO: It would be nice to reverse this
+    assert(m->nargs == src->nargs);
     src->code = copy;
     jl_gc_wb(src, copy);
     m->slot_syms = jl_compress_argnames(src->slotnames);

@@ -1937,6 +1937,8 @@ function f24852_kernel_cinfo(world::UInt, source, fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
+    code_info.nargs = 4
+    code_info.isva = false
     # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
     # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
     return match.method, code_info
@@ -4487,6 +4489,8 @@ let
         } where Bound<:Integer
     argtypes = Core.Compiler.most_general_argtypes(method, specTypes)
     popfirst!(argtypes)
+    # N.B.: `argtypes` do not have va processing applied yet
+    @test length(argtypes) == 12
     @test argtypes[1] == Integer
     @test argtypes[2] == Integer
     @test argtypes[3] == Type{Bound} where Bound<:Integer
@@ -4497,7 +4501,8 @@ let
     @test argtypes[8] == Any
     @test argtypes[9] == Union{Nothing,Bound} where Bound<:Integer
     @test argtypes[10] == Any
-    @test argtypes[11] == Tuple{Integer,Integer}
+    @test argtypes[11] == Integer
+    @test argtypes[12] == Integer
 end
 
 # make sure not to call `widenconst` on `TypeofVararg` objects
@@ -5660,6 +5665,8 @@ function gen_tuin_from_arg(world::UInt, source, _, _)
         ReturnNode(true),
     ]; slottypes=Any[Any, Bool])
     ci.slotnames = Symbol[:var"#self#", :def]
+    ci.nargs = 2
+    ci.isva = false
     ci
 end
 
@@ -5691,6 +5698,8 @@ function gen_infinite_loop_ssa_generator(world::UInt, source, _)
         ReturnNode(SSAValue(2))
     ]; slottypes=Any[Any])
     ci.slotnames = Symbol[:var"#self#"]
+    ci.nargs = 1
+    ci.isva = false
     ci
 end
 
@@ -5728,3 +5737,14 @@ end
 
 # fieldcount on `Tuple` should constant fold, even though `.fields` not const
 @test fully_eliminated(Base.fieldcount, Tuple{Type{Tuple{Nothing, Int, Int}}})
+
+# Vararg-constprop regression from MutableArithmetics (#54341)
+global SIDE_EFFECT54341::Int
+function foo54341(a, b, c, d, args...)
+    # Side effect to force constprop rather than semi-concrete
+    global SIDE_EFFECT54341 = a + b + c + d
+    return SIDE_EFFECT54341
+end
+bar54341(args...) = foo54341(4, args...)
+
+@test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int

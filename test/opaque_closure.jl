@@ -189,6 +189,8 @@ let ci = @code_lowered const_int()
         cig.slotnames = Symbol[Symbol("#self#")]
         cig.slottypes = Any[Any]
         cig.slotflags = UInt8[0x00]
+        cig.nargs = 1
+        cig.isva = false
         return cig
     end
 end
