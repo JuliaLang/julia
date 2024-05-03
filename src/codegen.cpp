@@ -6178,8 +6178,17 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     }
     sigtype = jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
 
-    jl_method_instance_t *mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
-    jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.min_world, ctx.max_world);
+    jl_method_instance_t *mi;
+    jl_code_instance_t *ci;
+
+    if (closure_method->source) {
+        mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
+        ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.min_world, ctx.max_world);
+    } else {
+        mi = (jl_method_instance_t*)jl_atomic_load_relaxed(&closure_method->specializations);
+        assert(jl_is_method_instance(mi));
+        ci = jl_atomic_load_relaxed(&mi->cache);
+    }
 
     if (ci == NULL || (jl_value_t*)ci == jl_nothing) {
         JL_GC_POP();
