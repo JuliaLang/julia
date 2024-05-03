@@ -532,17 +532,21 @@ end
 end
 
 @testset "Reverse operation on Symmetric" begin
-    A = Symmetric(randn(5, 5))
-    @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
-    @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
-    @test reverse(A)::Symmetric == reverse(Matrix(A))
+    for uplo in (:U, :L)
+        A = Symmetric(randn(5, 5), uplo)
+        @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+        @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+        @test reverse(A)::Symmetric == reverse(Matrix(A))
+    end
 end
 
 @testset "Reverse operation on Hermitian" begin
-    A = Hermitian(randn(ComplexF64, 5, 5))
-    @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
-    @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
-    @test reverse(A)::Hermitian == reverse(Matrix(A))
+    for uplo in (:U, :L)
+        A = Hermitian(randn(ComplexF64, 5, 5), uplo)
+        @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+        @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+        @test reverse(A)::Hermitian == reverse(Matrix(A))
+    end
 end
 
 
