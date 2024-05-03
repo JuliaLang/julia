@@ -533,7 +533,8 @@ function Base.Char(w::WrapperChar)
     end
 end
 Base.codepoint(w::WrapperChar) = codepoint(Char(w))
-WrapperChar(n::UInt32) = WrapperChar(Char(n), true)
+WrapperChar(n::UInt32) = WrapperChar(Char(n))
+WrapperChar(c::Char) = WrapperChar(c, true) # this constructor helps with assuming :nothrow
 # We extract the wrapperchar so that the result may be constant-propagated
 # This doesn't return a value of the same type on purpose
 Base.uppercase(w::WrapperChar) = uppercase(w.wrapperchar)
