@@ -878,7 +878,7 @@ end
     ST = SymTridiagonal(d, dl)
     @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
     @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
-    @test reverse(ST) == reverse(Matrix(ST))
+    @test reverse(ST)::SymTridiagonal == reverse(Matrix(ST))
 end
 
 
