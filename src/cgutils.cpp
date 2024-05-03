@@ -3053,6 +3053,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     PointerType *PT = cast<PointerType>(mem->getType());
     assert(PT == ctx.types().T_prjlvalue);
     Value *addr = emit_bitcast(ctx, mem, ctx.types().T_jlgenericmemory->getPointerTo(PT->getAddressSpace()));
+    addr = decay_derived(ctx, addr);
     addr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, addr, 1);
     setName(ctx.emission_context, addr, ".data_ptr");
     PointerType *PPT = cast<PointerType>(ctx.types().T_jlgenericmemory->getElementType(1));

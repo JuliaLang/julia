@@ -189,10 +189,11 @@ namespace {
         // }
     }
 
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     static inline void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
-        if (!llvm_only)
-            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass()));
+        if (!llvm_only){
+            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass(true)));
+        }
         MPM.addPass(VerifierPass());
     }
 #endif
@@ -332,7 +333,7 @@ namespace {
 
 static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeEarlySimplificationMarkerPass());
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     addVerificationPasses(MPM, options.llvm_only);
 #endif
     if (options.enable_early_simplifications) {
