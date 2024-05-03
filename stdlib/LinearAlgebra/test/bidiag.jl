@@ -908,10 +908,12 @@ end
     n = 5
     d = randn(n)
     e = randn(n - 1)
-    B = Bidiagonal(d, e)
-    @test reverse(B, dims=1) == reverse(Matrix(B), dims=1)
-    @test reverse(B, dims=2) == reverse(Matrix(B), dims=2)
-    @test reverse(B) == reverse(Matrix(B))
+    for uplo in (:U, :L)
+        B = Bidiagonal(d, e, uplo)
+        @test reverse(B, dims=1) == reverse(Matrix(B), dims=1)
+        @test reverse(B, dims=2) == reverse(Matrix(B), dims=2)
+        @test reverse(B)::Bidiagonal == reverse(Matrix(B))
+    end
 end
 
 
