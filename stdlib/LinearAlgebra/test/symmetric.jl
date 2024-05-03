@@ -535,7 +535,7 @@ end
     A = Symmetric(randn(5, 5))
     @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
     @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
-    @test reverse(A) == reverse(Matrix(A))
+    @test reverse(A)::Symmetric == reverse(Matrix(A))
 end
 
 @testset "Reverse operation on Hermitian" begin
