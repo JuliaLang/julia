@@ -1336,15 +1336,15 @@ end
 
 show(io::IO, l::Core.MethodInstance) = show_mi(io, l)
 
-function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
-    def = l.def
+function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
+    def = mi.def
     if isa(def, Method)
-        if isdefined(def, :generator) && l === def.generator
+        if isdefined(def, :generator) && mi === def.generator
             print(io, "MethodInstance generator for ")
             show(io, def)
         else
             print(io, "MethodInstance for ")
-            show_tuple_as_call(io, def.name, l.specTypes; qualified=true)
+            show_tuple_as_call(io, def.name, mi.specTypes; qualified=true)
         end
     else
         print(io, "Toplevel MethodInstance thunk")
@@ -1353,11 +1353,13 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
         # added by other means.  But if it isn't, then we should try
         # to print a little more identifying information.
         if !from_stackframe
-            di = mi.uninferred.debuginfo
-            file, line = IRShow.debuginfo_firstline(di)
-            file = string(file)
-            line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
-            print(io, " from ", def, " starting at ", line)
+            if isdefined(mi, :uninferred)
+                di = mi.uninferred.debuginfo
+                file, line = IRShow.debuginfo_firstline(di)
+                file = string(file)
+                line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
+                print(io, " from ", def, " starting at ", line)
+            end
         end
     end
 end
