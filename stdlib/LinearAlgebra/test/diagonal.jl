@@ -623,7 +623,7 @@ end
     D = Diagonal(randn(5))
     @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
     @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
-    @test reverse(D) == reverse(Matrix(D))
+    @test reverse(D)::Diagonal == reverse(Matrix(D))
 end
 
 
