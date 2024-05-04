@@ -505,7 +505,7 @@ julia> a
 1
 
 julia> b
-Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.Generator{UnitRange{Int64}, typeof(abs2)}(abs2, 1:4), 1)
+Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.Generator{UnitRange{Int64}, typeof(abs2)}(abs2, 1:4), 1)
 ```
 
 See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
