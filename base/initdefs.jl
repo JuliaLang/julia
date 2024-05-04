@@ -50,12 +50,20 @@ environments, repo clones, cached compiled package images, and configuration
 files. By default it includes:
 
 1. `~/.julia` where `~` is the user home as appropriate on the system;
-2. an architecture-specific shared system directory, e.g. `/usr/local/share/julia`;
-3. an architecture-independent shared system directory, e.g. `/usr/share/julia`.
+2. an architecture-specific shared system directory specific to the local host,
+   e.g. `/usr/local/lib/julia`;
+3. an architecture-independent shared system directory specific to the local host,
+   e.g. `/usr/local/share/julia`;
+4. an architecture-specific shared system directory,
+   e.g. `/usr/lib/julia`;
+5. an architecture-independent shared system directory,
+   e.g. `/usr/share/julia`
 
-So `DEPOT_PATH` might be:
+All directories except the first are relative to the path of the `julia` executable.
+So if Julia is installed to `/usr/bin/julia`, `DEPOT_PATH` might be:
 ```julia
-[joinpath(homedir(), ".julia"), "/usr/local/share/julia", "/usr/share/julia"]
+[joinpath(homedir(), ".julia"), "/usr/local/lib/julia", "/usr/local/share/julia",
+ "/usr/lib/julia", "/usr/share/julia"]
 ```
 The first entry is the "user depot" and should be writable by and owned by the
 current user. The user depot is where: registries are cloned, new package versions
@@ -76,7 +84,7 @@ Here is an overview of some of the subdirectories that may exist in a depot:
 * `artifacts`: Contains content that packages use for which Pkg manages the installation of.
 * `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
 * `config`: Contains julia-level configuration such as a `startup.jl`.
-* `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
+* `compiled`: Contains precompiled `*.ji` and `*.so` files for packages. Maintained by Julia.
 * `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
 * `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
 * `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and Julia.
@@ -95,9 +103,13 @@ See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 const DEPOT_PATH = String[]
 
 function append_bundled_depot_path!(DEPOT_PATH)
-    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
+    path = abspath(Sys.BINDIR, "..", "local", "foo", LIBDIR, "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path = abspath(Sys.BINDIR, "..", "local", "foo", DATAROOTDIR, "julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    path = abspath(Sys.BINDIR, LIBDIR, "julia")
+    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    path = abspath(Sys.BINDIR, DATAROOTDIR, "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     return DEPOT_PATH
 end

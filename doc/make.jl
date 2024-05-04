@@ -4,7 +4,7 @@ empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)
 push!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
-push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
+push!(DEPOT_PATH, abspath(Sys.BINDIR, Base.LIBDIR, "julia"))
 using Pkg
 Pkg.instantiate()
 

@@ -20,7 +20,7 @@ This escape analysis aims to:
 You can give a try to the escape analysis by loading the `EAUtils.jl` utility script that
 defines the convenience entries `code_escapes` and `@code_escapes` for testing and debugging purposes:
 ```@repl EAUtils
-let JULIA_DIR = normpath(Sys.BINDIR, "..", "share", "julia")
+let JULIA_DIR = normpath(Sys.BINDIR, Base.DATAROOTDIR, "julia")
     # load `EscapeAnalysis` module to define the core analysis code
     include(normpath(JULIA_DIR, "base", "compiler", "ssair", "EscapeAnalysis", "EscapeAnalysis.jl"))
     using .EscapeAnalysis
