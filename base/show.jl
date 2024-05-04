@@ -1303,7 +1303,8 @@ end
 function print_fullname(io::IO, m::Module)
     module_name = nameof(m)
     mp = parentmodule(m)
-    if m === Main || m === Base || m === Core || mp === m || isvisible(module_name, mp, Main)
+    active_mod = get(io, :module, active_module())
+    if m === Main || m === Base || m === Core || mp === m || isvisible(module_name, mp, active_mod)
         show_sym(io, module_name)
     else
         print_fullname(io, mp)
