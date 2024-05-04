@@ -607,7 +607,7 @@ static Expected<orc::ThreadSafeModule> validateExternRelocations(orc::ThreadSafe
         auto F = dyn_cast<Function>(&GO);
         if (!F)
             return false;
-        return F->isIntrinsic() || F->getName().startswith("julia.");
+        return F->isIntrinsic() || F->getName().starts_with("julia.");
     };
     // validate the relocations for M (only for RuntimeDyld, JITLink performs its own symbol validation)
     auto Err = TSM.withModuleDo([isIntrinsicFunction](Module &M) JL_NOTSAFEPOINT {
@@ -1207,7 +1207,7 @@ namespace {
                 {
                     if (*jl_ExecutionEngine->get_dump_llvm_opt_stream()) {
                         for (auto &F : M.functions()) {
-                            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                            if (F.isDeclaration() || F.getName().starts_with("jfptr_")) {
                                 continue;
                             }
                             // Each function is printed as a YAML object with several attributes
@@ -1260,7 +1260,7 @@ namespace {
                         // Print LLVM function statistics _after_ optimization
                         ios_printf(stream, "  after: \n");
                         for (auto &F : M.functions()) {
-                            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                            if (F.isDeclaration() || F.getName().starts_with("jfptr_")) {
                                 continue;
                             }
                             Stat(F).dump(stream);
@@ -1447,7 +1447,7 @@ struct JuliaOJIT::DLSymOptimizer {
     void operator()(Module &M) {
         for (auto &GV : M.globals()) {
             auto Name = GV.getName();
-            if (Name.startswith("jlplt") && Name.endswith("got")) {
+            if (Name.starts_with("jlplt") && Name.ends_with("got")) {
                 auto fname = GV.getAttribute("julia.fname").getValueAsString().str();
                 void *addr;
                 if (GV.hasAttribute("julia.libname")) {
@@ -1701,7 +1701,7 @@ JuliaOJIT::JuliaOJIT()
                   DL.getGlobalPrefix(),
                   [&](const orc::SymbolStringPtr &S) {
                         const char *const atomic_prefix = "__atomic_";
-                        return (*S).startswith(atomic_prefix);
+                        return (*S).starts_with(atomic_prefix);
                   })));
         }
     }

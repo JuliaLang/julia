@@ -830,7 +830,7 @@ template<typename T, typename F>
 static inline bool try_read_procfs_line(llvm::StringRef line, const char *prefix, T &out,
                                         bool &flag, F &&reset)
 {
-    if (!line.startswith(prefix))
+    if (!line.starts_with(prefix))
         return false;
     if (flag)
         reset();
