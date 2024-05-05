@@ -689,13 +689,9 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
     isexpr(lwr, :thunk) || return nothing # lowered to `Expr(:error, ...)` or similar
     src = lwr.args[1]::Core.CodeInfo
 
-    # construct top-level `MethodInstance`
-    mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
-    mi.specTypes = Tuple{}
-
-    mi.def = context_module
     resolve_toplevel_symbols!(src, context_module)
-    @atomic mi.uninferred = src
+    # construct top-level `MethodInstance`
+    mi = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), src, context_module)
 
     interp = REPLInterpreter(limit_aggressive_inference)
     result = CC.InferenceResult(mi)
