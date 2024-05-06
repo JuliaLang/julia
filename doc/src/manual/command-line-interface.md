@@ -59,7 +59,7 @@ expression.
 To see this feature in action, consider the following definition, which will execute the print function despite there being no explicit call to `main`:
 
 ```
-$ julia -e '(@main)(ARGS) = println("Hello World!")'
+$ julia -e '(@main)(args) = println("Hello World!")'
 Hello World!
 $
 ```
@@ -93,7 +93,7 @@ The `main` binding may be imported from a package. A *hello world* package defin
 module Hello
 
 export main
-(@main)(ARGS) = println("Hello from the package!")
+(@main)(args) = println("Hello from the package!")
 
 end
 ```
