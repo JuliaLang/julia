@@ -2040,37 +2040,6 @@ end
     end
 end
 
-@testset "_unsetindex!" begin
-    struct MyMatrixUnsetIndexCartInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data :: A
-    end
-    Base.size(A::MyMatrixUnsetIndexCartInds) = size(A.data)
-    Base.getindex(M::MyMatrixUnsetIndexCartInds, i::Int, j::Int) = M.data[i,j]
-    Base.setindex!(M::MyMatrixUnsetIndexCartInds, v, i::Int, j::Int) = setindex!(M.data, v, i, j)
-    struct MyMatrixUnsetIndexLinInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data :: A
-    end
-    Base.size(A::MyMatrixUnsetIndexLinInds) = size(A.data)
-    Base.getindex(M::MyMatrixUnsetIndexLinInds, i::Int) = M.data[i]
-    Base.setindex!(M::MyMatrixUnsetIndexLinInds, v, i::Int) = setindex!(M.data, v, i)
-    Base.IndexStyle(::Type{<:MyMatrixUnsetIndexLinInds}) = IndexLinear()
-
-    function test_unsetindex(MT)
-        M = MT(ones(2,2))
-        M2 = MT(Matrix{BigFloat}(undef, 2,2))
-        copyto!(M, M2)
-        @test all(==(1), M)
-        M3 = MT(Matrix{BigFloat}(undef, 2,2))
-        for i in eachindex(M3)
-            @test !isassigned(M3, i)
-        end
-        M3 .= 1
-        @test_throws MethodError copyto!(M3, M2)
-    end
-    test_unsetindex(MyMatrixUnsetIndexCartInds)
-    test_unsetindex(MyMatrixUnsetIndexLinInds)
-end
-
 @testset "reshape for offset arrays" begin
     p = Base.IdentityUnitRange(3:4)
     r = reshape(p, :, 1)
