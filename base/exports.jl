@@ -680,6 +680,7 @@ export
     split,
     string,
     strip,
+    take_string!,
     textwidth,
     thisind,
     titlecase,
