@@ -593,6 +593,10 @@ end
             x>=0 && @test binomial(x,x-T(2)) == div(x*(x-1), 2)
         end
         @test @inferred(binomial(one(T),one(T))) isa T
+
+        # Arguments of different Integer types do not lead to computation of
+        # generalized binomial coefficient (issue #54296)
+        @test @inferred(binomial(Int64(5), T(2))) === Int64(10)
     end
     for x in ((false,false), (false,true), (true,false), (true,true))
         @test binomial(x...) == (x != (false,true))

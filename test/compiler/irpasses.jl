@@ -802,7 +802,7 @@ function each_stmt_a_bb(stmts, preds, succs)
     ir = IRCode()
     empty!(ir.stmts.stmt)
     append!(ir.stmts.stmt, stmts)
-    empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
+    empty!(ir.stmts.type); append!(ir.stmts.type, [Any for _ = 1:length(stmts)])
     empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
     empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:3length(stmts)])
     empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
@@ -1893,7 +1893,7 @@ let code = Any[
         # block 4
         ReturnNode(nothing),
     ]
-    ir = make_ircode(code; ssavaluetypes=Any[Union{}, Union{}, Any, Union{}])
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Union{}, Any, Union{}])
 
     # Unfortunately `compute_basic_blocks` does not notice the `throw()` so it gives us
     # a slightly imprecise CFG. Instead manually construct the CFG we need for this test:
@@ -1910,4 +1910,42 @@ let code = Any[
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 3 # should have removed block 3
+end
+
+let code = Any[
+        # block 1
+        EnterNode(4, 1),
+        # block 2
+        GotoNode(3), # will be turned into nothing
+        # block 3
+        GotoNode(5),
+        # block 4
+        ReturnNode(),
+        # block 5
+        Expr(:leave, SSAValue(1)),
+        # block 6
+        GotoIfNot(Core.Argument(1), 8),
+        # block 7
+        ReturnNode(1),
+        # block 8
+        ReturnNode(2),
+    ]
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Any, Any, Any, Any, Union{}, Union{}])
+    @test length(ir.cfg.blocks) == 8
+    Core.Compiler.verify_ir(ir)
+
+    # Union typed deletion marker in basic block 2
+    Core.Compiler.setindex!(ir, nothing, SSAValue(2))
+
+    # Test cfg_simplify
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 6
+    gotoifnot = Core.Compiler.last(ir.cfg.blocks[3].stmts)
+    inst = ir[SSAValue(gotoifnot)]
+    @test isa(inst[:stmt], GotoIfNot)
+    # Make sure we didn't accidentally schedule the unreachable block as
+    # fallthrough
+    @test isdefined(ir[SSAValue(gotoifnot+1)][:inst]::ReturnNode, :val)
 end

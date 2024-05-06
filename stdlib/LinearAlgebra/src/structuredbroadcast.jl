@@ -78,7 +78,7 @@ find_uplo(bc::Broadcasted) = mapfoldl(find_uplo, merge_uplos, Broadcast.cat_nest
 function structured_broadcast_alloc(bc, ::Type{Bidiagonal}, ::Type{ElType}, n) where {ElType}
     uplo = n > 0 ? find_uplo(bc) : 'U'
     n1 = max(n - 1, 0)
-    if uplo == 'T'
+    if count_structedmatrix(Bidiagonal, bc) > 1 && uplo == 'T'
         return Tridiagonal(Array{ElType}(undef, n1), Array{ElType}(undef, n), Array{ElType}(undef, n1))
     end
     return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n1), uplo)
@@ -134,6 +134,8 @@ iszerodefined(::Type) = false
 iszerodefined(::Type{<:Number}) = true
 iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
 iszerodefined(::Type{<:UniformScaling{T}}) where T = iszerodefined(T)
+
+count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_nested(bc); init = 0)
 
 fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted

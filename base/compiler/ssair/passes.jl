@@ -2341,12 +2341,8 @@ function cfg_simplify!(ir::IRCode)
                     curr = merged_succ[curr]
                 end
                 terminator = ir[SSAValue(bbs[curr].stmts[end])][:stmt]
-                is_throw = ir[SSAValue(bbs[curr].stmts[end])][:type] === Union{} && !isa(terminator, PhiNode)
-                if isa(terminator, GotoNode) || isa(terminator, ReturnNode) || is_throw
-                    # Only advance to next block if it's a successor
-                    # (avoid GotoNode, ReturnNode, throw()/Union{})
-                    break
-                elseif isa(terminator, GotoIfNot)
+
+                if isa(terminator, GotoIfNot)
                     if bb_rename_succ[terminator.dest] == 0
                         push!(worklist, terminator.dest)
                     end
@@ -2354,6 +2350,20 @@ function cfg_simplify!(ir::IRCode)
                     catchbb = terminator.catch_dest
                     if bb_rename_succ[catchbb] == 0
                         push!(worklist, catchbb)
+                    end
+                elseif isa(terminator, GotoNode) || isa(terminator, ReturnNode)
+                    # No implicit fall through. Schedule from work list.
+                    break
+                else
+                    is_bottom = ir[SSAValue(bbs[curr].stmts[end])][:type] === Union{}
+                    if is_bottom && !isa(terminator, PhiNode) && terminator !== nothing
+                        # If this is a regular statement (not PhiNode/GotoNode/GotoIfNot
+                        # or the `nothing` special case deletion marker),
+                        # and the type is Union{}, then this may be a terminator.
+                        # Ordinarily we normalize with ReturnNode(), but this is not
+                        # required. In any case, we do not fall through, so we
+                        # do not need to schedule the fall-through block.
+                        break
                     end
                 end
                 ncurr = curr + 1

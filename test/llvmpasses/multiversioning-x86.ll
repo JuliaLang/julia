@@ -1,8 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning,CPUFeatures' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,TYPED
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning,CPUFeatures' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning,CPUFeatures' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,OPAQUE
 
 
 ; COM: This test checks that multiversioning actually happens from start to finish
@@ -10,18 +8,13 @@
 
 
 
-; TYPED: @jl_gvar_ptrs = global [0 x i64*] zeroinitializer, align 8
 ; OPAQUE: @jl_gvar_ptrs = global [0 x ptr] zeroinitializer, align 8
 ; CHECK: @jl_fvar_idxs = hidden constant [5 x i32] [i32 0, i32 1, i32 2, i32 3, i32 4], align 8
 ; CHECK: @jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer, align 8
-; TYPED: @simd_test.reloc_slot = hidden global i32 (<4 x i32>)* null
 ; OPAQUE: @simd_test.reloc_slot = hidden global ptr null
-; TYPED: @jl_fvar_ptrs = hidden global [5 x i64*] [i64* bitcast (i32 (i32)* @boring to i64*), i64* bitcast (float (float, float)* @fastmath_test to i64*), i64* bitcast (i32 (i32)* @loop_test to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test_call to i64*)]
 ; OPAQUE: @jl_fvar_ptrs = hidden global [5 x ptr] [ptr @boring, ptr @fastmath_test, ptr @loop_test, ptr @simd_test, ptr @simd_test_call]
-; TYPED: @jl_clone_slots = hidden constant [3 x i32] [i32 1, i32 3, i32 trunc (i64 sub (i64 ptrtoint (i32 (<4 x i32>)** @simd_test.reloc_slot to i64), i64 ptrtoint ([3 x i32]* @jl_clone_slots to i64)) to i32)]
 ; OPAQUE: @jl_clone_slots = hidden constant [3 x i32] [i32 1, i32 3, i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test.reloc_slot to i64), i64 ptrtoint (ptr @jl_clone_slots to i64)) to i32)]
 ; CHECK: @jl_clone_idxs = hidden constant [10 x i32] [i32 -2147483647, i32 3, i32 -2147483647, i32 3, i32 4, i32 1, i32 1, i32 2, i32 -2147483645, i32 4]
-; TYPED: @jl_clone_ptrs = hidden constant [9 x i64*] [i64* bitcast (i32 (i32)* @boring.1 to i64*), i64* bitcast (float (float, float)* @fastmath_test.1 to i64*), i64* bitcast (i32 (i32)* @loop_test.1 to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test.1 to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test_call.1 to i64*), i64* bitcast (float (float, float)* @fastmath_test.2 to i64*), i64* bitcast (i32 (i32)* @loop_test.2 to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test.2 to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test_call.2 to i64*)]
 ; OPAQUE: @jl_clone_ptrs = hidden constant [9 x ptr] [ptr @boring.1, ptr @fastmath_test.1, ptr @loop_test.1, ptr @simd_test.1, ptr @simd_test_call.1, ptr @fastmath_test.2, ptr @loop_test.2, ptr @simd_test.2, ptr @simd_test_call.2]
 
 
@@ -102,7 +95,6 @@ define noundef i32 @simd_test_call(<4 x i32> noundef %0) {
 ; CHECK: @simd_test{{.*}}#[[SIMD_CLONE2:[0-9]+]]
 
 ; CHECK: @simd_test_call{{.*}}#[[NOT_BORING_CLONE1:[0-9]+]]
-; TYPED: %2 = load i32 (<4 x i32>)*, i32 (<4 x i32>)** @simd_test.reloc_slot, align 8, !tbaa !8, !invariant.load !12
 ; OPAQUE: %2 = load ptr, ptr @simd_test.reloc_slot, align 8, !tbaa !8, !invariant.load !12
 ; CHECK: %3 = call noundef i32 %2(<4 x i32> noundef %0)
 

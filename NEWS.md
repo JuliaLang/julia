@@ -87,6 +87,8 @@ Standard library changes
 
 #### LinearAlgebra
 
+* `rank` can now take a `QRPivoted` matrix to allow rank estimation via QR factorization ([#54283]).
+
 #### Logging
 
 #### Printf
