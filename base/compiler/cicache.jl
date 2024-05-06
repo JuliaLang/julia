@@ -8,11 +8,9 @@ that have been created for the given method instance, stratified by world age
 ranges. This struct abstracts over access to this cache.
 """
 struct InternalCodeCache
-    owner::Any # `jl_egal` is used for comparison
 end
 
 function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstance)
-    @assert ci.owner === cache.owner
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
     return cache
 end
@@ -50,11 +48,11 @@ WorldView(wvc::WorldView, wr::WorldRange) = WorldView(wvc.cache, wr)
 WorldView(wvc::WorldView, args...) = WorldView(wvc.cache, args...)
 
 function haskey(wvc::WorldView{InternalCodeCache}, mi::MethodInstance)
-    return ccall(:jl_rettype_inferred, Any, (Any, Any, UInt, UInt), wvc.cache.owner, mi, first(wvc.worlds), last(wvc.worlds)) !== nothing
+    return ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, first(wvc.worlds), last(wvc.worlds)) !== nothing
 end
 
 function get(wvc::WorldView{InternalCodeCache}, mi::MethodInstance, default)
-    r = ccall(:jl_rettype_inferred, Any, (Any, Any, UInt, UInt), wvc.cache.owner, mi, first(wvc.worlds), last(wvc.worlds))
+    r = ccall(:jl_rettype_inferred, Any, (Any, UInt, UInt), mi, first(wvc.worlds), last(wvc.worlds))
     if r === nothing
         return default
     end
@@ -73,7 +71,7 @@ function setindex!(wvc::WorldView{InternalCodeCache}, ci::CodeInstance, mi::Meth
 end
 
 function code_cache(interp::AbstractInterpreter)
-    cache = InternalCodeCache(cache_owner(interp))
+    cache = InternalCodeCache()
     worlds = WorldRange(get_inference_world(interp))
     return WorldView(cache, worlds)
 end

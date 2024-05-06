@@ -182,10 +182,7 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         int do_compile = 0;
-        if (codeinst->owner != jl_nothing) {
-            // TODO(vchuravy) native code caching for foreign interpreters
-        }
-        else if (jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return) {
+        if (jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return) {
             jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
             if (inferred &&
                 inferred != jl_nothing &&

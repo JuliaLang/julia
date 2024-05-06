@@ -2380,7 +2380,6 @@ jl_fptr_args_t jl_get_builtin_fptr(jl_datatype_t *dt)
     jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&dt->name->mt->defs);
     jl_method_instance_t *mi = jl_atomic_load_relaxed(&entry->func.method->unspecialized);
     jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
-    assert(ci->owner == jl_nothing);
     return jl_atomic_load_relaxed(&ci->specptr.fptr1);
 }
 

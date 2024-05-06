@@ -503,13 +503,13 @@ end
 
 
 function CodeInstance(
-    mi::MethodInstance, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
+    mi::MethodInstance, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
     ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
     relocatability::UInt8, edges::DebugInfo)
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8, Any),
-        mi, owner, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
+        (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8, Any),
+        mi, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
         ipo_effects, effects, analysis_results, relocatability, edges)
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)

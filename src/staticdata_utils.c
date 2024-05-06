@@ -1204,7 +1204,7 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             assert(jl_atomic_load_relaxed(&ci->min_world) == 1);
             assert(jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0);
             jl_method_instance_t *caller = ci->def;
-            if (jl_atomic_load_relaxed(&ci->inferred) && jl_rettype_inferred(ci->owner, caller, minworld, ~(size_t)0) == jl_nothing) {
+            if (jl_atomic_load_relaxed(&ci->inferred) && jl_rettype_inferred(caller, minworld, ~(size_t)0) == jl_nothing) {
                 jl_mi_cache_insert(caller, ci);
             }
             //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)caller);
@@ -1251,16 +1251,13 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
                 jl_code_instance_t *next_ci = jl_atomic_load_relaxed(&codeinst->next);
                 jl_atomic_store_relaxed(&codeinst->next, NULL);
 
-                jl_value_t *owner = codeinst->owner;
-                JL_GC_PROMISE_ROOTED(owner);
-
                 assert(jl_atomic_load_relaxed(&codeinst->min_world) == minworld);
                 // See #53586, #53109
                 // assert(jl_atomic_load_relaxed(&codeinst->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
                 assert(jl_atomic_load_relaxed(&codeinst->inferred));
                 jl_atomic_store_relaxed(&codeinst->max_world, maxvalid);
 
-                if (jl_rettype_inferred(owner, caller, minworld, maxvalid) != jl_nothing) {
+                if (jl_rettype_inferred(caller, minworld, maxvalid) != jl_nothing) {
                     // We already got a code instance for this world age range from somewhere else - we don't need
                     // this one.
                 } else {

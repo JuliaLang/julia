@@ -3301,6 +3301,13 @@ void jl_init_types(void) JL_GC_DISABLED
                 jl_bool_type),
             jl_emptysvec, 0, 0, 4);
 
+    jl_datatype_t *uninferred_spec_type =
+        jl_new_datatype(jl_symbol("UninferredSpec"), core,
+            jl_any_type, jl_emptysvec,
+            jl_emptysvec,
+            jl_emptysvec,
+            jl_emptysvec, 0, 0, 0);
+
     tv = jl_svec1(tvar("D"));
     jl_datatype_t *jl_meth_spec_type =
         jl_new_datatype(jl_symbol("MethodSpecialization"), core,
@@ -3313,7 +3320,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "next",
                             "data"),
                         jl_svec(6,
-                            jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
+                            jl_any_type, // Union{Method, Module, MethodSpecialization}
                             jl_any_type,
                             jl_array_any_type,
                             jl_any_type,/*jl_code_instance_type*/
@@ -3333,9 +3340,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(18,
+                        jl_perm_symsvec(17,
                             "def",
-                            "owner",
                             "next",
                             "min_world",
                             "max_world",
@@ -3349,9 +3355,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             "analysis_results",
                             "specsigflags", "precompile", "relocatability",
                             "invoke", "specptr"), // function object decls
-                        jl_svec(18,
+                        jl_svec(17,
                             jl_method_specialization_type,
-                            jl_any_type,
                             jl_any_type,
                             jl_ulong_type,
                             jl_ulong_type,
@@ -3369,9 +3374,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type, jl_any_type), // fptrs
                         jl_emptysvec,
                         0, 1, 1);
-    jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b000001010011100011 }; // Set fields 1, 2, 6-8, 11, 13 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b110110101100011100 }; // Set fields 3-5, 9, 10, 12, 14-15, 17-18 as atomic
+    jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
+    const static uint32_t code_instance_constfields[1]  = { 0b00000101001110001 }; // Set fields 1, 2, 6-8, 11, 13 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b11011010110001110 }; // Set fields 3-5, 9, 10, 12, 14-15, 17-18 as atomic
     //Fields 4-5 are only operated on by construction and deserialization, so are const at runtime
     //Fields 13 and 17 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     //Except for field 9 (inferred), which is volatile unless you know which other places are currently using it
@@ -3513,10 +3518,13 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 9, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
+    jl_svecset(jl_meth_spec_type->types, 0,
+        jl_new_struct(jl_uniontype_type, jl_meth_spec_type,
+            jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type)));
     jl_svecset(jl_meth_spec_type->types, 3, jl_code_instance_type);
     jl_svecset(jl_meth_spec_type->types, 4, jl_method_specialization_type);
+    jl_svecset(jl_code_instance_type->types, 15, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 16, jl_voidpointer_type);
-    jl_svecset(jl_code_instance_type->types, 17, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 1, jl_globalref_type);
     jl_svecset(jl_binding_type->types, 2, jl_binding_type);
 
@@ -3538,6 +3546,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_method_instance_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_method_specialization_type, (jl_value_t*)jl_default_spec_type);
     jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
+
+    jl_method_uninferred_spec_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_method_specialization_type, (jl_value_t*)uninferred_spec_type);
 
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_default_spec_type);

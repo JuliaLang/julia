@@ -148,7 +148,7 @@ function get_staged(mi::MethodInstance, world::UInt)
 end
 
 function get_cached_uninferred(mi::MethodInstance, world::UInt)
-    ccall(:jl_cached_uninferred, Any, (Any, UInt), mi.cache, world)::CodeInstance
+    ccall(:jl_cached_uninferred, Any, (Any, UInt), mi, world)::CodeInstance
 end
 
 function retrieve_code_info(mi::MethodInstance, world::UInt)

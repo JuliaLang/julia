@@ -601,7 +601,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src)
 {
     // Do not compress this, we expect it to be shortlived.
-    jl_code_instance_t *ci = jl_new_codeinst(mi, (jl_value_t*)jl_uninferred_sym,
+    jl_code_instance_t *ci = jl_new_codeinst(mi,
         (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, jl_nothing,
         (jl_value_t*)src, 0, src->min_world, src->max_world,
         0, 0, NULL, 1, NULL);
@@ -613,11 +613,16 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *
     jl_method_instance_t *mi = jl_new_method_instance_uninit();
     mi->specTypes = (jl_value_t*)jl_emptytuple_type;
     mi->def.module = module;
-    JL_GC_PUSH1(&mi);
+    jl_method_instance_t *uninferred_mi = NULL;
+    JL_GC_PUSH2(&mi, &uninferred_mi);
+
+    uninferred_mi = (jl_method_instance_t *)jl_new_struct_uninit(jl_method_uninferred_spec_type);
+    jl_atomic_store_relaxed(&mi->next, uninferred_mi);
+    jl_gc_wb(mi, uninferred_mi);
 
     jl_code_instance_t *ci = jl_new_codeinst_for_uninferred(mi, src);
-    jl_atomic_store_relaxed(&mi->cache, ci);
-    jl_gc_wb(mi, ci);
+    jl_atomic_store_relaxed(&uninferred_mi->cache, ci);
+    jl_gc_wb(uninferred_mi, ci);
 
     JL_GC_POP();
     return mi;

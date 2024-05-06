@@ -518,8 +518,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         }
         else {
             jl_method_instance_t *mi = unspec->def;
-            jl_code_instance_t *uninferred = jl_cached_uninferred(
-                jl_atomic_load_relaxed(&mi->cache), 1);
+            jl_code_instance_t *uninferred = jl_cached_uninferred(mi, 1);
             assert(uninferred);
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
             assert(src);

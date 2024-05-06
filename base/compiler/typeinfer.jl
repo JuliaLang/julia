@@ -328,7 +328,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
     if !@isdefined edges
         edges = DebugInfo(result.linfo)
     end
-    return CodeInstance(result.linfo, owner,
+    return CodeInstance(result.linfo,
         widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
         const_flags, first(result.valid_worlds), last(result.valid_worlds),
         # TODO: Actually do something with non-IPO effects
@@ -935,7 +935,7 @@ more details.
 """
 function codeinstance_for_const_with_code(interp::AbstractInterpreter, code::CodeInstance)
     src = codeinfo_for_const(interp, code.def, code.rettype_const)
-    return CodeInstance(code.def, cache_owner(interp), code.rettype, code.exctype, code.rettype_const, src,
+    return CodeInstance(code.def, code.rettype, code.exctype, code.rettype_const, src,
         Int32(0x3), code.min_world, code.max_world,
         code.ipo_purity_bits, code.purity_bits, code.analysis_results,
         code.relocatability, src.debuginfo)
@@ -1109,7 +1109,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
         if ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && !generating_output(#=incremental=#false)
             src = retrieve_code_info(mi, get_inference_world(interp))
             src isa CodeInfo || return nothing
-            return CodeInstance(mi, cache_owner(interp), Any, Any, nothing, src, Int32(0),
+            return CodeInstance(mi, Any, Any, nothing, src, Int32(0),
                 get_inference_world(interp), get_inference_world(interp),
                 UInt32(0), UInt32(0), nothing, UInt8(0), src.debuginfo)
         end

@@ -86,6 +86,7 @@
     XX(jl_method_instance_type) \
     XX(jl_method_specialization_type) \
     XX(jl_default_spec_type) \
+    XX(jl_method_uninferred_spec_type) \
     XX(jl_method_match_type) \
     XX(jl_method_type) \
     XX(jl_methtable_type) \

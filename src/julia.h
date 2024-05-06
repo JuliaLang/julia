@@ -427,7 +427,7 @@ struct _jl_method_instance_t {
 
 static inline jl_mi_default_spec_t *jl_mi_default_spec_data(jl_method_instance_t *mi) JL_NOTSAFEPOINT {
     return (jl_mi_default_spec_t*)(&mi[1]);
-};
+}
 
 // OpaqueClosure
 typedef struct _jl_opaque_closure_t {
@@ -443,7 +443,6 @@ typedef struct _jl_opaque_closure_t {
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
     jl_method_instance_t *def; // method this is specialized from
-    jl_value_t *owner; // Compiler token this belongs to, `jl_nothing` is reserved for native
     _Atomic(struct _jl_code_instance_t*) next; // pointer to the next cache entry
 
     // world range for which this object is valid to use
@@ -854,6 +853,7 @@ extern JL_DLLIMPORT jl_value_t *jl_bottom_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_default_spec_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_unionall_t *jl_method_specialization_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_instance_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_method_uninferred_spec_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_code_instance_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_code_info_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_debuginfo_type JL_GLOBALLY_ROOTED;

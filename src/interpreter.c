@@ -704,8 +704,7 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world
             ret = (jl_value_t*)src;
         }
         else {
-            jl_code_instance_t *cache = jl_atomic_load_relaxed(&mi->cache);
-            jl_code_instance_t *uninferred = jl_cached_uninferred(cache, world);
+            jl_code_instance_t *uninferred = jl_cached_uninferred(mi, world);
             if (!uninferred) {
                 assert(mi->def.method->generator);
                 src = jl_code_for_staged(mi, world, &uninferred);
@@ -715,7 +714,7 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world
         }
     }
     else {
-        jl_code_instance_t *uninferred = jl_cached_uninferred(jl_atomic_load_relaxed(&mi->cache), world);
+        jl_code_instance_t *uninferred = jl_cached_uninferred(mi, world);
         ret = (jl_value_t*)uninferred;
         if (ret) {
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
