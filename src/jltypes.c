@@ -2273,12 +2273,12 @@ static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *s
     size_t i;
     size_t lp = jl_svec_len(p);
     jl_svec_t *np = jl_alloc_svec(lp);
-    jl_value_t *pi = NULL;
+    jl_value_t *orig_pi = NULL, *pi = NULL;
     JL_GC_PUSH2(&np, &pi);
     for (i = 0; i < lp; i++) {
-        pi = jl_svecref(p, i);
+        orig_pi = jl_svecref(p, i);
         JL_TRY {
-            pi = inst_type_w_(pi, env, stack, 1);
+            pi = inst_type_w_(orig_pi, env, stack, 1);
             if (!jl_is_type(pi) && !jl_is_typevar(pi)) {
                 pi = jl_bottom_type;
             }
@@ -2286,7 +2286,9 @@ static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *s
         JL_CATCH {
             pi = jl_bottom_type;
         }
-        jl_value_t *globalpi = jl_as_global_root(pi, cacheable);
+        jl_value_t *globalpi = NULL;
+        if (orig_pi != pi)
+            globalpi = jl_as_global_root(pi, cacheable);
         jl_svecset(np, i, globalpi ? globalpi : pi);
     }
     JL_GC_POP();
@@ -3284,8 +3286,8 @@ void jl_init_types(void) JL_GC_DISABLED
     const static uint32_t method_atomicfields[1] = { 0x00000030 }; // (1<<4)|(1<<5)
     jl_method_type->name->atomicfields = method_atomicfields;
 
-    jl_default_specialization_type =
-        jl_new_datatype(jl_symbol("DefaultSpecialization"), core,
+    jl_default_spec_type =
+        jl_new_datatype(jl_symbol("DefaultSpec"), core,
             jl_any_type, jl_emptysvec,
             jl_perm_symsvec(4,
                 "sparam_vals",
@@ -3299,9 +3301,10 @@ void jl_init_types(void) JL_GC_DISABLED
                 jl_bool_type),
             jl_emptysvec, 0, 0, 4);
 
-    jl_method_instance_type =
-        jl_new_datatype(jl_symbol("MethodInstance"), core,
-                        jl_any_type, jl_emptysvec,
+    tv = jl_svec1(tvar("D"));
+    jl_datatype_t *jl_meth_spec_type =
+        jl_new_datatype(jl_symbol("MethodSpecialization"), core,
+                        jl_any_type, tv,
                         jl_perm_symsvec(6,
                             "def",
                             "specTypes",
@@ -3314,16 +3317,18 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_array_any_type,
                             jl_any_type,/*jl_code_instance_type*/
-                            jl_any_type,/*jl_method_instance_type*/
-                            jl_default_specialization_type),
+                            jl_any_type,/*jl_method_specialization_type*/
+                            jl_svecref(tv, 0)),
                         jl_emptysvec,
                         0, 1, 2);
+    jl_method_specialization_type =
+        (jl_unionall_t*)jl_meth_spec_type->name->wrapper;
     // These fields should be constant, but Serialization wants to mutate them in initialization
     //const static uint32_t method_instance_constfields[1] = { 0x00000007 }; // (1<<0)|(1<<1);
     const static uint32_t method_instance_atomicfields[1] = { 0x0000008 }; // (1<<3)
     //Fields 3 and 4 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe. TODO: except inInference
     //jl_method_instance_type->name->constfields = method_instance_constfields;
-    jl_method_instance_type->name->atomicfields = method_instance_atomicfields;
+    jl_meth_spec_type->name->atomicfields = method_instance_atomicfields;
 
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
@@ -3345,7 +3350,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "specsigflags", "precompile", "relocatability",
                             "invoke", "specptr"), // function object decls
                         jl_svec(18,
-                            jl_method_instance_type,
+                            jl_method_specialization_type,
                             jl_any_type,
                             jl_any_type,
                             jl_ulong_type,
@@ -3483,7 +3488,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_partial_opaque_type = jl_new_datatype(jl_symbol("PartialOpaque"), core, jl_any_type, jl_emptysvec,
         jl_perm_symsvec(4, "typ", "env", "parent", "source"),
-        jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_any_type),
+        jl_svec(4, jl_type_type, jl_any_type, jl_method_specialization_type, jl_any_type),
         jl_emptysvec, 0, 0, 4);
 
     // complete builtin type metadata
@@ -3507,10 +3512,9 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 8, jl_long_type); // uint32_t plus alignment
     jl_svecset(jl_methtable_type->types, 9, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
-    jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
-    jl_svecset(jl_method_instance_type->types, 3, jl_code_instance_type);
-    jl_svecset(jl_method_instance_type->types, 4, jl_method_instance_type);
+    jl_svecset(jl_meth_spec_type->types, 3, jl_code_instance_type);
+    jl_svecset(jl_meth_spec_type->types, 4, jl_method_specialization_type);
     jl_svecset(jl_code_instance_type->types, 16, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 17, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 1, jl_globalref_type);
@@ -3532,8 +3536,11 @@ void jl_init_types(void) JL_GC_DISABLED
     assert(((jl_datatype_t*)jl_array_any_type)->ismutationfree == 0);
     assert(((jl_datatype_t*)jl_array_uint8_type)->ismutationfree == 0);
 
+    jl_method_instance_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_method_specialization_type, (jl_value_t*)jl_default_spec_type);
+    jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
+
     jl_compute_field_offsets(jl_simplevector_type);
-    jl_compute_field_offsets(jl_default_specialization_type);
+    jl_compute_field_offsets(jl_default_spec_type);
     jl_compute_field_offsets(jl_method_instance_type);
     jl_compute_field_offsets(jl_code_instance_type);
 

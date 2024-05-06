@@ -800,7 +800,12 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_method_type) {
         jl_method_t *m = (jl_method_t*)v;
-        n += jl_static_show_func_sig(out, m->sig);
+        if (m->sig == (jl_value_t*)jl_anytuple_type) {
+            jl_printf(out, "Builtin Method for ");
+            jl_static_show_x(out, (jl_value_t*)m->name, depth, ctx);
+        } else {
+            n += jl_static_show_func_sig(out, m->sig);
+        }
     }
     else if (vt == jl_method_instance_type) {
         jl_method_instance_t *li = (jl_method_instance_t*)v;

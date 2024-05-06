@@ -1142,7 +1142,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     _rettype = deserialize(s)  # for backwards compat
     linfo.specTypes = deserialize(s)
     linfo.def = deserialize(s)
-    linfo.data = DefaultSpecialization(sparam_vals, false, false, false)
+    linfo.data = DefaultSpec(sparam_vals, false, false, false)
     return linfo
 end
 
