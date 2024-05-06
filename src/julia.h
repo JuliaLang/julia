@@ -1179,8 +1179,8 @@ STATIC_INLINE jl_value_t *jl_svecset(
 /*
   how - allocation style
   0 = data is inlined
-  1 = owns the gc-managed data, exclusively
-  2 = malloc-allocated pointer (may or may not own it)
+  1 = owns the gc-managed data, exclusively (will free it)
+  2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the object that owns the data pointer
 */
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
