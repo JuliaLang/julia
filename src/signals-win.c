@@ -400,9 +400,15 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
         Sleep(timeout_ms > 0 ? timeout_ms : 1);
         if (running) {
             if (jl_profile_is_buffer_full()) {
-                jl_profile_stop_timer(); // does not change the thread state
-                SuspendThread(GetCurrentThread());
-                continue;
+                if (jl_profile_continuous) {
+                    // Wrap around to the beginning
+                    bt_size_cur = 0;
+                } else {
+                    // Buffer full: Delete the timer
+                    jl_profile_stop_timer(); // does not change the thread state
+                    SuspendThread(GetCurrentThread());
+                    continue;
+                }
             }
             else {
                 // TODO: bring this up to parity with other OS by adding loop over tid here

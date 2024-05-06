@@ -156,6 +156,30 @@ end
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
 end
 
+@testset "continuous profiling" begin
+    @test !Profile.is_continuous() # we default to non-continuous
+    n, delay = Profile.init()
+    @test !Profile.is_continuous() # reading `init()` doesn't change continuous
+    Profile.init(; n=n+1, delay, continuous=true)
+    @test Profile.is_continuous()
+    @test Profile.init() == (n+1, delay) # `n` and `delay` are also set appropriately
+    Profile.init(; continuous=false)
+    @test !Profile.is_continuous()
+    @test Profile.init() == (n+1, delay) # `n` and `delay` are kept as-is
+
+    Profile.init(;n=1_000, continuous=true) # pick a small `n` that we'll definitely overflow
+    mktemp() do path, io
+        Profile.@profile sleep(4) # takes a while, should generate more than 1000 samples
+        flush(io)
+        @test isempty(readlines(path)) # shouldn't print a warning on wrap-around
+    end
+    @test !Profile.is_running()
+    @test Profile.is_continuous() # doesn't get reset to non-continuous
+    samples = Profile.fetch()
+    @test 500 < length(samples) < 1000 # samples were collected, but also trimmed
+    Profile.print(devnull, samples) # samples are valid
+end
+
 # Profile deadlocking in compilation (debuginfo registration)
 let cmd = Base.julia_cmd()
     script = """

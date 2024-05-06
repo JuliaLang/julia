@@ -29,6 +29,8 @@ static const    uint64_t GIGA = 1000000000ULL;
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
 
+extern JL_DLLIMPORT int jl_profile_continuous;
+
 ///////////////////////
 // Utility functions //
 ///////////////////////
@@ -68,11 +70,23 @@ JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
 JL_DLLEXPORT void jl_profile_clear_data(void)
 {
     bt_size_cur = 0;
+    if (jl_profile_continuous) {
+        jl_lock_profile();
+        memset((void*)bt_data_prof, 0, bt_size_max * sizeof(jl_bt_element_t));
+        jl_unlock_profile();
+    }
 }
 
 JL_DLLEXPORT int jl_profile_is_running(void)
 {
     return running;
+}
+
+JL_DLLEXPORT void jl_profile_read(uint8_t *data)
+{
+    jl_lock_profile();
+    memcpy(data, (uint8_t*)bt_data_prof, bt_size_max * sizeof(jl_bt_element_t));
+    jl_unlock_profile();
 }
 
 // Any function that acquires this lock must be either a unmanaged thread

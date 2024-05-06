@@ -275,9 +275,9 @@ end
 
 [`@profile`](@ref) just accumulates backtraces, and the analysis happens when you call [`Profile.print()`](@ref).
 For a long-running computation, it's entirely possible that the pre-allocated buffer for storing
-backtraces will be filled. If that happens, the backtraces stop but your computation continues.
-As a consequence, you may miss some important profiling data (you will get a warning when that
-happens).
+backtraces will be filled. If that happens, then by default, the backtraces stop but your
+computation continues. As a consequence, you may miss some important profiling data (you will get a
+warning when that happens).
 
 You can obtain and configure the relevant parameters this way:
 
@@ -296,6 +296,44 @@ very long-running job might not need frequent backtraces. The default setting is
 Of course, you can decrease the delay as well as increase it; however, the overhead of profiling
 grows once the delay becomes similar to the amount of time needed to take a backtrace (~30 microseconds
 on the author's laptop).
+
+### Continuous Profiling
+
+Setting `n` and `delay` appropriately can help ensure that you collect all the relevant profiling
+information without missing any events, yet they incur more memory usage to achieve this. If you
+wanted to profile a long-running computation, you might end up needing to set `n` to a very large
+number, which could be larger than you have memory available for. In this case, "continuous
+profiling" is really a better solution. In continuous profiling, the profiler does not stop
+collecting backtraces when the buffer fills up; instead, it starts writing new backtraces at the
+beginning of the buffer, overwriting the oldest backtraces. While this means you might miss some
+events, it ensures that you always have the most recent events. To enable continuous profiling, you
+can set `continuous=true` in `Profile.init`:
+
+```julia
+Profile.init(continuous = true)
+```
+
+Continuous profiling can be used with `Profile.@profile` as usual, but will result in only catching
+the most recent events. Instead, it's possible to use `Profile.start_timer()` together with periodic
+calls to `Profile.fetch` to collect the most recent events. For example, to collect the most recent
+events every 10 seconds, while running `my_long_running_computation`:
+
+```julia
+t = Threads.@spawn my_long_running_computation()
+Profile.start_timer()
+while !istaskdone(t)
+    sleep(10)
+    frames = Profile.fetch()
+    # Process or print these latest events
+end
+Profile.stop_timer()
+```
+
+You may need to tune `n`, `delay`, and the sleep interval to ensure that you miss as few events as
+possible, while not spending too much time fetching and processing profiler events.
+
+Do note that the profiler will also collect information from the `while` loop, so you may need to
+filter those events out from the events for `my_long_running_computation`.
 
 ## Memory allocation analysis
 
