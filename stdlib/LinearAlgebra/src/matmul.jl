@@ -385,11 +385,11 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA,
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         if tA_uc == 'S' && tB_uc == 'N'
             return BLAS.symm!('L', tA == 'S' ? 'U' : 'L', alpha, A, B, beta, C)
-        elseif tB_uc == 'S' && tA_uc == 'N'
+        elseif tA_uc == 'N' && tB_uc == 'S'
             return BLAS.symm!('R', tB == 'S' ? 'U' : 'L', alpha, B, A, beta, C)
         elseif tA_uc == 'H' && tB_uc == 'N'
             return BLAS.hemm!('L', tA == 'H' ? 'U' : 'L', alpha, A, B, beta, C)
-        elseif tB_uc == 'H' && tA_uc == 'N'
+        elseif tA_uc == 'N' && tB_uc == 'H'
             return BLAS.hemm!('R', tB == 'H' ? 'U' : 'L', alpha, B, A, beta, C)
         end
     end

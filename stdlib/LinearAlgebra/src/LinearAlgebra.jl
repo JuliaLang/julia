@@ -526,7 +526,7 @@ struct WrapperChar <: AbstractChar
 end
 function Base.Char(w::WrapperChar)
     T = w.wrapperchar
-    if T ∉ ('S', 'H')
+    if T ∈ ('N', 'T', 'C') # known cases where isuppertri is true
         T
     else
         _isuppertri(w) ? uppercase(T) : lowercase(T)
@@ -534,14 +534,14 @@ function Base.Char(w::WrapperChar)
 end
 Base.codepoint(w::WrapperChar) = codepoint(Char(w))
 WrapperChar(n::UInt32) = WrapperChar(Char(n))
-WrapperChar(c::Char) = WrapperChar(c, true) # this constructor helps with assuming :nothrow
+WrapperChar(c::Char) = WrapperChar(c, isuppercase(c))
 # We extract the wrapperchar so that the result may be constant-propagated
 # This doesn't return a value of the same type on purpose
 Base.uppercase(w::WrapperChar) = uppercase(w.wrapperchar)
 Base.lowercase(w::WrapperChar) = lowercase(w.wrapperchar)
 _isuppertri(w::WrapperChar) = w.isuppertri
 _isuppertri(x::AbstractChar) = isuppercase(x) # compatibility with earlier Char-based implementation
-_getuplo(x) = _isuppertri(x) ? (:U) : (:L)
+_uplosym(x) = _isuppertri(x) ? (:U) : (:L)
 
 wrapper_char(::AbstractArray) = 'N'
 wrapper_char(::Adjoint) = 'C'
@@ -563,9 +563,9 @@ Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     elseif tA_uc == 'C'
         adjoint(A)
     elseif tA_uc == 'H'
-        Hermitian(A, _getuplo(tA) #= unwrap a WrapperChar =#)
+        Hermitian(A, _uplosym(tA))
     elseif tA_uc == 'S'
-        Symmetric(A, _getuplo(tA) #= unwrap a WrapperChar =#)
+        Symmetric(A, _uplosym(tA))
     end
     return B::AbstractVecOrMat
 end
