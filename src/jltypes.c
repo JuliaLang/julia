@@ -3284,33 +3284,44 @@ void jl_init_types(void) JL_GC_DISABLED
     const static uint32_t method_atomicfields[1] = { 0x00000030 }; // (1<<4)|(1<<5)
     jl_method_type->name->atomicfields = method_atomicfields;
 
+    jl_default_specialization_type =
+        jl_new_datatype(jl_symbol("DefaultSpecialization"), core,
+            jl_any_type, jl_emptysvec,
+            jl_perm_symsvec(4,
+                "sparam_vals",
+                "inInference",
+                "cache_with_orig",
+                "precompiled"),
+            jl_svec(4,
+                jl_simplevector_type,
+                jl_bool_type,
+                jl_bool_type,
+                jl_bool_type),
+            jl_emptysvec, 0, 0, 4);
+
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(8,
+                        jl_perm_symsvec(6,
                             "def",
                             "specTypes",
-                            "sparam_vals",
                             "backedges",
                             "cache",
-                            "inInference",
-                            "cache_with_orig",
-                            "precompiled"),
-                        jl_svec(8,
+                            "next",
+                            "data"),
+                        jl_svec(6,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
-                            jl_simplevector_type,
                             jl_array_any_type,
-                            jl_any_type/*jl_code_instance_type*/,
-                            jl_bool_type,
-                            jl_bool_type,
-                            jl_bool_type),
+                            jl_any_type,/*jl_code_instance_type*/
+                            jl_any_type,/*jl_method_instance_type*/
+                            jl_default_specialization_type),
                         jl_emptysvec,
-                        0, 1, 3);
+                        0, 1, 2);
     // These fields should be constant, but Serialization wants to mutate them in initialization
-    //const static uint32_t method_instance_constfields[1] = { 0x00000007 }; // (1<<0)|(1<<1)|(1<<2);
-    const static uint32_t method_instance_atomicfields[1] = { 0x0000090 }; // (1<<4)|(1<<7);
-    //Fields 4 and 5 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe. TODO: except inInference
+    //const static uint32_t method_instance_constfields[1] = { 0x00000007 }; // (1<<0)|(1<<1);
+    const static uint32_t method_instance_atomicfields[1] = { 0x0000008 }; // (1<<3)
+    //Fields 3 and 4 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe. TODO: except inInference
     //jl_method_instance_type->name->constfields = method_instance_constfields;
     jl_method_instance_type->name->atomicfields = method_instance_atomicfields;
 
@@ -3498,7 +3509,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
     jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
-    jl_svecset(jl_method_instance_type->types, 4, jl_code_instance_type);
+    jl_svecset(jl_method_instance_type->types, 3, jl_code_instance_type);
+    jl_svecset(jl_method_instance_type->types, 4, jl_method_instance_type);
     jl_svecset(jl_code_instance_type->types, 16, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 17, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 1, jl_globalref_type);
@@ -3509,10 +3521,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_uniontype_type);
     jl_compute_field_offsets(jl_tvar_type);
     jl_compute_field_offsets(jl_methtable_type);
-    jl_compute_field_offsets(jl_method_instance_type);
-    jl_compute_field_offsets(jl_code_instance_type);
     jl_compute_field_offsets(jl_unionall_type);
-    jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
 
     // override ismutationfree for builtin types that are mutable for identity
@@ -3522,6 +3531,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_datatype_type->ismutationfree = 1;
     assert(((jl_datatype_t*)jl_array_any_type)->ismutationfree == 0);
     assert(((jl_datatype_t*)jl_array_uint8_type)->ismutationfree == 0);
+
+    jl_compute_field_offsets(jl_simplevector_type);
+    jl_compute_field_offsets(jl_default_specialization_type);
+    jl_compute_field_offsets(jl_method_instance_type);
+    jl_compute_field_offsets(jl_code_instance_type);
 
     // Technically not ismutationfree, but there's a separate system to deal
     // with mutations for global state.

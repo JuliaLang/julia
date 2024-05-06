@@ -348,7 +348,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     isa(def, Method) || return ci # don't compress toplevel code
     cache_the_tree = true
     if can_discard_trees
-        cache_the_tree = is_inlineable(ci) || isa_compileable_sig(mi.specTypes, mi.sparam_vals, def)
+        cache_the_tree = is_inlineable(ci) || isa_compileable_sig(mi.specTypes, mi.data.sparam_vals, def)
     end
     if cache_the_tree
         if may_compress(interp)

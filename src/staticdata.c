@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    190
+#define NUM_TAGS    191
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -126,6 +126,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_string_type);
         INSERT_TAG(jl_module_type);
         INSERT_TAG(jl_tvar_type);
+        INSERT_TAG(jl_default_specialization_type);
         INSERT_TAG(jl_method_instance_type);
         INSERT_TAG(jl_method_type);
         INSERT_TAG(jl_code_instance_type);
@@ -803,7 +804,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // we only need 3 specific fields of this (the rest are not used)
             jl_queue_for_serialization(s, mi->def.value);
             jl_queue_for_serialization(s, mi->specTypes);
-            jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
+            jl_queue_for_serialization(s, (jl_value_t*)jl_mi_default_spec_data(mi)->sparam_vals);
             goto done_fields;
         }
         else if (jl_is_method(def) && jl_object_in_image(def)) {
@@ -1325,7 +1326,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     jl_method_instance_t *mi = (jl_method_instance_t*)v;
                     write_pointerfield(s, mi->def.value);
                     write_pointerfield(s, mi->specTypes);
-                    write_pointerfield(s, (jl_value_t*)mi->sparam_vals);
+                    write_pointerfield(s, (jl_value_t*)jl_mi_default_spec_data(mi)->sparam_vals);
                     continue;
                 }
                 else if (jl_is_datatype(v)) {
@@ -1624,7 +1625,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             else if (jl_is_method_instance(v)) {
                 assert(f == s->s);
                 jl_method_instance_t *newmi = (jl_method_instance_t*)&f->buf[reloc_offset];
-                jl_atomic_store_relaxed(&newmi->precompiled, 0);
+                jl_atomic_store_relaxed(&jl_mi_default_spec_data(newmi)->precompiled, 0);
             }
             else if (jl_is_code_instance(v)) {
                 assert(f == s->s);

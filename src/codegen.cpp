@@ -2804,10 +2804,11 @@ static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t 
     jl_value_t *sig = lam->specTypes;
     bool needsparams = false;
     if (jl_is_method(lam->def.method)) {
-        if ((size_t)jl_subtype_env_size(lam->def.method->sig) != jl_svec_len(lam->sparam_vals))
+        jl_svec_t *sparams = jl_mi_default_spec_data(lam)->sparam_vals;
+        if ((size_t)jl_subtype_env_size(lam->def.method->sig) != jl_svec_len(sparams))
             needsparams = true;
-        for (size_t i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
-            if (jl_is_typevar(jl_svecref(lam->sparam_vals, i)))
+        for (size_t i = 0; i < jl_svec_len(sparams); ++i) {
+            if (jl_is_typevar(jl_svecref(sparams, i)))
                 needsparams = true;
         }
     }
@@ -2987,8 +2988,9 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
         }
         else if (e->head == jl_static_parameter_sym) {
             size_t idx = jl_unbox_long(jl_exprarg(e, 0));
-            if (idx <= jl_svec_len(ctx.linfo->sparam_vals)) {
-                jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, idx - 1);
+            jl_svec_t *sparams = jl_mi_default_spec_data(ctx.linfo)->sparam_vals;
+            if (idx <= jl_svec_len(sparams)) {
+                jl_value_t *e = jl_svecref(sparams, idx - 1);
                 if (jl_is_typevar(e))
                     return NULL;
                 return e;
@@ -5523,8 +5525,9 @@ static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name,
 
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
 {
-    if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
-        jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
+    jl_svec_t *sparams = jl_mi_default_spec_data(ctx.linfo)->sparam_vals;
+    if (jl_svec_len(sparams) > 0) {
+        jl_value_t *e = jl_svecref(sparams, i);
         if (!jl_is_typevar(e)) {
             return mark_julia_const(ctx, e);
         }
@@ -5579,8 +5582,9 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
     else if (jl_is_expr(sym)) {
         assert(((jl_expr_t*)sym)->head == jl_static_parameter_sym && "malformed isdefined expression");
         size_t i = jl_unbox_long(jl_exprarg(sym, 0)) - 1;
-        if (jl_svec_len(ctx.linfo->sparam_vals) > 0) {
-            jl_value_t *e = jl_svecref(ctx.linfo->sparam_vals, i);
+        jl_svec_t *sparams = jl_mi_default_spec_data(ctx.linfo)->sparam_vals;
+        if (jl_svec_len(sparams) > 0) {
+            jl_value_t *e = jl_svecref(sparams, i);
             if (!jl_is_typevar(e)) {
                 return mark_julia_const(ctx, jl_true);
             }
@@ -7457,8 +7461,8 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         ? (jl_unionall_t*)ctx.linfo->def.method->sig
         : NULL;
     jl_svec_t *sparam_vals = NULL;
-    if (ctx.spvals_ptr == NULL && jl_svec_len(ctx.linfo->sparam_vals) > 0)
-        sparam_vals = ctx.linfo->sparam_vals;
+    if (ctx.spvals_ptr == NULL && jl_svec_len(jl_mi_default_spec_data(ctx.linfo)->sparam_vals) > 0)
+        sparam_vals = jl_mi_default_spec_data(ctx.linfo)->sparam_vals;
 
     jl_value_t *rt = declrt;
     if (jl_is_abstract_ref_type(declrt)) {

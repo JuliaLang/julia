@@ -691,7 +691,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     def = mi.def
     isa(def, Method) || return EMPTY_SPTYPES # toplevel
     sig = def.sig
-    if isempty(mi.sparam_vals)
+    if isempty(mi.data.sparam_vals)
         isa(sig, UnionAll) || return EMPTY_SPTYPES
         # mi is unspecialized
         spvals = Any[]
@@ -701,7 +701,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             sig′ = sig′.body
         end
     else
-        spvals = mi.sparam_vals
+        spvals = mi.data.sparam_vals
     end
     nvals = length(spvals)
     sptypes = Vector{VarState}(undef, nvals)

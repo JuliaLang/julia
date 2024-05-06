@@ -84,6 +84,7 @@
     XX(jl_memoryref_uint8_type) \
     XX(jl_methoderror_type) \
     XX(jl_method_instance_type) \
+    XX(jl_default_specialization_type) \
     XX(jl_method_match_type) \
     XX(jl_method_type) \
     XX(jl_methtable_type) \

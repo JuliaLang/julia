@@ -486,6 +486,8 @@ eval(Core, quote
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
+    DefaultSpecialization(sparam_vals::SimpleVector, inInference::Bool, cache_with_orig::Bool, precompiled::Bool) =
+        $(Expr(:new, DefaultSpecialization, :sparam_vals, :inInference, :cache_with_orig, :precompiled))
 end)
 
 const NullDebugInfo = DebugInfo(:none)

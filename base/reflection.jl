@@ -1507,7 +1507,7 @@ Unlike normal functions, the compilation heuristics still can't generate good di
 in some cases, but this may still allow inference not to fall over in some limited cases.
 """
 function may_invoke_generator(mi::MethodInstance)
-    return may_invoke_generator(mi.def::Method, mi.specTypes, mi.sparam_vals)
+    return may_invoke_generator(mi.def::Method, mi.specTypes, mi.data.sparam_vals)
 end
 function may_invoke_generator(method::Method, @nospecialize(atype), sparams::SimpleVector)
     # If we have complete information, we may always call the generator

@@ -609,17 +609,28 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 {
     jl_task_t *ct = jl_current_task;
     jl_method_instance_t *mi =
-        (jl_method_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_instance_t),
+        (jl_method_instance_t*)jl_gc_alloc(ct->ptls, jl_datatype_size(jl_method_instance_type),
                                            jl_method_instance_type);
     mi->def.value = NULL;
     mi->specTypes = NULL;
-    mi->sparam_vals = jl_emptysvec;
+    mi->next = NULL;
+    jl_mi_default_spec_data(mi)->sparam_vals = jl_emptysvec;
     mi->backedges = NULL;
     jl_atomic_store_relaxed(&mi->cache, NULL);
-    mi->inInference = 0;
-    mi->cache_with_orig = 0;
-    jl_atomic_store_relaxed(&mi->precompiled, 0);
+    jl_mi_default_spec_data(mi)->inInference = 0;
+    jl_mi_default_spec_data(mi)->cache_with_orig = 0;
+    jl_atomic_store_relaxed(&jl_mi_default_spec_data(mi)->precompiled, 0);
     return mi;
+}
+
+JL_DLLEXPORT void jl_lock_mi(jl_method_instance_t *mi)
+{
+    jl_mi_default_spec_data(mi)->inInference = 1;
+}
+
+JL_DLLEXPORT void jl_unlock_mi(jl_method_instance_t *mi)
+{
+    jl_mi_default_spec_data(mi)->inInference = 0;
 }
 
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
@@ -758,17 +769,18 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
-        ex = jl_call_staged(def, generator, world, mi->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
+        jl_svec_t *sparams = jl_mi_default_spec_data(mi)->sparam_vals;
+        ex = jl_call_staged(def, generator, world, sparams, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
 
         // do some post-processing
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
             jl_array_t *stmts = (jl_array_t*)func->code;
-            jl_resolve_globals_in_ir(stmts, def->module, mi->sparam_vals, 1);
+            jl_resolve_globals_in_ir(stmts, def->module, sparams, 1);
         }
         else {
             // Lower the user's expression and resolve references to the type parameters
-            func = jl_expand_and_resolve(ex, def->module, mi->sparam_vals);
+            func = jl_expand_and_resolve(ex, def->module, sparams);
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == jl_error_sym) {
                     ct->ptls->in_pure_callback = 0;
@@ -852,7 +864,7 @@ jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_s
     jl_method_instance_t *new_linfo = jl_new_method_instance_uninit();
     new_linfo->def.method = m;
     new_linfo->specTypes = types;
-    new_linfo->sparam_vals = sp;
+    jl_mi_default_spec_data(new_linfo)->sparam_vals = sp;
     return new_linfo;
 }
 

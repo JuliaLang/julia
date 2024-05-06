@@ -83,14 +83,14 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
     println(io, mi)
     print(io, "  from ")
     println(io, mi.def)
-    if !isempty(mi.sparam_vals)
+    if !isempty(mi.data.sparam_vals)
         println(io, "Static Parameters")
         sig = mi.def.sig
         warn_color = Base.warn_color() # more mild user notification
-        for i = 1:length(mi.sparam_vals)
+        for i = 1:length(mi.data.sparam_vals)
             sig = sig::UnionAll
             name = sig.var.name
-            val = mi.sparam_vals[i]
+            val = mi.data.sparam_vals[i]
             print_highlighted(io::IO, v::String, color::Symbol) =
                 if highlighting[:warntype]
                     Base.printstyled(io, v; color)

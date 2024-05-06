@@ -259,7 +259,7 @@ jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi)
 {
     jl_method_t *m = mi->def.method;
     jl_value_t *type = mi->specTypes;
-    jl_svec_t *sparams = mi->sparam_vals;
+    jl_svec_t *sparams = jl_mi_default_spec_data(mi)->sparam_vals;
     return jl_specializations_get_linfo_(m, type, sparams, mi);
 }
 
@@ -354,7 +354,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int fo
 
     jl_code_instance_t *ci = NULL;
 #ifdef ENABLE_INFERENCE
-    if (mi->inInference && !force)
+    if (jl_mi_default_spec_data(mi)->inInference && !force)
         return NULL;
     JL_TIMING(INFERENCE, INFERENCE);
     jl_value_t **fargs;
@@ -380,7 +380,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int fo
     ct->ptls->in_pure_callback = 0;
     size_t last_age = ct->world_age;
     ct->world_age = jl_typeinf_world;
-    mi->inInference = 1;
+    jl_mi_default_spec_data(mi)->inInference = 1;
     // first bit is for reentrant timing,
     // so adding 1 to the bit above performs
     // inference reentrancy counter addition.
@@ -415,7 +415,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int fo
     ct->world_age = last_age;
     ct->reentrant_timing -= 0b10;
     ct->ptls->in_pure_callback = last_pure;
-    mi->inInference = 0;
+    jl_mi_default_spec_data(mi)->inInference = 0;
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
@@ -1326,7 +1326,7 @@ static jl_method_instance_t *cache_method(
     }
     // TODO: maybe assert(jl_isa_compileable_sig(compilationsig, sparams, definition));
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)compilationsig, sparams);
-    if (newmeth->cache_with_orig)
+    if (jl_mi_default_spec_data(newmeth)->cache_with_orig)
         cache_with_orig = 1;
 
     jl_tupletype_t *cachett = tt;
@@ -1396,7 +1396,7 @@ static jl_method_instance_t *cache_method(
         }
         else {
             // do not revisit this decision
-            newmeth->cache_with_orig = 1;
+            jl_mi_default_spec_data(newmeth)->cache_with_orig = 1;
         }
     }
 
@@ -2658,11 +2658,11 @@ jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_co
     return invoke(f, args, nargs);
 }
 
-jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *ci)
 {
-    jl_svec_t *sparams = m->def->sparam_vals;
+    jl_svec_t *sparams = jl_mi_default_spec_data(ci->def)->sparam_vals;
     assert(sparams != jl_emptysvec);
-    jl_fptr_sparam_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr3);
+    jl_fptr_sparam_t invoke = jl_atomic_load_relaxed(&ci->specptr.fptr3);
     assert(invoke && "Forgot to set specptr for jl_fptr_sparam!");
     return invoke(f, args, nargs, sparams);
 }
@@ -2728,7 +2728,7 @@ jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_
     jl_methtable_t *mt = jl_method_get_table(def);
     if ((jl_value_t*)mt == jl_nothing)
         return mi;
-    jl_value_t *compilationsig = jl_normalize_to_compilable_sig(mt, (jl_datatype_t*)mi->specTypes, mi->sparam_vals, def, 1);
+    jl_value_t *compilationsig = jl_normalize_to_compilable_sig(mt, (jl_datatype_t*)mi->specTypes, jl_mi_default_spec_data(mi)->sparam_vals, def, 1);
     if (compilationsig == jl_nothing || jl_egal(compilationsig, mi->specTypes))
         return mi;
     jl_svec_t *env = NULL;
@@ -2898,7 +2898,7 @@ static void jl_compile_now(jl_method_instance_t *mi)
 JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world)
 {
     size_t tworld = jl_typeinf_world;
-    jl_atomic_store_relaxed(&mi->precompiled, 1);
+    jl_atomic_store_relaxed(&jl_mi_default_spec_data(mi)->precompiled, 1);
     if (jl_generating_output()) {
         jl_compile_now(mi);
         // In addition to full compilation of the compilation-signature, if `types` is more specific (e.g. due to nospecialize),
@@ -2913,7 +2913,7 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
             types2 = jl_type_intersection_env((jl_value_t*)types, (jl_value_t*)mi->def.method->sig, &tpenv2);
             jl_method_instance_t *mi2 = jl_specializations_get_linfo(mi->def.method, (jl_value_t*)types2, tpenv2);
             JL_GC_POP();
-            jl_atomic_store_relaxed(&mi2->precompiled, 1);
+            jl_atomic_store_relaxed(&jl_mi_default_spec_data(mi2)->precompiled, 1);
             if (jl_rettype_inferred_native(mi2, world, world) == jl_nothing)
                 (void)jl_type_infer(mi2, world, 1, SOURCE_MODE_NOT_REQUIRED);
             if (jl_typeinf_func && jl_atomic_load_relaxed(&mi->def.method->primary_world) <= tworld) {
@@ -3742,7 +3742,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                     env.match.ti = unw;
                 }
                 else if (jl_egal((jl_value_t*)type, mi->specTypes)) {
-                    env.match.env = mi->sparam_vals;
+                    env.match.env = jl_mi_default_spec_data(mi)->sparam_vals;
                     env.match.ti = mi->specTypes;
                 }
                 else {

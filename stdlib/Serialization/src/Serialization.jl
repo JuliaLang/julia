@@ -471,7 +471,7 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
     writetag(s.io, METHODINSTANCE_TAG)
     serialize(s, nothing)  # for backwards compat
-    serialize(s, linfo.sparam_vals)
+    serialize(s, linfo.data.sparam_vals)
     serialize(s, Any)  # for backwards compat
     serialize(s, linfo.specTypes)
     serialize(s, linfo.def)
@@ -1138,10 +1138,11 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
         # for reading files prior to v1.2
         handle_deserialize(s, tag)
     end
-    linfo.sparam_vals = deserialize(s)::SimpleVector
+    sparam_vals = deserialize(s)::SimpleVector
     _rettype = deserialize(s)  # for backwards compat
     linfo.specTypes = deserialize(s)
     linfo.def = deserialize(s)
+    linfo.data = DefaultSpecialization(sparam_vals, false, false, false)
     return linfo
 end
 

@@ -409,7 +409,7 @@ For the `NativeInterpreter`, we don't need to do an actual cache query to know i
 was already inferred. If we reach this point, but the inference flag has been turned off,
 then it's in the cache. This is purely for a performance optimization.
 """
-already_inferred_quick_test(interp::NativeInterpreter, mi::MethodInstance) = !mi.inInference
+already_inferred_quick_test(interp::NativeInterpreter, mi::MethodInstance) = !mi.data.inInference
 already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) = false
 
 """
@@ -424,13 +424,13 @@ already includes detection and restriction on recursion, so it is hopefully most
 benign problem, since it should really only happen during the first phase of bootstrapping
 that we encounter this flag.
 """
-lock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
+lock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (ccall(:jl_lock_mi, Cvoid, (Any,), mi); nothing)
 lock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
 
 """
 See `lock_mi_inference`.
 """
-unlock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)
+unlock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (ccall(:jl_unlock_mi, Cvoid, (Any,), mi); nothing)
 unlock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
 
 """

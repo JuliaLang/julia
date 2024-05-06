@@ -2299,9 +2299,9 @@ function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
     if isa(mi.def, Method)
         spsig = mi.def.sig
         if isa(spsig, UnionAll)
-            if !isempty(mi.sparam_vals)
+            if !isempty(mi.data.sparam_vals)
                 sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
-                                  v for v in  mi.sparam_vals]
+                                  v for v in  mi.data.sparam_vals]
                 T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
                 for v in sparam_vals

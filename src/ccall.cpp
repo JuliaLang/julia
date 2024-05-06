@@ -1531,7 +1531,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     std::string err = verify_ccall_sig(
       /* inputs:  */
       rt, at, unionall,
-      ctx.spvals_ptr == NULL ? ctx.linfo->sparam_vals : NULL,
+      ctx.spvals_ptr == NULL ? jl_mi_default_spec_data(ctx.linfo)->sparam_vals : NULL,
       &ctx.emission_context,
       /* outputs: */
       lrt, ctx.builder.getContext(),
@@ -1982,8 +1982,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         // so that the julia_to_native type checks are more likely to be doable (e.g. concrete types) at compile-time
         jl_value_t *jargty_in_env = jargty;
         if (ctx.spvals_ptr == NULL && !toboxed && unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env) &&
-                jl_svec_len(ctx.linfo->sparam_vals) > 0) {
-            jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(ctx.linfo->sparam_vals));
+                jl_svec_len(jl_mi_default_spec_data(ctx.linfo)->sparam_vals) > 0) {
+            jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(jl_mi_default_spec_data(ctx.linfo)->sparam_vals));
             if (jargty_in_env != jargty)
                 jargty_in_env = jl_ensure_rooted(ctx, jargty_in_env);
         }

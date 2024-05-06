@@ -778,7 +778,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
             s->locals[defargs - 1] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
         }
     }
-    s->sparam_vals = mi->sparam_vals;
+    s->sparam_vals = jl_mi_default_spec_data(mi)->sparam_vals;
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = mi;

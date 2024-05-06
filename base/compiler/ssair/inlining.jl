@@ -325,7 +325,7 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
         insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, topline))
     end
     spvals_ssa = nothing
-    if !validate_sparams(mi.sparam_vals)
+    if !validate_sparams(mi.data.sparam_vals)
         # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
         spvals_ssa = insert_node!(
             removable_if_unused(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
@@ -775,7 +775,7 @@ end
 function compileable_specialization(mi::MethodInstance, effects::Effects,
         et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
     mi_invoke = mi
-    method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
+    method, atype, sparams = mi.def::Method, mi.specTypes, mi.data.sparam_vals
     if compilesig_invokes
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
@@ -790,7 +790,7 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
         # If this caller does not want us to optimize calls to use their
         # declared compilesig, then it is also likely they would handle sparams
         # incorrectly if there were any unknown typevars, so we conservatively return nothing
-        if any(@nospecialize(t)->isa(t, TypeVar), mi.sparam_vals)
+        if any(@nospecialize(t)->isa(t, TypeVar), mi.data.sparam_vals)
             return nothing
         end
     end
@@ -1173,7 +1173,7 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
         argtypes = invoke_rewrite(sig.argtypes)
         if isa(result, ConstPropResult)
             mi = result.result.linfo
-            validate_sparams(mi.sparam_vals) || return nothing
+            validate_sparams(mi.data.sparam_vals) || return nothing
             if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
                 item = resolve_todo(mi, result.result, info, flag, state; invokesig)
                 handle_single_case!(todo, ir, idx, stmt, item, true)
@@ -1430,7 +1430,7 @@ function handle_const_prop_result!(cases::Vector{InliningCase}, result::ConstPro
     allow_typevars::Bool)
     mi = result.result.linfo
     spec_types = match.spec_types
-    if !validate_sparams(mi.sparam_vals)
+    if !validate_sparams(mi.data.sparam_vals)
         (allow_typevars && !may_have_fcalls(mi.def::Method)) || return false
     end
     item = resolve_todo(mi, result.result, info, flag, state)
@@ -1466,7 +1466,7 @@ function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiC
     match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState)
     mi = result.mi
     spec_types = match.spec_types
-    validate_sparams(mi.sparam_vals) || return false
+    validate_sparams(mi.data.sparam_vals) || return false
     item = semiconcrete_result_item(result, info, flag, state)
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
@@ -1521,7 +1521,7 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
     result = info.result
     if isa(result, ConstPropResult)
         mi = result.result.linfo
-        validate_sparams(mi.sparam_vals) || return nothing
+        validate_sparams(mi.data.sparam_vals) || return nothing
         item = resolve_todo(mi, result.result, info, flag, state)
     elseif isa(result, ConcreteResult)
         item = concrete_result_item(result, info, state)
@@ -1793,7 +1793,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
     if isa(val, Expr)
         e = val::Expr
         head = e.head
-        sparam_vals = ssa_substitute.mi.sparam_vals
+        sparam_vals = ssa_substitute.mi.data.sparam_vals
         if head === :static_parameter
             spidx = e.args[1]::Int
             val = sparam_vals[spidx]
