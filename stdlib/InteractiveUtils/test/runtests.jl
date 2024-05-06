@@ -770,3 +770,8 @@ end
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(InteractiveUtils))
 end
+
+@testset "code_warntype OpaqueClosure" begin
+    g = Base.Experimental.@opaque Tuple{Float64} x -> 0.0
+    @test warntype_hastag(g, Tuple{Float64}, "::Float64")
+end

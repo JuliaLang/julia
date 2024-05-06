@@ -153,7 +153,7 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
     nargs::Int = 0
     if isa(f, Core.OpaqueClosure)
-        isa(f.source, Method) && (nargs = f.nargs)
+        isa(f.source, Method) && (nargs = f.source.nargs)
         print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs; lineprinter)
         return nothing
     end
