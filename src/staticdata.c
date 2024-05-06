@@ -959,8 +959,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 jl_method_t *m = (jl_method_t *)v;
                 if (jl_is_svec(m->specializations))
                     jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->specializations), (jl_value_t*)m, 0, 1);
-
-                record_field_change((jl_value_t **)&((jl_method_t*)v)->roots, NULL);
             } else if (jl_typetagis(v, jl_typename_type)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
                 if (tn->mt != NULL && !(tn->mt->frozen)){
@@ -2563,6 +2561,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             }
             if (should_strip_ir) {
                 record_field_change(&m->source, jl_nothing);
+                record_field_change((jl_value_t **)&m->roots, NULL);
                 stripped_ir = 1;
             }
         }
