@@ -360,3 +360,21 @@ end
     @test Base.IteratorSize(Char) == Base.HasShape{0}()
     @test convert(ASCIIChar, 1) == Char(1)
 end
+
+@testset "foldable isuppercase/islowercase" begin
+    v = @inferred (() -> Val(isuppercase('C')))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(islowercase('C')))()
+    @test v isa Val{false}
+
+    struct MyChar <: AbstractChar
+        x :: Char
+    end
+    Base.codepoint(m::MyChar) = codepoint(m.x)
+    MyChar(x::UInt32) = MyChar(Char(x))
+
+    v = @inferred (() -> Val(isuppercase(MyChar('C'))))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(islowercase(MyChar('C'))))()
+    @test v isa Val{false}
+end
