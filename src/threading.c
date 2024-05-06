@@ -319,7 +319,7 @@ static uv_cond_t cond;
 void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 // return calling thread's ID
-JL_DLLEXPORT int16_t jl_threadid(void)
+JL_DLLEXPORT int16_t jl_threadid(void) JL_NOTSAFEPOINT
 {
     return jl_atomic_load_relaxed(&jl_current_task->tid);
 }

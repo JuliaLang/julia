@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 
-JL_DLLEXPORT int16_t jl_threadid(void);
+JL_DLLEXPORT int16_t jl_threadid(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT;
 
 // JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
