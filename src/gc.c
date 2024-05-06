@@ -1139,6 +1139,12 @@ void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
         jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
     jl_batch_accum_heap_size(ptls, sz);
 }
+
+void jl_gc_count_freed(size_t sz) JL_NOTSAFEPOINT
+{
+    jl_batch_accum_free_size(jl_current_task->ptls, sz);
+}
+
 // Only safe to update the heap inside the GC
 static void combine_thread_gc_counts(jl_gc_num_t *dest, int update_heap) JL_NOTSAFEPOINT
 {
