@@ -26,7 +26,7 @@ performance:
 const DEFAULT_VAL = 0
 ```
 
-If a global is known to always be of the same type, [the type should be annotated](@ref man-typed-globals).
+If a non-constant global is known to always be of the same type, [the type should be annotated](@ref man-typed-globals); `const` globals need not be annotated because their type is inferred from their initialization value.
 
 Uses of untyped globals can be optimized by annotating their types at the point of use:
 
