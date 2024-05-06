@@ -219,12 +219,7 @@ function _unsetindex!(A::Array, i::Int)
     @inbounds _unsetindex!(GenericMemoryRef(A.ref, i))
     return A
 end
-function _unsetindex!(A::Array, i::Int...)
-    @inline
-    @boundscheck checkbounds(A, i...)
-    @inbounds _unsetindex!(A, _to_linear_index(A, i...))
-    return A
-end
+
 
 # TODO: deprecate this (aligned_sizeof and/or elsize and/or sizeof(Some{T}) are more correct)
 elsize(::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
