@@ -309,7 +309,7 @@ function _rand_filename(len::Int=4) # modified from Base.Libc
     for i = 1:len
         slug[i] = chars[(Libc.rand() % length(chars)) + 1]
     end
-    return String(slug)
+    return take_string!(slug)
 end
 
 function tryrmopenfile(path::String)

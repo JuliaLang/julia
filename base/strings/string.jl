@@ -61,7 +61,7 @@ by [`take!`](@ref) on a writable [`IOBuffer`](@ref) and by calls to
 In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
-String(v::AbstractVector{UInt8}) = String(copyto!(StringMemory(length(v)), v))
+String(v::AbstractVector{UInt8}) = take_string!(copyto!(StringMemory(length(v)), v))
 String(v::Memory{UInt8}) = take_string!(copy(v))
 
 function String(v::Vector{UInt8})
