@@ -3683,3 +3683,15 @@ end
 # Issue #53729 - Lowering recursion into Expr(:toplevel)
 @test eval(Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(f53729(x) = x)), :(x=1)))) == 1
 @test f53729(2) == 2
+
+# Issue #53832 - interaction of arg destructuring and wrappers
+f53832((a, b), c=a) = (a, b, c)
+@test f53832((1,2)) == (1,2,1)
+
+g53832((a, b); c=a, d=b) = (a, b, c, b)
+@test g53832((1,2)) == (1,2,1,2)
+@test g53832((1,2); c=3) == (1,2,3,2)
+
+h53832((a, b), (c, d)=(a+10, b+100), (e, f)=(c+1000, d+10000)) = (a, b, c, d, e, f)
+@test h53832((1,2)) == (1, 2, 11, 102, 1011, 10102)
+@test h53832((1,2), (3, 4)) == (1, 2, 3, 4, 1003, 10004)
