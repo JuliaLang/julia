@@ -36,6 +36,7 @@ Base.@raw_str
 Base.@b_str
 Base.Docs.@html_str
 Base.Docs.@text_str
+Base.hascodepoint
 Base.isvalid(::Any)
 Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
