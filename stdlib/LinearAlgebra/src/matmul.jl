@@ -369,7 +369,6 @@ julia> lmul!(F.Q, B)
 lmul!(A, B)
 
 # THE one big BLAS dispatch
-# aggressive constant propagation makes mul!(C, A, B) invoke gemm_wrapper! directly
 Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                                     α::Number, β::Number) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
@@ -392,13 +391,13 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA,
     # the map in all ensures constprop by acting on tA and tB individually, instead of looping over them.
     if all(map(in(('N', 'T', 'C')), (tA_uc, tB_uc)))
         if tA_uc == 'T' && tB_uc == 'N' && A === B
-            return syrk_wrapper!(C, 'T', A, _add)
+            return syrk_wrapper!(C, 'T', A, α, β)
         elseif tA_uc == 'N' && tB_uc == 'T' && A === B
-            return syrk_wrapper!(C, 'N', A, _add)
+            return syrk_wrapper!(C, 'N', A, α, β)
         elseif tA_uc == 'C' && tB_uc == 'N' && A === B
-            return herk_wrapper!(C, 'C', A, _add)
+            return herk_wrapper!(C, 'C', A, α, β)
         elseif tA_uc == 'N' && tB_uc == 'C' && A === B
-            return herk_wrapper!(C, 'N', A, _add)
+            return herk_wrapper!(C, 'N', A, α, β)
         else
             return gemm_wrapper!(C, tA, tB, A, B, α, β)
         end
@@ -430,7 +429,7 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedVecOrMat{Compl
     tA_uc, tB_uc = uppercase(tA), uppercase(tB)
     # the map in all ensures constprop by acting on tA and tB individually, instead of looping over them.
     if all(map(in(('N', 'T', 'C')), (tA_uc, tB_uc)))
-        gemm_wrapper!(C, tA, tB, A, B, _add)
+        gemm_wrapper!(C, tA, tB, A, B, α, β)
     else
         _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
     end
@@ -629,7 +628,7 @@ Base.@constprop :aggressive function gemm_wrapper(tA::AbstractChar, tB::Abstract
     tA_uc, tB_uc = uppercase(tA), uppercase(tB)
     # the map in all ensures constprop by acting on tA and tB individually, instead of looping over them.
     if all(map(in(('N', 'T', 'C')), (tA_uc, tB_uc)))
-        gemm_wrapper!(C, tA, tB, A, B)
+        gemm_wrapper!(C, tA, tB, A, B, true, false)
     else
         _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul())
     end
