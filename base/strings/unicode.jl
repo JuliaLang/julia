@@ -411,14 +411,8 @@ julia> isuppercase('❤')
 false
 ```
 """
-function isuppercase(c::AbstractChar)
-    if ismalformed(c)
-        false
-    else
-        ui = UInt32(c)::UInt32 # type-assertion to ensure that we may assume :foldable
-        @assume_effects :foldable Bool(ccall(:utf8proc_isupper, Cint, (UInt32,), ui))
-    end
-end
+isuppercase(c::AbstractChar) = ismalformed(c) ? false :
+    Bool(@assume_effects :foldable @ccall utf8proc_isupper(UInt32(c)::UInt32)::Cint)
 
 """
     iscased(c::AbstractChar) -> Bool
