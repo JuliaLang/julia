@@ -68,12 +68,16 @@ Supertype operator, equivalent to `T2 <: T1`.
 """
     supertype(T::DataType)
 
-Return the supertype of DataType `T`.
+Return the supertype of type `T`.
+`T` can be a `DataType` or a `UnionAll` type.
 
 # Examples
 ```jldoctest
 julia> supertype(Int32)
 Signed
+
+julia> supertype(Vector)
+DenseVector (alias for DenseArray{T, 1} where T)
 ```
 """
 supertype(T::DataType) = (@_total_meta; T.super)
