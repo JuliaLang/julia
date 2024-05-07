@@ -598,6 +598,7 @@ export
     eachsplit,
     eachrsplit,
     escape_string,
+    hascodepoint,
     hex2bytes,
     hex2bytes!,
     isascii,

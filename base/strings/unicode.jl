@@ -4,7 +4,7 @@
 module Unicode
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
-             convert, isvalid, ismalformed, isoverlong, iterate,
+             convert, isvalid, ismalformed, hascodepoint, iterate,
              AnnotatedString, AnnotatedChar, annotated_chartransform,
              @assume_effects
 
@@ -55,7 +55,7 @@ true
 """
 isvalid(T,value)
 
-isvalid(c::AbstractChar) = !ismalformed(c) & !isoverlong(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
+isvalid(c::AbstractChar) = hascodepoint(c) & ((c ≤ '\ud7ff') | ('\ue000' ≤ c) & (c ≤ '\U10ffff'))
 isvalid(::Type{<:AbstractChar}, c::Unsigned) = ((c ≤  0xd7ff ) | ( 0xe000  ≤ c) & (c ≤  0x10ffff ))
 isvalid(::Type{T}, c::Integer) where {T<:AbstractChar}  = isvalid(T, Unsigned(c))
 isvalid(::Type{<:AbstractChar}, c::AbstractChar)     = isvalid(c)
@@ -346,7 +346,7 @@ titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
 
 # returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c::AbstractChar)
-    !ismalformed(c) ? category_code(UInt32(c)) : Cint(31)
+    hascodepoint(c) ? category_code(UInt32(c)) : Cint(31)
 end
 
 function category_code(x::Integer)
@@ -355,7 +355,7 @@ end
 
 # more human-readable representations of the category code
 function category_abbrev(c::AbstractChar)
-    ismalformed(c) && return "Ma"
+    !hascodepoint(c) && return "Ma"
     c ≤ '\U10ffff' || return "In"
     unsafe_string(ccall(:utf8proc_category_string, Cstring, (UInt32,), c))
 end
@@ -386,7 +386,7 @@ julia> islowercase('❤')
 false
 ```
 """
-islowercase(c::AbstractChar) = ismalformed(c) ? false :
+islowercase(c::AbstractChar) = !hascodepoint(c) ? false :
     Bool(@assume_effects :foldable @ccall utf8proc_islower(UInt32(c)::UInt32)::Cint)
 
 # true for Unicode upper and mixed case
@@ -411,7 +411,7 @@ julia> isuppercase('❤')
 false
 ```
 """
-isuppercase(c::AbstractChar) = ismalformed(c) ? false :
+isuppercase(c::AbstractChar) = !hascodepoint(c) ? false :
     Bool(@assume_effects :foldable @ccall utf8proc_isupper(UInt32(c)::UInt32)::Cint)
 
 """
@@ -772,14 +772,14 @@ end
 # iterators for grapheme segmentation
 
 isgraphemebreak(c1::AbstractChar, c2::AbstractChar) =
-    ismalformed(c1) || ismalformed(c2) ||
+    !hascodepoint(c1) || !hascodepoint(c2) ||
     ccall(:utf8proc_grapheme_break, Bool, (UInt32, UInt32), c1, c2)
 
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
 # Requires utf8proc v2.0 or later.
 function isgraphemebreak!(state::Ref{Int32}, c1::AbstractChar, c2::AbstractChar)
-    if ismalformed(c1) || ismalformed(c2)
+    if !hascodepoint(c1) || !hascodepoint(c2)
         state[] = 0
         return true
     end

@@ -131,6 +131,15 @@ See also [`decode_overlong`](@ref) and [`show_invalid`](@ref).
 """
 isoverlong(c::AbstractChar) = false
 
+"""
+    hascodepoint(c::AbstractChar) -> Bool
+
+Return `true` if [`codepoint(c)`](@ref) will return a codepoint
+value, or `false` if it will throw an error (e.g.
+for [`ismalformed`](@ref) or [`isoverlong`](@ref) characters).
+"""
+hascodepoint(c::AbstractChar) = !ismalformed(c) & !isoverlong(c)
+
 @constprop :aggressive function UInt32(c::Char)
     # TODO: use optimized inline LLVM
     u = bitcast(UInt32, c)
