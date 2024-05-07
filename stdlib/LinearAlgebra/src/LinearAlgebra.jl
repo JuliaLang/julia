@@ -516,32 +516,56 @@ const ⋅ = dot
 const × = cross
 export ⋅, ×
 
+# Separate the char corresponding to the wrapper from that corresponding to the uplo
+# In most cases, the former may be constant-propagated, while the latter usually can't be.
+# This improves type-inference in wrap for Symmetric/Hermitian matrices
+# A WrapperChar is equivalent to `isuppertri ? uppercase(wrapperchar) : lowercase(wrapperchar)`
+struct WrapperChar <: AbstractChar
+    wrapperchar :: Char
+    isuppertri :: Bool
+end
+function Base.Char(w::WrapperChar)
+    T = w.wrapperchar
+    if T ∈ ('N', 'T', 'C') # known cases where isuppertri is true
+        T
+    else
+        _isuppertri(w) ? uppercase(T) : lowercase(T)
+    end
+end
+Base.codepoint(w::WrapperChar) = codepoint(Char(w))
+WrapperChar(n::UInt32) = WrapperChar(Char(n))
+WrapperChar(c::Char) = WrapperChar(c, isuppercase(c))
+# We extract the wrapperchar so that the result may be constant-propagated
+# This doesn't return a value of the same type on purpose
+Base.uppercase(w::WrapperChar) = uppercase(w.wrapperchar)
+Base.lowercase(w::WrapperChar) = lowercase(w.wrapperchar)
+_isuppertri(w::WrapperChar) = w.isuppertri
+_isuppertri(x::AbstractChar) = isuppercase(x) # compatibility with earlier Char-based implementation
+_uplosym(x) = _isuppertri(x) ? (:U) : (:L)
+
 wrapper_char(::AbstractArray) = 'N'
 wrapper_char(::Adjoint) = 'C'
 wrapper_char(::Adjoint{<:Real}) = 'T'
 wrapper_char(::Transpose) = 'T'
-wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
-wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
-wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
+wrapper_char(A::Hermitian) =  WrapperChar('H', A.uplo == 'U')
+wrapper_char(A::Hermitian{<:Real}) = WrapperChar('S', A.uplo == 'U')
+wrapper_char(A::Symmetric) = WrapperChar('S', A.uplo == 'U')
 
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     # merge the result of this before return, so that we can type-assert the return such
     # that even if the tmerge is inaccurate, inference can still identify that the
     # `_generic_matmatmul` signature still matches and doesn't require missing backedges
-    B = if tA == 'N'
+    tA_uc = uppercase(tA)
+    B = if tA_uc == 'N'
         A
-    elseif tA == 'T'
+    elseif tA_uc == 'T'
         transpose(A)
-    elseif tA == 'C'
+    elseif tA_uc == 'C'
         adjoint(A)
-    elseif tA == 'H'
-        Hermitian(A, :U)
-    elseif tA == 'h'
-        Hermitian(A, :L)
-    elseif tA == 'S'
-        Symmetric(A, :U)
-    else # tA == 's'
-        Symmetric(A, :L)
+    elseif tA_uc == 'H'
+        Hermitian(A, _uplosym(tA))
+    elseif tA_uc == 'S'
+        Symmetric(A, _uplosym(tA))
     end
     return B::AbstractVecOrMat
 end
