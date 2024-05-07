@@ -1,4 +1,5 @@
 cmd = Base.julia_cmd()
+cmd = `$cmd --startup-file=no --history-file=no`
 output_type = nothing  # exe, sharedlib, sysimage
 static_call_graph = false
 strict = false
