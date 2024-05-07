@@ -245,11 +245,14 @@ function init_load_path()
     if haskey(ENV, "JULIA_LOAD_PATH")
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
-        paths = String[
-            env == "@." ? current_project() : env
-            for env in DEFAULT_LOAD_PATH
-            if env !== nothing
-        ]
+        paths = String[]
+        for env in DEFAULT_LOAD_PATH
+            if env == "@."
+                env = current_project()
+                env === nothing && continue
+            end
+            push!(paths, env)
+        end
     end
     append!(empty!(LOAD_PATH), paths)
 end
