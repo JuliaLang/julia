@@ -51,8 +51,7 @@ struct VersionNumber
     build::VerTuple
 
     function VersionNumber(major::VInt, minor::VInt, patch::VInt,
-            pre::VerTuple,
-            bld::VerTuple)
+                           @nospecialize(pre::VerTuple), @nospecialize(bld::VerTuple))
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
