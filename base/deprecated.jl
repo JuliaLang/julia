@@ -505,3 +505,18 @@ end
 @deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
 
 # END 1.11 deprecations
+
+# BEGIN 1.12 deprecations
+
+# This interface is internal, but relied on in some packages, so
+# this allows for smoother upgrades. To be removed when packages have
+# migrated.
+function Base.getproperty(mi::MethodInstance, s::Symbol)
+    if s === :sparam_vals
+        return getfield(getfield(mi, :data), s)
+    else
+        return getfield(mi, s)
+    end
+end
+
+# END 1.12 deprecations

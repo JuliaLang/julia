@@ -3519,7 +3519,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
     jl_svecset(jl_meth_spec_type->types, 0,
-        jl_new_struct(jl_uniontype_type, jl_meth_spec_type,
+        jl_new_struct(jl_uniontype_type, jl_method_specialization_type,
             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type)));
     jl_svecset(jl_meth_spec_type->types, 3, jl_code_instance_type);
     jl_svecset(jl_meth_spec_type->types, 4, jl_method_specialization_type);
