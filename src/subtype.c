@@ -1315,6 +1315,8 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     return ans;
 }
 
+static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e);
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -1365,7 +1367,8 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
                 if (yy) record_var_occurrence(yy, e, param);
                 if (yr) {
                     record_var_occurrence(xx, e, param);
-                    return subtype(xx->lb, yy->ub, e, 0);
+                    int trysub = e->intersection ? try_subtype_by_bounds(xx->lb, yy->ub, e) : 0;
+                    return trysub || subtype(xx->lb, yy->ub, e, 0);
                 }
                 return var_lt((jl_tvar_t*)x, y, e, param);
             }
@@ -2497,7 +2500,7 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
 
 static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT;
 
-// similar to `subtype_by_bounds`, used to avoid stack-overflow caused by circulation constraints.
+// similar to `subtype_by_bounds`, used to avoid stack-overflow caused by circular constraints.
 static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
 {
     if (jl_is_uniontype(a))
@@ -2506,22 +2509,21 @@ static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
     else if (jl_is_uniontype(b))
         return try_subtype_by_bounds(a, ((jl_uniontype_t *)b)->a, e) ||
                try_subtype_by_bounds(a, ((jl_uniontype_t *)b)->b, e);
-    else if (jl_egal(a, b))
+    else if (a == jl_bottom_type || b == (jl_value_t *)jl_any_type || obviously_egal(a, b))
         return 1;
     else if (!jl_is_typevar(b))
         return 0;
-    jl_varbinding_t *vb = e->vars;
-    while (vb != NULL) {
-        if (subtype_by_bounds(b, (jl_value_t *)vb->var, e) && obviously_in_union(a, vb->ub))
-            return 1;
-        vb = vb->prev;
-    }
-    return 0;
+    else if (jl_is_typevar(a) && subtype_by_bounds(a, b, e))
+        return 1;
+    // check if `Union{a, ...} <: b`.
+    jl_varbinding_t *vb = lookup(e, (jl_tvar_t *)b);
+    jl_value_t *blb = vb ? vb->lb : ((jl_tvar_t *)b)->lb;
+    return obviously_in_union(a, blb);
 }
 
 static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
 {
-    if (a == jl_bottom_type || b == (jl_value_t *)jl_any_type || try_subtype_by_bounds(a, b, e))
+    if (try_subtype_by_bounds(a, b, e))
         return 1;
     jl_savedenv_t se;
     save_env(e, &se, 1);
