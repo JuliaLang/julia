@@ -3332,7 +3332,7 @@ void jl_init_types(void) JL_GC_DISABLED
         (jl_unionall_t*)jl_meth_spec_type->name->wrapper;
     // These fields should be constant, but Serialization wants to mutate them in initialization
     //const static uint32_t method_instance_constfields[1] = { 0x00000007 }; // (1<<0)|(1<<1);
-    const static uint32_t method_instance_atomicfields[1] = { 0x0000008 }; // (1<<3)
+    const static uint32_t method_instance_atomicfields[1] = { 0x0000018 }; // (1<<3)|(1<<4)
     //Fields 3 and 4 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe. TODO: except inInference
     //jl_method_instance_type->name->constfields = method_instance_constfields;
     jl_meth_spec_type->name->atomicfields = method_instance_atomicfields;

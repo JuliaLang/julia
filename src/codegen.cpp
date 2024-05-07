@@ -5162,7 +5162,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
     jl_cgval_t result;
     if (lival.constant) {
         jl_method_instance_t *mi = (jl_method_instance_t*)lival.constant;
-        assert(jl_is_method_instance(mi));
+        assert(jl_is_method_specialization(mi));
         if (mi == ctx.linfo) {
             // handle self-recursion specially
             jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;

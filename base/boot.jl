@@ -501,9 +501,8 @@ struct LineInfoNode # legacy support for aiding Serializer.deserialize of old IR
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) = new(mod, method, file, line, inlined_at)
 end
 
-
 function CodeInstance(
-    mi::MethodInstance, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
+    mi::MethodSpecialization, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
     ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
     relocatability::UInt8, edges::DebugInfo)
@@ -649,12 +648,12 @@ Symbol(s::Symbol) = s
 # module providing the IR object model
 module IR
 
-export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+export CodeInfo, MethodSpecialization, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
     Const, PartialStruct, InterConditional, EnterNode
 
-using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+using Core: CodeInfo, MethodSpecialization, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
     Const, PartialStruct, InterConditional, EnterNode
@@ -1005,6 +1004,9 @@ const check_top_bit = check_sign_bit
 # For convenience
 EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?
     EnterNode(new_dest, old.scope) : EnterNode(new_dest)
+
+eval(Core, :((MS::Type{<:MethodSpecialization})(def::Union{Method, Module, MethodSpecialization}, abi::Type{<:Tuple}) =
+    $(Expr(:new, :MS, :def, :abi))))
 
 include(Core, "optimized_generics.jl")
 
