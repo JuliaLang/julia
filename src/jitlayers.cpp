@@ -517,7 +517,11 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
                 src = jl_uncompress_ir(def, NULL, (jl_value_t*)src);
         }
         else {
-            src = (jl_code_info_t*)jl_atomic_load_relaxed(&unspec->def->uninferred);
+            jl_method_instance_t *mi = unspec->def;
+            jl_code_instance_t *uninferred = jl_cached_uninferred(
+                jl_atomic_load_relaxed(&mi->cache), 1);
+            assert(uninferred);
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
             assert(src);
         }
         if (src) {
