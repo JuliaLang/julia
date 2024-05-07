@@ -386,14 +386,8 @@ julia> islowercase('❤')
 false
 ```
 """
-function islowercase(c::AbstractChar)
-    if ismalformed(c)
-        false
-    else
-        ui = UInt32(c)::UInt32 # type-assertion to ensure that we may assume :foldable
-        @assume_effects :foldable Bool(ccall(:utf8proc_islower, Cint, (UInt32,), ui))
-    end
-end
+islowercase(c::AbstractChar) = ismalformed(c) ? false :
+    Bool(@assume_effects :foldable @ccall utf8proc_islower(UInt32(c)::UInt32)::Cint)
 
 # true for Unicode upper and mixed case
 
