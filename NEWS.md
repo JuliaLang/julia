@@ -78,6 +78,8 @@ Standard library changes
 ------------------------
 
 * `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
+* New `hascodepoint(c::AbstractChar)` function returns
+  whether `codepoint(c)` will succeed ([#54393]).
 
 #### StyledStrings
 
