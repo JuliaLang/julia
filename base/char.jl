@@ -136,7 +136,7 @@ isoverlong(c::AbstractChar) = false
 
 Return `true` if [`codepoint(c)`](@ref) will return a codepoint
 value, or `false` if it will throw an error, e.g. for
-[`ismalformed`](@ref) or [`isoverlong`](@ref) characters.
+malformed or overlong character encodings.
 
 An [`isvalid`](@ref) character must always have a codepoint,
 but the converse is not necessarily true: for example, `hascodepoint`
