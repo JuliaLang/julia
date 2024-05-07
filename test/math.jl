@@ -58,6 +58,9 @@ has_fma = Dict(
     x = big(2) ^ 100
     @test (@allocated clamp(x, Int16)) == 0
 
+    x = clamp(2.0, BigInt)
+    @test x isa BigInt
+    @test x == big(2)
 end
 
 @testset "constants" begin

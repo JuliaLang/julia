@@ -779,7 +779,8 @@ function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::Abst
         else
             for k = 1:mA
                 aoffs = (k-1)*Astride
-                s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
+                firstterm = transpose(A[aoffs + 1])*B[1]
+                s = zero(firstterm + firstterm)
                 for i = 1:nA
                     s += transpose(A[aoffs+i]) * B[i]
                 end
@@ -794,7 +795,8 @@ function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::Abst
         else
             for k = 1:mA
                 aoffs = (k-1)*Astride
-                s = zero(A[aoffs + 1]*B[1] + A[aoffs + 1]*B[1])
+                firstterm = A[aoffs + 1]'B[1]
+                s = zero(firstterm + firstterm)
                 for i = 1:nA
                     s += A[aoffs + i]'B[i]
                 end

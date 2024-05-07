@@ -2428,7 +2428,11 @@ struct RTEffects
 end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sv::InferenceState)
-    si = StmtInfo(!call_result_unused(sv, sv.currpc))
+    unused = call_result_unused(sv, sv.currpc)
+    if unused
+        add_curr_ssaflag!(sv, IR_FLAG_UNUSED)
+    end
+    si = StmtInfo(!unused)
     call = abstract_call(interp, arginfo, si, sv)
     sv.stmt_info[sv.currpc] = call.info
     return call

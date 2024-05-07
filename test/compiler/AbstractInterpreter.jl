@@ -42,8 +42,10 @@ function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
     return nothing
 end
 
+struct StrangeSinError end
 strangesin(x) = sin(x)
-@overlay OverlayedMT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
+@overlay OverlayedMT strangesin(x::Float64) =
+    iszero(x) ? throw(StrangeSinError()) : x < 0 ? nothing : cos(x)
 
 # inference should use the overlayed method table
 @test Base.return_types((Float64,); interp=MTOverlayInterp()) do x
@@ -52,6 +54,11 @@ end |> only === Union{Float64,Nothing}
 @test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     @invoke strangesin(x::Float64)
 end |> only === Union{Float64,Nothing}
+@test only(Base.return_types(strangesin, (Float64,); interp=MTOverlayInterp())) === Union{Float64,Nothing}
+@test Base.infer_exception_type(strangesin, (Float64,); interp=MTOverlayInterp()) === Union{StrangeSinError,DomainError}
+@test only(Base.infer_exception_types(strangesin, (Float64,); interp=MTOverlayInterp())) === Union{StrangeSinError,DomainError}
+@test last(only(code_typed(strangesin, (Float64,); interp=MTOverlayInterp()))) === Union{Float64,Nothing}
+@test last(only(Base.code_ircode(strangesin, (Float64,); interp=MTOverlayInterp()))) === Union{Float64,Nothing}
 
 # effect analysis should figure out that the overlayed method is used
 @test Base.infer_effects((Float64,); interp=MTOverlayInterp()) do x
@@ -366,12 +373,15 @@ let src = code_typed1((Float64,Float64,Float64)) do x, y, z
     @test count(iscall((src, inlined_usually)), src.code) == 0
 end
 let NoinlineModule = Module()
+    OtherModule = Module()
+    main_func(x, y, z) = inlined_usually(x, y, z)
+    @eval NoinlineModule noinline_func(x, y, z) = $inlined_usually(x, y, z)
+    @eval OtherModule other_func(x, y, z) = $inlined_usually(x, y, z)
+
     interp = NoinlineInterpreter(Set((NoinlineModule,)))
 
     # this anonymous function's context is Main -- it should be inlined as usual
-    let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
-            inlined_usually(x, y, z)
-        end
+    let src = code_typed1(main_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 0
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
@@ -380,26 +390,19 @@ let NoinlineModule = Module()
     method = only(methods(inlined_usually, (Float64,Float64,Float64,)))
     mi = CC.specialize_method(method, Tuple{typeof(inlined_usually),Float64,Float64,Float64}, Core.svec())
     @test CC.haskey(CC.code_cache(interp), mi)
-    let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
-            inlined_usually(x, y, z)
-        end
+    let src = code_typed1(main_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 0
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
 
     # now the context module is `NoinlineModule` -- it should not be inlined
-    let src = @eval NoinlineModule $code_typed1((Float64,Float64,Float64); interp=$interp) do x, y, z
-            $inlined_usually(x, y, z)
-        end
+    let src = code_typed1(NoinlineModule.noinline_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 1
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
 
     # the context module is totally irrelevant -- it should be inlined as usual
-    OtherModule = Module()
-    let src = @eval OtherModule $code_typed1((Float64,Float64,Float64); interp=$interp) do x, y, z
-            $inlined_usually(x, y, z)
-        end
+    let src = code_typed1(OtherModule.other_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 0
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end

@@ -284,7 +284,7 @@ typedef union __jl_purity_overrides_t {
 } _jl_purity_overrides_t;
 
 #define NUM_EFFECTS_OVERRIDES 9
-#define NUM_IR_FLAGS 12
+#define NUM_IR_FLAGS 13
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
@@ -574,7 +574,10 @@ typedef struct {
         // metadata bit only for GenericMemory eltype layout
         uint16_t arrayelem_isboxed : 1;
         uint16_t arrayelem_isunion : 1;
-        uint16_t padding : 11;
+        // If set, this type's egality can be determined entirely by comparing
+        // the non-padding bits of this datatype.
+        uint16_t isbitsegal : 1;
+        uint16_t padding : 10;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -1176,8 +1179,8 @@ STATIC_INLINE jl_value_t *jl_svecset(
 /*
   how - allocation style
   0 = data is inlined
-  1 = owns the gc-managed data, exclusively
-  2 = malloc-allocated pointer (may or may not own it)
+  1 = owns the gc-managed data, exclusively (will free it)
+  2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the object that owns the data pointer
 */
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT

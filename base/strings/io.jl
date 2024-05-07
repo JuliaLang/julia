@@ -615,7 +615,7 @@ string literals. (It also happens to be the escaping convention
 expected by the Microsoft C/C++ compiler runtime when it parses a
 command-line string into the argv[] array.)
 
-See also [`escape_string`](@ref).
+See also [`Base.escape_string()`](@ref).
 """
 function escape_raw_string(io::IO, str::AbstractString, delim::Char='"')
     total = 0

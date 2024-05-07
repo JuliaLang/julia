@@ -642,6 +642,7 @@ end
 @testset "Task properties" begin
     f() = rand(2,2)
     t = Task(f)
-    @test_throws ErrorException("Querying `scope` is disallowed. Use `current_scope` instead.") t.scope
+    message = "Querying a Task's `scope` field is disallowed.\nThe private `Core.current_scope()` function is better, though still an implementation detail."
+    @test_throws ErrorException(message) t.scope
     @test t.state == :runnable
 end
