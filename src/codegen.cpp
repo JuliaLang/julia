@@ -6595,6 +6595,13 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             ((jl_method_t*)source.constant)->nargs > 0 &&
             jl_is_valid_oc_argtype((jl_tupletype_t*)argt.constant, (jl_method_t*)source.constant);
 
+        if (!can_optimize && ctx.params->no_dynamic_dispatch) {
+            // if we know the return type, we can assume the result is of that type
+            errs() << "ERROR: Dynamic call to OpaqueClosure method\n";
+            errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+            print_stacktrace(ctx);
+        }
+
         if (can_optimize) {
             jl_value_t *closure_t = NULL;
             jl_value_t *env_t = NULL;

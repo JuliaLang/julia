@@ -359,8 +359,10 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
     for (i = 0; i < MIs->len; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)MIs->items[i];
         jl_method_t *m = mi->def.method;
-        jl_sym_t * name = jl_method_get_table(m)->name;
         jl_methtable_t *old_mt = jl_method_get_table(m);
+        if ((jl_value_t *)old_mt == jl_nothing)
+            continue;
+        jl_sym_t *name = old_mt->name;
         if (!ptrhash_has(mtables, old_mt))
             ptrhash_put(mtables, old_mt, jl_new_method_table(name, m->module));
         jl_methtable_t *mt = (jl_methtable_t*)ptrhash_get(mtables, old_mt);
