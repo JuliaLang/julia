@@ -5,7 +5,8 @@ module Unicode
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
              convert, isvalid, ismalformed, isoverlong, iterate,
-             AnnotatedString, AnnotatedChar, annotated_chartransform
+             AnnotatedString, AnnotatedChar, annotated_chartransform,
+             @assume_effects
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -156,15 +157,15 @@ function utf8proc_decompose(str, options, buffer, nwords, chartransform::typeof(
     ret < 0 && utf8proc_error(ret)
     return ret
 end
-function utf8proc_decompose(str, options, buffer, nwords, chartransform::T) where T
-    ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{T}),
+function utf8proc_decompose(str, options, buffer, nwords, chartransform::F) where F
+    ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{F}),
                 str, sizeof(str), buffer, nwords, options,
-                @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{T})), chartransform)
+                @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{F})), chartransform)
     ret < 0 && utf8proc_error(ret)
     return ret
 end
 
-function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform=identity)
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform::F = identity) where F
     nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
     buffer = Base.StringVector(nwords*4)
     nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
@@ -183,7 +184,7 @@ const _julia_charmap = Dict{UInt32,UInt32}(
     0x210F => 0x0127,
 )
 
-utf8proc_map(s::AbstractString, flags::Integer, chartransform=identity) = utf8proc_map(String(s), flags, chartransform)
+utf8proc_map(s::AbstractString, flags::Integer, chartransform::F = identity) where F = utf8proc_map(String(s), flags, chartransform)
 
 # Documented in Unicode module
 function normalize(
@@ -385,7 +386,8 @@ julia> islowercase('❤')
 false
 ```
 """
-islowercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_islower, Cint, (UInt32,), UInt32(c)))
+islowercase(c::AbstractChar) = ismalformed(c) ? false :
+    Bool(@assume_effects :foldable @ccall utf8proc_islower(UInt32(c)::UInt32)::Cint)
 
 # true for Unicode upper and mixed case
 
@@ -409,7 +411,8 @@ julia> isuppercase('❤')
 false
 ```
 """
-isuppercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_isupper, Cint, (UInt32,), UInt32(c)))
+isuppercase(c::AbstractChar) = ismalformed(c) ? false :
+    Bool(@assume_effects :foldable @ccall utf8proc_isupper(UInt32(c)::UInt32)::Cint)
 
 """
     iscased(c::AbstractChar) -> Bool
