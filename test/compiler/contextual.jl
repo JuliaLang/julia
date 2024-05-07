@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
+using Test
+
 # Cassette
 # ========
 
