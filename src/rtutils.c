@@ -812,7 +812,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         else {
             n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth, ctx);
             n += jl_printf(out, ".<toplevel thunk> -> ");
-            n += jl_static_show_x(out, jl_atomic_load_relaxed(&li->uninferred), depth, ctx);
+            n += jl_static_show_x(out, jl_atomic_load_relaxed(&jl_cached_uninferred(
+                jl_atomic_load_relaxed(&li->cache), 1)->inferred), depth, ctx);
         }
     }
     else if (vt == jl_typename_type) {

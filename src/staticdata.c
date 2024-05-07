@@ -810,7 +810,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // we only need 3 specific fields of this (the rest are restored afterward, if valid)
             // in particular, cache is repopulated by jl_mi_cache_insert for all foreign function,
             // so must not be present here
-            record_field_change((jl_value_t**)&mi->uninferred, NULL);
             record_field_change((jl_value_t**)&mi->backedges, NULL);
             record_field_change((jl_value_t**)&mi->cache, NULL);
         }
@@ -2409,7 +2408,6 @@ static void strip_specializations_(jl_method_instance_t *mi)
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     if (jl_options.strip_ir) {
-        record_field_change((jl_value_t**)&mi->uninferred, NULL);
         record_field_change((jl_value_t**)&mi->backedges, NULL);
     }
 }

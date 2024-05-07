@@ -140,16 +140,28 @@ function get_staged(mi::MethodInstance, world::UInt)
     may_invoke_generator(mi) || return nothing
     try
         # user code might throw errors – ignore them
-        ci = ccall(:jl_code_for_staged, Any, (Any, UInt), mi, world)::CodeInfo
+        ci = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), mi, world, C_NULL)::CodeInfo
         return ci
     catch
         return nothing
     end
 end
 
+function get_cached_uninferred(mi::MethodInstance, world::UInt)
+    ccall(:jl_cached_uninferred, Any, (Any, UInt), mi.cache, world)::CodeInstance
+end
+
 function retrieve_code_info(mi::MethodInstance, world::UInt)
     def = mi.def
-    isa(def, Method) || return mi.uninferred
+    if !isa(def, Method)
+        ci = get_cached_uninferred(mi, world)
+        src = ci.inferred
+        # Inference may corrupt the src, which is fine, because this is a
+        # (short-lived) top-level thunk, but set it to NULL anyway, so we
+        # can catch it if somebody tries to read it again by accident.
+        # @atomic ci.inferred = C_NULL
+        return src
+    end
     c = isdefined(def, :generator) ? get_staged(mi, world) : nothing
     if c === nothing && isdefined(def, :source)
         src = def.source

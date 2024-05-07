@@ -1352,9 +1352,10 @@ function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
         # MethodInstance is part of a stacktrace, it gets location info
         # added by other means.  But if it isn't, then we should try
         # to print a little more identifying information.
-        if !from_stackframe
-            if isdefined(mi, :uninferred)
-                di = mi.uninferred.debuginfo
+        if !from_stackframe && isdefined(mi, :cache)
+            ci = mi.cache
+            if ci.owner === :uninferred
+                di = ci.inferred.debuginfo
                 file, line = IRShow.debuginfo_firstline(di)
                 file = string(file)
                 line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
@@ -1381,7 +1382,7 @@ function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
             show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
         end
     else
-        di = mi.uninferred.debuginfo
+        di = mi.cache.inferred.debuginfo
         file, line = IRShow.debuginfo_firstline(di)
         file = string(file)
         line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
