@@ -351,6 +351,19 @@ end
     @test all(!hascodepoint, overlong_chars)
     @test repr("text/plain", overlong_chars[1]) ==
         "'\\xc0': Malformed UTF-8 (category Ma: Malformed, bad data)"
+
+    let c = '\xf0\x8e\x80\x80' # overlong but not malformed
+        @test Base.isoverlong(c)
+        @test !Base.ismalformed(c)
+        @test hascodepoint(c)
+        @test !isuppercase(c) && !islowercase(c) # issue #54343
+    end
+
+    @test !Base.isoverlong('😺')
+    @test !Base.ismalformed('😺')
+    @test Base.hascodepoint('😺')
+    @test hascodepoint('\U110000') && !isvalid('\U110000')
+    @test hascodepoint('\ud800') && !isvalid('\ud800')
 end
 
 @testset "More fallback tests" begin
