@@ -135,8 +135,8 @@ isoverlong(c::AbstractChar) = false
     hascodepoint(c::AbstractChar) -> Bool
 
 Return `true` if [`codepoint(c)`](@ref) will return a codepoint
-value, or `false` if it will throw an error (e.g.
-for [`ismalformed`](@ref) or [`isoverlong`](@ref) characters).
+value, or `false` if it will throw an error, e.g. for
+[`ismalformed`](@ref) or [`isoverlong`](@ref) characters.
 """
 hascodepoint(c::AbstractChar) = !ismalformed(c) & !isoverlong(c)
 
@@ -288,8 +288,8 @@ end
 """
     show_invalid(io::IO, c::AbstractChar)
 
-Called by `show(io, c)` when [`isoverlong(c)`](@ref) or
-[`ismalformed(c)`](@ref) return `true`.   Subclasses
+Called by `show(io, c)` when [`hascodepoint(c)`](@ref)
+returns `false`.   Subclasses
 of `AbstractChar` should define `Base.show_invalid` methods
 if they support storing invalid character data.
 """
@@ -314,7 +314,7 @@ function show(io::IO, c::AbstractChar)
             return
         end
     end
-    if isoverlong(c) || ismalformed(c)
+    if !hascodepoint(c)
         show_invalid(io, c)
     elseif isprint(c)
         write(io, 0x27)

@@ -4,7 +4,7 @@
 module Unicode
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
-             convert, isvalid, ismalformed, hascodepoint, iterate,
+             convert, isvalid, hascodepoint, iterate,
              AnnotatedString, AnnotatedChar, annotated_chartransform,
              @assume_effects
 
@@ -256,7 +256,7 @@ julia> textwidth('⛵')
 ```
 """
 function textwidth(c::AbstractChar)
-    ismalformed(c) && return 1
+    !hascodepoint(c) && return 1
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
 

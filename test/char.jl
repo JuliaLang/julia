@@ -348,6 +348,7 @@ end
     @test all(Base.is_overlong_enc, overlong_uints)
     @test all(Base.isoverlong, overlong_chars)
     @test all(Base.ismalformed, overlong_chars)
+    @test all(!hascodepoint, overlong_chars)
     @test repr("text/plain", overlong_chars[1]) ==
         "'\\xc0': Malformed UTF-8 (category Ma: Malformed, bad data)"
 end
