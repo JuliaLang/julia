@@ -140,7 +140,7 @@ malformed or overlong character encodings.
 
 An [`isvalid`](@ref) character must always have a codepoint,
 but the converse is not necessarily true: for example, `hascodepoint`
-will return `true` for both `'\U110000'` and `'\ud800'`, but
+will return `true` for both `'\\U110000'` and `'\\ud800'`, but
 `isvalid` will return `false` for these characters because they
 cannot be present in any valid Unicode string (being too large
 in the first case, and part of a UTF-16 surrogate pair in the second case).
