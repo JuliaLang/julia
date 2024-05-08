@@ -770,6 +770,10 @@ function svd(A::RealHermSymComplexHerm; full::Bool=false)
     end
     return SVD(vecs, vals, V')
 end
+function svd(A::RealHermSymComplexHerm{T}; full::Bool = false) where {T <: Union{Float16,Complex{Float16}}}
+    A = svd(eigencopy_oftype(A, eigtype(T)); full)
+    return SVD{T}(A)
+end
 
 function svdvals!(A::RealHermSymComplexHerm)
     vals = eigvals!(A)

@@ -12,6 +12,13 @@ function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothin
     S = eigtype(eltype(A))
     eigen!(eigencopy_oftype(A, S), sortby=sortby)
 end
+function eigen(A::RealHermSymComplexHerm{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Union{Float16,ComplexF16}}
+    S = eigtype(eltype(A))
+    E = eigen!(eigencopy_oftype(A, S), sortby=sortby)
+    values = convert(AbstractVector{isreal(E.values) ? Float16 : Complex{Float16}}, E.values)
+    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
+    return Eigen(values, vectors)
+end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) =
     Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
