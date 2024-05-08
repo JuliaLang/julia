@@ -362,7 +362,7 @@ end
     @test !Base.isoverlong('😺')
     @test !Base.ismalformed('😺')
     @test Base.hascodepoint('😺')
-    @test hascodepoint('\U110000') && !isvalid('\U110000')
+    @test hascodepoint(Char(0x110000)) && !isvalid(Char(0x110000))
     @test hascodepoint('\ud800') && !isvalid('\ud800')
 end
 
