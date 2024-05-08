@@ -71,13 +71,14 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
 
     function randstring(r::AbstractRNG, chars=b, n::Integer=8)
+        _n = convert(Int, n)
         T = eltype(chars)
         if T === UInt8
-            str = Base._string_n(n)
-            GC.@preserve str rand!(r, UnsafeView(pointer(str), n), chars)
+            str = Base._string_n(_n)
+            GC.@preserve str rand!(r, UnsafeView(pointer(str), _n), chars)
             return str
         else
-            v = Vector{T}(undef, n)
+            v = Vector{T}(undef, _n)
             rand!(r, v, chars)
             return String(v)
         end
