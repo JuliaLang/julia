@@ -138,6 +138,11 @@ tag = "ANY"
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
+@testset "code_warntype OpaqueClosure" begin
+    g = Base.Experimental.@opaque Tuple{Float64} x -> 0.0
+    @test warntype_hastag(g, Tuple{Float64}, "::Float64")
+end
+
 end # module WarnType
 
 # Adds test for PR #17636
