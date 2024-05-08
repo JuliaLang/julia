@@ -1161,53 +1161,56 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 else {
                     MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
                 }
-                if (CI->hasStructRetAttr()) {
-                    Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
+                Type *ElT = CI->getAttributes().getParamAttrs(0).getStructRetType();
+                Attribute UnionSRet = CI->getAttributes().getParamAttrs(0).getAttribute("julia.sret");
+                Attribute RetRootsAttr0 = CI->getAttributes().getParamAttrs(0).getAttribute("julia.return_roots");
+                Attribute RetRootsAttr1 = CI->getAttributes().getParamAttrs(1).getAttribute("julia.return_roots");
+                if ((ElT || UnionSRet.isValid()) && (RetRootsAttr0.isValid() || RetRootsAttr1.isValid())) {
                     #if JL_LLVM_VERSION < 170000
-                    assert(cast<PointerType>(CI->getArgOperand(0)->getType())->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
+                    // assert(cast<PointerType>(CI->getArgOperand(0)->getType())->isOpaqueOrPointeeTypeMatches(ElT));
                     #endif
-                    auto tracked = CountTrackedPointers(ElT, true);
-                    if (tracked.count) {
-                        AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
-                        assert(SRet);
-                        {
-                            if (!(SRet->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                assert(!tracked.derived);
-                                if (tracked.all) {
-                                    S.ArrayAllocas[SRet] = tracked.count * cast<ConstantInt>(SRet->getArraySize())->getZExtValue();
-                                }
-                                else {
-                                    Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
-                                    AllocaInst *SRet_gc = nullptr;
-                                    if (PHINode *Phi = dyn_cast<PHINode>(arg1)) {
-                                        for (Value *V : Phi->incoming_values()) {
-                                            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
-                                                if (SRet_gc == nullptr) {
-                                                    SRet_gc = Alloca;
-                                                } else if (SRet_gc == Alloca) {
-                                                    continue;
-                                                } else {
-                                                    llvm_dump(Alloca);
-                                                    llvm_dump(SRet_gc);
-                                                    assert(false && "Allocas in Phi node should match");
-                                                }
+                    AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
+                    assert(SRet);
+                    {
+                        if (!(SRet->isStaticAlloca() && ElT && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
+                            if (RetRootsAttr0.isValid()) {
+                                // if (tracked.all) {
+                                S.ArrayAllocas[SRet] = atol(RetRootsAttr0.getValueAsString().data());
+                                assert(S.ArrayAllocas[SRet] != 0);
+                                //tracked.count * cast<ConstantInt>(SRet->getArraySize())->getZExtValue();
+                            } else {
+                                Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
+                                AllocaInst *SRet_gc = nullptr;
+                                if (PHINode *Phi = dyn_cast<PHINode>(arg1)) {
+                                    for (Value *V : Phi->incoming_values()) {
+                                        if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
+                                            if (SRet_gc == nullptr) {
+                                                SRet_gc = Alloca;
+                                            } else if (SRet_gc == Alloca) {
+                                                continue;
                                             } else {
-                                                llvm_dump(V->stripInBoundsOffsets());
-                                                assert(false && "Expected alloca");
+                                                llvm_dump(Alloca);
+                                                llvm_dump(SRet_gc);
+                                                assert(false && "Allocas in Phi node should match");
                                             }
+                                        } else {
+                                            llvm_dump(V->stripInBoundsOffsets());
+                                            assert(false && "Expected alloca");
                                         }
-                                    } else {
-                                        SRet_gc = dyn_cast<AllocaInst>(arg1);
                                     }
-                                    if (!SRet_gc) {
-                                        llvm_dump(CI);
-                                        llvm_dump(arg1);
-                                        assert(false && "Expected alloca");
-                                    }
-                                    Type *ElT = SRet_gc->getAllocatedType();
-                                    if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                        S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
-                                    }
+                                } else {
+                                    SRet_gc = dyn_cast<AllocaInst>(arg1);
+                                }
+                                if (!SRet_gc) {
+                                    llvm_dump(CI);
+                                    llvm_dump(arg1);
+                                    assert(false && "Expected alloca");
+                                }
+                                Type *ElT = SRet_gc->getAllocatedType();
+                                if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
+                                    S.ArrayAllocas[SRet_gc] = atol(RetRootsAttr1.getValueAsString().data());
+                                    assert(S.ArrayAllocas[SRet_gc] != 0);
+                                    // S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
                                 }
                             }
                         }
