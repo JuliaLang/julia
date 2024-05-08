@@ -318,7 +318,7 @@ function show_error_hints(io, ex, args...)
     isnothing(hinters) && return
     for handler in hinters
         try
-            Base.invokelatest(handler, io, ex, args...)
+            @invokelatest handler(io, ex, args...)
         catch err
             tn = typeof(handler).name
             @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
@@ -330,17 +330,97 @@ end
 include("opaque_closure.jl")
 
 """
-    Experimental.@overlay mt [function def]
+    Base.Experimental.@overlay mt [function def]
 
 Define a method and add it to the method table `mt` instead of to the global method table.
 This can be used to implement a method override mechanism. Regular compilation will not
 consider these methods, and you should customize the compilation flow to look in these
 method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+
+!!! note
+    Please be aware that when defining overlay methods using `@overlay`, it is not necessary
+    to have an original method that corresponds exactly in terms of how the method dispatches.
+    This means that the method overlay mechanism enabled by `@overlay` is not implemented by
+    replacing the methods themselves, but through an additional and prioritized method
+    lookup during the method dispatch.
+
+    Considering this, it is important to understand that in compilations using an overlay
+    method table like the following, the method dispatched by `callx(x)` is not the regular
+    method `callx(::Float64)`, but the overlay method `callx(x::Real)`:
+    ```julia
+    callx(::Real) = :real
+    @overlay SOME_OVERLAY_MT callx(::Real) = :overlay_real
+    callx(::Float64) = :float64
+
+    # some overlay callsite
+    let x::Float64
+        callx(x) #> :overlay_real
+    end
+    ```
 """
 macro overlay(mt, def)
-    def = macroexpand(__module__, def) # to expand @inline, @generated, etc
-    is_function_def(def) || error("@overlay requires a function definition")
-    return esc(overlay_def!(mt, def))
+    inner = Base.unwrap_macrocalls(def)
+    is_function_def(inner) || error("@overlay requires a function definition")
+    overlay_def!(mt, inner)
+    return esc(def)
+end
+
+"""
+    Base.Experimental.@consistent_overlay mt [function def]
+
+This macro operates almost identically to [`Base.Experimental.@overlay`](@ref), defining a
+new overlay method. The key difference with this macro is that it informs the compiler that
+the invocation of the overlay method it defines is `:consistent` with a regular,
+non-overlayed method call.
+
+More formally, when evaluating a generic function call ``f(x)`` at a specific world age
+``i``, if a regular method call ``fᵢ(x)`` is redirected to an overlay method call ``fᵢ′(x)``
+defined by this macro, it must be ensured that ``fᵢ(x) ≡ fᵢ′(x)``.
+
+For a detailed definition of `:consistent`-cy, consult the corresponding section in
+[`Base.@assume_effects`](@ref).
+
+!!! note
+    Note that the requirements for `:consistent`-cy include not only that the return values
+    are egal, but also that the manner of termination is the same.
+    However, it's important to aware that when they throw exceptions, the exceptions
+    themselves don't necessarily have to be egal as explained in the note of `:consistent`.
+    In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is required to also throw
+    one, but the exact exceptions may differ.
+
+!!! note
+    Please note that the `:consistent`-cy requirement applies not to method itself but to
+    _method invocation_. This means that for the use of `@consistent_overlay`, it is
+    necessary for method invocations with the native regular compilation and those with
+    a compilation with overlay method table to be `:consistent`.
+
+    For example, it is important to understand that, `@consistent_overlay` can be used like
+    the following:
+    ```julia
+    callsin(x::Real) = x < 0 ? error(x) : sin(x)
+    @consistent_overlay SOME_OVERLAY_MT callsin(x::Float64) =
+        x < 0 ? error_somehow(x) : sin(x)
+    ```
+    However, be aware that this `@consistent_overlay` will immediately become invalid if a
+    new method for `callsin` is defined subsequently, such as:
+    ```julia
+    callsin(x::Float64) = cos(x)
+    ```
+
+    This specifically implies that the use of `@consistent_overlay` should be restricted as
+    much as possible to cases where a regular method with a concrete signature is replaced
+    by an overlay method with the same concrete signature.
+
+    This constraint is closely related to the note in [`Base.Experimental.@overlay`](@ref);
+    you are advised to consult that as well.
+"""
+macro consistent_overlay(mt, def)
+    inner = Base.unwrap_macrocalls(def)
+    is_function_def(inner) || error("@consistent_overlay requires a function definition")
+    overlay_def!(mt, inner)
+    override = Core.Compiler.EffectsOverride(; consistent_overlay=true)
+    Base.pushmeta!(def::Expr, Base.form_purity_expr(override))
+    return esc(def)
 end
 
 function overlay_def!(mt, @nospecialize ex)

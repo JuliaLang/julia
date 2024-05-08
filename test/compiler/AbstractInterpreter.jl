@@ -21,7 +21,7 @@ CC.transform_result_for_cache(::AbsIntOnlyInterp2, ::Core.MethodInstance, ::CC.W
 # OverlayMethodTable
 # ==================
 
-using Base.Experimental: @MethodTable, @overlay
+using Base.Experimental: @MethodTable, @overlay, @consistent_overlay
 
 # @overlay method with return type annotation
 @MethodTable RT_METHOD_DEF
@@ -147,16 +147,28 @@ end
 raise_on_gpu1(x) = error(x)
 @overlay OVERLAY_MT @noinline raise_on_gpu1(x) = #=do something with GPU=# error(x)
 raise_on_gpu2(x) = error(x)
-@overlay OVERLAY_MT @noinline Base.@assume_effects :consistent_overlay raise_on_gpu2(x) = #=do something with GPU=# error(x)
+@consistent_overlay OVERLAY_MT @noinline raise_on_gpu2(x) = #=do something with GPU=# error(x)
+raise_on_gpu3(x) = error(x)
+@consistent_overlay OVERLAY_MT @noinline Base.@assume_effects :foldable raise_on_gpu3(x) = #=do something with GPU=# error_on_gpu(x)
 cpu_factorial(x::Int) = myfactorial(x, error)
 gpu_factorial1(x::Int) = myfactorial(x, raise_on_gpu1)
 gpu_factorial2(x::Int) = myfactorial(x, raise_on_gpu2)
+gpu_factorial3(x::Int) = myfactorial(x, raise_on_gpu3)
 
 @test Base.infer_effects(cpu_factorial, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
 @test Base.infer_effects(gpu_factorial1, (Int,); interp=MTOverlayInterp()) |> !Core.Compiler.is_nonoverlayed
 @test Base.infer_effects(gpu_factorial2, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_consistent_overlay
+let effects = Base.infer_effects(gpu_factorial3, (Int,); interp=MTOverlayInterp())
+    # check if `@consistent_overlay` together works with `@assume_effects`
+    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intetionally) undefined.
+    @test Core.Compiler.is_consistent_overlay(effects)
+    @test Core.Compiler.is_foldable(effects)
+end
 @test Base.infer_return_type(; interp=MTOverlayInterp()) do
     Val(gpu_factorial2(3))
+end == Val{6}
+@test Base.infer_return_type(; interp=MTOverlayInterp()) do
+    Val(gpu_factorial3(3))
 end == Val{6}
 
 # GPUCompiler needs accurate inference through kwfunc with the overlay of `Core.throw_inexacterror`

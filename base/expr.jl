@@ -505,7 +505,6 @@ The following `setting`s are supported.
 - `:inaccessiblememonly`
 - `:noub`
 - `:noub_if_noinbounds`
-- `:consistent_overlay`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -675,29 +674,6 @@ any other effect assertions (such as `:consistent` or `:effect_free`) as well, b
 not model this, and they assume the absence of undefined behavior.
 
 ---
-## `:consistent_overlay`
-
-The `:consistent_overlay` setting asserts that any overlayed methods potentially called by
-the method are `:consistent` with their original, non-overlayed counterparts. For the exact
-definition of `:consistent`, refer to the earlier explanation.
-
-More formally, when evaluating a generic function call ``f(x)`` at a specific world-age ``i``,
-and the regular method call ``fᵢ(x)`` is redirected to an overlay method ``fᵢ′(x)``, this
-setting requires that ``fᵢ(x) ≡ fᵢ′(x)``.
-
-!!! note
-    Note that the requirements for `:consistent`-cy include not only that the return values
-    are egal, but also that the manner of termination is the same.
-    However, it's important to aware that when they throw exceptions, the exceptions
-    themselves don't necessarily have to be egal as explained in the note of `:consistent`.
-    In other words, if ``fᵢ(x)`` throws an exception, this settings requires ``fᵢ′(x)`` to
-    also raise one, but the exact exceptions may differ.
-
-!!! note
-    This setting isn't supported at the callsite; it has to be applied at the definition
-    site. Also, given its nature, it's expected to be used together with `Base.Experimental.@overlay`.
-
----
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -761,7 +737,7 @@ macro assume_effects(args...)
     lastex = args[end]
     override = compute_assumed_settings(args[begin:end-1])
     if is_function_def(unwrap_macrocalls(lastex))
-        return esc(pushmeta!(lastex, form_purity_expr(override)))
+        return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
     elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
         lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(lastex.args, 3, Core.Compiler.encode_effects_override(override))
@@ -773,8 +749,6 @@ macro assume_effects(args...)
         return Expr(:meta, form_purity_expr(override′))
     else
         # call site annotation case
-        override.consistent_overlay &&
-            throw(ArgumentError("Callsite `@assume_effects :consistent_overlay` is not supported"))
         return Expr(:block,
                     form_purity_expr(override),
                     Expr(:local, Expr(:(=), :val, esc(lastex))),
@@ -819,8 +793,6 @@ function compute_assumed_setting(override::EffectsOverride, @nospecialize(settin
         return EffectsOverride(override; noub = val)
     elseif setting === :noub_if_noinbounds
         return EffectsOverride(override; noub_if_noinbounds = val)
-    elseif setting === :consistent_overlay
-        return EffectsOverride(override; consistent_overlay = val)
     elseif setting === :foldable
         consistent = effect_free = terminates_globally = noub = val
         return EffectsOverride(override; consistent, effect_free, terminates_globally, noub)
