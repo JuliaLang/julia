@@ -1317,6 +1317,40 @@ end
 print(io::IO, s::Splat) = print(io, "splat(", s.f, ')')
 show(io::IO, s::Splat) = print(io, s)
 
+## TupleView: for recursing over each element in a tuple
+
+struct TupleView{Length<:Tuple{Vararg{Nothing}},Parent<:Tuple}
+    p::Parent
+    TupleView{L,P}(p::P) where {L<:Tuple{Vararg{Nothing}},P<:Tuple} = new{L,P}(p)
+end
+TupleView{L}(p::P) where {L,P} = TupleView{L,P}(p)
+TupleView(p::P) where {P} = TupleView{Tuple{Vararg{Nothing,Int(length(p))}},P}(p)
+
+length(::TupleView{Tuple{Vararg{Nothing,l}}}) where {l} = l
+isempty(v::TupleView) = iszero(length(v))
+first(v::TupleView{Tuple{Vararg{Nothing,l}},<:Tuple{Vararg{Any,p}}}) where {l,p} = v.p[p - l + 1]
+function tail(v::TupleView{Tuple{Nothing,Vararg{Nothing,l}}}) where {l}
+    L = Tuple{Vararg{Nothing,l}}
+    TupleView{L}(v.p)
+end
+
+function _in_tupleview(x, (@nospecialize v::TupleView), any_missing::Bool)
+    @inline
+    if isempty(v)
+        any_missing ? missing : false
+    else
+        let y_single = x == first(v), is_missing = ismissing(y_single)
+            if !is_missing && y_single
+                true
+            else
+                let f = is_missing | any_missing, rest = tail(v)
+                    _in_tupleview(x, rest, f)
+                end
+            end
+        end
+    end
+end
+
 ## in and related operators
 
 """
@@ -1332,7 +1366,7 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr::Any)
+function _in_looping(x, itr)
     anymissing = false
     for y in itr
         v = (y == x)
@@ -1345,29 +1379,10 @@ function in(x, itr::Any)
     return anymissing ? missing : false
 end
 
-# Specialized variant of in for Tuple, which can generate typed comparisons for each element
-# of the tuple, skipping values that are statically known to be != at compile time.
-in(x, itr::Tuple) = _in_tuple(x, itr, false)
-# This recursive function will be unrolled at compiletime, and will not generate separate
-# llvm-compiled specializations for each step of the recursion.
-function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
-    @inline
-    # Base case
-    if isempty(itr)
-        return anymissing ? missing : false
-    end
-    # Recursive case
-    v = (itr[1] == x)
-    if ismissing(v)
-        anymissing = true
-    elseif v
-        return true
-    end
-    return _in_tuple(x, tail(itr), anymissing)
-end
-
-# fallback to the loop implementation after some number of arguments to avoid inference blowup
-in(x, itr::Any32) = invoke(in, Tuple{Any,Any}, x, itr)
+_in_tuple(x, t::Tuple) = _in_tupleview(x, TupleView(t), false)
+_in_tuple(x, t::Tuple{(Any for _ ∈ 1:600)..., Vararg}) = _in_looping(x, t)  # prevent type inference stack overflow
+in(x, t::Tuple) = _in_tuple(x, t)
+in(x, t) = _in_looping(x, t)
 
 const ∈ = in
 ∉(x, itr) = !∈(x, itr)

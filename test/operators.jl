@@ -4,6 +4,23 @@ using Random: randstring
 
 include("compiler/irutils.jl")
 
+@testset "differential testing of `in(::Any, ::Tuple)` implementations" begin
+    tuples = (
+        (), (3,), (7,), (missing,),
+        (3, 3), (3, 7), (3, missing), (7, 3), (7, 7), (7, missing), (missing, 3), (missing, 7), (missing, missing),
+        (3, 7, missing), (3, missing, 7), (missing, 3, 7),
+        (7, 3, missing), (7, missing, 3), (missing, 7, 3),
+        (3, 3, missing), (3, missing, 3), (missing, 3, 3),
+        (7, 7, missing), (7, missing, 7), (missing, 7, 7))
+    for x ∈ (3, missing)
+        for t ∈ tuples
+            x::Union{Int,Missing}
+            t::Tuple{Vararg{Union{Int,Missing}}}
+            @test ∈(x, t) === Base._in_looping(x, t) === Base._in_tuple(x, t)
+        end
+    end
+end
+
 @testset "ifelse" begin
     @test ifelse(true, 1, 2) == 1
     @test ifelse(false, 1, 2) == 2
