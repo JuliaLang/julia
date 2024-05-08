@@ -322,7 +322,7 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
     return native_code;
 }
 
-static void *jl_precompile_small_image(void)
+static void *jl_precompile_small_image(size_t world)
 {
     // array of MethodInstances and ccallable aliases to include in the output
     jl_array_t *m = jl_alloc_vec_any(0);
@@ -348,7 +348,7 @@ static void *jl_precompile_small_image(void)
     jl_cgparams_t params = jl_default_cgparams;
     params.no_dynamic_dispatch = jl_options.no_dispatch_precompile;
     void *native_code = jl_create_native(m, NULL, &params, 0, /* imaging */ 1, 0,
-                                         jl_atomic_load_acquire(&jl_world_counter));
+                                         world);
     JL_GC_POP();
     return native_code;
 }
@@ -366,10 +366,18 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
         jl_methtable_t *mt = (jl_methtable_t*)ptrhash_get(mtables, old_mt);
         size_t min_world = 1;
         size_t max_world = ~(size_t)0;
+        // Check if the method is already in the new table, if not then insert it there
         if (jl_gf_invoke_lookup_worlds(m->sig, (jl_value_t *)mt, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world) == jl_nothing){
-            jl_atomic_store_relaxed(&m->primary_world, max_world);
-            jl_atomic_store_relaxed(&m->deleted_world, min_world);
-            jl_method_table_insert(mt, m, NULL);
+            //TODO: should this be a function like unsafe_insert_method?
+            size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
+            size_t max_world = jl_atomic_load_relaxed(&m->deleted_world);
+            jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
+            jl_atomic_store_relaxed(&m->deleted_world, 1);
+            jl_typemap_entry_t *newentry = jl_method_table_add(mt, m, NULL);
+            jl_atomic_store_relaxed(&m->primary_world, min_world);
+            jl_atomic_store_relaxed(&m->deleted_world, max_world);
+            jl_atomic_store_relaxed(&newentry->min_world, min_world);
+            jl_atomic_store_relaxed(&newentry->max_world, max_world);
         }
     }
 

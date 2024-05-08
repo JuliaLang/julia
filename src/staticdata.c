@@ -350,6 +350,7 @@ static uintptr_t img_min;
 static uintptr_t img_max;
 
 static htable_t new_methtables;
+static size_t precompilation_world;
 
 static int ptr_cmp(const void *l, const void *r)
 {
@@ -3039,7 +3040,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, global_roots_keyset);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
-            write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
+            size_t world = jl_atomic_load_acquire(&jl_world_counter);
+            assert(world == precompilation_world);
+            write_uint(f, world);
             write_uint(f, jl_typeinf_world);
         }
         else {
@@ -3176,12 +3179,12 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         }
     }
     else if (_native_data != NULL) {
+        precompilation_world = jl_atomic_load_acquire(&jl_world_counter);
         if (jl_options.small_image)
-            *_native_data = jl_precompile_small_image();
+            *_native_data = jl_precompile_small_image(precompilation_world);
         else
             *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
     }
-
     // Make sure we don't run any Julia code concurrently after this point
     // since it will invalidate our serialization preparations
     jl_gc_enable_finalizers(ct, 0);
