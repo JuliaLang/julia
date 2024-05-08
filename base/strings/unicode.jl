@@ -350,7 +350,7 @@ function category_code(c::AbstractChar)
 end
 
 function category_code(x::Integer)
-    x ≤ 0x10ffff ? ccall(:utf8proc_category, Cint, (UInt32,), x) : Cint(30)
+    x ≤ 0x10ffff ? (@assume_effects :foldable @ccall utf8proc_category(UInt32(x)::UInt32)::Cint) : Cint(30)
 end
 
 # more human-readable representations of the category code
