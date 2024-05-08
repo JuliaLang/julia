@@ -354,6 +354,7 @@ end
 
     let c = '\xf0\x8e\x80\x80' # overlong but not malformed
         @test Base.isoverlong(c)
+        @test !Base.isvalid(c)
         @test !Base.ismalformed(c)
         @test !hascodepoint(c)
         @test !isuppercase(c) && !islowercase(c) # issue #54343
