@@ -2198,7 +2198,7 @@ end
     # These builtins are not-vararg, so if we have varars, here, we can't guarantee
     # the correct number of arguments.
     na = length(argtypes)
-    (na ≠ 0 && isvarargtype(argtypes[end])) && return false
+    hasvarargtype(argtypes) && return false
     if f === Core._typevar
         na == 3 || return false
         return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
@@ -2524,7 +2524,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt)
+        nothrow = !hasvarargtype(argtypes) && builtin_nothrow(𝕃, f, argtypes, rt)
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
@@ -2597,6 +2597,8 @@ function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
 end
 current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
 
+hasvarargtype(argtypes::Vector{Any}) = !isempty(argtypes) && isvarargtype(argtypes[end])
+
 """
     builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
 
@@ -2653,7 +2655,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         end
         tf = T_FFUNC_VAL[fidx]
     end
-    if !isempty(argtypes) && isvarargtype(argtypes[end])
+    if hasvarargtype(argtypes)
         if length(argtypes) - 1 > tf[2]
             # definitely too many arguments
             return Bottom
@@ -2706,7 +2708,7 @@ function known_is_valid_intrinsic_elptr(𝕃::AbstractLattice, @nospecialize(ptr
 end
 
 function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::Vector{Any})
-    if !isempty(argtypes) && isvarargtype(argtypes[end])
+    if hasvarargtype(argtypes)
         return Any
     end
 
