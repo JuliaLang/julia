@@ -934,15 +934,23 @@ function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
     matmul2x2!(similar(B, promote_op(matprod, T, S), 2, 2), tA, tB, A, B)
 end
 
-function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    _add::MulAddMul = MulAddMul())
+function __matmul_checks(C, A, B, sz)
     require_one_based_indexing(C, A, B)
     if C === A || B === C
         throw(ArgumentError("output matrix must not be aliased with input matrix"))
     end
-    if !(size(A) == size(B) == size(C) == (2,2))
+    if !(size(A) == size(B) == size(C) == sz)
         throw(DimensionMismatch(lazy"A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
+    return nothing
+end
+
+# separate function with the core of matmul2x2! that doesn't depend on a MulAddMul
+function _matmul2x2_elements!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+    __matmul_checks(C, A, B, (2,2))
+    __matmul2x2_elements!(tA, tB, A, B)
+end
+function __matmul2x2_elements!(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     @inbounds begin
     if tA == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
@@ -991,9 +999,17 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B11 = hermitian(B[1,1], :L); B12 = copy(adjoint(B[2,1]))
         B21 = B[2,1]; B22 = hermitian(B[2,2], :L)
     end
+    end # inbounds
+    (A11, A12, A21, A22), (B11, B12, B21, B22)
+end
+
+function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+                    _add::MulAddMul = MulAddMul())
+    (A11, A12, A21, A22), (B11, B12, B21, B22) = _matmul2x2_elements!(C, tA, tB, A, B)
+    @inbounds begin
     _modify!(_add, A11*B11 + A12*B21, C, (1,1))
-    _modify!(_add, A11*B12 + A12*B22, C, (1,2))
     _modify!(_add, A21*B11 + A22*B21, C, (2,1))
+    _modify!(_add, A11*B12 + A12*B22, C, (1,2))
     _modify!(_add, A21*B12 + A22*B22, C, (2,2))
     end # inbounds
     C
@@ -1004,15 +1020,12 @@ function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
     matmul3x3!(similar(B, promote_op(matprod, T, S), 3, 3), tA, tB, A, B)
 end
 
-function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    _add::MulAddMul = MulAddMul())
-    require_one_based_indexing(C, A, B)
-    if C === A || B === C
-        throw(ArgumentError("output matrix must not be aliased with input matrix"))
-    end
-    if !(size(A) == size(B) == size(C) == (3,3))
-        throw(DimensionMismatch(lazy"A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
-    end
+# separate function with the core of matmul3x3! that doesn't depend on a MulAddMul
+function _matmul3x3_elements!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+    __matmul_checks(C, A, B, (3,3))
+    __matmul3x3_elements!(tA, tB, A, B)
+end
+function __matmul3x3_elements!(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     @inbounds begin
     if tA == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
@@ -1077,17 +1090,27 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B21 = B[2,1]; B22 = hermitian(B[2,2], :L); B23 = copy(adjoint(B[3,2]))
         B31 = B[3,1]; B32 = B[3,2]; B33 = hermitian(B[3,3], :L)
     end
+    end # inbounds
+    (A11, A12, A13, A21, A22, A23, A31, A32, A33), (B11, B12, B13, B21, B22, B23, B31, B32, B33)
+end
 
+function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+                    _add::MulAddMul = MulAddMul())
+
+    (A11, A12, A13, A21, A22, A23, A31, A32, A33),
+        (B11, B12, B13, B21, B22, B23, B31, B32, B33) = _matmul3x3_elements!(C, tA, tB, A, B)
+
+    @inbounds begin
     _modify!(_add, A11*B11 + A12*B21 + A13*B31, C, (1,1))
-    _modify!(_add, A11*B12 + A12*B22 + A13*B32, C, (1,2))
-    _modify!(_add, A11*B13 + A12*B23 + A13*B33, C, (1,3))
-
     _modify!(_add, A21*B11 + A22*B21 + A23*B31, C, (2,1))
-    _modify!(_add, A21*B12 + A22*B22 + A23*B32, C, (2,2))
-    _modify!(_add, A21*B13 + A22*B23 + A23*B33, C, (2,3))
-
     _modify!(_add, A31*B11 + A32*B21 + A33*B31, C, (3,1))
+
+    _modify!(_add, A11*B12 + A12*B22 + A13*B32, C, (1,2))
+    _modify!(_add, A21*B12 + A22*B22 + A23*B32, C, (2,2))
     _modify!(_add, A31*B12 + A32*B22 + A33*B32, C, (3,2))
+
+    _modify!(_add, A11*B13 + A12*B23 + A13*B33, C, (1,3))
+    _modify!(_add, A21*B13 + A22*B23 + A23*B33, C, (2,3))
     _modify!(_add, A31*B13 + A32*B23 + A33*B33, C, (3,3))
     end # inbounds
     C
