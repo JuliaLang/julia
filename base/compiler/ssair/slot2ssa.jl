@@ -161,40 +161,6 @@ function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), r
     return fixemup!(stmt::SlotNumber->true, stmt::SlotNumber->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
-function strip_trailing_junk!(ci::CodeInfo, cfg::CFG, code::Vector{Any}, info::Vector{CallInfo})
-    # Remove `nothing`s at the end, we don't handle them well
-    # (we expect the last instruction to be a terminator)
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    (; codelocs, ssaflags) = ci
-    for i = length(code):-1:1
-        if code[i] !== nothing
-            resize!(code, i)
-            resize!(ssavaluetypes, i)
-            resize!(codelocs, i)
-            resize!(info, i)
-            resize!(ssaflags, i)
-            break
-        end
-    end
-    # If the last instruction is not a terminator, add one. This can
-    # happen for implicit return on dead branches.
-    term = code[end]
-    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
-        push!(code, ReturnNode())
-        push!(ssavaluetypes, Union{})
-        push!(codelocs, 0)
-        push!(info, NoCallInfo())
-        push!(ssaflags, IR_FLAG_NOTHROW)
-
-        # Update CFG to include appended terminator
-        old_range = cfg.blocks[end].stmts
-        new_range = StmtRange(first(old_range), last(old_range) + 1)
-        cfg.blocks[end] = BasicBlock(cfg.blocks[end], new_range)
-        (length(cfg.index) == length(cfg.blocks)) && (cfg.index[end] += 1)
-    end
-    nothing
-end
-
 # maybe use expr_type?
 function typ_for_val(@nospecialize(x), ci::CodeInfo, ir::IRCode, idx::Int, slottypes::Vector{Any})
     if isa(x, Expr)
@@ -229,7 +195,7 @@ Run iterated dominance frontier.
 The algorithm we have here essentially follows LLVM, which itself is a
 a cleaned up version of the linear-time algorithm described in [^SG95].
 
-The algorithm here, is quite straightforward. Suppose we have a CFG:
+The algorithm here is quite straightforward. Suppose we have a CFG:
 
     A -> B -> D -> F
      \\-> C ------>/
@@ -464,18 +430,18 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node in the next basic block (we accounted for this above)
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
             end
             result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, EnterNode)
-                result[inst_range[end]][:stmt] = EnterNode(terminator, bb_rename[terminator.catch_dest])
+                result[inst_range[end]][:stmt] = EnterNode(terminator, terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest])
             end
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
                 inst_range = first(inst_range):(last(inst_range) + 1)
             end
         end
@@ -504,6 +470,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
         new_node[:stmt] = renumber_ssa!(new_node_inst, inst_rename, true)
     end
+    ir.debuginfo.codelocs = result.line
     new_ir = IRCode(ir, result, cfg, new_new_nodes)
     return new_ir
 end
@@ -878,7 +845,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
         elseif isa(stmt, EnterNode)
-            except_bb = block_for_inst(cfg, stmt.catch_dest)
+            except_bb = stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest)
             new_code[idx] = EnterNode(stmt, except_bb)
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||

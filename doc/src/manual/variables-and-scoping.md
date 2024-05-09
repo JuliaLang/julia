@@ -67,32 +67,7 @@ Each module introduces a new global scope, separate from the global scope of all
 is no all-encompassing global scope. Modules can introduce variables of other modules into their
 scope through the [using or import](@ref modules) statements or through qualified access using the
 dot-notation, i.e. each module is a so-called *namespace* as well as a first-class data structure
-associating names with values. Note that while variable bindings can be read externally, they can only
-be changed within the module to which they belong. As an escape hatch, you can always evaluate code
-inside that module to modify a variable; this guarantees, in particular, that module bindings cannot
-be modified externally by code that never calls `eval`.
-
-```jldoctest
-julia> module A
-           a = 1 # a global in A's scope
-       end;
-
-julia> module B
-           module C
-               c = 2
-           end
-           b = C.c    # can access the namespace of a nested global scope
-                      # through a qualified access
-           import ..A # makes module A available
-           d = A.a
-       end;
-
-julia> module D
-           b = a # errors as D's global scope is separate from A's
-       end;
-ERROR: UndefVarError: `a` not defined in `D`
-Suggestion: check for spelling errors or missing imports.
-```
+associating names with values.
 
 If a top-level expression contains a variable declaration with keyword `local`,
 then that variable is not accessible outside that expression.

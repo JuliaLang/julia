@@ -192,7 +192,7 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     outf.close();
 }
 
-extern "C" void jl_write_coverage_data(const char *output)
+extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 {
     if (output) {
         StringRef output_pattern(output);

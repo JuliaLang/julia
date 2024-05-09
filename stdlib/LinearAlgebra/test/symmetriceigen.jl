@@ -144,4 +144,11 @@ end
     @test e0 ≈ eu
 end
 
+@testset "Hermitian tridiagonal eigen with Complex{Int} elements (#52801)" begin
+    dv, ev = fill(complex(2), 4), fill(3-4im, 3)
+    HT = Hermitian(Tridiagonal(ev, dv, ev))
+    λ, V = eigen(HT)
+    @test HT * V ≈ V * Diagonal(λ)
+end
+
 end # module TestSymmetricEigen

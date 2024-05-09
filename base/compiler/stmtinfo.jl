@@ -222,13 +222,18 @@ struct FinalizerInfo <: CallInfo
 end
 
 """
-    info::ModifyFieldInfo <: CallInfo
+    info::ModifyOpInfo <: CallInfo
 
-Represents a resolved all of `modifyfield!(obj, name, op, x, [order])`.
-`info.info` wraps the call information of `op(getfield(obj, name), x)`.
+Represents a resolved call of one of:
+ - `modifyfield!(obj, name, op, x, [order])`
+ - `modifyglobal!(mod, var, op, x, order)`
+ - `memoryrefmodify!(memref, op, x, order, boundscheck)`
+ - `Intrinsics.atomic_pointermodify(ptr, op, x, order)`
+
+`info.info` wraps the call information of `op(getval(), x)`.
 """
-struct ModifyFieldInfo <: CallInfo
-    info::CallInfo # the callinfo for the `op(getfield(obj, name), x)` call
+struct ModifyOpInfo <: CallInfo
+    info::CallInfo # the callinfo for the `op(getval(), x)` call
 end
 
 @specialize

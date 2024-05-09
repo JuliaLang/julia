@@ -47,7 +47,7 @@ end
 end
 
 @testset "DateTime parsing" begin
-    # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
+    # Useful reference for different locales: https://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
     # Allow parsing of strings which are not representable as a TimeType
     str = "02/15/1996 25:00"
@@ -469,6 +469,9 @@ end
 
 # Issue #44003
 @test tryparse(Dates.Date, "2017", Dates.DateFormat(".s")) === nothing
+
+# Issue #52989
+@test Dates.DateTime("2000") == Dates.DateTime(2000)
 
 @testset "parse milliseconds, Issue #22100" begin
     @test Dates.DateTime("2017-Mar-17 00:00:00.0000", "y-u-d H:M:S.s") == Dates.DateTime(2017, 3, 17)

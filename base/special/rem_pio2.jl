@@ -126,10 +126,7 @@ function fromfraction(f::Int128)
     return (z1,z2)
 end
 
-# XXX we want to mark :noub here so that this function can be concrete-folded,
-# because the effect analysis currently can't prove it in the presence of `@inbounds` or
-# `:boundscheck`, but still the accesses to `INV_2PI` are really safe here
-Base.@assume_effects :consistent :noub function paynehanek(x::Float64)
+function paynehanek(x::Float64)
     # 1. Convert to form
     #
     #    x = X * 2^k,
@@ -168,15 +165,15 @@ Base.@assume_effects :consistent :noub function paynehanek(x::Float64)
     idx = k >> 6
 
     shift = k - (idx << 6)
-    if shift == 0
-        @inbounds a1 = INV_2PI[idx+1]
-        @inbounds a2 = INV_2PI[idx+2]
-        @inbounds a3 = INV_2PI[idx+3]
+    Base.@assume_effects :nothrow :noub @inbounds if shift == 0
+        a1 = INV_2PI[idx+1]
+        a2 = INV_2PI[idx+2]
+        a3 = INV_2PI[idx+3]
     else
         # use shifts to extract the relevant 64 bit window
-        @inbounds a1 = (idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift) | (INV_2PI[idx+2] >> (64 - shift))
-        @inbounds a2 = (INV_2PI[idx+2] << shift) | (INV_2PI[idx+3] >> (64 - shift))
-        @inbounds a3 = (INV_2PI[idx+3] << shift) | (INV_2PI[idx+4] >> (64 - shift))
+        a1 = (idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift) | (INV_2PI[idx+2] >> (64 - shift))
+        a2 = (INV_2PI[idx+2] << shift) | (INV_2PI[idx+3] >> (64 - shift))
+        a3 = (INV_2PI[idx+3] << shift) | (INV_2PI[idx+4] >> (64 - shift))
     end
 
     # 3. Perform the multiplication:

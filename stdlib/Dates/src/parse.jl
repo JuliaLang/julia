@@ -207,7 +207,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     let val = tryparsenext_base10(s, i, end_pos, 1)
         val === nothing && @goto error
         dy, i = val
-        i > end_pos && @goto error
+        i > end_pos && @goto done
     end
 
     c, i = iterate(s, i)::Tuple{Char, Int}

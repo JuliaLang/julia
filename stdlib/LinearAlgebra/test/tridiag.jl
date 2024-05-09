@@ -15,6 +15,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -95,12 +98,12 @@ end
         @test isa(ST, SymTridiagonal{elty,Vector{elty}})
         TT = Tridiagonal{elty,Vector{elty}}(GenericArray(dl), d, GenericArray(dl))
         @test isa(TT, Tridiagonal{elty,Vector{elty}})
-        @test_throws MethodError SymTridiagonal(d, GenericArray(dl))
-        @test_throws MethodError SymTridiagonal(GenericArray(d), dl)
-        @test_throws MethodError Tridiagonal(GenericArray(dl), d, GenericArray(dl))
-        @test_throws MethodError Tridiagonal(dl, GenericArray(d), dl)
-        @test_throws MethodError SymTridiagonal{elty}(d, GenericArray(dl))
-        @test_throws MethodError Tridiagonal{elty}(GenericArray(dl), d,GenericArray(dl))
+        @test_throws ArgumentError SymTridiagonal(d, GenericArray(dl))
+        @test_throws ArgumentError SymTridiagonal(GenericArray(d), dl)
+        @test_throws ArgumentError Tridiagonal(GenericArray(dl), d, GenericArray(dl))
+        @test_throws ArgumentError Tridiagonal(dl, GenericArray(d), dl)
+        @test_throws ArgumentError SymTridiagonal{elty}(d, GenericArray(dl))
+        @test_throws ArgumentError Tridiagonal{elty}(GenericArray(dl), d,GenericArray(dl))
         STI = SymTridiagonal([1,2,3,4], [1,2,3])
         TTI = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3])
         TTI2 = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3], [1,2])
@@ -505,6 +508,11 @@ end
     @test SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
 end
 
+@testset "Issue #48505" begin
+    @test SymTridiagonal([1,2,3],[4,5.0]) == [1.0 4.0 0.0; 4.0 2.0 5.0; 0.0 5.0 3.0]
+    @test Tridiagonal([1, 2], [4, 5, 1], [6.0, 7]) == [4.0 6.0 0.0; 1.0 5.0 7.0; 0.0 2.0 1.0]
+end
+
 @testset "convert for SymTridiagonal" begin
     STF32 = SymTridiagonal{Float32}(fill(1f0, 5), fill(1f0, 4))
     @test convert(SymTridiagonal{Float64}, STF32)::SymTridiagonal{Float64} == STF32
@@ -780,6 +788,35 @@ using .Main.SizedArrays
     end
 end
 
+@testset "copyto! between SymTridiagonal and Tridiagonal" begin
+    ev, dv = [1:4;], [1:5;]
+    S = SymTridiagonal(dv, ev)
+    T = Tridiagonal(zero(ev), zero(dv), zero(ev))
+    @test copyto!(T, S) == S
+    @test copyto!(zero(S), T) == T
+
+    ev2 = [1:5;]
+    S = SymTridiagonal(dv, ev2)
+    T = Tridiagonal(zeros(length(ev2)-1), zero(dv), zeros(length(ev2)-1))
+    @test copyto!(T, S) == S
+    @test copyto!(zero(S), T) == T
+
+    T2 = Tridiagonal(ones(length(ev)), zero(dv), zero(ev))
+    @test_throws "cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
+
+    @testset "mismatched sizes" begin
+        dv2 = [4; @view dv[2:end]]
+        @test copyto!(S, SymTridiagonal([4], Int[])) == SymTridiagonal(dv2, ev)
+        @test copyto!(T, SymTridiagonal([4], Int[])) == Tridiagonal(ev, dv2, ev)
+        @test copyto!(S, Tridiagonal(Int[], [4], Int[])) == SymTridiagonal(dv2, ev)
+        @test copyto!(T, Tridiagonal(Int[], [4], Int[])) == Tridiagonal(ev, dv2, ev)
+        @test copyto!(S, SymTridiagonal(Int[], Int[])) == SymTridiagonal(dv, ev)
+        @test copyto!(T, SymTridiagonal(Int[], Int[])) == Tridiagonal(ev, dv, ev)
+        @test copyto!(S, Tridiagonal(Int[], Int[], Int[])) == SymTridiagonal(dv, ev)
+        @test copyto!(T, Tridiagonal(Int[], Int[], Int[])) == Tridiagonal(ev, dv, ev)
+    end
+end
+
 @testset "copyto! with UniformScaling" begin
     @testset "Tridiagonal" begin
         @testset "Fill" begin
@@ -811,6 +848,23 @@ end
         @test all(iszero, diag(ST, 1))
         @test all(iszero, diag(ST, -1))
     end
+end
+
+@testset "custom axes" begin
+    dv, uv = OffsetArray(1:4), OffsetArray(1:3)
+    B = Tridiagonal(uv, dv, uv)
+    ax = axes(dv, 1)
+    @test axes(B) === (ax, ax)
+    B = SymTridiagonal(dv, uv)
+    @test axes(B) === (ax, ax)
+end
+
+@testset "Matrix conversion for non-numeric and undef" begin
+    T = Tridiagonal(fill(big(3), 3), Vector{BigInt}(undef, 4), fill(big(3), 3))
+    M = Matrix(T)
+    T[diagind(T)] .= 4
+    M[diagind(M)] .= 4
+    @test diag(T) == diag(M)
 end
 
 end # module TestTridiagonal

@@ -203,6 +203,12 @@ end
         @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
     end
+
+    @testset ":noshift constructor" begin
+        @test SubString("", 0, 0, Val(:noshift)) == ""
+        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
+        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
+    end
 end
 
 

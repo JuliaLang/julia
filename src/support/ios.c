@@ -602,11 +602,11 @@ int ios_eof(ios_t *s)
 {
     if (s->state == bst_rd && s->bpos < s->size)
         return 0;
-    if (s->bm == bm_mem)
-        return (s->_eof ? 1 : 0);
-    if (s->fd == -1)
-        return 1;
     if (s->_eof)
+        return 1;
+    if (s->bm == bm_mem)
+        return 0;
+    if (s->fd == -1)
         return 1;
     return 0;
     /*
@@ -615,6 +615,12 @@ int ios_eof(ios_t *s)
     s->_eof = 1;
     return 1;
     */
+}
+
+void ios_reseteof(ios_t *s)
+{
+    if (s->bm != bm_mem && s->fd != -1)
+        s->_eof = 0;
 }
 
 int ios_eof_blocking(ios_t *s)

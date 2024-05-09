@@ -741,6 +741,9 @@ end
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
 
+    zd = fill(0)
+    @test permutedims(zd, ()) == zd
+
     x = PermutedDimsArray([1 2; 3 4], (2, 1))
     @test size(x) == (2, 2)
     @test copy(x) == [1 3; 2 4]
@@ -794,6 +797,14 @@ end
     oa = OffsetVector(copy(a), -1)
     @test circshift!(oa, 1) === oa
     @test oa == circshift(OffsetVector(a, -1), 1)
+
+    # 1d circshift! (#53554)
+    a = []
+    @test circshift!(a, 1) === a
+    @test circshift!(a, 1) == []
+    a = [1:5;]
+    @test circshift!(a, 10) === a
+    @test circshift!(a, 10) == 1:5
 end
 
 @testset "circcopy" begin
@@ -2609,7 +2620,7 @@ end
 end
 
 @testset "sign, conj[!], ~" begin
-    local A, B, C
+    local A, B, C, D, E
     A = [-10,0,3]
     B = [-10.0,0.0,3.0]
     C = [1,im,0]
@@ -2626,6 +2637,11 @@ end
     @test typeof(conj(A)) == Vector{Int}
     @test typeof(conj(B)) == Vector{Float64}
     @test typeof(conj(C)) == Vector{Complex{Int}}
+    D = [C copy(C); copy(C) copy(C)]
+    @test conj(D) == conj!(copy(D))
+    E = [D, copy(D)]
+    @test conj(E) == conj!(copy(E))
+    @test (@allocations conj!(E)) == 0
 
     @test .~A == [9,-1,-4]
     @test typeof(.~A) == Vector{Int}
@@ -2843,6 +2859,33 @@ end
     @inferred accumulate(*, String[])
     @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=1) == ["a" "b"; "ac" "bd"]
     @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=2) == ["a" "ab"; "c" "cd"]
+
+    # #53438
+    v = [(1, 2), (3, 4)]
+    @test_throws MethodError accumulate(+, v)
+    @test_throws MethodError cumsum(v)
+    @test_throws MethodError cumprod(v)
+    @test_throws MethodError accumulate(+, v; init=(0, 0))
+    @test_throws MethodError accumulate(+, v; dims=1, init=(0, 0))
+
+    # Some checks to ensure we're identifying the widest needed eltype
+    # as identified in PR 53461
+    @testset "Base._accumulate_promote_op" begin
+        # A somewhat contrived example where each call to `foo`
+        # will return a different type
+        foo(x::Bool, y::Int)::Int = x + y
+        foo(x::Int, y::Int)::Float64 = x + y
+        foo(x::Float64, y::Int)::ComplexF64 = x + y * im
+        foo(x::ComplexF64, y::Int)::String = string(x, "+", y)
+
+        v = collect(1:5)
+        @test Base._accumulate_promote_op(foo, v; init=true) === Base._accumulate_promote_op(foo, v) == Union{Float64, String, ComplexF64}
+        @test Base._accumulate_promote_op(/, v) === Base._accumulate_promote_op(/, v; init=0) == Float64
+        @test Base._accumulate_promote_op(+, v) === Base._accumulate_promote_op(+, v; init=0) === Int
+        @test Base._accumulate_promote_op(+, v; init=0.0) === Float64
+        @test Base._accumulate_promote_op(+, Union{Int, Missing}[v...]) === Union{Int, Missing}
+        @test Base._accumulate_promote_op(+, Union{Int, Nothing}[v...]) === Union{Int, Nothing}
+    end
 end
 
 struct F21666{T <: Base.ArithmeticStyle}
@@ -3169,4 +3212,51 @@ end
         c = view(b, 1:1, 1:1)
         @test c + zero(c) == c
     end
+end
+
+@testset "Wrapping Memory into Arrays with view and reshape" begin
+    mem::Memory{Int} = Memory{Int}(undef, 10) .= 11:20
+
+    @test_throws DimensionMismatch reshape(mem, 10, 10)
+    @test_throws DimensionMismatch reshape(mem, 5)
+    @test_throws BoundsError view(mem, 1:10, 1:10)
+    @test_throws BoundsError view(mem, 1:11)
+    @test_throws BoundsError view(mem, 3:11)
+    @test_throws BoundsError view(mem, 0:4)
+
+    @test @inferred(view(mem, 1:5))::Vector{Int} == 11:15
+    @test @inferred(view(mem, 1:2))::Vector{Int} == 11:12
+    @test @inferred(view(mem, 1:10))::Vector{Int} == 11:20
+    @test @inferred(view(mem, 3:8))::Vector{Int} == 13:18
+    @test @inferred(view(mem, 20:19))::Vector{Int} == []
+    @test @inferred(view(mem, -5:-7))::Vector{Int} == []
+    @test @inferred(view(mem, :))::Vector{Int} == mem
+    @test @inferred(reshape(mem, 5, 2))::Matrix{Int} == reshape(11:20, 5, 2)
+
+    # 53990
+    @test @inferred(view(mem, unsigned(1):10))::Vector{Int} == 11:20
+
+    empty_mem = Memory{Module}(undef, 0)
+    @test_throws BoundsError view(empty_mem, 0:1)
+    @test_throws BoundsError view(empty_mem, 1:2)
+    @test_throws DimensionMismatch reshape(empty_mem, 1)
+    @test_throws DimensionMismatch reshape(empty_mem, 1, 2, 3)
+    @test_throws ArgumentError reshape(empty_mem, 2^16, 2^16, 2^16, 2^16)
+
+    @test @inferred(view(empty_mem, 1:0))::Vector{Module} == []
+    @test @inferred(view(empty_mem, 10:3))::Vector{Module} == []
+    @test @inferred(view(empty_mem, :))::Vector{Module} == empty_mem
+    @test isempty(@inferred(reshape(empty_mem, 0, 7, 1))::Array{Module, 3})
+
+    offset_inds = OffsetArrays.IdOffsetRange(values=3:6, indices=53:56)
+    @test @inferred(view(collect(mem), offset_inds)) == view(mem, offset_inds)
+end
+
+@testset "Memory size" begin
+    len = 5
+    mem = Memory{Int}(undef, len)
+    @test size(mem, 1) == len
+    @test size(mem, 0x1) == len
+    @test size(mem, 2) == 1
+    @test size(mem, 0x2) == 1
 end

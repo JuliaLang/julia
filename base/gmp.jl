@@ -10,7 +10,8 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
+             clamp
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -358,6 +359,8 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
+clamp(x, ::Type{BigInt}) = convert(BigInt, x)
+
 isodd(x::BigInt) = MPZ.tstbit(x, 0)
 iseven(x::BigInt) = !isodd(x)
 
@@ -606,8 +609,8 @@ function top_set_bit(x::BigInt)
     x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
 end
 
-divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
-divrem(x::BigInt, y::Integer) = MPZ.tdiv_qr(x, big(y))
+divrem(x::BigInt, y::BigInt,  ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, y)
+divrem(x::BigInt, y::Integer, ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, BigInt(y))
 
 cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
 cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))
@@ -658,11 +661,6 @@ end
 powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function gcdx(a::BigInt, b::BigInt)
-    if iszero(b) # shortcut this to ensure consistent results with gcdx(a,b)
-        return a < 0 ? (-a,-ONE,b) : (a,one(BigInt),b)
-        # we don't return the globals ONE and ZERO in case the user wants to
-        # mutate the result
-    end
     g, s, t = MPZ.gcdext(a, b)
     if t == 0
         # work around a difference in some versions of GMP
@@ -754,7 +752,7 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     iszero(n) && pad < 1 && return ""
     nd1 = ndigits(n, base=base)
     nd  = max(nd1, pad)
-    sv  = Base.StringVector(nd + isneg(n))
+    sv  = Base.StringMemory(nd + isneg(n))
     GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
     @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8

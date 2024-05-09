@@ -3,7 +3,8 @@ Base.ACTIVE_PROJECT[] = nothing
 empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)
-pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
+push!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
+push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
 using Pkg
 Pkg.instantiate()
 
@@ -126,6 +127,7 @@ generate_markdown("NEWS")
 
 Manual = [
     "manual/getting-started.md",
+    "manual/installation.md",
     "manual/variables.md",
     "manual/integers-and-floating-point-numbers.md",
     "manual/mathematical-operations.md",
@@ -155,6 +157,7 @@ Manual = [
     "manual/environment-variables.md",
     "manual/embedding.md",
     "manual/code-loading.md",
+    "manual/profile.md",
     "manual/stacktraces.md",
     "manual/performance-tips.md",
     "manual/workflow-tips.md",
@@ -189,12 +192,6 @@ BaseDocs = [
 ]
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
-
-Tutorials = [
-    "tutorials/creating-packages.md",
-    "tutorials/profile.md",
-    "tutorials/external.md",
-]
 
 DevDocs = [
     "Documentation of Julia's Internals" => [
@@ -254,7 +251,6 @@ const PAGES = [
     "Manual" => ["index.md", Manual...],
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Tutorials" => Tutorials,
     # Add "Release Notes" to devdocs
     "Developer Documentation" => [DevDocs..., hide("NEWS.md")],
 ]
@@ -265,7 +261,6 @@ const PAGES = [
     "Manual" => Manual,
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Tutorials" => Tutorials,
     "Developer Documentation" => DevDocs,
 ]
 end
@@ -364,6 +359,7 @@ else
         ansicolor = true,
         size_threshold = 800 * 2^10, # 800 KiB
         size_threshold_warn = 200 * 2^10, # the manual has quite a few large pages, so we warn at 200+ KiB only
+        inventory_version = VERSION,
     )
 end
 

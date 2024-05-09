@@ -236,7 +236,7 @@ end
 # Effect modeling for Core.compilerbarrier
 @test Base.infer_effects(Base.inferencebarrier, Tuple{Any}) |> Core.Compiler.is_removable_if_unused
 
-# allocation/access of uninitialized fields should taint the :consistent-cy
+# effects modeling for allocation/access of uninitialized fields
 struct Maybe{T}
     x::T
     Maybe{T}() where T = new{T}()
@@ -244,57 +244,9 @@ struct Maybe{T}
     Maybe(x::T) where T = new{T}(x)
 end
 Base.getindex(x::Maybe) = x.x
-
 struct SyntacticallyDefined{T}
     x::T
 end
-
-import Core.Compiler: Const, getfield_notundefined
-for T = (Base.RefValue, Maybe) # both mutable and immutable
-    for name = (Const(1), Const(:x))
-        @test getfield_notundefined(T{String}, name)
-        @test getfield_notundefined(T{Integer}, name)
-        @test getfield_notundefined(T{Union{String,Integer}}, name)
-        @test getfield_notundefined(Union{T{String},T{Integer}}, name)
-        @test !getfield_notundefined(T{Int}, name)
-        @test !getfield_notundefined(T{<:Integer}, name)
-        @test !getfield_notundefined(T{Union{Int32,Int64}}, name)
-        @test !getfield_notundefined(T, name)
-    end
-    # throw doesn't account for undefined behavior
-    for name = (Const(0), Const(2), Const(1.0), Const(:y), Const("x"),
-                Float64, String, Nothing)
-        @test getfield_notundefined(T{String}, name)
-        @test getfield_notundefined(T{Int}, name)
-        @test getfield_notundefined(T{Integer}, name)
-        @test getfield_notundefined(T{<:Integer}, name)
-        @test getfield_notundefined(T{Union{Int32,Int64}}, name)
-        @test getfield_notundefined(T, name)
-    end
-    # should not be too conservative when field isn't known very well but object information is accurate
-    @test getfield_notundefined(T{String}, Int)
-    @test getfield_notundefined(T{String}, Symbol)
-    @test getfield_notundefined(T{Integer}, Int)
-    @test getfield_notundefined(T{Integer}, Symbol)
-    @test !getfield_notundefined(T{Int}, Int)
-    @test !getfield_notundefined(T{Int}, Symbol)
-    @test !getfield_notundefined(T{<:Integer}, Int)
-    @test !getfield_notundefined(T{<:Integer}, Symbol)
-end
-# should be conservative when object information isn't accurate
-@test !getfield_notundefined(Any, Const(1))
-@test !getfield_notundefined(Any, Const(:x))
-# tuples and namedtuples should be okay if not given accurate information
-for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tuple,
-                    NamedTuple{(:a, :b), Tuple{Int,Int}}, NamedTuple{(:x,),Tuple{Any}}, NamedTuple],
-    FieldType = Any[Int, Symbol, Any]
-    @test getfield_notundefined(TupleType, FieldType)
-end
-# skip analysis on fields that are known to be defined syntactically
-@test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
-@test Core.Compiler.getfield_notundefined(Const(Main), Const(:var))
-@test Core.Compiler.getfield_notundefined(Const(Main), Const(42))
-# high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
 end |> !Core.Compiler.is_consistent
@@ -446,7 +398,7 @@ let effects = Base.infer_effects() do
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
-@test_throws ErrorException setglobal!_nothrow_undefinedyet()
+@test_throws Union{ErrorException,TypeError} setglobal!_nothrow_undefinedyet() # TODO: what kind of error should this be?
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
@@ -904,7 +856,6 @@ end |> Core.Compiler.is_foldable_nothrow
 @test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
-@test Core.Compiler.getfield_notundefined(WrapperOneField{Float64}, Symbol)
 @test Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
@@ -996,7 +947,7 @@ end
 let effects = Base.infer_effects() do
         isdefined(defined_ref, :x)
     end
-    @test Core.Compiler.is_consistent(effects)
+    @test !Core.Compiler.is_consistent(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
 let effects = Base.infer_effects() do
@@ -1096,13 +1047,15 @@ function f2_optrefine()
     end
     return true
 end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine; optimize=false))
 @test Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine))
 
 function f3_optrefine(x)
     @fastmath sqrt(x)
     return x
 end
-@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine))
+@test !Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine; optimize=false))
+@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine, (Float64,)))
 
 # Check that :consistent is properly modeled for throwing statements
 const GLOBAL_MUTABLE_SWITCH = Ref{Bool}(false)
@@ -1340,3 +1293,63 @@ end
     end
     return res
 end |> Core.Compiler.is_terminates
+
+# https://github.com/JuliaLang/julia/issues/52531
+const a52531 = Core.Ref(1)
+@eval getref52531() = $(QuoteNode(a52531)).x
+@test !Core.Compiler.is_consistent(Base.infer_effects(getref52531))
+let
+    global set_a52531!, get_a52531
+    _a::Int             = -1
+    set_a52531!(a::Int) = (_a = a; return get_a52531())
+    get_a52531()        = _a
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(set_a52531!, (Int,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(get_a52531, ()))
+@test get_a52531() == -1
+@test set_a52531!(1) == 1
+@test get_a52531() == 1
+
+let
+    global is_initialized52531, set_initialized52531!
+    _is_initialized                   = false
+    set_initialized52531!(flag::Bool) = (_is_initialized = flag)
+    is_initialized52531()             = _is_initialized
+end
+top_52531(_) = (set_initialized52531!(true); nothing)
+@test !Core.Compiler.is_consistent(Base.infer_effects(is_initialized52531))
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(set_initialized52531!, (Bool,)))
+@test !is_initialized52531()
+top_52531(0)
+@test is_initialized52531()
+
+const ref52843 = Ref{Int}()
+@eval func52843() = ($ref52843[] = 1; nothing)
+@test !Core.Compiler.is_foldable(Base.infer_effects(func52843))
+let; Base.Experimental.@force_compile; func52843(); end
+@test ref52843[] == 1
+
+@test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(identity∘identity, Tuple{Any}))
+@test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(()->Vararg, Tuple{}))
+
+# pointerref nothrow for invalid pointer
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{Vector{Int64}}}, Int, Int])
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{T}} where T, Int, Int])
+
+# post-opt :consistent-cy analysis correctness
+# https://github.com/JuliaLang/julia/issues/53508
+@test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (UnitRange{Int},Int)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (Base.OneTo{Int},Int)))
+
+@noinline f53613() = @assert isdefined(@__MODULE__, :v53613)
+g53613() = f53613()
+h53613() = g53613()
+@test !Core.Compiler.is_consistent(Base.infer_effects(f53613))
+@test !Core.Compiler.is_consistent(Base.infer_effects(g53613))
+@test_throws AssertionError f53613()
+@test_throws AssertionError g53613()
+@test_throws AssertionError h53613()
+global v53613 = nothing
+@test f53613() === nothing
+@test g53613() === nothing
+@test h53613() === nothing

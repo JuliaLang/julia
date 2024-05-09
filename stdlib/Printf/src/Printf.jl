@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
+"""
+The `Printf` module provides formatted output functions similar to the C standard library's `printf`. It allows formatted printing to an output stream or to a string.
+"""
 module Printf
 
 using Base.Ryu
@@ -652,7 +654,7 @@ const __BIG_FLOAT_MAX__ = 8192
         else
             # right aligned
             n = width - (newpos - pos)
-            if zero
+            if zero && isfinite(x)
                 ex = (arg < 0 || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
                 so = pos + ex
                 len = (newpos - pos) - ex

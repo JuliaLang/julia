@@ -337,3 +337,20 @@ end
     # There must be at least two: one for the root test task and one for the async task:
     @test fetch(@async(@ccall(jl_get_num_stack_mappings()::Cint))) >= 2
 end
+
+@testset "Base.Threads docstrings" begin
+    @test isempty(Docs.undocumented_names(Threads))
+end
+
+@testset "wait failed task" begin
+    @testset "wait without throw keyword" begin
+        t = Threads.@spawn error("Error")
+        @test_throws TaskFailedException wait(t)
+    end
+
+    @testset "wait with throw=false" begin
+        t = Threads.@spawn error("Error")
+        wait(t; throw=false)
+        @test istaskfailed(t)
+    end
+end

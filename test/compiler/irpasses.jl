@@ -29,7 +29,7 @@ let code = Any[
         ReturnNode(Core.SSAValue(10)),
     ]
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.stmt[3]
@@ -47,7 +47,7 @@ let code = Any[]
     push!(code, Expr(:call, :opaque))
     push!(code, ReturnNode(nothing))
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end
@@ -802,9 +802,9 @@ function each_stmt_a_bb(stmts, preds, succs)
     ir = IRCode()
     empty!(ir.stmts.stmt)
     append!(ir.stmts.stmt, stmts)
-    empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
+    empty!(ir.stmts.type); append!(ir.stmts.type, [Any for _ = 1:length(stmts)])
     empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
-    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
+    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:3length(stmts)])
     empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
     empty!(ir.cfg.blocks); append!(ir.cfg.blocks, [BasicBlock(StmtRange(i, i), preds[i], succs[i]) for i = 1:length(stmts)])
     empty!(ir.cfg.index);  append!(ir.cfg.index,  [i for i = 2:length(stmts)])
@@ -1386,15 +1386,21 @@ end
 # ifelse folding
 @test Core.Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
 @test !Core.Compiler.is_inlineable(code_typed1(exp, (Float64,)))
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))
 end
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(true, x, exp(x)) # the optimization should be applied to post-inlining IR too
 end
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(isa(x, Float64), x, exp(x))
 end
+func_coreifelse(c, x) = Core.ifelse(c, x, x)
+func_ifelse(c, x) = ifelse(c, x, x)
+@test fully_eliminated(func_coreifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_coreifelse, (Any,Float64))
+@test fully_eliminated(func_ifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_ifelse, (Any,Float64))
 
 # PhiC fixup of compact! with cfg modification
 @inline function big_dead_throw_catch()
@@ -1549,10 +1555,46 @@ function persistent_dict_elim()
     a = Base.PersistentDict(:a => 1)
     return a[:a]
 end
+
 # Ideally we would be able to fully eliminate this,
 # but currently this would require an extra round of constprop
 @test_broken fully_eliminated(persistent_dict_elim)
 @test code_typed(persistent_dict_elim)[1][1].code[end] == Core.ReturnNode(1)
+
+function persistent_dict_elim_multiple()
+    a = Base.PersistentDict(:a => 1)
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test_broken fully_eliminated(persistent_dict_elim_multiple)
+let code = code_typed(persistent_dict_elim_multiple)[1][1].code
+    @test count(x->isexpr(x, :invoke), code) == 0
+    @test code[end] == Core.ReturnNode(1)
+end
+
+function persistent_dict_elim_multiple_phi(c::Bool)
+    if c
+        a = Base.PersistentDict(:a => 1)
+    else
+        a = Base.PersistentDict(:a => 1)
+    end
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test_broken fully_eliminated(persistent_dict_elim_multiple_phi)
+@test code_typed(persistent_dict_elim_multiple_phi)[1][1].code[end] == Core.ReturnNode(1)
+
+function persistent_dict_elim_multiple_phi2(c::Bool)
+    z = Base.inferencebarrier(1)::Int
+    if c
+        a = Base.PersistentDict(:a => z)
+    else
+        a = Base.PersistentDict(:a => z)
+    end
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test persistent_dict_elim_multiple_phi2(true) == 1
 
 # Test CFG simplify with try/catch blocks
 let code = Any[
@@ -1561,7 +1603,7 @@ let code = Any[
         # Block 2
         EnterNode(4),
         # Block 3
-        Expr(:leave),
+        Expr(:leave, SSAValue(2)),
         # Block 4
         GotoNode(5),
         # Block 5
@@ -1570,7 +1612,7 @@ let code = Any[
     ir = make_ircode(code)
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
-    @test length(ir.cfg.blocks) == 4
+    @test length(ir.cfg.blocks) <= 5
 end
 
 # Test CFG simplify with single predecessor phi node
@@ -1653,4 +1695,257 @@ let code = Any[
     Core.Compiler.verify_ir(ir)
     ir = Core.Compiler.compact!(ir)
     Core.Compiler.verify_ir(ir)
+end
+
+# Test correctness of current_scope folding
+@eval function scope_folding()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), 2),
+            :(return Core.current_scope())),
+    :(), 1))
+end
+
+@eval function scope_folding_opt()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), :(Base.inferencebarrier(2))),
+            :(return Core.current_scope())),
+    :(), :(Base.inferencebarrier(1))))
+end
+
+@test scope_folding() == 1
+@test scope_folding_opt() == 1
+@test_broken fully_eliminated(scope_folding)
+@test_broken fully_eliminated(scope_folding_opt)
+
+# Function that happened to have lots of sroa that
+# happened to trigger a bad case in the renamer. We
+# just want to check this doesn't crash in inference.
+function f52610()
+    slots_dict = IdDict()
+    for () in Base.inferencebarrier(1)
+       for x in 1
+           if Base.inferencebarrier(true)
+               slots_dict[x] = 0
+           end
+       end
+    end
+    return nothing
+end
+@test code_typed(f52610)[1][2] === Nothing
+
+# Issue #52703
+@eval function f52703()
+    try
+        $(Expr(:tryfinally,
+            Expr(:block,
+                Expr(:tryfinally, :(), :(), 2),
+                :(return Base.inferencebarrier(Core.current_scope)()::Int)),
+        :(), 1))
+    catch
+        return 1
+    end
+    return 0
+end
+@test code_typed(f52703)[1][2] === Int
+
+# Issue #52858 - compaction gets confused by pending node
+let code = Any[
+    # Block 1
+    GotoIfNot(true, 6),
+    # Block 2
+    Expr(:call, println, 1),
+    Expr(:call, Base.inferencebarrier, true),
+    GotoIfNot(SSAValue(3), 6),
+    # Block 3
+    nothing,
+    # Block 4
+    PhiNode(Int32[1, 4, 5], Any[1, 2, 3]),
+    ReturnNode(SSAValue(6))
+]
+    ir = make_ircode(code)
+    Core.Compiler.insert_node!(ir, SSAValue(5),
+        Core.Compiler.NewInstruction(
+            Expr(:call, println, 2), Nothing, Int32(1)),
+            #= attach_after = =# true)
+    ir = Core.Compiler.compact!(ir, true)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test count(x->isa(x, GotoIfNot), ir.stmts.stmt) == 1
+end
+
+# Issue #52857 - Affinity of sroa definedness check
+let code = Any[
+    Expr(:new, ImmutableRef{Any}),
+    GotoIfNot(Argument(1), 4),
+    Expr(:call, GlobalRef(Base, :getfield), SSAValue(1), 1), # Will throw
+    ReturnNode(1)
+]
+    ir = make_ircode(code; ssavaluetypes = Any[ImmutableRef{Any}, Any, Any, Any], slottypes=Any[Bool], verify=true)
+    ir = Core.Compiler.sroa_pass!(ir)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test !any(iscall((ir, getfield)), ir.stmts.stmt)
+    @test length(ir.cfg.blocks[end].stmts) == 1
+end
+
+# https://github.com/JuliaLang/julia/issues/47065
+# `Core.Compiler.sort!` should be able to handle a big list
+let n = 1000
+    ex = :(return 1)
+    for _ in 1:n
+        ex = :(rand() < .1 && $(ex))
+    end
+    @eval global function f_1000_blocks()
+        $ex
+        return 0
+    end
+end
+@test f_1000_blocks() == 0
+
+# https://github.com/JuliaLang/julia/issues/53521
+# Incorrect scope counting in :leave
+using Base.ScopedValues
+function f53521()
+    VALUE = ScopedValue(1)
+    @with VALUE => 2 begin
+        for i = 1
+            @with VALUE => 3 begin
+                try
+                    foo()
+                catch
+                    nothing
+                end
+            end
+        end
+    end
+end
+@test code_typed(f53521)[1][2] === Nothing
+
+# Test that adce_pass! sets Refined on PhiNode values
+let code = Any[
+    # Basic Block 1
+    GotoIfNot(false, 3)
+    # Basic Block 2
+    nothing
+    # Basic Block 3
+    PhiNode(Int32[1, 2], Any[1.0, 1])
+    ReturnNode(Core.SSAValue(3))
+]
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Nothing, Union{Int64, Float64}, Any])
+    (ir, made_changes) = Core.Compiler.adce_pass!(ir)
+    @test made_changes
+    @test (ir[Core.SSAValue(length(ir.stmts))][:flag] & Core.Compiler.IR_FLAG_REFINED) != 0
+end
+
+# JuliaLang/julia#52991: statements that may not :terminate should not be deleted
+@noinline Base.@assume_effects :effect_free :nothrow function issue52991(n)
+    local s = 0
+    try
+        while true
+            yield()
+            if n - rand(1:10) > 0
+                s += 1
+            else
+                break
+            end
+        end
+    catch
+    end
+    return s
+end
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(issue52991, (Int,)))
+let src = code_typed1((Int,)) do x
+        issue52991(x)
+        nothing
+    end
+    @test count(isinvoke(:issue52991), src.code) == 1
+end
+let t = @async begin
+        issue52991(11) # this call never terminates
+        nothing
+    end
+    sleep(1)
+    if istaskdone(t)
+        ok = false
+    else
+        ok = true
+        schedule(t, InterruptException(); error=true)
+    end
+    @test ok
+end
+
+# JuliaLang/julia47664
+@test !fully_eliminated() do
+    any(isone, Iterators.repeated(0))
+end
+@test !fully_eliminated() do
+    all(iszero, Iterators.repeated(0))
+end
+
+## Test that cfg_simplify respects implicit `unreachable` terminators
+let code = Any[
+        # block 1
+        GotoIfNot(Core.Argument(2), 4),
+        # block 2
+        Expr(:call, Base.throw, "error"), # an implicit `unreachable` terminator
+        # block 3
+        Expr(:call, :opaque),
+        # block 4
+        ReturnNode(nothing),
+    ]
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Union{}, Any, Union{}])
+
+    # Unfortunately `compute_basic_blocks` does not notice the `throw()` so it gives us
+    # a slightly imprecise CFG. Instead manually construct the CFG we need for this test:
+    empty!(ir.cfg.blocks)
+    push!(ir.cfg.blocks, BasicBlock(StmtRange(1,1), [], [2,4]))
+    push!(ir.cfg.blocks, BasicBlock(StmtRange(2,2), [1], []))
+    push!(ir.cfg.blocks, BasicBlock(StmtRange(3,3), [], []))
+    push!(ir.cfg.blocks, BasicBlock(StmtRange(4,4), [1], []))
+    empty!(ir.cfg.index)
+    append!(ir.cfg.index, Int[2,3,4])
+    ir.stmts.stmt[1] = GotoIfNot(Core.Argument(2), 4)
+
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 3 # should have removed block 3
+end
+
+let code = Any[
+        # block 1
+        EnterNode(4, 1),
+        # block 2
+        GotoNode(3), # will be turned into nothing
+        # block 3
+        GotoNode(5),
+        # block 4
+        ReturnNode(),
+        # block 5
+        Expr(:leave, SSAValue(1)),
+        # block 6
+        GotoIfNot(Core.Argument(1), 8),
+        # block 7
+        ReturnNode(1),
+        # block 8
+        ReturnNode(2),
+    ]
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Any, Any, Any, Any, Union{}, Union{}])
+    @test length(ir.cfg.blocks) == 8
+    Core.Compiler.verify_ir(ir)
+
+    # Union typed deletion marker in basic block 2
+    Core.Compiler.setindex!(ir, nothing, SSAValue(2))
+
+    # Test cfg_simplify
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 6
+    gotoifnot = Core.Compiler.last(ir.cfg.blocks[3].stmts)
+    inst = ir[SSAValue(gotoifnot)]
+    @test isa(inst[:stmt], GotoIfNot)
+    # Make sure we didn't accidentally schedule the unreachable block as
+    # fallthrough
+    @test isdefined(ir[SSAValue(gotoifnot+1)][:inst]::ReturnNode, :val)
 end

@@ -189,8 +189,6 @@ let ci = @code_lowered const_int()
         cig.slotnames = Symbol[Symbol("#self#")]
         cig.slottypes = Any[Any]
         cig.slotflags = UInt8[0x00]
-        @assert cig.min_world == UInt(1)
-        @assert cig.max_world == typemax(UInt)
         return cig
     end
 end
@@ -241,13 +239,21 @@ let foo::Int = 42
 end
 
 let oc = @opaque a->sin(a)
-    @test length(code_typed(oc, (Int,))) == 1
+    let opt = code_typed(oc, (Int,))
+        @test length(opt) == 1
+        @test opt[1][2] === Float64
+    end
+    let unopt = code_typed(oc, (Int,); optimize=false)
+        @test length(unopt) == 1
+    end
 end
 
 # constructing an opaque closure from IRCode
 let src = first(only(code_typed(+, (Int, Int))))
-    ir = Core.Compiler.inflate_ir(src)
-    @test OpaqueClosure(src)(40, 2) == 42
+    ir = Core.Compiler.inflate_ir(src, Core.Compiler.VarState[], src.slottypes)
+    @test ir.debuginfo.def === nothing
+    ir.debuginfo.def = Symbol(@__FILE__)
+    @test OpaqueClosure(src; sig=Tuple{Int, Int}, rettype=Int, nargs=2)(40, 2) == 42
     oc = OpaqueClosure(ir)
     @test oc(40, 2) == 42
     @test isa(oc, OpaqueClosure{Tuple{Int,Int}, Int})
@@ -257,6 +263,7 @@ end
 let ir = first(only(Base.code_ircode(sin, (Int,))))
     @test OpaqueClosure(ir)(42) == sin(42)
     @test OpaqueClosure(ir)(42) == sin(42) # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
+    @test length(code_typed(OpaqueClosure(ir))) == 1
     ir = first(only(Base.code_ircode(sin, (Float64,))))
     @test OpaqueClosure(ir)(42.) == sin(42.)
     @test OpaqueClosure(ir)(42.) == sin(42.) # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
@@ -266,11 +273,13 @@ end
 let src = code_typed((Int,Int)) do x, y...
         return (x, y)
     end |> only |> first
-    let oc = OpaqueClosure(src)
+    let oc = OpaqueClosure(src; rettype=Tuple{Int, Tuple{Int}}, sig=Tuple{Int, Int}, nargs=2, isva=true)
         @test oc(1,2) === (1,(2,))
         @test_throws MethodError oc(1,2,3)
     end
-    ir = Core.Compiler.inflate_ir(src)
+    ir = Core.Compiler.inflate_ir(src, Core.Compiler.VarState[], src.slottypes)
+    @test ir.debuginfo.def === nothing
+    ir.debuginfo.def = Symbol(@__FILE__)
     let oc = OpaqueClosure(ir; isva=true)
         @test oc(1,2) === (1,(2,))
         @test_throws MethodError oc(1,2,3)
@@ -351,3 +360,13 @@ end
 foopaque() = Base.Experimental.@opaque(@noinline x::Int->println(x))(1)
 
 code_llvm(devnull,foopaque,()) #shouldn't crash
+
+let ir = first(only(Base.code_ircode(sin, (Int,))))
+    oc = Core.OpaqueClosure(ir)
+    @test (Base.show_method(IOBuffer(), oc.source::Method); true)
+end
+
+let ir = first(only(Base.code_ircode(sin, (Int,))))
+    oc = Core.OpaqueClosure(ir; do_compile=false)
+    @test oc(1) == sin(1)
+end

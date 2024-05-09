@@ -193,7 +193,11 @@ static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder,
     if (isa<PointerType>(jl_value) &&
         v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
         // Cast to the proper address space
+        #if JL_LLVM_VERSION >= 170000
+        Type *jl_value_addr = PointerType::get(jl_value, v->getType()->getPointerAddressSpace());
+        #else
         Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
+        #endif
         return builder.CreateBitCast(v, jl_value_addr);
     }
     else {
@@ -222,7 +226,7 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
     auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
     const int ptls_offset = offsetof(jl_task_t, ptls);
     llvm::Value *pptls = builder.CreateInBoundsGEP(
-            T_pjlvalue, current_task,
+            T_pjlvalue, emit_bitcast_with_builder(builder, current_task, T_ppjlvalue),
             ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
             "ptls_field");
     LoadInst *ptls_load = builder.CreateAlignedLoad(T_pjlvalue,
@@ -304,8 +308,8 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
     BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
     BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
     Constant *zero8 = ConstantInt::get(T_int8, 0);
-    builder.CreateCondBr(builder.CreateAnd(builder.CreateICmpNE(old_state, zero8), // if (old_state && !state)
-                                           builder.CreateICmpEQ(state, zero8)),
+    builder.CreateCondBr(builder.CreateOr(builder.CreateICmpEQ(old_state, zero8), // if (!old_state || !state)
+                                          builder.CreateICmpEQ(state, zero8)),
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
@@ -325,7 +329,7 @@ static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm
 static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
 {
     using namespace llvm;
-    Value *old_state = builder.getInt8(0);
+    Value *old_state = builder.getInt8(JL_GC_STATE_UNSAFE);
     return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 

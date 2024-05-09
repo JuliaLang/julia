@@ -832,7 +832,7 @@ of the substring that matches, but perhaps we want to capture any non-blank text
 character. We could do the following:
 
 ```jldoctest
-julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
+julia> m = match(r"^\s*(?:#\s*(.*?)\s*$)", "# a comment ")
 RegexMatch("# a comment ", 1="a comment")
 ```
 
@@ -981,10 +981,10 @@ x   Tells the regular expression parser to ignore most whitespace
 For example, the following regex has all three flags turned on:
 
 ```jldoctest
-julia> r"a+.*b+.*?d$"ism
-r"a+.*b+.*?d$"ims
+julia> r"a+.*b+.*d$"ism
+r"a+.*b+.*d$"ims
 
-julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
+julia> match(r"a+.*b+.*d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
 RegexMatch("angry,\nBad world")
 ```
 
@@ -1142,7 +1142,7 @@ some confusion regarding the matter.
 
 Version numbers can easily be expressed with non-standard string literals of the form [`v"..."`](@ref @v_str).
 Version number literals create [`VersionNumber`](@ref) objects which follow the
-specifications of [semantic versioning](https://semver.org/),
+specifications of [semantic versioning 2.0.0-rc2](https://semver.org/spec/v2.0.0-rc.2.html),
 and therefore are composed of major, minor and patch numeric values, followed by pre-release and
 build alphanumeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
 `0`, minor version `2`, patch version `1`, pre-release `rc1` and build `win64`. When entering
