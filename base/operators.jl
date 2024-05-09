@@ -66,10 +66,11 @@ Supertype operator, equivalent to `T2 <: T1`.
 (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
-    supertype(T::DataType)
+    supertype(T::Type)
 
-Return the supertype of type `T`.
-`T` can be a `DataType` or a `UnionAll` type.
+Return the direct supertype of type `T`.
+`T` can be a [`DataType`](@ref) or a [`UnionAll`](@ref) type. Does not support
+type [`Union`](@ref)s. Also see info on [Types](@ref man-types).
 
 # Examples
 ```jldoctest
