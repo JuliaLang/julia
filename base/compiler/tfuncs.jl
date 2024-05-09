@@ -2176,7 +2176,8 @@ end
 end
 
 # Query whether the given builtin is guaranteed not to throw given the argtypes
-@nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
+function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any},
+                          @nospecialize(rt))
     ⊑ = partialorder(𝕃)
     if f === memoryref
         return memoryref_builtin_common_nothrow(argtypes)
@@ -2224,8 +2225,6 @@ end
     elseif f === (<:)
         na == 2 || return false
         return subtype_nothrow(𝕃, argtypes[1], argtypes[2])
-    elseif f === UnionAll
-        return na == 2 && (argtypes[1] ⊑ TypeVar && argtypes[2] ⊑ Type)
     elseif f === isdefined
         return isdefined_nothrow(𝕃, argtypes)
     elseif f === Core.sizeof
