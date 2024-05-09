@@ -2698,3 +2698,10 @@ end
 # Pointers should be reprable
 @test is_juliarepr(pointer([1]))
 @test is_juliarepr(Ptr{Vector{Complex{Float16}}}(UInt(0xdeadbeef)))
+
+# Toplevel MethodInstance with undef :uninferred
+let topmi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
+    topmi.specTypes = Tuple{}
+    topmi.def = Main
+    @test contains(repr(topmi), "Toplevel MethodInstance")
+end
