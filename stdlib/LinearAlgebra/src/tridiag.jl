@@ -135,17 +135,13 @@ function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = Matrix{T}(undef, n, n)
     n == 0 && return Mf
-    if haszero(T) # optimized path for types with zero(T) defined
-        n > 2 && fill!(Mf, zero(T))
-        @inbounds for i = 1:n-1
-            Mf[i,i] = symmetric(M.dv[i], :U)
-            Mf[i+1,i] = transpose(M.ev[i])
-            Mf[i,i+1] = M.ev[i]
-        end
-        Mf[n,n] = symmetric(M.dv[n], :U)
-    else
-        copyto!(Mf, M)
+    n > 2 && fill!(Mf, zero(T))
+    @inbounds for i = 1:n-1
+        Mf[i,i] = symmetric(M.dv[i], :U)
+        Mf[i+1,i] = transpose(M.ev[i])
+        Mf[i,i+1] = M.ev[i]
     end
+    Mf[n,n] = symmetric(M.dv[n], :U)
     return Mf
 end
 Matrix(M::SymTridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)
@@ -590,14 +586,15 @@ axes(M::Tridiagonal) = (ax = axes(M.d,1); (ax, ax))
 
 function Matrix{T}(M::Tridiagonal) where {T}
     A = Matrix{T}(undef, size(M))
-    if haszero(T) # optimized path for types with zero(T) defined
-        size(A,1) > 2 && fill!(A, zero(T))
-        copyto!(view(A, diagind(A)), M.d)
-        copyto!(view(A, diagind(A,1)), M.du)
-        copyto!(view(A, diagind(A,-1)), M.dl)
-    else
-        copyto!(A, M)
+    n = length(M.d)
+    n == 0 && return A
+    n > 2 && fill!(A, zero(T))
+    for i in 1:n-1
+        A[i,i] = M.d[i]
+        A[i+1,i] = M.dl[i]
+        A[i,i+1] = M.du[i]
     end
+    A[n,n] = M.d[n]
     A
 end
 Matrix(M::Tridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)

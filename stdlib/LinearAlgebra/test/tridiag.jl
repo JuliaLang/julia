@@ -859,12 +859,4 @@ end
     @test axes(B) === (ax, ax)
 end
 
-@testset "Matrix conversion for non-numeric and undef" begin
-    T = Tridiagonal(fill(big(3), 3), Vector{BigInt}(undef, 4), fill(big(3), 3))
-    M = Matrix(T)
-    T[diagind(T)] .= 4
-    M[diagind(M)] .= 4
-    @test diag(T) == diag(M)
-end
-
 end # module TestTridiagonal

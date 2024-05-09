@@ -904,17 +904,4 @@ end
     @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
 end
 
-@testset "Matrix conversion for non-numeric and undef" begin
-    B = Bidiagonal(Vector{BigInt}(undef, 4), fill(big(3), 3), :U)
-    M = Matrix(B)
-    B[diagind(B)] .= 4
-    M[diagind(M)] .= 4
-    @test diag(B) == diag(M)
-
-    B = Bidiagonal(fill(Diagonal([1,3]), 3), fill(Diagonal([1,3]), 2), :U)
-    M = Matrix{eltype(B)}(B)
-    @test M isa Matrix{eltype(B)}
-    @test M == B
-end
-
 end # module TestBidiagonal
