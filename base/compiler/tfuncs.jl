@@ -2175,10 +2175,12 @@ end
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
 end
 
-# Query whether the given builtin is guaranteed not to throw given the argtypes
+# Query whether the given builtin is guaranteed not to throw given the `argtypes`.
+# `argtypes` can be assumed not to contain varargs.
 function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any},
                           @nospecialize(rt))
     ⊑ = partialorder(𝕃)
+    na = length(argtypes)
     if f === memoryref
         return memoryref_builtin_common_nothrow(argtypes)
     elseif f === memoryrefoffset
@@ -2194,13 +2196,7 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
-    end
-
-    # These builtins are not-vararg, so if we have varars, here, we can't guarantee
-    # the correct number of arguments.
-    na = length(argtypes)
-    hasvarargtype(argtypes) && return false
-    if f === Core._typevar
+    elseif f === Core._typevar
         na == 3 || return false
         return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
     elseif f === invoke
