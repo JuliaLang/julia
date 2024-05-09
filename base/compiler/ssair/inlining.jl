@@ -1226,7 +1226,8 @@ end
 # Handles all analysis and inlining of intrinsics and builtins. In particular,
 # this method does not access the method table or otherwise process generic
 # functions.
-function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, state::InliningState)
+function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag::UInt32,
+                         state::InliningState)
     inst = ir[SSAValue(idx)]
     stmt = inst[:stmt]
     if !(stmt isa Expr)
@@ -1257,7 +1258,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
     sig === nothing && return nothing
 
     # Check if we match any of the early inliners
-    earlyres = early_inline_special_case(ir, stmt, rt, sig, state)
+    earlyres = early_inline_special_case(ir, stmt, flag, rt, sig, state)
     if isa(earlyres, SomeCase)
         inst[:stmt] = earlyres.val
         return nothing
@@ -1286,7 +1287,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
     end
 
     # Special case inliners for regular functions
-    lateres = late_inline_special_case!(ir, idx, stmt, rt, sig, state)
+    lateres = late_inline_special_case!(ir, idx, stmt, flag, rt, sig, state)
     if isa(lateres, SomeCase)
         inst[:stmt] = lateres.val
         add_inst_flag!(inst, ir, state)
@@ -1616,11 +1617,12 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
     todo = Pair{Int, Any}[]
 
     for idx in 1:length(ir.stmts)
-        simpleres = process_simple!(todo, ir, idx, state)
+        flag = ir.stmts[idx][:flag]
+
+        simpleres = process_simple!(todo, ir, idx, flag, state)
         simpleres === nothing && continue
         stmt, sig = simpleres
 
-        flag = ir.stmts[idx][:flag]
         info = ir.stmts[idx][:info]
 
         # `NativeInterpreter` won't need this, but provide a support for `:invoke` exprs here
@@ -1666,9 +1668,8 @@ function linear_inline_eligible(ir::IRCode)
     return true
 end
 
-function early_inline_special_case(
-    ir::IRCode, stmt::Expr, @nospecialize(type), sig::Signature,
-    state::InliningState)
+function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
+                                   @nospecialize(type), sig::Signature, state::InliningState)
     OptimizationParams(state.interp).inlining || return nothing
     (; f, ft, argtypes) = sig
 
@@ -1676,13 +1677,13 @@ function early_inline_special_case(
         val = type.val
         is_inlineable_constant(val) || return nothing
         if isa(f, IntrinsicFunction)
-            if is_pure_intrinsic_infer(f) && intrinsic_nothrow(f, argtypes[2:end])
+            if is_pure_intrinsic_infer(f) && has_flag(flag, IR_FLAG_NOTHROW)
                 return SomeCase(quoted(val))
             end
         elseif contains_is(_PURE_BUILTINS, f)
             return SomeCase(quoted(val))
         elseif contains_is(_EFFECT_FREE_BUILTINS, f)
-            if _builtin_nothrow(optimizer_lattice(state.interp), f, argtypes[2:end], type)
+            if has_flag(flag, IR_FLAG_NOTHROW)
                 return SomeCase(quoted(val))
             end
         elseif f === Core.get_binding_type
@@ -1723,9 +1724,8 @@ end
 # special-case some regular method calls whose results are not folded within `abstract_call_known`
 # (and thus `early_inline_special_case` doesn't handle them yet)
 # NOTE we manually inline the method bodies, and so the logic here needs to precisely sync with their definitions
-function late_inline_special_case!(
-    ir::IRCode, idx::Int, stmt::Expr, @nospecialize(type), sig::Signature,
-    state::InliningState)
+function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, flag::UInt32,
+                                   @nospecialize(type), sig::Signature, state::InliningState)
     OptimizationParams(state.interp).inlining || return nothing
     (; f, ft, argtypes) = sig
     if length(argtypes) == 3 && istopfunction(f, :!==)
@@ -1741,7 +1741,7 @@ function late_inline_special_case!(
     elseif length(argtypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
-        if isa(type, Const) && _builtin_nothrow(optimizer_lattice(state.interp), <:, Any[argtypes[3], argtypes[2]], type)
+        if isa(type, Const) && has_flag(flag, IR_FLAG_NOTHROW)
             return SomeCase(quoted(type.val))
         end
         subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])
