@@ -1347,13 +1347,11 @@ end
 
 # Specialized variant of in for Tuple, which can generate typed comparisons for each element
 # of the tuple, skipping values that are statically known to be != at compile time.
-function in(x, itr::Tuple)
-    @_terminates_globally
-    _in_tuple(x, itr, false)
-end
+in(x, itr::Tuple) = _in_tuple(x, itr, false)
 # This recursive function will be unrolled at compiletime, and will not generate separate
 # llvm-compiled specializations for each step of the recursion.
-@inline function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
+function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
+    @inline
     # Base case
     if isempty(itr)
         return anymissing ? missing : false
@@ -1365,8 +1363,11 @@ end
     elseif v
         return true
     end
-    return _in_tuple(x, Base.tail(itr), anymissing)
+    return _in_tuple(x, tail(itr), anymissing)
 end
+
+# fallback to the loop implementation after some number of arguments to avoid inference blowup
+in(x, itr::Any32) = invoke(in, Tuple{Any,Any}, x, itr)
 
 const ∈ = in
 ∉(x, itr) = !∈(x, itr)

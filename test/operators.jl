@@ -379,7 +379,8 @@ end
     @test B46327() <= B46327()
 end
 
-@testset "concrete eval `x in itr::Tuple`" begin
+@testset "inference for `x in itr::Tuple`" begin
+    # concrete evaluation
     @test Core.Compiler.is_foldable(Base.infer_effects(in, (Int,Tuple{Int,Int,Int})))
     @test Core.Compiler.is_foldable(Base.infer_effects(in, (Char,Tuple{Char,Char,Char})))
     for i = (1,2,3)
@@ -389,10 +390,23 @@ end
             end |> only == Val{true}
         end
     end
-    @test Base.return_types() do
+    @test Base.infer_return_type() do
         Val(4 in (1,2,3))
-    end |> only == Val{false}
-    @test Base.return_types() do
+    end == Val{false}
+    @test Base.infer_return_type() do
         Val('1' in ('1','2','3'))
-    end |> only == Val{true}
+    end == Val{true}
+
+    # constant propagation
+    @test Base.infer_return_type((Int,Int)) do x, y
+        Val(1 in (x,2,y))
+    end >: Val{true}
+    @test Base.infer_return_type((Int,Int)) do x, y
+        Val(2 in (x,2,y))
+    end == Val{true}
+
+    # should use the loop implementation given large tuples to avoid inference blowup
+    let t = ntuple(x->'A', 10000);
+        @test Base.infer_return_type(in, (Char,typeof(t))) == Bool
+    end
 end
