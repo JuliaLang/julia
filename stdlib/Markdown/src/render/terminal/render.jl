@@ -111,8 +111,23 @@ function term(io::AnnotIO, md::Header{l}, columns) where l
 end
 
 function term(io::IO, md::Code, columns)
-    code = if md.language ∈ ("", "julia", "julia-repl", "jldoctest")
+    code = if md.language ∈ ("", "julia")
         highlight(md.code)
+    elseif md.language == "julia-repl" || Base.startswith(md.language, "jldoctest")
+        hl = AnnotatedString(md.code)
+        for (; match) in eachmatch(r"(?:^|\n)julia>", hl)
+            StyledStrings.face!(match, :markdown_julia_prompt)
+            afterprompt = match.offset + ncodeunits(match) + 1
+            _, exprend = Meta.parse(md.code, afterprompt, raise = false)
+            highlight!(hl[afterprompt:prevind(md.code, exprend)])
+            if (nextspace = findnext(' ', md.code, exprend)) |> !isnothing
+                nextword = hl[exprend:prevind(hl, nextspace)]
+                if nextword == "ERROR:"
+                    StyledStrings.face!(nextword, :error)
+                end
+            end
+        end
+        hl
     elseif md.language == "styled"
         styled(md.code)
     else
