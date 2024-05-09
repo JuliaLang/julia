@@ -476,6 +476,7 @@ floor(::Type{T}, x) where T = round(T, x, RoundDown)
  ceil(::Type{T}, x) where T = round(T, x, RoundUp)
 round(::Type{T}, x) where T = round(T, x, RoundNearest)
 
-round(::Type{T}, x, r::RoundingMode) where T = convert(T, round(x, r))
+round(::Type{T}, x, r::RoundingMode) where T = _round_convert(T, round(x, r), x, r)
+_round_convert(::Type{T}, x_integer, x, r) where T = convert(T, x_integer)
 
 round(x::Integer, r::RoundingMode) = x

@@ -468,9 +468,8 @@ rounds_up(x, ::RoundingMode{:Down}) = false
 rounds_up(x, ::RoundingMode{:Up}) = true
 rounds_up(x, ::RoundingMode{:ToZero}) = signbit(x)
 rounds_up(x, ::RoundingMode{:FromZero}) = !signbit(x)
-function round(::Type{T}, x, r::Union{RoundingMode{:ToZero}, RoundingMode{:FromZero}, RoundingMode{:Up}, RoundingMode{:Down}}) where {T<:AbstractFloat}
-    x_int = round(x, r)
-    x_t = convert(T, x_int)
+function _round_convert(::Type{T}, x_integer, x, r::Union{RoundingMode{:ToZero}, RoundingMode{:FromZero}, RoundingMode{:Up}, RoundingMode{:Down}}) where {T<:AbstractFloat}
+    x_t = convert(T, x_integer)
     if rounds_up(x, r)
         x_t < x ? nextfloat(x_t) : x_t
     else
