@@ -47,6 +47,6 @@ end
   @test undoc == [:File, :Filesystem, :cptree, :futime, :rename, :sendfile, :unlink]
 end
 
-@testet "write return type" begin
+@testset "write return type" begin
     @test Base.return_types(write, (Base.Filesystem.File, UInt8)) == [Int]
 end
