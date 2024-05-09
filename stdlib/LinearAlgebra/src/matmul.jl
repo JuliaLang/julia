@@ -946,11 +946,11 @@ function __matmul_checks(C, A, B, sz)
 end
 
 # separate function with the core of matmul2x2! that doesn't depend on a MulAddMul
-function _matmul2x2_elements!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+function _matmul2x2_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     __matmul_checks(C, A, B, (2,2))
-    __matmul2x2_elements!(tA, tB, A, B)
+    __matmul2x2_elements(tA, tB, A, B)
 end
-function __matmul2x2_elements!(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+function __matmul2x2_elements(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     @inbounds begin
     if tA == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
@@ -1005,7 +1005,7 @@ end
 
 function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
-    (A11, A12, A21, A22), (B11, B12, B21, B22) = _matmul2x2_elements!(C, tA, tB, A, B)
+    (A11, A12, A21, A22), (B11, B12, B21, B22) = _matmul2x2_elements(C, tA, tB, A, B)
     @inbounds begin
     _modify!(_add, A11*B11 + A12*B21, C, (1,1))
     _modify!(_add, A21*B11 + A22*B21, C, (2,1))
@@ -1021,11 +1021,11 @@ function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
 end
 
 # separate function with the core of matmul3x3! that doesn't depend on a MulAddMul
-function _matmul3x3_elements!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+function _matmul3x3_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     __matmul_checks(C, A, B, (3,3))
-    __matmul3x3_elements!(tA, tB, A, B)
+    __matmul3x3_elements(tA, tB, A, B)
 end
-function __matmul3x3_elements!(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+function __matmul3x3_elements(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     @inbounds begin
     if tA == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
@@ -1098,7 +1098,7 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
                     _add::MulAddMul = MulAddMul())
 
     (A11, A12, A13, A21, A22, A23, A31, A32, A33),
-        (B11, B12, B13, B21, B22, B23, B31, B32, B33) = _matmul3x3_elements!(C, tA, tB, A, B)
+        (B11, B12, B13, B21, B22, B23, B31, B32, B33) = _matmul3x3_elements(C, tA, tB, A, B)
 
     @inbounds begin
     _modify!(_add, A11*B11 + A12*B21 + A13*B31, C, (1,1))
