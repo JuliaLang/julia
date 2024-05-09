@@ -605,11 +605,6 @@ for important details on how to modify these fields safely.
     For the `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`.
     But for a runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and indexable.
 
-  * `uninferred`
-
-    The uncompressed source code for a toplevel thunk. Additionally, for a generated function,
-    this is one of many places that the source code might be found.
-
   * `backedges`
 
     We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after a new method definitions.

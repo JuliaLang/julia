@@ -209,6 +209,8 @@ end
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
     @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
+
+    @test Core.Compiler.is_nothrow(Base.infer_effects(iterate, (Tuple{Int,Int,Int}, Int)))
 end
 
 

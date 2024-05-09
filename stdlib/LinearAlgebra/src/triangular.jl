@@ -545,9 +545,9 @@ function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular
 end
 
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
-    _triscale!(A, B, C, MulAddMul(alpha, beta))
+    @stable_muladdmul _triscale!(A, B, C, MulAddMul(alpha, beta))
 @inline _lscale_add!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
-    _triscale!(A, B, C, MulAddMul(alpha, beta))
+    @stable_muladdmul _triscale!(A, B, C, MulAddMul(alpha, beta))
 
 function checksize1(A, B)
     szA, szB = size(A), size(B)
@@ -891,7 +891,7 @@ for TC in (:AbstractVector, :AbstractMatrix)
         if isone(alpha) && iszero(beta)
             return _trimul!(C, A, B)
         else
-            return generic_matvecmul!(C, 'N', A, B, MulAddMul(alpha, beta))
+            return @stable_muladdmul generic_matvecmul!(C, 'N', A, B, MulAddMul(alpha, beta))
         end
     end
 end
@@ -903,7 +903,7 @@ for (TA, TB) in ((:AbstractTriangular, :AbstractMatrix),
         if isone(alpha) && iszero(beta)
             return _trimul!(C, A, B)
         else
-            return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+            return generic_matmatmul!(C, 'N', 'N', A, B, alpha, beta)
         end
     end
 end

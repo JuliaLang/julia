@@ -157,6 +157,7 @@ Manual = [
     "manual/environment-variables.md",
     "manual/embedding.md",
     "manual/code-loading.md",
+    "manual/profile.md",
     "manual/stacktraces.md",
     "manual/performance-tips.md",
     "manual/workflow-tips.md",
@@ -191,11 +192,6 @@ BaseDocs = [
 ]
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
-
-Tutorials = [
-    "tutorials/profile.md",
-    "tutorials/external.md",
-]
 
 DevDocs = [
     "Documentation of Julia's Internals" => [
@@ -255,7 +251,6 @@ const PAGES = [
     "Manual" => ["index.md", Manual...],
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Tutorials" => Tutorials,
     # Add "Release Notes" to devdocs
     "Developer Documentation" => [DevDocs..., hide("NEWS.md")],
 ]
@@ -266,7 +261,6 @@ const PAGES = [
     "Manual" => Manual,
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Tutorials" => Tutorials,
     "Developer Documentation" => DevDocs,
 ]
 end
