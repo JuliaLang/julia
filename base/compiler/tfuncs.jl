@@ -2524,7 +2524,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = !hasvarargtype(argtypes) && builtin_nothrow(𝕃, f, argtypes, rt)
+        nothrow = builtin_nothrow(𝕃, f, argtypes, rt)
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
@@ -2606,7 +2606,13 @@ Compute throw-ness of a builtin function call. `argtypes` should not include `f`
 """
 function builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
     rt === Bottom && return false
-    contains_is(_PURE_BUILTINS, f) && return true
+    if f === tuple || f === svec
+        return true
+    elseif hasvarargtype(argtypes)
+        return false
+    elseif contains_is(_PURE_BUILTINS, f)
+        return true
+    end
     return _builtin_nothrow(𝕃, f, argtypes, rt)
 end
 
@@ -2852,7 +2858,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         consistent = ALWAYS_TRUE
     end
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes)
+    nothrow = intrinsic_nothrow(f, argtypes)
     inaccessiblememonly = ALWAYS_TRUE
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
 end
