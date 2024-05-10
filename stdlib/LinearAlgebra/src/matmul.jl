@@ -950,7 +950,7 @@ function _matmul2x2_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::Ab
     __matmul_checks(C, A, B, (2,2))
     __matmul2x2_elements(tA, tB, A, B)
 end
-function __matmul2x2_elements(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+function __matmul2x2_elements(tA, A::AbstractMatrix)
     @inbounds begin
     if tA == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
@@ -975,33 +975,10 @@ function __matmul2x2_elements(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
         A11 = hermitian(A[1,1], :L); A12 = copy(adjoint(A[2,1]))
         A21 = A[2,1]; A22 = hermitian(A[2,2], :L)
     end
-    if tB == 'N'
-        B11 = B[1,1]; B12 = B[1,2];
-        B21 = B[2,1]; B22 = B[2,2]
-    elseif tB == 'T'
-        # TODO making these lazy could improve perf
-        B11 = copy(transpose(B[1,1])); B12 = copy(transpose(B[2,1]))
-        B21 = copy(transpose(B[1,2])); B22 = copy(transpose(B[2,2]))
-    elseif tB == 'C'
-        # TODO making these lazy could improve perf
-        B11 = copy(B[1,1]'); B12 = copy(B[2,1]')
-        B21 = copy(B[1,2]'); B22 = copy(B[2,2]')
-    elseif tB == 'S'
-        B11 = symmetric(B[1,1], :U); B12 = B[1,2]
-        B21 = copy(transpose(B[1,2])); B22 = symmetric(B[2,2], :U)
-    elseif tB == 's'
-        B11 = symmetric(B[1,1], :L); B12 = copy(transpose(B[2,1]))
-        B21 = B[2,1]; B22 = symmetric(B[2,2], :L)
-    elseif tB == 'H'
-        B11 = hermitian(B[1,1], :U); B12 = B[1,2]
-        B21 = copy(adjoint(B[1,2])); B22 = hermitian(B[2,2], :U)
-    else # if tB == 'h'
-        B11 = hermitian(B[1,1], :L); B12 = copy(adjoint(B[2,1]))
-        B21 = B[2,1]; B22 = hermitian(B[2,2], :L)
-    end
     end # inbounds
-    (A11, A12, A21, A22), (B11, B12, B21, B22)
+    A11, A12, A21, A22
 end
+__matmul2x2_elements(tA, tB, A, B) = __matmul2x2_elements(tA, A), __matmul2x2_elements(tB, B)
 
 function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
@@ -1025,7 +1002,7 @@ function _matmul3x3_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::Ab
     __matmul_checks(C, A, B, (3,3))
     __matmul3x3_elements(tA, tB, A, B)
 end
-function __matmul3x3_elements(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+function __matmul3x3_elements(tA, A::AbstractMatrix)
     @inbounds begin
     if tA == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
@@ -1058,41 +1035,10 @@ function __matmul3x3_elements(tA, tB, A::AbstractMatrix, B::AbstractMatrix)
         A21 = A[2,1]; A22 = hermitian(A[2,2], :L); A23 = copy(adjoint(A[3,2]))
         A31 = A[3,1]; A32 = A[3,2]; A33 = hermitian(A[3,3], :L)
     end
-
-    if tB == 'N'
-        B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3]
-        B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3]
-        B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3]
-    elseif tB == 'T'
-        # TODO making these lazy could improve perf
-        B11 = copy(transpose(B[1,1])); B12 = copy(transpose(B[2,1])); B13 = copy(transpose(B[3,1]))
-        B21 = copy(transpose(B[1,2])); B22 = copy(transpose(B[2,2])); B23 = copy(transpose(B[3,2]))
-        B31 = copy(transpose(B[1,3])); B32 = copy(transpose(B[2,3])); B33 = copy(transpose(B[3,3]))
-    elseif tB == 'C'
-        # TODO making these lazy could improve perf
-        B11 = copy(B[1,1]'); B12 = copy(B[2,1]'); B13 = copy(B[3,1]')
-        B21 = copy(B[1,2]'); B22 = copy(B[2,2]'); B23 = copy(B[3,2]')
-        B31 = copy(B[1,3]'); B32 = copy(B[2,3]'); B33 = copy(B[3,3]')
-    elseif tB == 'S'
-        B11 = symmetric(B[1,1], :U); B12 = B[1,2]; B13 = B[1,3]
-        B21 = copy(transpose(B[1,2])); B22 = symmetric(B[2,2], :U); B23 = B[2,3]
-        B31 = copy(transpose(B[1,3])); B32 = copy(transpose(B[2,3])); B33 = symmetric(B[3,3], :U)
-    elseif tB == 's'
-        B11 = symmetric(B[1,1], :L); B12 = copy(transpose(B[2,1])); B13 = copy(transpose(B[3,1]))
-        B21 = B[2,1]; B22 = symmetric(B[2,2], :L); B23 = copy(transpose(B[3,2]))
-        B31 = B[3,1]; B32 = B[3,2]; B33 = symmetric(B[3,3], :L)
-    elseif tB == 'H'
-        B11 = hermitian(B[1,1], :U); B12 = B[1,2]; B13 = B[1,3]
-        B21 = copy(adjoint(B[1,2])); B22 = hermitian(B[2,2], :U); B23 = B[2,3]
-        B31 = copy(adjoint(B[1,3])); B32 = copy(adjoint(B[2,3])); B33 = hermitian(B[3,3], :U)
-    else # if tB == 'h'
-        B11 = hermitian(B[1,1], :L); B12 = copy(adjoint(B[2,1])); B13 = copy(adjoint(B[3,1]))
-        B21 = B[2,1]; B22 = hermitian(B[2,2], :L); B23 = copy(adjoint(B[3,2]))
-        B31 = B[3,1]; B32 = B[3,2]; B33 = hermitian(B[3,3], :L)
-    end
     end # inbounds
-    (A11, A12, A13, A21, A22, A23, A31, A32, A33), (B11, B12, B13, B21, B22, B23, B31, B32, B33)
+    A11, A12, A13, A21, A22, A23, A31, A32, A33
 end
+__matmul3x3_elements(tA, tB, A, B) = __matmul3x3_elements(tA, A), __matmul3x3_elements(tB, B)
 
 function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
