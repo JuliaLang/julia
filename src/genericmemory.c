@@ -193,7 +193,6 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
     }
     int how = jl_genericmemory_how(m);
     size_t mlength = m->length;
-    m->length = 0;
     if (how != 0) {
         jl_value_t *o = jl_genericmemory_data_owner_field(m);
         jl_genericmemory_data_owner_field(m) = NULL;
@@ -208,8 +207,6 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
         JL_GC_PUSH1(&o);
         jl_value_t *str = jl_pchar_to_string((const char*)m->ptr, len);
         JL_GC_POP();
-        if (how == 1) // TODO: we might like to early-call jl_gc_free_memory here instead actually, but hopefully `m` will die soon
-            jl_gc_count_freed(mlength);
         return str;
     }
     // n.b. how == 0 is always pool-allocated, so the freed bytes are computed from the pool not the object
