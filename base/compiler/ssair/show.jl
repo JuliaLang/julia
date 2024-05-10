@@ -31,7 +31,8 @@ function Base.show(io::IO, cfg::CFG)
     end
 end
 
-function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool)
+function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool,
+                    unstable_ssa::Union{Nothing, BitSet} = nothing)
     if idx in used
         idx_s = string(idx)
         pad = " "^(maxlength_idx - length(idx_s) + 1)
@@ -693,7 +694,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
         show_type = should_print_ssa_type(new_node_inst)
         let maxlength_idx=maxlength_idx, show_type=show_type
             with_output_color(:green, io) do io′
-                print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
+                print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type, unstable_ssa)
             end
         end
 
@@ -722,7 +723,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
             stmt = statement_indices_to_labels(stmt, cfg)
         end
         show_type = type !== nothing && should_print_ssa_type(stmt)
-        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
+        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type, unstable_ssa)
         if type !== nothing # ignore types for pre-inference code
             if type === UNDEF
                 # This is an error, but can happen if passes don't update their type information
