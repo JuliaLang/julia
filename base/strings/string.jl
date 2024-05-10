@@ -66,12 +66,12 @@ String(v::AbstractVector{UInt8}) = takestring!(copyto!(StringMemory(length(v)), 
 function String(v::Vector{UInt8})
     len = length(v)
     len == 0 && return ""
-    # This method copies the content of the Memory such that the underlying
-    # Memory is unchanged, but then empties the Vector and re-assigns a new
-    # empty memory to the string.
-    mem = StringMemory(len)
-    GC.@preserve mem v unsafe_copyto!(pointer(mem), pointer(v), len)
-    str = takestring!(mem)
+    ref = v.ref
+    if ref.ptr_or_offset == ref.mem.ptr
+        str = ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), ref.mem, len)
+    else
+        str = ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8}, Int), ref, len)
+    end
     # optimized empty!(v); sizehint!(v, 0) calls
     setfield!(v, :size, (0,))
     setfield!(v, :ref, memoryref(Memory{UInt8}()))
@@ -100,20 +100,7 @@ julia> isempty(v)
 true
 ```
 """
-function takestring! end
-
-function takestring!(v::Memory{UInt8})
-    len = length(v)
-    len == 0 && return ""
-    # This function will truncate the memory to zero length
-    return ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), v, len)
-end
-
-# Note: Currently, this constructor truncates for Vector, but not for AbstractVector.
-# See issue 32528
-function takestring!(v::Vector{UInt8})
-    String(v)
-end
+takestring!(v::Vector{UInt8}) = String(v)
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
