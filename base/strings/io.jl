@@ -112,7 +112,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     else
         f(s, args...)
     end
-    String(_unsafe_take!(s))
+    unsafe_takestring!(s)
 end
 
 function _str_sizehint(x)
@@ -146,7 +146,7 @@ function print_to_string(xs...)
     for x in xs
         print(s, x)
     end
-    String(_unsafe_take!(s))
+    unsafe_takestring!(s)
 end
 setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
 
@@ -164,7 +164,7 @@ function string_with_env(env, xs...)
     for x in xs
         print(env_io, x)
     end
-    String(_unsafe_take!(s))
+    unsafe_takestring!(s)
 end
 
 """

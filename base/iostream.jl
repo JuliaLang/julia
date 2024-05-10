@@ -469,7 +469,7 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
 end
 readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
     isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
-    String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
+    unsafe_takestring!(copyuntil(IOBuffer(sizehint=70), s, delim; keep))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
