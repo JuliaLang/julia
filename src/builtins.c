@@ -865,6 +865,13 @@ JL_CALLABLE(jl_f__apply_pure)
     return ret;
 }
 
+JL_CALLABLE(jl_f__call_assert_precompiled)
+{
+    // TODO: Actually assert that this call was covered by a `precompile()` statement
+    JL_NARGSV(_call_assert_precompiled, 1);
+    return jl_apply(args, nargs);
+}
+
 // this is like a regular call, but always runs in the newest world
 JL_CALLABLE(jl_f__call_latest)
 {
@@ -2443,6 +2450,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
+    add_builtin_func("_call_assert_precompiled", jl_f__call_assert_precompiled);
     add_builtin_func("_call_latest", jl_f__call_latest);
     add_builtin_func("_call_in_world", jl_f__call_in_world);
     add_builtin_func("_call_in_world_total", jl_f__call_in_world_total);
