@@ -1112,6 +1112,20 @@ JL_CALLABLE(jl_f_modifyfield)
     return v;
 }
 
+JL_CALLABLE(jl_f__precompile)
+{
+    JL_NARGS(_precompile, 1, 1);
+    return jl_compile_hint((jl_tupletype_t *)args[0]) ? jl_true : jl_false;
+}
+
+JL_CALLABLE(jl_f__precompile_method_instance)
+{
+    JL_NARGS(_precompile, 1, 2);
+    unsigned int world = (nargs == 2) ? jl_unbox_long(args[1]) : jl_get_world_counter();
+    jl_compile_method_instance((jl_method_instance_t *)args[0], NULL, world);
+    return jl_nothing;
+}
+
 JL_CALLABLE(jl_f_replacefield)
 {
     enum jl_memory_order success_order = jl_memory_order_notatomic;
@@ -2466,6 +2480,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_finalizer = add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
+    jl_builtin__precompile = add_builtin_func("_precompile", jl_f__precompile);
+    jl_builtin__precompile_method_instance = add_builtin_func("_precompile_method_instance", jl_f__precompile_method_instance);
     add_builtin_func("current_scope", jl_f_current_scope);
 
     // builtin types

@@ -59,6 +59,8 @@ DECLARE_BUILTIN(memoryrefswap);
 DECLARE_BUILTIN(modifyfield);
 DECLARE_BUILTIN(modifyglobal);
 DECLARE_BUILTIN(nfields);
+DECLARE_BUILTIN(_precompile);
+DECLARE_BUILTIN(_precompile_method_instance);
 DECLARE_BUILTIN(replacefield);
 DECLARE_BUILTIN(replaceglobal);
 DECLARE_BUILTIN(setfield);

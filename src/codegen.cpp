@@ -1614,6 +1614,8 @@ static const auto &builtin_func_map() {
           { jl_f_modifyfield_addr,        new JuliaFunction<>{XSTR(jl_f_modifyfield), get_func_sig, get_func_attrs} },
           { jl_f_fieldtype_addr,          new JuliaFunction<>{XSTR(jl_f_fieldtype), get_func_sig, get_func_attrs} },
           { jl_f_nfields_addr,            new JuliaFunction<>{XSTR(jl_f_nfields), get_func_sig, get_func_attrs} },
+          { jl_f__precompile,             new JuliaFunction<>{XSTR(jl_f__precompile), get_func_sig, get_func_attrs} },
+          { jl_f__precompile_method_instance, new JuliaFunction<>{XSTR(jl_f__precompile_method_instance), get_func_sig, get_func_attrs} },
           { jl_f__expr_addr,              new JuliaFunction<>{XSTR(jl_f__expr), get_func_sig, get_func_attrs} },
           { jl_f__typevar_addr,           new JuliaFunction<>{XSTR(jl_f__typevar), get_func_sig, get_func_attrs} },
           { jl_f_memoryref_addr,          new JuliaFunction<>{XSTR(jl_f_memoryref), get_func_sig, get_func_attrs} },
@@ -4960,6 +4962,41 @@ isdefined_unknown_idx:
             }
             // return false, since we didn't actually implement the call - we just lifted the dispatch
             return false;
+        }
+    }
+
+    else if (f == jl_builtin__precompile) {
+        if (ctx.params->no_dynamic_dispatch && nargs == 1) {
+            int resolved = 0;
+            if (argv[1].constant && jl_is_tuple_type(argv[1].constant)) {
+                // TODO: This method lookup is pretty sloppy and probably uses the wrong world.
+                size_t world = jl_atomic_load_acquire(&jl_world_counter);
+                jl_value_t *mi = jl_method_lookup_by_tt((jl_tupletype_t*)argv[1].constant, world, jl_nothing);
+                if (mi != jl_nothing) {
+                    arraylist_push(&new_invokes, mi);
+                    resolved = 1;
+                }
+            }
+            if (!resolved) {
+                errs() << "Dynamic call to Core._precompile ";
+                // TODO: show type too
+                errs() << " in " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+
+                print_stacktrace(ctx);
+            }
+        }
+    }
+
+    else if (f == jl_builtin__precompile_method_instance) {
+        if (ctx.params->no_dynamic_dispatch && nargs == 2) {
+            if (argv[1].constant && argv[2].constant) {
+                // TODO: treat this as an `invoke_in_world` that we encountered
+                arraylist_push(&new_invokes, argv[1].constant);
+            } else {
+                errs() << "Dynamic call to Core._precompile_method_instance in " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+
+                print_stacktrace(ctx);
+            }
         }
     }
 
