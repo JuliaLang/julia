@@ -761,7 +761,7 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
         sv[i] = '0' % UInt8
     end
     isneg(n) && (sv[1] = '-' % UInt8)
-    take_string!(sv)
+    takestring!(sv)
 end
 
 function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
