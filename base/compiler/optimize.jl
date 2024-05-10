@@ -288,12 +288,7 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     return (false, true, true)
 end
 
-"""
-    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
-        (consistent::Bool, removable::Bool, nothrow::Bool)
-
-Returns a tuple of `(:consistent, :removable, :nothrow)` flags for a given statement.
-"""
+# Returns a tuple of `(:consistent, :removable, :nothrow)` flags for a given statement.
 function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.
     isa(stmt, PiNode) && return (true, true, true)
@@ -317,12 +312,6 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return (false, false, false)
-            if f === UnionAll
-                # TODO: This is a weird special case - should be determined in inference
-                argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-                nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
-                return (true, nothrow, nothrow)
-            end
             if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
