@@ -62,7 +62,6 @@ In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
 String(v::AbstractVector{UInt8}) = takestring!(copyto!(StringMemory(length(v)), v))
-String(v::Memory{UInt8}) = takestring!(copy(v))
 
 function String(v::Vector{UInt8})
     #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
