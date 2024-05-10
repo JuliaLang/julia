@@ -81,6 +81,8 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     elseif stmt isa GotoIfNot
         show_unquoted_gotoifnot(io, stmt, indent, "#")
     # everything else in the IR, defer to the generic AST printer
+    elseif stmt isa Expr
+        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0, 0, unstable_ssa)
     else
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
     end
@@ -848,9 +850,9 @@ statementidx_lineinfo_printer(f, code::CodeInfo) = f(code.debuginfo, :var"unknow
 statementidx_lineinfo_printer(code) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
 
 function is_unstable_ssa(code::CodeInfo, idx::Int64)
-	ssaType = _type(code, idx)
-	is_unstable = isa(ssaType, Type) & (!Base.isdispatchelem(ssaType) || ssaType == Core.Box)
-	return is_unstable
+    ssaType = _type(code, idx)
+    is_unstable = isa(ssaType, Type) & (!Base.isdispatchelem(ssaType) || ssaType == Core.Box)
+    return is_unstable
 end
 
 function stmts_used(io::IO, code::IRCode, warn_unset_entry=true)
