@@ -628,13 +628,13 @@ end
 #   at index `idx`. This function is repeatedly called until it returns `nothing`.
 #   to iterate nodes that are to be inserted after the statement, set `attach_after=true`.
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
-                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false)
+                      used::BitSet, cfg::CFG, bb_idx::Int, unstable_ssa::Union{Nothing, BitSet} = nothing; pop_new_node! = Returns(nothing), only_after::Bool=false)
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
-                        used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color)
+                        used, cfg, bb_idx, unstable_ssa; pop_new_node!, only_after, config.bb_color)
 end
 
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
-                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false, bb_color=:light_black)
+                      used::BitSet, cfg::CFG, bb_idx::Int, unstable_ssa::Union{Nothing, BitSet} = nothing; pop_new_node! = Returns(nothing), only_after::Bool=false, bb_color=:light_black)
     stmt = _stmt(code, idx)
     type = _type(code, idx)
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -890,7 +890,7 @@ function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, 
                        used::BitSet, cfg::CFG, bb_idx::Int, unstable_ssa::Union{Nothing, BitSet} = nothing; pop_new_node! = Returns(nothing))
     for idx in inds
         if config.should_print_stmt(ir, idx, used)
-            bb_idx = show_ir_stmt(io, ir, idx, config, used, cfg, bb_idx; pop_new_node!)
+            bb_idx = show_ir_stmt(io, ir, idx, config, used, cfg, bb_idx, unstable_ssa; pop_new_node!)
         elseif bb_idx <= length(cfg.blocks) && idx == cfg.blocks[bb_idx].stmts.stop
             bb_idx += 1
         end
