@@ -45,6 +45,7 @@ const MARKDOWN_FACES = [
     :markdown_h6 => Face(height=1.05, inherit=:markdown_header),
     :markdown_admonition => Face(weight=:bold),
     :markdown_code => Face(inherit=:code),
+    :markdown_julia_prompt => Face(inherit=:repl_prompt_julia),
     :markdown_footnote => Face(inherit=:bright_yellow),
     :markdown_hrule => Face(inherit=:shadow),
     :markdown_inlinecode => Face(inherit=:markdown_code),
