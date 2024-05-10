@@ -8,8 +8,6 @@ and available by default.
 """
 module Logging
 
-using StyledStrings
-
 # Import the CoreLogging implementation into Logging as new const bindings.
 # Doing it this way (rather than with import) makes these symbols accessible to
 # tab completion.
