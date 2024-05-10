@@ -1232,6 +1232,7 @@ end
 
 size(m::MethodList) = size(m.ms)
 getindex(m::MethodList, i::Integer) = m.ms[i]
+collect(m::MethodList) = m.ms
 
 function MethodList(mt::Core.MethodTable)
     ms = Method[]
@@ -1242,9 +1243,10 @@ function MethodList(mt::Core.MethodTable)
 end
 
 """
-    methods(f, [types], [module]) -> MethodList
+    methods(f, [types], [module]) -> AbstractVector{Method}
 
-Return a [`MethodList`](@ref) for `f`.
+Return a list of [`Method`](@ref)s for `f`. The returned container type is not specified.
+Use `collect(methods(f))` to construct a `Vector{Method}`. 
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
