@@ -3948,6 +3948,8 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     bool needlock = isatomic && layout->size > MAX_ATOMIC_SIZE;
     size_t elsz = layout->size;
     size_t al = layout->alignment;
+    if (al > JL_HEAP_ALIGNMENT)
+        al = JL_HEAP_ALIGNMENT;
     if (isatomic == (order == jl_memory_order_notatomic)) {
         emit_atomic_error(ctx,
                 issetmemory ?
@@ -4276,6 +4278,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             bool isunion = layout->flags.arrayelem_isunion;
             size_t elsz = layout->size;
             size_t al = layout->alignment;
+            if (al > JL_HEAP_ALIGNMENT)
+                al = JL_HEAP_ALIGNMENT;
             bool needlock = isatomic && !isboxed && elsz > MAX_ATOMIC_SIZE;
             AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
                                     ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
