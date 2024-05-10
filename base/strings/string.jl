@@ -69,7 +69,9 @@ function String(v::Vector{UInt8})
     # This method copies the content of the Memory such that the underlying
     # Memory is unchanged, but then empties the Vector and re-assigns a new
     # empty memory to the string.
-    str = String(StringMemory(len))
+    mem = StringMemory(len)
+    GC.@preserve mem v unsafe_copyto!(pointer(mem), pointer(v), len)
+    str = takestring!(mem)
     # optimized empty!(v); sizehint!(v, 0) calls
     setfield!(v, :size, (0,))
     setfield!(v, :ref, memoryref(Memory{UInt8}()))
