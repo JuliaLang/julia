@@ -2589,7 +2589,7 @@ setglobalonce!
 
 """
 `Method` represents a method definition of a function. A list of methods for a function
-can be retrieved using [`Base.methods`](@ref). Also see [`Base.MethodList`](@ref)
+can be retrieved using [`Base.methods`](@ref). Also see [`Base.MethodList`](@ref).
 
 To access the properties of a `Method`, use the following functions:
 
