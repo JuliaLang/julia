@@ -86,11 +86,9 @@ function unsafe_takestring(m::Memory{UInt8})
 end
 
 """
-    takestring!(v::Union{Memory{UInt8}, Vector{UInt8}}) -> String
+    takestring!(x) -> String
 
-Create a string, truncating `v` to zero length. If `v` is a `Vector`, further
-modification of `v` will not modify the string.
-When possible, the returned string will reuse the memory of `v`.
+Create a string from the content of `x`, emptying `x`.
 
 # Examples
 ```jldoctest
@@ -103,6 +101,8 @@ julia> isempty(v)
 true
 ```
 """
+function takestring! end
+
 function takestring!(v::Memory{UInt8})
     len = length(v)
     len == 0 && return ""
