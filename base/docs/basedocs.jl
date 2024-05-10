@@ -2586,6 +2586,65 @@ See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@re
 """
 setglobalonce!
 
+
+"""
+`Method` represents a method definition of a function. A list of methods for a function
+can be retrieved using [`Base.methods`](@ref). Also see [`Base.MethodList`](@ref)
+
+To access the properties of a `Method`, use the following functions:
+
+```
+julia> m = methods(sum)[1]
+sum(r::StepRangeLen{<:Any, <:Base.TwicePrecision, <:Base.TwicePrecision})
+     @ Base twiceprecision.jl:605
+
+julia> nameof(m)
+:sum
+
+julia> parentmodule(m)
+Base
+
+julia> signature_type(m)
+Tuple{typeof(sum), StepRangeLen{<:Any, <:Base.TwicePrecision, <:Base.TwicePrecision}}
+```
+
+# Private properties
+```
+Core.Method <: Core.Any
+  name::Core.Symbol
+  module::Core.Module
+  file::Core.Symbol
+  line::Core.Int32
+  primary_world::Core.UInt64
+  deleted_world::Core.UInt64
+  sig::Core.Type where T
+  specializations::Core.Any
+  speckeyset::Core.Array where N where T
+  slot_syms::Core.String
+  external_mt::Core.Any
+  source::Core.Any
+  unspecialized::Core.MethodInstance
+  generator::Core.Any
+  roots::Core.Array{Core.Any,1}
+  root_blocks::Core.Array{Core.UInt64,1}
+  nroots_sysimg::Core.Int32
+  ccallable::Core.SimpleVector
+  invokes::Core.Any
+  recursion_relation::Core.Any
+  nargs::Core.Int32
+  called::Core.Int32
+  nospecialize::Core.Int32
+  nkw::Core.Int32
+  isva::Core.Bool
+  is_for_opaque_closure::Core.Bool
+  nospecializeinfer::Core.Bool
+  constprop::Core.UInt8
+  max_varargs::Core.UInt8
+  purity::Core.UInt8
+```
+"""
+Core.Method
+
 """
     typeof(x)
 
