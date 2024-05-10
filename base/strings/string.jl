@@ -64,15 +64,12 @@ to guarantee consistent behavior.
 String(v::AbstractVector{UInt8}) = takestring!(copyto!(StringMemory(length(v)), v))
 
 function String(v::Vector{UInt8})
-    #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
     len = length(v)
     len == 0 && return ""
-    ref = v.ref
-    if ref.ptr_or_offset == ref.mem.ptr
-        str = ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), ref.mem, len)
-    else
-        str = ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8}, Int), ref, len)
-    end
+    # This method copies the content of the Memory such that the underlying
+    # Memory is unchanged, but then empties the Vector and re-assigns a new
+    # empty memory to the string.
+    str = String(StringMemory(len))
     # optimized empty!(v); sizehint!(v, 0) calls
     setfield!(v, :size, (0,))
     setfield!(v, :ref, memoryref(Memory{UInt8}()))
@@ -106,6 +103,7 @@ function takestring! end
 function takestring!(v::Memory{UInt8})
     len = length(v)
     len == 0 && return ""
+    # This function will truncate the memory to zero length
     return ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), v, len)
 end
 
