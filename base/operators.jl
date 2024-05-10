@@ -66,7 +66,7 @@ Supertype operator, equivalent to `T2 <: T1`.
 (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
-    supertype(T::Type)
+    supertype(T::Union{DataType, UnionAll})
 
 Return the direct supertype of type `T`.
 `T` can be a [`DataType`](@ref) or a [`UnionAll`](@ref) type. Does not support
