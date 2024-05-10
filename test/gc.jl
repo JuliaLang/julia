@@ -84,4 +84,5 @@ GC.enable(false); # prevent new objects from being old
     nothing
 end
 GC.enable(true); GC.gc(false) # incremental collection
-@test dims54422 == []
+@test typeof(dims54422) == Vector{Any}
+@test isempty(dims54422)
