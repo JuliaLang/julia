@@ -1124,7 +1124,7 @@ function signature_type(@nospecialize(f), @nospecialize(argtypes))
 end
 
 """
-    signature_type(m::Method) -> Tuple
+    signature_type(m::Method) -> Union{Tuple, Nothing}
 
 Retrieve the signature type of a `Method`. Returns a `Tuple` type the first element of which is
 the `typeof` the function for the method. The remaining elements are the types of the arguments.
