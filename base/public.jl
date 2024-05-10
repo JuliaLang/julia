@@ -21,6 +21,7 @@ public
     AnnotatedString,
     AnnotatedChar,
     UUID,
+    Method,
 
 # Annotated strings
     annotatedstring,
@@ -62,6 +63,8 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+    nameof,
+    methods,
 
 # Opperators
     operator_associativity,
