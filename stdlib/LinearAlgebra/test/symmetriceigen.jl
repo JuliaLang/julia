@@ -149,6 +149,11 @@ end
     HT = Hermitian(Tridiagonal(ev, dv, ev))
     λ, V = eigen(HT)
     @test HT * V ≈ V * Diagonal(λ)
+    HT = Hermitian(Tridiagonal(ComplexF16.(ev), ComplexF16.(dv), ComplexF16.(ev)))
+    F = eigen(HT)
+    @test F isa Eigen{ComplexF16, Float16, Matrix{ComplexF16}, Vector{Float16}}
+    λ, V = F
+    @test HT * V ≈ V * Diagonal(λ)
 end
 
 @testset "Float16" begin

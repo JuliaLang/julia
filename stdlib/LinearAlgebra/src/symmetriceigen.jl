@@ -15,8 +15,8 @@ end
 function eigen(A::RealHermSymComplexHerm{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Union{Float16,ComplexF16}}
     S = eigtype(eltype(A))
     E = eigen!(eigencopy_oftype(A, S), sortby=sortby)
-    values = convert(AbstractVector{isreal(E.values) ? Float16 : Complex{Float16}}, E.values)
-    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
+    values = convert(AbstractVector{real(T)}, E.values)
+    vectors = convert(AbstractMatrix{T}, E.vectors)
     return Eigen(values, vectors)
 end
 
@@ -302,8 +302,17 @@ function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{F
     return eigvals!(A; sortby)
 end
 
-
-function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
+eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T} =
+    _eigenhermtridiag(A; kwargs...)
+# disambiguation
+function eigen(A::Hermitian{ComplexF16, <:Tridiagonal}; kwargs...)
+    _eigenhermtridiag(A; kwargs...)
+    E = _eigenhermtridiag(A; kwargs...)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{ComplexF16}, E.vectors)
+    return Eigen(values, vectors)
+end
+function _eigenhermtridiag(A::Hermitian{<:Complex,<:Tridiagonal}; kwargs...)
     (; dl, d, du) = parent(A)
     N = length(d)
     if N <= 1
