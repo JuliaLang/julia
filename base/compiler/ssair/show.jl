@@ -887,7 +887,7 @@ end
 default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code))
 
 function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, inds, config::IRShowConfig,
-                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
+                       used::BitSet, cfg::CFG, bb_idx::Int, unstable_ssa::Union{Nothing, BitSet} = nothing; pop_new_node! = Returns(nothing))
     for idx in inds
         if config.should_print_stmt(ir, idx, used)
             bb_idx = show_ir_stmt(io, ir, idx, config, used, cfg, bb_idx; pop_new_node!)
@@ -918,9 +918,10 @@ end
 function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
+    unstable_ssa = filter(idx -> is_unstable_ssa(ci, idx), used)
     cfg = compute_basic_blocks(ci.code)
     let io = IOContext(io, :maxssaid=>length(ci.code))
-        show_ir_stmts(io, ci, 1:length(ci.code), config, used, cfg, 1; pop_new_node!)
+        show_ir_stmts(io, ci, 1:length(ci.code), config, used, cfg, 1, unstable_ssa; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)
 end
