@@ -332,7 +332,7 @@ end
 
 # tril and triu
 
-function istriu(M::SymTridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::SymTridiagonal, k::Integer=0)
     if k <= -1
         return true
     elseif k == 0
@@ -341,7 +341,7 @@ function istriu(M::SymTridiagonal, k::Integer=0)
         return iszero(_evview(M)) && iszero(M.dv)
     end
 end
-istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
+Base.@constprop :aggressive istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
 iszero(M::SymTridiagonal) =  iszero(_evview(M)) && iszero(M.dv)
 isone(M::SymTridiagonal) =  iszero(_evview(M)) && all(isone, M.dv)
 isdiag(M::SymTridiagonal) =  iszero(_evview(M))
@@ -718,7 +718,7 @@ end
 
 iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
-function istriu(M::Tridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::Tridiagonal, k::Integer=0)
     if k <= -1
         return true
     elseif k == 0
@@ -729,7 +729,7 @@ function istriu(M::Tridiagonal, k::Integer=0)
         return iszero(M.dl) && iszero(M.d) && iszero(M.du)
     end
 end
-function istril(M::Tridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istril(M::Tridiagonal, k::Integer=0)
     if k >= 1
         return true
     elseif k == 0

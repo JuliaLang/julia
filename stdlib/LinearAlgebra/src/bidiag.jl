@@ -309,7 +309,7 @@ end
 
 iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
 isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
-function istriu(M::Bidiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::Bidiagonal, k::Integer=0)
     if M.uplo == 'U'
         if k <= 0
             return true
@@ -328,7 +328,7 @@ function istriu(M::Bidiagonal, k::Integer=0)
         end
     end
 end
-function istril(M::Bidiagonal, k::Integer=0)
+Base.@constprop :aggressive function istril(M::Bidiagonal, k::Integer=0)
     if M.uplo == 'U'
         if k >= 1
             return true
