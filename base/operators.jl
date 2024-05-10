@@ -66,14 +66,19 @@ Supertype operator, equivalent to `T2 <: T1`.
 (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
-    supertype(T::DataType)
+    supertype(T::Union{DataType, UnionAll})
 
-Return the supertype of DataType `T`.
+Return the direct supertype of type `T`.
+`T` can be a [`DataType`](@ref) or a [`UnionAll`](@ref) type. Does not support
+type [`Union`](@ref)s. Also see info on [Types](@ref man-types).
 
 # Examples
 ```jldoctest
 julia> supertype(Int32)
 Signed
+
+julia> supertype(Vector)
+DenseVector (alias for DenseArray{T, 1} where T)
 ```
 """
 supertype(T::DataType) = (@_total_meta; T.super)
