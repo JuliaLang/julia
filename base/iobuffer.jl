@@ -819,12 +819,13 @@ function takestring!(io::IOBuffer)
     nbytes = filesize(io)
 
     # If the memory is invalidated (and hence unused), or no bytes, return empty string
-    s = if iszero(nbytes) || io.reinit
+    s = if (iszero(nbytes) || io.reinit)
         ""
     else
         mem = StringMemory(nbytes)
         start = io.seekable ? io.offset + 1 : io.ptr
         unsafe_copyto!(mem, 1, io.data, start, nbytes)
+        takestring!(mem)
     end
 
     # Empty the IOBuffer, resetting it.
@@ -832,7 +833,6 @@ function takestring!(io::IOBuffer)
     io.ptr = 1
     io.size = 0
     io.offset = 0
-    end
     return s
 end
 
