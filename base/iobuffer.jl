@@ -816,7 +816,12 @@ true
 ```
 """
 function takestring!(io::IOBuffer)
-    s = unsafe_takestring!(io)
+    nbytes = filesize(io)
+    # If the memory is invalidated (and hence unused), or no bytes, return empty string
+    (io.reinit || iszero(nbytes)) && return ""
+    mem = StringMemory(nbytes)
+    start = io.seekable ? io.offset + 1 : io.ptr
+    unsafe_copyto!(mem, 1, io.data, start, nbytes)
 
     # Put the IO in a well-defined state after emptying its underlying memory
     ismarked(io) && unmark(io)
