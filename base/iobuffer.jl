@@ -783,6 +783,52 @@ function take!(io::IOBuffer)
     return data
 end
 
+"Internal method. Copies the data from the IOBuffer to a string, leaving the
+IOBuffer in an unusable (erroneous) state.
+This assumes the IOBuffer is writable and seekable"
+function unsafe_takestring!(io::IOBuffer)
+    off = io.offset
+    nbytes = io.size - off
+    iszero(nbytes) && return ""
+    mem = StringMemory(nbytes)
+    unsafe_copyto!(mem, 1, io.data, off+1, nbytes)
+    return takestring!(mem)
+end
+
+"""
+    takestring!(io::IOBuffer) -> String
+
+Return the content of `io` as a `String`, emptying the buffer.
+This is preferred over calling `String(take!(io))` to create a string from
+an `IOBuffer`.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, 0x61); write(io, 0x62); write(io, 0x63);
+
+julia> s = takestring!(io)
+"abc"
+
+julia> isempty(take!(io)) # io is now empty
+true
+```
+"""
+function takestring!(io::IOBuffer)
+    s = unsafe_takestring!(io)
+
+    # Put the IO in a well-defined state after emptying its underlying memory
+    ismarked(io) && unmark(io)
+    if io.writable
+        io.reinit = true
+        io.ptr = 1
+        io.size = 0
+        io.offset = 0
+    end
+    return s
+end
+
 """
     _unsafe_take!(io::IOBuffer)
 
