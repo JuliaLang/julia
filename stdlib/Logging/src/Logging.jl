@@ -68,7 +68,7 @@ Alias for [`LogLevel(1_000_001)`](@ref LogLevel).
 const AboveMaxLevel = Base.CoreLogging.AboveMaxLevel
 
 using Base.CoreLogging:
-    closed_stream
+    closed_stream, ConsoleLogger, default_metafmt
 
 export
     AbstractLogger,
@@ -92,8 +92,6 @@ export
     Error,
     AboveMaxLevel
 
-include("ConsoleLogger.jl")
-
 # The following are also part of the public API, but not exported:
 #
 # 1. Log levels:
@@ -101,9 +99,5 @@ include("ConsoleLogger.jl")
 #
 # 2. AbstractLogger message related functions:
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
-
-function __init__()
-    global_logger(ConsoleLogger())
-end
 
 end
