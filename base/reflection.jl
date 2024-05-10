@@ -1130,7 +1130,7 @@ Retrieve the signature type of a `Method`. Returns a `Tuple` type the first elem
 the `typeof` the function for the method. The remaining elements are the types of the arguments.
 
 For methods that are `OpaqueClosure`s or `Builtin`s, `nothing` is returned.
-# Examples 
+# Examples
 ```jldoctest
 julia> f(x::Int, y) = x + y
 
@@ -2343,7 +2343,7 @@ end
 """
     nameof(f::Method) -> Symbol
 
-Get the name of a `Method` as a symbol. 
+Get the name of a `Method` as a symbol.
 """
 function nameof(m::Method)
     return m.name
