@@ -849,7 +849,7 @@ statementidx_lineinfo_printer(f, code::IRCode) = f(code.debuginfo, :var"unknown 
 statementidx_lineinfo_printer(f, code::CodeInfo) = f(code.debuginfo, :var"unknown scope")
 statementidx_lineinfo_printer(code) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
 
-function is_unstable_ssa(code::CodeInfo, idx::Int64)
+function is_unstable_ssa(code::CodeInfo, idx::Int)
     ssaType = _type(code, idx)
     is_unstable = isa(ssaType, Type) & (!Base.isdispatchelem(ssaType) || ssaType == Core.Box)
     return is_unstable
