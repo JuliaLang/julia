@@ -306,6 +306,9 @@ mutable struct InferenceState
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
         argtypes = result.argtypes
+
+        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
+
         nargtypes = length(argtypes)
         for i = 1:nslots
             argtyp = (i > nargtypes) ? Bottom : argtypes[i]
@@ -850,10 +853,9 @@ function print_callstack(sv::InferenceState)
 end
 
 function narguments(sv::InferenceState, include_va::Bool=true)
-    def = sv.linfo.def
-    nargs = length(sv.result.argtypes)
+    nargs = sv.src.nargs
     if !include_va
-        nargs -= isa(def, Method) && def.isva
+        nargs -= sv.src.isva
     end
     return nargs
 end
@@ -915,7 +917,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     end
     method_info = MethodInfo(src)
     ir = inflate_ir(src, mi)
-    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, mi)
+    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva)
     return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
                                  codeinst.min_world, codeinst.max_world)
 end
