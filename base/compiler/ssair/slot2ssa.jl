@@ -33,7 +33,7 @@ function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
     end
 end
 
-function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
+function scan_slot_def_use(nargs::Integer, ci::CodeInfo, code::Vector{Any})
     nslots = length(ci.slotflags)
     result = SlotInfo[SlotInfo() for i = 1:nslots]
     # Set defs for arguments

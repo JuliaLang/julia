@@ -766,8 +766,8 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     }
     else {
         s->module = mi->def.method->module;
-        size_t defargs = mi->def.method->nargs;
-        int isva = mi->def.method->isva ? 1 : 0;
+        size_t defargs = src->nargs;
+        int isva = src->isva;
         size_t i;
         s->locals[0] = f;
         assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);

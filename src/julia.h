@@ -320,11 +320,13 @@ typedef struct _jl_code_info_t {
     jl_value_t *edges; // forward edges to method instances that must be invalidated (for copying to debuginfo)
     size_t min_world;
     size_t max_world;
+    size_t nargs;
 
     // various boolean properties:
     uint8_t propagate_inbounds;
     uint8_t has_fcall;
     uint8_t nospecializeinfer;
+    uint8_t isva;
     // uint8 settings
     uint8_t inlining; // 0 = default; 1 = @inline; 2 = @noinline
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none

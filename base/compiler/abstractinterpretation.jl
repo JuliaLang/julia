@@ -479,7 +479,12 @@ function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospe
     if isa(rt, InterConditional) && rt.slot == i
         return rt
     else
-        thentype = elsetype = tmeet(𝕃ᵢ, widenslotwrapper(argtypes[i]), fieldtype(sig, i))
+        argt = widenslotwrapper(argtypes[i])
+        if isvarargtype(argt)
+            @assert fieldcount(sig) == i
+            argt = unwrapva(argt)
+        end
+        thentype = elsetype = tmeet(𝕃ᵢ, argt, fieldtype(sig, i))
         condval = maybe_extract_const_bool(rt)
         condval === true && (elsetype = Bottom)
         condval === false && (thentype = Bottom)
@@ -986,15 +991,12 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
         # N.B. remarks are emitted within `const_prop_entry_heuristic`
         return nothing
     end
-    nargs::Int = method.nargs
-    method.isva && (nargs -= 1)
-    length(arginfo.argtypes) < nargs && return nothing
     if !const_prop_argument_heuristic(interp, arginfo, sv)
         add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
         return nothing
     end
     all_overridden = is_all_overridden(interp, arginfo, sv)
-    if !force && !const_prop_function_heuristic(interp, f, arginfo, nargs, all_overridden, sv)
+    if !force && !const_prop_function_heuristic(interp, f, arginfo, all_overridden, sv)
         add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
         return nothing
     end
@@ -1113,9 +1115,9 @@ function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method:
 end
 
 function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecialize(f),
-    arginfo::ArgInfo, nargs::Int, all_overridden::Bool, sv::AbsIntState)
+    arginfo::ArgInfo, all_overridden::Bool, sv::AbsIntState)
     argtypes = arginfo.argtypes
-    if nargs > 1
+    if length(argtypes) > 1
         𝕃ᵢ = typeinf_lattice(interp)
         if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
             arrty = argtypes[2]
@@ -1274,7 +1276,7 @@ function const_prop_call(interp::AbstractInterpreter,
     end
     overridden_by_const = falses(length(argtypes))
     for i = 1:length(argtypes)
-        if argtypes[i] !== cache_argtypes[i]
+        if argtypes[i] !== argtype_by_index(cache_argtypes, i)
             overridden_by_const[i] = true
         end
     end
@@ -1348,20 +1350,6 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
             end
         end
         given_argtypes[i] = widenslotwrapper(argtype)
-    end
-    if condargs !== nothing
-        given_argtypes = let condargs=condargs
-            va_process_argtypes(𝕃, given_argtypes, mi) do isva_given_argtypes::Vector{Any}, last::Int
-                # invalidate `Conditional` imposed on varargs
-                for (slotid, i) in condargs
-                    if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
-                        isva_given_argtypes[i] = widenconditional(isva_given_argtypes[i])
-                    end
-                end
-            end
-        end
-    else
-        given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
     end
     return pick_const_args!(𝕃, given_argtypes, cache_argtypes)
 end
@@ -1721,7 +1709,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     return CallMeta(res, exct, effects, retinfo)
 end
 
-function argtype_by_index(argtypes::Vector{Any}, i::Int)
+function argtype_by_index(argtypes::Vector{Any}, i::Integer)
     n = length(argtypes)
     na = argtypes[n]
     if isvarargtype(na)
@@ -2892,12 +2880,12 @@ end
 struct BestguessInfo{Interp<:AbstractInterpreter}
     interp::Interp
     bestguess
-    nargs::Int
+    nargs::UInt
     slottypes::Vector{Any}
     changes::VarTable
-    function BestguessInfo(interp::Interp, @nospecialize(bestguess), nargs::Int,
+    function BestguessInfo(interp::Interp, @nospecialize(bestguess), nargs::UInt,
         slottypes::Vector{Any}, changes::VarTable) where Interp<:AbstractInterpreter
-        new{Interp}(interp, bestguess, nargs, slottypes, changes)
+        new{Interp}(interp, bestguess, Int(nargs), slottypes, changes)
     end
 end
 
@@ -2972,7 +2960,7 @@ end
         # pick up the first "interesting" slot, convert `rt` to its `Conditional`
         # TODO: ideally we want `Conditional` and `InterConditional` to convey
         # constraints on multiple slots
-        for slot_id = 1:info.nargs
+        for slot_id = 1:Int(info.nargs)
             rt = bool_rt_to_conditional(rt, slot_id, info)
             rt isa InterConditional && break
         end
@@ -2983,6 +2971,9 @@ end
     ⊑ᵢ = ⊑(typeinf_lattice(info.interp))
     old = info.slottypes[slot_id]
     new = widenslotwrapper(info.changes[slot_id].typ) # avoid nested conditional
+    if isvarargtype(old) || isvarargtype(new)
+        return rt
+    end
     if new ⊑ᵢ old && !(old ⊑ᵢ new)
         if isa(rt, Const)
             val = rt.val

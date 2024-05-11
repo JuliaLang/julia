@@ -631,16 +631,18 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 // -- helper types -- //
 
 typedef struct {
-    uint8_t propagate_inbounds:1;
-    uint8_t has_fcall:1;
-    uint8_t nospecializeinfer:1;
-    uint8_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
-    uint8_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
+    uint16_t propagate_inbounds:1;
+    uint16_t has_fcall:1;
+    uint16_t nospecializeinfer:1;
+    uint16_t isva:1;
+    uint16_t nargsmatchesmethod:1;
+    uint16_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
+    uint16_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
 } jl_code_info_flags_bitfield_t;
 
 typedef union {
     jl_code_info_flags_bitfield_t bits;
-    uint8_t packed;
+    uint16_t packed;
 } jl_code_info_flags_t;
 
 // -- functions -- //

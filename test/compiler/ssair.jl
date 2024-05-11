@@ -747,6 +747,8 @@ function gen_unreachable_phinode_edge1(world::UInt, source, args...)
         ReturnNode(SSAValue(4))
     ]; slottypes=Any[Any,Int,Int])
     ci.slotnames = Symbol[:var"#self#", :x, :y]
+    ci.nargs = 3
+    ci.isva = false
     return ci
 end
 @eval function f_unreachable_phinode_edge1(x, y)
@@ -769,6 +771,8 @@ function gen_unreachable_phinode_edge2(world::UInt, source, args...)
         ReturnNode(SSAValue(4))
     ]; slottypes=Any[Any,Int,Int])
     ci.slotnames = Symbol[:var"#self#", :x, :y]
+    ci.nargs = 3
+    ci.isva = false
     return ci
 end
 @eval function f_unreachable_phinode_edge2(x, y)
@@ -791,6 +795,8 @@ function gen_must_throw_phinode_edge(world::UInt, source, _)
         ReturnNode(SSAValue(4))
     ]; slottypes=Any[Any])
     ci.slotnames = Symbol[:var"#self#"]
+    ci.nargs = 1
+    ci.isva = false
     return ci
 end
 @eval function f_must_throw_phinode_edge()

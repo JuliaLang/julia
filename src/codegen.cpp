@@ -2759,7 +2759,7 @@ static void jl_init_function(Function *F, const Triple &TT)
     F->addFnAttrs(attr);
 }
 
-static bool uses_specsig(jl_value_t *sig, bool needsparams, bool va, jl_value_t *rettype, bool prefer_specsig)
+static bool uses_specsig(jl_value_t *sig, bool needsparams, jl_value_t *rettype, bool prefer_specsig)
 {
     if (needsparams)
         return false;
@@ -2769,10 +2769,8 @@ static bool uses_specsig(jl_value_t *sig, bool needsparams, bool va, jl_value_t 
         return false;
     if (jl_nparams(sig) == 0)
         return false;
-    if (va) {
-        if (jl_is_vararg(jl_tparam(sig, jl_nparams(sig) - 1)))
-            return false;
-    }
+    if (jl_vararg_kind(jl_tparam(sig, jl_nparams(sig) - 1)) == JL_VARARG_UNBOUND)
+        return false;
     // not invalid, consider if specialized signature is worthwhile
     if (prefer_specsig)
         return true;
@@ -2803,7 +2801,6 @@ static bool uses_specsig(jl_value_t *sig, bool needsparams, bool va, jl_value_t 
 
 static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t *rettype, bool prefer_specsig)
 {
-    int va = lam->def.method->isva;
     jl_value_t *sig = lam->specTypes;
     bool needsparams = false;
     if (jl_is_method(lam->def.method)) {
@@ -2814,7 +2811,7 @@ static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t 
                 needsparams = true;
         }
     }
-    return std::make_pair(uses_specsig(sig, needsparams, va, rettype, prefer_specsig), needsparams);
+    return std::make_pair(uses_specsig(sig, needsparams, rettype, prefer_specsig), needsparams);
 }
 
 
@@ -5411,7 +5408,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         jl_value_t *oc_rett = jl_tparam1(f.typ);
         if (jl_is_datatype(oc_argt) && jl_tupletype_length_compat(oc_argt, nargs-1)) {
             jl_value_t *sigtype = jl_argtype_with_function_type((jl_value_t*)f.typ, (jl_value_t*)oc_argt);
-            if (uses_specsig(sigtype, false, true, oc_rett, true)) {
+            if (uses_specsig(sigtype, false, oc_rett, true)) {
                 JL_GC_PUSH1(&sigtype);
                 jl_cgval_t r = emit_specsig_oc_call(ctx, f.typ, sigtype, argv, nargs);
                 JL_GC_POP();
@@ -8098,19 +8095,15 @@ static jl_llvm_functions_t
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
     ctx.name = TSM.getModuleUnlocked()->getModuleIdentifier().data();
-    size_t nreq = 0;
-    int va = 0;
-    if (jl_is_method(lam->def.method)) {
-        ctx.nargs = nreq = lam->def.method->nargs;
-        ctx.is_opaque_closure = lam->def.method->is_for_opaque_closure;
-        if ((nreq > 0 && jl_is_method(lam->def.value) && lam->def.method->isva)) {
-            assert(nreq > 0);
-            nreq--;
-            va = 1;
-        }
+    size_t nreq = src->nargs;
+    int va = src->isva;
+    ctx.nargs = nreq;
+    if (va) {
+        assert(nreq > 0);
+        nreq--;
     }
-    else {
-        ctx.nargs = 0;
+    if (jl_is_method(lam->def.value)) {
+        ctx.is_opaque_closure = lam->def.method->is_for_opaque_closure;
     }
     ctx.nReqArgs = nreq;
     if (va) {
@@ -8174,7 +8167,7 @@ static jl_llvm_functions_t
 
     // step 3. some variable analysis
     size_t i;
-    for (i = 0; i < nreq; i++) {
+    for (i = 0; i < nreq && i < vinfoslen; i++) {
         jl_varinfo_t &varinfo = ctx.slots[i];
         varinfo.isArgument = true;
         jl_sym_t *argname = slot_symbol(ctx, i);
@@ -8688,7 +8681,7 @@ static jl_llvm_functions_t
         AttrBuilder param(ctx.builder.getContext());
         attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param);
     }
-    for (i = 0; i < nreq; i++) {
+    for (i = 0; i < nreq && i < vinfoslen; i++) {
         jl_sym_t *s = slot_symbol(ctx, i);
         jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
         // TODO: jl_nth_slot_type should call jl_rewrap_unionall?
@@ -9774,7 +9767,7 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(orc::ThreadSafeModule &m, jl_codeg
     std::string funcName = get_function_name(true, false, ctx.name, ctx.emission_context.TargetTriple);
     jl_llvm_functions_t declarations;
     declarations.functionObject = "jl_f_opaque_closure_call";
-    if (uses_specsig(mi->specTypes, false, true, rettype, true)) {
+    if (uses_specsig(mi->specTypes, false, rettype, true)) {
         jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, funcName, mi->specTypes, rettype, true, JL_FEAT_TEST(ctx,gcstack_arg));
         Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
         jl_init_function(gf_thunk, ctx.emission_context.TargetTriple);

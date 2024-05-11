@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 28 # do not make changes without bumping the version #!
+const ser_version = 29 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1094,6 +1094,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         if template !== nothing
             # TODO: compress template
             template = template::CodeInfo
+            if format_version(s) < 29
+                template.nargs = nargs
+                template.isva = isva
+            end
             meth.source = template
             meth.debuginfo = template.debuginfo
             if !@isdefined(slot_syms)
@@ -1259,6 +1263,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
             ci.inlining_cost = inlining_cost
         end
     end
+    if format_version(s) >= 29
+        ci.nargs = deserialize(s)
+    end
     ci.propagate_inbounds = deserialize(s)
     if format_version(s) < 23
         deserialize(s) # `pure` field has been removed
@@ -1268,6 +1275,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     end
     if format_version(s) >= 24
         ci.nospecializeinfer = deserialize(s)::Bool
+    end
+    if format_version(s) >= 29
+        ci.isva = deserialize(s)::Bool
     end
     if format_version(s) >= 21
         ci.inlining = deserialize(s)::UInt8

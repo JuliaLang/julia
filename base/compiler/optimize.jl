@@ -1253,14 +1253,13 @@ end
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
-    nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
     @timeit "domtree 1" domtree = construct_domtree(ir)
-    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.stmt)
+    defuse_insts = scan_slot_def_use(ci.nargs, ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
-    resize!(ir.argtypes, nargs)
+    resize!(ir.argtypes, ci.nargs)
     return ir
 end
 
