@@ -139,7 +139,7 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
         argv[i-1] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
-    jl_value_t *result = jl_invoke(argv[0], &argv[1], nargs - 2, meth);
+    jl_value_t *result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, meth);
     JL_GC_POP();
     return result;
 }
