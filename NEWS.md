@@ -95,6 +95,8 @@ New library functions
   but allows adding keyword arguments to the function call ([#51501]).
 * New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
 * New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
+* New function `Base.isrelocatable(pkg)` tells whether the package is precompiled and the associated
+  cachefile is relocatable ([#53906]).
 
 New library features
 --------------------
@@ -261,12 +263,10 @@ Tooling Improvements
 [#51799]: https://github.com/JuliaLang/julia/issues/51799
 [#51897]: https://github.com/JuliaLang/julia/issues/51897
 [#51929]: https://github.com/JuliaLang/julia/issues/51929
-[#52049]: https://github.com/JuliaLang/julia/issues/52049
 [#52096]: https://github.com/JuliaLang/julia/issues/52096
 [#52123]: https://github.com/JuliaLang/julia/issues/52123
 [#52139]: https://github.com/JuliaLang/julia/issues/52139
 [#52180]: https://github.com/JuliaLang/julia/issues/52180
-[#52196]: https://github.com/JuliaLang/julia/issues/52196
 [#52400]: https://github.com/JuliaLang/julia/issues/52400
 [#52413]: https://github.com/JuliaLang/julia/issues/52413
 [#52461]: https://github.com/JuliaLang/julia/issues/52461
@@ -282,3 +282,4 @@ Tooling Improvements
 [#53092]: https://github.com/JuliaLang/julia/issues/53092
 [#53262]: https://github.com/JuliaLang/julia/issues/53262
 [#53320]: https://github.com/JuliaLang/julia/issues/53320
+[#53906]: https://github.com/JuliaLang/julia/issues/53906
