@@ -930,7 +930,7 @@ end
 
 
 # multiply 2x2 matrices
-function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
+Base.@constprop :aggressive function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
     matmul2x2!(similar(B, promote_op(matprod, T, S), 2, 2), tA, tB, A, B)
 end
 
@@ -946,11 +946,11 @@ function __matmul_checks(C, A, B, sz)
 end
 
 # separate function with the core of matmul2x2! that doesn't depend on a MulAddMul
-function _matmul2x2_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+Base.@constprop :aggressive function _matmul2x2_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     __matmul_checks(C, A, B, (2,2))
     __matmul2x2_elements(tA, tB, A, B)
 end
-function __matmul2x2_elements(tA, A::AbstractMatrix)
+Base.@constprop :aggressive function __matmul2x2_elements(tA, A::AbstractMatrix)
     @inbounds begin
     if tA == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
@@ -978,9 +978,9 @@ function __matmul2x2_elements(tA, A::AbstractMatrix)
     end # inbounds
     A11, A12, A21, A22
 end
-__matmul2x2_elements(tA, tB, A, B) = __matmul2x2_elements(tA, A), __matmul2x2_elements(tB, B)
+Base.@constprop :aggressive __matmul2x2_elements(tA, tB, A, B) = __matmul2x2_elements(tA, A), __matmul2x2_elements(tB, B)
 
-function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+Base.@constprop :aggressive function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
     (A11, A12, A21, A22), (B11, B12, B21, B22) = _matmul2x2_elements(C, tA, tB, A, B)
     @inbounds begin
@@ -993,16 +993,16 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
 end
 
 # Multiply 3x3 matrices
-function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
+Base.@constprop :aggressive function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,S}
     matmul3x3!(similar(B, promote_op(matprod, T, S), 3, 3), tA, tB, A, B)
 end
 
 # separate function with the core of matmul3x3! that doesn't depend on a MulAddMul
-function _matmul3x3_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
+Base.@constprop :aggressive function _matmul3x3_elements(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix)
     __matmul_checks(C, A, B, (3,3))
     __matmul3x3_elements(tA, tB, A, B)
 end
-function __matmul3x3_elements(tA, A::AbstractMatrix)
+Base.@constprop :aggressive function __matmul3x3_elements(tA, A::AbstractMatrix)
     @inbounds begin
     if tA == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
@@ -1038,9 +1038,9 @@ function __matmul3x3_elements(tA, A::AbstractMatrix)
     end # inbounds
     A11, A12, A13, A21, A22, A23, A31, A32, A33
 end
-__matmul3x3_elements(tA, tB, A, B) = __matmul3x3_elements(tA, A), __matmul3x3_elements(tB, B)
+Base.@constprop :aggressive __matmul3x3_elements(tA, tB, A, B) = __matmul3x3_elements(tA, A), __matmul3x3_elements(tB, B)
 
-function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+Base.@constprop :aggressive function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
 
     (A11, A12, A13, A21, A22, A23, A31, A32, A33),
