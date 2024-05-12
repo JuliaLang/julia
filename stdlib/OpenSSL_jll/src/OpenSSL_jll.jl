@@ -4,6 +4,7 @@
 
 baremodule OpenSSL_jll
 using Base, Libdl, Base.BinaryPlatforms
+using NetworkOptions: ca_roots
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -43,6 +44,12 @@ function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libssl_path)
     push!(LIBPATH_list, LIBPATH[])
+
+    # If not already done, set the environment variable `SSL_CERT_FILE` when necessary.
+    cert_loc = ca_roots()
+    if cert_loc isa String
+        get!(ENV, "SSL_CERT_FILE", cert_loc)
+    end
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
