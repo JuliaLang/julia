@@ -273,7 +273,7 @@ end
     @test B.S ≈ B32.S
     C = Symmetric(A'A)
     D = svd(C)
-    D32 = svd(Float32.(C))
+    D32 = svd(Symmetric(Float32.(C)))
     @test D isa SVD{Float16, Float16, Matrix{Float16}}
     @test D.U isa Matrix{Float16}
     @test D.Vt isa Matrix{Float16}
