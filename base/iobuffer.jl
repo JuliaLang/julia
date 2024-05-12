@@ -792,7 +792,7 @@ function unsafe_takestring!(io::IOBuffer)
     iszero(nbytes) && return ""
     mem = StringMemory(nbytes)
     unsafe_copyto!(mem, 1, io.data, off+1, nbytes)
-    return takestring!(mem)
+    return unsafe_takestring(mem)
 end
 
 """
@@ -825,7 +825,13 @@ function takestring!(io::IOBuffer)
         mem = StringMemory(nbytes)
         start = io.seekable ? io.offset + 1 : io.ptr
         unsafe_copyto!(mem, 1, io.data, start, nbytes)
-        takestring!(mem)
+
+        # We can use unsafe_takestring here, because the IOBuffer
+        # gets its memory reallocated on next use due to setting
+        # io.reinit = true, so this can only cause UB if the user
+        # holds a reference to the internal .data field and mutates
+        # it.
+        unsafe_takestring(mem)
     end
 
     # Empty the IOBuffer, resetting it.
@@ -833,6 +839,7 @@ function takestring!(io::IOBuffer)
     io.ptr = 1
     io.size = 0
     io.offset = 0
+    io.reinit = true
     return s
 end
 

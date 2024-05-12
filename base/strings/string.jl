@@ -61,7 +61,7 @@ by [`take!`](@ref) on a writable [`IOBuffer`](@ref) and by calls to
 In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
-String(v::AbstractVector{UInt8}) = takestring!(copyto!(StringMemory(length(v)), v))
+String(v::AbstractVector{UInt8}) = unsafe_takestring(copyto!(StringMemory(length(v)), v))
 
 function String(v::Vector{UInt8})
     len = length(v)
@@ -91,7 +91,7 @@ Create a string from the content of `x`, emptying `x`.
 
 # Examples
 ```jldoctest
-julia> v = Memory{UInt8}([0x61, 0x62, 0x63]);
+julia> v = [0x61, 0x62, 0x63];
 
 julia> s = takestring!(v)
 "abc"
@@ -101,6 +101,12 @@ true
 ```
 """
 takestring!(v::Vector{UInt8}) = String(v)
+
+"Create a string re-using the memory, if possible.
+Mutating the memory after calling this function is undefined behaviour."
+function unsafe_takestring(m::Memory{UInt8})
+    ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
+end
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
