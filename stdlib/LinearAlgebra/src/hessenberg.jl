@@ -74,7 +74,7 @@ real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
-function istriu(A::UpperHessenberg, k::Integer=0)
+Base.@constprop :aggressive function istriu(A::UpperHessenberg, k::Integer=0)
     k <= -1 && return true
     return _istriu(A, k)
 end

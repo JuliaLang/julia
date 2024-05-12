@@ -351,11 +351,11 @@ function Base.replace_in_print_matrix(A::Union{LowerTriangular,UnitLowerTriangul
     return i >= j ? s : Base.replace_with_centered_mark(s)
 end
 
-function istril(A::Union{LowerTriangular,UnitLowerTriangular}, k::Integer=0)
+Base.@constprop :aggressive function istril(A::Union{LowerTriangular,UnitLowerTriangular}, k::Integer=0)
     k >= 0 && return true
     return _istril(A, k)
 end
-function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
+Base.@constprop :aggressive function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
     k <= 0 && return true
     return _istriu(A, k)
 end
