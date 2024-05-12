@@ -2784,12 +2784,7 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
                 res = jl_bottom_type;
             }
             else if (obviously_egal(var->lb, ub)) {
-                JL_TRY {
-                    res = jl_substitute_var(body, var, ub);
-                }
-                JL_CATCH {
-                    res = jl_bottom_type;
-                }
+                res = jl_substitute_var_nothrow(body, var, ub);
             }
             else {
                 if (ub != var->ub) {
@@ -2961,12 +2956,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 }
             }
             if (varval) {
-                JL_TRY {
-                    *btemp->ub = jl_substitute_var(iub, vb->var, varval);
-                }
-                JL_CATCH {
+                *btemp->ub = jl_substitute_var_nothrow(iub, vb->var, varval);
+                if (*btemp->ub == jl_bottom_type && *btemp->lb != jl_bottom_type)
                     res = jl_bottom_type;
-                }
             }
             else if (iub == (jl_value_t*)vb->var) {
                 // TODO: this loses some constraints, such as in this test, where we replace T4<:S3 (e.g. T4==S3 since T4 only appears covariantly once) with T4<:Any
@@ -3095,17 +3087,14 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     // if `v` still occurs, re-wrap body in `UnionAll v` or eliminate the UnionAll
     if (jl_has_typevar(res, vb->var)) {
         if (varval) {
-            JL_TRY {
-                // you can construct `T{x} where x` even if T's parameter is actually
-                // limited. in that case we might get an invalid instantiation here.
-                res = jl_substitute_var(res, vb->var, varval);
-                // simplify chains of UnionAlls where bounds become equal
-                while (jl_is_unionall(res) && obviously_egal(((jl_unionall_t*)res)->var->lb,
-                                                             ((jl_unionall_t*)res)->var->ub))
-                    res = jl_instantiate_unionall((jl_unionall_t*)res, ((jl_unionall_t*)res)->var->lb);
-            }
-            JL_CATCH {
-                res = jl_bottom_type;
+            // you can construct `T{x} where x` even if T's parameter is actually
+            // limited. in that case we might get an invalid instantiation here.
+            res = jl_substitute_var_nothrow(res, vb->var, varval);
+            // simplify chains of UnionAlls where bounds become equal
+            while (jl_is_unionall(res) && obviously_egal(((jl_unionall_t*)res)->var->lb,
+                                                         ((jl_unionall_t*)res)->var->ub)) {
+                jl_unionall_t * ures = (jl_unionall_t *)res;
+                res = jl_substitute_var_nothrow(ures->body, ures->var, ures->var->lb);
             }
         }
         else {
