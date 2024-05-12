@@ -235,7 +235,8 @@ static const char opts[]  =
     " -i, --interactive                             Interactive mode; REPL runs and\n"
     "                                               `isinteractive()` is true.\n"
     " -q, --quiet                                   Quiet startup: no banner, suppress REPL warnings\n"
-    " --banner={yes|no|short|auto*}                 Enable or disable startup banner\n"
+    " --banner={yes|no|auto*|<size>}                Enable or disable startup banner, or specify a\n"
+    "                                               preferred <size> (tiny, short, narrow, or full).\n"
     " --color={yes|no|auto*}                        Enable or disable color text\n"
     " --history-file={yes*|no}                      Load or save history\n\n"
 
@@ -611,16 +612,22 @@ restart_switch:
                 jl_options.banner = 0;
             break;
         case opt_banner: // banner
-            if (!strcmp(optarg, "yes"))
-                jl_options.banner = 1;
+            if (!strcmp(optarg, "auto"))
+                jl_options.banner = -1;
             else if (!strcmp(optarg, "no"))
                 jl_options.banner = 0;
-            else if (!strcmp(optarg, "auto"))
-                jl_options.banner = -1;
-            else if (!strcmp(optarg, "short"))
+            else if (!strcmp(optarg, "yes"))
+                jl_options.banner = 1;
+            else if (!strcmp(optarg, "full"))
+                jl_options.banner = 1; // Same as "yes".
+            else if (!strcmp(optarg, "narrow"))
                 jl_options.banner = 2;
+            else if (!strcmp(optarg, "short"))
+                jl_options.banner = 3;
+            else if (!strcmp(optarg, "tiny"))
+                jl_options.banner = 4;
             else
-                jl_errorf("julia: invalid argument to --banner={yes|no|auto|short} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --banner={yes|no|auto|full|narrow|short|tiny} (%s)", optarg);
             break;
         case opt_experimental_features:
             jl_options.use_experimental_features = JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_YES;
