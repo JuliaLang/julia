@@ -38,6 +38,47 @@ getindex(t::Tuple, c::Colon) = t
 get(t::Tuple, i::Integer, default) = i in 1:length(t) ? getindex(t, i) : default
 get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 
+# tuple views
+
+struct _TupleViewFront end
+struct _TupleViewTail end
+const _TupleView = Union{_TupleViewFront,_TupleViewTail}
+_tupleview_length_representation_impl(n::Int) = ((nothing for _ ∈ OneTo(n))...,)::Tuple{Vararg{Nothing}}
+_tupleview_length_representation(@nospecialize t::Tuple) = _tupleview_length_representation_impl(nfields(t))
+function _tupleview_length_representation_decremented(@nospecialize t::Tuple{Nothing,Vararg{Nothing}})
+    - = sub_int  # bootstrapping
+    _tupleview_length_representation_impl(nfields(t) - 1)
+end
+function _tupleview_single_from(::_TupleViewFront, (@nospecialize parent::Tuple), @nospecialize length::Tuple{Vararg{Nothing}})
+    parent[nfields(length)]
+end
+function _tupleview_single_from(::_TupleViewTail, (@nospecialize parent::Tuple), @nospecialize length::Tuple{Vararg{Nothing}})
+    + = add_int; - = sub_int  # for bootstrapping
+    parent[nfields(parent) - nfields(length) + 1]
+end
+
+module _FoldAssociativity
+    struct Left end
+    struct Right end
+    const U = Union{Left,Right}
+    f(::Left, a, b) = (a, b)
+    f(::Right, a, b) = (b, a)
+end
+
+function _tupleview_fold(
+    op::Op, ass::_FoldAssociativity.U,
+    o::_TupleView, (@nospecialize parent::Tuple{Any,Vararg}), @nospecialize length::Tuple{Nothing,Vararg{Nothing}}
+) where {Op}
+    @inline
+    e = _tupleview_single_from(o, parent, length)
+    lenm1 = _tupleview_length_representation_decremented(length)
+    if lenm1 === ()
+        e
+    else
+        op(_FoldAssociativity.f(ass, _tupleview_fold(op, ass, o, parent, lenm1), e)...)
+    end
+end
+
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
@@ -413,6 +454,18 @@ function map(f, t1::Any32, t2::Any32, ts::Any32...)
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
     end
     (A...,)
+end
+
+function _tuple_foldl(op::Op, t::Tuple{Any,Vararg}) where {Op}
+    ass = _FoldAssociativity.Left()
+    _tupleview_fold(op, ass, _TupleViewFront(), t, _tupleview_length_representation(t))
+end
+function _tuple_foldl(op::Op, t::Any32) where {Op}
+    y = t[1]
+    for i ∈ 2:length(t)
+        y = op(y, t[i])
+    end
+    y
 end
 
 # type-stable padding
