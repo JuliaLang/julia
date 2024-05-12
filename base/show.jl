@@ -2649,7 +2649,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     end
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
-    str = String(take!(buf))
+    str = takestring!(buf)
     str = type_limited_string_from_context(out, str)
     print(out, str)
     nothing

@@ -911,7 +911,7 @@ function hist_from_file(hp::REPLHistoryProvider, path::String)
 end
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
-    str = rstrip(String(take!(copy(s.input_buffer))))
+    str = rstrip(takestring!(copy(s.input_buffer)))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
     !isempty(hist.history) &&
@@ -1038,7 +1038,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
                              prefix::AbstractString,
                              backwards::Bool,
                              cur_idx::Int = hist.cur_idx)
-    cur_response = String(take!(copy(LineEdit.buffer(s))))
+    cur_response = takestring!(copy(LineEdit.buffer(s)))
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
         cur_idx = hist.last_idx
