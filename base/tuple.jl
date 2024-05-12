@@ -38,6 +38,45 @@ getindex(t::Tuple, c::Colon) = t
 get(t::Tuple, i::Integer, default) = i in 1:length(t) ? getindex(t, i) : default
 get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 
+# tuple views
+
+struct _TupleViewFront end
+struct _TupleViewTail end
+const _TupleView = Union{_TupleViewFront,_TupleViewTail}
+_tupleview_length_representation_impl(n::Int) = ((nothing for _ ∈ OneTo(n))...,)::Tuple{Vararg{Nothing}}
+_tupleview_length_representation(@nospecialize t::Tuple) = _tupleview_length_representation_impl(nfields(t))
+function _tupleview_length_representation_decremented(@nospecialize t::Tuple{Nothing,Vararg{Nothing}})
+    - = sub_int  # bootstrapping
+    _tupleview_length_representation_impl(nfields(t) - 1)
+end
+function _tupleview_single_from(::_TupleViewFront, (@nospecialize parent::Tuple), @nospecialize length::Tuple{Vararg{Nothing}})
+    parent[nfields(length)]
+end
+function _tupleview_single_from(::_TupleViewTail, (@nospecialize parent::Tuple), @nospecialize length::Tuple{Vararg{Nothing}})
+    + = add_int; - = sub_int  # for bootstrapping
+    parent[nfields(parent) - nfields(length) + 1]
+end
+
+_tupleview_tuple_concatenation_helper(::_TupleViewFront, (@nospecialize s), @nospecialize r::Tuple) = (r..., s)
+_tupleview_tuple_concatenation_helper(::_TupleViewTail, (@nospecialize s), @nospecialize r::Tuple) = (s, r...)
+
+function _tupleview_setindex_to_tuple(
+    o::_TupleView, (@nospecialize parent::Tuple{Vararg}), (@nospecialize length::Tuple{Vararg{Nothing}}),
+    new_value, target_length::Int,
+)
+    @inline
+    if length === ()
+        ()
+    else
+        let lenm1 = _tupleview_length_representation_decremented(length),
+            b = nfields(length) == target_length
+            e = b ? new_value : _tupleview_single_from(o, parent, length)
+            rest = _tupleview_setindex_to_tuple(o, parent, lenm1, new_value, target_length)
+            _tupleview_tuple_concatenation_helper(o, e, rest)
+        end
+    end
+end
+
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
@@ -55,12 +94,14 @@ true
 function setindex(x::Tuple, v, i::Integer)
     @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
     @inline
-    _setindex(v, i, x...)
+    _setindex(v, i, x)
 end
 
-function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
+function _setindex(v, i::Integer, x::Tuple)
     @inline
-    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
+    len = _tupleview_length_representation(x)
+    l = nfields(x) - Int(i)::Int + 1
+    _tupleview_setindex_to_tuple(_TupleViewTail(), x, len, v, l)
 end
 
 
