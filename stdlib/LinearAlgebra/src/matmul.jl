@@ -952,28 +952,33 @@ Base.@constprop :aggressive function _matmul2x2_elements(C::AbstractMatrix, tA, 
 end
 Base.@constprop :aggressive function __matmul2x2_elements(tA, A::AbstractMatrix)
     @inbounds begin
-    if tA == 'N'
+    tA_uc = uppercase(tA) # possibly unwrap a WrapperChar
+    if tA_uc == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
-    elseif tA == 'T'
+    elseif tA_uc == 'T'
         # TODO making these lazy could improve perf
         A11 = copy(transpose(A[1,1])); A12 = copy(transpose(A[2,1]))
         A21 = copy(transpose(A[1,2])); A22 = copy(transpose(A[2,2]))
-    elseif tA == 'C'
+    elseif tA_uc == 'C'
         # TODO making these lazy could improve perf
         A11 = copy(A[1,1]'); A12 = copy(A[2,1]')
         A21 = copy(A[1,2]'); A22 = copy(A[2,2]')
-    elseif tA == 'S'
-        A11 = symmetric(A[1,1], :U); A12 = A[1,2]
-        A21 = copy(transpose(A[1,2])); A22 = symmetric(A[2,2], :U)
-    elseif tA == 's'
-        A11 = symmetric(A[1,1], :L); A12 = copy(transpose(A[2,1]))
-        A21 = A[2,1]; A22 = symmetric(A[2,2], :L)
-    elseif tA == 'H'
-        A11 = hermitian(A[1,1], :U); A12 = A[1,2]
-        A21 = copy(adjoint(A[1,2])); A22 = hermitian(A[2,2], :U)
-    else # if tA == 'h'
-        A11 = hermitian(A[1,1], :L); A12 = copy(adjoint(A[2,1]))
-        A21 = A[2,1]; A22 = hermitian(A[2,2], :L)
+    elseif tA_uc == 'S'
+        if isuppercase(tA) # tA == 'S'
+            A11 = symmetric(A[1,1], :U); A12 = A[1,2]
+            A21 = copy(transpose(A[1,2])); A22 = symmetric(A[2,2], :U)
+        else
+            A11 = symmetric(A[1,1], :L); A12 = copy(transpose(A[2,1]))
+            A21 = A[2,1]; A22 = symmetric(A[2,2], :L)
+        end
+    elseif tA_uc == 'H'
+        if isuppercase(tA) # tA == 'H'
+            A11 = hermitian(A[1,1], :U); A12 = A[1,2]
+            A21 = copy(adjoint(A[1,2])); A22 = hermitian(A[2,2], :U)
+        else # if tA == 'h'
+            A11 = hermitian(A[1,1], :L); A12 = copy(adjoint(A[2,1]))
+            A21 = A[2,1]; A22 = hermitian(A[2,2], :L)
+        end
     end
     end # inbounds
     A11, A12, A21, A22
@@ -1004,36 +1009,41 @@ Base.@constprop :aggressive function _matmul3x3_elements(C::AbstractMatrix, tA, 
 end
 Base.@constprop :aggressive function __matmul3x3_elements(tA, A::AbstractMatrix)
     @inbounds begin
-    if tA == 'N'
+    tA_uc = uppercase(tA) # possibly unwrap a WrapperChar
+    if tA_uc == 'N'
         A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
         A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3]
         A31 = A[3,1]; A32 = A[3,2]; A33 = A[3,3]
-    elseif tA == 'T'
+    elseif tA_uc == 'T'
         # TODO making these lazy could improve perf
         A11 = copy(transpose(A[1,1])); A12 = copy(transpose(A[2,1])); A13 = copy(transpose(A[3,1]))
         A21 = copy(transpose(A[1,2])); A22 = copy(transpose(A[2,2])); A23 = copy(transpose(A[3,2]))
         A31 = copy(transpose(A[1,3])); A32 = copy(transpose(A[2,3])); A33 = copy(transpose(A[3,3]))
-    elseif tA == 'C'
+    elseif tA_uc == 'C'
         # TODO making these lazy could improve perf
         A11 = copy(A[1,1]'); A12 = copy(A[2,1]'); A13 = copy(A[3,1]')
         A21 = copy(A[1,2]'); A22 = copy(A[2,2]'); A23 = copy(A[3,2]')
         A31 = copy(A[1,3]'); A32 = copy(A[2,3]'); A33 = copy(A[3,3]')
-    elseif tA == 'S'
-        A11 = symmetric(A[1,1], :U); A12 = A[1,2]; A13 = A[1,3]
-        A21 = copy(transpose(A[1,2])); A22 = symmetric(A[2,2], :U); A23 = A[2,3]
-        A31 = copy(transpose(A[1,3])); A32 = copy(transpose(A[2,3])); A33 = symmetric(A[3,3], :U)
-    elseif tA == 's'
-        A11 = symmetric(A[1,1], :L); A12 = copy(transpose(A[2,1])); A13 = copy(transpose(A[3,1]))
-        A21 = A[2,1]; A22 = symmetric(A[2,2], :L); A23 = copy(transpose(A[3,2]))
-        A31 = A[3,1]; A32 = A[3,2]; A33 = symmetric(A[3,3], :L)
-    elseif tA == 'H'
-        A11 = hermitian(A[1,1], :U); A12 = A[1,2]; A13 = A[1,3]
-        A21 = copy(adjoint(A[1,2])); A22 = hermitian(A[2,2], :U); A23 = A[2,3]
-        A31 = copy(adjoint(A[1,3])); A32 = copy(adjoint(A[2,3])); A33 = hermitian(A[3,3], :U)
-    else # if tA == 'h'
-        A11 = hermitian(A[1,1], :L); A12 = copy(adjoint(A[2,1])); A13 = copy(adjoint(A[3,1]))
-        A21 = A[2,1]; A22 = hermitian(A[2,2], :L); A23 = copy(adjoint(A[3,2]))
-        A31 = A[3,1]; A32 = A[3,2]; A33 = hermitian(A[3,3], :L)
+    elseif tA_uc == 'S'
+        if isuppercase(tA) # tA == 'S'
+            A11 = symmetric(A[1,1], :U); A12 = A[1,2]; A13 = A[1,3]
+            A21 = copy(transpose(A[1,2])); A22 = symmetric(A[2,2], :U); A23 = A[2,3]
+            A31 = copy(transpose(A[1,3])); A32 = copy(transpose(A[2,3])); A33 = symmetric(A[3,3], :U)
+        else
+            A11 = symmetric(A[1,1], :L); A12 = copy(transpose(A[2,1])); A13 = copy(transpose(A[3,1]))
+            A21 = A[2,1]; A22 = symmetric(A[2,2], :L); A23 = copy(transpose(A[3,2]))
+            A31 = A[3,1]; A32 = A[3,2]; A33 = symmetric(A[3,3], :L)
+        end
+    elseif tA_uc == 'H'
+        if isuppercase(tA) # tA == 'H'
+            A11 = hermitian(A[1,1], :U); A12 = A[1,2]; A13 = A[1,3]
+            A21 = copy(adjoint(A[1,2])); A22 = hermitian(A[2,2], :U); A23 = A[2,3]
+            A31 = copy(adjoint(A[1,3])); A32 = copy(adjoint(A[2,3])); A33 = hermitian(A[3,3], :U)
+        else # if tA == 'h'
+            A11 = hermitian(A[1,1], :L); A12 = copy(adjoint(A[2,1])); A13 = copy(adjoint(A[3,1]))
+            A21 = A[2,1]; A22 = hermitian(A[2,2], :L); A23 = copy(adjoint(A[3,2]))
+            A31 = A[3,1]; A32 = A[3,2]; A33 = hermitian(A[3,3], :L)
+        end
     end
     end # inbounds
     A11, A12, A13, A21, A22, A23, A31, A32, A33
