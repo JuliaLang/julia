@@ -193,7 +193,7 @@ The following is a complete list of command-line switches available when launchi
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`, `--interactive`                  |Interactive mode; REPL runs and `isinteractive()` is true|
 |`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings|
-|`--banner={yes\|no\|short\|auto*}`     |Enable or disable startup banner|
+|`--banner={yes\|no\|auto*\|<size>}`    |Enable or disable startup banner, or specify a preferred `<size>` (`tiny`, `short`, `narrow`, or `full`)|
 |`--color={yes\|no\|auto*}`             |Enable or disable color text|
 |`--history-file={yes*\|no}`            |Load or save history|
 |`--depwarn={yes\|no*\|error}`          |Enable or disable syntax and method deprecation warnings (`error` turns warnings into errors)|
