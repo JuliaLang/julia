@@ -36,3 +36,7 @@ end
     # Specifically check UTF-8 string whose lead byte is same as a surrogate
     @test String(b"\xed\x9f\xbf") == "\xed\x9f\xbf" == "\ud7ff"
 end
+
+@testset "decimal digits" begin
+    @test isdigit('４')
+end

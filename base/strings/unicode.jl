@@ -433,6 +433,8 @@ end
     isdigit(c::AbstractChar) -> Bool
 
 Tests whether a character is a decimal digit (0-9).
+A character is classified as a letter if it belongs to the Unicode general
+category Number, decimal digit, i.e. a character whose category code is `ND`.
 
 See also: [`isletter`](@ref).
 
@@ -448,7 +450,7 @@ julia> isdigit('α')
 false
 ```
 """
-isdigit(c::AbstractChar) = (c >= '0') & (c <= '9')
+isdigit(c::AbstractChar) = category_code(c) == UTF8PROC_CATEGORY_ND
 
 """
     isletter(c::AbstractChar) -> Bool
