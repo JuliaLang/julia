@@ -1255,7 +1255,8 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
                 JL_GC_PROMISE_ROOTED(owner);
 
                 assert(jl_atomic_load_relaxed(&codeinst->min_world) == minworld);
-                assert(jl_atomic_load_relaxed(&codeinst->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
+                // See #53586, #53109
+                // assert(jl_atomic_load_relaxed(&codeinst->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
                 assert(jl_atomic_load_relaxed(&codeinst->inferred));
                 jl_atomic_store_relaxed(&codeinst->max_world, maxvalid);
 
