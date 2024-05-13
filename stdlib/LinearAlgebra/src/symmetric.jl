@@ -770,7 +770,8 @@ function svd(A::RealHermSymComplexHerm; full::Bool=false)
     end
     return SVD(vecs, vals, V')
 end
-function svd(A::RealHermSymComplexHerm{T}; full::Bool = false) where {T <: Union{Float16,Complex{Float16}}}
+function svd(A::RealHermSymComplexHerm{Float16}; full::Bool = false)
+    T = eltype(A)
     A = svd(eigencopy_oftype(A, eigtype(T)); full)
     return SVD{T}(A)
 end
