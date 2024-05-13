@@ -1490,7 +1490,7 @@ let src = @eval Module() begin
     @test count(iscall((src, Base.add_int)), src.code) == 1
 end
 
-# Test gvn! fixes #50877
+# Test gvn! fixes #50887
 let src = @eval Module() begin
     function f(x)
         return Base.exp(x) / (1 + Base.exp(x))
