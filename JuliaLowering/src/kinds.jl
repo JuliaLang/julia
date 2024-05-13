@@ -10,6 +10,8 @@ function _insert_kinds()
             # A literal Julia value of any kind, as might be inserted by the AST
             # during macro expansion
             "Value"
+            # A (quoted) `Symbol`
+            "Symbol"
             # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
             "inline"

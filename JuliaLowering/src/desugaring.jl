@@ -1,11 +1,4 @@
-"""
-Unique symbolic identity for a variable within a `DesugaringContext`
-"""
-const VarId = Int
-
-struct SSAVar
-    id::VarId
-end
+# Lowering Pass 2 - syntax desugaring 
 
 struct LambdaInfo
     # TODO: Make SyntaxList concretely typed?
@@ -18,193 +11,19 @@ end
 struct DesugaringContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     next_var_id::Ref{VarId}
+    scope_layers::Vector{ScopeLayer}
     mod::Module
 end
 
-function DesugaringContext(ctx, mod)
-    graph = syntax_graph(ctx)
-    ensure_attributes!(graph,
-                       kind=Kind, syntax_flags=UInt16, green_tree=GreenNode,
-                       source_pos=Int, source=SourceAttrType,
-                       value=Any, name_val=String,
-                       scope_type=Symbol, # :hard or :soft
-                       var_id=VarId,
-                       lambda_info=LambdaInfo)
-    DesugaringContext(freeze_attrs(graph), Ref{VarId}(1), mod)
-end
-
-#-------------------------------------------------------------------------------
-#-------------------------------------------------------------------------------
-# Predicates and accessors working on expression trees
-
-function is_quoted(ex)
-    kind(ex) in KSet"quote top core globalref outerref break inert
-                     meta inbounds inline noinline loopinfo"
-end
-
-function is_sym_decl(x)
-    k = kind(x)
-    k == K"Identifier" || k == K"::"
-end
-
-# Identifier made of underscores
-function is_placeholder(ex)
-    kind(ex) == K"Identifier" && all(==('_'), ex.name_val)
-end
-
-function is_identifier(x)
-    k = kind(x)
-    k == K"Identifier" || k == K"var" || is_operator(k) || is_macro_name(k)
-end
-
-function is_eventually_call(ex::SyntaxTree)
-    k = kind(ex)
-    return k == K"call" || ((k == K"where" || k == K"::") && is_eventually_call(ex[1]))
-end
-
-function is_function_def(ex)
-    k = kind(ex)
-    return k == K"function" || k == K"->" ||
-        (k == K"=" && numchildren(ex) == 2 && is_eventually_call(ex[1]))
-end
-
-function identifier_name(ex)
-    kind(ex) == K"var" ? ex[1] : ex
-end
-
-function is_valid_name(ex)
-    n = identifier_name(ex).name_val
-    n !== "ccall" && n !== "cglobal"
-end
-
-function decl_var(ex)
-    kind(ex) == K"::" ? ex[1] : ex
-end
-
-# given a complex assignment LHS, return the symbol that will ultimately be assigned to
-function assigned_name(ex)
-    k = kind(ex)
-    if (k == K"call" || k == K"curly" || k == K"where") || (k == K"::" && is_eventually_call(ex))
-        assigned_name(ex[1])
-    else
-        ex
-    end
-end
-
-#-------------------------------------------------------------------------------
-# Lowering pass 1.1: Simple normalizations and quote expansion
-function _contains_active_interp(ex, depth)
-    k = kind(ex)
-    if k == K"$" && depth == 0
-        return true
-    end
-    inner_depth = k == K"quote" ? depth + 1 :
-                  k == K"$"     ? depth - 1 :
-                  depth
-    return any(_contains_active_interp(c, inner_depth) for c in children(ex))
-end
-
-function expand_interpolation(ctx, interp_ctx_var, ex)
-    @ast ctx ex [K"call"
-        interpolate_value::K"Value"
-        interp_ctx_var
-        ex::K"Value"
-        expand_forms_0(ctx, ex)
-    ]
-end
-
-function expand_quote_content(ctx, interp_ctx_var, ex, depth)
-    if !_contains_active_interp(ex, depth)
-        return @ast ctx ex [K"call"
-            interpolate_copy_ast::K"Value"
-            interp_ctx_var
-            ex::K"Value"
-        ]
-    end
-
-    # We have an interpolation deeper in the tree somewhere - expand to an
-    # expression 
-    inner_depth = kind(ex) == K"quote" ? depth + 1 :
-                  kind(ex) == K"$"     ? depth - 1 :
-                  depth
-    expanded_children = SyntaxList(ctx)
-    for e in children(ex)
-        if kind(e) == K"$" && inner_depth == 0
-            for x in children(e)
-                push!(expanded_children, expand_interpolation(ctx, interp_ctx_var, x))
-            end
-        else
-            push!(expanded_children, expand_quote_content(ctx, interp_ctx_var, e, inner_depth))
-        end
-    end
-
-    return @ast ctx ex [K"call"
-        interpolate_node::K"Value"
-        interp_ctx_var
-        ex::K"Value"
-        expanded_children...
-    ]
-end
-
-function expand_quote(ctx, ex)
-    interp_ctx_var = ssavar(ctx, ex)
-    expanded = if kind(ex) == K"$"
-        @chk numchildren(ex) == 1
-        e1 = ex[1]
-        if kind(e1) == K"..."
-            throw(LoweringError(e1, "`...` expression outside of call"))
-        end
-        expand_interpolation(ctx, interp_ctx_var, e1)
-    else
-        expand_quote_content(ctx, interp_ctx_var, ex, 0)
-    end
-    @ast ctx ex [K"block"
-        [K"="
-           interp_ctx_var
-           [K"call"
-               InterpolationContext::K"Value"
-               ctx.mod::K"Value"
-           ]
-        ]
-        expanded
-    ]
-end
-
-"""
-The aim of this pass is to do some super simple normalizations to make
-desugaring-proper easier to write. The kinds of things like identifier
-normalization which would require extra logic to pervade the remaining
-desugaring.
-"""
-function expand_forms_0(ctx::DesugaringContext, ex::SyntaxTree)
-    k = kind(ex)
-    if k == K"var" || k == K"char" || k == K"parens"
-        # Strip "container" nodes
-        @chk numchildren(ex) == 1
-        ex[1]
-    elseif is_operator(k) && !haschildren(ex) # FIXME do in JuliaSyntax?
-        @ast ctx ex ex.name_val::K"Identifier"
-    elseif k == K"quote"
-        @chk numchildren(ex) == 1
-        expand_quote(ctx, ex[1])
-    elseif !haschildren(ex)
-        ex
-    else
-        mapchildren(e->expand_forms_0(ctx,e), ctx, ex)
-    end
-end
-
-function expand_forms_0(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector})
-    res = SyntaxList(ctx)
-    for e in exs
-        push!(res, expand_forms_0(ctx, e))
-    end
-    res
-end
-
-#-------------------------------------------------------------------------------
-# Lowering Pass 1.2 - desugaring
-function expand_assignment(ctx, ex)
+function DesugaringContext(ctx)
+    graph = ensure_attributes(syntax_graph(ctx),
+                              kind=Kind, syntax_flags=UInt16,
+                              source=SourceAttrType,
+                              value=Any, name_val=String,
+                              scope_type=Symbol, # :hard or :soft
+                              var_id=VarId,
+                              lambda_info=LambdaInfo)
+    DesugaringContext(graph, ctx.next_var_id, ctx.scope_layers, ctx.current_layer.mod)
 end
 
 function expand_condition(ctx, ex)
@@ -213,7 +32,7 @@ function expand_condition(ctx, ex)
         # rather than first computing a bool and then jumping.
         error("TODO expand_condition")
     end
-    expand_forms(ctx, ex)
+    expand_forms_2(ctx, ex)
 end
 
 function expand_let(ctx, ex)
@@ -258,7 +77,7 @@ function expand_let(ctx, ex)
 end
 
 function expand_call(ctx, ex)
-    cs = expand_forms(ctx, children(ex))
+    cs = expand_forms_2(ctx, children(ex))
     if is_infix_op_call(ex) || is_postfix_op_call(ex)
         cs[1], cs[2] = cs[2], cs[1]
     end
@@ -562,12 +381,12 @@ function expand_module(ctx::DesugaringContext, ex::SyntaxTree)
     std_defs = if !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
         @ast ctx (@HERE) [
             K"block"
-            [K"using"
+            [K"using"(@HERE)
                 [K"importpath"
                     "Base"           ::K"Identifier"
                 ]
             ]
-            [K"function"
+            [K"function"(@HERE)
                 [K"call"
                     "eval"           ::K"Identifier"
                     "x"              ::K"Identifier"
@@ -578,7 +397,7 @@ function expand_module(ctx::DesugaringContext, ex::SyntaxTree)
                     "x"              ::K"Identifier"
                 ]
             ]
-            [K"function"
+            [K"function"(@HERE)
                 [K"call"
                     "include"        ::K"Identifier"
                     "x"              ::K"Identifier"
@@ -590,7 +409,7 @@ function expand_module(ctx::DesugaringContext, ex::SyntaxTree)
                     "x"              ::K"Identifier"
                 ]
             ]
-            [K"function"
+            [K"function"(@HERE)
                 [K"call"
                     "include"        ::K"Identifier"
                     [K"::"
@@ -627,20 +446,35 @@ function expand_module(ctx::DesugaringContext, ex::SyntaxTree)
     ]
 end
 
-function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
+"""
+Lowering pass 2 - desugaring
+
+This pass simplifies expressions by expanding complicated syntax sugar into a
+small set of core syntactic forms. For example, field access syntax `a.b` is
+expanded to a function call `getproperty(a, :b)`.
+"""
+function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree)
     k = kind(ex)
     if k == K"call"
         expand_call(ctx, ex)
+    elseif k == K"."
+        @chk numchildren(ex) == 2
+        @chk kind(ex[2]) == K"Identifier"
+        @ast ctx ex [K"call"
+            "getproperty"::K"top" 
+            ex[1]
+            ex[2]=>K"Symbol"
+        ]
     elseif k == K"function"
-        expand_forms(ctx, expand_function_def(ctx, ex))
+        expand_forms_2(ctx, expand_function_def(ctx, ex))
     elseif k == K"let"
-        expand_forms(ctx, expand_let(ctx, ex))
+        expand_forms_2(ctx, expand_let(ctx, ex))
     elseif k == K"local" || k == K"global"
         if numchildren(ex) == 1 && kind(ex[1]) == K"Identifier"
             # Don't recurse when already simplified - `local x`, etc
             ex
         else
-            expand_forms(ctx, expand_decls(ctx, ex)) # FIXME
+            expand_forms_2(ctx, expand_decls(ctx, ex)) # FIXME
         end
     elseif is_operator(k) && !haschildren(ex)
         makeleaf(ctx, ex, K"Identifier", ex.name_val)
@@ -653,14 +487,14 @@ function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
         else
             @ast ctx ex [K"call" 
                 "string"::K"top"
-                expand_forms(ctx, children(ex))...
+                expand_forms_2(ctx, children(ex))...
             ]
         end
     elseif k == K"tuple"
         # TODO: named tuples
         @ast ctx ex [K"call" 
             "tuple"::K"core"
-            expand_forms(ctx, children(ex))...
+            expand_forms_2(ctx, children(ex))...
         ]
     elseif k == K"module"
         # TODO: check-toplevel
@@ -689,22 +523,21 @@ function expand_forms(ctx::DesugaringContext, ex::SyntaxTree)
                 TODO(ex, "destructuring assignment")
             end
         end
-        mapchildren(e->expand_forms(ctx,e), ctx, ex)
+        mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
     end
 end
 
-function expand_forms(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector})
+function expand_forms_2(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector})
     res = SyntaxList(ctx)
     for e in exs
-        push!(res, expand_forms(ctx, e))
+        push!(res, expand_forms_2(ctx, e))
     end
     res
 end
 
-function expand_forms(mod::Module, ex::SyntaxTree)
-    ctx = DesugaringContext(ex, mod)
-    ex1 = expand_forms_0(ctx, reparent(ctx, ex))
-    ex2 = expand_forms(ctx, ex1)
-    ctx, ex2
+function expand_forms_2(ctx, ex::SyntaxTree)
+    ctx1 = DesugaringContext(ctx)
+    ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
+    ctx1, ex1
 end
 

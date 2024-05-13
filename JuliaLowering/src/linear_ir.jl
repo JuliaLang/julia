@@ -1,5 +1,5 @@
 #-------------------------------------------------------------------------------
-# Lowering pass 4: Flatten to linear IR
+# Lowering pass 5: Flatten to linear IR
 
 function is_simple_atom(ex)
     k = kind(ex)
@@ -154,7 +154,7 @@ end
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"Identifier" || is_literal(k) || k == K"SSAValue" || k == K"quote" || k == K"inert" ||
-            k == K"top" || k == K"core" || k == K"Value"
+            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol"
         # TODO: other kinds: copyast the_exception $ globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall
         if in_tail_pos
             emit_return(ctx, ex, ex)
@@ -166,7 +166,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             ex
         else
             if k == K"Identifier"
-                emit(ctx, ex) # keep symbols for undefined-var checking
+                emit(ctx, ex) # keep identifiers for undefined-var checking
             end
             nothing
         end
@@ -283,7 +283,12 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
             makenode(ctx, ex, K"slot"; var_id=slot_id)
         else
             # TODO: look up any static parameters
-            ex
+            info = ctx.var_info[id]
+            if info.kind === :global
+                makeleaf(ctx, ex, K"globalref", ex.name_val, mod=info.mod)
+            else
+                TODO(ex, "Identifier which is not a slot or global?")
+            end
         end
     elseif k == K"outerref" || k == K"meta"
         TODO(ex, "_renumber $k")
@@ -381,7 +386,8 @@ end
 function linearize_ir(ctx, ex)
     graph = ensure_attributes(ctx.graph,
                               slot_rewrites=Dict{VarId,Int},
-                              var_info=Dict{VarId,VarInfo})
+                              var_info=Dict{VarId,VarInfo},
+                              mod=Module)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
     # required to call reparent() ...
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.next_var_id,

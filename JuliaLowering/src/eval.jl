@@ -1,8 +1,9 @@
-function lower(mod, ex)
-    ctx1, ex1 = expand_forms(mod, ex)
-    ctx2, ex2 = resolve_scopes!(ctx1, ex1)
-    ctx3, ex3 = linearize_ir(ctx2, ex2)
-    ex3
+function lower(mod::Module, ex)
+    ctx1, ex1 = expand_forms_1(mod, ex)
+    ctx2, ex2 = expand_forms_2(ctx1, ex1)
+    ctx3, ex3 = resolve_scopes!(ctx2, ex2)
+    ctx4, ex4 = linearize_ir(ctx3, ex3)
+    ex4
 end
 
 # CodeInfo constructor. TODO: Should be in Core?
@@ -130,11 +131,20 @@ function to_lowered_expr(mod, var_info, ex)
         GlobalRef(Core, Symbol(ex.name_val))
     elseif k == K"top"
         GlobalRef(Base, Symbol(ex.name_val))
+    elseif k == K"globalref"
+        if mod === ex.mod
+            # Implicitly refers to name in parent module.
+            Symbol(ex.name_val)
+        else
+            GlobalRef(ex.mod, Symbol(ex.name_val))
+        end
     elseif k == K"Identifier"
         # Implicitly refers to name in parent module
         # TODO: Should we even have plain identifiers at this point or should
         # they all effectively be resolved into GlobalRef earlier?
         Symbol(ex.name_val)
+    elseif k == K"Symbol"
+        QuoteNode(Symbol(ex.name_val))
     elseif k == K"slot"
         Core.SlotNumber(ex.var_id)
     elseif k == K"SSAValue"
@@ -183,15 +193,14 @@ end
 # Runtime support functions called by lowering
 
 struct InterpolationContext{Graph} <: AbstractLoweringContext
-    mod::Module
     graph::Graph
 end
 
-function InterpolationContext(mod)
+function InterpolationContext()
     graph = SyntaxGraph()
     ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-                       value=Any, name_val=String, mod=Module)
-    InterpolationContext(mod, freeze_attrs(graph))
+                       value=Any, name_val=String)
+    InterpolationContext(freeze_attrs(graph))
 end
 
 # Produce interpolated node for `$x` syntax
@@ -210,34 +219,7 @@ end
 # Produce node corresponding to `srcref` when there was an interpolation among
 # `children`
 function interpolate_node(ctx::InterpolationContext, srcref, children...)
-    makenode(ctx, sourceref(srcref), head(srcref), children...; mod=ctx.mod)
-end
-
-function copy_ast(ctx, ex; new_attrs...)
-    if haschildren(ex)
-        cs = SyntaxList(ctx)
-        for e in children(ex)
-            push!(cs, interpolate_copy_ast(ctx, e))
-        end
-        ex2 = makenode(ctx, sourceref(ex), head(ex), cs; new_attrs...)
-    else
-        ex2 = makeleaf(ctx, sourceref(ex), head(ex); new_attrs...)
-    end
-    for (name,attr) in pairs(ex.graph.attributes)
-        if (name !== :source && name !== :kind && name !== :syntax_flags) &&
-                haskey(attr, ex.id)
-            attr2 = getattr(ex2.graph, name, nothing)
-            if !isnothing(attr2)
-                attr2[ex2.id] = attr[ex.id]
-            end
-        end
-    end
-    return ex2
-end
-
-# Copy AST `ex` into `ctx.graph`
-function interpolate_copy_ast(ctx, ex)
-    copy_ast(ctx, ex; mod=ctx.mod)
+    makenode(ctx, sourceref(srcref), head(srcref), children...)
 end
 
 # Construct new bare module including only the "default names"
@@ -275,7 +257,7 @@ function module_import(into_mod::Module, is_using::Bool,
     # For now, this function converts our lowered representation back to Expr
     # and calls eval() to avoid replicating all of the fiddly logic in
     # jl_toplevel_eval_flex.
-    # FIXME: ccall Julia runtime functions directly?
+    # TODO: ccall Julia runtime functions directly?
     #   * jl_module_using jl_module_use_as
     #   * import_module jl_module_import_as
     path_args = []

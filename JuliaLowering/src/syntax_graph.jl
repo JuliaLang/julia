@@ -116,7 +116,7 @@ function Base.getproperty(graph::SyntaxGraph, name::Symbol)
     return getattr(graph, name)
 end
 
-function sethead!(graph, id::NodeId, h::SyntaxHead)
+function sethead!(graph, id::NodeId, h::JuliaSyntax.SyntaxHead)
     graph.kind[id] = kind(h)
     f = flags(h)
     if f != 0
@@ -227,7 +227,7 @@ function JuliaSyntax.child(tree::SyntaxTree, i::Integer)
 end
 
 function JuliaSyntax.head(tree::SyntaxTree)
-    SyntaxHead(kind(tree), flags(tree))
+    JuliaSyntax.SyntaxHead(kind(tree), flags(tree))
 end
 
 function JuliaSyntax.kind(tree::SyntaxTree)
@@ -244,7 +244,7 @@ struct SourceRef
     file::SourceFile
     first_byte::Int
     # TODO: Do we need the green node, or would last_byte suffice?
-    green_tree::GreenNode
+    green_tree::JuliaSyntax.GreenNode
 end
 
 JuliaSyntax.first_byte(src::SourceRef) = src.first_byte
@@ -263,8 +263,16 @@ JuliaSyntax.filename(src::LineNumberNode) = string(src.file)
 JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
 JuliaSyntax.source_location(src::LineNumberNode) = (src.line, 0)
 
+function JuliaSyntax.highlight(io::IO, src::LineNumberNode; note="")
+    print(io, src, " - ", note, "\n")
+end
+
+function JuliaSyntax.highlight(io::IO, src::SourceRef; kws...)
+    highlight(io, src.file, first_byte(src):last_byte(src); kws...)
+end
+
 function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
-    highlight(io, src.file, first_byte(src):last_byte(src), note="these are the bytes you're looking for 😊", context_lines_inner=20)
+    highlight(io, src; note="these are the bytes you're looking for 😊", context_lines_inner=20)
 end
 
 function sourceref(tree::SyntaxTree)
@@ -305,10 +313,12 @@ attrsummary(name, value::Number) = "$name=$value"
 
 function _value_string(ex)
     k = kind(ex)
-    str = k == K"Identifier" || is_operator(k) ? ex.name_val :
+    str = k == K"Identifier" || k == K"MacroName" || is_operator(k) ? ex.name_val :
           k == K"SSAValue"   ? "ssa"                 :
           k == K"core"       ? "core.$(ex.name_val)" :
           k == K"top"        ? "top.$(ex.name_val)"  :
+          k == K"Symbol"     ? ":$(ex.name_val)" :
+          k == K"globalref"  ? "$(ex.mod).$(ex.name_val)" :
           k == K"slot"       ? "slot" :
           repr(get(ex, :value, nothing))
     id = get(ex, :var_id, nothing)
@@ -429,7 +439,7 @@ function SyntaxList(graph::SyntaxGraph, ids::AbstractVector{NodeId})
 end
 
 SyntaxList(graph::SyntaxGraph) = SyntaxList(graph, Vector{NodeId}())
-SyntaxList(ctx) = SyntaxList(ctx.graph)
+SyntaxList(ctx) = SyntaxList(syntax_graph(ctx))
 
 syntax_graph(lst::SyntaxList) = lst.graph
 

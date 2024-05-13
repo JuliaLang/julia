@@ -1,3 +1,17 @@
+#-------------------------------------------------------------------------------
+abstract type AbstractLoweringContext end
+
+function syntax_graph(ctx::AbstractLoweringContext)
+    ctx.graph
+end
+
+function new_var_id(ctx::AbstractLoweringContext)
+    id = ctx.next_var_id[]
+    ctx.next_var_id[] += 1
+    return id
+end
+
+#-------------------------------------------------------------------------------
 # AST creation utilities
 _node_id(ex::NodeId) = ex
 _node_id(ex::SyntaxTree) = ex.id
@@ -33,7 +47,7 @@ end
 
 function makeleaf(ctx, srcref, kind, value; kws...)
     graph = syntax_graph(ctx)
-    if kind == K"Identifier" || kind == K"core" || kind == K"top"
+    if kind == K"Identifier" || kind == K"core" || kind == K"top" || kind == K"Symbol" || kind == K"globalref"
         _makenode(graph, srcref, kind, nothing; name_val=value, kws...)
     elseif kind == K"SSAValue"
         _makenode(graph, srcref, kind, nothing; var_id=value, kws...)
@@ -52,6 +66,32 @@ function makeleaf(ctx, srcref, kind; kws...)
     _makenode(syntax_graph(ctx), srcref, kind, nothing; kws...)
 end
 
+# Convenience functions to create leaf nodes referring to identifiers within
+# the Core and Top modules.
+core_ref(ctx, ex, name) = makeleaf(ctx, ex, K"core", name)
+Any_type(ctx, ex) = core_ref(ctx, ex, "Any")
+svec_type(ctx, ex) = core_ref(ctx, ex, "svec")
+nothing_(ctx, ex) = core_ref(ctx, ex, "nothing")
+unused(ctx, ex) = core_ref(ctx, ex, "UNUSED")
+
+top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
+
+# Create a new SSA variable
+function ssavar(ctx::AbstractLoweringContext, srcref)
+    makenode(ctx, srcref, K"SSAValue", var_id=new_var_id(ctx))
+end
+
+# Assign `ex` to an SSA variable.
+# Return (variable, assignment_node)
+function assign_tmp(ctx::AbstractLoweringContext, ex)
+    var = ssavar(ctx, ex)
+    assign_var = makenode(ctx, ex, K"=", var, ex)
+    var, assign_var
+end
+
+
+#-------------------------------------------------------------------------------
+# @ast macro
 function _match_srcref(ex)
     if Meta.isexpr(ex, :macrocall) && ex.args[1] == Symbol("@HERE")
         QuoteNode(ex.args[2])
@@ -89,7 +129,12 @@ function _expand_ast_tree(defs, ctx, srcref, tree)
         # Leaf node
         kind, srcref, kws = _match_kind_ex(defs, srcref, tree.args[2])
         :(makeleaf($ctx, $srcref, $kind, $(esc(tree.args[1])), $(kws...)))
-    elseif Meta.isexpr(tree, (:vcat, :hcat))
+    elseif Meta.isexpr(tree, :call) && tree.args[1] === :(=>)
+        # Leaf node with copied attributes
+        kind = esc(tree.args[3])
+        srcref = esc(tree.args[2])
+        :(mapleaf($ctx, $srcref, $kind))
+    elseif Meta.isexpr(tree, (:vcat, :hcat, :vect))
         # Interior node
         flatargs = []
         for a in tree.args
@@ -128,7 +173,9 @@ Syntactic s-expression shorthand for constructing a `SyntaxTree` AST.
 
 The `tree` contains syntax of the following forms:
 * `[kind child₁ child₂]` - construct an interior node with children
-* `value :: kind`         - construct a leaf node
+* `value :: kind`        - construct a leaf node
+* `ex => kind`           - convert a leaf node to the given `kind`, copying attributes
+                           from it and also using `ex` as the source reference.
 * `var=ex`               - Set `var=ssavar(...)` and return an assignment node `\$var=ex`.
                            `var` may be used outside `@ast`
 * `cond ? ex1 : ex2`     - Conditional; `ex1` and `ex2` will be recursively expanded.
@@ -161,7 +208,7 @@ to indicate that the "primary" location of the source is the location where
        ]
        [K"call"
            "eval"       ::K"core"      
-           mn.name_val  ::K"Identifier"
+           mn           =>K"Identifier"
            "x"          ::K"Identifier"
        ]
    ]
@@ -177,6 +224,25 @@ macro ast(ctx, srcref, tree)
         $(defs...)
         $ex
     end
+end
+
+#-------------------------------------------------------------------------------
+# Mapping and copying of AST nodes
+function copy_attrs!(dest, src)
+    # TODO: Make this faster?
+    for (k,v) in pairs(dest.graph.attributes)
+        if (k !== :source && k !== :kind && k !== :syntax_flags) && haskey(v, src.id)
+            v[dest.id] = v[src.id]
+        end
+    end
+end
+
+function mapleaf(ctx, src, kind)
+    ex = _makenode(syntax_graph(ctx), src, kind, nothing)
+    # TODO: Value coersion might be broken here due to use of `name_val` vs
+    # `value` vs ... ?
+    copy_attrs!(ex, src)
+    ex
 end
 
 function mapchildren(f, ctx, ex)
@@ -204,46 +270,133 @@ function mapchildren(f, ctx, ex)
     end
     cs::SyntaxList
     ex2 = makenode(ctx, ex, head(ex), cs)
-    # TODO: Make this faster?
-    for (k,v) in pairs(ex2.graph.attributes)
-        if (k !== :source && k !== :kind && k !== :syntax_flags) && haskey(v, ex.id)
-            v[ex2.id] = v[ex.id]
+    copy_attrs!(ex2, ex)
+    return ex2
+end
+
+# Copy AST `ex` into `ctx`
+function copy_ast(ctx, ex)
+    if haschildren(ex)
+        cs = SyntaxList(ctx)
+        for e in children(ex)
+            push!(cs, copy_ast(ctx, e))
+        end
+        ex2 = makenode(ctx, sourceref(ex), head(ex), cs)
+    else
+        ex2 = makeleaf(ctx, sourceref(ex), head(ex))
+    end
+    for (name,attr) in pairs(ex.graph.attributes)
+        if (name !== :source && name !== :kind && name !== :syntax_flags) &&
+                haskey(attr, ex.id)
+            attr2 = getattr(ex2.graph, name, nothing)
+            if !isnothing(attr2)
+                attr2[ex2.id] = attr[ex.id]
+            end
         end
     end
     return ex2
 end
 
-# Convenience functions to create leaf nodes referring to identifiers within
-# the Core and Top modules.
-core_ref(ctx, ex, name) = makeleaf(ctx, ex, K"core", name)
-Any_type(ctx, ex) = core_ref(ctx, ex, "Any")
-svec_type(ctx, ex) = core_ref(ctx, ex, "svec")
-nothing_(ctx, ex) = core_ref(ctx, ex, "nothing")
-unused(ctx, ex) = core_ref(ctx, ex, "UNUSED")
+#-------------------------------------------------------------------------------
+# Predicates and accessors working on expression trees
 
-top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
+function is_quoted(ex)
+    kind(ex) in KSet"quote top core globalref outerref break inert
+                     meta inbounds inline noinline loopinfo"
+end
+
+function is_sym_decl(x)
+    k = kind(x)
+    k == K"Identifier" || k == K"::"
+end
+
+# Identifier made of underscores
+function is_placeholder(ex)
+    kind(ex) == K"Identifier" && all(==('_'), ex.name_val)
+end
+
+function is_identifier(x)
+    k = kind(x)
+    k == K"Identifier" || k == K"var" || is_operator(k) || is_macro_name(k)
+end
+
+function is_eventually_call(ex::SyntaxTree)
+    k = kind(ex)
+    return k == K"call" || ((k == K"where" || k == K"::") && is_eventually_call(ex[1]))
+end
+
+function is_function_def(ex)
+    k = kind(ex)
+    return k == K"function" || k == K"->" ||
+        (k == K"=" && numchildren(ex) == 2 && is_eventually_call(ex[1]))
+end
+
+function identifier_name(ex)
+    kind(ex) == K"var" ? ex[1] : ex
+end
+
+function is_valid_name(ex)
+    n = identifier_name(ex).name_val
+    n !== "ccall" && n !== "cglobal"
+end
+
+function decl_var(ex)
+    kind(ex) == K"::" ? ex[1] : ex
+end
+
+# given a complex assignment LHS, return the symbol that will ultimately be assigned to
+function assigned_name(ex)
+    k = kind(ex)
+    if (k == K"call" || k == K"curly" || k == K"where") || (k == K"::" && is_eventually_call(ex))
+        assigned_name(ex[1])
+    else
+        ex
+    end
+end
 
 #-------------------------------------------------------------------------------
-function syntax_graph(ctx::AbstractLoweringContext)
-    ctx.graph
+# @chk: AST structure checking tool
+function _chk_code(ex, cond)
+    cond_str = string(cond)
+    quote
+        ex = $(esc(ex))
+        @assert ex isa SyntaxTree
+        try
+            ok = $(esc(cond))
+            if !ok
+                throw(LoweringError(ex, "Expected `$($cond_str)`"))
+            end
+        catch
+            throw(LoweringError(ex, "Structure error evaluating `$($cond_str)`"))
+        end
+    end
 end
 
-function new_var_id(ctx::AbstractLoweringContext)
-    id = ctx.next_var_id[]
-    ctx.next_var_id[] += 1
-    return id
+# Internal error checking macro.
+# Check a condition involving an expression, throwing a LoweringError if it
+# doesn't evaluate to true. Does some very simple pattern matching to attempt
+# to extract the expression variable from the left hand side.
+macro chk(cond)
+    ex = cond
+    while true
+        if ex isa Symbol
+            break
+        elseif ex.head == :call
+            ex = ex.args[2]
+        elseif ex.head == :ref
+            ex = ex.args[1]
+        elseif ex.head == :.
+            ex = ex.args[1]
+        elseif ex.head in (:(==), :(in), :<, :>)
+            ex = ex.args[1]
+        else
+            error("Can't analyze $cond")
+        end
+    end
+    _chk_code(ex, cond)
 end
 
-# Create a new SSA variable
-function ssavar(ctx::AbstractLoweringContext, srcref)
-    makenode(ctx, srcref, K"SSAValue", var_id=new_var_id(ctx))
-end
-
-# Assign `ex` to an SSA variable.
-# Return (variable, assignment_node)
-function assign_tmp(ctx::AbstractLoweringContext, ex)
-    var = ssavar(ctx, ex)
-    assign_var = makenode(ctx, ex, K"=", var, ex)
-    var, assign_var
+macro chk(ex, cond)
+    _chk_code(ex, cond)
 end
 

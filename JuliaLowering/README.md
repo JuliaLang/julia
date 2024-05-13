@@ -2,18 +2,10 @@
 
 [![Build Status](https://github.com/c42f/JuliaLowering.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/c42f/JuliaLowering.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
-Experimental port of Julia's code "lowering" compiler passes into Julia.
-
-Lowering comprises four symbolic simplification steps
-* Syntax desugaring - simplifying the rich surface syntax down to a small
-  number of forms.
-* Scope analysis - analyzing identifier names used in the code to discover
-  local variables, closure captures, and associate global variables to the
-  appropriate module.
-* Closure conversion - convert closures to types and deal with captured
-  variables efficiently where possible.
-* Flattening to linear IR - convert code in hierarchical tree form to a
-  flat array of statements and control flow into gotos.
+JuliaLowering.jl is an experimental port of Julia's code lowering compiler
+passes, written in Julia itself. "Code lowering" is the set of compiler passes
+which *symbolically* transform and simplify Julia's syntax prior to type
+inference.
 
 ## Goals
 
@@ -41,7 +33,20 @@ Note this is a very early work in progress; most things probably don't work!
 
 # Design Notes
 
-A disorganized collection of design notes :)
+Lowering has five symbolic simplification passes:
+
+1. Macro expansion - expanding user-defined syntactic constructs by running the
+   user's macros. This pass also includes a small amount of other symbolic
+   simplification.
+2. Syntax desugaring - simplifying Julia's rich surface syntax down to a small
+   number of syntactic forms.
+3. Scope analysis - analyzing identifier names used in the code to discover
+   local variables, closure captures, and associate global variables to the
+   appropriate module.
+4. Closure conversion - convert closures to types and deal with captured
+   variables efficiently where possible.
+5. Flattening to linear IR - convert code in hierarchical tree form to a
+   flat array of statements; convert control flow into gotos.
 
 ## Syntax trees
 
@@ -69,6 +74,70 @@ are similar.
 
 Analogy 3: Graph algorithms which represent graphs as a compact array of node
 ids and edges with integer indices, rather than using a linked data structure.
+
+## Hygiene
+
+### Problems with Hygiene in Julia's exiting macro system
+
+To write correct hygienic macros in Julia (as of 2024), macro authors must use
+`esc()` on any any syntax passed to the macro so that passed identifiers escape
+to the macro caller scope. However
+
+* This is not automatic and the correct use of `esc()` is one of the things
+  that new macro authors find most confusing. (My impression, based on various
+  people complaining about how confusing `esc()` is.)
+* `esc()` wraps expressions in `Expr(:escape)`, but this doesn't work well when
+  macros pass such escaped syntax to an inner macro call. As discussed in
+  [Julia issue #37691](https://github.com/JuliaLang/julia/issues/37691), macros
+  in Julia's existing system are not composable by default. Writing
+  composable macros in the existing system would require preserving the escape
+  nesting depth when recursing into any macro argument nested expressions.
+  Almost no macro author knows how to do this and is prepared to pay for the
+  complexity of getting it right.
+
+The requirement to use `esc()` stems from Julia's pervasive use of the simple
+`Expr` data structure which represents a unadorned AST in which names are plain
+symbols. For example, a macro call `@foo x` gets passed the  symbol `:x`
+which is just a name without any information attached to indicate that it came
+from the scope where `@foo` was called.
+
+### Hygiene in JuliaLowering
+
+In JuliaLowering we make hygiene automatic and remove `esc()` by combining names
+with scope information. In the language of the paper [*Towards the Essence of
+Hygiene*](https://michaeldadams.org/papers/hygiene/hygiene-2015-popl-authors-copy.pdf)
+by Michael Adams, this combination is called a "syntax object". In
+JuliaLowering our representation is the tuple `(name,scope_layer)`, also called
+`VarId` in the scope resolution pass.
+
+JuliaLowering's macro expander attaches a unique *scope layer* to each
+identifier in a piece of syntax. A "scope layer" is an integer identifer
+combined with the module in which the syntax was created.
+
+When expanding macros,
+
+* Any identifiers passed to the macro are tagged with the scope layer they were
+  defined within.
+* A new unique scope layer is generated for the macro invocation, and any names
+  in the syntax produced by the macro are tagged with this layer.
+
+Subsequently, the `(name,scope_layer)` pairs are used when resolving bindings.
+This ensures that, by default, we satisfy the basic rules for hygenic macros
+discussed in Adams' paper:
+
+1. A macro can't insert a binding that can capture references other than those
+   inserted by the macro.
+2. A macro can't insert a reference that can be captured by bindings other than
+   those inserted by the macro.
+
+TODO: Write more here...
+
+#### References
+
+* [Toward Fearless Macros](https://lambdaland.org/posts/2023-10-17_fearless_macros) -
+  a blog post by Ashton Wiersdorf
+* [Towards the Essence of Hygiene](https://michaeldadams.org/papers/hygiene/hygiene-2015-popl-authors-copy.pdf) - a paper by Michael Adams
+* [Bindings as sets of scopes](https://www-old.cs.utah.edu/plt/scope-sets/) - a description of Racket's scope set mechanism by Matthew Flatt
 
 ## Julia's existing lowering implementation
 
@@ -264,9 +333,10 @@ In the current Julia runtime,
   * Use codegen "where necessary/profitable" (eg ccall, has_loops etc)
   * Otherwise interpret via `jl_interpret_toplevel_thunk`
 
-Should we reimplement eval of the above blessed top level forms in Julia?
+Should we lower the above blessed top level forms to julia runtime calls?
 Pros:
-- Semantically sound. Lowering should do syntax checking in things like `Expr(:using)`
+- Semantically sound. Lowering should do syntax checking in things like
+  `Expr(:using)` rather than doing this in the runtime support functions.
 - Precise lowering error messages
 - Replaces more Expr usage
 - Replaces a whole pile of C code with significantly less Julia code
@@ -281,4 +351,23 @@ In general, we'd be replacing current *declarative* lowering targets like
 `Expr(:using)` with an *imperative* call to a `Core` API instead. The call and
 the setup of its arguments would need to go in a thunk. We've currently got an
 odd mixture of imperative and declarative lowered code.
+
+
+## Notes on racket's hygiene
+
+People look at [Racket](https://racket-lang.org/) as an example of a very
+complete system of hygienic macros. We should learn from them, but keeping in
+mind that Racket's macro system is more inherently more complicated. Racket's
+current approach to hygiene is described in an [accessible talk](https://www.youtube.com/watch?v=Or_yKiI3Ha4)
+and in more depth in [a paper](https://www-old.cs.utah.edu/plt/publications/popl16-f.pdf).
+
+Some differences which makes Racket's macro expander different from Julia:
+
+* Racket allows *local* definitions of macros. Macro code can be embedded in an
+  inner lexical scope and capture locals from that scope, but still needs to be
+  executed at compile time. Julia supports macros at top level scope only.
+* Racket goes to great lengths to execute the minimal package code necessary to
+  expand macros; the "pass system". Julia just executes all top level
+  statements in order when precompiling a package.
+* As a lisp, Racket's surface syntax is dramatically simpler and more uniform
 

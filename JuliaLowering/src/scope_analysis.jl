@@ -1,4 +1,4 @@
-# Lowering pass 2: analyze scopes (passes 2/3 in flisp code)
+# Lowering pass 3: analyze scopes (passes 2/3 in flisp code)
 #
 # This pass analyzes the names (variables/constants etc) used in scopes
 #
@@ -52,21 +52,19 @@
 function _find_scope_vars!(assignments, locals, globals, used_names, ex)
     k = kind(ex)
     if k == K"Identifier"
-        push!(used_names, ex.name_val)
+        push!(used_names, VarKey(ex))
     elseif !haschildren(ex) || is_quoted(k) ||
             k in KSet"scope_block lambda module toplevel"
         return
     elseif k == K"local" || k == K"local_def"
-        name = ex[1].name_val
-        get!(locals, name, ex)
+        get!(locals, VarKey(ex[1]), ex)
     elseif k == K"global"
-        name = ex[1].name_val
-        get!(globals, name, ex)
+        get!(globals, VarKey(ex[1]), ex)
     # elseif k == K"method" TODO static parameters
     elseif k == K"="
         v = decl_var(ex[1])
         if !(kind(v) in KSet"SSAValue globalref outerref" || is_placeholder(v))
-            get!(assignments, v.name_val, v)
+            get!(assignments, VarKey(v), v)
         end
         _find_scope_vars!(assignments, locals, globals, used_names, ex[2])
     else
@@ -79,13 +77,13 @@ end
 # Find names of all identifiers used in the given expression, grouping them
 # into sets by type.
 #
-# NB: This only works propery after expand_forms has already processed assignments
+# NB: This only works propery after desugaring has already processed assignments
 function find_scope_vars(ex)
     ExT = typeof(ex)
-    assignments = Dict{String,ExT}()
-    locals = Dict{String,ExT}()
-    globals = Dict{String,ExT}()
-    used_names = Set{String}()
+    assignments = Dict{VarKey,ExT}()
+    locals = Dict{VarKey,ExT}()
+    globals = Dict{VarKey,ExT}()
+    used_names = Set{VarKey}()
     for e in children(ex)
         _find_scope_vars!(assignments, locals, globals, used_names, e)
     end
@@ -93,10 +91,31 @@ function find_scope_vars(ex)
 end
 
 """
+Key to use when looking up variables, composed of the name and scope layer.
+"""
+struct VarKey
+    name::String
+    layer::LayerId
+end
+
+# Identifiers produced by lowering will have the following layer by default.
+#
+# To make new mutable variables without colliding names, lowering can
+# - generate new var_id's directly (like the gensyms used by the old system)
+# - create additional layers, though this may be unnecessary
+const _lowering_internal_layer = -1
+
+function VarKey(ex::SyntaxTree)
+    @chk kind(ex) == K"Identifier"
+    VarKey(ex.name_val, get(ex, :scope_layer, _lowering_internal_layer))
+end
+
+"""
 Metadata about a variable name - whether it's a local, etc
 """
 struct VarInfo
-    name::String              # Variable name
+    name::String
+    mod::Union{Nothing,Module}
     kind::Symbol              # :local :global :argument :static_parameter
     is_single_assign::Bool    # Single assignment
     is_ambiguous_local::Bool  # Local, but would be global in soft scope (ie, the REPL)
@@ -111,7 +130,7 @@ struct ScopeInfo
     is_hard::Bool
     # Map from variable names to IDs which appear in this scope but not in the
     # parent scope
-    var_ids::Dict{String,VarId}
+    var_ids::Dict{VarKey,VarId}
     # Variables used by the enclosing lambda
     lambda_locals::Set{VarId}
 end
@@ -120,8 +139,9 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     next_var_id::Ref{VarId}
     mod::Module
+    scope_layers::Vector{ScopeLayer}
     # name=>id mappings for all discovered global vars
-    global_vars::Dict{String,VarId}
+    global_vars::Dict{VarKey,VarId}
     # Stack of name=>id mappings for each scope, innermost scope last.
     scope_stack::Vector{ScopeInfo}
     # Metadata about variables. There's only one map for this, as var_id is is
@@ -130,7 +150,7 @@ struct ScopeResolutionContext{GraphType} <: AbstractLoweringContext
     var_info::Dict{VarId,VarInfo}
     # Variables which were implicitly global due to being assigned to in top
     # level code
-    implicit_toplevel_globals::Set{String}
+    implicit_toplevel_globals::Set{VarKey}
 end
 
 function ScopeResolutionContext(ctx)
@@ -138,22 +158,23 @@ function ScopeResolutionContext(ctx)
     ScopeResolutionContext(graph,
                            ctx.next_var_id,
                            ctx.mod,
-                           Dict{String,VarId}(),
+                           ctx.scope_layers,
+                           Dict{VarKey,VarId}(),
                            Vector{ScopeInfo}(),
                            Dict{VarId,VarInfo}(),
-                           Set{String}())
+                           Set{VarKey}())
 end
 
-function lookup_var(ctx, name::String, exclude_toplevel_globals=false)
+function lookup_var(ctx, varkey::VarKey, exclude_toplevel_globals=false)
     for i in lastindex(ctx.scope_stack):-1:1
         ids = ctx.scope_stack[i].var_ids
-        id = get(ids, name, nothing)
+        id = get(ids, varkey, nothing)
         if !isnothing(id) && (!exclude_toplevel_globals ||
                               i > 1 || ctx.var_info[id].kind != :global)
             return id
         end
     end
-    return exclude_toplevel_globals ? nothing : get(ctx.global_vars, name, nothing)
+    return exclude_toplevel_globals ? nothing : get(ctx.global_vars, varkey, nothing)
 end
 
 function current_scope(ctx)
@@ -164,19 +185,20 @@ function var_kind(ctx, id::VarId)
     ctx.var_info[id].kind
 end
 
-function var_kind(ctx, name::String, exclude_toplevel_globals=false)
-    id = lookup_var(ctx, name, exclude_toplevel_globals)
+function var_kind(ctx, varkey::VarKey, exclude_toplevel_globals=false)
+    id = lookup_var(ctx, varkey, exclude_toplevel_globals)
     isnothing(id) ? nothing : ctx.var_info[id].kind
 end
 
-function new_var(ctx, name, kind, is_ambiguous_local=false)
-    id = kind === :global ? get(ctx.global_vars, name, nothing) : nothing
+function new_var(ctx, varkey::VarKey, kind::Symbol, is_ambiguous_local=false)
+    id = kind === :global ? get(ctx.global_vars, varkey, nothing) : nothing
     if isnothing(id)
         id = new_var_id(ctx)
-        ctx.var_info[id] = VarInfo(name, kind, false, is_ambiguous_local)
+        mod = kind === :global ? ctx.scope_layers[varkey.layer].mod : nothing
+        ctx.var_info[id] = VarInfo(varkey.name, mod, kind, false, is_ambiguous_local)
     end
     if kind === :global
-        ctx.global_vars[name] = id
+        ctx.global_vars[varkey] = id
     end
     id
 end
@@ -184,7 +206,7 @@ end
 # Analyze identifier usage within a scope, adding all newly discovered
 # identifiers to ctx.var_info and constructing a lookup table from identifier
 # names to their variable IDs
-function make_scope(ctx, ex, scope_type, lambda_info)
+function analyze_scope(ctx, ex, scope_type, lambda_info)
     parentscope = isempty(ctx.scope_stack) ? nothing : current_scope(ctx)
     is_outer_lambda_scope = kind(ex) == K"lambda"
     is_toplevel = !isnothing(lambda_info) && lambda_info.is_toplevel_thunk
@@ -194,48 +216,50 @@ function make_scope(ctx, ex, scope_type, lambda_info)
 
     # Create new lookup table for variables in this scope which differ from the
     # parent scope.
-    var_ids = Dict{String,VarId}()
+    var_ids = Dict{VarKey,VarId}()
 
     # Add lambda arguments
     if !isnothing(lambda_info)
         for a in lambda_info.args
-            var_ids[a.name_val] = new_var(ctx, a.name_val, :argument)
+            vk = VarKey(a)
+            var_ids[vk] = new_var(ctx, vk, :argument)
         end
         for a in lambda_info.static_parameters
-            var_ids[a.name_val] = new_var(ctx, a.name_val, :static_parameter)
+            vk = VarKey(a)
+            var_ids[vk] = new_var(ctx, vk, :static_parameter)
         end
     end
 
     # Add explicit locals
-    for (name,e) in pairs(locals)
-        if haskey(globals, name)
-            throw(LoweringError(e, "Variable `$name` declared both local and global"))
-        elseif haskey(var_ids, name)
-            vk = ctx.var_info[var_ids[name]].kind
+    for (varkey,e) in pairs(locals)
+        if haskey(globals, varkey)
+            throw(LoweringError(e, "Variable `$(varkey.name)` declared both local and global"))
+        elseif haskey(var_ids, varkey)
+            vk = ctx.var_info[var_ids[varkey]].kind
             if vk === :argument && is_outer_lambda_scope
-                throw(LoweringError(e, "local variable name `$name` conflicts with an argument"))
+                throw(LoweringError(e, "local variable name `$(varkey.name)` conflicts with an argument"))
             elseif vk === :static_parameter
-                throw(LoweringError(e, "local variable name `$name` conflicts with a static parameter"))
+                throw(LoweringError(e, "local variable name `$(varkey.name)` conflicts with a static parameter"))
             end
-        elseif var_kind(ctx, name) === :static_parameter
-            throw(LoweringError(e, "local variable name `$name` conflicts with a static parameter"))
+        elseif var_kind(ctx, varkey) === :static_parameter
+            throw(LoweringError(e, "local variable name `$(varkey.name)` conflicts with a static parameter"))
         end
-        var_ids[name] = new_var(ctx, name, :local)
+        var_ids[varkey] = new_var(ctx, varkey, :local)
     end
 
     # Add explicit globals
-    for (name,e) in pairs(globals)
-        if haskey(var_ids, name)
-            vk = ctx.var_info[var_ids[name]].kind
+    for (varkey,e) in pairs(globals)
+        if haskey(var_ids, varkey)
+            vk = ctx.var_info[var_ids[varkey]].kind
             if vk === :argument && is_outer_lambda_scope
-                throw(LoweringError(e, "global variable name `$name` conflicts with an argument"))
+                throw(LoweringError(e, "global variable name `$(varkey.name)` conflicts with an argument"))
             elseif vk === :static_parameter
-                throw(LoweringError(e, "global variable name `$name` conflicts with a static parameter"))
+                throw(LoweringError(e, "global variable name `$(varkey.name)` conflicts with a static parameter"))
             end
         elseif var_kind(ctx, name) === :static_parameter
-            throw(LoweringError(e, "global variable name `$name` conflicts with a static parameter"))
+            throw(LoweringError(e, "global variable name `$(varkey.name)` conflicts with a static parameter"))
         end
-        var_ids[name] = new_var(ctx, name, :global)
+        var_ids[varkey] = new_var(ctx, varkey, :global)
     end
 
     # Compute implicit locals and globals
@@ -244,10 +268,10 @@ function make_scope(ctx, ex, scope_type, lambda_info)
         is_soft_scope = false
 
         # All non-local assignments are implicitly global at top level
-        for (name,e) in assignments
-            if !haskey(locals, name)
-                new_var(ctx, name, :global)
-                push!(ctx.implicit_toplevel_globals, name)
+        for (varkey,e) in assignments
+            if !haskey(locals, varkey)
+                new_var(ctx, varkey, :global)
+                push!(ctx.implicit_toplevel_globals, varkey)
             end
         end
     else
@@ -256,25 +280,28 @@ function make_scope(ctx, ex, scope_type, lambda_info)
                         (scope_type === :neutral ? parentscope.is_soft : scope_type === :soft)
 
         # Outside top level code, most assignments create local variables implicitly
-        for (name,e) in assignments
-            vk = haskey(var_ids, name) ?
-                 ctx.var_info[var_ids[name]].kind :
-                 var_kind(ctx, name, true)
+        for (varkey,e) in assignments
+            vk = haskey(var_ids, varkey) ?
+                 ctx.var_info[var_ids[varkey]].kind :
+                 var_kind(ctx, varkey, true)
             if vk === :static_parameter
-                throw(LoweringError(e, "local variable name `$name` conflicts with a static parameter"))
+                throw(LoweringError(e, "local variable name `$(varkey.name)` conflicts with a static parameter"))
             elseif vk !== nothing
                 continue
             end
             # Assignment is to a newly discovered variable name
             is_ambiguous_local = false
             if in_toplevel_thunk && !is_hard_scope
+                # FIXME: Scope resolution: find module for varkey
                 # In a top level thunk but *inside* a nontrivial scope
-                if (name in ctx.implicit_toplevel_globals || isdefined(ctx.mod, Symbol(name)))
+                var_mod = ctx.scope_layers[varkey.layer].mod
+                if (varkey in ctx.implicit_toplevel_globals ||
+                        isdefined(var_mod, Symbol(varkey.name)))
                     # Special scope rules to make assignments to globals work
                     # like assignments to locals do inside a function.
                     if is_soft_scope
                         # Soft scope (eg, for loop in REPL) => treat as a global
-                        new_var(ctx, name, :global)
+                        new_var(ctx, varkey, :global)
                         continue
                     else
                         # Ambiguous case (eg, nontrivial scopes in package top level code)
@@ -283,14 +310,14 @@ function make_scope(ctx, ex, scope_type, lambda_info)
                     end
                 end
             end
-            var_ids[name] = new_var(ctx, name, :local, is_ambiguous_local)
+            var_ids[varkey] = new_var(ctx, varkey, :local, is_ambiguous_local)
         end
     end
 
-    for name in used
-        if lookup_var(ctx, name) === nothing
+    for varkey in used
+        if lookup_var(ctx, varkey) === nothing
             # Add other newly discovered identifiers as globals
-            new_var(ctx, name, :global)
+            new_var(ctx, varkey, :global)
         end
     end
 
@@ -311,8 +338,7 @@ function _resolve_scopes!(ctx, ex)
         if is_placeholder(ex)
             return # FIXME - make these K"placeholder"?
         end
-        # TODO: Maybe we shouldn't do this in place??
-        id = lookup_var(ctx, ex.name_val)
+        id = lookup_var(ctx, VarKey(ex))
         setattr!(ctx.graph, ex.id, var_id=id)
     elseif !haschildren(ex) || is_quoted(ex) || k == K"toplevel"
         return
@@ -324,7 +350,7 @@ function _resolve_scopes!(ctx, ex)
     # elseif islocal
     elseif k == K"lambda"
         lambda_info = ex.lambda_info
-        scope = make_scope(ctx, ex, nothing, lambda_info)
+        scope = analyze_scope(ctx, ex, nothing, lambda_info)
         push!(ctx.scope_stack, scope)
         # Resolve args and static parameters so that variable IDs get pushed
         # back into the original tree (not required for downstream processing)
@@ -340,7 +366,7 @@ function _resolve_scopes!(ctx, ex)
         pop!(ctx.scope_stack)
         setattr!(ctx.graph, ex.id, lambda_locals=scope.lambda_locals)
     elseif k == K"scope_block"
-        scope = make_scope(ctx, ex, ex.scope_type, nothing)
+        scope = analyze_scope(ctx, ex, ex.scope_type, nothing)
         push!(ctx.scope_stack, scope)
         for e in children(ex)
             _resolve_scopes!(ctx, e)
