@@ -25,7 +25,7 @@ import Base: @handle_as, wait, close, eventloop, notify_error, IOError,
     uv_req_data, uv_req_set_data, associate_julia_struct, disassociate_julia_struct,
     _sizeof_uv_poll, _sizeof_uv_fs, _sizeof_uv_fs_event, _uv_hook_close, uv_error, _UVError,
     iolock_begin, iolock_end, preserve_handle, unpreserve_handle,
-    isreadable, iswritable, isopen, |, getproperty, propertynames
+    isreadable, iswritable, isopen, |, getproperty, propertynames, unsafe_takestring!
 import Base.Filesystem: StatStruct, uv_fs_req_cleanup
 if Sys.iswindows()
     import Base.WindowsRawSocket

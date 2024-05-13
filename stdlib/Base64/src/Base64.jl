@@ -8,7 +8,7 @@ a method to represent binary data using text, common on the web.
 """
 module Base64
 
-using Base: require_one_based_indexing
+using Base: require_one_based_indexing, unsafe_takestring!
 
 export
     Base64EncodePipe,
