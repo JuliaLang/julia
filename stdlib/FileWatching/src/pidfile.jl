@@ -5,7 +5,8 @@ export mkpidlock, trymkpidlock
 
 using Base:
     IOError, UV_EEXIST, UV_ESRCH, UV_ENOENT,
-    Process
+    Process,
+    unsafe_takestring
 
 using Base.Filesystem:
     File, open, JL_O_CREAT, JL_O_RDWR, JL_O_RDONLY, JL_O_EXCL,
