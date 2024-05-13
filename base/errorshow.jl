@@ -800,7 +800,7 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     # t is a pre-processed backtrace (ref #12856)
-    if t isa Vector{Any}
+    if t isa Vector{Any} && (length(t) == 0 || t[1] isa Tuple{StackFrame,Int})
         filtered = t
     else
         filtered = process_backtrace(t)
