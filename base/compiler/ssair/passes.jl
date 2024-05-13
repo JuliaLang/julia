@@ -2229,7 +2229,9 @@ The elimination step is based on the implementation in LLVM's NewGVN pass.
 """
 function gvn!(ir::IRCode)
     ssa_to_ssa = Memory{SSAValue}(undef, length(ir.stmts)) # Map from ssa to ssa of equivalent value
-    fill!(ssa_to_ssa, SSAValue(0))
+    for i in eachindex(ssa_to_ssa)
+        ssa_to_ssa[i] = SSAValue(0)
+    end
 
     # Value type of val_to_ssa is a SSAValue in order to reuse cache
     # from it being boxed in a svec in `perform_symbolic_evaluation`
