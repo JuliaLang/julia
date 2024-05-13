@@ -208,6 +208,15 @@ end
         C .= C0 = rand(eltype(C), size(C))
         @test mul!(C, vf, transpose(vf), 2, 3) ≈ 2vf * vf' .+ 3C0
     end
+
+    @testset "zero stride" begin
+        for AAv in (view(AA, StepRangeLen(2,0,size(AA,1)), :),
+                    view(AA, StepRangeLen.(2,0,size(AA))...))
+            C = AAv * BB
+            @test allequal(C)
+            @test C ≈ Array(AAv) * BB
+        end
+    end
 end
 
 @testset "generic_matvecmul for vectors of vectors" begin

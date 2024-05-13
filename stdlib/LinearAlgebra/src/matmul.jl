@@ -459,6 +459,17 @@ Base.@constprop :aggressive generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, t
     A
 end
 
+_fullstride2(A) = abs(stride(A, 2)) >= size(A, 1)
+# for some standard StridedArrays, the _fullstride2 condition is known to hold at compile-time
+# We specialize the function for certain StridedArray subtypes
+
+# Similar to Base.RangeIndex, but only include range types where the step is statically known to be non-zero
+const NonConstRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}, StepRange{<:BitInteger, <:BitInteger}}
+# Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
+StridedSubArrayStandard{T,N,A,
+    I<:Tuple{Vararg{Union{NonConstRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
+_fullstride2(A::Union{DenseArray,Base.StridedReshapedArray,Base.StridedReinterpretArray,StridedSubArrayStandard}) = true
+
 Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar,
                 A::StridedVecOrMat{T}, x::StridedVector{T},
                α::Number=true, β::Number=false) where {T<:BlasFloat}
@@ -472,7 +483,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar
     alpha, beta = promote(α, β, zero(T))
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
+        stride(A, 1) == 1 && _fullstride2(A) &&
         !iszero(stride(x, 1)) && # We only check input's stride here.
         if tA_uc in ('N', 'T', 'C')
             return BLAS.gemv!(tA, alpha, A, x, beta, y)
