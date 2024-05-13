@@ -2173,7 +2173,7 @@ function perform_symbolic_evaluation!(key, stmt::PhiNode, ssa_to_ssa, blockidx, 
     firstval = nothing
     allthesame = true # If all values into the phi node are the same SSAValue
 
-    ordered_indices = collect(1:no_of_edges)
+    ordered_indices = Memory{Int32}(1:no_of_edges)
     sort!(ordered_indices; by=i->stmt.edges[i])
 
     for ordered_i in ordered_indices
@@ -2228,7 +2228,8 @@ It implements the RPO value numbering algorithm based on the paper "SCC based va
 The elimination step is based on the implementation in LLVM's NewGVN pass.
 """
 function gvn!(ir::IRCode)
-    ssa_to_ssa = fill(SSAValue(0), length(ir.stmts)) # Map from ssa to ssa of equivalent value
+    ssa_to_ssa = Memory{SSAValue}(undef, length(ir.stmts)) # Map from ssa to ssa of equivalent value
+    fill!(ssa_to_ssa, SSAValue(0))
 
     # Value type of val_to_ssa is a SSAValue in order to reuse cache
     # from it being boxed in a svec in `perform_symbolic_evaluation`
