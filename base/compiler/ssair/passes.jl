@@ -2173,10 +2173,7 @@ function perform_symbolic_evaluation!(key, stmt::PhiNode, ssa_to_ssa, blockidx, 
     firstval = nothing
     allthesame = true # If all values into the phi node are the same SSAValue
 
-    ordered_indices = Memory{Int}(undef, no_of_edges)
-    for i in eachindex(ordered_indices)
-        ordered_indices[i] = i
-    end
+    ordered_indices = collect(1:no_of_edges)
     sort!(ordered_indices; by=i->stmt.edges[i])
 
     for ordered_i in ordered_indices
