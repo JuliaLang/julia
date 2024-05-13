@@ -798,7 +798,8 @@ end
 """
     takestring!(io::IOBuffer) -> String
 
-Return the content of `io` as a `String`, emptying the buffer.
+Return the content of `io` as a `String`, resetting the buffer to its initial
+state.
 This is preferred over calling `String(take!(io))` to create a string from
 an `IOBuffer`.
 
@@ -806,7 +807,7 @@ an `IOBuffer`.
 ```jldoctest
 julia> io = IOBuffer();
 
-julia> write(io, 0x61); write(io, 0x62); write(io, 0x63);
+julia> write(io, [0x61, 0x62, 0x63]);
 
 julia> s = takestring!(io)
 "abc"
@@ -825,21 +826,16 @@ function takestring!(io::IOBuffer)
         mem = StringMemory(nbytes)
         start = io.seekable ? io.offset + 1 : io.ptr
         unsafe_copyto!(mem, 1, io.data, start, nbytes)
-
-        # We can use unsafe_takestring here, because the IOBuffer
-        # gets its memory reallocated on next use due to setting
-        # io.reinit = true, so this can only cause UB if the user
-        # holds a reference to the internal .data field and mutates
-        # it.
         unsafe_takestring(mem)
     end
 
-    # Empty the IOBuffer, resetting it.
-    io.mark = -1
-    io.ptr = 1
-    io.size = 0
-    io.offset = 0
-    io.reinit = true
+    # Empty the IOBuffer, resetting it, if the buffer is writable
+    if io.writable
+        io.mark = -1
+        io.ptr = 1
+        io.size = 0
+        io.offset = 0
+    end
     return s
 end
 
