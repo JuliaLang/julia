@@ -211,10 +211,13 @@ end
 
     @testset "zero stride" begin
         for AAv in (view(AA, StepRangeLen(2,0,size(AA,1)), :),
-                    view(AA, StepRangeLen.(2,0,size(AA))...))
-            C = AAv * BB
-            @test allequal(C)
-            @test C ≈ Array(AAv) * BB
+                    view(AA, StepRangeLen.(2,0,size(AA))...),
+                    view(complex.(AA, AA), StepRangeLen.(2,0,size(AA))...),)
+            for BB2 in (BB, complex.(BB, BB))
+                C = AAv * BB2
+                @test allequal(C)
+                @test C ≈ Array(AAv) * BB2
+            end
         end
     end
 end

@@ -514,9 +514,9 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     alpha, beta = promote(α, β, zero(T))
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
-        stride(y, 1) == 1 && tA_uc == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
-        !iszero(stride(x, 1))
+            stride(A, 1) == 1 && _fullstride2(A) &&
+            stride(y, 1) == 1 && tA_uc == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
+            !iszero(stride(x, 1))
         BLAS.gemv!(tA, alpha, reinterpret(T, A), x, beta, reinterpret(T, y))
         return y
     else
@@ -538,8 +538,8 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     alpha, beta = promote(α, β, zero(T))
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     @views if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
-        !iszero(stride(x, 1)) && tA_uc in ('N', 'T', 'C')
+            stride(A, 1) == 1 && _fullstride2(A) &&
+            !iszero(stride(x, 1)) && tA_uc in ('N', 'T', 'C')
         xfl = reinterpret(reshape, T, x) # Use reshape here.
         yfl = reinterpret(reshape, T, y)
         BLAS.gemv!(tA, alpha, A, xfl[1, :], beta, yfl[1, :])
