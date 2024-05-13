@@ -96,7 +96,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
             u >>= 4
         end
         @inbounds a[24] = a[19] = a[14] = a[9] = '-'
-        return String(a)
+        return Base._unsafe_takestring!(a)
     end
 end
 
