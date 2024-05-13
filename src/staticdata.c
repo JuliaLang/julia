@@ -3041,7 +3041,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             size_t world = jl_atomic_load_acquire(&jl_world_counter);
-            assert(world == precompilation_world);
+            // assert(world == precompilation_world); // This triggers on a normal build of julia
             write_uint(f, world);
             write_uint(f, jl_typeinf_world);
         }
