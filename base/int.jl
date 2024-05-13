@@ -720,7 +720,7 @@ macro big_str(s::String)
             is_prev_dot = (c == '.')
         end
         print(bf, s[end])
-        s = unsafe_takestring(bf)
+        s = unsafe_takestring!(bf)
     end
     n = tryparse(BigInt, s)
     n === nothing || return n
