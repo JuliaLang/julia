@@ -9,7 +9,7 @@ literals `md"..."` and `doc"..."`.
 """
 module Markdown
 
-import Base: AnnotatedString, AnnotatedIOBuffer, show, ==, with_output_color, mapany
+import Base: AnnotatedString, AnnotatedIOBuffer, show, ==, with_output_color, mapany, unsafe_takestring!
 using Base64: stringmime
 
 using StyledStrings: StyledStrings, Face, addface!, @styled_str, styled
