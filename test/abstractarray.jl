@@ -1852,6 +1852,24 @@ function check_pointer_strides(A::AbstractArray)
     return true
 end
 
+@testset "colonful `reshape`, #54245" begin
+    @test reshape([], (0, :)) isa Matrix
+    @test_throws DimensionMismatch reshape([7], (0, :))
+    let b = prevpow(2, typemax(Int))
+        @test iszero(b*b)
+        @test_throws ArgumentError reshape([7], (b, :, b))
+        @test reshape([], (b, :, b)) isa Array{<:Any, 3}
+    end
+    for iterator ∈ (7:6, 7:7, 7:8)
+        for it ∈ (iterator, map(BigInt, iterator))
+            @test reshape(it, (:, Int(length(it)))) isa AbstractMatrix
+            @test reshape(it, (Int(length(it)), :)) isa AbstractMatrix
+            @test reshape(it, (1, :))               isa AbstractMatrix
+            @test reshape(it, (:, 1))               isa AbstractMatrix
+        end
+    end
+end
+
 @testset "strides for ReshapedArray" begin
     # Type-based contiguous Check
     a = vec(reinterpret(reshape, Int16, reshape(view(reinterpret(Int32, randn(10)), 2:11), 5, :)))
