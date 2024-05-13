@@ -12,10 +12,10 @@ Log levels less than `min_level` are filtered out.
 Message formatting can be controlled by setting keyword arguments:
 
 * `meta_formatter` is a function which takes the log event metadata
-  `(level, _module, group, id, file, line)` and returns a face name (used in
-  the constructed [`AnnotatedString`](@ref Base.AnnotatedString)), prefix and
-  suffix for the log message.  The default is to prefix with the log level and
-  a suffix containing the module, file and line location.
+  `(level, _module, group, id, file, line)` and returns a color (as would be
+  passed to printstyled), prefix and suffix for the log message.  The
+  default is to prefix with the log level and a suffix containing the module,
+  file and line location.
 * `show_limited` limits the printing of large data structures to something
   which can fit on the screen by setting the `:limit` `IOContext` key during
   formatting.
@@ -58,10 +58,10 @@ end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
 function default_logcolor(level::LogLevel)
-    level < Info  ? :log_debug :
-    level < Warn  ? :log_info  :
-    level < Error ? :log_warn  :
-                    :log_error
+    level < Info  ? Base.debug_color() :
+    level < Warn  ? Base.info_color()  :
+    level < Error ? Base.warn_color()  :
+                    Base.error_color()
 end
 
 function default_metafmt(level::LogLevel, _module, group, id, file, line)
@@ -102,8 +102,6 @@ function termlength(str)
     end
     return N
 end
-
-termlength(str::Base.AnnotatedString) = textwidth(str)
 
 function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module, group, id,
                         filepath, line; kwargs...)
@@ -156,10 +154,6 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # Format lines as text with appropriate indentation and with a box
     # decoration on the left.
     color, prefix, suffix = logger.meta_formatter(level, _module, group, id, filepath, line)::Tuple{Union{Symbol,Int},String,String}
-    lcolor = StyledStrings.Legacy.legacy_color(color)
-    if !isnothing(lcolor)
-        color = StyledStrings.Face(foreground=lcolor)
-    end
     minsuffixpad = 2
     buf = IOBuffer()
     iob = IOContext(buf, stream)
@@ -173,19 +167,19 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
         nonpadwidth = 2 + length(suffix)
     end
     for (i, (indent, msg)) in enumerate(msglines)
-        boxstr = length(msglines) == 1 ? "[" :
-                 i == 1                ? "┌" :
-                 i < length(msglines)  ? "│" :
-                                         "└"
-        print(iob, styled"{$color,bold:$boxstr} ")
+        boxstr = length(msglines) == 1 ? "[ " :
+                 i == 1                ? "┌ " :
+                 i < length(msglines)  ? "│ " :
+                                         "└ "
+        printstyled(iob, boxstr, bold=true, color=color)
         if i == 1 && !isempty(prefix)
-            print(iob, styled"{$color,bold:$prefix} ")
+            printstyled(iob, prefix, " ", bold=true, color=color)
         end
         print(iob, " "^indent, msg)
         if i == length(msglines) && !isempty(suffix)
             npad = max(0, justify_width - nonpadwidth) + minsuffixpad
             print(iob, " "^npad)
-            print(iob, styled"{shadow:$suffix}")
+            printstyled(iob, suffix, color=:light_black)
         end
         println(iob)
     end
