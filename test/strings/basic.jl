@@ -1095,13 +1095,13 @@ end
 
 # issue #54369
 let v = Base.StringMemory(3)
-    v .= [0x40,0x41,0x42]
+    v .= [0x41,0x42,0x43]
     s = String(v)
     @test s == "ABC"
-    @test v == [0x40,0x41,0x42]
-    v[1] = 0x42
+    @test v == [0x41,0x42,0x43]
+    v[1] = 0x43
     @test s == "ABC"
-    @test v == [0x42,0x41,0x42]
+    @test v == [0x43,0x42,0x43]
 end
 
 # make sure length for identical String and AbstractString return the same value, PR #25533
