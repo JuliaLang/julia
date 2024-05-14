@@ -139,7 +139,7 @@ count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_
 """
     fzeropreserving(bc) -> Bool
 
-returns true if whenever all strutured args to bc are structural zeros, the function result
+Return true if whenever all structured args to bc are structural zeros, the function result
 is also zero. For trivial broadcasted values such as `bc::Number`, this reduces to
 `iszero(bc)`.
 """
