@@ -702,9 +702,9 @@ function circshift(t::Tuple{Any,Any}, shift::Integer)
         reverse(t)
     end::Tuple{Any,Any}
 end
-function circshift(x::Tuple{Any,Any,Any,Vararg{Any}}, shift::Integer)
+function circshift(x::Tuple{Any,Any,Any,Vararg{Any,N}}, shift::Integer) where {N}
     @inline
-    len = length(x)
+    len = N + 3
     j = mod1(shift, len)
-    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,length(x))), len)::Tuple
+    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,len)), Val(len))::Tuple
 end
