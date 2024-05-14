@@ -525,12 +525,12 @@ for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Uni
     end
 end
 
-function kron(A::Hermitian{T,<:StridedMatrix}, B::Hermitian{S,<:StridedMatrix}) where {T<:Union{Real,Complex},S<:Union{Real,Complex}}
+function kron(A::Hermitian{<:Union{Real,Complex},<:StridedMatrix}, B::Hermitian{<:Union{Real,Complex},<:StridedMatrix})
     resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
     C = Hermitian(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)), resultuplo)
     return kron!(C, A, B)
 end
-function kron(A::Symmetric{T,<:StridedMatrix}, B::Symmetric{S,<:StridedMatrix}) where {T,S}
+function kron(A::Symmetric{<:Number,<:StridedMatrix}, B::Symmetric{<:Number,<:StridedMatrix})
     resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
     C = Symmetric(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)), resultuplo)
     return kron!(C, A, B)
@@ -544,7 +544,7 @@ function kron!(C::Hermitian{<:Union{Real,Complex},<:StridedMatrix}, A::Hermitian
     _hermkron!(C.data, A.data, B.data, conj, real, A.uplo, B.uplo)
     return C
 end
-function kron!(C::Symmetric{<:Any,<:StridedMatrix}, A::Symmetric{<:Any,<:StridedMatrix}, B::Symmetric{<:Any,<:StridedMatrix})
+function kron!(C::Symmetric{<:Number,<:StridedMatrix}, A::Symmetric{<:Number,<:StridedMatrix}, B::Symmetric{<:Number,<:StridedMatrix})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     if ((A.uplo == 'U' || B.uplo == 'U') && C.uplo != 'U') || ((A.uplo == 'L' && B.uplo == 'L') && C.uplo != 'L')
         throw(ArgumentError("C.uplo must match A.uplo and B.uplo, got $(C.uplo) $(A.uplo) $(B.uplo)"))
