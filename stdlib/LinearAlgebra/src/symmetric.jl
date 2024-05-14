@@ -770,6 +770,11 @@ function svd(A::RealHermSymComplexHerm; full::Bool=false)
     end
     return SVD(vecs, vals, V')
 end
+function svd(A::RealHermSymComplexHerm{Float16}; full::Bool = false)
+    T = eltype(A)
+    F = svd(eigencopy_oftype(A, eigtype(T)); full)
+    return SVD{T}(F)
+end
 
 function svdvals!(A::RealHermSymComplexHerm)
     vals = eigvals!(A)

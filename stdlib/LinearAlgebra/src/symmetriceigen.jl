@@ -12,6 +12,13 @@ function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothin
     S = eigtype(eltype(A))
     eigen!(eigencopy_oftype(A, S), sortby=sortby)
 end
+function eigen(A::RealHermSymComplexHerm{Float16}; sortby::Union{Function,Nothing}=nothing)
+    S = eigtype(eltype(A))
+    E = eigen!(eigencopy_oftype(A, S), sortby=sortby)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
+    return Eigen(values, vectors)
+end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) =
     Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
@@ -295,8 +302,16 @@ function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{F
     return eigvals!(A; sortby)
 end
 
-
-function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
+eigen(A::Hermitian{<:Complex, <:Tridiagonal}; kwargs...) =
+    _eigenhermtridiag(A; kwargs...)
+# disambiguation
+function eigen(A::Hermitian{Complex{Float16}, <:Tridiagonal}; kwargs...)
+    E = _eigenhermtridiag(A; kwargs...)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{ComplexF16}, E.vectors)
+    return Eigen(values, vectors)
+end
+function _eigenhermtridiag(A::Hermitian{<:Complex,<:Tridiagonal}; kwargs...)
     (; dl, d, du) = parent(A)
     N = length(d)
     if N <= 1
