@@ -1709,7 +1709,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     return CallMeta(res, exct, effects, retinfo)
 end
 
-function argtype_by_index(argtypes::Vector{Any}, i::Integer)
+function argtype_by_index(argtypes::Vector{Any}, i::Int)
     n = length(argtypes)
     na = argtypes[n]
     if isvarargtype(na)
@@ -2880,12 +2880,12 @@ end
 struct BestguessInfo{Interp<:AbstractInterpreter}
     interp::Interp
     bestguess
-    nargs::UInt
+    nargs::Int
     slottypes::Vector{Any}
     changes::VarTable
-    function BestguessInfo(interp::Interp, @nospecialize(bestguess), nargs::UInt,
+    function BestguessInfo(interp::Interp, @nospecialize(bestguess), nargs::Int,
         slottypes::Vector{Any}, changes::VarTable) where Interp<:AbstractInterpreter
-        new{Interp}(interp, bestguess, Int(nargs), slottypes, changes)
+        new{Interp}(interp, bestguess, nargs, slottypes, changes)
     end
 end
 
