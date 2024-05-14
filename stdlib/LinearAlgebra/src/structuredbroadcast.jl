@@ -136,20 +136,20 @@ iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
 
 count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_nested(bc); init = 0)
 
-fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
+fzeropreserving(bc) = (v = fzero(bc); !isnothing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
 # expression is stable.  We can test the zero-preservability by applying the function
 # in cases where all other arguments are known scalars against a zero from the structured
 # matrix. If any non-structured matrix argument is not a known scalar, we give up.
-fzero(x::Number) = x
-fzero(::Type{T}) where T = T
-fzero(r::Ref) = r[]
-fzero(t::Tuple{Any}) = t[1]
-fzero(S::StructuredMatrix) = zero(eltype(S))
-fzero(x) = missing
+fzero(x::Number) = Some(x)
+fzero(::Type{T}) where T = Some(T)
+fzero(r::Ref) = Some(r[])
+fzero(t::Tuple{Any}) = Some(only(t))
+fzero(S::StructuredMatrix) = Some(zero(eltype(S)))
+fzero(x) = nothing
 function fzero(bc::Broadcast.Broadcasted)
     args = map(fzero, bc.args)
-    return any(ismissing, args) ? missing : bc.f(args...)
+    return any(isnothing, args) ? nothing : Some(bc.f(something.(args)...))
 end
 
 function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
