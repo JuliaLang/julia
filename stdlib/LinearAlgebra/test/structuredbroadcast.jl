@@ -298,4 +298,13 @@ end
 # structured broadcast with function returning non-number type
 @test tuple.(Diagonal([1, 2])) == [(1,) (0,); (0,) (2,)]
 
+@testset "Broadcast with missing (#54467)" begin
+    select_first(x, y) = x
+    diag = Diagonal([1,2])
+    @test select_first.(diag, missing) == diag
+    @test select_first.(diag, missing) isa Diagonal{Int}
+    @test isequal(select_first.(missing, diag), fill(missing, 2, 2))
+    @test select_first.(missing, diag) isa Matrix{Missing}
+end
+
 end
