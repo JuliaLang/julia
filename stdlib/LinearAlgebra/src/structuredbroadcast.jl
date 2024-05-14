@@ -136,7 +136,15 @@ iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
 
 count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_nested(bc); init = 0)
 
+"""
+    fzeropreserving(bc) -> Bool
+
+returns true if whenever all strutured args to bc are structural zeros, the function result
+is also zero. For trivial broadcasted values such as `bc::Number`, this reduces to
+`iszero(bc)`.
+"""
 fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
+
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
 # expression is stable.  We can test the zero-preservability by applying the function
 # in cases where all other arguments are known scalars against a zero from the structured
