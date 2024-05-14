@@ -772,8 +772,8 @@ function svd(A::RealHermSymComplexHerm; full::Bool=false)
 end
 function svd(A::RealHermSymComplexHerm{Float16}; full::Bool = false)
     T = eltype(A)
-    A = svd(eigencopy_oftype(A, eigtype(T)); full)
-    return SVD{T}(A)
+    F = svd(eigencopy_oftype(A, eigtype(T)); full)
+    return SVD{T}(F)
 end
 
 function svdvals!(A::RealHermSymComplexHerm)
