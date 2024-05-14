@@ -853,7 +853,7 @@ function print_callstack(sv::InferenceState)
 end
 
 function narguments(sv::InferenceState, include_va::Bool=true)
-    nargs = sv.src.nargs
+    nargs = Int(sv.src.nargs)
     if !include_va
         nargs -= sv.src.isva
     end
