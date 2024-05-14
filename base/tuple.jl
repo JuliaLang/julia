@@ -704,6 +704,7 @@ function circshift(t::Tuple{Any,Any}, shift::Integer)
 end
 function circshift(x::Tuple{Any,Any,Any,Vararg{Any}}, shift::Integer)
     @inline
-    j = mod1(shift, length(x))
-    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,length(x))), Val(length(x)))
+    len = length(x)
+    j = mod1(shift, len)
+    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,length(x))), Val(len))
 end
