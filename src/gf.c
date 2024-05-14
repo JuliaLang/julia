@@ -2936,7 +2936,7 @@ JL_DLLEXPORT int jl_add_entrypoint(jl_tupletype_t *types)
             jl_safe_printf("from module: ");
             jl_(mi->def.method->module);
         }
-        arraylist_push(jl_precompile_mis, mi);
+        arraylist_push(jl_entrypoint_mis, mi);
     }
     return 1;
 }

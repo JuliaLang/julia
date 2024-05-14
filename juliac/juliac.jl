@@ -6,6 +6,7 @@ strict = false
 verbose = false
 outname = nothing
 file = nothing
+add_ccallables = false
 
 help = findfirst(x->x == "--help", ARGS)
 if help !== nothing
@@ -14,6 +15,7 @@ if help !== nothing
         Usage: julia juliac.jl [--output-exe | --output-lib | --output-sysimage] <name> [options] <file.jl>
         --static-call-graph  Only output code statically determined to be reachable
         --strict             Error if call graph cannot be fully statically determined
+        --compile-ccallable  Include all methods marked `@ccallable` in output
         --verbose            Request verbose output
         """)
     exit(0)
@@ -34,6 +36,8 @@ let i = 1
             global static_call_graph = true
         elseif arg == "--verbose"
             global verbose = true
+        elseif arg == "--compile-ccallable"
+            global add_ccallables = true
         else
             if arg[1] == '-' || !isnothing(file)
                 println("Unexpected argument `$arg`")
@@ -61,7 +65,7 @@ bc_path = joinpath(tmpdir, "img-bc.a")
 is_small_image() = static_call_graph ? `--small-image=yes` : ``
 is_strict() = strict ? `--no-dispatch-precompile=yes` : ``
 is_verbose() = verbose ? `--verbose-compilation=yes` : ``
-cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(is_small_image()) $(is_strict()) $(is_verbose()) $(joinpath(@__DIR__,"buildscript.jl")) $absfile $output_type`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(is_small_image()) $(is_strict()) $(is_verbose()) $(joinpath(@__DIR__,"buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
 
 if !success(pipeline(cmd; stdout, stderr))
     println(stderr, "\nFailed to compile $file")

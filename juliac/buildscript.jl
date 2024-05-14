@@ -2,6 +2,7 @@
 
 inputfile = ARGS[1]
 output_type = ARGS[2]
+add_ccallables = ARGS[3] == "true"
 
 # Initialize some things not usually initialized when output is request
 Sys.__init__()
@@ -191,11 +192,14 @@ let mod = Base.include(Base.__toplevel__, inputfile)
     if !isa(mod, Module)
         mod = Main
     end
-    if output_type == "--output-exe" && isdefined(mod, :main)
+    if output_type == "--output-exe" && isdefined(mod, :main) && !add_ccallables
         entrypoint(mod.main, ())
     end
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
+    if add_ccallables
+        ccall(:jl_add_ccallable_entrypoints, Cvoid, ())
+    end
 end
 
 # Additional method patches depending on whether user code loads certain stdlibs

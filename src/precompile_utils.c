@@ -322,6 +322,26 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
     return native_code;
 }
 
+static int enq_ccallable_entrypoints_(jl_typemap_entry_t *def, void *closure)
+{
+    jl_method_t *m = def->func.method;
+    if (m->external_mt)
+        return 1;
+    if (m->ccallable)
+        jl_add_entrypoint((jl_tupletype_t*)jl_svecref(m->ccallable, 1));
+    return 1;
+}
+
+static int enq_ccallable_entrypoints(jl_methtable_t *mt, void *env)
+{
+    return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), enq_ccallable_entrypoints_, env);
+}
+
+JL_DLLEXPORT void jl_add_ccallable_entrypoints(void)
+{
+    jl_foreach_reachable_mtable(enq_ccallable_entrypoints, NULL);
+}
+
 static void *jl_precompile_small_image(size_t world)
 {
     // array of MethodInstances and ccallable aliases to include in the output
@@ -330,7 +350,7 @@ static void *jl_precompile_small_image(size_t world)
     jl_method_instance_t *mi;
     while (1)
     {
-        mi = (jl_method_instance_t*)arraylist_pop(jl_precompile_mis);
+        mi = (jl_method_instance_t*)arraylist_pop(jl_entrypoint_mis);
         if (mi == NULL)
             break;
         assert(jl_is_method_instance(mi));
