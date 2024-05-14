@@ -464,8 +464,9 @@ _fullstride2(A, f=identity) = f(stride(A, 2)) >= size(A, 1)
 # We specialize the function for certain StridedArray subtypes
 
 # Similar to Base.RangeIndex, but only include range types where the step is statically known to be non-zero
-const NonConstRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}, StepRange{<:BitInteger, <:BitInteger}}
 const IncreasingRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}}
+const NonConstRangeIndex = Union{IncreasingRangeIndex, StepRange{<:BitInteger, <:BitInteger}}
+# StridedArray subtypes for which _fullstride2(::T) === true is known from the type
 const DenseOrStridedReshapedReinterpreted = Union{DenseArray, Base.StridedReshapedArray, Base.StridedReinterpretArray}
 # Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
 StridedSubArrayStandard{T,N,A,
