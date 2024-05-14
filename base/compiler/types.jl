@@ -363,6 +363,7 @@ struct NativeInterpreter <: AbstractInterpreter
 
     # Cache of inference results for this particular interpreter
     inf_cache::Vector{InferenceResult}
+    irinterp_cache::Vector{InferenceResult}
 
     # Parameters for inference and optimization
     inf_params::InferenceParams
@@ -382,17 +383,19 @@ function NativeInterpreter(world::UInt = get_world_counter();
     # incorrect, fail out loudly.
     @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
-    inf_cache = Vector{InferenceResult}() # Initially empty cache
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
+    inf_cache = InferenceResult[]
+    irinterp_cache = InferenceResult[]
+    return NativeInterpreter(world, method_table, inf_cache, irinterp_cache, inf_params, opt_params)
 end
 
 function NativeInterpreter(interp::NativeInterpreter;
                            world::UInt = interp.world,
                            method_table::CachedMethodTable{InternalMethodTable} = interp.method_table,
                            inf_cache::Vector{InferenceResult} = interp.inf_cache,
+                           irinterp_cache::Vector{InferenceResult} = interp.irinterp_cache,
                            inf_params::InferenceParams = interp.inf_params,
                            opt_params::OptimizationParams = interp.opt_params)
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
+    return NativeInterpreter(world, method_table, inf_cache, irinterp_cache, inf_params, opt_params)
 end
 
 # Quickly and easily satisfy the AbstractInterpreter API contract
@@ -401,6 +404,9 @@ OptimizationParams(interp::NativeInterpreter) = interp.opt_params
 get_inference_world(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
 cache_owner(interp::NativeInterpreter) = nothing
+
+get_irinterp_cache(interp::NativeInterpreter) = interp.irinterp_cache
+get_irinterp_cache(::AbstractInterpreter) = nothing
 
 """
     already_inferred_quick_test(::AbstractInterpreter, ::MethodInstance)

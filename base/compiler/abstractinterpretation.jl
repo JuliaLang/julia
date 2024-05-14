@@ -1207,11 +1207,30 @@ end
 
 function semi_concrete_eval_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
+    irinterp_cache = get_irinterp_cache(interp)
+    argtypes = arginfo.argtypes
+    if irinterp_cache !== nothing
+        𝕃ᵢ = typeinf_lattice(interp)
+        # TODO use cache-valid argtypes here?
+        inf_result = cache_lookup_relaxed(𝕃ᵢ, mi, argtypes, irinterp_cache)
+        if inf_result !== nothing
+            if inf_result.result === nothing
+                return nothing
+            end
+            ir = inf_result.src::IRCode
+            inf_result.src = copy(ir)
+            return ConstCallResults(inf_result.result, inf_result.exc_result,
+                SemiConcreteResult(mi, ir, inf_result.ipo_effects), inf_result.ipo_effects, mi)
+        else
+            inf_result = InferenceResult(mi, argtypes, nothing)
+            push!(irinterp_cache, inf_result)
+        end
+    end
     world = frame_world(sv)
     mi_cache = WorldView(code_cache(interp), world)
     code = get(mi_cache, mi, nothing)
     if code !== nothing
-        irsv = IRInterpretationState(interp, code, mi, arginfo.argtypes, world)
+        irsv = IRInterpretationState(interp, code, mi, argtypes, world)
         if irsv !== nothing
             irsv.parent = sv
             rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv)
@@ -1230,6 +1249,12 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                     effects = Effects(effects; noub=ALWAYS_TRUE)
                 end
                 exct = refine_exception_type(result.exct, effects)
+                if irinterp_cache !== nothing && @isdefined(inf_result)
+                    inf_result.src = copy(ir) # `ir` might be used destructively by the inlining pass later
+                    inf_result.result = rt
+                    inf_result.exc_result = exct
+                    inf_result.ipo_effects = effects
+                end
                 return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects), effects, mi)
             end
         end
@@ -1250,10 +1275,19 @@ function compute_forwarded_argtypes(interp::AbstractInterpreter, arginfo::ArgInf
     return has_conditional(𝕃ᵢ, sv) ? ConditionalSimpleArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
 end
 
+function compute_overridden_by_const(given_argtypes::Vector{Any}, cache_argtypes::Vector{Any})
+    overridden_by_const = falses(length(given_argtypes))
+    for i = 1:length(given_argtypes)
+        if given_argtypes[i] !== argtype_by_index(cache_argtypes, i)
+            overridden_by_const[i] = true
+        end
+    end
+    return overridden_by_const
+end
+
 function const_prop_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
     concrete_eval_result::Union{Nothing, ConstCallResults}=nothing)
-    inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
     forwarded_argtypes = compute_forwarded_argtypes(interp, arginfo, sv)
     # use `cache_argtypes` that has been constructed for fresh regular inference if available
@@ -1264,6 +1298,7 @@ function const_prop_call(interp::AbstractInterpreter,
         cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
     end
     argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
+    inf_cache = get_inference_cache(interp)
     inf_result = cache_lookup(𝕃ᵢ, mi, argtypes, inf_cache)
     if inf_result !== nothing
         # found the cache for this constant prop'
@@ -1274,12 +1309,7 @@ function const_prop_call(interp::AbstractInterpreter,
         @assert inf_result.linfo === mi "MethodInstance for cached inference result does not match"
         return return_cached_result(interp, inf_result, sv)
     end
-    overridden_by_const = falses(length(argtypes))
-    for i = 1:length(argtypes)
-        if argtypes[i] !== argtype_by_index(cache_argtypes, i)
-            overridden_by_const[i] = true
-        end
-    end
+    overridden_by_const = compute_overridden_by_const(argtypes, cache_argtypes)
     if !any(overridden_by_const)
         add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
         return nothing

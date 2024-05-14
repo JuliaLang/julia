@@ -180,20 +180,29 @@ end
 
 function cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any},
                       cache::Vector{InferenceResult})
-    method = mi.def::Method
     nargtypes = length(given_argtypes)
     for cached_result in cache
-        cached_result.linfo === mi || @goto next_cache
+        cached_result.linfo === mi || continue
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
         cache_overridden_by_const = cached_result.overridden_by_const::BitVector
-        for i in 1:nargtypes
-            if !is_argtype_match(𝕃, given_argtypes[i], cache_argtypes[i], cache_overridden_by_const[i])
-                @goto next_cache
-            end
-        end
-        return cached_result
-        @label next_cache
+        all(1:nargtypes) do i::Int
+            is_argtype_match(𝕃, given_argtypes[i], cache_argtypes[i], cache_overridden_by_const[i])
+        end && return cached_result
+    end
+    return nothing
+end
+
+function cache_lookup_relaxed(𝕃::AbstractLattice, mi::MethodInstance,
+                              given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
+    nargtypes = length(given_argtypes)
+    for cached_result in cache
+        cached_result.linfo === mi || continue
+        cache_argtypes = cached_result.argtypes
+        nargtypes == length(cache_argtypes) || continue
+        all(1:nargtypes) do i::Int
+            is_lattice_equal(𝕃, given_argtypes[i], cache_argtypes[i])
+        end && return cached_result
     end
     return nothing
 end
