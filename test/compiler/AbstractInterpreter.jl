@@ -163,24 +163,30 @@ CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_inferen
 overlay_sin1(x) = error("Not supposed to be called.")
 @overlay OverlaySinMT overlay_sin1(x) = cos(x)
 @overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
-let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
-    end |> only |> first |> Core.OpaqueClosure
+    end |> only |> first
+    ir.argtypes[1] = Tuple{}
+    oc = Core.OpaqueClosure(ir)
     @test oc() == cos(0.)
 end
 @overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin1(x)
-let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
-    end |> only |> first |> Core.OpaqueClosure
+    end |> only |> first
+    ir.argtypes[1] = Tuple{}
+    oc = Core.OpaqueClosure(ir)
     @test oc() == cos(0.)
 end
 _overlay_sin2(x) = error("Not supposed to be called.")
 @overlay OverlaySinMT _overlay_sin2(x) = cos(x)
 overlay_sin2(x) = _overlay_sin2(x)
 @overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin2(x)
-let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
-    end |> only |> first |> Core.OpaqueClosure
+    end |> only |> first
+    ir.argtypes[1] = Tuple{}
+    oc = Core.OpaqueClosure(ir)
     @test oc() == cos(0.)
 end
 

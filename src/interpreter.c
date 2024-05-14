@@ -805,7 +805,13 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
         assert(jl_is_method_instance(specializations));
         jl_method_instance_t *mi = (jl_method_instance_t *)specializations;
         jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
-        code = jl_uncompress_ir(source, ci, jl_atomic_load_relaxed(&ci->inferred));
+        jl_value_t *src = jl_atomic_load_relaxed(&ci->inferred);
+        if (!src) {
+            // This can happen if somebody did :new_opaque_closure with broken IR. This is definitely bad
+            // and UB, but let's try to be slightly nicer than segfaulting here for people debugging.
+            jl_error("Internal Error: Opaque closure with no source at all");
+        }
+        code = jl_uncompress_ir(source, ci, src);
     }
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;

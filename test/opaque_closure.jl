@@ -251,6 +251,7 @@ end
 # constructing an opaque closure from IRCode
 let src = first(only(code_typed(+, (Int, Int))))
     ir = Core.Compiler.inflate_ir(src, Core.Compiler.VarState[], src.slottypes)
+    ir.argtypes[1] = Tuple{}
     @test ir.debuginfo.def === nothing
     ir.debuginfo.def = Symbol(@__FILE__)
     @test OpaqueClosure(src; sig=Tuple{Int, Int}, rettype=Int, nargs=2)(40, 2) == 42
@@ -261,10 +262,12 @@ let src = first(only(code_typed(+, (Int, Int))))
     @test OpaqueClosure(ir)(40, 2) == 42 # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
 end
 let ir = first(only(Base.code_ircode(sin, (Int,))))
+    ir.argtypes[1] = Tuple{}
     @test OpaqueClosure(ir)(42) == sin(42)
     @test OpaqueClosure(ir)(42) == sin(42) # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
     @test length(code_typed(OpaqueClosure(ir))) == 1
     ir = first(only(Base.code_ircode(sin, (Float64,))))
+    ir.argtypes[1] = Tuple{}
     @test OpaqueClosure(ir)(42.) == sin(42.)
     @test OpaqueClosure(ir)(42.) == sin(42.) # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
 end
@@ -273,6 +276,7 @@ end
 let src = code_typed((Int,Int)) do x, y...
         return (x, y)
     end |> only |> first
+    src.slottypes[1] = Tuple{}
     let oc = OpaqueClosure(src; rettype=Tuple{Int, Tuple{Int}}, sig=Tuple{Int, Int}, nargs=2, isva=true)
         @test oc(1,2) === (1,(2,))
         @test_throws MethodError oc(1,2,3)
@@ -313,6 +317,7 @@ f_oc_throws() = error("oops")
 @noinline function make_oc_and_collect_bt()
     did_gc = Ref{Bool}(false)
     bt = let ir = first(only(Base.code_ircode(f_oc_throws, ())))
+        ir.argtypes[1] = Tuple
         sentinel = Ref{Any}(nothing)
         oc = OpaqueClosure(ir, sentinel)
         finalizer(sentinel) do x
@@ -349,6 +354,7 @@ ccall_op_arg_restrict2_bad_args() = op_arg_restrict2((1.,), 2)
 let ir = Base.code_ircode((Int,Int)) do x, y
         @noinline x * y
     end |> only |> first
+    ir.argtypes[1] = Tuple{}
     oc = Core.OpaqueClosure(ir)
     io = IOBuffer()
     code_llvm(io, oc, Tuple{Int,Int})
@@ -362,11 +368,13 @@ foopaque() = Base.Experimental.@opaque(@noinline x::Int->println(x))(1)
 code_llvm(devnull,foopaque,()) #shouldn't crash
 
 let ir = first(only(Base.code_ircode(sin, (Int,))))
+    ir.argtypes[1] = Tuple{}
     oc = Core.OpaqueClosure(ir)
     @test (Base.show_method(IOBuffer(), oc.source::Method); true)
 end
 
 let ir = first(only(Base.code_ircode(sin, (Int,))))
+    ir.argtypes[1] = Tuple{}
     oc = Core.OpaqueClosure(ir; do_compile=false)
     @test oc(1) == sin(1)
 end
