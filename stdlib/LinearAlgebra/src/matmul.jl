@@ -459,16 +459,22 @@ Base.@constprop :aggressive generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, t
     A
 end
 
-_fullstride2(A) = abs(stride(A, 2)) >= size(A, 1)
+_fullstride2(A, f=identity) = f(stride(A, 2)) >= size(A, 1)
 # for some standard StridedArrays, the _fullstride2 condition is known to hold at compile-time
 # We specialize the function for certain StridedArray subtypes
 
 # Similar to Base.RangeIndex, but only include range types where the step is statically known to be non-zero
-const NonConstRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}, StepRange{<:BitInteger, <:BitInteger}}
+const IncreasingRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}}
+const NonConstRangeIndex = Union{IncreasingRangeIndex, StepRange{<:BitInteger, <:BitInteger}}
+# StridedArray subtypes for which _fullstride2(::T) === true is known from the type
+const DenseOrStridedReshapedReinterpreted = Union{DenseArray, Base.StridedReshapedArray, Base.StridedReinterpretArray}
 # Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
 StridedSubArrayStandard{T,N,A,
     I<:Tuple{Vararg{Union{NonConstRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
-_fullstride2(A::Union{DenseArray,Base.StridedReshapedArray,Base.StridedReinterpretArray,StridedSubArrayStandard}) = true
+_fullstride2(A::Union{DenseOrStridedReshapedReinterpreted,StridedSubArrayStandard}, ::typeof(abs)) = true
+StridedSubArrayIncr{T,N,A,
+    I<:Tuple{Vararg{Union{IncreasingRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
+_fullstride2(A::Union{DenseOrStridedReshapedReinterpreted,StridedSubArrayIncr}, ::typeof(identity)) = true
 
 Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar,
                 A::StridedVecOrMat{T}, x::StridedVector{T},
@@ -483,7 +489,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar
     alpha, beta = promote(α, β, zero(T))
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && _fullstride2(A) &&
+        stride(A, 1) == 1 && _fullstride2(A, abs) &&
         !iszero(stride(x, 1)) && # We only check input's stride here.
         if tA_uc in ('N', 'T', 'C')
             return BLAS.gemv!(tA, alpha, A, x, beta, y)
@@ -514,7 +520,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     alpha, beta = promote(α, β, zero(T))
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-            stride(A, 1) == 1 && _fullstride2(A) &&
+            stride(A, 1) == 1 && _fullstride2(A, abs) &&
             stride(y, 1) == 1 && tA_uc == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
             !iszero(stride(x, 1))
         BLAS.gemv!(tA, alpha, reinterpret(T, A), x, beta, reinterpret(T, y))
@@ -538,7 +544,7 @@ Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::Abs
     alpha, beta = promote(α, β, zero(T))
     tA_uc = uppercase(tA) # potentially convert a WrapperChar to a Char
     @views if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-            stride(A, 1) == 1 && _fullstride2(A) &&
+            stride(A, 1) == 1 && _fullstride2(A, abs) &&
             !iszero(stride(x, 1)) && tA_uc in ('N', 'T', 'C')
         xfl = reinterpret(reshape, T, x) # Use reshape here.
         yfl = reinterpret(reshape, T, y)
@@ -576,10 +582,9 @@ Base.@constprop :aggressive function syrk_wrapper!(C::StridedMatrix{T}, tA::Abst
     if iszero(beta) || issymmetric(C)
         α, β = promote(alpha, beta, zero(T))
         if (alpha isa Union{Bool,T} &&
-            beta isa Union{Bool,T} &&
-            stride(A, 1) == stride(C, 1) == 1 &&
-            stride(A, 2) >= size(A, 1) &&
-            stride(C, 2) >= size(C, 1))
+                beta isa Union{Bool,T} &&
+                stride(A, 1) == stride(C, 1) == 1 &&
+                _fullstride2(A) && _fullstride2(C))
             return copytri!(BLAS.syrk!('U', tA, alpha, A, beta, C), 'U')
         end
     end
@@ -612,10 +617,9 @@ Base.@constprop :aggressive function herk_wrapper!(C::Union{StridedMatrix{T}, St
     if iszero(β) || issymmetric(C)
         alpha, beta = promote(α, β, zero(T))
         if (alpha isa Union{Bool,T} &&
-            beta isa Union{Bool,T} &&
-            stride(A, 1) == stride(C, 1) == 1 &&
-            stride(A, 2) >= size(A, 1) &&
-            stride(C, 2) >= size(C, 1))
+                beta isa Union{Bool,T} &&
+                stride(A, 1) == stride(C, 1) == 1 &&
+                _fullstride2(A) && _fullstride2(C))
             return copytri!(BLAS.herk!('U', tA, alpha, A, beta, C), 'U', true)
         end
     end
@@ -663,11 +667,9 @@ Base.@constprop :aggressive function gemm_wrapper!(C::StridedVecOrMat{T}, tA::Ab
 
     alpha, beta = promote(α, β, zero(T))
     if (alpha isa Union{Bool,T} &&
-        beta isa Union{Bool,T} &&
-        stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
-        stride(A, 2) >= size(A, 1) &&
-        stride(B, 2) >= size(B, 1) &&
-        stride(C, 2) >= size(C, 1))
+            beta isa Union{Bool,T} &&
+            stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
+            _fullstride2(A) && _fullstride2(B) && _fullstride2(C))
         return BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
     end
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
@@ -699,11 +701,9 @@ Base.@constprop :aggressive function gemm_wrapper!(C::StridedVecOrMat{Complex{T}
 
     # Make-sure reinterpret-based optimization is BLAS-compatible.
     if (alpha isa Union{Bool,T} &&
-        beta isa Union{Bool,T} &&
-        stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
-        stride(A, 2) >= size(A, 1) &&
-        stride(B, 2) >= size(B, 1) &&
-        stride(C, 2) >= size(C, 1) && tA_uc == 'N')
+            beta isa Union{Bool,T} &&
+            stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
+            _fullstride2(A) && _fullstride2(B) && _fullstride2(C) && tA_uc == 'N')
         BLAS.gemm!(tA, tB, alpha, reinterpret(T, A), B, beta, reinterpret(T, C))
         return C
     end
