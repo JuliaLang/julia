@@ -125,6 +125,8 @@ end
         z = Array{Float64,0}(undef); z[] = 3.0
         @test (3.0,) === @inferred Tuple(z)
     end
+
+    @test Tuple{Union{Int, Float64}}(1) === Tuple{Int}(1)
 end
 
 @testset "size" begin
@@ -654,6 +656,17 @@ end
 
     f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
     @test @inferred(f()) == (9, 2:2, 3:3)
+
+    x = (Ref(1), Ref(2))
+    y = Base.setindex(x, Ref(3), 1)
+    @test y[1][] === 3
+    @test y[2][] === 2
+
+    z = (1, Int32(2), Int128(3), Int8(1))
+    @test Base.setindex(z, Int8(5), 4) === (1, Int32(2), Int128(3), Int8(5))
+
+    a = (1, Int32(2), Int32(3), Int8(4))
+    @test Base.setindex(a, Int8(5), 4) === (1, Int32(2), Int32(3), Int8(5))
 end
 
 @testset "inferable range indexing with constant values" begin
