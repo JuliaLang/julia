@@ -50,6 +50,7 @@ function print(io::IO, xs...)
     end
     return nothing
 end
+setfield!(typeof(print).name.mt, :max_args, 10, :monotonic)
 
 """
     println([io::IO], xs...)
@@ -73,6 +74,7 @@ julia> String(take!(io))
 ```
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
+setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 
 ## conversion of general objects to strings ##
 
