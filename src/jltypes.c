@@ -876,14 +876,14 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
         if (T_has_tv) {
             jl_value_t *wrapped = jl_type_unionall(v, vm->T);
             JL_GC_PUSH1(&wrapped);
-            wrapped = (jl_value_t*)jl_wrap_vararg(wrapped, vm->N, 1);
+            wrapped = (jl_value_t*)jl_wrap_vararg(wrapped, vm->N, 1, 0);
             JL_GC_POP();
             return wrapped;
         }
         else {
             assert(N_has_tv);
             assert(vm->N == (jl_value_t*)v);
-            return (jl_value_t*)jl_wrap_vararg(vm->T, NULL, 1);
+            return (jl_value_t*)jl_wrap_vararg(vm->T, NULL, 1, 0);
         }
     }
     if (!jl_is_type(body) && !jl_is_typevar(body))
@@ -1887,7 +1887,7 @@ static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *t, int check, int not
         if (!jl_valid_type_param(t)) {
             if (nothrow) {
                 JL_GC_POP();
-                return jl_bottom_type;
+                return NULL;
             }
             jl_type_error_rt("Vararg", "type", (jl_value_t*)jl_type_type, t);
         }
@@ -1942,7 +1942,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             }
             if (pi == jl_bottom_type) {
                 if (nothrow)
-                    return jl_bottom_type;
+                    return NULL;
                 jl_errorf("Tuple field type cannot be Union{}");
             }
             if (cacheable && !jl_is_concrete_type(pi))
@@ -2009,7 +2009,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         }
         JL_CATCH {
             if (!nothrow) jl_rethrow();
-            return jl_bottom_type;
+            return NULL;
         }
     }
     else if (ntp == 0 && jl_emptytuple_type != NULL) {
@@ -2046,7 +2046,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 l = ntp - 1 + nt;
                 for (; i < l; i++)
                     jl_svecset(p, i, va0);
-                jl_value_t *ndt = jl_apply_tuple_type(p, check);
+                size_t np = jl_svec_len(p);
+                jl_value_t **pp = jl_svec_data(p);
+                jl_value_t *ndt = inst_datatype_inner(jl_anytuple_type, p, pp, np, NULL, NULL, check, nothrow);
                 JL_GC_POP();
                 return ndt;
             }
@@ -2164,16 +2166,16 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 if (!jl_is_symbol(ni)) {
                     if (!nothrow)
                         jl_type_error_rt("NamedTuple", "name", (jl_value_t*)jl_symbol_type, ni);
-                    invalid = 1;
+                    invalid = 1; break;
                 }
                 for (size_t j = 0; j < i; j++) {
                     if (ni == jl_fieldref_noalloc(names_tup, j)) {
                         if (!nothrow)
                             jl_errorf("duplicate field name in NamedTuple: \"%s\" is not unique", jl_symbol_name((jl_sym_t*)ni));
-                        invalid = 1;
-                        break;
+                        invalid = 1; break;
                     }
                 }
+                if (invalid) break;
             }
             if (values_tt == jl_bottom_type && nf > 0) {
                 ndt->types = jl_svec_fill(nf, jl_bottom_type);
@@ -2215,7 +2217,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         if (cacheable)
             JL_UNLOCK(&typecache_lock);
         JL_GC_POP();
-        return jl_bottom_type;
+        return NULL;
     }
     jl_datatype_t *primarydt = ((jl_datatype_t*)jl_unwrap_unionall(tn->wrapper));
     jl_precompute_memoized_dt(ndt, cacheable);
@@ -2227,11 +2229,11 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     }
     else if (dt->super) {
         jl_value_t *super = inst_type_w_((jl_value_t*)dt->super, env, stack, check, nothrow);
-        if (nothrow && super == jl_bottom_type) {
+        if (nothrow && super == NULL) {
             if (cacheable)
                 JL_UNLOCK(&typecache_lock);
             JL_GC_POP();
-            return jl_bottom_type;
+            return NULL;
         }
         ndt->super = (jl_datatype_t *)super;
         jl_gc_wb(ndt, ndt->super);
@@ -2381,7 +2383,7 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
             if (nt >= 0)
                 return jl_tupletype_fill(nt, T, check, nothrow);
             if (nothrow)
-                return jl_bottom_type;
+                return NULL;
             jl_errorf("Vararg length is negative: %zd", nt);
         }
     }
@@ -2395,32 +2397,24 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         iparams = jl_svec_data(ip_heap);
     }
     int i, bound = 0;
-    size_t len = jl_is_va_tuple(tt) && nothrow && ntp > 0 ? ntp - 1 : ntp;
-    for (i = 0; i < len; i++) {
+    for (i = 0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
         jl_value_t *pi = inst_type_w_(elt, env, stack, check, nothrow);
+        if (pi == NULL) {
+            if (i == ntp-1 && jl_is_vararg(elt)) {
+                t = NULL;
+                break;
+            }
+            else {
+                pi = jl_bottom_type;
+            }
+        }
         iparams[i] = pi;
         if (ip_heap)
             jl_gc_wb(ip_heap, pi);
         bound |= (pi != elt);
     }
-    if (len == ntp - 1) {
-        //handle nothrow vararg instantiation.
-        jl_value_t *elt = jl_svecref(tp, len);
-        assert(nothrow && jl_is_vararg(elt));
-        JL_TRY {
-            jl_value_t *pi = inst_type_w_(elt, env, stack, check, 1);
-            iparams[len] = pi;
-            if (ip_heap)
-                jl_gc_wb(ip_heap, pi);
-            bound |= (pi != elt);
-        }
-        JL_CATCH {
-            t = jl_bottom_type;
-            bound = 0;
-        }
-    }
-    if (bound)
+    if (t != NULL && bound)
         t = inst_datatype_inner(tt, ip_heap, iparams, ntp, stack, env, check, nothrow);
     JL_GC_POP();
     return t;
@@ -2451,19 +2445,30 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         }
         JL_CATCH {
             if (!nothrow) jl_rethrow();
-            t = jl_bottom_type;
+            t = NULL;
         }
-        if (t != jl_bottom_type) {
+        if (t != NULL) {
             var = inst_type_w_(ua->var->ub, env, stack, check, nothrow);
-            if (lb != ua->var->lb || var != ua->var->ub) {
+            if (var == NULL) {
+                if (lb == jl_bottom_type)
+                    var = jl_bottom_type;
+                else
+                    t = NULL;
+            }
+            else if (lb != ua->var->lb || var != ua->var->ub) {
                 var = (jl_value_t*)jl_new_typevar(ua->var->name, lb, var);
             }
             else {
                 var = (jl_value_t*)ua->var;
             }
+        }
+        if (t != NULL) {
             jl_typeenv_t newenv = { ua->var, var, env };
             newbody = inst_type_w_(ua->body, &newenv, stack, check, nothrow);
-            if (newbody == (jl_value_t*)jl_emptytuple_type) {
+            if (newbody == NULL) {
+                t = NULL;
+            }
+            else if (newbody == (jl_value_t*)jl_emptytuple_type) {
                 // NTuple{0} => Tuple{} can make a typevar disappear
                 t = (jl_value_t*)jl_emptytuple_type;
             }
@@ -2485,13 +2490,20 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         JL_GC_PUSH2(&a, &b);
         b = inst_type_w_(u->b, env, stack, check, nothrow);
         if (a != u->a || b != u->b) {
-            if (check) {
-                jl_value_t *uargs[2] = {a, b};
-                t = jl_type_union(uargs, 2);
-            }
-            else {
+            if (!check) {
                 // fast path for `jl_rename_unionall`.
                 t = jl_new_struct(jl_uniontype_type, a, b);
+            }
+            else if (nothrow && a == NULL) {
+                t = b;
+            }
+            else if (nothrow && b == NULL) {
+                t = a;
+            }
+            else {
+                assert(a != NULL && b != NULL);
+                jl_value_t *uargs[2] = {a, b};
+                t = jl_type_union(uargs, 2);
             }
         }
         JL_GC_POP();
@@ -2504,12 +2516,14 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         JL_GC_PUSH2(&T, &N);
         if (v->T) {
             T = inst_type_w_(v->T, env, stack, check, nothrow);
+            if (T == NULL)
+                T = jl_bottom_type;
             if (v->N) // This branch should never throw.
                 N = inst_type_w_(v->N, env, stack, check, 0);
         }
         if (T != v->T || N != v->N) {
             // `Vararg` is special, we'd better handle inner error at Tuple level.
-            t = (jl_value_t*)jl_wrap_vararg(T, N, check);
+            t = (jl_value_t*)jl_wrap_vararg(T, N, check, nothrow);
         }
         JL_GC_POP();
         return t;
@@ -2536,13 +2550,12 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         }
         JL_CATCH {
             if (!nothrow) jl_rethrow();
-            t = jl_bottom_type;
-            bound = 0;
+            t = NULL;
         }
-        if (nothrow && t == jl_bottom_type) break;
+        if (t == NULL) break;
     }
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
-    if (bound)
+    if (t != NULL && bound)
         t = inst_datatype_inner(tt, NULL, iparams, ntp, stack, env, check, nothrow);
     JL_GC_POP();
     return t;
@@ -2590,8 +2603,10 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
     return (jl_datatype_t*)jl_instantiate_unionall(jl_type_type, t);
 }
 
-jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check)
+jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow)
 {
+    int valid = 1;
+    jl_vararg_t *vm = NULL;
     jl_task_t *ct = jl_current_task;
     JL_GC_PUSH1(&t);
     if (check) {
@@ -2602,30 +2617,44 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check)
                 // values and not the bounds of variables.
                 /*
                 jl_tvar_t *N = (jl_tvar_t*)n;
-                if (!(N->lb == jl_bottom_type && N->ub == (jl_value_t*)jl_any_type))
-                    jl_error("TypeVar in Vararg length must have bounds Union{} and Any");
+                if (valid && !(N->lb == jl_bottom_type && N->ub == (jl_value_t*)jl_any_type)) {
+                    if (!nothrow)
+                        jl_error("TypeVar in Vararg length must have bounds Union{} and Any");
+                    invalid = 1;
+                }
                 */
             }
-            else if (!jl_is_long(n)) {
-                jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, n);
+            else if (valid && !jl_is_long(n)) {
+                if (!nothrow)
+                    jl_type_error_rt("Vararg", "count", (jl_value_t*)jl_long_type, n);
+                valid = 0;
             }
-            else if (jl_unbox_long(n) < 0) {
-                jl_errorf("Vararg length is negative: %zd", jl_unbox_long(n));
+            else if (valid && jl_unbox_long(n) < 0) {
+                if (!nothrow)
+                    jl_errorf("Vararg length is negative: %zd", jl_unbox_long(n));
+                valid = 0;
             }
         }
         if (t) {
-            if (!jl_valid_type_param(t))
-                jl_type_error_rt("Vararg", "type", (jl_value_t*)jl_type_type, t);
-            t = normalize_unionalls(t);
-            jl_value_t *tw = extract_wrapper(t);
-            if (tw && t != tw && jl_types_equal(t, tw))
-                t = tw;
+            if (valid && !jl_valid_type_param(t)) {
+                if (!nothrow)
+                    jl_type_error_rt("Vararg", "type", (jl_value_t*)jl_type_type, t);
+                valid = 0;
+            }
+            if (valid) {
+                t = normalize_unionalls(t);
+                jl_value_t *tw = extract_wrapper(t);
+                if (tw && t != tw && jl_types_equal(t, tw))
+                    t = tw;
+            }
         }
     }
-    jl_vararg_t *vm = (jl_vararg_t *)jl_gc_alloc(ct->ptls, sizeof(jl_vararg_t), jl_vararg_type);
-    jl_set_typetagof(vm, jl_vararg_tag, 0);
-    vm->T = t;
-    vm->N = n;
+    if (valid) {
+        vm = (jl_vararg_t *)jl_gc_alloc(ct->ptls, sizeof(jl_vararg_t), jl_vararg_type);
+        jl_set_typetagof(vm, jl_vararg_tag, 0);
+        vm->T = t;
+        vm->N = n;
+    }
     JL_GC_POP();
     return vm;
 }
@@ -2910,7 +2939,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_vararg_type->name->mayinlinealloc = 0;
     jl_vararg_type->ismutationfree = 1;
 
-    jl_svec_t *anytuple_params = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL, 0));
+    jl_svec_t *anytuple_params = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL, 0, 0));
     jl_anytuple_type = jl_new_datatype(jl_symbol("Tuple"), core, jl_any_type, anytuple_params,
                                        jl_emptysvec, anytuple_params, jl_emptysvec, 0, 0, 0);
     jl_tuple_typename = jl_anytuple_type->name;
@@ -3136,7 +3165,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_perm_symsvec(2, "ref", "size"),
                         jl_svec(2,
                             jl_apply_type3((jl_value_t*)jl_genericmemoryref_type, (jl_value_t*)jl_not_atomic_sym, jl_svecref(tv, 0), cpumem),
-                            jl_apply_type1((jl_value_t*)jl_tuple_type, (jl_value_t*)jl_wrap_vararg((jl_value_t*)jl_long_type, jl_svecref(tv, 1), 0))),
+                            jl_apply_type1((jl_value_t*)jl_tuple_type, (jl_value_t*)jl_wrap_vararg((jl_value_t*)jl_long_type, jl_svecref(tv, 1), 0, 0))),
                             jl_emptysvec, 0, 1, 2)->name;
     jl_array_type = (jl_unionall_t*)jl_array_typename->wrapper;
 
