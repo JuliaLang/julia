@@ -71,7 +71,7 @@ function _tupleview_setindex_to_tuple(
         let lenm1 = _tupleview_length_representation_decremented(length),
             b = nfields(length) == target_length
             e = b ? new_value : _tupleview_single_from(o, parent, length)
-            rest = _tupleview_setindex_to_tuple(o, parent, lenm1, new_value, target_length)
+            rest = _tupleview_setindex_to_tuple(o, parent, lenm1, new_value, target_length)::Tuple
             _tupleview_tuple_concatenation_helper(o, e, rest)
         end
     end
