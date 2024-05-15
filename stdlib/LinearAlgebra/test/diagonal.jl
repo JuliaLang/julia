@@ -1298,4 +1298,11 @@ end
     @test yadj == x'
 end
 
+@testset "Matrix conversion for non-numeric" begin
+    D = Diagonal(fill(Diagonal([1,3]), 2))
+    M = Matrix{eltype(D)}(D)
+    @test M isa Matrix{eltype(D)}
+    @test M == D
+end
+
 end # module TestDiagonal
