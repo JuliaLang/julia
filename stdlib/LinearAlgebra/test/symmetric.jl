@@ -580,6 +580,15 @@ end
     @test kron(A, B) ≈ kron(Symmetric(A), Symmetric(B))
 end
 
+@testset "kron with symmetric/hermitian matrices of matrices" begin
+    M = fill(ones(2,2), 2, 2)
+    for W in (Symmetric, Hermitian)
+        for (t1, t2) in ((W(M, :U), W(M, :U)), (W(M, :U), W(M, :L)), (W(M, :L), W(M, :L)))
+            @test kron(t1, t2) ≈ kron(Matrix(t1), Matrix(t2))
+        end
+    end
+end
+
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
 @testset "Eigenvalues in interval for $(typeof(Mi7647))" for Mi7647 in
         (Symmetric(diagm(0 => 1.0:3.0)),
