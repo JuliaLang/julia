@@ -693,8 +693,7 @@ empty(@nospecialize x::Tuple) = ()
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)
 
-circshift(::Tuple{}, @nospecialize _::Integer) = ()
-circshift((@nospecialize t::Tuple{Any}), @nospecialize _::Integer) = t
+circshift((@nospecialize t::Union{Tuple{},Tuple{Any}}), @nospecialize _::Integer) = t
 function circshift(t::Tuple{Any,Any}, shift::Integer)
     if iseven(shift)
         t
