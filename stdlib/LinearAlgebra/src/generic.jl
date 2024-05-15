@@ -2012,6 +2012,7 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     m,n = size(A)
     m1,n1 = size(B)
     (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+    A = Base.unalias(B, A)
     if uplo == 'U'
         for j=1:n
             for i=1:min(j,m)

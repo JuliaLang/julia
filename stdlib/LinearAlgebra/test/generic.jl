@@ -654,6 +654,14 @@ end
         C = uplo == 'L' ? tril(A) : triu(A)
         @test B ≈ C
     end
+    @testset "aliasing" begin
+        M = Matrix(reshape(1:36, 6, 6))
+        A = view(M, 1:5, 1:5)
+        A2 = Matrix(A)
+        B = view(M, 2:6, 2:6)
+        copytrito!(B, A, 'U')
+        @test UpperTriangular(B) == UpperTriangular(A2)
+    end
 end
 
 @testset "immutable arrays" begin
