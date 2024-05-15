@@ -459,7 +459,7 @@ end
     # More comprehensive testing is present in test/floatfuncs.jl
 end
 
-@test "floor(<:AbstractFloat, large_number) (#52355)" begin
+@testset "floor(<:AbstractFloat, large_number) (#52355)" begin
     @test floor(Float32, 0xffff_ffff) == prevfloat(2f0^32) <= 0xffff_ffff
     @test trunc(Float16, typemax(UInt128)) == floatmax(Float16)
     @test round(Float16, typemax(UInt128)) == Inf16
