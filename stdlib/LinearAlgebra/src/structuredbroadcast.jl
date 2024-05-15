@@ -154,7 +154,7 @@ fzero(S::StructuredMatrix) = Some(zero(eltype(S)))
 fzero(x) = nothing
 function fzero(bc::Broadcast.Broadcasted)
     args = map(fzero, bc.args)
-    return any(isnothing, args) ? nothing : Some(bc.f(something.(args)...))
+    return any(isnothing, args) ? nothing : Some(bc.f(map(something, args)...))
 end
 
 function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
