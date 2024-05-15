@@ -808,7 +808,7 @@ julia> opnorm(A, 1)
 5.0
 ```
 """
-function opnorm(A::AbstractMatrix, p::Real=2)
+Base.@constprop :aggressive function opnorm(A::AbstractMatrix, p::Real=2)
     if p == 2
         return opnorm2(A)
     elseif p == 1
