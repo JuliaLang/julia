@@ -147,10 +147,24 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 
 llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
-    if (jit_targets.empty())
-        jl_error("JIT targets not initialized");
+
+    auto &cmdline = get_cmdline_targets();
+    check_cmdline(cmdline, true);
+    llvm::SmallVector<TargetData<feature_sz>, 0> image_targets;
+    for (auto &arg: cmdline) {
+        auto data = arg_target_data(arg, image_targets.empty());
+        image_targets.push_back(std::move(data));
+    }
+    auto ntargets = image_targets.size();
+    // Now decide the clone condition.
+    for (size_t i = 1; i < ntargets; i++) {
+        auto &t = image_targets[i];
+        t.en.flags |= JL_TARGET_CLONE_ALL;
+    }
+    if (image_targets.empty())
+        jl_error("No image targets found");
     llvm::SmallVector<jl_target_spec_t, 0> res;
-    for (auto &target: jit_targets) {
+    for (auto &target: image_targets) {
         jl_target_spec_t ele;
         std::tie(ele.cpu_name, ele.cpu_features) = get_llvm_target_str(target);
         ele.data = serialize_target_data(target.name, target.en.features,
