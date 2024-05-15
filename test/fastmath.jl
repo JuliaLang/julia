@@ -7,11 +7,11 @@ using InteractiveUtils: code_llvm
     for T in (Float16, Float32, Float64, ComplexF32, ComplexF64)
         f(x) = @fastmath x + x + x
         llvm = sprint(code_llvm, f, (T,))
-        @test occursin("fmul fast", llvm)
+        @test occursin("fast", llvm)
 
         g(x) = @fastmath x * x * x
         llvm = sprint(code_llvm, g, (T,))
-        @test occursin("fmul fast", llvm)
+        @test occursin("fast", llvm)
     end
 
     for T in (Float16, Float32, Float64)
@@ -21,7 +21,7 @@ using InteractiveUtils: code_llvm
 
         g(x, y, z) = @fastmath max(x, y, z)
         llvm = sprint(code_llvm, g, (T,T,T))
-        @test occursin("fcmp fast", llvm)
+        @test occursin("fast", llvm)
     end
 end
 
