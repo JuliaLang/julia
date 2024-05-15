@@ -231,6 +231,7 @@ LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
 $(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
+$(eval $(call LLVM_PATCH,llvm-code-model))
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib

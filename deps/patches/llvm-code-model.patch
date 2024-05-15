@@ -1,0 +1,18 @@
+
+diff --git a/lib/Target/X86/X86ISelLowering.cpp b/lib/Target/X86/X86ISelLowering.cpp
+index a53192bce8fd..4d367514b603 100644
+--- a/lib/Target/X86/X86ISelLowering.cpp
++++ b/lib/Target/X86/X86ISelLowering.cpp
+@@ -20185,8 +20185,11 @@ unsigned X86TargetLowering::getGlobalWrapperKind(
+   CodeModel::Model M = getTargetMachine().getCodeModel();
+   if (Subtarget.isPICStyleRIPRel() &&
+       (M == CodeModel::Small || M == CodeModel::Kernel))
++    return X86ISD::WrapperRIP;  // In the medium model, functions can always be referenced RIP-relatively,
++  // since they must be within 2GiB. This is also possible in non-PIC mode, and
++  // shorter than the 64-bit absolute immediate that would otherwise be emitted.
++  if (M == CodeModel::Medium && isa_and_nonnull<Function>(GV))
+     return X86ISD::WrapperRIP;
+-
+   // GOTPCREL references must always use RIP.
+   if (OpFlags == X86II::MO_GOTPCREL || OpFlags == X86II::MO_GOTPCREL_NORELAX)
+     return X86ISD::WrapperRIP;
