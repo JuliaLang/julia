@@ -144,7 +144,7 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
                 jl_get_cpu_features_llvm(), {{}, 0}, {{}, 0}, 0});
     return res;
 }
-
+#ifndef __clang_gcanalyzer__
 llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
 
@@ -175,6 +175,7 @@ llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
     }
     return res;
 }
+#endif
 
 JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 {

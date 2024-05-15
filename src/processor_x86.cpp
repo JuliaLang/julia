@@ -1105,6 +1105,7 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     return res;
 }
 //This function parses the -C command line to figure out which targets to multiversion to.
+#ifndef __clang_gcanalyzer__
 llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
     auto &cmdline = get_cmdline_targets();
@@ -1198,6 +1199,7 @@ llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
     }
     return res;
 }
+#endif
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 {
