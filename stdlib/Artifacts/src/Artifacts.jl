@@ -68,7 +68,7 @@ function parse_mapping(mapping::String, name::String, override_file::String)
     if !isabspath(mapping) && !isempty(mapping)
         mapping = tryparse(Base.SHA1, mapping)
         if mapping === nothing
-            @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
+            error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
         end
     end
     return mapping
@@ -125,7 +125,7 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
             # First, parse the mapping. Is it an absolute path, a valid SHA1-hash, or neither?
             mapping = parse_mapping(mapping, k, override_file)
             if mapping === nothing
-                @error("Invalid override in '$(override_file)': failed to parse entry `$(k)`")
+                error("Invalid override in '$(override_file)': failed to parse entry `$(k)`")
                 continue
             end
 
@@ -134,7 +134,7 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
                 # if this mapping is a direct mapping (e.g. a String), store it as a hash override
                 hash = tryparse(Base.SHA1, k)
                 if hash === nothing
-                    @error("Invalid override in '$(override_file)': Invalid SHA1 hash '$(k)'")
+                    error("Invalid override in '$(override_file)': Invalid SHA1 hash '$(k)'")
                     continue
                 end
 
@@ -148,7 +148,7 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
                 # Convert `k` into a uuid
                 uuid = tryparse(Base.UUID, k)
                 if uuid === nothing
-                    @error("Invalid override in '$(override_file)': Invalid UUID '$(k)'")
+                    error("Invalid override in '$(override_file)': Invalid UUID '$(k)'")
                     continue
                 end
 
@@ -168,18 +168,16 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
                     end
                 end
             else
-                @error("Invalid override in '$(override_file)': unknown mapping type for '$(k)': $(typeof(mapping))")
+                error("Invalid override in '$(override_file)': unknown mapping type for '$(k)': $(typeof(mapping))")
             end
         end
     end
 
-    overrides = Dict{Symbol,Any}(
-        # Overrides by UUID
-        :UUID => overrides_uuid,
-
-        # Overrides by hash
-        :hash => overrides_hash
-    )
+    overrides = Dict{Symbol,Any}()
+    # Overrides by UUID
+    overrides[:UUID] = overrides_uuid
+    # Overrides by hash
+    overrides[:hash] = overrides_hash
 
     ARTIFACT_OVERRIDES[] = overrides
     return overrides
@@ -273,12 +271,12 @@ returns the `Platform` object that this entry specifies.  Returns `nothing` on e
 function unpack_platform(entry::Dict{String,Any}, name::String,
                          artifacts_toml::String)::Union{Nothing,Platform}
     if !haskey(entry, "os")
-        @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entry '$name' missing 'os' key")
+        error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entry '$name' missing 'os' key")
         return nothing
     end
 
     if !haskey(entry, "arch")
-        @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entry '$name' missing 'arch' key")
+        error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entry '$name' missing 'arch' key")
         return nothing
     end
 
@@ -349,7 +347,7 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
 
             # If we've got a platform-specific friend, override all hashes:
             artifact_dict_name = artifact_dict[name]
-            if isa(artifact_dict_name, Array)
+            if isa(artifact_dict_name, Vector{Any})
                 for entry in artifact_dict_name
                     entry = entry::Dict{String,Any}
                     hash = SHA1(entry["git-tree-sha1"]::String)
@@ -358,7 +356,7 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
             elseif isa(artifact_dict_name, Dict{String, Any})
                 hash = SHA1(artifact_dict_name["git-tree-sha1"]::String)
                 overrides_hash[hash] = overrides_uuid[pkg_uuid][name]
-            end
+            else @assert false end
         end
     end
     return artifact_dict
@@ -399,16 +397,18 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
     meta = artifact_dict[name]
 
     # If it's an array, find the entry that best matches our current platform
-    if isa(meta, Vector)
-        dl_dict = Dict{AbstractPlatform,Dict{String,Any}}()
+    if isa(meta, Vector{Any})
+        dl_dict = Dict{Platform,Dict{String,Any}}()
         for x in meta
             x = x::Dict{String, Any}
-            dl_dict[unpack_platform(x, name, artifacts_toml)] = x
+            p = unpack_platform(x, name, artifacts_toml)
+            p === nothing && continue
+            dl_dict[p] = x
         end
         meta = select_platform(dl_dict, platform)
     # If it's NOT a dict, complain
-    elseif !isa(meta, Dict)
-        @error("Invalid artifacts file at $(artifacts_toml): artifact '$name' malformed, must be array or dict!")
+    elseif !isa(meta, Dict{String, Any})
+        error("Invalid artifacts file at $(artifacts_toml): artifact '$name' malformed, must be array or dict!")
         return nothing
     end
 
@@ -416,7 +416,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
     if meta !== nothing
         meta = meta::Dict{String, Any}
         if !haskey(meta, "git-tree-sha1")
-            @error("Invalid artifacts file at $(artifacts_toml): artifact '$name' contains no `git-tree-sha1`!")
+            error("Invalid artifacts file at $(artifacts_toml): artifact '$name' contains no `git-tree-sha1`!")
             return nothing
         end
     end
@@ -542,7 +542,7 @@ function jointail(dir, tail)
     end
 end
 
-function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, @nospecialize(lazyartifacts))
+function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, _::Val{lazyartifacts}) where lazyartifacts
     moduleroot = Base.moduleroot(__module__)
     if haskey(Base.module_keys, moduleroot)
         # Process overrides for this UUID, if we know what it is
@@ -561,7 +561,8 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     # If not, try determining what went wrong:
     meta = artifact_meta(name, artifact_dict, artifacts_toml; platform)
     if meta !== nothing && get(meta, "lazy", false)
-        if lazyartifacts isa Module && isdefined(lazyartifacts, :ensure_artifact_installed)
+        if lazyartifacts isa Module && nameof(lazyartifacts) in (:Pkg, :LazyArtifacts)
+            @assert isdefined(lazyartifacts, :ensure_artifact_installed)
             if nameof(lazyartifacts) in (:Pkg, :Artifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
@@ -573,7 +574,8 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     path_str = if length(dirs) == 1
         "path \"$(first(dirs))\". "
     else
-        string("paths:\n", join("  " .* contractuser.(dirs), '\n'), '\n')
+        dirs = [join("  ", contractuser(dir)) for dir in dirs]
+        string("paths:\n", join(dirs, '\n'), '\n')
     end
 
     suggestion_str = if query_override(hash) !== nothing
@@ -704,7 +706,7 @@ macro artifact_str(name, platform=nothing)
             break
         end
     end
-
+    @assert !isnothing(lazyartifacts)
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
     # and parse the `Artifacts.toml` file now, saving the work from runtime.
     if isa(name, AbstractString) && platform === nothing
@@ -712,7 +714,7 @@ macro artifact_str(name, platform=nothing)
         platform = HostPlatform()
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
         return quote
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))::String
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), Val($lazyartifacts))::String
         end
     else
         if platform === nothing
@@ -721,7 +723,7 @@ macro artifact_str(name, platform=nothing)
         return quote
             local platform = $(esc(platform))
             local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))::String
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, Val($lazyartifacts))::String
         end
     end
 end
