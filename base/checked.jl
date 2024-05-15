@@ -370,6 +370,10 @@ checked_pow(x::Integer, y::Integer) = checked_power_by_squaring(x, y)
 checked_power_by_squaring(x_, p::Integer) = Base.power_by_squaring(x_, p; mul = checked_mul)
 # For Booleans, the default implementation covers all cases.
 checked_power_by_squaring(x::Bool, p::Integer) = Base.power_by_squaring(x, p)
+# BigInt can never overflow, so we don't need to check anything, and can fall back to the
+# default implementation of `^` (which calls into the C library).
+checked_power_by_squaring(x::BigInt, p::Integer) = x^p
+checked_power_by_squaring(x::Integer, p::BigInt) = x^p
 
 """
     Base.checked_length(r)
