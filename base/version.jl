@@ -179,7 +179,7 @@ ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
 ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
 ident_cmp(a::String,  b::String ) = cmp(a, b)
 
-function ident_cmp(A::VerTuple, B::VerTuple)
+function ident_cmp(@nospecialize(A::VerTuple), @nospecialize(B::VerTuple))
     for (a, b) in Iterators.Zip{Tuple{VerTuple,VerTuple}}((A, B))
         c = ident_cmp(a, b)
         (c != 0) && return c

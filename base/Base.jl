@@ -463,9 +463,6 @@ using .Order
 include("sort.jl")
 using .Sort
 
-# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
-include("binaryplatforms.jl")
-
 # Fast math
 include("fastmath.jl")
 using .FastMath
@@ -498,12 +495,15 @@ using .MathConstants: ℯ, π, pi
 # metaprogramming
 include("meta.jl")
 
+# experimental API's
+include("experimental.jl")
+
+# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+include("binaryplatforms.jl")
+
 # Stack frames and traces
 include("stacktraces.jl")
 using .StackTraces
-
-# experimental API's
-include("experimental.jl")
 
 # utilities
 include("deepcopy.jl")
