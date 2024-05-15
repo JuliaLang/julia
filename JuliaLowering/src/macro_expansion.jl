@@ -240,6 +240,12 @@ function expand_macro(ctx, ex)
     end
 
     if expanded isa SyntaxTree
+        if syntax_graph(expanded) !== syntax_graph(ctx)
+            # If the macro has produced syntax outside the macro context, copy it over.
+            # TODO: Do we expect this always to happen?  What is the API for access
+            # to the macro expansion context?
+            expanded = copy_ast(ctx, expanded)
+        end
         new_layer = new_scope_layer(ctx.scope_layers, parentmodule(macfunc))
         ctx2 = MacroExpansionContext(ctx.graph, ctx.next_var_id, ctx.scope_layers, new_layer)
         expand_forms_1(ctx2, expanded)

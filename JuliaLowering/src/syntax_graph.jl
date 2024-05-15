@@ -173,6 +173,10 @@ function Base.getproperty(tree::SyntaxTree, name::Symbol)
     end
 end
 
+function Base.setproperty!(tree::SyntaxTree, name::Symbol, val)
+    return setattr!(tree.graph, tree.id; name=>val)
+end
+
 function Base.propertynames(tree::SyntaxTree)
     attrnames(tree)
 end
@@ -448,6 +452,10 @@ Base.size(v::SyntaxList) = size(v.ids)
 Base.IndexStyle(::Type{<:SyntaxList}) = IndexLinear()
 
 Base.getindex(v::SyntaxList, i::Int) = SyntaxTree(v.graph, v.ids[i])
+
+function Base.getindex(v::SyntaxList, r::UnitRange)
+    SyntaxList(v.graph, view(v.ids, r))
+end
 
 function Base.setindex!(v::SyntaxList, tree::SyntaxTree, i::Int)
     v.graph === tree.graph || error("Mismatching syntax graphs")

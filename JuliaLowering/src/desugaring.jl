@@ -155,7 +155,7 @@ function analyze_function_arg(full_ex)
             end
             break
         elseif k == K"..."
-            @chk full_ex !is_slurp
+            @chk !is_slurp (full_ex,"nested `...` in function argument")
             @chk numchildren(ex) == 1
             is_slurp = true
             ex = ex[1]
@@ -296,6 +296,43 @@ function expand_function_def(ctx, ex)
     else
         throw(LoweringError(name, "Bad function definition"))
     end
+end
+
+function _make_macro_name(ctx, name)
+    @chk kind(name) == K"Identifier" (name, "invalid macro name")
+    ex = mapleaf(ctx, name, K"Identifier")
+    ex.name_val = "@$(name.name_val)"
+    ex
+end
+
+# flisp: expand-macro-def
+function expand_macro_def(ctx, ex)
+    @chk numchildren(ex) >= 1 (ex,"invalid macro definition")
+    if numchildren(ex) == 1
+        name = ex[1]
+        # macro with zero methods
+        # `macro m end`
+        return @ast ctx ex [K"function" _make_macro_name(ctx, name)]
+    end
+    # TODO: Making this manual pattern matching robust is such a pain!!!
+    sig = ex[1]
+    @chk (kind(sig) == K"call" && numchildren(sig) >= 1) (sig, "invalid macro signature")
+    name = sig[1]
+    args = remove_empty_parameters(children(sig))
+    @chk kind(args[end]) != K"parameters" (args[end], "macros cannot accept keyword arguments")
+    ret = @ast ctx ex [K"function"
+        [K"call"(sig)
+            _make_macro_name(ctx, name)
+            [K"::"
+                "__context__"::K"Identifier"(scope_layer=name.scope_layer)
+                MacroContext::K"Value"
+            ]
+            # flisp: We don't mark these @nospecialize because all arguments to
+            # new macros will be of type SyntaxTree
+            args[2:end]...
+        ]
+        ex[2]
+    ]
 end
 
 function _append_importpath(ctx, path_spec, path)
@@ -460,13 +497,17 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree)
     elseif k == K"."
         @chk numchildren(ex) == 2
         @chk kind(ex[2]) == K"Identifier"
-        @ast ctx ex [K"call"
-            "getproperty"::K"top" 
-            ex[1]
-            ex[2]=>K"Symbol"
-        ]
+        expand_forms_2(ctx,
+            @ast ctx ex [K"call"
+                "getproperty"::K"top" 
+                ex[1]
+                ex[2]=>K"Symbol"
+            ]
+        )
     elseif k == K"function"
         expand_forms_2(ctx, expand_function_def(ctx, ex))
+    elseif k == K"macro"
+        expand_forms_2(ctx, expand_macro_def(ctx, ex))
     elseif k == K"let"
         expand_forms_2(ctx, expand_let(ctx, ex))
     elseif k == K"local" || k == K"global"
@@ -504,6 +545,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree)
         expand_import(ctx, ex)
     elseif k == K"export" || k == K"public"
         TODO(ex)
+    elseif k == K"ref"
+        if numchildren(ex) > 2
+            TODO(ex, "ref expansion")
+        end
+        expand_forms_2(ctx, @ast ctx ex [K"call" "getindex"::K"top" ex[1] ex[2]])
     elseif k == K"toplevel"
         # The toplevel form can't be lowered here - it needs to just be quoted
         # and passed through to a call to eval.
@@ -514,6 +560,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree)
             ctx.mod       ::K"Value"
             [K"inert" ex]
         ]
+    elseif k == K"inert"
+        ex
     elseif !haschildren(ex)
         ex
     else

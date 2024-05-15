@@ -145,67 +145,58 @@ end
 @test sourcetext(ex[1][2]) == "x+1"
 @test sourcetext(ex[1][3]) == "g(z)"
 
+# Test expression flags are preserved during interpolation
+@test JuliaSyntax.is_infix_op_call(JuliaLowering.include_string(test_mod, """
+let
+    x = 1
+    :(\$x + \$x)
+end
+"""))
+
 #-------------------------------------------------------------------------------
 # Macro expansion
 
-Base.eval(test_mod, :(
+JuliaLowering.include_string(test_mod, """
 module M
-    using JuliaLowering: @ast, @chk
+    using JuliaLowering: JuliaLowering, @ast, @chk
     using JuliaSyntax
 
-    const someglobal = "global in module M"
+    # Introspection
+    macro __MODULE__()
+        __context__.mod
+    end
+
+    macro __FILE__()
+        JuliaLowering.filename(__context__.macroname)
+    end
+
+    macro __LINE__()
+        JuliaLowering.source_location(__context__.macroname)[1]
+    end
+
+    someglobal = "global in module M"
 
     # Macro with local variables
-    function var"@foo"(mctx, ex)
-        # TODO
-        # :(let x = "local in @foo expansion"
-        #     (x, someglobal, $ex)
-        # end)
-        @ast mctx (@HERE) [K"let"
-            [K"block"(@HERE)
-                [K"="(@HERE)
-                    "x"::K"Identifier"(@HERE)
-                    "`x` from @foo"::K"String"(@HERE)
-                ]
-            ]
-            [K"block"(@HERE)
-                [K"tuple"(@HERE)
-                    "x"::K"Identifier"(@HERE)
-                    "someglobal"::K"Identifier"(@HERE)
-                    ex
-                ]
-            ]
-        ]
+    macro foo(ex)
+        :(let x = "`x` from @foo"
+            (x, someglobal, \$ex)
+        end)
     end
 
-    # Recursive macro call
-    function var"@recursive"(mctx, N)
-        @chk kind(N) == K"Integer"
-        Nval = N.value::Int
-        if Nval < 1
-            return N
-        end
-        # TODO
-        # quote
-        #     x = $N
-        #     (@recursive $(Nval-1), x)
-        # end
-        @ast mctx (@HERE) [K"block"
-            [K"="(@HERE)
-                "x"::K"Identifier"(@HERE)
-                N
-            ]
-            [K"tuple"(@HERE)
-                "x"::K"Identifier"(@HERE)
-                [K"macrocall"(@HERE)
-                    "@recursive"::K"Identifier"
-                    (Nval-1)::K"Integer"
-                ]
-            ]
-        ]
-    end
+    # # Recursive macro call
+    # # TODO: Need branching!
+    # macro recursive(N)
+    #     Nval = N.value #::Int
+    #     if Nval < 1
+    #         return N
+    #     end
+    #     quote
+    #         x = \$N
+    #         (@recursive \$(Nval-1), x)
+    #     end
+    # end
 end
-))
+""")
 
 @test JuliaLowering.include_string(test_mod, """
 let 
@@ -214,9 +205,47 @@ let
 end
 """) == ("`x` from @foo", "global in module M", "`x` from outer scope")
 
+@test JuliaLowering.include_string(test_mod, """
+#line1
+(M.@__MODULE__(), M.@__FILE__(), M.@__LINE__())
+""", "foo.jl") == (test_mod, "foo.jl", 2)
+
+Base.eval(test_mod.M, :(
+# Recursive macro call
+function var"@recursive"(mctx, N)
+    @chk kind(N) == K"Integer"
+    Nval = N.value::Int
+    if Nval < 1
+        return N
+    end
+    @ast mctx (@HERE) [K"block"
+        [K"="(@HERE)
+            "x"::K"Identifier"(@HERE)
+            N
+        ]
+        [K"tuple"(@HERE)
+            "x"::K"Identifier"(@HERE)
+            [K"macrocall"(@HERE)
+                "@recursive"::K"Identifier"
+                (Nval-1)::K"Integer"
+            ]
+        ]
+    ]
+end
+))
 
 @test JuliaLowering.include_string(test_mod, """
 M.@recursive 3
 """) == (3, (2, (1, 0)))
+
+@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+macro mmm(a; b=2)
+end
+""")
+
+@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+macro A.b(ex)
+end
+""")
 
 end

@@ -82,42 +82,38 @@ end
 # end
 # """
 
+JuliaLowering.include_string(Main, """
 module M
-    using JuliaLowering: @ast, @chk
+    using JuliaLowering: JuliaLowering, @ast, @chk
     using JuliaSyntax
 
-    const someglobal = "global in M"
-
-    # TODO: macrocall in macro call
-    # module A
-    #     function var"@bar"(mctx, ex)
-    #     end
-    # end
-
-    # Macro with local variables
-    function var"@foo"(mctx, ex)
-        # :(let x = "local in @asdf expansion"
-        #     (x, someglobal, $ex)
-        # end)
-        @ast mctx (@HERE) [K"let"
-            [K"block"(@HERE)
-                [K"="(@HERE)
-                    "x"::K"Identifier"(@HERE)
-                    "local in @asdf expansion"::K"String"(@HERE)
-                ]
-            ]
-            [K"block"(@HERE)
-                [K"tuple"(@HERE)
-                    "x"::K"Identifier"(@HERE)
-                    "someglobal"::K"Identifier"(@HERE)
-                    ex
-                ]
-            ]
-        ]
+    # Introspection
+    macro __MODULE__()
+        __context__.mod
     end
 
+    macro __FILE__()
+        JuliaLowering.filename(__context__.macroname)
+    end
+
+    macro __LINE__()
+        JuliaLowering.source_location(__context__.macroname)[1]
+    end
+
+    someglobal = "global in module M"
+
+    # Macro with local variables
+    macro foo(ex)
+        :(let x = "`x` from @foo"
+            (x, someglobal, \$ex)
+        end)
+    end
+end
+""")
+
+Base.eval(M, quote
     # Recursive macro call
-    function var"@recursive"(mctx, N)
+    function var"@recursive"(__context__, N)
         @chk kind(N) == K"Integer"
         Nval = N.value::Int
         if Nval < 1
@@ -127,7 +123,7 @@ module M
         #     x = $N
         #     (@recursive $(Nval-1), x)
         # end
-        @ast mctx (@HERE) [K"block"
+        @ast __context__ (@HERE) [K"block"
             [K"="(@HERE)
                 "x"::K"Identifier"(@HERE)
                 N
@@ -141,6 +137,15 @@ module M
             ]
         ]
     end
+end)
+
+function wrapscope(ex, scope_type)
+    makenode(ex, ex, K"scope_block", ex; scope_type=scope_type)
+end
+
+function softscope_test(ex)
+    g = JuliaLowering.ensure_attributes(ex.graph, scope_type=Symbol)
+    wrapscope(wrapscope(JuliaLowering.reparent(g, ex), :neutral), :soft)
 end
 
 # src = """
@@ -154,27 +159,26 @@ src = """
 M.@recursive 3
 """
 
-src = """
-begin
-    x = 2
-end
-"""
+# src = """
+# macro mmm(a; b=2)
+# end
+# macro A.b(ex)
+# end
+# """
 
-function wrapscope(ex, scope_type)
-    makenode(ex, ex, K"scope_block", ex; scope_type=scope_type)
-end
+# TODO:
+# "hygiene bending" / (being unhygenic, or bending hygiene to the context of a
+# macro argument on purpose)
+# * bend to macro name to get to parent layer?
+# * already needed in `#self#` argument
 
-function softscope_test(ex)
-    g = JuliaLowering.ensure_attributes(ex.graph, scope_type=Symbol)
-    wrapscope(wrapscope(JuliaLowering.reparent(g, ex), :neutral), :soft)
-end
-
-ex = softscope_test(parsestmt(SyntaxTree, src, filename="foo.jl"))
+ex = parsestmt(SyntaxTree, src, filename="foo.jl")
+#ex = softscope_test(ex)
 @info "Input code" ex
 
 in_mod = Main
 ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
-# @info "Macro expanded" ex_macroexpand
+@info "Macro expanded" ex_macroexpand
 
 ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
 @info "Desugared" ex_desugar

@@ -199,7 +199,7 @@ end
 function InterpolationContext()
     graph = SyntaxGraph()
     ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-                       value=Any, name_val=String)
+                       value=Any, name_val=String, scope_layer=LayerId)
     InterpolationContext(freeze_attrs(graph))
 end
 
