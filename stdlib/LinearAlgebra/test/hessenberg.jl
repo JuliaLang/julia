@@ -261,7 +261,7 @@ end
 @testset "getindex with Integers" begin
     M = reshape(1:9, 3, 3)
     S = UpperHessenberg(M)
-    @test_throws "invalid index" S[true, true]
+    @test_throws "invalid index" S[3, true]
     @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
 end
 

@@ -1072,10 +1072,15 @@ end
 
 @testset "getindex with Integers" begin
     M = reshape(1:4,2,2)
-    for UT in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
-        T = UT(M)
-        @test_throws "invalid index" S[true, true]
-        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    for Ttype in (UpperTriangular, UnitUpperTriangular)
+        T = Ttype(M)
+        @test_throws "invalid index" T[2, true]
+        @test T[1,2] == T[Int8(1),UInt16(2)] == T[big(1), Int16(2)]
+    end
+    for Ttype in (LowerTriangular, UnitLowerTriangular)
+        T = Ttype(M)
+        @test_throws "invalid index" T[true, 2]
+        @test T[2,1] == T[Int8(2),UInt16(1)] == T[big(2), Int16(1)]
     end
 end
 
