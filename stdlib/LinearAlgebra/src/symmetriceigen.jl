@@ -1,8 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # preserve HermOrSym wrapper
-# Call `copytrito!` instead of `copy_similar` as we know that the the `uplo` is matched, and we don't need to compile
-# the mismatched-`uplo` branch in `copyto!`
+# Call `copytrito!` instead of `copy_similar` to only copy the matching triangular half
 eigencopy_oftype(A::Hermitian, S) = Hermitian(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
 eigencopy_oftype(A::Symmetric, S) = Symmetric(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
 
