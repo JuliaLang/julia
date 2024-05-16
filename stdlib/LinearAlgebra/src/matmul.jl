@@ -464,7 +464,7 @@ _fullstride2(A, f=identity) = f(stride(A, 2)) >= size(A, 1)
 # We specialize the function for certain StridedArray subtypes
 
 
-_fullstride2(A::StridedSubArrayStandard, ::typeof(abs)) = true
+_fullstride2(A::StridedArrayStdSubArray, ::typeof(abs)) = true
 _fullstride2(A::StridedArrayStdSubArrayIncr, ::typeof(identity)) = true
 
 Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar,

@@ -287,15 +287,16 @@ const NonConstRangeIndex = Union{IncreasingRangeIndex, StepRange{<:BitInteger, <
 DenseOrStridedReshapedReinterpreted{T,N} =
     Union{DenseArray{T,N}, Base.StridedReshapedArray{T,N}, Base.StridedReinterpretArray{T,N}}
 # Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
-StridedSubArrayStandard{T,N,A,
+StridedSubArrayStandard{T,N,A<:DenseOrStridedReshapedReinterpreted,
     I<:Tuple{Vararg{Union{NonConstRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
 StridedArrayStdSubArray{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayStandard{T,N}}
 # Similar to Base.StridedSubArray, except with a IncreasingRangeIndex instead of a RangeIndex
-StridedSubArrayIncr{T,N,A,
+StridedSubArrayIncr{T,N,A<:DenseOrStridedReshapedReinterpreted,
     I<:Tuple{Vararg{Union{IncreasingRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
 StridedArrayStdSubArrayIncr{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayIncr{T,N}}
 # These subarrays have a stride of 1 along the first dimension
-StridedSubArrayAUR{T,N,A,I<:Tuple{AbstractUnitRange{<:BitInteger}}} = Base.StridedSubArray{T,N,A,I}
+StridedSubArrayAUR{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{AbstractUnitRange{<:BitInteger}}} = Base.StridedSubArray{T,N,A,I}
 StridedArrayStride1{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayIncr{T,N}}
 # StridedMatrixStride1 may typically be forwarded to LAPACK methods
 StridedMatrixStride1{T} = StridedArrayStride1{T,2}
