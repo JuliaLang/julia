@@ -1480,7 +1480,7 @@ InitialOptimizations(next) = SubArrayOptimization(
 struct DefaultStable <: Algorithm end
 
 `DefaultStable` is an algorithm which indicates that a fast, genreal purpose sorting
-algorithm should be used, but does not specify exactly which algorith.
+algorithm should be used, but does not specify exactly which algorithm.
 
 Currently, when sorting short NTuples, this is an unrolled mergesort, and otherwise it is
 composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid of Radix, Insertion,
