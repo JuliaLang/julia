@@ -65,6 +65,11 @@ Return the file descriptor backing the stream, file, or socket.
     passing it to another system that will take ownership of it (e.g. a C
     library). Otherwise both the Julia object `x` and the other system may try
     to close the file descriptor, which will cause errors.
+
+!!! warning
+    The file descriptors for sockets are asynchronous (i.e. `O_NONBLOCK` on
+    POSIX and `OVERLAPPED` on Windows), they may behave differently than regular
+    file descriptors.
 """
 fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
