@@ -963,7 +963,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     if (R && ans && e->envidx < e->envsz) {
         jl_value_t *val;
         if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
-            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0); // special token result that represents N::Int in the envout
+            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
         else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
             val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
         else if (vb.lb == vb.ub)
@@ -2770,12 +2770,9 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
                 res = jl_bottom_type;
             }
             else if (obviously_egal(var->lb, ub)) {
-                JL_TRY {
-                    res = jl_substitute_var(body, var, ub);
-                }
-                JL_CATCH {
+                res = jl_substitute_var_nothrow(body, var, ub);
+                if (res == NULL)
                     res = jl_bottom_type;
-                }
             }
             else {
                 if (ub != var->ub) {
@@ -2964,12 +2961,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             }
             if (varval) {
                 if (ub_has_dep) { // inner substitution has been handled
-                    JL_TRY {
-                        btemp->ub = jl_substitute_var(btemp->ub, vb->var, varval);
-                    }
-                    JL_CATCH {
+                    btemp->ub = jl_substitute_var_nothrow(btemp->ub, vb->var, varval);
+                    if (btemp->ub == NULL)
                         res = jl_bottom_type;
-                    }
                 }
             }
             else if (btemp->ub == (jl_value_t*)vb->var) {
@@ -3002,18 +2996,17 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     // if `v` still occurs, re-wrap body in `UnionAll v` or eliminate the UnionAll
     if (jl_has_typevar(res, vb->var)) {
         if (varval) {
-            JL_TRY {
-                // you can construct `T{x} where x` even if T's parameter is actually
-                // limited. in that case we might get an invalid instantiation here.
-                res = jl_substitute_var(res, vb->var, varval);
-                // simplify chains of UnionAlls where bounds become equal
-                while (jl_is_unionall(res) && obviously_egal(((jl_unionall_t*)res)->var->lb,
-                                                             ((jl_unionall_t*)res)->var->ub))
-                    res = jl_instantiate_unionall((jl_unionall_t*)res, ((jl_unionall_t*)res)->var->lb);
+            // you can construct `T{x} where x` even if T's parameter is actually
+            // limited. in that case we might get an invalid instantiation here.
+            res = jl_substitute_var_nothrow(res, vb->var, varval);
+            // simplify chains of UnionAlls where bounds become equal
+            while (res != NULL && jl_is_unionall(res) && obviously_egal(((jl_unionall_t*)res)->var->lb,
+                                                         ((jl_unionall_t*)res)->var->ub)) {
+                jl_unionall_t * ures = (jl_unionall_t *)res;
+                res = jl_substitute_var_nothrow(ures->body, ures->var, ures->var->lb);
             }
-            JL_CATCH {
+            if (res == NULL)
                 res = jl_bottom_type;
-            }
         }
         else {
             if (newvar != vb->var)
@@ -3273,7 +3266,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
             ii = (jl_value_t*)vmy;
         else {
             JL_GC_PUSH1(&ii);
-            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL, 1);
+            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL, 1, 0);
             JL_GC_POP();
         }
         return ii;
@@ -3314,7 +3307,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
     else if (yp2 && obviously_egal(yp1, ii) && obviously_egal(yp2, i2))
         ii = (jl_value_t*)vmy;
     else
-        ii = (jl_value_t*)jl_wrap_vararg(ii, i2, 1);
+        ii = (jl_value_t*)jl_wrap_vararg(ii, i2, 1, 0);
     JL_GC_POP();
     return ii;
 }
@@ -4515,7 +4508,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         JL_GC_PUSH2(&newt, &n);
         newt = insert_nondiagonal(t, troot, widen2ub);
         if (t != newt)
-            type = (jl_value_t *)jl_wrap_vararg(newt, n, 0);
+            type = (jl_value_t *)jl_wrap_vararg(newt, n, 0, 0);
         JL_GC_POP();
     }
     else if (jl_is_datatype(type)) {
