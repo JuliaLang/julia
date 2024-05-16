@@ -16,17 +16,17 @@ introduce a "soft scope", which affects whether
 [shadowing](https://en.wikipedia.org/wiki/Variable_shadowing)
 a global variable by the same name is allowed or not.
 
-### [Scope constructs](@id man-scope-table)
+### [Scope Constructs](@id man-scope-table)
 
 The constructs introducing scope blocks are:
 
-| Construct | Scope type | Allowed within |
-|:----------|:-----------|:---------------|
-| [`module`](@ref), [`baremodule`](@ref) | global | global |
-| [`struct`](@ref) | local (soft) | global |
-| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
-| [`macro`](@ref) | local (hard) | global |
-| functions, [`do`](@ref) blocks, [`let`](@ref) blocks, comprehensions, generators | local (hard) | global, local |
+| Construct | Scope Introduced | Allowed in Local Scopes |
+|:----------|:-----------------|:------------------------|
+| [`module`](@ref), [`baremodule`](@ref) | global | no |
+| [`struct`](@ref) | local (soft) | no |
+| [`macro`](@ref) | local (hard) | no |
+| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | yes |
+| [`function`](@ref), [`do`](@ref), [`let`](@ref), [comprehensions](@ref man-comprehensions), [generators](@ref man-generators) | local (hard) | yes |
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
