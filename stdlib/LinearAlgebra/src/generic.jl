@@ -2028,3 +2028,7 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     end
     return B
 end
+# Forward contiguous strided matrices to LAPACK to avail the faster method
+function copytrito!(B::StridedMatrixStride1{T}, A::StridedMatrixStride1{T}, uplo::AbstractChar) where {T<:BlasFloat}
+    LAPACK.lacpy!(B, A, uplo)
+end
