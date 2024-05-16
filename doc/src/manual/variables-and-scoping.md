@@ -20,13 +20,13 @@ a global variable by the same name is allowed or not.
 
 The constructs introducing scope blocks are:
 
-| Construct | Scope Introduced | Allowed in Local Scopes |
-|:----------|:-----------------|:------------------------|
-| [`module`](@ref), [`baremodule`](@ref) | global | no |
-| [`struct`](@ref) | local (soft) | no |
-| [`macro`](@ref) | local (hard) | no |
-| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | yes |
-| [`function`](@ref), [`do`](@ref), [`let`](@ref), [comprehensions](@ref man-comprehensions), [generators](@ref man-generators) | local (hard) | yes |
+| Construct | Scope Type Introduced | Scope Types Able to Contain Construct |
+|:----------|:----------------------|:--------------------------------------|
+| [`module`](@ref), [`baremodule`](@ref) | global | global |
+| [`struct`](@ref) | local (soft) | global |
+| [`macro`](@ref) | local (hard) | global |
+| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
+| [`function`](@ref), [`do`](@ref), [`let`](@ref), [comprehensions](@ref man-comprehensions), [generators](@ref man-generators) | local (hard) | global, local |
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
