@@ -46,11 +46,16 @@
 #endif
 
 // Define the largest size (bytes) of a properly aligned object that the
-// processor family and compiler typically supports without a lock
-// (assumed to be at least a pointer size). Since C is bad at handling 16-byte
-// types, we currently use 8 here as the default.
+// processor family (MAX_ATOMIC_SIZE) and compiler (MAX_POINTERATOMIC_SIZE)
+// typically supports without a lock (assumed to be at least a pointer size)
+// with MAX_POINTERATOMIC_SIZE >= MAX_ATOMIC_SIZE.
+#ifdef _P64
+#define MAX_ATOMIC_SIZE 16
+#define MAX_POINTERATOMIC_SIZE 16
+#else
 #define MAX_ATOMIC_SIZE 8
 #define MAX_POINTERATOMIC_SIZE 8
+#endif
 
 #ifdef _P64
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -245,6 +250,19 @@ typedef struct _jl_line_info_node_t {
     int32_t inlined_at;
 } jl_line_info_node_t;
 
+struct jl_codeloc_t {
+    int32_t line;
+    int32_t to;
+    int32_t pc;
+};
+
+typedef struct _jl_debuginfo_t {
+    jl_value_t *def;
+    struct _jl_debuginfo_t *linetable; // or nothing
+    jl_svec_t *edges; // Memory{DebugInfo}
+    jl_value_t *codelocs; // String // Memory{UInt8} // compressed info
+} jl_debuginfo_t;
+
 // the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
 typedef union __jl_purity_overrides_t {
     struct {
@@ -266,13 +284,13 @@ typedef union __jl_purity_overrides_t {
 } _jl_purity_overrides_t;
 
 #define NUM_EFFECTS_OVERRIDES 9
-#define NUM_IR_FLAGS 12
+#define NUM_IR_FLAGS 13
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     // ssavalue-indexed arrays of properties:
     jl_array_t *code;  // Any array of statements
-    jl_value_t *codelocs; // Int32 array of indices into the line table
+    jl_debuginfo_t *debuginfo; // Table of edge data for each statement
     jl_value_t *ssavaluetypes; // types of ssa values (or count of them)
     jl_array_t *ssaflags; // 32 bits flags associated with each statement:
         // 1 << 0 = inbounds region
@@ -289,22 +307,26 @@ typedef struct _jl_code_info_t {
         // 1 << 11 = :inaccessiblemem_or_argmemonly
         // 1 << 12-19 = callsite effects overrides
     // miscellaneous data:
-    jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
-    jl_value_t *linetable; // Table of locations [TODO: make this volatile like slotnames]
     jl_array_t *slotnames; // names of local variables
     jl_array_t *slotflags;  // local var bit flags
     // the following are optional transient properties (not preserved by compression--as they typically get stored elsewhere):
     jl_value_t *slottypes; // inferred types of slots
-    jl_value_t *rettype;
-    jl_method_instance_t *parent; // context (optionally, if available, otherwise nothing)
-    jl_value_t *edges; // forward edges to method instances that must be invalidated
+    jl_method_instance_t *parent; // context (after inference, otherwise nothing)
+
+    // These may be used by generated functions to further constrain the resulting inputs.
+    // They are not used by any other part of the system and may be moved elsewhere in the
+    // future.
+    jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
+    jl_value_t *edges; // forward edges to method instances that must be invalidated (for copying to debuginfo)
     size_t min_world;
     size_t max_world;
+    size_t nargs;
+
     // various boolean properties:
-    uint8_t inferred;
     uint8_t propagate_inbounds;
     uint8_t has_fcall;
     uint8_t nospecializeinfer;
+    uint8_t isva;
     // uint8 settings
     uint8_t inlining; // 0 = default; 1 = @inline; 2 = @noinline
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
@@ -334,6 +356,7 @@ typedef struct _jl_method_t {
     jl_value_t *slot_syms; // compacted list of slot names (String)
     jl_value_t *external_mt; // reference to the method table this method is part of, null if part of the internal table
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
+    jl_debuginfo_t *debuginfo;  // fixed linetable from the source argument, null if not available
     _Atomic(jl_method_instance_t*) unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
@@ -389,7 +412,6 @@ struct _jl_method_instance_t {
     } def; // pointer back to the context for this code
     jl_value_t *specTypes;  // argument types this was specialized for
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sig
-    _Atomic(jl_value_t*) uninferred; // cached uncompressed code, for generated functions, top-level thunks, or the interpreter
     jl_array_t *backedges; // list of method-instances which call this method-instance; `invoke` records (invokesig, caller) pairs
     _Atomic(struct _jl_code_instance_t*) cache;
     uint8_t inInference; // flags to tell if inference is running on this object
@@ -422,8 +444,14 @@ typedef struct _jl_code_instance_t {
     jl_value_t *rettype; // return type for fptr
     jl_value_t *exctype; // thrown type for fptr
     jl_value_t *rettype_const; // inferred constant return value, or null
-    _Atomic(jl_value_t *) inferred; // inferred jl_code_info_t (may be compressed), or jl_nothing, or null
-    //TODO: jl_array_t *edges; // stored information about edges from this object
+
+    // Inferred result. When part of the runtime cache, either
+    // - A jl_code_info_t (may be compressed) containing the inferred IR
+    // - jl_nothing, indicating that inference was completed, but the result was
+    //               deleted to save space.
+    // - null, indicating that inference was not yet completed or did not succeed
+    _Atomic(jl_value_t *) inferred;
+    _Atomic(jl_debuginfo_t *) debuginfo; // stored information about edges from this object (set once, with a happens-before both source and invoke)
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results
@@ -547,7 +575,10 @@ typedef struct {
         // metadata bit only for GenericMemory eltype layout
         uint16_t arrayelem_isboxed : 1;
         uint16_t arrayelem_isunion : 1;
-        uint16_t padding : 11;
+        // If set, this type's egality can be determined entirely by comparing
+        // the non-padding bits of this datatype.
+        uint16_t isbitsegal : 1;
+        uint16_t padding : 10;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -636,11 +667,11 @@ typedef struct _jl_module_t {
     intptr_t hash;
 } jl_module_t;
 
-typedef struct _jl_globalref_t {
+struct _jl_globalref_t {
     jl_module_t *mod;
     jl_sym_t *name;
     jl_binding_t *binding;
-} jl_globalref_t;
+};
 
 // one Type-to-Value entry
 typedef struct _jl_typemap_entry_t {
@@ -813,6 +844,7 @@ extern JL_DLLIMPORT jl_value_t *jl_bottom_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_instance_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_code_instance_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_code_info_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_debuginfo_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_module_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_unionall_t *jl_addrspace_type JL_GLOBALLY_ROOTED;
@@ -1148,8 +1180,8 @@ STATIC_INLINE jl_value_t *jl_svecset(
 /*
   how - allocation style
   0 = data is inlined
-  1 = owns the gc-managed data, exclusively
-  2 = malloc-allocated pointer (may or may not own it)
+  1 = owns the gc-managed data, exclusively (will free it)
+  2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the object that owns the data pointer
 */
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
@@ -1702,6 +1734,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body);
 JL_DLLEXPORT const char *jl_typename_str(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT const char *jl_typeof_str(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
+JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb);
 
 STATIC_INLINE int jl_is_dispatch_tupletype(jl_value_t *v) JL_NOTSAFEPOINT
 {
@@ -1772,7 +1805,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  _Atomic(jl_value_t*) *bp,
                                                  jl_binding_t *bnd);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world);
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world, jl_code_instance_t **cache);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x) JL_NOTSAFEPOINT;
@@ -2004,17 +2037,6 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_unboxed_int(void *v, jl_value_t *v
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOTED,
                                                    size_t *idxs, size_t nidxs);
 
-// Return the exception currently being handled, or `jl_nothing`.
-//
-// The catch scope is determined dynamically so this works in functions called
-// from a catch block.  The returned value is gc rooted until we exit the
-// enclosing JL_CATCH.
-// FIXME: Teach the static analyzer about this rather than using
-// JL_GLOBALLY_ROOTED which is far too optimistic.
-JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_exception_occurred(void);
-JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
-
 #define JL_NARGS(fname, min, max)                               \
     if (nargs < min) jl_too_few_args(#fname, min);              \
     else if (nargs > max) jl_too_many_args(#fname, max);
@@ -2060,6 +2082,7 @@ JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t e
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage);
+JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci);
@@ -2127,7 +2150,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 // IR representation
 JL_DLLEXPORT jl_value_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_value_t *data);
-JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_value_t *data) JL_NOTSAFEPOINT;
@@ -2136,7 +2158,9 @@ JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_value_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
-
+JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_value_t *cl, size_t pc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstline, jl_value_t *codelocs, size_t nstmts);
+JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_value_t *cl, size_t nstmts);
 
 JL_DLLEXPORT int jl_is_operator(const char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(const char *sym);
@@ -2273,11 +2297,24 @@ extern JL_DLLIMPORT int jl_task_ptls_offset;
 
 #include "julia_locks.h"   // requires jl_task_t definition
 
-JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
-JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh);
-JL_DLLEXPORT void jl_pop_handler(int n);
-JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT;
+// Return the exception currently being handled, or `jl_nothing`.
+//
+// The catch scope is determined dynamically so this works in functions called
+// from a catch block.  The returned value is gc rooted until we exit the
+// enclosing JL_CATCH.
+// FIXME: Teach the static analyzer about this rather than using
+// JL_GLOBALLY_ROOTED which is far too optimistic.
+JL_DLLEXPORT jl_value_t *jl_current_exception(jl_task_t *ct) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_exception_occurred(void);
+JL_DLLEXPORT void jl_exception_clear(void) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh) JL_NOTSAFEPOINT ;
+JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh);
+JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_pop_handler(jl_task_t *ct, int n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_pop_handler_noexcept(jl_task_t *ct, int n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_excstack_state(jl_task_t *ct) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_restore_excstack(jl_task_t *ct, size_t state) JL_NOTSAFEPOINT;
 
 #if defined(_OS_WINDOWS_)
 #if defined(_COMPILER_GCC_)
@@ -2328,24 +2365,36 @@ extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
 
 #ifdef __clang_gcanalyzer__
 
-// This is hard. Ideally we'd teach the static analyzer about the extra control
-// flow edges. But for now, just hide this as best we can
 extern int had_exception;
-#define JL_TRY if (1)
-#define JL_CATCH if (had_exception)
+
+// The analyzer assumes that the TRY block always executes to completion.
+// This can lead to both false positives and false negatives, since it doesn't model the fact that throwing always leaves the try block early.
+#define JL_TRY                                                      \
+    int i__try, i__catch; jl_handler_t __eh; jl_task_t *__eh_ct;    \
+    __eh_ct = jl_current_task;                                      \
+    size_t __excstack_state = jl_excstack_state(__eh_ct);           \
+    jl_enter_handler(__eh_ct, &__eh);                               \
+    if (1)
+    /* TRY BLOCK; */
+#define JL_CATCH                                                    \
+    if (!had_exception)                                             \
+        jl_eh_restore_state_noexcept(__eh_ct, &__eh);               \
+    else                                                            \
+        for (i__catch=1, jl_eh_restore_state(__eh_ct, &__eh); i__catch; i__catch=0, /* CATCH BLOCK; */ jl_restore_excstack(__eh_ct, __excstack_state))
 
 #else
 
-#define JL_TRY                                                    \
-    int i__tr, i__ca; jl_handler_t __eh;                          \
-    size_t __excstack_state = jl_excstack_state();                \
-    jl_enter_handler(&__eh);                                      \
-    if (!jl_setjmp(__eh.eh_ctx,0))                                \
-        for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__eh))
+#define JL_TRY                                                      \
+    int i__try, i__catch; jl_handler_t __eh; jl_task_t *__eh_ct;    \
+    __eh_ct = jl_current_task;                                      \
+    size_t __excstack_state = jl_excstack_state(__eh_ct);           \
+    jl_enter_handler(__eh_ct, &__eh);                               \
+    if (!jl_setjmp(__eh.eh_ctx, 0))                                 \
+        for (i__try=1; i__try; i__try=0, /* TRY BLOCK; */  jl_eh_restore_state_noexcept(__eh_ct, &__eh))
 
-#define JL_CATCH                                                \
-    else                                                        \
-        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0, jl_restore_excstack(__excstack_state))
+#define JL_CATCH                                                    \
+    else                                                            \
+        for (i__catch=1, jl_eh_restore_state(__eh_ct, &__eh); i__catch; i__catch=0, /* CATCH BLOCK; */ jl_restore_excstack(__eh_ct, __excstack_state))
 
 #endif
 

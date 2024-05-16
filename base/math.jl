@@ -95,11 +95,10 @@ julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
  10
 ```
 """
-clamp(x::X, lo::L, hi::H) where {X,L,H} =
-    ifelse(x > hi, convert(promote_type(X,L,H), hi),
-           ifelse(x < lo,
-                  convert(promote_type(X,L,H), lo),
-                  convert(promote_type(X,L,H), x)))
+function clamp(x::X, lo::L, hi::H) where {X,L,H}
+    T = promote_type(X, L, H)
+    return (x > hi) ? convert(T, hi) : (x < lo) ? convert(T, lo) : convert(T, x)
+end
 
 """
     clamp(x, T)::T
@@ -120,7 +119,14 @@ julia> trunc(Int, 4pi^2)
 39
 ```
 """
-clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
+function clamp(x, ::Type{T}) where {T<:Integer}
+    # delegating to clamp(x, typemin(T), typemax(T)) would promote types
+    # this way, we avoid unnecessary conversions
+    # think of, e.g., clamp(big(2) ^ 200, Int16)
+    lo = typemin(T)
+    hi = typemax(T)
+    return (x > hi) ? hi : (x < lo) ? lo : convert(T, x)
+end
 
 
 """
@@ -359,7 +365,7 @@ log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative
+Compute the base `b` logarithm of `x`. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
 # Examples
@@ -408,6 +414,8 @@ const libm = Base.libm_name
     sinh(x)
 
 Compute hyperbolic sine of `x`.
+
+See also [`sin`](@ref).
 """
 sinh(x::Number)
 
@@ -415,6 +423,8 @@ sinh(x::Number)
     cosh(x)
 
 Compute hyperbolic cosine of `x`.
+
+See also [`cos`](@ref).
 """
 cosh(x::Number)
 
@@ -493,9 +503,11 @@ asinh(x::Number)
 
 # functions that return NaN on non-NaN argument for domain error
 """
-    sin(x)
+    sin(x::T) where {T <: Number} -> float(T)
 
 Compute sine of `x`, where `x` is in radians.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref), [`asin`](@ref).
 
@@ -524,25 +536,33 @@ julia> round(exp(im*pi/6), digits=3)
 sin(x::Number)
 
 """
-    cos(x)
+    cos(x::T) where {T <: Number} -> float(T)
 
 Compute cosine of `x`, where `x` is in radians.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
 cos(x::Number)
 
 """
-    tan(x)
+    tan(x::T) where {T <: Number} -> float(T)
 
 Compute tangent of `x`, where `x` is in radians.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
+
+See also [`tanh`](@ref).
 """
 tan(x::Number)
 
 """
-    asin(x)
+    asin(x::T) where {T <: Number} -> float(T)
 
 Compute the inverse sine of `x`, where the output is in radians.
+
+Return a `T(NaN)` if `isnan(x)`.
 
 See also [`asind`](@ref) for output in degrees.
 
@@ -558,9 +578,11 @@ julia> asind.((0, 1/2, 1))
 asin(x::Number)
 
 """
-    acos(x)
+    acos(x::T) where {T <: Number} -> float(T)
 
 Compute the inverse cosine of `x`, where the output is in radians
+
+Return a `T(NaN)` if `isnan(x)`.
 """
 acos(x::Number)
 
@@ -583,9 +605,12 @@ atanh(x::Number)
 
 Compute the natural logarithm of `x`.
 
-Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
-Use complex arguments to obtain complex results.
-Has a branch cut along the negative real axis, for which `-0.0im` is taken to be below the axis.
+Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use [`Complex`](@ref) arguments to obtain [`Complex`](@ref) results.
+
+!!! note "Branch cut"
+    `log` has a branch cut along the negative real axis; `-0.0im` is taken
+    to be below the axis.
 
 See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
@@ -619,7 +644,7 @@ log(x::Number)
 """
     log2(x)
 
-Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
+Compute the logarithm of `x` to base 2. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
 See also: [`exp2`](@ref), [`ldexp`](@ref), [`ispow2`](@ref).
@@ -652,7 +677,7 @@ log2(x)
     log10(x)
 
 Compute the logarithm of `x` to base 10.
-Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -675,7 +700,7 @@ log10(x)
 """
     log1p(x)
 
-Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
+Accurate natural logarithm of `1+x`. Throw a [`DomainError`](@ref) for [`Real`](@ref)
 arguments less than -1.
 
 # Examples
@@ -706,11 +731,14 @@ end
 
 Return ``\\sqrt{x}``.
 
-Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
-Use complex negative arguments instead. Note that `sqrt` has a branch cut
-along the negative real axis.
+Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use [`Complex`](@ref) negative arguments instead to obtain a [`Complex`](@ref) result.
 
 The prefix operator `√` is equivalent to `sqrt`.
+
+!!! note "Branch cut"
+    `sqrt` has a branch cut along the negative real axis; `-0.0im` is taken
+    to be below the axis.
 
 See also: [`hypot`](@ref).
 
@@ -795,8 +823,8 @@ true
 ```
 """
 hypot(x::Number) = abs(float(x))
-hypot(x::Number, y::Number) = _hypot(promote(float(x), y)...)
-hypot(x::Number, y::Number, xs::Number...) = _hypot(promote(float(x), y, xs...))
+hypot(x::Number, y::Number) = _hypot(float.(promote(x, y))...)
+hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...)))
 function _hypot(x, y)
     # preserves unit
     axu = abs(x)
@@ -1005,7 +1033,8 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 """
     exponent(x::Real) -> Int
 
-Returns the largest integer `y` such that `2^y ≤ abs(x)`.
+Return the largest integer `y` such that `2^y ≤ abs(x)`.
+For a normalized floating-point number `x`, this corresponds to the exponent of `x`.
 
 Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
 For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
@@ -1232,6 +1261,10 @@ function modf(x::T) where T<:IEEEFloat
     return (rx, ix)
 end
 
+@inline function use_power_by_squaring(n::Integer)
+    -2^12 <= n <= 3 * 2^13
+end
+
 # @constprop aggressive to help the compiler see the switch between the integer and float
 # variants for callers with constant `y`
 @constprop :aggressive function ^(x::Float64, y::Float64)
@@ -1244,24 +1277,33 @@ end
         y = sign(y)*0x1.8p62
     end
     yint = unsafe_trunc(Int64, y) # This is actually safe since julia freezes the result
-    y == yint && return @noinline x^yint
-    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x==0
-    x<0 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
-    !isfinite(x) && return x*(y>0 || isnan(x))           # x is inf or NaN
+    yisint = y == yint
+    if yisint
+        yint == 0 && return 1.0
+        use_power_by_squaring(yint) && return @noinline pow_body(x, yint)
+    end
+    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x === +0.0 or -0.0 (Inf * false === 0.0)
+    s = 1
+    if x < 0
+        !yisint && throw_exp_domainerror(x) # y isn't an integer
+        s = ifelse(isodd(yint), -1, 1)
+    end
+    !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x))           # x is inf or NaN
+    return copysign(pow_body(abs(x), y), s)
+end
+
+@assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
+    xu = reinterpret(UInt64, x)
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
         xu &= ~sign_mask(Float64)
         xu -= UInt64(52) << 52 # mess with the exponent
     end
-    return pow_body(xu, y)
-end
-
-@inline function pow_body(xu::UInt64, y::Float64)
     logxhi,logxlo = _log_ext(xu)
     xyhi, xylo = two_mul(logxhi,y)
     xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
-    return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
+    return @inline Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
 
 @constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
@@ -1285,12 +1327,29 @@ end
     return T(exp2(log2(abs(widen(x))) * y))
 end
 
-# compensated power by squaring
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
+    x^clamp(n, Int64)
+end
+@constprop :aggressive @inline function ^(x::Float64, n::Int64)
     n == 0 && return one(x)
-    return pow_body(x, n)
+    if use_power_by_squaring(n)
+        return pow_body(x, n)
+    else
+        s = ifelse(x < 0 && isodd(n), -1.0, 1.0)
+        x = abs(x)
+        y = float(n)
+        if y == n
+            return copysign(pow_body(x, y), s)
+        else
+            n2 = n % 1024
+            y = float(n - n2)
+            return pow_body(x, y) * copysign(pow_body(x, n2), s)
+        end
+    end
 end
 
+# compensated power by squaring
+# this method is only reliable for -2^20 < n < 2^20 (cf. #53881 #53886)
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0
@@ -1330,8 +1389,8 @@ end
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
-    # double-double numbers and returns the high double. References:
-    # [1] https://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
+    # double-double numbers and return the high double. References:
+    # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)

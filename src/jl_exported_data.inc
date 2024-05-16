@@ -35,6 +35,7 @@
     XX(jl_const_type) \
     XX(jl_core_module) \
     XX(jl_datatype_type) \
+    XX(jl_debuginfo_type) \
     XX(jl_densearray_type) \
     XX(jl_diverror_exception) \
     XX(jl_emptysvec) \

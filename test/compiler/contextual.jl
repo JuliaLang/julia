@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
+using Test
+
 # Cassette
 # ========
 
@@ -43,14 +46,16 @@ module MiniCassette
         end
     end
 
-    function transform!(ci::CodeInfo, nargs::Int, sparams::Core.SimpleVector)
+    function transform!(mi::MethodInstance, ci::CodeInfo, nargs::Int, sparams::Core.SimpleVector)
         code = ci.code
+        di = Core.Compiler.DebugInfoStream(mi, ci.debuginfo, length(code))
         ci.slotnames = Symbol[Symbol("#self#"), :ctx, :f, :args, ci.slotnames[nargs+1:end]...]
         ci.slotflags = UInt8[(0x00 for i = 1:4)..., ci.slotflags[nargs+1:end]...]
         # Insert one SSAValue for every argument statement
         prepend!(code, Any[Expr(:call, getfield, SlotNumber(4), i) for i = 1:nargs])
-        prepend!(ci.codelocs, fill(0, nargs))
+        prepend!(di.codelocs, fill(Int32(0), 3nargs))
         prepend!(ci.ssaflags, fill(0x00, nargs))
+        ci.debuginfo = Core.DebugInfo(di, length(code))
         ci.ssavaluetypes += nargs
         function map_slot_number(slot::Int)
             if slot == 1
@@ -88,9 +93,12 @@ module MiniCassette
         code_info = copy(code_info)
         @assert code_info.edges === nothing
         code_info.edges = MethodInstance[mi]
-        transform!(code_info, length(args), match.sparams)
+        transform!(mi, code_info, length(args), match.sparams)
         # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
         # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
+        # Match the generator, since that's what our transform! does
+        code_info.nargs = 4
+        code_info.isva = true
         return code_info
     end
 
@@ -220,3 +228,25 @@ end
 end
 
 @test_throws "oh no" doit49715(sin, Tuple{Int})
+
+# Test that the CodeInfo returned from generated function need not match the
+# generator.
+function overdubbee54341(a, b)
+    a + b
+end
+const overdubee_codeinfo54341 = code_lowered(overdubbee54341, Tuple{Any, Any})[1]
+
+function overdub_generator54341(world::UInt, source::LineNumberNode, args...)
+    if length(args) != 2
+        :(error("Wrong number of arguments"))
+    else
+        return copy(overdubee_codeinfo54341)
+    end
+end
+
+@eval function overdub54341(args...)
+    $(Expr(:meta, :generated, overdub_generator54341))
+    $(Expr(:meta, :generated_only))
+end
+
+@test overdub54341(1, 2) == 3

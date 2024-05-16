@@ -9,6 +9,8 @@ include("testenv.jl")
 Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
+Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
+
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -669,7 +671,7 @@ end
 
     str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0), Base.get_world_counter()))
     @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
-    @test occursin("This method may not support any kwargs", str)
+    @test occursin("This method does not support all of the given keyword arguments", str)
 
     @test_throws "MethodError: no method matching kwcall()" Core.kwcall()
 end
@@ -743,6 +745,22 @@ let err_str
     # issue 40478
     err_str = @except_str ANumber()(3 + 4) MethodError
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
+end
+
+let err_str
+    a = [1 2; 3 4];
+    err_str = @except_str (a[1][2] = 5) MethodError
+    @test occursin("\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ", err_str)
+    @test occursin("a[1, 2]", err_str)
+    @test occursin("rather than a[1][2]", err_str)
+end
+
+let err_str
+    d = Dict
+    err_str = @except_str (d[1] = 5) MethodError
+    @test occursin("\nYou attempted to index the type Dict, rather than an instance of the type. Make sure you create the type using its constructor: ", err_str)
+    @test occursin("d = Dict([...])", err_str)
+    @test occursin(" rather than d = Dict", err_str)
 end
 
 # Execute backtrace once before checking formatting, see #38858

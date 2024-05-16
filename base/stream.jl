@@ -122,7 +122,7 @@ const DEFAULT_READ_BUFFER_SZ = 10485760 # 10 MB
 if Sys.iswindows()
     const MAX_OS_WRITE = UInt(0x1FF0_0000) # 511 MB (determined semi-empirically, limited to 31 MB on XP)
 else
-    const MAX_OS_WRITE = UInt(typemax(Csize_t))
+    const MAX_OS_WRITE = UInt(0x7FFF_0000) # almost 2 GB (both macOS and linux have this kernel restriction, although only macOS documents it)
 end
 
 
@@ -304,7 +304,7 @@ function init_stdio(handle::Ptr{Cvoid})
     elseif t == UV_TTY
         io = TTY(handle, StatusOpen)
     elseif t == UV_TCP
-        Sockets = require(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
+        Sockets = require_stdlib(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
         io = Sockets.TCPSocket(handle, StatusOpen)
     elseif t == UV_NAMED_PIPE
         io = PipeEndpoint(handle, StatusOpen)
@@ -341,7 +341,7 @@ function open(h::OS_HANDLE)
     elseif t == UV_TTY
         io = TTY(h)
     elseif t == UV_TCP
-        Sockets = require(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
+        Sockets = require_stdlib(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
         io = Sockets.TCPSocket(h)
     elseif t == UV_NAMED_PIPE
         io = PipeEndpoint(h)
@@ -453,9 +453,11 @@ function closewrite(s::LibuvStream)
     sigatomic_begin()
     uv_req_set_data(req, ct)
     iolock_end()
-    status = try
+    local status
+    try
         sigatomic_end()
-        wait()::Cint
+        status = wait()::Cint
+        sigatomic_begin()
     finally
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
@@ -608,7 +610,7 @@ end
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = min(length(buffer.data), buffer.maxsize) - ptr + 1
+    nb = min(length(buffer.data)-buffer.offset, buffer.maxsize) + buffer.offset - ptr + 1
     return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
@@ -619,6 +621,7 @@ function notify_filled(buffer::IOBuffer, nread::Int)
         buffer.size += nread
     else
         buffer.ptr += nread
+        buffer.size = max(buffer.size, buffer.ptr - 1)
     end
     nothing
 end
@@ -932,7 +935,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         nread = readbytes!(sbuf, a, nb)
     else
         newbuf = PipeBuffer(a, maxsize=nb)
-        newbuf.size = 0 # reset the write pointer to the beginning
+        newbuf.size = newbuf.offset # reset the write pointer to the beginning
         nread = try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -979,7 +982,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
         unsafe_read(sbuf, p, nb)
     else
         newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize=Int(nb))
-        newbuf.size = 0 # reset the write pointer to the beginning
+        newbuf.size = newbuf.offset # reset the write pointer to the beginning
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -1061,12 +1064,14 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     sigatomic_begin()
     uv_req_set_data(uvw, ct)
     iolock_end()
-    status = try
+    local status
+    try
         sigatomic_end()
         # wait for the last chunk to complete (or error)
         # assume that any errors would be sticky,
         # (so we don't need to monitor the error status of the intermediate writes)
-        wait()::Cint
+        status = wait()::Cint
+        sigatomic_begin()
     finally
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()

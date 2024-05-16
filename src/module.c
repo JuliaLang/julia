@@ -59,7 +59,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent)
 
 uint32_t jl_module_next_counter(jl_module_t *m)
 {
-    return jl_atomic_fetch_add(&m->counter, 1);
+    return jl_atomic_fetch_add_relaxed(&m->counter, 1);
 }
 
 JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports, uint8_t default_names)
@@ -665,6 +665,15 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 {
     jl_binding_t *b = jl_get_module_binding(from, s, 1);
+    if (b->publicp) {
+        // check for conflicting declarations
+        if (b->exportp && !exported)
+            jl_errorf("cannot declare %s.%s public; it is already declared exported",
+                      jl_symbol_name(from->name), jl_symbol_name(s));
+        if (!b->exportp && exported)
+            jl_errorf("cannot declare %s.%s exported; it is already declared public",
+                      jl_symbol_name(from->name), jl_symbol_name(s));
+    }
     b->publicp = 1;
     b->exportp |= exported;
 }

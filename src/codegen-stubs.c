@@ -38,17 +38,17 @@ JL_DLLEXPORT void jl_register_fptrs_fallback(uint64_t image_base, const struct _
     (void)image_base; (void)fptrs; (void)linfos; (void)n;
 }
 
-JL_DLLEXPORT jl_code_instance_t *jl_generate_fptr_fallback(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
-{
-    return NULL;
-}
-
 JL_DLLEXPORT void jl_generate_fptr_for_unspecialized_fallback(jl_code_instance_t *unspec)
 {
     jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
 }
 
-JL_DLLEXPORT void jl_generate_fptr_for_oc_wrapper_fallback(jl_code_instance_t *unspec) UNAVAILABLE
+JL_DLLEXPORT int jl_compile_codeinst_fallback(jl_code_instance_t *unspec)
+{
+    // Do nothing. The caller will notice that we failed to provide a an ->invoke and trigger
+    // appropriate fallbacks.
+    return 0;
+}
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
 {

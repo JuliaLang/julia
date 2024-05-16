@@ -17,6 +17,7 @@ extern "C" {
 typedef struct {
     jl_code_info_t *src; // contains the names and number of slots
     jl_method_instance_t *mi; // MethodInstance we're executing, or NULL if toplevel
+    jl_code_instance_t *ci; // CodeInstance we're executing (for generated functions)
     jl_module_t *module; // context for globals
     jl_value_t **locals; // slots for holding local slots and ssavalues
     jl_svec_t *sparam_vals; // method static parameters, if eval-ing a method body
@@ -317,7 +318,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_copy_ast(eval_value(args[0], s));
     }
     else if (head == jl_exc_sym) {
-        return jl_current_exception();
+        return jl_current_exception(jl_current_task);
     }
     else if (head == jl_boundscheck_sym) {
         return jl_true;
@@ -490,7 +491,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             s->locals[jl_source_nslots(s->src) + id] = val;
         }
         else if (jl_is_enternode(stmt)) {
-            jl_enter_handler(&__eh);
+            jl_enter_handler(ct, &__eh);
             // This is a bit tricky, but supports the implementation of PhiC nodes.
             // They are conceptually slots, but the slot to store to doesn't get explicitly
             // mentioned in the store (aka the "UpsilonNode") (this makes them integrate more
@@ -521,7 +522,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 }
                 // store current top of exception stack for restore in pop_exception.
             }
-            s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state());
+            s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state(ct));
             if (jl_enternode_scope(stmt)) {
                 jl_value_t *old_scope = ct->scope;
                 JL_GC_PUSH1(&old_scope);
@@ -540,13 +541,15 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     jl_unreachable();
                 }
             }
-            jl_eh_restore_state(&__eh);
+
             if (s->continue_at) { // means we reached a :leave expression
+                jl_eh_restore_state_noexcept(ct, &__eh);
                 ip = s->continue_at;
                 s->continue_at = 0;
                 continue;
             }
             else { // a real exception
+                jl_eh_restore_state(ct, &__eh);
                 ip = catch_ip;
                 assert(jl_enternode_catch_dest(stmt) != 0);
                 continue;
@@ -609,7 +612,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else if (head == jl_pop_exception_sym) {
                 size_t prev_state = jl_unbox_ulong(eval_value(jl_exprarg(stmt, 0), s));
-                jl_restore_excstack(prev_state);
+                jl_restore_excstack(ct, prev_state);
             }
             else if (toplevel) {
                 if (head == jl_method_sym && jl_expr_nargs(stmt) > 1) {
@@ -681,31 +684,55 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 // preparing method IR for interpreter
 
-jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
+jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world)
 {
-    jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&mi->uninferred);
+    jl_value_t *ret = NULL;
+    jl_code_info_t *src = NULL;
     if (jl_is_method(mi->def.value)) {
-        if (!src || (jl_value_t*)src == jl_nothing) {
-            if (mi->def.method->source) {
-                src = (jl_code_info_t*)mi->def.method->source;
+        if (mi->def.method->source) {
+            jl_method_t *m = mi->def.method;
+            src = (jl_code_info_t*)m->source;
+            if (!jl_is_code_info(src)) {
+                src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
+                // Replace the method source by the uncompressed version,
+                // under the assumption that the interpreter may need to
+                // access it frequently. TODO: Have some sort of usage-based
+                // cache here.
+                m->source = (jl_value_t*)src;
+                jl_gc_wb(m, src);
             }
-            else {
-                assert(mi->def.method->generator);
-                src = jl_code_for_staged(mi, world);
-            }
+            ret = (jl_value_t*)src;
         }
-        if (src && (jl_value_t*)src != jl_nothing) {
-            JL_GC_PUSH1(&src);
-            src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
-            jl_atomic_store_release(&mi->uninferred, (jl_value_t*)src);
-            jl_gc_wb(mi, src);
-            JL_GC_POP();
+        else {
+            jl_code_instance_t *cache = jl_atomic_load_relaxed(&mi->cache);
+            jl_code_instance_t *uninferred = jl_cached_uninferred(cache, world);
+            if (!uninferred) {
+                assert(mi->def.method->generator);
+                src = jl_code_for_staged(mi, world, &uninferred);
+            }
+            ret = (jl_value_t*)uninferred;
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
+        }
+    }
+    else {
+        jl_code_instance_t *uninferred = jl_cached_uninferred(jl_atomic_load_relaxed(&mi->cache), world);
+        ret = (jl_value_t*)uninferred;
+        if (ret) {
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
         }
     }
     if (!src || !jl_is_code_info(src)) {
         jl_throw(jl_new_struct(jl_missingcodeerror_type, (jl_value_t*)mi));
     }
-    return src;
+    return ret;
+}
+
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
+{
+    jl_value_t *code_or_ci = jl_code_or_ci_for_interpreter(mi, world);
+    if (jl_is_code_instance(code_or_ci))
+        return (jl_code_info_t*)jl_atomic_load_relaxed(&((jl_code_instance_t*)code_or_ci)->inferred);
+    return (jl_code_info_t*)code_or_ci;
 }
 
 // interpreter entry points
@@ -716,7 +743,15 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     jl_method_instance_t *mi = codeinst->def;
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
-    jl_code_info_t *src = jl_code_for_interpreter(mi, world);
+    jl_code_info_t *src = NULL;
+    jl_value_t *code = jl_code_or_ci_for_interpreter(mi, world);
+    jl_code_instance_t *ci = NULL;
+    if (jl_is_code_instance(code)) {
+        ci = (jl_code_instance_t*)code;
+        src = (jl_code_info_t*)jl_atomic_load_relaxed(&ci->inferred);
+    } else {
+        src = (jl_code_info_t*)code;
+    }
     jl_array_t *stmts = src->code;
     assert(jl_typetagis(stmts, jl_array_any_type));
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
@@ -731,8 +766,8 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     }
     else {
         s->module = mi->def.method->module;
-        size_t defargs = mi->def.method->nargs;
-        int isva = mi->def.method->isva ? 1 : 0;
+        size_t defargs = src->nargs;
+        int isva = src->isva;
         size_t i;
         s->locals[0] = f;
         assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -747,6 +782,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = mi;
+    s->ci = ci;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
@@ -758,7 +794,19 @@ JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
-    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
+    jl_code_info_t *code = NULL;
+    if (source->source) {
+        code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
+    }
+    else {
+        // OC constructed from optimized IR. It'll have a single specialization with optimized code
+        // in it that we'll try to interpret.
+        jl_svec_t *specializations = (jl_svec_t*)jl_atomic_load_relaxed(&source->specializations);
+        assert(jl_is_method_instance(specializations));
+        jl_method_instance_t *mi = (jl_method_instance_t *)specializations;
+        jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+        code = jl_uncompress_ir(source, ci, jl_atomic_load_relaxed(&ci->inferred));
+    }
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
     jl_task_t *ct = jl_current_task;
@@ -778,6 +826,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = NULL;
+    s->ci = NULL;
     size_t defargs = source->nargs;
     int isva = source->isva;
     assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -809,6 +858,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
     s->mi = NULL;
+    s->ci = NULL;
     JL_GC_ENABLEFRAME(s);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
@@ -833,6 +883,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     s->preevaluation = (sparam_vals != NULL);
     s->continue_at = 0;
     s->mi = NULL;
+    s->ci = NULL;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *v = eval_value(e, s);
     assert(v);
@@ -852,7 +903,8 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry,
     uintptr_t entry_tags = jl_bt_entry_descriptor(njlvalues, 0, JL_BT_INTERP_FRAME_TAG, s->ip);
     bt_entry[0].uintptr = JL_BT_NON_PTR_ENTRY;
     bt_entry[1].uintptr = entry_tags;
-    bt_entry[2].jlvalue = s->mi  ? (jl_value_t*)s->mi  :
+    bt_entry[2].jlvalue = s->ci  ? (jl_value_t*)s->ci  :
+                          s->mi  ? (jl_value_t*)s->mi  :
                           s->src ? (jl_value_t*)s->src : (jl_value_t*)jl_nothing;
     if (need_module) {
         // If we only have a CodeInfo (s->src), we are in a top level thunk and

@@ -180,22 +180,11 @@ macro isdefined(s::Symbol)
     return Expr(:escape, Expr(:isdefined, s))
 end
 
-"""
-    nameof(m::Module) -> Symbol
-
-Get the name of a `Module` as a [`Symbol`](@ref).
-
-# Examples
-```jldoctest
-julia> nameof(Base.Broadcast)
-:Broadcast
-```
-"""
-nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+_nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 function _is_internal(__module__)
     if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
-       nameof(__module__) === :Base
+       _nameof(__module__) === :Base
         return true
     end
     return false
@@ -374,6 +363,19 @@ default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
     memoryrefget(memoryref(memoryref(A), i, @_boundscheck), default_access_order(A), false))
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
+
+"""
+    nameof(m::Module) -> Symbol
+
+Get the name of a `Module` as a [`Symbol`](@ref).
+
+# Examples
+```jldoctest
+julia> nameof(Base.Broadcast)
+:Broadcast
+```
+"""
+nameof(m::Module) = (@_total_meta; ccall(:jl_module_name, Ref{Symbol}, (Any,), m))
 
 function iterate end
 
@@ -673,7 +675,7 @@ Change the type-interpretation of the binary data in the isbits value `x`
 to that of the isbits type `Out`.
 The size (ignoring padding) of `Out` has to be the same as that of the type of `x`.
 For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
-[`Float32`](@ref).
+[`Float32`](@ref). Note that `reinterpret(In, reinterpret(Out, x)) === x`
 
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
@@ -689,11 +691,16 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
 (0x0301, 0x02)
 ```
 
+!!! note
+
+    The treatment of padding differs from reinterpret(::DataType, ::AbstractArray).
+
 !!! warning
 
     Use caution if some combinations of bits in `Out` are not considered valid and would
     otherwise be prevented by the type's constructors and methods. Unexpected behavior
     may result without additional validation.
+
 """
 function reinterpret(::Type{Out}, x) where {Out}
     if isprimitivetype(Out) && isprimitivetype(typeof(x))

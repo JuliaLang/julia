@@ -12,8 +12,6 @@
     ADD_I(udiv_int, 2) \
     ADD_I(srem_int, 2) \
     ADD_I(urem_int, 2) \
-    ADD_I(add_ptr, 2) \
-    ADD_I(sub_ptr, 2) \
     ADD_I(neg_float, 1) \
     ADD_I(add_float, 2) \
     ADD_I(sub_float, 2) \
@@ -86,6 +84,9 @@
     ADD_I(rint_llvm, 1) \
     ADD_I(sqrt_llvm, 1) \
     ADD_I(sqrt_llvm_fast, 1) \
+    /*  pointer arithmetic */ \
+    ADD_I(add_ptr, 2) \
+    ADD_I(sub_ptr, 2) \
     /*  pointer access */ \
     ADD_I(pointerref, 3) \
     ADD_I(pointerset, 4) \

@@ -270,13 +270,13 @@ function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
 end
 
 """
-    unsafe_copyto!(dest::Array, do, src::Array, so, N)
+    unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
 
-Copy `N` elements from a source array to a destination, starting at the linear index `so` in the
-source and `do` in the destination (1-indexed).
+Copy `n` elements from a source array to a destination, starting at the linear index `soffs` in the
+source and `doffs` in the destination (1-indexed).
 
 The `unsafe` prefix on this function indicates that no validation is performed to ensure
-that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
+that n is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
 the same manner as C.
 """
 function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
@@ -286,10 +286,10 @@ function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
 end
 
 """
-    copyto!(dest, do, src, so, N)
+    copyto!(dest, doffs, src, soffs, n)
 
-Copy `N` elements from collection `src` starting at the linear index `so`, to array `dest` starting at
-the index `do`. Return `dest`.
+Copy `n` elements from collection `src` starting at the linear index `soffs`, to array `dest` starting at
+the index `doffs`. Return `dest`.
 """
 copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
 copyto!(dest::Array, doffs::Integer, src::Memory, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
@@ -524,6 +524,7 @@ function fill end
 fill(v, dims::DimOrInd...) = fill(v, dims)
 fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
 fill(v, dims::NTuple{N, Integer}) where {N} = (a=Array{typeof(v),N}(undef, dims); fill!(a, v); a)
+fill(v, dims::NTuple{N, DimOrInd}) where {N} = (a=similar(Array{typeof(v),N}, dims); fill!(a, v); a)
 fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
 
 """
@@ -584,23 +585,13 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
             fill!(a, $felt(T))
             return a
         end
+        function $fname(::Type{T}, dims::NTuple{N, DimOrInd}) where {T,N}
+            a = similar(Array{T,N}, dims)
+            fill!(a, $felt(T))
+            return a
+        end
     end
 end
-
-function _one(unit::T, x::AbstractMatrix) where T
-    require_one_based_indexing(x)
-    m,n = size(x)
-    m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    # Matrix{T}(I, m, m)
-    I = zeros(T, m, m)
-    for i in 1:m
-        I[i,i] = unit
-    end
-    I
-end
-
-one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
-oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
@@ -672,30 +663,34 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
     collect(collection)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Vector{Pair{KeyType, ValType}}`. If the argument is array-like or is an iterator with the
-[`HasShape`](@ref IteratorSize) trait, the result will have the same shape
+a `Vector` of `key=>value` [Pair](@ref Pair)s. If the argument is array-like or is an iterator
+with the [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
 
-Used by comprehensions to turn a generator into an `Array`.
+Used by [comprehensions](@ref man-comprehensions) to turn a [generator expression](@ref man-generators)
+into an `Array`. Thus, *on generators*, the square-brackets notation may be used instead of calling `collect`,
+see second example.
 
 # Examples
-```jldoctest
-julia> collect(1:2:13)
-7-element Vector{Int64}:
-  1
-  3
-  5
-  7
-  9
- 11
- 13
 
-julia> [x^2 for x in 1:8 if isodd(x)]
-4-element Vector{Int64}:
-  1
-  9
- 25
- 49
+Collect items from a `UnitRange{Int64}` collection:
+
+```jldoctest
+julia> collect(1:3)
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
+
+Collect items from a generator (same output as `[x^2 for x in 1:3]`):
+
+```jldoctest
+julia> collect(x^2 for x in 1:3)
+3-element Vector{Int64}:
+ 1
+ 4
+ 9
 ```
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(itr))
@@ -1059,6 +1054,9 @@ function _growbeg!(a::Vector, delta::Integer)
     else
         @noinline (function()
         memlen = length(mem)
+        if offset + len - 1 > memlen || offset < 1
+            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+        end
         # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
         # the +1 is because I didn't want to have an off by 1 error.
         newmemlen = max(overallocation(memlen), len + 2 * delta + 1)
@@ -1074,6 +1072,9 @@ function _growbeg!(a::Vector, delta::Integer)
             newmem = array_new_memory(mem, newmemlen)
         end
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+        if ref !== a.ref
+            @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+        end
         setfield!(a, :ref, @inbounds GenericMemoryRef(newmem, newoffset))
         end)()
     end
@@ -1094,6 +1095,10 @@ function _growend!(a::Vector, delta::Integer)
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
         @noinline (function()
+        if offset + len - 1 > memlen || offset < 1
+            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+        end
+
         if offset - 1 > div(5 * newlen, 4)
             # If the offset is far enough that we can copy without resizing
             # while maintaining proportional spacing on both ends of the array
@@ -1111,6 +1116,9 @@ function _growend!(a::Vector, delta::Integer)
         end
         newref = @inbounds GenericMemoryRef(newmem, newoffset)
         unsafe_copyto!(newref, ref, len)
+        if ref !== a.ref
+            @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+        end
         setfield!(a, :ref, newref)
         end)()
     end
@@ -2613,7 +2621,7 @@ Dict{Symbol, Int64} with 3 entries:
   :B => -1
   :C => 0
 
-julia> findall(x -> x >= 0, d)
+julia> findall(≥(0), d)
 2-element Vector{Symbol}:
  :A
  :C
@@ -3057,37 +3065,4 @@ intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
     else
         _getindex(v, i)
     end
-end
-
-"""
-    wrap(Array, m::Union{Memory{T}, MemoryRef{T}}, dims)
-
-Create an array of size `dims` using `m` as the underlying memory. This can be thought of as a safe version
-of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointers.
-"""
-function wrap end
-
-@eval @propagate_inbounds function wrap(::Type{Array}, ref::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
-    mem = ref.mem
-    mem_len = length(mem) + 1 - memoryrefoffset(ref)
-    len = Core.checked_dims(dims...)
-    @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
-    if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
-        mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-        ref = MemoryRef(mem)
-    end
-    $(Expr(:new, :(Array{T, N}), :ref, :dims))
-end
-
-@noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(
-    "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $proddims > $len, so that the array would have more elements than the underlying memory can store."))
-
-function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
-    wrap(Array, MemoryRef(m), dims)
-end
-function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
-    wrap(Array, m, (l,))
-end
-function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
-    wrap(Array, MemoryRef(m), (l,))
 end

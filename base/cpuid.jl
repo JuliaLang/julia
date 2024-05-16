@@ -64,7 +64,11 @@ const ISAs_by_family = Dict(
     "powerpc64le" => [
         # We have no way to test powerpc64le features yet, so we're only going to declare the lowest ISA:
         "power8" => ISA(Set{UInt32}()),
-    ]
+    ],
+    "riscv64" => [
+        # We have no way to test riscv64 features yet, so we're only going to declare the lowest ISA:
+        "riscv64" => ISA(Set{UInt32}()),
+    ],
 )
 
 # Test a CPU feature exists on the currently-running host

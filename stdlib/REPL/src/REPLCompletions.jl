@@ -4,10 +4,11 @@ module REPLCompletions
 
 export completions, shell_completions, bslash_completions, completion_text
 
-using Core: CodeInfo, MethodInstance, CodeInstance, Const
+using Core: Const
 const CC = Core.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
+using Base.Filesystem: _readdirx
 
 abstract type Completion end
 
@@ -317,8 +318,8 @@ function cache_PATH()
             continue
         end
 
-        filesinpath = try
-            readdir(pathdir)
+        path_entries = try
+            _readdirx(pathdir)
         catch e
             # Bash allows dirs in PATH that can't be read, so we should as well.
             if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -328,13 +329,13 @@ function cache_PATH()
                 rethrow()
             end
         end
-        for file in filesinpath
+        for entry in path_entries
             # In a perfect world, we would filter on whether the file is executable
             # here, or even on whether the current user can execute the file in question.
             try
-                if isfile(joinpath(pathdir, file))
-                    @lock PATH_cache_lock push!(PATH_cache, file)
-                    push!(this_PATH_cache, file)
+                if isfile(entry)
+                    @lock PATH_cache_lock push!(PATH_cache, entry.name)
+                    push!(this_PATH_cache, entry.name)
                 end
             catch e
                 # `isfile()` can throw in rare cases such as when probing a
@@ -366,7 +367,8 @@ function complete_path(path::AbstractString;
                        use_envpath=false,
                        shell_escape=false,
                        raw_escape=false,
-                       string_escape=false)
+                       string_escape=false,
+                       contract_user=false)
     @assert !(shell_escape && string_escape)
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
@@ -378,11 +380,11 @@ function complete_path(path::AbstractString;
     else
         dir, prefix = splitdir(path)
     end
-    files = try
+    entries = try
         if isempty(dir)
-            readdir()
+            _readdirx()
         elseif isdir(dir)
-            readdir(dir)
+            _readdirx(dir)
         else
             return Completion[], dir, false
         end
@@ -392,11 +394,10 @@ function complete_path(path::AbstractString;
     end
 
     matches = Set{String}()
-    for file in files
-        if startswith(file, prefix)
-            p = joinpath(dir, file)
-            is_dir = try isdir(p) catch ex; ex isa Base.IOError ? false : rethrow() end
-            push!(matches, is_dir ? file * "/" : file)
+    for entry in entries
+        if startswith(entry.name, prefix)
+            is_dir = try isdir(entry) catch ex; ex isa Base.IOError ? false : rethrow() end
+            push!(matches, is_dir ? entry.name * "/" : entry.name)
         end
     end
 
@@ -413,7 +414,7 @@ function complete_path(path::AbstractString;
 
     matches = ((shell_escape ? do_shell_escape(s) : string_escape ? do_string_escape(s) : s) for s in matches)
     matches = ((raw_escape ? do_raw_escape(s) : s) for s in matches)
-    matches = Completion[PathCompletion(s) for s in matches]
+    matches = Completion[PathCompletion(contract_user ? contractuser(s) : s) for s in matches]
     return matches, dir, !isempty(matches)
 end
 
@@ -421,7 +422,8 @@ function complete_path(path::AbstractString,
                        pos::Int;
                        use_envpath=false,
                        shell_escape=false,
-                       string_escape=false)
+                       string_escape=false,
+                       contract_user=false)
     ## TODO: enable this depwarn once Pkg is fixed
     #Base.depwarn("complete_path with pos argument is deprecated because the return value [2] is incorrect to use", :complete_path)
     paths, dir, success = complete_path(path; use_envpath, shell_escape, string_escape)
@@ -687,13 +689,9 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
     isexpr(lwr, :thunk) || return nothing # lowered to `Expr(:error, ...)` or similar
     src = lwr.args[1]::Core.CodeInfo
 
-    # construct top-level `MethodInstance`
-    mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
-    mi.specTypes = Tuple{}
-
-    mi.def = context_module
     resolve_toplevel_symbols!(src, context_module)
-    @atomic mi.uninferred = src
+    # construct top-level `MethodInstance`
+    mi = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), src, context_module)
 
     interp = REPLInterpreter(limit_aggressive_inference)
     result = CC.InferenceResult(mi)
@@ -909,7 +907,7 @@ function close_path_completion(dir, paths, str, pos)
     return lastindex(str) <= pos || str[nextind(str, pos)] != '"'
 end
 
-function bslash_completions(string::String, pos::Int)
+function bslash_completions(string::String, pos::Int, hint::Bool=false)
     slashpos = something(findprev(isequal('\\'), string, pos), 0)
     if (something(findprev(in(bslash_separators), string, pos), 0) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
@@ -1166,7 +1164,7 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
     return sort!(unique(suggestions), by=completion_text), (dotpos+1):pos, true
 end
 
-function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true)
+function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true, hint::Bool=false)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(Meta.parse(partial, raise=false, depwarn=false))
@@ -1219,6 +1217,9 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     # its invocation.
     varrange = findprev("var\"", string, pos)
 
+    expanded = nothing
+    was_expanded = false
+
     if varrange !== nothing
         ok, ret = bslash_completions(string, pos)
         ok && return ret
@@ -1235,7 +1236,13 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
             scs::String = string[r]
 
             expanded = complete_expanduser(scs, r)
-            expanded[3] && return expanded  # If user expansion available, return it
+            was_expanded = expanded[3]
+            if was_expanded
+                scs = (only(expanded[1])::PathCompletion).path
+                # If tab press, ispath and user expansion available, return it now
+                # otherwise see if we can complete the path further before returning with expanded ~
+                !hint && ispath(scs) && return expanded::Completions
+            end
 
             path::String = replace(scs, r"(\\+)\g1(\\?)`" => "\1\2`") # fuzzy unescape_raw_string: match an even number of \ before ` and replace with half as many
             # This expansion with "\\ "=>' ' replacement and shell_escape=true
@@ -1253,12 +1260,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                         r = nextind(string, startpos + sizeof(dir)):pos
                     else
                         map!(paths, paths) do c::PathCompletion
-                            return PathCompletion(dir * "/" * c.path)
+                            p = dir * "/" * c.path
+                            was_expanded && (p = contractuser(p))
+                            return PathCompletion(p)
                         end
                     end
                 end
             end
-            return sort!(paths, by=p->p.path), r, success
+            if isempty(paths) && !hint && was_expanded
+                # if not able to provide completions, not hinting, and ~ expansion was possible, return ~ expansion
+                return expanded::Completions
+            else
+                return sort!(paths, by=p->p.path), r::UnitRange{Int}, success
+            end
         end
     elseif inc_tag === :string
         # Find first non-escaped quote
@@ -1268,7 +1282,13 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
             scs::String = string[r]
 
             expanded = complete_expanduser(scs, r)
-            expanded[3] && return expanded  # If user expansion available, return it
+            was_expanded = expanded[3]
+            if was_expanded
+                scs = (only(expanded[1])::PathCompletion).path
+                # If tab press, ispath and user expansion available, return it now
+                # otherwise see if we can complete the path further before returning with expanded ~
+                !hint && ispath(scs) && return expanded::Completions
+            end
 
             path = try
                 unescape_string(replace(scs, "\\\$"=>"\$"))
@@ -1280,7 +1300,9 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                 paths, dir, success = complete_path(path::String, string_escape=true)
 
                 if close_path_completion(dir, paths, path, pos)
-                    paths[1] = PathCompletion((paths[1]::PathCompletion).path * "\"")
+                    p = (paths[1]::PathCompletion).path * "\""
+                    hint && was_expanded && (p = contractuser(p))
+                    paths[1] = PathCompletion(p)
                 end
 
                 if success && !isempty(dir)
@@ -1289,21 +1311,31 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                         # otherwise make it the whole completion
                         if endswith(dir, "/") && startswith(scs, dir)
                             r = (startpos + sizeof(dir)):pos
-                        elseif startswith(scs, dir * "/")
+                        elseif startswith(scs, dir * "/") && dir != dirname(homedir())
+                            was_expanded && (dir = contractuser(dir))
                             r = nextind(string, startpos + sizeof(dir)):pos
                         else
                             map!(paths, paths) do c::PathCompletion
-                                return PathCompletion(dir * "/" * c.path)
+                                p = dir * "/" * c.path
+                                hint && was_expanded && (p = contractuser(p))
+                                return PathCompletion(p)
                             end
                         end
                     end
                 end
 
                 # Fallthrough allowed so that Latex symbols can be completed in strings
-                success && return sort!(paths, by=p->p.path), r, success
+                if success
+                    return sort!(paths, by=p->p.path), r::UnitRange{Int}, success
+                elseif !hint && was_expanded
+                    # if not able to provide completions, not hinting, and ~ expansion was possible, return ~ expansion
+                    return expanded::Completions
+                end
             end
         end
     end
+    # if path has ~ and we didn't find any paths to complete just return the expanded path
+    was_expanded && return expanded::Completions
 
     ok, ret = bslash_completions(string, pos)
     ok && return ret
@@ -1349,14 +1381,15 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                     append!(suggestions, project_deps_get_completion_candidates(s, dir))
                 end
                 isdir(dir) || continue
-                for pname in readdir(dir)
+                for entry in _readdirx(dir)
+                    pname = entry.name
                     if pname[1] != '.' && pname != "METADATA" &&
                         pname != "REQUIRE" && startswith(pname, s)
                         # Valid file paths are
                         #   <Mod>.jl
                         #   <Mod>/src/<Mod>.jl
                         #   <Mod>.jl/src/<Mod>.jl
-                        if isfile(joinpath(dir, pname))
+                        if isfile(entry)
                             endswith(pname, ".jl") && push!(suggestions,
                                                             PackageCompletion(pname[1:prevind(pname, end-2)]))
                         else
@@ -1365,7 +1398,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                             else
                                 pname
                             end
-                            if isfile(joinpath(dir, pname, "src",
+                            if isfile(joinpath(entry, "src",
                                                "$mod_name.jl"))
                                 push!(suggestions, PackageCompletion(mod_name))
                             end
@@ -1388,7 +1421,7 @@ end
 module_filter(mod::Module, x::Symbol) =
     Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getglobal(mod, x), Module)
 
-function shell_completions(string, pos)
+function shell_completions(string, pos, hint::Bool=false)
     # First parse everything up to the current position
     scs = string[1:pos]
     args, last_arg_start = try
@@ -1406,7 +1439,7 @@ function shell_completions(string, pos)
     # If the last char was a space, but shell_parse ignored it search on "".
     if isexpr(lastarg, :incomplete) || isexpr(lastarg, :error)
         partial = string[last_arg_start:pos]
-        ret, range = completions(partial, lastindex(partial))
+        ret, range = completions(partial, lastindex(partial), Main, true, hint)
         range = range .+ (last_arg_start - 1)
         return ret, range, true
     elseif endswith(scs, ' ') && !endswith(scs, "\\ ")
@@ -1421,9 +1454,16 @@ function shell_completions(string, pos)
         # Also try looking into the env path if the user wants to complete the first argument
         use_envpath = length(args.args) < 2
 
-        # TODO: call complete_expanduser here?
+        expanded = complete_expanduser(path, r)
+        was_expanded = expanded[3]
+        if was_expanded
+            path = (only(expanded[1])::PathCompletion).path
+            # If tab press, ispath and user expansion available, return it now
+            # otherwise see if we can complete the path further before returning with expanded ~
+            !hint && ispath(path) && return expanded::Completions
+        end
 
-        paths, dir, success = complete_path(path, use_envpath=use_envpath, shell_escape=true)
+        paths, dir, success = complete_path(path, use_envpath=use_envpath, shell_escape=true, contract_user=was_expanded)
 
         if success && !isempty(dir)
             let dir = do_shell_escape(dir)
@@ -1441,7 +1481,14 @@ function shell_completions(string, pos)
                 end
             end
         end
-
+        # if ~ was expanded earlier and the incomplete string isn't a path
+        # return the path with contracted user to match what the hint shows. Otherwise expand ~
+        # i.e. require two tab presses to expand user
+        if was_expanded && !ispath(path)
+            map!(paths, paths) do c::PathCompletion
+                PathCompletion(contractuser(c.path))
+            end
+        end
         return paths, r, success
     end
     return Completion[], 0:-1, false

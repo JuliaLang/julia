@@ -209,6 +209,8 @@ end
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
     @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
+
+    @test Core.Compiler.is_nothrow(Base.infer_effects(iterate, (Tuple{Int,Int,Int}, Int)))
 end
 
 
@@ -817,4 +819,16 @@ namedtup = (;a=1, b=2, c=3)
     pair = (1 => "2")
     @test (1, "2") == @inferred Tuple(pair)
     @test (1, "2") == @inferred Tuple{Int,String}(pair)
+end
+
+@testset "circshift" begin
+    t1 = (1, 2, 3, 4, 5)
+    t2 = (1, 'a', -7.0, 3)
+    t3 = ('a', 'b', 'c', 'd')
+    @test @inferred(Base.circshift(t1, 2)) == (4, 5, 1, 2, 3)
+    # The return type of mixed tuples with runtime shift cannot be inferred.
+    @test Base.circshift(t2, 3) == ('a', -7.0, 3, 1)
+    @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
+    @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
+    @test_throws MethodError circshift(t1, 'a')
 end

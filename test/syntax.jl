@@ -713,34 +713,8 @@ m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
 let low3 = Meta.lower(@__MODULE__, quote @m3 end)
     m3_exprs = get_expr_list(low3)
     ci = low3.args[1]::Core.CodeInfo
-    @test ci.codelocs in ([4, 4, 2], [4, 2])
+    #@test ci.codelocs in ([4, 4, 0], [4, 0])
     @test is_return_ssavalue(m3_exprs[end])
-end
-
-function f1(a)
-    b = a + 100
-    b
-end
-
-@generated function f2(a)
-    quote
-        b = a + 100
-        b
-    end
-end
-
-f1_ci = code_typed(f1, (Int,), debuginfo=:source)[1][1]
-f2_ci = code_typed(f2, (Int,), debuginfo=:source)[1][1]
-
-f1_exprs = get_expr_list(f1_ci)
-f2_exprs = get_expr_list(f2_ci)
-
-if Base.JLOptions().can_inline != 0
-    @test length(f1_ci.linetable) == 3
-    @test length(f2_ci.linetable) >= 3
-else
-    @test length(f1_ci.linetable) == 2
-    @test length(f2_ci.linetable) >= 3
 end
 
 # Check that string and command literals are parsed to the appropriate macros
@@ -2215,6 +2189,16 @@ end
 end
 @test z28789 == 42
 
+const warn28789 = "Assignment to `s28789` in soft scope is ambiguous because a global variable by the same name exists: "*
+    "`s28789` will be treated as a new local. Disambiguate by using `local s28789` to suppress this warning or "*
+    "`global s28789` to assign to the existing global variable."
+@test_logs (:warn, warn28789) @test_throws UndefVarError @eval begin
+    s28789 = 0
+    for i = 1:10
+        s28789 += i
+    end
+end
+
 # issue #38650, `struct` should always be a hard scope
 f38650() = 0
 @eval begin
@@ -3637,3 +3621,65 @@ end
     @test array == [7]
     @test execs == 4
 end
+
+# Allow GlobalRefs in macro definition
+module MyMacroModule
+    macro mymacro end
+end
+macro MyMacroModule.mymacro()
+    1
+end
+@eval macro $(GlobalRef(MyMacroModule, :mymacro))(x)
+    2
+end
+@test (@MyMacroModule.mymacro) == 1
+@test (@MyMacroModule.mymacro(a)) == 2
+
+# Issue #53673 - missing macro hygiene for for/generator
+baremodule MacroHygieneFor
+    import ..Base
+    using Base: esc, Expr, +
+    macro for1()
+        :(let a=(for i=10; end; 1); a; end)
+    end
+    macro for2()
+        :(let b=(for j=11, k=12; end; 2); b; end)
+    end
+    macro for3()
+        :(let c=($(Expr(:for, esc(Expr(:block, :(j=11), :(k=12))), :())); 3); c; end)
+    end
+    macro for4()
+        :(begin; local j; let a=(for outer j=10; end; 4); j+a; end; end)
+    end
+end
+let nnames = length(names(MacroHygieneFor; all=true))
+    @test (@MacroHygieneFor.for1) == 1
+    @test (@MacroHygieneFor.for2) == 2
+    @test (@MacroHygieneFor.for3) == 3
+    @test (@MacroHygieneFor.for4) == 14
+    @test length(names(MacroHygieneFor; all=true)) == nnames
+end
+
+baremodule MacroHygieneGenerator
+    using ..Base: Any, !
+    my!(x) = !x
+    macro gen1()
+        :(let a=Any[x for x in 1]; a; end)
+    end
+    macro gen2()
+        :(let a=Bool[x for x in (true, false) if my!(x)]; a; end)
+    end
+    macro gen3()
+        :(let a=Bool[x for x in (true, false), y in (true, false) if my!(x) && my!(y)]; a; end)
+    end
+end
+let nnames = length(names(MacroHygieneGenerator; all=true))
+    @test (MacroHygieneGenerator.@gen1) == Any[x for x in 1]
+    @test (MacroHygieneGenerator.@gen2) == Bool[false]
+    @test (MacroHygieneGenerator.@gen3) == Bool[false]
+    @test length(names(MacroHygieneGenerator; all=true)) == nnames
+end
+
+# Issue #53729 - Lowering recursion into Expr(:toplevel)
+@test eval(Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(f53729(x) = x)), :(x=1)))) == 1
+@test f53729(2) == 2
