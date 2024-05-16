@@ -279,6 +279,28 @@ stride1(x::DenseArray) = stride(x, 1)::Int
 @noinline _chkstride1(ok::Bool) = ok || error("matrix does not have contiguous columns")
 @inline _chkstride1(ok::Bool, A, B...) = _chkstride1(ok & (stride1(A) == 1), B...)
 
+# Subtypes of StridedArrays that satisfy certain properties on their strides
+# Similar to Base.RangeIndex, but only include range types where the step is statically known to be non-zero
+const IncreasingRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}}
+const NonConstRangeIndex = Union{IncreasingRangeIndex, StepRange{<:BitInteger, <:BitInteger}}
+# StridedArray subtypes for which _fullstride2(::T) === true is known from the type
+DenseOrStridedReshapedReinterpreted{T,N} =
+    Union{DenseArray{T,N}, Base.StridedReshapedArray{T,N}, Base.StridedReinterpretArray{T,N}}
+# Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
+StridedSubArrayStandard{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{Vararg{Union{NonConstRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
+StridedArrayStdSubArray{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayStandard{T,N}}
+# Similar to Base.StridedSubArray, except with a IncreasingRangeIndex instead of a RangeIndex
+StridedSubArrayIncr{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{Vararg{Union{IncreasingRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
+StridedArrayStdSubArrayIncr{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayIncr{T,N}}
+# These subarrays have a stride of 1 along the first dimension
+StridedSubArrayAUR{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{AbstractUnitRange{<:BitInteger}}} = Base.StridedSubArray{T,N,A,I}
+StridedArrayStride1{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayIncr{T,N}}
+# StridedMatrixStride1 may typically be forwarded to LAPACK methods
+StridedMatrixStride1{T} = StridedArrayStride1{T,2}
+
 """
     LinearAlgebra.checksquare(A)
 

@@ -647,12 +647,14 @@ end
 
 @testset "copytrito!" begin
     n = 10
-    A = rand(n, n)
-    for uplo in ('L', 'U')
-        B = zeros(n, n)
-        copytrito!(B, A, uplo)
-        C = uplo == 'L' ? tril(A) : triu(A)
-        @test B ≈ C
+    for A in (rand(n, n), rand(Int8, n, n)), uplo in ('L', 'U')
+        for AA in (A, view(A, reverse.(axes(A))...))
+            for B in (zeros(n, n), zeros(n+1, n+2))
+                copytrito!(B, AA, uplo)
+                C = uplo == 'L' ? tril(AA) : triu(AA)
+                @test view(B, 1:n, 1:n) == C
+            end
+        end
     end
     @testset "aliasing" begin
         M = Matrix(reshape(1:36, 6, 6))
