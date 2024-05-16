@@ -45,7 +45,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     if !color && stmt isa PiNode
         # when the outer context is already colored (green, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
-        show_unquoted(io, stmt.val, indent)
+        show_unquoted(io, stmt.val, indent, 0, unstable_ssa)
         print(io, ", ")
         print(io, stmt.typ)
         print(io, ")")
@@ -77,9 +77,9 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa PhiNode
-        show_unquoted_phinode(io, stmt, indent, "#")
+        show_unquoted_phinode(io, stmt, indent, "#", unstable_ssa)
     elseif stmt isa GotoIfNot
-        show_unquoted_gotoifnot(io, stmt, indent, "#")
+        show_unquoted_gotoifnot(io, stmt, indent, "#", unstable_ssa)
     # everything else in the IR, defer to the generic AST printer
     elseif stmt isa Expr
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0, 0, unstable_ssa)
@@ -91,13 +91,17 @@ end
 
 show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io, Core.SlotNumber(val.n), indent, prec)
 
-show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
-function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String)
+function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String, unstable_ssa::BitSet = BitSet())
     args = String[let
         e = stmt.edges[i]
         v = !isassigned(stmt.values, i) ? "#undef" :
             sprint(; context=io) do io′
-                show_unquoted(io′, stmt.values[i], indent)
+                val = stmt.values[i]
+                if val isa SSAValue
+                    show_unquoted(io′, stmt.values[i], indent, -1, unstable_ssa)
+                else
+                    show_unquoted(io′, stmt.values[i], indent)
+                end
             end
         "$prefix$e => $v"
         end for i in 1:length(stmt.edges)
@@ -107,45 +111,55 @@ function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::Strin
     print(io, ')')
 end
 
-function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, ::Int)
+function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, prec::Int, unstable_ssa::BitSet = BitSet())
     print(io, "φᶜ (")
     first = true
     for v in stmt.values
         first ? (first = false) : print(io, ", ")
-        show_unquoted(io, v, indent)
+        show_unquoted(io, v, indent, prec, unstable_ssa)
     end
     print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::PiNode, indent::Int, ::Int)
+function show_unquoted(io::IO, stmt::PiNode, indent::Int, prec::Int, unstable_ssa::BitSet=BitSet())
     print(io, "π (")
-    show_unquoted(io, stmt.val, indent)
+    show_unquoted(io, stmt.val, indent, prec, unstable_ssa)
     print(io, ", ")
     printstyled(io, stmt.typ, color=:cyan)
     print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, ::Int)
+function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, prec::Int, unstable_ssa::BitSet = BitSet())
     print(io, "ϒ (")
-    isdefined(stmt, :val) ?
-        show_unquoted(io, stmt.val, indent) :
+    if isdefined(stmt, :val)
+        if stmt.val isa SSAValue
+            show_unquoted(io, stmt.val, indent, prec, unstable_ssa)
+        else
+            show_unquoted(io, stmt.val, indent, prec)
+        end
+    else
         print(io, "#undef")
+    end
     print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, ::Int)
+function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, prec::Int, unstable_ssa::BitSet = BitSet())
     if !isdefined(stmt, :val)
         print(io, "unreachable")
     else
         print(io, "return ")
-        show_unquoted(io, stmt.val, indent)
+        if stmt.val isa SSAValue
+            show_unquoted(io, stmt.val, indent, prec, unstable_ssa)
+        else
+            show_unquoted(io, stmt.val, indent, prec)
+        end
     end
 end
 
 show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int) = show_unquoted_gotoifnot(io, stmt, indent, "%")
-function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String)
+function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String, unstable_ssa::BitSet = BitSet())
     print(io, "goto ", prefix, stmt.dest, " if not ")
-    show_unquoted(io, stmt.cond, indent)
+    show_unquoted(io, stmt.cond, indent, 0, unstable_ssa)
 end
 
 function should_print_ssa_type(@nospecialize node)
