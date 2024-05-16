@@ -445,7 +445,7 @@ end
     end
 end
 
-@inline function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
+@inline function getindex(A::SymTridiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return symmetric((@inbounds A.dv[i]), :U)::symmetric_type(eltype(A.dv))
@@ -680,7 +680,7 @@ end
     end
 end
 
-@inline function getindex(A::Tridiagonal{T}, i::Integer, j::Integer) where T
+@inline function getindex(A::Tridiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.d[i]

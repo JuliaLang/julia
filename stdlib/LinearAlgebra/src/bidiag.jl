@@ -156,7 +156,7 @@ end
     end
 end
 
-@inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
+@inline function getindex(A::Bidiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.dv[i]
