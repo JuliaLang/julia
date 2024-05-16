@@ -462,8 +462,6 @@ end
 _fullstride2(A, f=identity) = f(stride(A, 2)) >= size(A, 1)
 # for some standard StridedArrays, the _fullstride2 condition is known to hold at compile-time
 # We specialize the function for certain StridedArray subtypes
-
-
 _fullstride2(A::StridedArrayStdSubArray, ::typeof(abs)) = true
 _fullstride2(A::StridedArrayStdSubArrayIncr, ::typeof(identity)) = true
 
