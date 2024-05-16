@@ -35,11 +35,12 @@ struct Ignored ; end
 #-------------------------------------------------------------------------------
 # Logger with extra test-related state
 mutable struct TestLogger <: AbstractLogger
-    logs::Vector{LogRecord}
+    lock::ReentrantLock
+    logs::Vector{LogRecord}  # Guarded by lock.
     min_level::LogLevel
     catch_exceptions::Bool
     shouldlog_args
-    message_limits::Dict{Any,Int}
+    message_limits::Dict{Any,Int}  # Guarded by lock.
     respect_maxlog::Bool
 end
 
@@ -84,7 +85,8 @@ TestLogger(; min_level=Info, catch_exceptions=false, respect_maxlog=true) =
 Logging.min_enabled_level(logger::TestLogger) = logger.min_level
 
 function Logging.shouldlog(logger::TestLogger, level, _module, group, id)
-    if get(logger.message_limits, id, 1) > 0
+
+    if @lock(logger.lock, get(logger.message_limits, id, 1)) > 0
         logger.shouldlog_args = (level, _module, group, id)
         true
     else
@@ -98,12 +100,17 @@ function Logging.handle_message(logger::TestLogger, level, msg, _module,
     if logger.respect_maxlog
         maxlog = get(kwargs, :maxlog, nothing)
         if maxlog isa Core.BuiltinInts
-            remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
-            logger.message_limits[id] = remaining - 1
-            remaining > 0 || return
+            @lock logger.lock begin
+                remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+                logger.message_limits[id] = remaining - 1
+                remaining > 0 || return
+            end
         end
     end
-    push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
+    r = LogRecord(level, msg, _module, group, id, file, line, kwargs)
+    @lock logger.lock begin
+        push!(logger.logs, r)
+    end
 end
 
 # Catch exceptions for the test logger only if specified
@@ -112,7 +119,9 @@ Logging.catch_exceptions(logger::TestLogger) = logger.catch_exceptions
 function collect_test_logs(f; kwargs...)
     logger = TestLogger(; kwargs...)
     value = with_logger(f, logger)
-    logger.logs, value
+    @lock logger.lock begin
+        return copy(logger.logs), value
+    end
 end
 
 
