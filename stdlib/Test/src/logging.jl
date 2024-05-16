@@ -2,6 +2,7 @@
 
 using Logging: Logging, AbstractLogger, LogLevel, Info, with_logger
 import Base: occursin
+using Base: @lock
 
 #-------------------------------------------------------------------------------
 """
@@ -39,7 +40,7 @@ mutable struct TestLogger <: AbstractLogger
     logs::Vector{LogRecord}  # Guarded by lock.
     min_level::LogLevel
     catch_exceptions::Bool
-    shouldlog_args
+    shouldlog_args  # Guarded by lock.
     message_limits::Dict{Any,Int}  # Guarded by lock.
     respect_maxlog::Bool
 end
@@ -81,16 +82,17 @@ Test Passed
 ```
 """
 TestLogger(; min_level=Info, catch_exceptions=false, respect_maxlog=true) =
-    TestLogger(LogRecord[], min_level, catch_exceptions, nothing, Dict{Any, Int}(), respect_maxlog)
+    TestLogger(ReentrantLock(), LogRecord[], min_level, catch_exceptions, nothing, Dict{Any, Int}(), respect_maxlog)
 Logging.min_enabled_level(logger::TestLogger) = logger.min_level
 
 function Logging.shouldlog(logger::TestLogger, level, _module, group, id)
-
-    if @lock(logger.lock, get(logger.message_limits, id, 1)) > 0
-        logger.shouldlog_args = (level, _module, group, id)
-        true
-    else
-        false
+    @lock logger.lock begin
+        if get(logger.message_limits, id, 1) > 0
+            logger.shouldlog_args = (level, _module, group, id)
+            return true
+        else
+            return false
+        end
     end
 end
 
