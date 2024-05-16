@@ -432,7 +432,7 @@ end
 """
     isdigit(c::AbstractChar) -> Bool
 
-Tests whether a character is a decimal digit (0-9).
+Tests whether a character is an ASCII decimal digit (`0`-`9`).
 
 See also: [`isletter`](@ref).
 
