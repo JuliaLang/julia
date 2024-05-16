@@ -1052,6 +1052,14 @@ end
     end
 end
 
+@testset "kron with triangular matrices of matrices" begin
+    for T in (UpperTriangular, LowerTriangular)
+        t = T(fill(ones(2,2), 2, 2))
+        m = Matrix(t)
+        @test kron(t, t) ≈ kron(m, m)
+    end
+end
+
 @testset "copyto! with aliasing (#39460)" begin
     M = Matrix(reshape(1:36, 6, 6))
     @testset for T in (UpperTriangular, LowerTriangular)

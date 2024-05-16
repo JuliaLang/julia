@@ -757,6 +757,7 @@ JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals);
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
+jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
 jl_unionall_t *jl_rename_unionall(jl_unionall_t *u);
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
@@ -769,7 +770,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
 JL_DLLEXPORT jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
-jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check);
+jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
 void jl_cache_type_(jl_datatype_t *type);
