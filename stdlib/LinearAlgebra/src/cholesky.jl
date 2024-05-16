@@ -519,9 +519,17 @@ function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d === :U
-        return UpperTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
+        if Cuplo === 'U'
+            return UpperTriangular(Cfactors)
+        else
+            return copy(LowerTriangular(Cfactors)')
+        end
     elseif d === :L
-        return LowerTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
+        if Cuplo === 'L'
+            return LowerTriangular(Cfactors)
+        else
+            return copy(UpperTriangular(Cfactors)')
+        end
     elseif d === :UL
         return (Cuplo === 'U' ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors))
     else
