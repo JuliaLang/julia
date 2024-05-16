@@ -771,7 +771,7 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
                 vm = T_has_tv ? jl_type_unionall(v, T) : T;
                 if (N_has_tv)
                     N = NULL;
-                vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1); // this cannot throw for these inputs
+                vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1, 0); // this cannot throw for these inputs
             }
             sp++;
             decl = ((jl_unionall_t*)decl)->body;
@@ -1020,7 +1020,7 @@ static void jl_compilation_sig(
             // avoid Vararg{Type{Type{...}}}
             if (jl_is_type_type(type_i) && jl_is_type_type(jl_tparam0(type_i)))
                 type_i = (jl_value_t*)jl_type_type;
-            type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1); // this cannot throw for these inputs
+            type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1, 0); // this cannot throw for these inputs
         }
         else {
             type_i = inst_varargp_in_env(decl, sparams);

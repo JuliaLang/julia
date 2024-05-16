@@ -2613,3 +2613,23 @@ let S = Tuple{Val{Val{Union{Val{A2}, A2}}}, Val{Val{Union{Val{A2}, Val{A4}, A4}}
     T = Tuple{Vararg{Val{V}}} where {V}
     @testintersect(S, T, !Union{})
 end
+
+#issue 54356
+abstract type A54356{T<:Real} end
+struct B54356{T} <: A54356{T} end
+let S = Tuple{Val, Val{T}} where {T}, R = Tuple{Val{Val{T}}, Val{T}} where {T}
+    # general parameters check
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, Complex{B}}}, S{1}, R{1})
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, B54356{B}}}, S{1}, R{1})
+    # extra check for Vararg
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, NTuple{B,Any}}}, S{-1}, R{-1})
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, Tuple{Any,Vararg{Any,B}}}}, S{-1}, R{-1})
+    # extra check for NamedTuple
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, NamedTuple{B,Tuple{Int}}}}, S{1}, R{1})
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, NamedTuple{B,Tuple{Int}}}}, S{(1,)}, R{(1,)})
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, NamedTuple{(:a),B}}}, S{NTuple{2,Int}}, R{NTuple{2,Int}})
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, NamedTuple{B,Tuple{Int,Int}}}}, S{(:a,:a)}, R{(:a,:a)})
+    # extra check for GenericMemory/GenericMemoryRef
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, GenericMemory{B}}}, S{1}, R{1})
+    @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, GenericMemory{:not_atomic,Int,B}}}, S{1}, R{1})
+end
