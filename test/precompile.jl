@@ -1957,6 +1957,7 @@ if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarc
     @testset "Multiversioning" begin # This test isn't the most robust because it relies on being in CI,
         pkg = Base.identify_package("Test")  # but we need better target reflection to make a better one.
         cachefiles = Base.find_all_in_cache_path(pkg)
+        pkgpath = Base.locate_package(pkg)
         idx = findfirst(cachefiles) do cf
             Base.stale_cachefile(pkgpath, cf) !== true
         end
