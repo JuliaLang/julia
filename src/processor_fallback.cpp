@@ -150,7 +150,7 @@ llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 
     auto &cmdline = get_cmdline_targets();
     check_cmdline(cmdline, true);
-    llvm::SmallVector<TargetData<feature_sz>, 0> image_targets;
+    llvm::SmallVector<TargetData<1>, 0> image_targets;
     for (auto &arg: cmdline) {
         auto data = arg_target_data(arg, image_targets.empty());
         image_targets.push_back(std::move(data));
