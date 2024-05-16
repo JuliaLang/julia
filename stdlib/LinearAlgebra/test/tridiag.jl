@@ -859,4 +859,12 @@ end
     @test axes(B) === (ax, ax)
 end
 
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    for S in (Tridiagonal(ev, dv, ev), SymTridiagonal(dv, ev))
+        @test_throws "invalid index" S[3, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
+end
+
 end # module TestTridiagonal

@@ -1062,4 +1062,13 @@ end
     end
 end
 
+@testset "getindex with Integers" begin
+    M = reshape(1:4,2,2)
+    for ST in (Symmetric, Hermitian)
+        S = ST(M)
+        @test_throws "invalid index" S[true, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
+end
+
 end # module TestSymmetric
