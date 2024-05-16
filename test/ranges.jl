@@ -314,6 +314,13 @@ end
             twiceprecision_is_normalized(Base.TwicePrecision{Float64}(rand_twiceprecision(Float32)))
         end
     end
+
+    @testset "displaying a complex range (#52713)" begin
+        r = 1.0*(1:5) .+ im
+        @test startswith(repr(r), repr(first(r)))
+        @test endswith(repr(r), repr(last(r)))
+        @test occursin(repr(step(r)), repr(r))
+    end
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -2718,4 +2725,17 @@ end
     @test Base._log_twice64_unchecked(-1.23).lo isa Float64
     @test Base._log_twice64_unchecked(NaN).lo isa Float64
     @test Base._log_twice64_unchecked(Inf).lo isa Float64
+end
+
+@testset "OneTo promotion" begin
+    struct MyUnitRange{T} <: AbstractUnitRange{T}
+        range::UnitRange{T}
+    end
+    Base.first(r::MyUnitRange) = first(r.range)
+    Base.last(r::MyUnitRange) = last(r.range)
+    Base.size(r::MyUnitRange) = size(r.range)
+    Base.length(r::MyUnitRange) = length(r.range)
+    Base.getindex(r::MyUnitRange, i::Int) = getindex(r.range, i)
+    @test promote(MyUnitRange(2:3), Base.OneTo(3)) == (2:3, 1:3)
+    @test promote(MyUnitRange(UnitRange(3.0, 4.0)), Base.OneTo(3)) == (3.0:4.0, 1.0:3.0)
 end

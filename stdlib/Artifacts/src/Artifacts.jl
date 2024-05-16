@@ -693,7 +693,7 @@ macro artifact_str(name, platform=nothing)
     local artifact_dict = load_artifacts_toml(artifacts_toml)
 
     # Invalidate calling .ji file if Artifacts.toml file changes
-    Base.include_dependency(artifacts_toml)
+    Base.include_dependency(artifacts_toml, track_content = true)
 
     # Check if the user has provided `LazyArtifacts`, and thus supports lazy artifacts
     # If not, check to see if `Pkg` or `Pkg.Artifacts` has been imported.
@@ -759,6 +759,6 @@ precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
 precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 precompile(parse_mapping, (String, String, String))
 precompile(parse_mapping, (Dict{String, Any}, String, String))
-
+precompile(Tuple{typeof(Artifacts._artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Any})
 
 end # module Artifacts

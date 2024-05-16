@@ -546,6 +546,15 @@ end
     @test det(B)  ≈  det(A) atol=eps()
     @test logdet(B)  ==  -Inf
     @test logabsdet(B)[1] == -Inf
- end
+end
+
+@testset "partly initialized factors" begin
+    @testset for uplo in ('U', 'L')
+        M = Matrix{BigFloat}(undef, 2, 2)
+        M[1,1] = M[2,2] = M[1+(uplo=='L'), 1+(uplo=='U')] = 3
+        C = Cholesky(M, uplo, 0)
+        @test C.L == C.U'
+    end
+end
 
 end # module TestCholesky

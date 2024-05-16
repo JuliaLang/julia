@@ -504,4 +504,40 @@ end
     @test x ≈ xf
 end
 
+@testset "issue #53451" begin
+    # in the issue it was noted that QR factorizations of zero-column matrices
+    # were possible, but zero row-matrices errored, because LAPACK does not
+    # accept these empty matrices. now, the `geqrt!` call should be forwarded only
+    # if both matrix dimensions are positive.
+
+    for dimA in (0, 1, 2, 4)
+        for F in (Float32, Float64, ComplexF32, ComplexF64, BigFloat)
+            # this should have worked before, Q is square, and R is 0 × 0:
+            A_zero_cols = rand(F, dimA, 0)
+            qr_zero_cols = qr(A_zero_cols)
+            @test size(qr_zero_cols.Q) == (dimA, dimA)
+            @test size(qr_zero_cols.R) == (0, 0)
+            @test qr_zero_cols.Q == LinearAlgebra.I(dimA)
+
+            # this should work now, Q is 0 × 0, and R has `dimA` columns:
+            A_zero_rows = rand(F, 0, dimA)
+            qr_zero_rows = qr(A_zero_rows)
+            @test size(qr_zero_rows.Q) == (0, 0)
+            @test size(qr_zero_rows.R) == (0, dimA)
+        end
+    end
+end
+
+@testset "issue #53214" begin
+    # Test that the rank of a QRPivoted matrix is computed correctly
+    @test rank(qr([1.0 0.0; 0.0 1.0], ColumnNorm())) == 2
+    @test rank(qr([1.0 0.0; 0.0 0.9], ColumnNorm()), rtol=0.95) == 1
+    @test rank(qr([1.0 0.0; 0.0 0.9], ColumnNorm()), atol=0.95) == 1
+    @test rank(qr([1.0 0.0; 0.0 1.0], ColumnNorm()), rtol=1.01) == 0
+    @test rank(qr([1.0 0.0; 0.0 1.0], ColumnNorm()), atol=1.01) == 0
+
+    @test rank(qr([1.0 2.0; 2.0 4.0], ColumnNorm())) == 1
+    @test rank(qr([1.0 2.0 3.0; 4.0 5.0 6.0 ; 7.0 8.0 9.0], ColumnNorm())) == 2
+end
+
 end # module TestQR

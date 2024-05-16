@@ -1253,8 +1253,6 @@ show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
 print(io::IO, n::Unsigned) = print(io, string(n))
 
-show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(string(UInt(p), base = 16, pad = Sys.WORD_SIZE>>2))")
-
 has_tight_type(p::Pair) =
     typeof(p.first)  == typeof(p).parameters[1] &&
     typeof(p.second) == typeof(p).parameters[2]
@@ -1336,15 +1334,15 @@ end
 
 show(io::IO, l::Core.MethodInstance) = show_mi(io, l)
 
-function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
-    def = l.def
+function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
+    def = mi.def
     if isa(def, Method)
-        if isdefined(def, :generator) && l === def.generator
+        if isdefined(def, :generator) && mi === def.generator
             print(io, "MethodInstance generator for ")
             show(io, def)
         else
             print(io, "MethodInstance for ")
-            show_tuple_as_call(io, def.name, l.specTypes; qualified=true)
+            show_tuple_as_call(io, def.name, mi.specTypes; qualified=true)
         end
     else
         print(io, "Toplevel MethodInstance thunk")
@@ -1352,12 +1350,15 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
         # MethodInstance is part of a stacktrace, it gets location info
         # added by other means.  But if it isn't, then we should try
         # to print a little more identifying information.
-        if !from_stackframe
-            di = mi.uninferred.debuginfo
-            file, line = IRShow.debuginfo_firstline(di)
-            file = string(file)
-            line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
-            print(io, " from ", def, " starting at ", line)
+        if !from_stackframe && isdefined(mi, :cache)
+            ci = mi.cache
+            if ci.owner === :uninferred
+                di = ci.inferred.debuginfo
+                file, line = IRShow.debuginfo_firstline(di)
+                file = string(file)
+                line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
+                print(io, " from ", def, " starting at ", line)
+            end
         end
     end
 end
@@ -1379,7 +1380,7 @@ function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
             show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
         end
     else
-        di = mi.uninferred.debuginfo
+        di = mi.cache.inferred.debuginfo
         file, line = IRShow.debuginfo_firstline(di)
         file = string(file)
         line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"

@@ -78,7 +78,7 @@ find_uplo(bc::Broadcasted) = mapfoldl(find_uplo, merge_uplos, Broadcast.cat_nest
 function structured_broadcast_alloc(bc, ::Type{Bidiagonal}, ::Type{ElType}, n) where {ElType}
     uplo = n > 0 ? find_uplo(bc) : 'U'
     n1 = max(n - 1, 0)
-    if uplo == 'T'
+    if count_structedmatrix(Bidiagonal, bc) > 1 && uplo == 'T'
         return Tridiagonal(Array{ElType}(undef, n1), Array{ElType}(undef, n), Array{ElType}(undef, n1))
     end
     return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n1), uplo)
@@ -134,7 +134,18 @@ iszerodefined(::Type) = false
 iszerodefined(::Type{<:Number}) = true
 iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
 
+count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_nested(bc); init = 0)
+
+"""
+    fzeropreserving(bc) -> Bool
+
+Return true if the broadcasted function call evaluates to zero for structural zeros of the
+structured arguments.
+
+For trivial broadcasted values such as `bc::Number`, this reduces to `iszero(bc)`.
+"""
 fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
+
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
 # expression is stable.  We can test the zero-preservability by applying the function
 # in cases where all other arguments are known scalars against a zero from the structured
@@ -176,7 +187,7 @@ function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.diag[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+        dest.diag[i] = @inbounds bc[CartesianIndex(i, i)]
     end
     return dest
 end
@@ -186,15 +197,15 @@ function copyto!(dest::Bidiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.dv[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+        dest.dv[i] = @inbounds bc[CartesianIndex(i, i)]
     end
     if dest.uplo == 'U'
         for i = 1:size(dest, 1)-1
-            dest.ev[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
+            dest.ev[i] = @inbounds bc[CartesianIndex(i, i+1)]
         end
     else
         for i = 1:size(dest, 1)-1
-            dest.ev[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
+            dest.ev[i] = @inbounds bc[CartesianIndex(i+1, i)]
         end
     end
     return dest
@@ -205,11 +216,11 @@ function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.dv[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+        dest.dv[i] = @inbounds bc[CartesianIndex(i, i)]
     end
     for i = 1:size(dest, 1)-1
-        v = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
-        v == (@inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))) || throw(ArgumentError("broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
+        v = @inbounds bc[CartesianIndex(i, i+1)]
+        v == (@inbounds bc[CartesianIndex(i+1, i)]) || throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
         dest.ev[i] = v
     end
     return dest
@@ -220,11 +231,11 @@ function copyto!(dest::Tridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.d[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+        dest.d[i] = @inbounds bc[CartesianIndex(i, i)]
     end
     for i = 1:size(dest, 1)-1
-        dest.du[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
-        dest.dl[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
+        dest.du[i] = @inbounds bc[CartesianIndex(i, i+1)]
+        dest.dl[i] = @inbounds bc[CartesianIndex(i+1, i)]
     end
     return dest
 end
@@ -235,7 +246,7 @@ function copyto!(dest::LowerTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for j in axs[2]
         for i in j:axs[1][end]
-            @inbounds dest.data[i,j] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, j))
+            @inbounds dest.data[i,j] = bc[CartesianIndex(i, j)]
         end
     end
     return dest
@@ -247,7 +258,7 @@ function copyto!(dest::UpperTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for j in axs[2]
         for i in 1:j
-            @inbounds dest.data[i,j] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, j))
+            @inbounds dest.data[i,j] = bc[CartesianIndex(i, j)]
         end
     end
     return dest

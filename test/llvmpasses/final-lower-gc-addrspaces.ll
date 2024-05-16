@@ -1,8 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='FinalLowerGC' -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='FinalLowerGC' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='FinalLowerGC' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 target triple = "amdgcn-amd-amdhsa"
 target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:32:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64-S32-A5-G1-ni:7-ni:10:11:12:13"
@@ -25,11 +23,8 @@ attributes #0 = { allocsize(1) }
 define void @gc_frame_addrspace(i64 %a, i64 %b) {
 top:
 ; CHECK-LABEL: @gc_frame_addrspace
-; TYPED: %0 = alloca {} addrspace(10)*, i32 4, align 16, addrspace(5)
 ; OPAQUE: %0 = alloca ptr addrspace(10), i32 4, align 16, addrspace(5)
-; TYPED: %gcframe = addrspacecast {} addrspace(10)* addrspace(5)* %0 to {} addrspace(10)**
 ; OPAQUE: %gcframe = addrspacecast ptr addrspace(5) %0 to ptr
-; TYPED: %1 = bitcast {} addrspace(10)** %gcframe to i8*
   %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
   %pgcstack = call {}*** @julia.get_pgcstack()
   call void @julia.push_gc_frame({} addrspace(10)** %gcframe, i32 2)

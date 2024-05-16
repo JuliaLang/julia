@@ -1057,7 +1057,9 @@ end
                 $ew HasDepWithExtensions.do_something() || error("do_something errored")
                 using ExtDep2
                 $ew using ExtDep2
-                $ew HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+                using ExtDep3
+                $ew using ExtDep3
+                $ew HasExtensions.ext_dep_loaded || error("ext_dep_loaded not set")
             end
             """
             return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
@@ -1105,6 +1107,8 @@ end
             Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
             using ExtDep2
             Base.get_extension(HasExtensions, :ExtensionFolder) isa Module || error("expected extension to load")
+            using ExtDep3
+            Base.get_extension(HasExtensions, :ExtensionDep) isa Module || error("expected extension to load")
         end
         """
         for compile in (`--compiled-modules=no`, ``)
@@ -1609,5 +1613,20 @@ end
 
     finally
        copy!(LOAD_PATH, old_load_path)
-   end
+    end
+end
+
+@testset "project path handling" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "ProjectPath"))
+        id_project = Base.identify_package("ProjectPath")
+        Base.locate_package(id_project)
+        @test Base.locate_package(id_project) == joinpath(@__DIR__, "project", "ProjectPath", "CustomPath.jl")
+
+        id_dep = Base.identify_package("ProjectPathDep")
+        @test Base.locate_package(id_dep) == joinpath(@__DIR__, "project", "ProjectPath", "ProjectPathDep", "CustomPath.jl")
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
 end
