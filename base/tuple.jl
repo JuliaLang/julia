@@ -456,16 +456,9 @@ function map(f, t1::Any32, t2::Any32, ts::Any32...)
     (A...,)
 end
 
-function _tuple_foldl(op::Op, t::Tuple{Any,Vararg}) where {Op}
+function _tuple_foldl(op::Op, @nospecialize t::Tuple{Any,Vararg}) where {Op}
     ass = _FoldAssociativity.Left()
     _tupleview_fold(op, ass, _TupleViewFront(), t, _tupleview_length_representation(t))
-end
-function _tuple_foldl(op::Op, t::Any32) where {Op}
-    y = t[1]
-    for i ∈ 2:length(t)
-        y = op(y, t[i])
-    end
-    y
 end
 
 # type-stable padding
