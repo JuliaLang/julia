@@ -808,7 +808,7 @@ julia> opnorm(A, 1)
 5.0
 ```
 """
-function opnorm(A::AbstractMatrix, p::Real=2)
+Base.@constprop :aggressive function opnorm(A::AbstractMatrix, p::Real=2)
     if p == 2
         return opnorm2(A)
     elseif p == 1
@@ -2012,6 +2012,7 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     m,n = size(A)
     m1,n1 = size(B)
     (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+    A = Base.unalias(B, A)
     if uplo == 'U'
         for j=1:n
             for i=1:min(j,m)
@@ -2026,4 +2027,8 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
         end
     end
     return B
+end
+# Forward LAPACK-compatible strided matrices to lacpy
+function copytrito!(B::StridedMatrixStride1{T}, A::StridedMatrixStride1{T}, uplo::AbstractChar) where {T<:BlasFloat}
+    LAPACK.lacpy!(B, A, uplo)
 end

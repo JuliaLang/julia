@@ -269,13 +269,13 @@ Base.isstored(A::UnitUpperTriangular, i::Int, j::Int) =
 Base.isstored(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? Base.isstored(A.data, i, j) : false
 
-@propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
+@propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Int, j::Int) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-@propagate_inbounds getindex(A::LowerTriangular, i::Integer, j::Integer) =
+@propagate_inbounds getindex(A::LowerTriangular, i::Int, j::Int) =
     i >= j ? A.data[i,j] : _zero(A.data,j,i)
-@propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
+@propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Int, j::Int) where {T} =
     i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-@propagate_inbounds getindex(A::UpperTriangular, i::Integer, j::Integer) =
+@propagate_inbounds getindex(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
@@ -763,23 +763,21 @@ for op in (:+, :-)
     end
 end
 
-function kron(A::UpperTriangular{T}, B::UpperTriangular{S}) where {T<:Number,S<:Number}
-    C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
+function kron(A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+    C = UpperTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
+    return kron!(C, A, B)
+end
+function kron(A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+    C = LowerTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
 
-function kron(A::LowerTriangular{T}, B::LowerTriangular{S}) where {T<:Number,S<:Number}
-    C = LowerTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
-    return kron!(C, A, B)
-end
-
-function kron!(C::UpperTriangular{<:Number}, A::UpperTriangular{<:Number}, B::UpperTriangular{<:Number})
+function kron!(C::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _triukron!(C.data, A.data, B.data)
     return C
 end
-
-function kron!(C::LowerTriangular{<:Number}, A::LowerTriangular{<:Number}, B::LowerTriangular{<:Number})
+function kron!(C::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _trilkron!(C.data, A.data, B.data)
     return C

@@ -1052,6 +1052,14 @@ end
     end
 end
 
+@testset "kron with triangular matrices of matrices" begin
+    for T in (UpperTriangular, LowerTriangular)
+        t = T(fill(ones(2,2), 2, 2))
+        m = Matrix(t)
+        @test kron(t, t) ≈ kron(m, m)
+    end
+end
+
 @testset "copyto! with aliasing (#39460)" begin
     M = Matrix(reshape(1:36, 6, 6))
     @testset for T in (UpperTriangular, LowerTriangular)
@@ -1059,6 +1067,20 @@ end
         A2 = copy(A)
         B = T(view(M, 2:6, 2:6))
         @test copyto!(B, A) == A2
+    end
+end
+
+@testset "getindex with Integers" begin
+    M = reshape(1:4,2,2)
+    for Ttype in (UpperTriangular, UnitUpperTriangular)
+        T = Ttype(M)
+        @test_throws "invalid index" T[2, true]
+        @test T[1,2] == T[Int8(1),UInt16(2)] == T[big(1), Int16(2)]
+    end
+    for Ttype in (LowerTriangular, UnitLowerTriangular)
+        T = Ttype(M)
+        @test_throws "invalid index" T[true, 2]
+        @test T[2,1] == T[Int8(2),UInt16(1)] == T[big(2), Int16(1)]
     end
 end
 

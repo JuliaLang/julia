@@ -380,10 +380,10 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA,
         return _rmul_or_fill!(C, β)
     end
     if size(C) == size(A) == size(B) == (2,2)
-        return @stable_muladdmul matmul2x2!(C, tA, tB, A, B, MulAddMul(α, β))
+        return matmul2x2!(C, tA, tB, A, B, α, β)
     end
     if size(C) == size(A) == size(B) == (3,3)
-        return @stable_muladdmul matmul3x3!(C, tA, tB, A, B, MulAddMul(α, β))
+        return matmul3x3!(C, tA, tB, A, B, α, β)
     end
     # We convert the chars to uppercase to potentially unwrap a WrapperChar,
     # and extract the char corresponding to the wrapper type
@@ -462,19 +462,8 @@ end
 _fullstride2(A, f=identity) = f(stride(A, 2)) >= size(A, 1)
 # for some standard StridedArrays, the _fullstride2 condition is known to hold at compile-time
 # We specialize the function for certain StridedArray subtypes
-
-# Similar to Base.RangeIndex, but only include range types where the step is statically known to be non-zero
-const IncreasingRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}}
-const NonConstRangeIndex = Union{IncreasingRangeIndex, StepRange{<:BitInteger, <:BitInteger}}
-# StridedArray subtypes for which _fullstride2(::T) === true is known from the type
-const DenseOrStridedReshapedReinterpreted = Union{DenseArray, Base.StridedReshapedArray, Base.StridedReinterpretArray}
-# Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
-StridedSubArrayStandard{T,N,A,
-    I<:Tuple{Vararg{Union{NonConstRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
-_fullstride2(A::Union{DenseOrStridedReshapedReinterpreted,StridedSubArrayStandard}, ::typeof(abs)) = true
-StridedSubArrayIncr{T,N,A,
-    I<:Tuple{Vararg{Union{IncreasingRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
-_fullstride2(A::Union{DenseOrStridedReshapedReinterpreted,StridedSubArrayIncr}, ::typeof(identity)) = true
+_fullstride2(A::StridedArrayStdSubArray, ::typeof(abs)) = true
+_fullstride2(A::StridedArrayStdSubArrayIncr, ::typeof(identity)) = true
 
 Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar,
                 A::StridedVecOrMat{T}, x::StridedVector{T},
@@ -996,15 +985,20 @@ Base.@constprop :aggressive function __matmul2x2_elements(tA, A::AbstractMatrix)
 end
 Base.@constprop :aggressive __matmul2x2_elements(tA, tB, A, B) = __matmul2x2_elements(tA, A), __matmul2x2_elements(tB, B)
 
-Base.@constprop :aggressive function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    _add::MulAddMul = MulAddMul())
-    (A11, A12, A21, A22), (B11, B12, B21, B22) = _matmul2x2_elements(C, tA, tB, A, B)
+function _modify2x2!(Aelements, Belements, C, _add)
+    (A11, A12, A21, A22), (B11, B12, B21, B22) = Aelements, Belements
     @inbounds begin
     _modify!(_add, A11*B11 + A12*B21, C, (1,1))
     _modify!(_add, A21*B11 + A22*B21, C, (2,1))
     _modify!(_add, A11*B12 + A12*B22, C, (1,2))
     _modify!(_add, A21*B12 + A22*B22, C, (2,2))
     end # inbounds
+    C
+end
+Base.@constprop :aggressive function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+                    α = true, β = false)
+    Aelements, Belements = _matmul2x2_elements(C, tA, tB, A, B)
+    @stable_muladdmul _modify2x2!(Aelements, Belements, C, MulAddMul(α, β))
     C
 end
 
@@ -1061,12 +1055,9 @@ Base.@constprop :aggressive function __matmul3x3_elements(tA, A::AbstractMatrix)
 end
 Base.@constprop :aggressive __matmul3x3_elements(tA, tB, A, B) = __matmul3x3_elements(tA, A), __matmul3x3_elements(tB, B)
 
-Base.@constprop :aggressive function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                    _add::MulAddMul = MulAddMul())
-
+function _modify3x3!(Aelements, Belements, C, _add)
     (A11, A12, A13, A21, A22, A23, A31, A32, A33),
-        (B11, B12, B13, B21, B22, B23, B31, B32, B33) = _matmul3x3_elements(C, tA, tB, A, B)
-
+        (B11, B12, B13, B21, B22, B23, B31, B32, B33) = Aelements, Belements
     @inbounds begin
     _modify!(_add, A11*B11 + A12*B21 + A13*B31, C, (1,1))
     _modify!(_add, A21*B11 + A22*B21 + A23*B31, C, (2,1))
@@ -1080,6 +1071,13 @@ Base.@constprop :aggressive function matmul3x3!(C::AbstractMatrix, tA, tB, A::Ab
     _modify!(_add, A21*B13 + A22*B23 + A23*B33, C, (2,3))
     _modify!(_add, A31*B13 + A32*B23 + A33*B33, C, (3,3))
     end # inbounds
+    C
+end
+Base.@constprop :aggressive function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+                    α = true, β = false)
+
+    Aelements, Belements = _matmul3x3_elements(C, tA, tB, A, B)
+    @stable_muladdmul _modify3x3!(Aelements, Belements, C, MulAddMul(α, β))
     C
 end
 

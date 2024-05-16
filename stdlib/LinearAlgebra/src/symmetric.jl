@@ -233,7 +233,7 @@ axes(A::HermOrSym) = axes(A.data)
     end
 end
 
-@inline function getindex(A::Symmetric, i::Integer, j::Integer)
+@inline function getindex(A::Symmetric, i::Int, j::Int)
     @boundscheck checkbounds(A, i, j)
     @inbounds if i == j
         return symmetric(A.data[i, j], sym_uplo(A.uplo))::symmetric_type(eltype(A.data))
@@ -243,7 +243,7 @@ end
         return transpose(A.data[j, i])
     end
 end
-@inline function getindex(A::Hermitian, i::Integer, j::Integer)
+@inline function getindex(A::Hermitian, i::Int, j::Int)
     @boundscheck checkbounds(A, i, j)
     @inbounds if i == j
         return hermitian(A.data[i, j], sym_uplo(A.uplo))::hermitian_type(eltype(A.data))
@@ -347,7 +347,7 @@ copy(A::Hermitian) = (Hermitian(parentof_applytri(copy, A), sym_uplo(A.uplo)))
 
 function copyto!(dest::Symmetric, src::Symmetric)
     if src.uplo == dest.uplo
-        copyto!(dest.data, src.data)
+        copytrito!(dest.data, src.data, src.uplo)
     else
         transpose!(dest.data, Base.unalias(dest.data, src.data))
     end
@@ -356,7 +356,7 @@ end
 
 function copyto!(dest::Hermitian, src::Hermitian)
     if src.uplo == dest.uplo
-        copyto!(dest.data, src.data)
+        copytrito!(dest.data, src.data, src.uplo)
     else
         adjoint!(dest.data, Base.unalias(dest.data, src.data))
     end
@@ -525,19 +525,18 @@ for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Uni
     end
 end
 
-function kron(A::Hermitian{T}, B::Hermitian{S}) where {T<:Union{Real,Complex},S<:Union{Real,Complex}}
+function kron(A::Hermitian{<:Union{Real,Complex},<:StridedMatrix}, B::Hermitian{<:Union{Real,Complex},<:StridedMatrix})
     resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
-    C = Hermitian(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)), resultuplo)
+    C = Hermitian(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)), resultuplo)
+    return kron!(C, A, B)
+end
+function kron(A::Symmetric{<:Number,<:StridedMatrix}, B::Symmetric{<:Number,<:StridedMatrix})
+    resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
+    C = Symmetric(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)), resultuplo)
     return kron!(C, A, B)
 end
 
-function kron(A::Symmetric{T}, B::Symmetric{S}) where {T<:Number,S<:Number}
-    resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
-    C = Symmetric(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)), resultuplo)
-    return kron!(C, A, B)
-end
-
-function kron!(C::Hermitian{<:Union{Real,Complex}}, A::Hermitian{<:Union{Real,Complex}}, B::Hermitian{<:Union{Real,Complex}})
+function kron!(C::Hermitian{<:Union{Real,Complex},<:StridedMatrix}, A::Hermitian{<:Union{Real,Complex},<:StridedMatrix}, B::Hermitian{<:Union{Real,Complex},<:StridedMatrix})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     if ((A.uplo == 'U' || B.uplo == 'U') && C.uplo != 'U') || ((A.uplo == 'L' && B.uplo == 'L') && C.uplo != 'L')
         throw(ArgumentError("C.uplo must match A.uplo and B.uplo, got $(C.uplo) $(A.uplo) $(B.uplo)"))
@@ -545,8 +544,7 @@ function kron!(C::Hermitian{<:Union{Real,Complex}}, A::Hermitian{<:Union{Real,Co
     _hermkron!(C.data, A.data, B.data, conj, real, A.uplo, B.uplo)
     return C
 end
-
-function kron!(C::Symmetric{<:Number}, A::Symmetric{<:Number}, B::Symmetric{<:Number})
+function kron!(C::Symmetric{<:Number,<:StridedMatrix}, A::Symmetric{<:Number,<:StridedMatrix}, B::Symmetric{<:Number,<:StridedMatrix})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     if ((A.uplo == 'U' || B.uplo == 'U') && C.uplo != 'U') || ((A.uplo == 'L' && B.uplo == 'L') && C.uplo != 'L')
         throw(ArgumentError("C.uplo must match A.uplo and B.uplo, got $(C.uplo) $(A.uplo) $(B.uplo)"))
@@ -555,7 +553,7 @@ function kron!(C::Symmetric{<:Number}, A::Symmetric{<:Number}, B::Symmetric{<:Nu
     return C
 end
 
-function _hermkron!(C, A, B, conj::TC, real::TR, Auplo, Buplo) where {TC,TR}
+function _hermkron!(C, A, B, conj, real, Auplo, Buplo)
     n_A = size(A, 1)
     n_B = size(B, 1)
     @inbounds if Auplo == 'U' && Buplo == 'U'

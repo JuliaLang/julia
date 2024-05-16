@@ -904,4 +904,18 @@ end
     @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
 end
 
+@testset "Matrix conversion for non-numeric" begin
+    B = Bidiagonal(fill(Diagonal([1,3]), 3), fill(Diagonal([1,3]), 2), :U)
+    M = Matrix{eltype(B)}(B)
+    @test M isa Matrix{eltype(B)}
+    @test M == B
+end
+
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    B = Bidiagonal(dv, ev, :U)
+    @test_throws "invalid index" B[3, true]
+    @test B[1,2] == B[Int8(1),UInt16(2)] == B[big(1), Int16(2)]
+end
+
 end # module TestBidiagonal
