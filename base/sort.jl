@@ -1771,7 +1771,9 @@ end
 # Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
 # or _sort(x::NTuple{N, TheirType}, ::DefaultStable, o::Ordering) where N
 function _sort(x::NTuple, a::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw)
-    if length(x) > 9
+    # The unrolled tuple sort is prohibitively slow to compile for length > 9.
+    # See https://github.com/JuliaLang/julia/pull/46104#issuecomment-1435688502 for benchmarks
+    if length(x) > 9  
         v = copymutable(x)
         _sort!(v, a, o, kw)
         typeof(x)(v)
