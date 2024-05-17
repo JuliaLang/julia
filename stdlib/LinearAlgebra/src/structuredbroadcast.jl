@@ -8,8 +8,8 @@ struct StructuredMatrixStyle{T} <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()
 StructuredMatrixStyle{T}(::Val{N}) where {T,N} = Broadcast.DefaultArrayStyle{N}()
 
-const StructuredMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}
-for ST in Base.uniontypes(StructuredMatrix)
+const StructuredMatrix{T} = Union{Diagonal{T},Bidiagonal{T},SymTridiagonal{T},Tridiagonal{T},LowerTriangular{T},UnitLowerTriangular{T},UpperTriangular{T},UnitUpperTriangular{T}}
+for ST in (Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular)
     @eval Broadcast.BroadcastStyle(::Type{<:$ST}) = $(StructuredMatrixStyle{ST}())
 end
 
@@ -133,6 +133,7 @@ fails as `zero(::Tuple{Int})` is not defined. However,
 iszerodefined(::Type) = false
 iszerodefined(::Type{<:Number}) = true
 iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
+iszerodefined(::Type{<:UniformScaling{T}}) where T = iszerodefined(T)
 
 count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_nested(bc); init = 0)
 
@@ -160,6 +161,7 @@ fzero(::Type{T}) where T = Some(T)
 fzero(r::Ref) = Some(r[])
 fzero(t::Tuple{Any}) = Some(only(t))
 fzero(S::StructuredMatrix) = Some(zero(eltype(S)))
+fzero(::StructuredMatrix{<:AbstractMatrix{T}}) where {T<:Number} = Some(haszero(T) ? zero(T)*I : nothing)
 fzero(x) = nothing
 function fzero(bc::Broadcast.Broadcasted)
     args = map(fzero, bc.args)
