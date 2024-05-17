@@ -2136,9 +2136,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
                 sep = func === :(:) ? "$func" : " $func "
 
                 if func_prec <= prec
-                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true)
+                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true, false, unstable_ssa)
                 else
-                    show_list(io, func_args, sep, indent, func_prec, quote_level, true)
+                    show_list(io, func_args, sep, indent, func_prec, quote_level, true, false, unstable_ssa)
                 end
             elseif na == 1
                 # 1-argument call to normally-binary operator
