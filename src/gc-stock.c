@@ -305,6 +305,9 @@ STATIC_INLINE void gc_setmark_pool(jl_ptls_t ptls, jl_taggedvalue_t *o,
 STATIC_INLINE void gc_setmark(jl_ptls_t ptls, jl_taggedvalue_t *o,
                               uint8_t mark_mode, size_t sz) JL_NOTSAFEPOINT
 {
+    if (o->bits.in_image) {
+        return;
+    }
     if (sz <= GC_MAX_SZCLASS) {
         gc_setmark_pool(ptls, o, mark_mode);
     }
