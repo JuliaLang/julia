@@ -267,4 +267,6 @@ end
     @test a.lock !== b.lock
     @test islocked(a.lock)
     @test !islocked(b.lock)
+    @inferred deepcopy(a)
+    @inferred deepcopy(a.lock)
 end
