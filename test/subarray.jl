@@ -1075,48 +1075,20 @@ end
         @test !isassigned(v, 1, 2) # inbounds but not assigned
         @test !isassigned(v, 3, 3) # out-of-bounds
     end
+end
 
-    @testset "_unsetindex!" begin
-        function test_unsetindex(A, B)
-            copyto!(A, B)
-            for i in eachindex(A)
-                @test !isassigned(A, i)
-            end
-            inds = eachindex(A)
-            @test_throws BoundsError Base._unsetindex!(A, last(inds) + oneunit(eltype(inds)))
-        end
-        @testset "dest IndexLinear, src IndexLinear" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(copy(p), ntuple(_->:, ndims(p))...)
-                B = view(similar(A), ntuple(_->:, ndims(p))...)
-                test_unsetindex(A, B)
-                test_unsetindex(p, B)
-            end
-        end
+@testset "aliasing check with reshaped subarrays" begin
+    C = rand(2,1)
+    V1 = @view C[1, :]
+    V2 = @view C[2, :]
 
-        @testset "dest IndexLinear, src IndexCartesian" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(copy(p), ntuple(_->:, ndims(p))...)
-                B = view(similar(A), axes(A)...)
-                test_unsetindex(A, B)
-                test_unsetindex(p, B)
-            end
-        end
+    @test !Base.mightalias(V1, V2)
+    @test !Base.mightalias(V1, permutedims(V2))
+    @test !Base.mightalias(permutedims(V1), V2)
+    @test !Base.mightalias(permutedims(V1), permutedims(V2))
 
-        @testset "dest IndexCartesian, src IndexLinear" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(p, axes(p)...)
-                B = similar(A)
-                test_unsetindex(A, B)
-            end
-        end
-
-        @testset "dest IndexCartesian, src IndexCartesian" begin
-            for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])
-                A = view(p, axes(p)...)
-                B = view(similar(A), axes(A)...)
-                test_unsetindex(A, B)
-            end
-        end
-    end
+    @test Base.mightalias(V1, V1)
+    @test Base.mightalias(V1, permutedims(V1))
+    @test Base.mightalias(permutedims(V1), V1)
+    @test Base.mightalias(permutedims(V1), permutedims(V1))
 end

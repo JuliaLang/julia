@@ -1852,6 +1852,24 @@ function check_pointer_strides(A::AbstractArray)
     return true
 end
 
+@testset "colonful `reshape`, #54245" begin
+    @test reshape([], (0, :)) isa Matrix
+    @test_throws DimensionMismatch reshape([7], (0, :))
+    let b = prevpow(2, typemax(Int))
+        @test iszero(b*b)
+        @test_throws ArgumentError reshape([7], (b, :, b))
+        @test reshape([], (b, :, b)) isa Array{<:Any, 3}
+    end
+    for iterator ∈ (7:6, 7:7, 7:8)
+        for it ∈ (iterator, map(BigInt, iterator))
+            @test reshape(it, (:, Int(length(it)))) isa AbstractMatrix
+            @test reshape(it, (Int(length(it)), :)) isa AbstractMatrix
+            @test reshape(it, (1, :))               isa AbstractMatrix
+            @test reshape(it, (:, 1))               isa AbstractMatrix
+        end
+    end
+end
+
 @testset "strides for ReshapedArray" begin
     # Type-based contiguous Check
     a = vec(reinterpret(reshape, Int16, reshape(view(reinterpret(Int32, randn(10)), 2:11), 5, :)))
@@ -2040,37 +2058,6 @@ end
     end
 end
 
-@testset "_unsetindex!" begin
-    struct MyMatrixUnsetIndexCartInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data :: A
-    end
-    Base.size(A::MyMatrixUnsetIndexCartInds) = size(A.data)
-    Base.getindex(M::MyMatrixUnsetIndexCartInds, i::Int, j::Int) = M.data[i,j]
-    Base.setindex!(M::MyMatrixUnsetIndexCartInds, v, i::Int, j::Int) = setindex!(M.data, v, i, j)
-    struct MyMatrixUnsetIndexLinInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data :: A
-    end
-    Base.size(A::MyMatrixUnsetIndexLinInds) = size(A.data)
-    Base.getindex(M::MyMatrixUnsetIndexLinInds, i::Int) = M.data[i]
-    Base.setindex!(M::MyMatrixUnsetIndexLinInds, v, i::Int) = setindex!(M.data, v, i)
-    Base.IndexStyle(::Type{<:MyMatrixUnsetIndexLinInds}) = IndexLinear()
-
-    function test_unsetindex(MT)
-        M = MT(ones(2,2))
-        M2 = MT(Matrix{BigFloat}(undef, 2,2))
-        copyto!(M, M2)
-        @test all(==(1), M)
-        M3 = MT(Matrix{BigFloat}(undef, 2,2))
-        for i in eachindex(M3)
-            @test !isassigned(M3, i)
-        end
-        M3 .= 1
-        @test_throws MethodError copyto!(M3, M2)
-    end
-    test_unsetindex(MyMatrixUnsetIndexCartInds)
-    test_unsetindex(MyMatrixUnsetIndexLinInds)
-end
-
 @testset "reshape for offset arrays" begin
     p = Base.IdentityUnitRange(3:4)
     r = reshape(p, :, 1)
@@ -2118,4 +2105,21 @@ end
             @test all(==(v), A)
         end
     end
+end
+
+@testset "one" begin
+    @test one([1 2; 3 4]) == [1 0; 0 1]
+    @test one([1 2; 3 4]) isa Matrix{Int}
+
+    struct Mat <: AbstractMatrix{Int}
+        p::Matrix{Int}
+    end
+    Base.size(m::Mat) = size(m.p)
+    Base.IndexStyle(::Type{<:Mat}) = IndexLinear()
+    Base.getindex(m::Mat, i::Int) = m.p[i]
+    Base.setindex!(m::Mat, v, i::Int) = m.p[i] = v
+    Base.similar(::Mat, ::Type{Int}, size::NTuple{2,Int}) = Mat(Matrix{Int}(undef, size))
+
+    @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
+    @test one(Mat([1 2; 3 4])) isa Mat
 end

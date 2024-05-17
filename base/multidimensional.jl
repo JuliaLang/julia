@@ -1612,12 +1612,6 @@ end
     end
 end
 
-# _unsetindex
-@propagate_inbounds function Base._unsetindex!(A::AbstractArray, i::CartesianIndex)
-    Base._unsetindex!(A, to_indices(A, (i,))...)
-    return A
-end
-
 ## permutedims
 
 ## Permute array dims ##

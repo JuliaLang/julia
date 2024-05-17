@@ -71,7 +71,7 @@ rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(@nospecialize(e)) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
-    code::Union{CodeInfo,Core.MethodInstance,Nothing}
+    code::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
     stmt::Csize_t
     mod::Union{Module,Nothing}
 end
@@ -96,7 +96,7 @@ function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Nothing}
+            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
             mod = njlvalues == 2 ? bt2[j+1]::Union{Module,Nothing} : nothing
             push!(ret, InterpreterIP(code, header, mod))
         else

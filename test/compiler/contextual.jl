@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
+using Test
+
 # Cassette
 # ========
 
@@ -93,6 +96,9 @@ module MiniCassette
         transform!(mi, code_info, length(args), match.sparams)
         # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
         # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
+        # Match the generator, since that's what our transform! does
+        code_info.nargs = 4
+        code_info.isva = true
         return code_info
     end
 
@@ -222,3 +228,25 @@ end
 end
 
 @test_throws "oh no" doit49715(sin, Tuple{Int})
+
+# Test that the CodeInfo returned from generated function need not match the
+# generator.
+function overdubbee54341(a, b)
+    a + b
+end
+const overdubee_codeinfo54341 = code_lowered(overdubbee54341, Tuple{Any, Any})[1]
+
+function overdub_generator54341(world::UInt, source::LineNumberNode, args...)
+    if length(args) != 2
+        :(error("Wrong number of arguments"))
+    else
+        return copy(overdubee_codeinfo54341)
+    end
+end
+
+@eval function overdub54341(args...)
+    $(Expr(:meta, :generated, overdub_generator54341))
+    $(Expr(:meta, :generated_only))
+end
+
+@test overdub54341(1, 2) == 3
