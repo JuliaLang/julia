@@ -36,7 +36,12 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     if idx in used
         idx_s = string(idx)
         pad = " "^(maxlength_idx - length(idx_s) + 1)
-        print(io, "%", idx_s, pad, "= ")
+        if unstable_ssa != nothing && idx in unstable_ssa
+            printstyled(io, "%", idx_s, color = :red)
+        else
+            print(io, "%", idx_s)
+        end
+        print(io, pad, "= ")
     else
         print(io, " "^(maxlength_idx + 4))
     end
