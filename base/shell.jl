@@ -219,9 +219,9 @@ print_shell_escaped(io::IO; special::String="") = nothing
 """
     shell_escape(args::Union{Cmd,AbstractString...}; special::AbstractString="")
 
-The unexported `shell_escape` function is the inverse of the unexported `shell_split` function:
+The unexported `shell_escape` function is the inverse of the unexported [`Base.shell_split()`](@ref) function:
 it takes a string or command object and escapes any special characters in such a way that calling
-`shell_split` on it would give back the array of words in the original command. The `special`
+[`Base.shell_split()`](@ref) on it would give back the array of words in the original command. The `special`
 keyword argument controls what characters in addition to whitespace, backslashes, quotes and
 dollar signs are considered to be special (default: none).
 
@@ -284,6 +284,8 @@ The unexported `shell_escape_posixly` function
 takes a string or command object and escapes any special characters in such a way that
 it is safe to pass it as an argument to a posix shell.
 
+See also: [`Base.shell_escape()`](@ref)
+
 # Examples
 ```jldoctest
 julia> Base.shell_escape_posixly("cat", "/foo/bar baz", "&&", "echo", "done")
@@ -316,7 +318,7 @@ a backslash.
 This function should also work for a POSIX shell, except if the input
 string contains a linefeed (`"\\n"`) character.
 
-See also: [`shell_escape_posixly`](@ref)
+See also: [`Base.shell_escape_posixly()`](@ref)
 """
 function shell_escape_csh(io::IO, args::AbstractString...)
     first = true
@@ -414,7 +416,7 @@ run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
 With an I/O stream parameter `io`, the result will be written there,
 rather than returned as a string.
 
-See also [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref).
+See also [`Base.escape_microsoft_c_args()`](@ref), [`Base.shell_escape_posixly()`](@ref).
 
 # Examples
 ```jldoctest
@@ -468,7 +470,7 @@ It joins command-line arguments to be passed to a Windows
 C/C++/Julia application into a command line, escaping or quoting the
 meta characters space, TAB, double quote and backslash where needed.
 
-See also [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref).
+See also [`Base.shell_escape_wincmd()`](@ref), [`Base.escape_raw_string()`](@ref).
 """
 function escape_microsoft_c_args(io::IO, args::AbstractString...)
     # http://daviddeley.com/autohotkey/parameters/parameters.htm#WINCRULES

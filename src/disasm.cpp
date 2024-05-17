@@ -58,7 +58,11 @@
 #include "llvm-version.h"
 
 // for outputting disassembly
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Triple.h>
+#else
 #include <llvm/ADT/Triple.h>
+#endif
 #include <llvm/AsmParser/Parser.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/BinaryFormat/COFF.h>
@@ -1094,7 +1098,11 @@ static void jl_dump_asm_internal(
                             const MCOperand &OpI = Inst.getOperand(Op);
                             if (OpI.isImm()) {
                                 int64_t imm = OpI.getImm();
+                                #if JL_LLVM_VERSION >= 170000
+                                if (opinfo.operands()[Op].OperandType == MCOI::OPERAND_PCREL)
+                                #else
                                 if (opinfo.OpInfo[Op].OperandType == MCOI::OPERAND_PCREL)
+                                #endif
                                     imm += Fptr + Index;
                                 const char *name = DisInfo.lookupSymbolName(imm);
                                 if (name)

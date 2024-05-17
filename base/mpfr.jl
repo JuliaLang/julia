@@ -1222,7 +1222,8 @@ end
 # flags
 clear_flags() = ccall((:mpfr_clear_flags, libmpfr), Cvoid, ())
 had_underflow() = ccall((:mpfr_underflow_p, libmpfr), Cint, ()) != 0
-had_overflow() = ccall((:mpfr_underflow_p, libmpfr), Cint, ()) != 0
+had_overflow() = ccall((:mpfr_overflow_p, libmpfr), Cint, ()) != 0
+had_divbyzero() = ccall((:mpfr_divby0_p, libmpfr), Cint, ()) != 0
 had_nan() = ccall((:mpfr_nanflag_p, libmpfr), Cint, ()) != 0
 had_inexact_exception() = ccall((:mpfr_inexflag_p, libmpfr), Cint, ()) != 0
 had_range_exception() = ccall((:mpfr_erangeflag_p, libmpfr), Cint, ()) != 0

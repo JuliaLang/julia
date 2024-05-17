@@ -582,13 +582,13 @@ The `@main` macro may be used standalone or as part of the function definition, 
 case, parentheses are required. In particular, the following are equivalent:
 
 ```
-function (@main)(ARGS)
+function (@main)(args)
     println("Hello World")
 end
 ```
 
 ```
-function main(ARGS)
+function main(args)
 end
 @main
 ```
@@ -601,7 +601,7 @@ imported into `Main`, it will be treated as an entrypoint in `Main`:
 ```
 module MyApp
     export main
-    (@main)(ARGS) = println("Hello World")
+    (@main)(args) = println("Hello World")
 end
 using .MyApp
 # `julia` Will execute MyApp.main at the conclusion of script execution
@@ -611,7 +611,7 @@ Note that in particular, the semantics do not attach to the method
 or the name:
 ```
 module MyApp
-    (@main)(ARGS) = println("Hello World")
+    (@main)(args) = println("Hello World")
 end
 const main = MyApp.main
 # `julia` Will *NOT* execute MyApp.main unless there is a separate `@main` annotation in `Main`

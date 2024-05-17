@@ -157,7 +157,8 @@ axes(M::SymTridiagonal) = (ax = axes(M.dv, 1); (ax, ax))
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
 
-copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
+# copyto! for matching axes
+_copyto_banded!(dest::SymTridiagonal, src::SymTridiagonal) =
     (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
 
 #Elementary operations
@@ -331,7 +332,7 @@ end
 
 # tril and triu
 
-function istriu(M::SymTridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::SymTridiagonal, k::Integer=0)
     if k <= -1
         return true
     elseif k == 0
@@ -340,7 +341,7 @@ function istriu(M::SymTridiagonal, k::Integer=0)
         return iszero(_evview(M)) && iszero(M.dv)
     end
 end
-istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
+Base.@constprop :aggressive istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
 iszero(M::SymTridiagonal) =  iszero(_evview(M)) && iszero(M.dv)
 isone(M::SymTridiagonal) =  iszero(_evview(M)) && all(isone, M.dv)
 isdiag(M::SymTridiagonal) =  iszero(_evview(M))
@@ -444,7 +445,7 @@ end
     end
 end
 
-@inline function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
+@inline function getindex(A::SymTridiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return symmetric((@inbounds A.dv[i]), :U)::symmetric_type(eltype(A.dv))
@@ -606,7 +607,13 @@ similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), sim
 similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(M.d, T, dims)
 
 # Operations on Tridiagonal matrices
-copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
+# copyto! for matching axes
+function _copyto_banded!(dest::Tridiagonal, src::Tridiagonal)
+    copyto!(dest.dl, src.dl)
+    copyto!(dest.d, src.d)
+    copyto!(dest.du, src.du)
+    dest
+end
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
@@ -673,7 +680,7 @@ end
     end
 end
 
-@inline function getindex(A::Tridiagonal{T}, i::Integer, j::Integer) where T
+@inline function getindex(A::Tridiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.d[i]
@@ -711,7 +718,7 @@ end
 
 iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
-function istriu(M::Tridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::Tridiagonal, k::Integer=0)
     if k <= -1
         return true
     elseif k == 0
@@ -722,7 +729,7 @@ function istriu(M::Tridiagonal, k::Integer=0)
         return iszero(M.dl) && iszero(M.d) && iszero(M.du)
     end
 end
-function istril(M::Tridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istril(M::Tridiagonal, k::Integer=0)
     if k >= 1
         return true
     elseif k == 0
@@ -980,4 +987,22 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
         end
     end
     return B
+end
+
+# combinations of Tridiagonal and Symtridiagonal
+# copyto! for matching axes
+function _copyto_banded!(A::Tridiagonal, B::SymTridiagonal)
+    Bev = _evview(B)
+    A.du .= Bev
+    # Broadcast identity for numbers to access the faster copyto! path
+    # This uses the fact that transpose(x::Number) = x and symmetric(x::Number) = x
+    A.dl .= (eltype(B) <: Number ? identity : transpose).(Bev)
+    A.d .= (eltype(B) <: Number ? identity : symmetric).(B.dv)
+    return A
+end
+function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
+    issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal"))
+    A.dv .= B.d
+    _evview(A) .= B.du
+    return A
 end

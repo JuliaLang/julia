@@ -271,6 +271,27 @@ end
     @test B.U ≈ B32.U
     @test B.Vt ≈ B32.Vt
     @test B.S ≈ B32.S
+    C = Symmetric(A'A)
+    D = svd(C)
+    D32 = svd(Symmetric(Float32.(C)))
+    @test D isa SVD{Float16, Float16, Matrix{Float16}}
+    @test D.U isa Matrix{Float16}
+    @test D.Vt isa Matrix{Float16}
+    @test D.S isa Vector{Float16}
+    @test D.U ≈ D32.U
+    @test D.Vt ≈ D32.Vt
+    @test D.S ≈ D32.S
+    A = randn(ComplexF16, 3, 3)
+    E = Hermitian(A'A)
+    F = svd(E)
+    F32 = svd(Hermitian(ComplexF32.(E)))
+    @test F isa SVD{ComplexF16, Float16, Matrix{ComplexF16}, Vector{Float16}}
+    @test F.U isa Matrix{ComplexF16}
+    @test F.Vt isa Matrix{ComplexF16}
+    @test F.S isa Vector{Float16}
+    @test F.U ≈ F32.U
+    @test F.Vt ≈ F32.Vt
+    @test F.S ≈ F32.S
 end
 
 end # module TestSVD
