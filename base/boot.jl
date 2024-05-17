@@ -404,9 +404,9 @@ struct AssertionError <: Exception
 end
 AssertionError() = AssertionError("")
 
-struct MemberAccessError <: Exception
-    objType::DataType
-    x::Symbol
+struct UndefFieldError <: Exception
+    type::DataType
+    field::Symbol
 end
 
 abstract type WrappedException <: Exception end
