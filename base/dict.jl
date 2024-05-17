@@ -116,6 +116,14 @@ Dict(ps::Pair...)                  = Dict(ps)
 
 Dict(kv) = dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
 
+function getproperty(d::Dict, x::Symbol)
+	if x in propertynames(d)
+		return getfield(d, x)
+	else
+		throw(MemberAccessError(typeof(d), x))
+	end
+end
+
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
 # Gets 7 most significant bits from the hash (hsh), first bit is 1
