@@ -219,12 +219,7 @@ function _unsetindex!(A::Array, i::Int)
     @inbounds _unsetindex!(GenericMemoryRef(A.ref, i))
     return A
 end
-function _unsetindex!(A::Array, i::Int...)
-    @inline
-    @boundscheck checkbounds(A, i...)
-    @inbounds _unsetindex!(A, _to_linear_index(A, i...))
-    return A
-end
+
 
 # TODO: deprecate this (aligned_sizeof and/or elsize and/or sizeof(Some{T}) are more correct)
 elsize(::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
@@ -597,21 +592,6 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
         end
     end
 end
-
-function _one(unit::T, x::AbstractMatrix) where T
-    require_one_based_indexing(x)
-    m,n = size(x)
-    m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    # Matrix{T}(I, m, m)
-    I = zeros(T, m, m)
-    for i in 1:m
-        I[i,i] = unit
-    end
-    I
-end
-
-one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
-oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 

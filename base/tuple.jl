@@ -68,6 +68,7 @@ end
 
 function iterate(@nospecialize(t::Tuple), i::Int=1)
     @inline
+    @_nothrow_meta
     return (1 <= i <= length(t)) ? (t[i], i + 1) : nothing
 end
 

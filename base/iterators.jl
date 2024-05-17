@@ -61,9 +61,6 @@ julia> collect(Iterators.map(x -> x^2, 1:3))
 """
 map(f, arg, args...) = Base.Generator(f, arg, args...)
 
-tail_if_any(::Tuple{}) = ()
-tail_if_any(x::Tuple) = tail(x)
-
 _min_length(a, b, ::IsInfinite, ::IsInfinite) = min(length(a),length(b)) # inherit behaviour, error
 _min_length(a, b, A, ::IsInfinite) = length(a)
 _min_length(a, b, ::IsInfinite, B) = length(b)
