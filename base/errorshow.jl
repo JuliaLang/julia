@@ -368,9 +368,9 @@ function showerror(io::IO, ex::MethodError)
 end
 
 function showerror(io::IO, exc::MemberAccessError)
-	@nospecialize
-	println(io, "MemberAccessError : member access of this field on this DataType is not entertained.\n")
-	Base.Experimental.show_error_hints(io, exc)
+    @nospecialize
+    println(io, "MemberAccessError : member access of this field on this DataType is not entertained.\n")
+    Base.Experimental.show_error_hints(io, exc)
 end
 
 striptype(::Type{T}) where {T} = T
@@ -1094,27 +1094,30 @@ Experimental.register_error_hint(methods_on_iterable, MethodError)
 
 # Display a hint in case the use tries to access non-member fields of container type datastructures
 function member_access_handler(io, exc)
-	@nospecialize
-	x = exc.x
-	objType = exc.objType
-	if objType <: Dict
-		println(io, 
-		"""
-		The field `$x` is not a member of Dict type. In case you
-		are trying to access values using keys consider
-		using `indexing` operation. 
-		Example: 
-			```julia
-			dict = Dict($(x)=>1)
-			dict[$(x)]
-			```
-		""")
-	else
-		println(io, """
-		This datatype doesn't allow member access of this field-`$(x)` for end users.
-		Please refer to documentation on $(objType) on access rights and means to do it.
-		""")
-	end
+    @nospecialize
+    x = exc.x
+    objType = exc.objType
+    if objType <: Dict
+        println(io,
+            """
+            The field `$x` is not a member of Dict type. In case you
+            are trying to access values using keys consider
+            using `indexing` operation.
+            Example:
+                ```julia
+                dict = Dict($(x)=>1)
+                dict[$(x)]
+                ```
+            """
+        )
+    else
+        println(io,
+            """
+            This datatype doesn't allow member access of this field-`$(x)` for end users.
+            Please refer to documentation on $(objType) on access rights and means to do it.
+            """
+        )
+    end
 end
 
 Experimental.register_error_hint(member_access_handler, MemberAccessError)

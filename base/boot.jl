@@ -405,8 +405,8 @@ end
 AssertionError() = AssertionError("")
 
 struct MemberAccessError <: Exception
-	objType::DataType
-	x::Symbol
+    objType::DataType
+    x::Symbol
 end
 
 abstract type WrappedException <: Exception end
