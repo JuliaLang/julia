@@ -4013,6 +4013,36 @@ JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *o
     arraylist_push(&ptls->gc_tls.sweep_objs, obj);
 }
 
+void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    jl_taggedvalue_t *o = jl_astaggedvalue(v);
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
+    size_t dtsz = jl_datatype_size(dt);
+    if (o->bits.gc == GC_OLD_MARKED)
+        return;
+    o->bits.gc = GC_OLD_MARKED;
+    if (dt == jl_simplevector_type) {
+        size_t l = jl_svec_len(v);
+        dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
+    }
+    else if (dt->name == jl_genericmemory_typename) {
+        dtsz = sizeof(jl_genericmemory_t);
+    }
+    else if (dt == jl_module_type) {
+        dtsz = sizeof(jl_module_t);
+    }
+    else if (dt == jl_task_type) {
+        dtsz = sizeof(jl_task_t);
+    }
+    else if (dt == jl_symbol_type) {
+        return;
+    }
+    gc_setmark(ptls, o, GC_OLD_MARKED, dtsz);
+    if (dt->layout->npointers != 0)
+        jl_gc_queue_root(v);
+}
+
+
 #ifdef __cplusplus
 }
 #endif
