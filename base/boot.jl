@@ -206,7 +206,7 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError, ConcurrencyViolationError, MemberAccessError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
@@ -404,7 +404,7 @@ struct AssertionError <: Exception
 end
 AssertionError() = AssertionError("")
 
-struct UndefFieldError <: Exception
+struct FieldError <: Exception
     type::DataType
     field::Symbol
 end

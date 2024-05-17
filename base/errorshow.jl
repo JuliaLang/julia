@@ -367,9 +367,9 @@ function showerror(io::IO, ex::MethodError)
     nothing
 end
 
-function showerror(io::IO, exc::MemberAccessError)
+function showerror(io::IO, exc::FieldError)
     @nospecialize
-    println(io, "MemberAccessError : member access of this field on this DataType is not entertained.\n")
+    println(io, "FieldError: type $(exc.type) has no field $(exc.field)")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -1093,27 +1093,26 @@ end
 Experimental.register_error_hint(methods_on_iterable, MethodError)
 
 # Display a hint in case the use tries to access non-member fields of container type datastructures
-function member_access_handler(io, exc)
+function fielderror_hint_handler(io, exc)
     @nospecialize
-    x = exc.x
-    objType = exc.objType
-    if objType <: Dict
+    field = exc.field
+    type = exc.type
+    if type == :Dict
         println(io,
             """
-            The field `$x` is not a member of Dict type. In case you
-            are trying to access values using keys consider
-            using `indexing` operation.
+            \nDid you mean to access dict values using key: `$field` ?
+            Consider using `indexing` operation.
             Example:
                 ```julia
-                dict = Dict($(x)=>1)
-                dict[$(x)]
+                dict = Dict($(field)=>someValue)
+                dict[$(field)]
                 ```
             """
         )
     end
 end
 
-Experimental.register_error_hint(member_access_handler, MemberAccessError)
+Experimental.register_error_hint(fielderror_hint_handler, FieldError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)
