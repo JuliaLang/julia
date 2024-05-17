@@ -4127,6 +4127,15 @@ JL_DLLEXPORT void jl_typeinf_lock_end(void)
     JL_UNLOCK(&jl_codegen_lock);
 }
 
+// TODO: Where to put this function?
+JL_DLLEXPORT void jl_coverage_touch_line(uint64_t *ptr) {
+    uint64_t v = *ptr;
+    // Huh, apparently the first time this is called, `*ptr` is `1`, not `0`?
+    if (v <= 1) {
+        *ptr = v + 1;
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif

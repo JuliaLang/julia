@@ -1637,6 +1637,18 @@ static const auto &builtin_func_map() {
 
 static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction<>{XSTR(jl_new_opaque_closure_jlcall), get_func_sig, get_func_attrs};
 
+static const auto jl_code_coverage_touch_line_func = new JuliaFunction<>{
+    XSTR(jl_coverage_touch_line),
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {getInt8PtrTy(C), getInt32Ty(C)}, false); },
+    nullptr,
+};
+// static const auto diff_gc_total_bytes_func = new JuliaFunction<>{
+//     XSTR(jl_gc_diff_total_bytes),
+//     [](LLVMContext &C) { return FunctionType::get(getInt64Ty(C), false); },
+//     nullptr,
+// };
+
 static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
 
 // --- code generation ---
@@ -2821,15 +2833,13 @@ JL_DLLEXPORT void jl_coverage_alloc_line(StringRef filename, int line);
 JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(StringRef filename, int line);
 JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line);
 
+JL_DLLEXPORT void jl_coverage_touch_line(uint64_t *ptr);
 static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const char *name)
 {
     Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(ctx.types().T_size, (uintptr_t)ptr),
         getInt64PtrTy(ctx.builder.getContext()));
-    Value *v = ctx.builder.CreateLoad(getInt64Ty(ctx.builder.getContext()), pv, true, name);
-    v = ctx.builder.CreateAdd(v, addend);
-    ctx.builder.CreateStore(v, pv, true); // volatile, not atomic, so this might be an underestimate,
-                                          // but it's faster this way
+    ctx.builder.CreateCall(prepare_call(jl_code_coverage_touch_line_func), {pv});
 }
 
 // Code coverage
