@@ -27,6 +27,13 @@ let lk = ReentrantLock()
     @test fetch(t1)
 end
 
+# Sanity test for events
+let e = Event()
+    @test isopen(e)
+    notify(e)
+    @test !isopen(e)
+end
+
 let e = Event(), started1 = Event(false), started2 = Event(false)
     for i = 1:3
         done1 = false

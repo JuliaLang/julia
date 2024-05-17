@@ -484,7 +484,8 @@ end
 Create a level-triggered event source. Tasks that call [`wait`](@ref) on an
 `Event` are suspended and queued until [`notify`](@ref) is called on the `Event`.
 After `notify` is called, the `Event` remains in a signaled state and
-tasks will no longer block when waiting for it, until `reset` is called.
+tasks will no longer block when waiting for it, until `reset` is called. Use
+[`isopen`](@ref) to check whether it is currently un-signaled.
 
 If `autoreset` is true, at most one task will be released from `wait` for
 each call to `notify`.
@@ -496,6 +497,9 @@ This provides an acquire & release memory ordering on notify/wait.
 
 !!! compat "Julia 1.8"
     The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
+
+!!! compat "Julia 1.12"
+    `isopen(::Event)` requires at least Julia 1.12.
 """
 mutable struct Event
     const notify::ThreadSynchronizer
@@ -551,6 +555,8 @@ function reset(e::Event)
     @atomic e.set = false # full barrier
     nothing
 end
+
+isopen(e::Event) = !e.set
 
 @eval Threads begin
     import .Base: Event
