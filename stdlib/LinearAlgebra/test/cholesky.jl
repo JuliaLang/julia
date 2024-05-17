@@ -554,6 +554,9 @@ end
         M[1,1] = M[2,2] = M[1+(uplo=='L'), 1+(uplo=='U')] = 3
         C = Cholesky(M, uplo, 0)
         @test C.L == C.U'
+        # parameters are arbitrary
+        C = CholeskyPivoted(M, uplo, [1,2], 2, 0.0, 0)
+        @test C.L == C.U'
     end
 end
 
