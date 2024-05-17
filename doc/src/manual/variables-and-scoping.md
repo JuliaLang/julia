@@ -16,8 +16,7 @@ introduce a "soft scope", which affects whether
 [shadowing](https://en.wikipedia.org/wiki/Variable_shadowing)
 a global variable by the same name is allowed or not.
 
-!!! Note Rough Summary
-
+!!! info "Summary"
     Variables defined in global scope may be undefined in inner local scopes,
     depending on where the code is run, in order to balance safety and convenience.
     The hard and soft local scoping rules define the interplay between global and local variables.
@@ -26,8 +25,7 @@ a global variable by the same name is allowed or not.
     If the variable is already defined, it will be reused. If the variable is not defined,
     it will be made available to the current and inner scopes (but not outer scopes).
 
-!!! Tip A Common Confusion
-
+!!! tip "A Common Confusion"
     If you run into an unexpectedly undefined variable,
 
     ```julia
