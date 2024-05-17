@@ -1110,13 +1110,6 @@ function member_access_handler(io, exc)
                 ```
             """
         )
-    else
-        println(io,
-            """
-            This datatype doesn't allow member access of this field-`$(x)` for end users.
-            Please refer to documentation on $(objType) on access rights and means to do it.
-            """
-        )
     end
 end
 
