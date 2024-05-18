@@ -546,6 +546,11 @@ end
 Base.propertynames(F::Cholesky, private::Bool=false) =
     (:U, :L, :UL, (private ? fieldnames(typeof(F)) : ())...)
 
+function Base.:(==)(C1::Cholesky, C2::Cholesky)
+    C1.uplo == C2.uplo || return false
+    C1.uplo == 'L' ? (C1.L == C2.L) : (C1.U == C2.U)
+end
+
 function getproperty(C::CholeskyPivoted{T}, d::Symbol) where {T}
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
@@ -568,6 +573,11 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where {T}
 end
 Base.propertynames(F::CholeskyPivoted, private::Bool=false) =
     (:U, :L, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
+
+function Base.:(==)(C1::CholeskyPivoted, C2::CholeskyPivoted)
+    (C1.uplo == C2.uplo && C1.p == C2.p) || return false
+    C1.uplo == 'L' ? (C1.L == C2.L) : (C1.U == C2.U)
+end
 
 issuccess(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
