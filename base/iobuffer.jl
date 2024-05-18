@@ -783,16 +783,25 @@ function take!(io::IOBuffer)
     return data
 end
 
-"Internal method. Copies the data from the IOBuffer to a string, leaving the
-IOBuffer in an unusable (erroneous) state.
-This assumes the IOBuffer is writable and seekable"
+"Internal method. This method can be faster than takestring!, because it assumes
+the buffer is writable and seekable, and because it does not reset the buffer
+to a usable state.
+Using the buffer after calling unsafe_takestring! may cause illegal behaviour.
+This function is meant to be used when the buffer is only used as a temporary
+string builder, which is discarded after the string is built."
 function unsafe_takestring!(io::IOBuffer)
     off = io.offset
     nbytes = io.size - off
     iszero(nbytes) && return ""
-    mem = StringMemory(nbytes)
-    unsafe_copyto!(mem, 1, io.data, off+1, nbytes)
-    return unsafe_takestring(mem)
+    # The C function can only copy from the start of the memory.
+    # Fortunately, in most cases, the offset will be zero.
+    return if iszero(off)
+        ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), io.data, nbytes)
+    else
+        mem = StringMemory(nbytes)
+        unsafe_copyto!(mem, 1, io.data, off + 1, nbytes)
+        unsafe_takestring!(mem)
+    end
 end
 
 """
@@ -820,23 +829,35 @@ function takestring!(io::IOBuffer)
     nbytes = filesize(io)
 
     # If the memory is invalidated (and hence unused), or no bytes, return empty string
-    s = if (iszero(nbytes) || io.reinit)
+    return if (iszero(nbytes) || io.reinit)
         ""
     else
-        mem = StringMemory(nbytes)
         start = io.seekable ? io.offset + 1 : io.ptr
-        unsafe_copyto!(mem, 1, io.data, start, nbytes)
-        unsafe_takestring(mem)
-    end
+        # The C function can only copy from the start of the memory.
+        # Fortunately, in most cases, start will be 1.
+        s = if isone(start)
+            ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), io.data, nbytes)
+        else
+            mem = StringMemory(nbytes)
+            unsafe_copyto!(mem, 1, io.data, start, nbytes)
+            unsafe_takestring!(mem)
+        end
 
-    # Empty the IOBuffer, resetting it, if the buffer is writable
-    if io.writable
-        io.mark = -1
-        io.ptr = 1
-        io.size = 0
-        io.offset = 0
+        # Empty the IOBuffer, resetting it, if the buffer is writable.
+        # By setting io.reinit and setting its size to zero, we ensure the memory
+        # is written.
+        # If the buffer is not writable, the assumption is that the memory will
+        # never be mutated, and as such, it's okay that a string shares memory
+        # with this object.
+        if io.writable
+            io.reinit = true
+            io.mark = -1
+            io.ptr = 1
+            io.size = 0
+            io.offset = 0
+        end
+        s
     end
-    return s
 end
 
 """
