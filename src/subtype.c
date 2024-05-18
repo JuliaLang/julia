@@ -2958,9 +2958,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 }
             }
             if (varval) {
-                *btemp->ub = jl_substitute_var_nothrow(iub, vb->var, varval);
-                if (*btemp->ub == NULL)
+                iub = jl_substitute_var_nothrow(iub, vb->var, varval, 2);
+                if (iub == NULL)
                     res = jl_bottom_type;
+                else
+                    *btemp->ub = iub;
             }
             else if (iub == (jl_value_t*)vb->var) {
                 // TODO: this loses some constraints, such as in this test, where we replace T4<:S3 (e.g. T4==S3 since T4 only appears covariantly once) with T4<:Any
