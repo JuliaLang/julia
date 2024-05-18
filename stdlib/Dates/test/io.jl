@@ -470,6 +470,9 @@ end
 # Issue #44003
 @test tryparse(Dates.Date, "2017", Dates.DateFormat(".s")) === nothing
 
+# Issue #52989
+@test Dates.DateTime("2000") == Dates.DateTime(2000)
+
 @testset "parse milliseconds, Issue #22100" begin
     @test Dates.DateTime("2017-Mar-17 00:00:00.0000", "y-u-d H:M:S.s") == Dates.DateTime(2017, 3, 17)
     @test Dates.parse_components(".1", Dates.DateFormat(".s")) == [Dates.Millisecond(100)]

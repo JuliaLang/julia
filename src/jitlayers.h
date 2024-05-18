@@ -342,11 +342,13 @@ private:
 };
 using MaxAlignedAlloc = MaxAlignedAllocImpl<>;
 
+#if JL_LLVM_VERSION < 170000
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
+#endif
 
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 using OptimizerResultT = Expected<orc::ThreadSafeModule>;
@@ -520,13 +522,19 @@ public:
                             bool ShouldOptimize = false) JL_NOTSAFEPOINT;
     Error addObjectFile(orc::JITDylib &JD,
                         std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
-    Expected<JITEvaluatedSymbol> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
     orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return ExternalCompileLayer; };
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
     orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
-    JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
-    JL_JITSymbol findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    #if JL_LLVM_VERSION >= 170000
+    Expected<llvm::orc::ExecutorSymbolDef> findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
+    #else
+    JITEvaluatedSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
+    JITEvaluatedSymbol findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    Expected<JITEvaluatedSymbol> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
+    #endif
     uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
@@ -624,7 +632,10 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     return *_shared_module;
 }
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
+
+#if JL_LLVM_VERSION < 170000
 void SetOpaquePointer(LLVMContext &ctx) JL_NOTSAFEPOINT;
+#endif
 
 void optimizeDLSyms(Module &M);
 

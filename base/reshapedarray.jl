@@ -132,12 +132,24 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(
         "may have at most one omitted dimension specified by `Colon()`")))
     @noinline throw2(A, dims) = throw(DimensionMismatch(string("array size $(length(A)) ",
         "must be divisible by the product of the new dimensions $dims")))
-    pre = _before_colon(dims...)
+    pre = _before_colon(dims...)::Tuple{Vararg{Int}}
     post = _after_colon(dims...)
     _any_colon(post...) && throw1(dims)
-    sz, remainder = divrem(length(A), prod(pre)*prod(post))
-    remainder == 0 || throw2(A, dims)
-    (pre..., Int(sz), post...)
+    post::Tuple{Vararg{Int}}
+    len = length(A)
+    sz, is_exact = if iszero(len)
+        (0, true)
+    else
+        let pr = Core.checked_dims(pre..., post...)  # safe product
+            if iszero(pr)
+                throw2(A, dims)
+            end
+            (quo, rem) = divrem(len, pr)
+            (Int(quo), iszero(rem))
+        end
+    end::Tuple{Int,Bool}
+    is_exact || throw2(A, dims)
+    (pre..., sz, post...)::Tuple{Int,Vararg{Int}}
 end
 @inline _any_colon() = false
 @inline _any_colon(dim::Colon, tail...) = true
@@ -225,6 +237,11 @@ elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 
 unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
 dataids(A::ReshapedArray) = dataids(A.parent)
+# forward the aliasing check the parent in case there are specializations
+mightalias(A::ReshapedArray, B::ReshapedArray) = mightalias(parent(A), parent(B))
+# special handling for reshaped SubArrays that dispatches to the subarray aliasing check
+mightalias(A::ReshapedArray, B::SubArray) = mightalias(parent(A), B)
+mightalias(A::SubArray, B::ReshapedArray) = mightalias(A, parent(B))
 
 @inline ind2sub_rs(ax, ::Tuple{}, i::Int) = (i,)
 @inline ind2sub_rs(ax, strds, i) = _ind2sub_rs(ax, strds, i - 1)

@@ -90,7 +90,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
     global string
     function string(u::UUID)
         u = u.value
-        a = Base.StringVector(36)
+        a = Base.StringMemory(36)
         for i in groupings
             @inbounds a[i] = hex_chars[1 + u & 0xf]
             u >>= 4

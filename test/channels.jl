@@ -638,3 +638,11 @@ end
         @test n_avail(c) == 0
     end
 end
+
+@testset "Task properties" begin
+    f() = rand(2,2)
+    t = Task(f)
+    message = "Querying a Task's `scope` field is disallowed.\nThe private `Core.current_scope()` function is better, though still an implementation detail."
+    @test_throws ErrorException(message) t.scope
+    @test t.state == :runnable
+end

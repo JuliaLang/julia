@@ -222,6 +222,11 @@ mutable struct TryCatchFrame
     TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
 end
 
+struct HandlerInfo
+    handlers::Vector{TryCatchFrame}
+    handler_at::Vector{Tuple{Int,Int}} # tuple of current (handler, exception stack) value at the pc
+end
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -237,8 +242,7 @@ mutable struct InferenceState
     currbb::Int
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
-    handlers::Vector{TryCatchFrame}
-    handler_at::Vector{Tuple{Int, Int}} # tuple of current (handler, exception stack) value at the pc
+    handler_info::Union{Nothing,HandlerInfo}
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
@@ -276,21 +280,21 @@ mutable struct InferenceState
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
                             interp::AbstractInterpreter)
-        linfo = result.linfo
+        mi = result.linfo
         world = get_inference_world(interp)
         if world == typemax(UInt)
             error("Entering inference from a generated function with an invalid world")
         end
-        def = linfo.def
+        def = mi.def
         mod = isa(def, Method) ? def.module : def
-        sptypes = sptypes_from_meth_instance(linfo)
+        sptypes = sptypes_from_meth_instance(mi)
         code = src.code::Vector{Any}
         cfg = compute_basic_blocks(code)
         method_info = MethodInfo(src)
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
-        handler_at, handlers = compute_trycatch(code, BitSet())
+        handler_info = compute_trycatch(code)
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
@@ -302,6 +306,9 @@ mutable struct InferenceState
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
         argtypes = result.argtypes
+
+        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
+
         nargtypes = length(argtypes)
         for i = 1:nslots
             argtyp = (i > nargtypes) ? Bottom : argtypes[i]
@@ -335,12 +342,12 @@ mutable struct InferenceState
         restrict_abstract_call_sites = isa(def, Module)
 
         # some more setups
-        InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
+        InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_info)
         !iszero(cache_mode & CACHE_MODE_LOCAL) && push!(get_inference_cache(interp), result)
 
         this = new(
-            linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
-            currbb, currpc, ip, handlers, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
+            mi, world, mod, sptypes, slottypes, src, cfg, method_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
@@ -356,6 +363,14 @@ mutable struct InferenceState
     end
 end
 
+gethandler(frame::InferenceState, pc::Int=frame.currpc) = gethandler(frame.handler_info, pc)
+gethandler(::Nothing, ::Int) = nothing
+function gethandler(handler_info::HandlerInfo, pc::Int)
+    handler_idx = handler_info.handler_at[pc][1]
+    handler_idx == 0 && return nothing
+    return handler_info.handlers[handler_idx]
+end
+
 is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
 is_nonoverlayed(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
 isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")
@@ -368,7 +383,21 @@ is_inferred(result::InferenceResult) = result.result !== nothing
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
 
-function compute_trycatch(code::Vector{Any}, ip::BitSet)
+compute_trycatch(ir::IRCode) = compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
+
+"""
+    compute_trycatch(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo}
+
+Given the code of a function, compute, at every statement, the current
+try/catch handler, and the current exception stack top. This function returns
+a tuple of:
+
+    1. `handler_info.handler_at`: A statement length vector of tuples
+       `(catch_handler, exception_stack)`, which are indices into `handlers`
+
+    2. `handler_info.handlers`: A `TryCatchFrame` vector of handlers
+"""
+function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothing}=nothing)
     # The goal initially is to record the frame like this for the state at exit:
     # 1: (enter 3) # == 0
     # 3: (expr)    # == 1
@@ -377,17 +406,19 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # then we can find all `try`s by walking backwards from :enter statements,
     # and all `catch`es by looking at the statement after the :enter
     n = length(code)
-    empty!(ip)
+    ip = BitSet()
     ip.offset = 0 # for _bits_findnext
     push!(ip, n + 1)
-    handler_at = fill((0, 0), n)
-    handlers = TryCatchFrame[]
+    handler_info = nothing
 
     # start from all :enter statements and record the location of the try
     for pc = 1:n
         stmt = code[pc]
         if isa(stmt, EnterNode)
+            (;handlers, handler_at) = handler_info =
+                (handler_info === nothing ? HandlerInfo(TryCatchFrame[], fill((0, 0), n)) : handler_info)
             l = stmt.catch_dest
+            (bbs !== nothing) && (l = first(bbs[l].stmts))
             push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
@@ -399,7 +430,12 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
         end
     end
 
+    if handler_info === nothing
+        return nothing
+    end
+
     # now forward those marks to all :leave statements
+    (;handlers, handler_at) = handler_info
     while true
         # make progress on the active ip set
         pc = _bits_findnext(ip.bits, 0)::Int
@@ -412,8 +448,10 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
             stmt = code[pc]
             if isa(stmt, GotoNode)
                 pc´ = stmt.label
+                (bbs !== nothing) && (pc´ = first(bbs[pc´].stmts))
             elseif isa(stmt, GotoIfNot)
                 l = stmt.dest::Int
+                (bbs !== nothing) && (l = first(bbs[l].stmts))
                 if handler_at[l] != cur_stacks
                     @assert handler_at[l][1] == 0 || handler_at[l][1] == cur_stacks[1] "unbalanced try/catch"
                     handler_at[l] = cur_stacks
@@ -424,6 +462,7 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 break
             elseif isa(stmt, EnterNode)
                 l = stmt.catch_dest
+                (bbs !== nothing) && (l = first(bbs[l].stmts))
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
                 if l != 0
@@ -470,7 +509,73 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     end
 
     @assert first(ip) == n + 1
-    return handler_at, handlers
+    return handler_info
+end
+
+function is_throw_call(e::Expr, code::Vector{Any})
+    if e.head === :call
+        f = e.args[1]
+        if isa(f, SSAValue)
+            f = code[f.id]
+        end
+        if isa(f, GlobalRef)
+            ff = abstract_eval_globalref_type(f)
+            if isa(ff, Const) && ff.val === Core.throw
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function mark_throw_blocks!(src::CodeInfo, handler_info::Union{Nothing,HandlerInfo})
+    for stmt in find_throw_blocks(src.code, handler_info)
+        src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
+    end
+    return nothing
+end
+
+# this utility function is incomplete and won't catch every block that always throws, since:
+# - it only recognizes direct calls to `throw` within the target code, so it can't mark
+#   blocks that deterministically call `throw` internally, like those containing `error`.
+# - it just does a reverse linear traverse of statements, there's a chance it might miss
+#   blocks, particularly when there are reverse control edges.
+function find_throw_blocks(code::Vector{Any}, handler_info::Union{Nothing,HandlerInfo})
+    stmts = BitSet()
+    n = length(code)
+    for i in n:-1:1
+        s = code[i]
+        if isa(s, Expr)
+            if s.head === :gotoifnot
+                if i+1 in stmts && s.args[2]::Int in stmts
+                    push!(stmts, i)
+                end
+            elseif s.head === :return
+                # see `ReturnNode` handling
+            elseif is_throw_call(s, code)
+                if handler_info === nothing || handler_info.handler_at[i][1] == 0
+                    push!(stmts, i)
+                end
+            elseif i+1 in stmts
+                push!(stmts, i)
+            end
+        elseif isa(s, ReturnNode)
+            # NOTE: it potentially makes sense to treat unreachable nodes
+            # (where !isdefined(s, :val)) as `throw` points, but that can cause
+            # worse codegen around the call site (issue #37558)
+        elseif isa(s, GotoNode)
+            if s.label in stmts
+                push!(stmts, i)
+            end
+        elseif isa(s, GotoIfNot)
+            if i+1 in stmts && s.dest in stmts
+                push!(stmts, i)
+            end
+        elseif i+1 in stmts
+            push!(stmts, i)
+        end
+    end
+    return stmts
 end
 
 # check if coverage mode is enabled
@@ -582,13 +687,13 @@ end
 
 const EMPTY_SPTYPES = VarState[]
 
-function sptypes_from_meth_instance(linfo::MethodInstance)
-    def = linfo.def
+function sptypes_from_meth_instance(mi::MethodInstance)
+    def = mi.def
     isa(def, Method) || return EMPTY_SPTYPES # toplevel
     sig = def.sig
-    if isempty(linfo.sparam_vals)
+    if isempty(mi.sparam_vals)
         isa(sig, UnionAll) || return EMPTY_SPTYPES
-        # linfo is unspecialized
+        # mi is unspecialized
         spvals = Any[]
         sig′ = sig
         while isa(sig′, UnionAll)
@@ -596,7 +701,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
             sig′ = sig′.body
         end
     else
-        spvals = linfo.sparam_vals
+        spvals = mi.sparam_vals
     end
     nvals = length(spvals)
     sptypes = Vector{VarState}(undef, nvals)
@@ -614,7 +719,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
                     # if this parameter came from `arg::Type{T}`,
                     # then `arg` is more precise than `Type{T} where lb<:T<:ub`
-                    ty = fieldtype(linfo.specTypes, j)
+                    ty = fieldtype(mi.specTypes, j)
                     @goto ty_computed
                 elseif (va = va_from_vatuple(sⱼ)) !== nothing
                     # if this parameter came from `::Tuple{.., Vararg{T,vᵢ}}`,
@@ -645,8 +750,8 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 # type variables, we can use it for a more accurate analysis of whether `v`
                 # is constrained or not, otherwise we should use `def.sig` which always
                 # doesn't contain any free type variables
-                if !has_free_typevars(linfo.specTypes)
-                    sig = linfo.specTypes
+                if !has_free_typevars(mi.specTypes)
+                    sig = mi.specTypes
                 end
                 @assert !has_free_typevars(sig)
                 constrains_param(v, sig, #=covariant=#true)
@@ -748,10 +853,9 @@ function print_callstack(sv::InferenceState)
 end
 
 function narguments(sv::InferenceState, include_va::Bool=true)
-    def = sv.linfo.def
-    nargs = length(sv.result.argtypes)
+    nargs = Int(sv.src.nargs)
     if !include_va
-        nargs -= isa(def, Method) && def.isva
+        nargs -= sv.src.isva
     end
     return nargs
 end
@@ -783,9 +887,12 @@ mutable struct IRInterpretationState
         for i = 1:length(given_argtypes)
             given_argtypes[i] = widenslotwrapper(argtypes[i])
         end
-        given_argtypes = va_process_argtypes(optimizer_lattice(interp), given_argtypes, mi)
-        argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
-            for i = 1:length(given_argtypes)]
+        if isa(mi.def, Method)
+            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
+                for i = 1:length(given_argtypes)]
+        else
+            argtypes_refined = Bool[false for i = 1:length(given_argtypes)]
+        end
         empty!(ir.argtypes)
         append!(ir.argtypes, given_argtypes)
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
@@ -810,6 +917,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     end
     method_info = MethodInfo(src)
     ir = inflate_ir(src, mi)
+    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva)
     return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
                                  codeinst.min_world, codeinst.max_world)
 end
@@ -832,7 +940,10 @@ end
 frame_parent(sv::InferenceState) = sv.parent::Union{Nothing,AbsIntState}
 frame_parent(sv::IRInterpretationState) = sv.parent::Union{Nothing,AbsIntState}
 
-is_constproped(sv::InferenceState) = any(sv.result.overridden_by_const)
+function is_constproped(sv::InferenceState)
+    (;overridden_by_const) = sv.result
+    return overridden_by_const !== nothing
+end
 is_constproped(::IRInterpretationState) = true
 
 is_cached(sv::InferenceState) = !iszero(sv.cache_mode & CACHE_MODE_GLOBAL)
@@ -858,8 +969,8 @@ function is_effect_overridden(sv::AbsIntState, effect::Symbol)
     end
     return false
 end
-function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
-    def = linfo.def
+function is_effect_overridden(mi::MethodInstance, effect::Symbol)
+    def = mi.def
     return isa(def, Method) && is_effect_overridden(def, effect)
 end
 is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)

@@ -284,7 +284,7 @@ typedef union __jl_purity_overrides_t {
 } _jl_purity_overrides_t;
 
 #define NUM_EFFECTS_OVERRIDES 9
-#define NUM_IR_FLAGS 12
+#define NUM_IR_FLAGS 13
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
@@ -320,11 +320,13 @@ typedef struct _jl_code_info_t {
     jl_value_t *edges; // forward edges to method instances that must be invalidated (for copying to debuginfo)
     size_t min_world;
     size_t max_world;
+    size_t nargs;
 
     // various boolean properties:
     uint8_t propagate_inbounds;
     uint8_t has_fcall;
     uint8_t nospecializeinfer;
+    uint8_t isva;
     // uint8 settings
     uint8_t inlining; // 0 = default; 1 = @inline; 2 = @noinline
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
@@ -410,7 +412,6 @@ struct _jl_method_instance_t {
     } def; // pointer back to the context for this code
     jl_value_t *specTypes;  // argument types this was specialized for
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sig
-    _Atomic(jl_value_t*) uninferred; // cached uncompressed code, for generated functions, top-level thunks, or the interpreter
     jl_array_t *backedges; // list of method-instances which call this method-instance; `invoke` records (invokesig, caller) pairs
     _Atomic(struct _jl_code_instance_t*) cache;
     uint8_t inInference; // flags to tell if inference is running on this object
@@ -574,7 +575,10 @@ typedef struct {
         // metadata bit only for GenericMemory eltype layout
         uint16_t arrayelem_isboxed : 1;
         uint16_t arrayelem_isunion : 1;
-        uint16_t padding : 11;
+        // If set, this type's egality can be determined entirely by comparing
+        // the non-padding bits of this datatype.
+        uint16_t isbitsegal : 1;
+        uint16_t padding : 10;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -1176,8 +1180,8 @@ STATIC_INLINE jl_value_t *jl_svecset(
 /*
   how - allocation style
   0 = data is inlined
-  1 = owns the gc-managed data, exclusively
-  2 = malloc-allocated pointer (may or may not own it)
+  1 = owns the gc-managed data, exclusively (will free it)
+  2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the object that owns the data pointer
 */
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
@@ -1801,7 +1805,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  _Atomic(jl_value_t*) *bp,
                                                  jl_binding_t *bnd);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world);
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world, jl_code_instance_t **cache);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x) JL_NOTSAFEPOINT;
@@ -2078,6 +2082,7 @@ JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t e
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage);
+JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci);

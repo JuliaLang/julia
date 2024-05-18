@@ -1281,6 +1281,12 @@ end
     @test c == Diagonal([2,2,2,2])
 end
 
+@testset "uppertriangular/lowertriangular" begin
+    D = Diagonal([1,2])
+    @test LinearAlgebra.uppertriangular(D) === D
+    @test LinearAlgebra.lowertriangular(D) === D
+end
+
 @testset "mul/div with an adjoint vector" begin
     A = [1.0;;]
     x = [1.0]
@@ -1290,6 +1296,13 @@ end
     yadj = Diagonal(A) * x'
     @test typeof(yadj) == typeof(x')
     @test yadj == x'
+end
+
+@testset "Matrix conversion for non-numeric" begin
+    D = Diagonal(fill(Diagonal([1,3]), 2))
+    M = Matrix{eltype(D)}(D)
+    @test M isa Matrix{eltype(D)}
+    @test M == D
 end
 
 end # module TestDiagonal

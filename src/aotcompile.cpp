@@ -4,8 +4,12 @@
 #include "platform.h"
 
 // target support
-#include "llvm/Support/CodeGen.h"
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Triple.h>
+#else
 #include <llvm/ADT/Triple.h>
+#endif
+#include "llvm/Support/CodeGen.h"
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
@@ -696,7 +700,11 @@ static FunctionInfo getFunctionWeight(const Function &F)
         auto val = F.getFnAttribute("julia.mv.clones").getValueAsString();
         // base16, so must be at most 4 * length bits long
         // popcount gives number of clones
+        #if JL_LLVM_VERSION >= 170000
+        info.clones = APInt(val.size() * 4, val, 16).popcount() + 1;
+        #else
         info.clones = APInt(val.size() * 4, val, 16).countPopulation() + 1;
+        #endif
     }
     info.weight += info.insts;
     // more basic blocks = more complex than just sum of insts,
@@ -1439,7 +1447,9 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         for (unsigned i = 0; i < threads; i++) {
             std::function<void()> func = [&, i]() {
                 LLVMContext ctx;
+                #if JL_LLVM_VERSION < 170000
                 SetOpaquePointer(ctx);
+                #endif
                 // Lazily deserialize the entire module
                 timers[i].deserialize.startTimer();
                 auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
@@ -1605,7 +1615,7 @@ void jl_dump_native_impl(void *native_code,
         TheTriple.setOSName(Str);
     }
     Optional<Reloc::Model> RelocModel;
-    if (TheTriple.isOSLinux() || TheTriple.isOSFreeBSD()) {
+    if (TheTriple.isOSLinux() || TheTriple.isOSFreeBSD() || TheTriple.isOSOpenBSD()) {
         RelocModel = Reloc::PIC_;
     }
 
@@ -1643,7 +1653,9 @@ void jl_dump_native_impl(void *native_code,
     if (z) {
         JL_TIMING(NATIVE_AOT, NATIVE_Sysimg);
         LLVMContext Context;
+        #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(Context);
+        #endif
         Module sysimgM("sysimg", Context);
         sysimgM.setTargetTriple(TheTriple.str());
         sysimgM.setDataLayout(DL);
@@ -1690,6 +1702,7 @@ void jl_dump_native_impl(void *native_code,
         JL_TIMING(NATIVE_AOT, NATIVE_Setup);
         dataM.setTargetTriple(TheTriple.str());
         dataM.setDataLayout(DL);
+        dataM.setPICLevel(PICLevel::BigPIC);
         auto &Context = dataM.getContext();
 
         Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
@@ -1786,7 +1799,9 @@ void jl_dump_native_impl(void *native_code,
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
+        #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(Context);
+        #endif
         Module metadataM("metadata", Context);
         metadataM.setTargetTriple(TheTriple.str());
         metadataM.setDataLayout(DL);
@@ -2036,12 +2051,16 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                     global.second->setLinkage(GlobalValue::ExternalLinkage);
                 } else {
                     auto p = literal_static_pointer_val(global.first, global.second->getValueType());
+                    #if JL_LLVM_VERSION >= 170000
+                    Type *elty = PointerType::get(output.getContext(), 0);
+                    #else
                     Type *elty;
                     if (p->getType()->isOpaquePointerTy()) {
                         elty = PointerType::get(output.getContext(), 0);
                     } else {
                         elty = p->getType()->getNonOpaquePointerElementType();
                     }
+                    #endif
                     // For pretty printing, when LLVM inlines the global initializer into its loads
                     auto alias = GlobalAlias::create(elty, 0, GlobalValue::PrivateLinkage, global.second->getName() + ".jit", p, global.second->getParent());
                     global.second->setInitializer(ConstantExpr::getBitCast(alias, global.second->getValueType()));

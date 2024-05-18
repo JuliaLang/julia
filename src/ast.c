@@ -116,7 +116,7 @@ JL_DLLEXPORT jl_sym_t *jl_acquire_sym;
 JL_DLLEXPORT jl_sym_t *jl_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
-
+JL_DLLEXPORT jl_sym_t *jl_uninferred_sym;
 
 static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -416,6 +416,7 @@ void jl_init_common_symbols(void)
     jl_release_sym = jl_symbol("release");
     jl_acquire_release_sym = jl_symbol("acquire_release");
     jl_sequentially_consistent_sym = jl_symbol("sequentially_consistent");
+    jl_uninferred_sym = jl_symbol("uninferred");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -717,8 +718,20 @@ static int julia_to_scm_noalloc1(fl_context_t *fl_ctx, jl_value_t *v, value_t *r
 
 static value_t julia_to_scm_noalloc2(fl_context_t *fl_ctx, jl_value_t *v, int check_valid) JL_NOTSAFEPOINT
 {
-    if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
-        return fixnum(jl_unbox_long(v));
+    if (jl_is_long(v)) {
+        if (fits_fixnum(jl_unbox_long(v))) {
+            return fixnum(jl_unbox_long(v));
+        } else {
+#ifdef _P64
+            value_t prim = cprim(fl_ctx, fl_ctx->int64type, sizeof(int64_t));
+            *((int64_t*)cp_data((cprim_t*)ptr(prim))) = jl_unbox_long(v);
+#else
+            value_t prim = cprim(fl_ctx, fl_ctx->int32type, sizeof(int32_t));
+            *((int32_t*)cp_data((cprim_t*)ptr(prim))) = jl_unbox_long(v);
+#endif
+            return prim;
+        }
+    }
     if (check_valid) {
         if (jl_is_ssavalue(v))
             lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");

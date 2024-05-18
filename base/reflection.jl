@@ -18,7 +18,7 @@ julia> parentmodule(Base.Broadcast)
 Base
 ```
 """
-parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (Any,), m))
 
 is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
 
@@ -30,6 +30,7 @@ parent modules of `m` which is either a registered root module or which is its
 own parent module.
 """
 function moduleroot(m::Module)
+    @_total_meta
     while true
         is_root_module(m) && return m
         p = parentmodule(m)
@@ -63,6 +64,7 @@ julia> fullname(Main)
 ```
 """
 function fullname(m::Module)
+    @_total_meta
     mn = nameof(m)
     if m === Main || m === Base || m === Core
         return (mn,)
@@ -488,8 +490,8 @@ gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
     Base.datatype_haspadding(dt::DataType) -> Bool
 
 Return whether the fields of instances of this type are packed in memory,
-with no intervening padding bits (defined as bits whose value does not uniquely
-impact the egal test when applied to the struct fields).
+with no intervening padding bits (defined as bits whose value does not impact
+the semantic value of the instance itself).
 Can be called on any `isconcretetype`.
 """
 function datatype_haspadding(dt::DataType)
@@ -497,6 +499,21 @@ function datatype_haspadding(dt::DataType)
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return flags & 1 == 1
+end
+
+"""
+    Base.datatype_isbitsegal(dt::DataType) -> Bool
+
+Return whether egality of the (non-padding bits of the) in-memory representation
+of an instance of this type implies semantic egality of the instance itself.
+This may not be the case if the type contains to other values whose egality is
+independent of their identity (e.g. immutable structs, some types, etc.).
+"""
+function datatype_isbitsegal(dt::DataType)
+    @_foldable_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return (flags & (1<<5)) != 0
 end
 
 """
@@ -1003,12 +1020,15 @@ function datatype_fieldcount(t::DataType)
             return fieldcount(types)
         end
         return nothing
-    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+    elseif isabstracttype(t)
         return nothing
     end
-    if isdefined(t, :types)
+    if t.name === Tuple.name
+        isvatuple(t) && return nothing
         return length(t.types)
     end
+    # Equivalent to length(t.types), but `t.types` is lazy and we do not want
+    # to be forced to compute it.
     return length(t.name.names)
 end
 
@@ -1134,7 +1154,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     for m in method_instances(f, t, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
-                code = ccall(:jl_code_for_staged, Any, (Any, UInt), m, world)::CodeInfo
+                code = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)::CodeInfo
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
@@ -1584,7 +1604,7 @@ julia> code_typed(+, (Float64, Float64))
 """
 function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs...)
     if isa(f, Core.OpaqueClosure)
-        return code_typed_opaque_closure(f; kwargs...)
+        return code_typed_opaque_closure(f, types; kwargs...)
     end
     tt = signature_type(f, types)
     return code_typed_by_type(tt; kwargs...)
@@ -1600,6 +1620,12 @@ function default_tt(@nospecialize(f))
     else
         return Tuple
     end
+end
+
+function raise_match_failure(name::Symbol, @nospecialize(tt))
+    @noinline
+    sig_str = sprint(Base.show_tuple_as_call, Symbol(""), tt)
+    error("$name: unanalyzable call given $sig_str")
 end
 
 """
@@ -1624,9 +1650,10 @@ function code_typed_by_type(@nospecialize(tt::Type);
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     tt = to_tuple_type(tt)
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:code_typed, tt)
     asts = []
-    for match in matches
+    for match in matches.matches
         match = match::Core.MethodMatch
         (code, ty) = Core.Compiler.typeinf_code(interp, match, optimize)
         if code === nothing
@@ -1639,20 +1666,38 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function get_oc_code_rt(@nospecialize(oc::Core.OpaqueClosure))
-    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
+    @nospecialize oc types
+    ccall(:jl_is_in_pure_context, Bool, ()) &&
+        error("code reflection cannot be used from generated functions")
     m = oc.source
     if isa(m, Method)
-        code = _uncompressed_ir(m)
-        return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+        if isdefined(m, :source)
+            if optimize
+                tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
+                mi = Core.Compiler.specialize_method(m, tt, Core.svec())
+                interp = Core.Compiler.NativeInterpreter(m.primary_world)
+                return Core.Compiler.typeinf_code(interp, mi, optimize)
+            else
+                code = _uncompressed_ir(m)
+                return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+            end
+        else
+            # OC constructed from optimized IR
+            codeinst = m.specializations.cache
+            return Pair{CodeInfo, Any}(codeinst.inferred, codeinst.rettype)
+        end
     else
         error("encountered invalid Core.OpaqueClosure object")
     end
 end
 
-function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
-                                   debuginfo::Symbol=:default, _...)
-    (code, rt) = get_oc_code_rt(oc)
+function code_typed_opaque_closure(oc::Core.OpaqueClosure, types;
+                                   debuginfo::Symbol=:default,
+                                   optimize::Bool=true,
+                                   _...)
+    @nospecialize oc types
+    (code, rt) = get_oc_code_rt(oc, types, optimize)
     debuginfo === :none && remove_linenums!(code)
     return Any[Pair{CodeInfo,Any}(code, rt)]
 end
@@ -1723,9 +1768,10 @@ function code_ircode_by_type(
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     tt = to_tuple_type(tt)
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:code_ircode, tt)
     asts = []
-    for match in matches
+    for match in matches.matches
         match = match::Core.MethodMatch
         (code, ty) = Core.Compiler.typeinf_ircode(interp, match, optimize_until)
         if code === nothing
@@ -1749,6 +1795,12 @@ function _builtin_effects(interp::Core.Compiler.AbstractInterpreter,
     argtypes = Any[to_tuple_type(types).parameters...]
     rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
     return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
+end
+
+function _builtin_exception_type(interp::Core.Compiler.AbstractInterpreter,
+                                 @nospecialize(f::Core.Builtin), @nospecialize(types))
+    effects = _builtin_effects(interp, f, types)
+    return Core.Compiler.is_nothrow(effects) ? Union{} : Any
 end
 
 check_generated_context(world::UInt) =
@@ -1807,17 +1859,16 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        _, rt = only(code_typed_opaque_closure(f))
+        _, rt = only(code_typed_opaque_closure(f, types))
         return Any[rt]
+    elseif isa(f, Core.Builtin)
+        return Any[_builtin_return_type(interp, f, types)]
     end
-    if isa(f, Core.Builtin)
-        rt = _builtin_return_type(interp, f, types)
-        return Any[rt]
-    end
-    rts = Any[]
     tt = signature_type(f, types)
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
-    for match in matches
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:return_types, tt)
+    rts = Any[]
+    for match in matches.matches
         ty = Core.Compiler.typeinf_type(interp, match::Core.MethodMatch)
         push!(rts, something(ty, Any))
     end
@@ -1876,18 +1927,13 @@ function infer_return_type(@nospecialize(f), @nospecialize(types=default_tt(f));
                            interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        return last(only(code_typed_opaque_closure(f)))
-    end
-    if isa(f, Core.Builtin)
+        return last(only(code_typed_opaque_closure(f, types)))
+    elseif isa(f, Core.Builtin)
         return _builtin_return_type(interp, f, types)
     end
     tt = signature_type(f, types)
     matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
-    if matches === nothing
-        # unanalyzable call, i.e. the interpreter world might be newer than the world where
-        # the `f` is defined, return the unknown return type
-        return Any
-    end
+    matches === nothing && raise_match_failure(:infer_return_type, tt)
     rt = Union{}
     for match in matches.matches
         ty = Core.Compiler.typeinf_type(interp, match::Core.MethodMatch)
@@ -1952,18 +1998,15 @@ function infer_exception_types(@nospecialize(f), @nospecialize(types=default_tt(
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         return Any[Any] # TODO
+    elseif isa(f, Core.Builtin)
+        return Any[_builtin_exception_type(interp, f, types)]
     end
-    if isa(f, Core.Builtin)
-        effects = _builtin_effects(interp, f, types)
-        exct = Core.Compiler.is_nothrow(effects) ? Union{} : Any
-        return Any[exct]
-    end
-    excts = Any[]
     tt = signature_type(f, types)
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
-    for match in matches
-        match = match::Core.MethodMatch
-        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#false)
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:infer_exception_types, tt)
+    excts = Any[]
+    for match in matches.matches
+        frame = Core.Compiler.typeinf_frame(interp, match::Core.MethodMatch, #=run_optimizer=#false)
         if frame === nothing
             exct = Any
         else
@@ -2034,18 +2077,12 @@ function infer_exception_type(@nospecialize(f), @nospecialize(types=default_tt(f
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         return Any # TODO
-    end
-    if isa(f, Core.Builtin)
-        effects = _builtin_effects(interp, f, types)
-        return Core.Compiler.is_nothrow(effects) ? Union{} : Any
+    elseif isa(f, Core.Builtin)
+        return _builtin_exception_type(interp, f, types)
     end
     tt = signature_type(f, types)
     matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
-    if matches === nothing
-        # unanalyzable call, i.e. the interpreter world might be newer than the world where
-        # the `f` is defined, return the unknown exception type
-        return Any
-    end
+    matches === nothing && raise_match_failure(:infer_exception_type, tt)
     exct = Union{}
     if _may_throw_methoderror(matches)
         # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -2063,6 +2100,7 @@ end
 """
     Base.infer_effects(
         f, types=default_tt(f);
+        optimize::Bool=true,
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> effects::Effects
 
@@ -2071,6 +2109,7 @@ Returns the possible computation effects of the function call specified by `f` a
 # Arguments
 - `f`: The function to analyze.
 - `types` (optional): The argument types of the function. Defaults to the default tuple type of `f`.
+- `optimize` (optional): Whether to run additional effects refinements based on post-optimization analysis.
 - `world` (optional): The world counter to use for the analysis. Defaults to the current world counter.
 - `interp` (optional): The abstract interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
 
@@ -2118,6 +2157,7 @@ signature, the `:nothrow` bit gets tainted.
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
 """
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
+                       optimize::Bool=true,
                        world::UInt=get_world_counter(),
                        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     check_generated_context(world)
@@ -2126,11 +2166,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     end
     tt = signature_type(f, types)
     matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
-    if matches === nothing
-        # unanalyzable call, i.e. the interpreter world might be newer than the world where
-        # the `f` is defined, return the unknown effects
-        return Core.Compiler.Effects()
-    end
+    matches === nothing && raise_match_failure(:infer_effects, tt)
     effects = Core.Compiler.EFFECTS_TOTAL
     if _may_throw_methoderror(matches)
         # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -2138,7 +2174,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     end
     for match in matches.matches
         match = match::Core.MethodMatch
-        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#true)
+        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#optimize)
         frame === nothing && return Core.Compiler.Effects()
         effects = Core.Compiler.merge_effects(effects, frame.result.ipo_effects)
     end
@@ -2161,10 +2197,11 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
                                interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     tt = to_tuple_type(tt)
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:print_statement_costs, tt)
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
-    for match in matches
+    for match in matches.matches
         match = match::Core.MethodMatch
         println(io, match.method)
         (code, ty) = Core.Compiler.typeinf_code(interp, match, true)

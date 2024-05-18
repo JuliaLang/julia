@@ -427,7 +427,7 @@ The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 
 The argument `tol` determines the tolerance for determining the rank.
-For negative values, the tolerance is the machine precision.
+For negative values, the tolerance is equal to `eps()*size(A,1)*maximum(diag(A))`.
 
 If you have a matrix `A` that is slightly non-Hermitian due to roundoff errors in its construction,
 wrap it in `Hermitian(A)` before passing it to `cholesky` in order to treat it as perfectly Hermitian.
@@ -515,13 +515,28 @@ copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.ran
 size(C::Union{Cholesky, CholeskyPivoted}) = size(C.factors)
 size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 
+function _choleskyUfactor(Cfactors, Cuplo)
+    if Cuplo === 'U'
+        return UpperTriangular(Cfactors)
+    else
+        return copy(LowerTriangular(Cfactors)')
+    end
+end
+function _choleskyLfactor(Cfactors, Cuplo)
+    if Cuplo === 'L'
+        return LowerTriangular(Cfactors)
+    else
+        return copy(UpperTriangular(Cfactors)')
+    end
+end
+
 function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d === :U
-        return UpperTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
+        _choleskyUfactor(Cfactors, Cuplo)
     elseif d === :L
-        return LowerTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
+        _choleskyLfactor(Cfactors, Cuplo)
     elseif d === :UL
         return (Cuplo === 'U' ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors))
     else
@@ -535,9 +550,9 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where {T}
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d === :U
-        return UpperTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        _choleskyUfactor(Cfactors, Cuplo)
     elseif d === :L
-        return LowerTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        _choleskyLfactor(Cfactors, Cuplo)
     elseif d === :p
         return getfield(C, :piv)
     elseif d === :P

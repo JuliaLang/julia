@@ -14,6 +14,7 @@ const NRM2_CUTOFF = 32
 const ISONE_CUTOFF = 2^21 # 2M
 
 function isone(A::AbstractMatrix)
+    require_one_based_indexing(A)  # multiplication not defined yet among offset matrices
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -336,7 +337,7 @@ function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}..
     mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
     nmax = mapreduce(x -> length(x.second) + max(0,Int(x.first)), max, kv; init=0)
     m, n = size
-    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch(lazy"invalid size=$size"))
     return m, n
 end
 function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
@@ -491,8 +492,8 @@ julia> reshape(kron(v,w), (length(w), length(v)))
 ```
 """
 function kron(A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) where {T,S}
-    R = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
-    return kron!(R, A, B)
+    C = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
+    return kron!(C, A, B)
 end
 function kron(a::AbstractVector{T}, b::AbstractVector{S}) where {T,S}
     c = Vector{promote_op(*,T,S)}(undef, length(a)*length(b))
@@ -704,8 +705,8 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         V = mul!(C[3]*P, true, C[1]*I, true, true) #V = C[1]*I + C[3]*P
         for k in 2:(div(length(C), 2) - 1)
             P *= A2
-            mul!(U, C[2k + 2], P, true, true) # U += C[2k+2]*P
-            mul!(V, C[2k + 1], P, true, true) # V += C[2k+1]*P
+            U .+= C[2k + 2] .* P
+            V .+= C[2k + 1] .* P
         end
 
         U = A * U
@@ -1645,7 +1646,7 @@ function cond(A::AbstractMatrix, p::Real=2)
             end
         end
     end
-    throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
+    throw(ArgumentError(lazy"p-norm must be 1, 2 or Inf, got $p"))
 end
 
 ## Lyapunov and Sylvester equation

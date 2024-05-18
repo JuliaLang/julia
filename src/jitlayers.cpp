@@ -28,7 +28,11 @@
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Target/TargetOptions.h>
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Host.h>
+#else
 #include <llvm/Support/Host.h>
+#endif
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Object/SymbolSize.h>
 
@@ -110,6 +114,15 @@ static void *getTLSAddress(void *control)
         return nullptr;
     }
 }
+}
+#endif
+
+#ifdef _OS_OPENBSD_
+extern "C" {
+    __int128 __divti3(__int128, __int128);
+    __int128 __modti3(__int128, __int128);
+    unsigned __int128 __udivti3(unsigned __int128, unsigned __int128);
+    unsigned __int128 __umodti3(unsigned __int128, unsigned __int128);
 }
 #endif
 
@@ -504,7 +517,11 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
                 src = jl_uncompress_ir(def, NULL, (jl_value_t*)src);
         }
         else {
-            src = (jl_code_info_t*)jl_atomic_load_relaxed(&unspec->def->uninferred);
+            jl_method_instance_t *mi = unspec->def;
+            jl_code_instance_t *uninferred = jl_cached_uninferred(
+                jl_atomic_load_relaxed(&mi->cache), 1);
+            assert(uninferred);
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred->inferred);
             assert(src);
         }
         if (src) {
@@ -595,7 +612,8 @@ CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 #ifdef DISABLE_OPT
     return CodeGenOpt::None;
 #else
-    return optlevel < 2 ? CodeGenOpt::None :
+    return optlevel == 0 ? CodeGenOpt::None :
+        optlevel == 1 ? CodeGenOpt::Less :
         optlevel == 2 ? CodeGenOpt::Default :
         CodeGenOpt::Aggressive;
 #endif
@@ -1478,9 +1496,11 @@ struct JuliaOJIT::DLSymOptimizer {
                     if (named) {
                         auto T = GV.getValueType();
                         assert(T->isPointerTy());
+                        #if JL_LLVM_VERSION < 170000
                         if (!T->isOpaquePointerTy()) {
                             T = T->getNonOpaquePointerElementType();
                         }
+                        #endif
                         init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, GV.getName() + ".jit", init, &M);
                     }
                     GV.setInitializer(init);
@@ -1531,9 +1551,11 @@ struct JuliaOJIT::DLSymOptimizer {
                         if (named) {
                             auto T = CI->getType();
                             assert(T->isPointerTy());
+                            #if JL_LLVM_VERSION < 170000
                             if (!T->isOpaquePointerTy()) {
                                 T = T->getNonOpaquePointerElementType();
                             }
+                            #endif
                             init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, CI->getName() + ".jit", init, &M);
                         }
                         // DCE and SimplifyCFG will kill the branching structure around
@@ -1577,6 +1599,7 @@ void fixupTM(TargetMachine &TM) {
     }
 }
 
+#if JL_LLVM_VERSION < 170000
 extern int jl_opaque_ptrs_set;
 void SetOpaquePointer(LLVMContext &ctx) {
     if (jl_opaque_ptrs_set)
@@ -1587,6 +1610,7 @@ void SetOpaquePointer(LLVMContext &ctx) {
     ctx.setOpaquePointers(true);
 #endif
 }
+#endif
 
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     // Mark our address spaces as non-integral
@@ -1609,7 +1633,9 @@ JuliaOJIT::JuliaOJIT()
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
+        #if JL_LLVM_VERSION < 170000
         SetOpaquePointer(*ctx);
+        #endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK
@@ -1732,8 +1758,38 @@ JuliaOJIT::JuliaOJIT()
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
 
+#ifdef _OS_OPENBSD_
+    orc::SymbolMap i128_crt;
+
+    i128_crt[mangle("__divti3")] = JITEvaluatedSymbol::fromPointer(&__divti3, JITSymbolFlags::Exported);
+    i128_crt[mangle("__modti3")] = JITEvaluatedSymbol::fromPointer(&__modti3, JITSymbolFlags::Exported);
+    i128_crt[mangle("__udivti3")] = JITEvaluatedSymbol::fromPointer(&__udivti3, JITSymbolFlags::Exported);
+    i128_crt[mangle("__umodti3")] = JITEvaluatedSymbol::fromPointer(&__umodti3, JITSymbolFlags::Exported);
+
+    cantFail(GlobalJD.define(orc::absoluteSymbols(i128_crt)));
+#endif
+
 #ifdef MSAN_EMUTLS_WORKAROUND
     orc::SymbolMap msan_crt;
+    #if JL_LLVM_VERSION >= 170000
+    msan_crt[mangle("__emutls_get_address")] = {ExecutorAddr::fromPtr(msan_workaround::getTLSAddress), JITSymbolFlags::Exported};
+    msan_crt[mangle("__emutls_v.__msan_param_tls")] = {ExecutorAddr::fromPtr(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::param))), JITSymbolFlags::Exported};
+    msan_crt[mangle("__emutls_v.__msan_param_origin_tls")] = {ExecutorAddr::fromPtr(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::param_origin))), JITSymbolFlags::Exported};
+    msan_crt[mangle("__emutls_v.__msan_retval_tls")] = {ExecutorAddr::fromPtr(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::retval))), JITSymbolFlags::Exported};
+    msan_crt[mangle("__emutls_v.__msan_retval_origin_tls")] = {ExecutorAddr::fromPtr(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::retval_origin))), JITSymbolFlags::Exported};
+    msan_crt[mangle("__emutls_v.__msan_va_arg_tls")] = {ExecutorAddr::fromPtr(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::va_arg))), JITSymbolFlags::Exported};
+    msan_crt[mangle("__emutls_v.__msan_va_arg_origin_tls")] = {ExecutorAddr::fromPtr(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::va_arg_origin))), JITSymbolFlags::Exported};
+    msan_crt[mangle("__emutls_v.__msan_va_arg_overflow_size_tls")] = {ExecutorAddr::fromPtr(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::va_arg_overflow_size))), JITSymbolFlags::Exported};
+    msan_crt[mangle("__emutls_v.__msan_origin_tls")] = {ExecutorAddr::fromPtr(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin))), JITSymbolFlags::Exported};
+    #else
     msan_crt[mangle("__emutls_get_address")] = JITEvaluatedSymbol::fromPointer(msan_workaround::getTLSAddress, JITSymbolFlags::Exported);
     msan_crt[mangle("__emutls_v.__msan_param_tls")] = JITEvaluatedSymbol::fromPointer(
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::param)), JITSymbolFlags::Exported);
@@ -1751,11 +1807,16 @@ JuliaOJIT::JuliaOJIT()
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::va_arg_overflow_size)), JITSymbolFlags::Exported);
     msan_crt[mangle("__emutls_v.__msan_origin_tls")] = JITEvaluatedSymbol::fromPointer(
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin)), JITSymbolFlags::Exported);
+    #endif
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
 #ifdef _COMPILER_ASAN_ENABLED_
     orc::SymbolMap asan_crt;
+    #if JL_LLVM_VERSION >= 170000
+    asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&___asan_globals_registered), JITSymbolFlags::Exported};
+    #else
     asan_crt[mangle("___asan_globals_registered")] = JITEvaluatedSymbol::fromPointer(&___asan_globals_registered, JITSymbolFlags::Exported);
+    #endif
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
 #endif
 }
@@ -1770,7 +1831,11 @@ orc::SymbolStringPtr JuliaOJIT::mangle(StringRef Name)
 
 void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 {
+    #if JL_LLVM_VERSION >= 170000
+    cantFail(JD.define(orc::absoluteSymbols({{mangle(Name), {ExecutorAddr::fromPtr((void*)Addr), JITSymbolFlags::Exported}}})));
+    #else
     cantFail(JD.define(orc::absoluteSymbols({{mangle(Name), JITEvaluatedSymbol::fromPointer((void*)Addr)}})));
+    #endif
 }
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
@@ -1808,7 +1873,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     auto Lookups = ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}}, NewExports);
     if (!Lookups) {
         ES.reportError(Lookups.takeError());
-        errs() << "Failed to lookup symbols in module!";
+        errs() << "Failed to lookup symbols in module!\n";
         if (CurrentlyCompiling) {
             CurrentlyCompiling.withModuleDo([](Module &M) JL_NOTSAFEPOINT { errs() << "Dumping failing module\n" << M << "\n"; });
         } else {
@@ -1816,7 +1881,11 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         }
     }
     for (auto &Sym : *Lookups) {
+        #if JL_LLVM_VERSION >= 170000
+        assert(Sym.second.getAddress());
+        #else
         assert(Sym.second);
+        #endif
         (void) Sym;
     }
 }
@@ -1845,6 +1914,48 @@ Error JuliaOJIT::addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> 
     return LockLayer.add(JD.getDefaultResourceTracker(), std::move(Obj));
 }
 
+#if JL_LLVM_VERSION >= 170000
+Expected<ExecutorSymbolDef> JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
+{
+    orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
+    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
+    auto Sym = ES.lookup(SearchOrder, Name);
+    return Sym;
+}
+
+Expected<ExecutorSymbolDef> JuliaOJIT::findUnmangledSymbol(StringRef Name)
+{
+    return findSymbol(getMangledName(Name), true);
+}
+
+Expected<ExecutorSymbolDef> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool ExternalJDOnly)
+{
+    orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
+    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
+    auto Sym = ES.lookup(SearchOrder, getMangledName(Name));
+    return Sym;
+}
+
+uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
+{
+    auto addr = findSymbol(getMangledName(Name), false);
+    if (!addr) {
+        consumeError(addr.takeError());
+        return 0;
+    }
+    return cantFail(std::move(addr)).getAddress().getValue();
+}
+
+uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
+{
+    auto addr = findSymbol(getMangledName(Name), false);
+    if (!addr) {
+        consumeError(addr.takeError());
+        return 0;
+    }
+    return cantFail(std::move(addr)).getAddress().getValue();
+}
+#else
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
     orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
@@ -1860,7 +1971,7 @@ JL_JITSymbol JuliaOJIT::findUnmangledSymbol(StringRef Name)
     return findSymbol(getMangledName(Name), true);
 }
 
-Expected<JITEvaluatedSymbol> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool ExternalJDOnly)
+Expected<JL_JITSymbol> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool ExternalJDOnly)
 {
     orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
     ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
@@ -1875,7 +1986,7 @@ uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
         consumeError(addr.takeError());
         return 0;
     }
-    return cantFail(addr.getAddress());
+    return cantFail(addr).getAddress();
 }
 
 uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
@@ -1885,8 +1996,9 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
         consumeError(addr.takeError());
         return 0;
     }
-    return cantFail(addr.getAddress());
+    return cantFail(addr).getAddress();
 }
+#endif
 
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
@@ -1926,8 +2038,13 @@ llvm_orc_registerJITLoaderGDBAllocAction(const char *Data, size_t Size);
 void JuliaOJIT::enableJITDebuggingSupport()
 {
     orc::SymbolMap GDBFunctions;
+    #if JL_LLVM_VERSION >= 170000
+    GDBFunctions[mangle("llvm_orc_registerJITLoaderGDBAllocAction")] = {ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBAllocAction), JITSymbolFlags::Exported | JITSymbolFlags::Callable};
+    GDBFunctions[mangle("llvm_orc_registerJITLoaderGDBWrapper")] = {ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBWrapper), JITSymbolFlags::Exported | JITSymbolFlags::Callable};
+    #else
     GDBFunctions[mangle("llvm_orc_registerJITLoaderGDBAllocAction")] = JITEvaluatedSymbol::fromPointer(&llvm_orc_registerJITLoaderGDBAllocAction, JITSymbolFlags::Exported | JITSymbolFlags::Callable);
     GDBFunctions[mangle("llvm_orc_registerJITLoaderGDBWrapper")] = JITEvaluatedSymbol::fromPointer(&llvm_orc_registerJITLoaderGDBWrapper, JITSymbolFlags::Exported | JITSymbolFlags::Callable);
+    #endif
     cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     if (TM->getTargetTriple().isOSBinFormatMachO())
         ObjectLayer.addPlugin(cantFail(orc::GDBJITDebugInfoRegistrationPlugin::Create(ES, JD, TM->getTargetTriple())));
@@ -2053,7 +2170,11 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
                 }
                 // Reparent the global variable:
                 SG.removeFromParent();
+                #if JL_LLVM_VERSION >= 170000
+                dest.insertGlobalVariable(&SG);
+                #else
                 dest.getGlobalList().push_back(&SG);
+                #endif
                 // Comdat is owned by the Module
                 SG.setComdat(nullptr);
             }
@@ -2100,7 +2221,11 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
                     }
                 }
                 SG.removeFromParent();
+                #if JL_LLVM_VERSION >= 170000
+                dest.insertAlias(&SG);
+                #else
                 dest.getAliasList().push_back(&SG);
+                #endif
             }
 
             // metadata nodes need to be explicitly merged not just copied
