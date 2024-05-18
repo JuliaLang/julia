@@ -1759,7 +1759,10 @@ static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, siz
             if (bj != (jl_value_t*)jl_any_type && bj != jl_bottom_type) {
                 int isub = j & 1;
                 // use different nothrow level for lb and ub substitution.
-                // TODO: should normal path of type instantiation follows this rule？
+                // TODO: This assuming the top instantiation could only start with
+                // `nothrow == 2` or `nothrow == 0`. If `nothrow` is initially set to 1
+                // then we might miss some inner error, perhaps the normal path should 
+                // also follow this rule？
                 jl_value_t *nb = jl_substitute_var_nothrow(bj, tv, params[i], nothrow ? (isub ? 2 : 1) : 0 );
                 if (nb == NULL) {
                     assert(nothrow);
@@ -2431,6 +2434,10 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
     return t;
 }
 
+// `nothrow` means that when type checking fails, the type instantiation should
+// return `NULL` instead of immediately throwing an error. If `nothrow` == 2 then
+// we further assume that the imprecise instantiation for non invariant parameters
+// is acceptable, and inner error (`NULL`) would be ignored.
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow)
 {
     size_t i;
