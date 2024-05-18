@@ -515,21 +515,28 @@ copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.ran
 size(C::Union{Cholesky, CholeskyPivoted}) = size(C.factors)
 size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 
+function _choleskyUfactor(Cfactors, Cuplo)
+    if Cuplo === 'U'
+        return UpperTriangular(Cfactors)
+    else
+        return copy(LowerTriangular(Cfactors)')
+    end
+end
+function _choleskyLfactor(Cfactors, Cuplo)
+    if Cuplo === 'L'
+        return LowerTriangular(Cfactors)
+    else
+        return copy(UpperTriangular(Cfactors)')
+    end
+end
+
 function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d === :U
-        if Cuplo === 'U'
-            return UpperTriangular(Cfactors)
-        else
-            return copy(LowerTriangular(Cfactors)')
-        end
+        _choleskyUfactor(Cfactors, Cuplo)
     elseif d === :L
-        if Cuplo === 'L'
-            return LowerTriangular(Cfactors)
-        else
-            return copy(UpperTriangular(Cfactors)')
-        end
+        _choleskyLfactor(Cfactors, Cuplo)
     elseif d === :UL
         return (Cuplo === 'U' ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors))
     else
@@ -539,13 +546,18 @@ end
 Base.propertynames(F::Cholesky, private::Bool=false) =
     (:U, :L, :UL, (private ? fieldnames(typeof(F)) : ())...)
 
+function Base.:(==)(C1::Cholesky, C2::Cholesky)
+    C1.uplo == C2.uplo || return false
+    C1.uplo == 'L' ? (C1.L == C2.L) : (C1.U == C2.U)
+end
+
 function getproperty(C::CholeskyPivoted{T}, d::Symbol) where {T}
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d === :U
-        return UpperTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        _choleskyUfactor(Cfactors, Cuplo)
     elseif d === :L
-        return LowerTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        _choleskyLfactor(Cfactors, Cuplo)
     elseif d === :p
         return getfield(C, :piv)
     elseif d === :P
@@ -561,6 +573,11 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where {T}
 end
 Base.propertynames(F::CholeskyPivoted, private::Bool=false) =
     (:U, :L, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
+
+function Base.:(==)(C1::CholeskyPivoted, C2::CholeskyPivoted)
+    (C1.uplo == C2.uplo && C1.p == C2.p) || return false
+    C1.uplo == 'L' ? (C1.L == C2.L) : (C1.U == C2.U)
+end
 
 issuccess(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 

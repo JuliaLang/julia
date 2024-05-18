@@ -37,8 +37,8 @@ using Test, LinearAlgebra
         return x isa AbstractArray{Float64} ? Float64.(Float32.(x)) : x
     end...)
 
-    @test F == G broken=!(f === eigen || f === qr)
-    @test isequal(F, G) broken=!(f === eigen || f === qr)
+    @test F == G broken=!(f === eigen || f === qr || f == bunchkaufman || f == cholesky || F isa CholeskyPivoted)
+    @test isequal(F, G) broken=!(f === eigen || f === qr || f == bunchkaufman || f == cholesky || F isa CholeskyPivoted)
     @test hash(F) == hash(G)
 end
 
