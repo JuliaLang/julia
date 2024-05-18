@@ -2784,7 +2784,7 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
                 res = jl_bottom_type;
             }
             else if (obviously_egal(var->lb, ub)) {
-                res = jl_substitute_var_nothrow(body, var, ub);
+                res = jl_substitute_var_nothrow(body, var, ub, 2);
                 if (res == NULL)
                     res = jl_bottom_type;
             }
@@ -3093,12 +3093,12 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         if (varval) {
             // you can construct `T{x} where x` even if T's parameter is actually
             // limited. in that case we might get an invalid instantiation here.
-            res = jl_substitute_var_nothrow(res, vb->var, varval);
+            res = jl_substitute_var_nothrow(res, vb->var, varval, 2);
             // simplify chains of UnionAlls where bounds become equal
             while (res != NULL && jl_is_unionall(res) && obviously_egal(((jl_unionall_t*)res)->var->lb,
                                                          ((jl_unionall_t*)res)->var->ub)) {
                 jl_unionall_t * ures = (jl_unionall_t *)res;
-                res = jl_substitute_var_nothrow(ures->body, ures->var, ures->var->lb);
+                res = jl_substitute_var_nothrow(ures->body, ures->var, ures->var->lb, 2);
             }
             if (res == NULL)
                 res = jl_bottom_type;

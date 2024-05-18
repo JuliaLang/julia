@@ -1499,11 +1499,11 @@ jl_unionall_t *jl_rename_unionall(jl_unionall_t *u)
     return (jl_unionall_t*)t;
 }
 
-jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val)
+jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int nothrow)
 {
     if (val == (jl_value_t*)var)
         return t;
-    int nothrow = jl_is_typevar(val) ? 0 : 1;
+    nothrow = jl_is_typevar(val) ? 0 : nothrow;
     jl_typeenv_t env = { var, val, NULL };
     return inst_type_w_(t, &env, NULL, 1, nothrow);
 }
@@ -2401,7 +2401,8 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         jl_value_t *elt = jl_svecref(tp, i);
         jl_value_t *pi = inst_type_w_(elt, env, stack, check, nothrow);
         if (pi == NULL) {
-            if (i == ntp-1 && jl_is_vararg(elt)) {
+            assert(nothrow);
+            if (nothrow == 1 || (i == ntp-1 && jl_is_vararg(elt))) {
                 t = NULL;
                 break;
             }
@@ -2440,11 +2441,10 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         jl_value_t *var = NULL;
         jl_value_t *newbody = NULL;
         JL_GC_PUSH3(&lb, &var, &newbody);
-        JL_TRY {
-            lb = inst_type_w_(ua->var->lb, env, stack, check, 0);
-        }
-        JL_CATCH {
-            if (!nothrow) jl_rethrow();
+        // set nothrow <= 1 to ensure lb's accuracy.
+        lb = inst_type_w_(ua->var->lb, env, stack, check, nothrow ? 1 : 0);
+        if (lb == NULL) {
+            assert(nothrow);
             t = NULL;
         }
         if (t != NULL) {
@@ -2477,6 +2477,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             }
             else if (newbody != ua->body || var != (jl_value_t*)ua->var) {
                 // if t's parameters are not bound in the environment, return it uncopied (#9378)
+                assert(jl_has_typevar(newbody, (jl_tvar_t *)var));
                 t = jl_new_struct(jl_unionall_type, var, newbody);
             }
         }
@@ -2494,11 +2495,9 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
                 // fast path for `jl_rename_unionall`.
                 t = jl_new_struct(jl_uniontype_type, a, b);
             }
-            else if (nothrow && a == NULL) {
-                t = b;
-            }
-            else if (nothrow && b == NULL) {
-                t = a;
+            else if (a == NULL || b == NULL) {
+                assert(nothrow);
+                t = nothrow == 1 ? NULL : a == NULL ? b : a;
             }
             else {
                 assert(a != NULL && b != NULL);
@@ -2516,15 +2515,17 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         JL_GC_PUSH2(&T, &N);
         if (v->T) {
             T = inst_type_w_(v->T, env, stack, check, nothrow);
-            if (T == NULL)
-                T = jl_bottom_type;
-            if (v->N) // This branch should never throw.
+            if (T == NULL) {
+                if (nothrow == 2)
+                    T = jl_bottom_type;
+                else
+                    t = NULL;
+            }
+            if (t && v->N) // This branch should never throw.
                 N = inst_type_w_(v->N, env, stack, check, 0);
         }
-        if (T != v->T || N != v->N) {
-            // `Vararg` is special, we'd better handle inner error at Tuple level.
+        if (t && (T != v->T || N != v->N))
             t = (jl_value_t*)jl_wrap_vararg(T, N, check, nothrow);
-        }
         JL_GC_POP();
         return t;
     }
@@ -2543,16 +2544,15 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
     int bound = 0;
     for (i = 0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
-        JL_TRY {
-            jl_value_t *pi = inst_type_w_(elt, env, stack, check, 0);
-            iparams[i] = pi;
-            bound |= (pi != elt);
-        }
-        JL_CATCH {
-            if (!nothrow) jl_rethrow();
+        // set nothrow <= 1 to ensure invariant parameter's accuracy.
+        jl_value_t *pi = inst_type_w_(elt, env, stack, check, nothrow ? 1 : 0);
+        if (pi == NULL) {
+            assert(nothrow);
             t = NULL;
+            break;
         }
-        if (t == NULL) break;
+        iparams[i] = pi;
+        bound |= (pi != elt);
     }
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
     if (t != NULL && bound)
