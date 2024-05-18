@@ -1725,7 +1725,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
 }
 
-static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, size_t np)
+static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, size_t np, int nothrow)
 {
     jl_value_t *wrapper = tn->wrapper;
     jl_value_t **bounds;
@@ -1743,6 +1743,10 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
         assert(jl_is_unionall(wrapper));
         jl_tvar_t *tv = ((jl_unionall_t*)wrapper)->var;
         if (!within_typevar(params[i], bounds[2*i], bounds[2*i+1])) {
+            if (nothrow) {
+                JL_GC_POP();
+                return 1;
+            }
             if (tv->lb != bounds[2*i] || tv->ub != bounds[2*i+1])
                 // pass a new version of `tv` containing the instantiated bounds
                 tv = jl_new_typevar(tv->name, bounds[2*i], bounds[2*i+1]);
@@ -1752,12 +1756,23 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
         int j;
         for (j = 2*i + 2; j < 2*np; j++) {
             jl_value_t *bj = bounds[j];
-            if (bj != (jl_value_t*)jl_any_type && bj != jl_bottom_type)
-                bounds[j] = jl_substitute_var(bj, tv, params[i]);
+            if (bj != (jl_value_t*)jl_any_type && bj != jl_bottom_type) {
+                int isub = j & 1;
+                // use different nothrow level for lb and ub substitution.
+                // TODO: should normal path of type instantiation follows this rule？
+                jl_value_t *nb = jl_substitute_var_nothrow(bj, tv, params[i], nothrow ? (isub ? 2 : 1) : 0 );
+                if (nb == NULL) {
+                    assert(nothrow);
+                    JL_GC_POP();
+                    return 1;
+                }
+                bounds[j] = nb;
+            }
         }
         wrapper = ((jl_unionall_t*)wrapper)->body;
     }
     JL_GC_POP();
+    return 0;
 }
 
 static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
@@ -2004,13 +2019,8 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     // for whether this is even valid
     if (check && !istuple) {
         assert(ntp > 0);
-        JL_TRY {
-            check_datatype_parameters(tn, iparams, ntp);
-        }
-        JL_CATCH {
-            if (!nothrow) jl_rethrow();
+        if (check_datatype_parameters(tn, iparams, ntp, nothrow))
             return NULL;
-        }
     }
     else if (ntp == 0 && jl_emptytuple_type != NULL) {
         // empty tuple type case
