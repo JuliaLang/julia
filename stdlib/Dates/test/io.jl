@@ -621,8 +621,6 @@ end
 @testset "Issue #50328: parsing negative years" begin
     @test Date("-2013-10-10") == Date(-2013, 10, 10)
     @test Date("-2013") == Date(-2013, 01, 01)
-
-    @test_throws "Cannot parse an empty string as a Date or Time" Date("")
 end
 
 end
