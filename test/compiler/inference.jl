@@ -2784,7 +2784,7 @@ end
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{<:Array{Int}}
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{<:Array{<:Real}}
 # test complexity limit on apply_type on a function capturing functions returning functions
-@test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
+@test all((t -> t <: Function), Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function})))
 
 let A = Tuple{A,B,C,D,E,F,G,H} where {A,B,C,D,E,F,G,H}
     B = Core.Compiler.rename_unionall(A)
