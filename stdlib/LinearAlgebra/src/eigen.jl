@@ -658,14 +658,18 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
     show(io, mime, F.vectors)
 end
 
-function Base.hash(F::Eigen, h::UInt)
-    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
-end
-function Base.:(==)(A::Eigen, B::Eigen)
-    return A.values == B.values && A.vectors == B.vectors
-end
-function Base.isequal(A::Eigen, B::Eigen)
-    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
+for T in (Eigen, GeneralizedEigen)
+    @eval begin
+        function Base.hash(F::$T, h::UInt)
+            return hash(F.values, hash(F.vectors, hash($T, h)))
+        end
+        function Base.:(==)(A::$T, B::$T)
+            return A.values == B.values && A.vectors == B.vectors
+        end
+        function Base.isequal(A::$T, B::$T)
+            return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
+        end
+    end
 end
 
 # Conversion methods
