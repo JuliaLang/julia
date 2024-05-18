@@ -2478,16 +2478,13 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             if (newbody == NULL) {
                 t = NULL;
             }
-            else if (newbody == (jl_value_t*)jl_emptytuple_type) {
-                // NTuple{0} => Tuple{} can make a typevar disappear
-                t = (jl_value_t*)jl_emptytuple_type;
-            }
-            else if (nothrow && !jl_has_typevar(newbody, (jl_tvar_t *)var)) {
+            else if (!jl_has_typevar(newbody, (jl_tvar_t *)var)) {
+                // inner instantiation might make a typevar disappear, e.g.
+                // NTuple{0,T} => Tuple{}
                 t = newbody;
             }
             else if (newbody != ua->body || var != (jl_value_t*)ua->var) {
                 // if t's parameters are not bound in the environment, return it uncopied (#9378)
-                assert(jl_has_typevar(newbody, (jl_tvar_t *)var));
                 t = jl_new_struct(jl_unionall_type, var, newbody);
             }
         }
