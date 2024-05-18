@@ -537,6 +537,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree)
             "tuple"::K"core"
             expand_forms_2(ctx, children(ex))...
         ]
+    elseif k == K"$"
+        throw(LoweringError(ex, "`\$` expression outside quote"))
     elseif k == K"module"
         # TODO: check-toplevel
         expand_module(ctx, ex)

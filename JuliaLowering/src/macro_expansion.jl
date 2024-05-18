@@ -18,6 +18,7 @@ generates a new layer.
 struct ScopeLayer
     id::LayerId
     mod::Module
+    is_macro_expansion::Bool
 end
 
 struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
@@ -32,11 +33,11 @@ function MacroExpansionContext(ctx, mod::Module)
                               var_id=VarId,
                               scope_layer=LayerId)
     layers = Vector{ScopeLayer}()
-    MacroExpansionContext(graph, Ref{VarId}(1), layers, new_scope_layer(layers, mod))
+    MacroExpansionContext(graph, Ref{VarId}(1), layers, new_scope_layer(layers, mod, false))
 end
 
-function new_scope_layer(layers, mod::Module)
-    layer = ScopeLayer(length(layers)+1, mod)
+function new_scope_layer(layers, mod::Module, is_macro_expansion)
+    layer = ScopeLayer(length(layers)+1, mod, is_macro_expansion)
     push!(layers, layer)
     return layer
 end
@@ -246,7 +247,7 @@ function expand_macro(ctx, ex)
             # to the macro expansion context?
             expanded = copy_ast(ctx, expanded)
         end
-        new_layer = new_scope_layer(ctx.scope_layers, parentmodule(macfunc))
+        new_layer = new_scope_layer(ctx.scope_layers, parentmodule(macfunc), true)
         ctx2 = MacroExpansionContext(ctx.graph, ctx.next_var_id, ctx.scope_layers, new_layer)
         expand_forms_1(ctx2, expanded)
     else

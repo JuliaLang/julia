@@ -104,8 +104,17 @@ module M
 
     # Macro with local variables
     macro foo(ex)
-        :(let x = "`x` from @foo"
+        :(begin
+            x = "`x` from @foo"
             (x, someglobal, \$ex)
+        end)
+    end
+
+    a_global = nothing
+
+    macro set_a_global(val)
+        :(begin
+            global a_global = \$val
         end)
     end
 end
@@ -148,16 +157,23 @@ function softscope_test(ex)
     wrapscope(wrapscope(JuliaLowering.reparent(g, ex), :neutral), :soft)
 end
 
-# src = """
-# let 
-#     x = 42
-#     M.@foo x
-# end
-# """
+src = """
+begin
+    x = 42
+    M.@foo x
+end
+"""
 
 src = """
-M.@recursive 3
+begin
+    M.@set_a_global 42
+    M.a_global
+end
 """
+
+# src = """
+# M.@recursive 3
+# """
 
 # src = """
 # macro mmm(a; b=2)

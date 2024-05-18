@@ -190,6 +190,7 @@ function var_kind(ctx, varkey::VarKey, exclude_toplevel_globals=false)
     isnothing(id) ? nothing : ctx.var_info[id].kind
 end
 
+# FIXME: This name is a misnomer now. It's more like "maybe_new_var" ...
 function new_var(ctx, varkey::VarKey, kind::Symbol, is_ambiguous_local=false)
     id = kind === :global ? get(ctx.global_vars, varkey, nothing) : nothing
     if isnothing(id)
@@ -221,12 +222,12 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     # Add lambda arguments
     if !isnothing(lambda_info)
         for a in lambda_info.args
-            vk = VarKey(a)
-            var_ids[vk] = new_var(ctx, vk, :argument)
+            varkey = VarKey(a)
+            var_ids[varkey] = new_var(ctx, varkey, :argument)
         end
         for a in lambda_info.static_parameters
-            vk = VarKey(a)
-            var_ids[vk] = new_var(ctx, vk, :static_parameter)
+            varkey = VarKey(a)
+            var_ids[varkey] = new_var(ctx, varkey, :static_parameter)
         end
     end
 
@@ -256,7 +257,7 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
             elseif vk === :static_parameter
                 throw(LoweringError(e, "global variable name `$(varkey.name)` conflicts with a static parameter"))
             end
-        elseif var_kind(ctx, name) === :static_parameter
+        elseif var_kind(ctx, varkey) === :static_parameter
             throw(LoweringError(e, "global variable name `$(varkey.name)` conflicts with a static parameter"))
         end
         var_ids[varkey] = new_var(ctx, varkey, :global)
@@ -267,11 +268,19 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
         is_hard_scope = false
         is_soft_scope = false
 
-        # All non-local assignments are implicitly global at top level
+        # Assignments are implicitly global at top level, unless they come from
+        # a macro expansion
         for (varkey,e) in assignments
-            if !haskey(locals, varkey)
-                new_var(ctx, varkey, :global)
-                push!(ctx.implicit_toplevel_globals, varkey)
+            vk = haskey(var_ids, varkey) ?
+                 ctx.var_info[var_ids[varkey]].kind :
+                 var_kind(ctx, varkey, true)
+            if vk === nothing
+                if ctx.scope_layers[varkey.layer].is_macro_expansion
+                    var_ids[varkey] = new_var(ctx, varkey, :local)
+                else
+                    new_var(ctx, varkey, :global)
+                    push!(ctx.implicit_toplevel_globals, varkey)
+                end
             end
         end
     else
@@ -292,11 +301,10 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
             # Assignment is to a newly discovered variable name
             is_ambiguous_local = false
             if in_toplevel_thunk && !is_hard_scope
-                # FIXME: Scope resolution: find module for varkey
                 # In a top level thunk but *inside* a nontrivial scope
-                var_mod = ctx.scope_layers[varkey.layer].mod
-                if (varkey in ctx.implicit_toplevel_globals ||
-                        isdefined(var_mod, Symbol(varkey.name)))
+                layer = ctx.scope_layers[varkey.layer]
+                if !layer.is_macro_expansion && (varkey in ctx.implicit_toplevel_globals ||
+                        isdefined(layer.mod, Symbol(varkey.name)))
                     # Special scope rules to make assignments to globals work
                     # like assignments to locals do inside a function.
                     if is_soft_scope
