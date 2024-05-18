@@ -658,16 +658,17 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
     show(io, mime, F.vectors)
 end
 
+_equalcheck(f, Avalues, Avectors, Bvalues, Bvectors) = f(Avalues, Bvalues) && f(Avectors, Bvectors)
 for T in (Eigen, GeneralizedEigen)
     @eval begin
         function Base.hash(F::$T, h::UInt)
             return hash(F.values, hash(F.vectors, hash($T, h)))
         end
         function Base.:(==)(A::$T, B::$T)
-            return A.values == B.values && A.vectors == B.vectors
+            return _equalcheck(==, A..., B...)
         end
         function Base.isequal(A::$T, B::$T)
-            return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
+            return _equalcheck(isequal, A..., B...)
         end
     end
 end
