@@ -2500,6 +2500,13 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         jl_value_t *b = NULL;
         JL_GC_PUSH2(&a, &b);
         b = inst_type_w_(u->b, env, stack, check, nothrow);
+        if (nothrow) {
+            // ensure jl_type_union nothrow.
+            if (a && !(jl_is_typevar(a) || jl_is_type(a)))
+                a = NULL;
+            if (b && !(jl_is_typevar(b) || jl_is_type(b)))
+                b = NULL;
+        }
         if (a != u->a || b != u->b) {
             if (!check) {
                 // fast path for `jl_rename_unionall`.
@@ -2531,8 +2538,12 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
                 else
                     t = NULL;
             }
-            if (t && v->N) // This branch should never throw.
-                N = inst_type_w_(v->N, env, stack, check, 0);
+            if (t && v->N) {
+                // set nothrow <= 1 to ensure invariant parameter's accuracy.
+                N = inst_type_w_(v->N, env, stack, check, nothrow ? 1 : 0);
+                if (N == NULL)
+                    t = NULL;
+            }
         }
         if (t && (T != v->T || N != v->N))
             t = (jl_value_t*)jl_wrap_vararg(T, N, check, nothrow);
