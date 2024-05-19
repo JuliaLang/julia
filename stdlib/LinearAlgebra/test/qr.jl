@@ -216,7 +216,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
             end
         end
 
-        @testset "Test nullspace" begin
+        @testset "Test nullspace (issue #54354)" begin
             a15null = nullspace(qr(a[:,1:n1], ColumnNorm()))
             @test rank([a[:,1:n1] a15null]) == 10
             @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
@@ -550,7 +550,7 @@ end
     @test rank(qr([1.0 2.0 3.0; 4.0 5.0 6.0 ; 7.0 8.0 9.0], ColumnNorm())) == 2
 end
 
-@testset "Matrix condition number" begin
+@testset "Test matrix condition number (issue #54354)" begin
     ainit = rand(n, n)
     @testset "for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         ainit = convert(Matrix{elty}, ainit)
