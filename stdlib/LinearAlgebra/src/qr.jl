@@ -542,6 +542,35 @@ function rank(A::QRPivoted; atol::Real=0, rtol::Real=min(size(A)...) * eps(real(
     return something(findfirst(i -> abs(A.R[i,i]) <= tol, 1:m), m+1) - 1
 end
 
+function nullspace(A::QRPivoted; atol::Real=0, rtol::Real=min(size(A)...) * eps(real(float(one(eltype(A.Q))))) * iszero(atol))
+    m, n = size(A, 1), size(A, 2)
+    (m == 0 || n == 0) && return Matrix{eigtype(eltype(A.Q))}(I, n, n)
+
+    indstart = rank(A) + 1
+    return copy((@view collect(A.Q)[:, indstart:end]))
+end
+
+function cond(A::QRPivoted, p::Real=2)
+    m = min(size(A.R)...)
+    if p == 2
+        maxv = abs(A.R[1,1])
+        return iszero(maxv) ? oftype(real(maxv), Inf) : maxv / abs(A.R[m,m])
+    elseif p == 1 || p == Inf
+        checksquare(A.R)
+        try
+            Rinv = inv(A.R)
+            return opnorm(A.R, p)*opnorm(Rinv, p)
+        catch e
+            if isa(e, LAPACKException) || isa(e, SingularException)
+                return convert(float(real(eltype(A))), Inf)
+            else
+                rethrow()
+            end
+        end
+    end
+    throw(ArgumentError(lazy"p-norm must be 1, 2 or Inf, got $p"))
+end
+
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractMatrix{T}, rcond::Real) where {T<:BlasFloat}
     require_one_based_indexing(B)
