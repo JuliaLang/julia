@@ -1761,7 +1761,7 @@ static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, siz
                 // use different nothrow level for lb and ub substitution.
                 // TODO: This assuming the top instantiation could only start with
                 // `nothrow == 2` or `nothrow == 0`. If `nothrow` is initially set to 1
-                // then we might miss some inner error, perhaps the normal path should 
+                // then we might miss some inner error, perhaps the normal path should
                 // also follow this rule？
                 jl_value_t *nb = jl_substitute_var_nothrow(bj, tv, params[i], nothrow ? (isub ? 2 : 1) : 0 );
                 if (nb == NULL) {
