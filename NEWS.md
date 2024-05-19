@@ -87,7 +87,9 @@ Standard library changes
 
 #### LinearAlgebra
 
-* `rank` can now take a `QRPivoted` matrix to allow rank estimation via QR factorization ([#54283]).
+* `rank` can now take a `QRPivoted` matrix to allow rank estimation via QR factorization ([#54283])
+* `nullspace` can now take a `QRPivoted` matrix to allow kernel computation via QR factorization ([#54519]).
+* `cond` can now take a `QRPivoted` matrix to allow condition number estimation via QR factorization ([#54519]).
 
 #### Logging
 
