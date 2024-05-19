@@ -479,7 +479,12 @@ function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospe
     if isa(rt, InterConditional) && rt.slot == i
         return rt
     else
-        thentype = elsetype = tmeet(𝕃ᵢ, widenslotwrapper(argtypes[i]), fieldtype(sig, i))
+        argt = widenslotwrapper(argtypes[i])
+        if isvarargtype(argt)
+            @assert fieldcount(sig) == i
+            argt = unwrapva(argt)
+        end
+        thentype = elsetype = tmeet(𝕃ᵢ, argt, fieldtype(sig, i))
         condval = maybe_extract_const_bool(rt)
         condval === true && (elsetype = Bottom)
         condval === false && (thentype = Bottom)
@@ -986,15 +991,12 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
         # N.B. remarks are emitted within `const_prop_entry_heuristic`
         return nothing
     end
-    nargs::Int = method.nargs
-    method.isva && (nargs -= 1)
-    length(arginfo.argtypes) < nargs && return nothing
     if !const_prop_argument_heuristic(interp, arginfo, sv)
         add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
         return nothing
     end
     all_overridden = is_all_overridden(interp, arginfo, sv)
-    if !force && !const_prop_function_heuristic(interp, f, arginfo, nargs, all_overridden, sv)
+    if !force && !const_prop_function_heuristic(interp, f, arginfo, all_overridden, sv)
         add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
         return nothing
     end
@@ -1113,9 +1115,9 @@ function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method:
 end
 
 function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecialize(f),
-    arginfo::ArgInfo, nargs::Int, all_overridden::Bool, sv::AbsIntState)
+    arginfo::ArgInfo, all_overridden::Bool, sv::AbsIntState)
     argtypes = arginfo.argtypes
-    if nargs > 1
+    if length(argtypes) > 1
         𝕃ᵢ = typeinf_lattice(interp)
         if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
             arrty = argtypes[2]
@@ -1274,7 +1276,7 @@ function const_prop_call(interp::AbstractInterpreter,
     end
     overridden_by_const = falses(length(argtypes))
     for i = 1:length(argtypes)
-        if argtypes[i] !== cache_argtypes[i]
+        if argtypes[i] !== argtype_by_index(cache_argtypes, i)
             overridden_by_const[i] = true
         end
     end
@@ -1348,20 +1350,6 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
             end
         end
         given_argtypes[i] = widenslotwrapper(argtype)
-    end
-    if condargs !== nothing
-        given_argtypes = let condargs=condargs
-            va_process_argtypes(𝕃, given_argtypes, mi) do isva_given_argtypes::Vector{Any}, last::Int
-                # invalidate `Conditional` imposed on varargs
-                for (slotid, i) in condargs
-                    if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
-                        isva_given_argtypes[i] = widenconditional(isva_given_argtypes[i])
-                    end
-                end
-            end
-        end
-    else
-        given_argtypes = va_process_argtypes(𝕃, given_argtypes, mi)
     end
     return pick_const_args!(𝕃, given_argtypes, cache_argtypes)
 end
@@ -2651,8 +2639,10 @@ function abstract_eval_throw_undef_if_not(interp::AbstractInterpreter, e::Expr, 
     return RTEffects(rt, exct, effects)
 end
 
-abstract_eval_the_exception(::AbstractInterpreter, sv::InferenceState) =
-    the_exception_info(sv.handlers[sv.handler_at[sv.currpc][2]].exct)
+function abstract_eval_the_exception(::AbstractInterpreter, sv::InferenceState)
+    (;handlers, handler_at) = sv.handler_info::HandlerInfo
+    return the_exception_info(handlers[handler_at[sv.currpc][2]].exct)
+end
 abstract_eval_the_exception(::AbstractInterpreter, ::IRInterpretationState) = the_exception_info(Any)
 the_exception_info(@nospecialize t) = RTEffects(t, Union{}, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
 
@@ -2970,7 +2960,7 @@ end
         # pick up the first "interesting" slot, convert `rt` to its `Conditional`
         # TODO: ideally we want `Conditional` and `InterConditional` to convey
         # constraints on multiple slots
-        for slot_id = 1:info.nargs
+        for slot_id = 1:Int(info.nargs)
             rt = bool_rt_to_conditional(rt, slot_id, info)
             rt isa InterConditional && break
         end
@@ -2981,6 +2971,9 @@ end
     ⊑ᵢ = ⊑(typeinf_lattice(info.interp))
     old = info.slottypes[slot_id]
     new = widenslotwrapper(info.changes[slot_id].typ) # avoid nested conditional
+    if isvarargtype(old) || isvarargtype(new)
+        return rt
+    end
     if new ⊑ᵢ old && !(old ⊑ᵢ new)
         if isa(rt, Const)
             val = rt.val
@@ -3159,22 +3152,21 @@ end
 
 function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct), frame::InferenceState)
     𝕃ₚ = ipo_lattice(interp)
-    cur_hand = frame.handler_at[frame.currpc][1]
-    if cur_hand == 0
+    handler = gethandler(frame)
+    if handler === nothing
         if !⊑(𝕃ₚ, exct, frame.exc_bestguess)
             frame.exc_bestguess = tmerge(𝕃ₚ, frame.exc_bestguess, exct)
             update_cycle_worklists!(frame) do caller::InferenceState, caller_pc::Int
-                caller_handler = caller.handler_at[caller_pc][1]
-                caller_exct = caller_handler == 0 ?
-                    caller.exc_bestguess : caller.handlers[caller_handler].exct
+                caller_handler = gethandler(caller, caller_pc)
+                caller_exct = caller_handler === nothing ?
+                    caller.exc_bestguess : caller_handler.exct
                 return caller_exct !== Any
             end
         end
     else
-        handler_frame = frame.handlers[cur_hand]
-        if !⊑(𝕃ₚ, exct, handler_frame.exct)
-            handler_frame.exct = tmerge(𝕃ₚ, handler_frame.exct, exct)
-            enter = frame.src.code[handler_frame.enter_idx]::EnterNode
+        if !⊑(𝕃ₚ, exct, handler.exct)
+            handler.exct = tmerge(𝕃ₚ, handler.exct, exct)
+            enter = frame.src.code[handler.enter_idx]::EnterNode
             exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
             push!(frame.ip, exceptbb)
         end
@@ -3184,9 +3176,9 @@ end
 function propagate_to_error_handler!(currstate::VarTable, frame::InferenceState, 𝕃ᵢ::AbstractLattice)
     # If this statement potentially threw, propagate the currstate to the
     # exception handler, BEFORE applying any state changes.
-    cur_hand = frame.handler_at[frame.currpc][1]
-    if cur_hand != 0
-        enter = frame.src.code[frame.handlers[cur_hand].enter_idx]::EnterNode
+    curr_hand = gethandler(frame)
+    if curr_hand !== nothing
+        enter = frame.src.code[curr_hand.enter_idx]::EnterNode
         exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
         if update_bbstate!(𝕃ᵢ, frame, exceptbb, currstate)
             push!(frame.ip, exceptbb)
@@ -3333,7 +3325,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     if isdefined(stmt, :scope)
                         scopet = abstract_eval_value(interp, stmt.scope, currstate, frame)
-                        handler = frame.handlers[frame.handler_at[frame.currpc+1][1]]
+                        handler = gethandler(frame, frame.currpc+1)::TryCatchFrame
                         @assert handler.scopet !== nothing
                         if !⊑(𝕃ᵢ, scopet, handler.scopet)
                             handler.scopet = tmerge(𝕃ᵢ, scopet, handler.scopet)

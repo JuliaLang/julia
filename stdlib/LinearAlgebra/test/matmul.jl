@@ -30,6 +30,30 @@ mul_wrappers = [
     h(A) = LinearAlgebra.wrap(LinearAlgebra._unwrap(A), LinearAlgebra.wrapper_char(A))
     @test @inferred(h(transpose(A))) === transpose(A)
     @test @inferred(h(adjoint(A))) === transpose(A)
+
+    M = rand(2,2)
+    for S in (Symmetric(M), Hermitian(M))
+        @test @inferred((A -> LinearAlgebra.wrap(parent(A), LinearAlgebra.wrapper_char(A)))(S)) === Symmetric(M)
+    end
+    M = rand(ComplexF64,2,2)
+    for S in (Symmetric(M), Hermitian(M))
+        @test @inferred((A -> LinearAlgebra.wrap(parent(A), LinearAlgebra.wrapper_char(A)))(S)) === S
+    end
+
+    @testset "WrapperChar" begin
+        @test LinearAlgebra.WrapperChar('c') == 'c'
+        @test LinearAlgebra.WrapperChar('C') == 'C'
+        @testset "constant propagation in uppercase/lowercase" begin
+            v = @inferred (() -> Val(uppercase(LinearAlgebra.WrapperChar('C'))))()
+            @test v isa Val{'C'}
+            v = @inferred (() -> Val(uppercase(LinearAlgebra.WrapperChar('s'))))()
+            @test v isa Val{'S'}
+            v = @inferred (() -> Val(lowercase(LinearAlgebra.WrapperChar('C'))))()
+            @test v isa Val{'c'}
+            v = @inferred (() -> Val(lowercase(LinearAlgebra.WrapperChar('s'))))()
+            @test v isa Val{'s'}
+        end
+    end
 end
 
 @testset "matrices with zero dimensions" begin
@@ -183,6 +207,18 @@ end
         @test mul!(C, vf, transpose(vf)) == vf * vf'
         C .= C0 = rand(eltype(C), size(C))
         @test mul!(C, vf, transpose(vf), 2, 3) ≈ 2vf * vf' .+ 3C0
+    end
+
+    @testset "zero stride" begin
+        for AAv in (view(AA, StepRangeLen(2,0,size(AA,1)), :),
+                    view(AA, StepRangeLen.(2,0,size(AA))...),
+                    view(complex.(AA, AA), StepRangeLen.(2,0,size(AA))...),)
+            for BB2 in (BB, complex.(BB, BB))
+                C = AAv * BB2
+                @test allequal(C)
+                @test C ≈ Array(AAv) * BB2
+            end
+        end
     end
 end
 
@@ -1070,7 +1106,8 @@ end
     end
 end
 
-@testset "Issue #46865: mul!() with non-const alpha, beta" begin
+#46865
+@testset "mul!() with non-const alpha, beta" begin
     f!(C,A,B,alphas,betas) = mul!(C, A, B, alphas[1], betas[1])
     alphas = [1.0]
     betas = [0.5]
@@ -1079,7 +1116,7 @@ end
         B = copy(A)
         C = copy(A)
         f!(C, A, B, alphas, betas)
-        @test_broken (@allocated f!(C, A, B, alphas, betas)) == 0
+        @test (@allocated f!(C, A, B, alphas, betas)) == 0
     end
 end
 

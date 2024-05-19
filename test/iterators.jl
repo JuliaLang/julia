@@ -978,13 +978,6 @@ end
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
 
-
-@testset "Iterators.tail_if_any" begin
-    @test Iterators.tail_if_any(()) == ()
-    @test Iterators.tail_if_any((1, 2)) == (2,)
-    @test Iterators.tail_if_any((1,)) == ()
-end
-
 @testset "IteratorSize trait for zip" begin
     @test Base.IteratorSize(zip()) == Base.IsInfinite()                     # for zip of empty tuple
     @test Base.IteratorSize(zip((1,2,3), repeated(0))) == Base.HasLength()  # for zip of ::HasLength and ::IsInfinite

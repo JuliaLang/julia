@@ -580,6 +580,15 @@ end
     @test kron(A, B) ≈ kron(Symmetric(A), Symmetric(B))
 end
 
+@testset "kron with symmetric/hermitian matrices of matrices" begin
+    M = fill(ones(2,2), 2, 2)
+    for W in (Symmetric, Hermitian)
+        for (t1, t2) in ((W(M, :U), W(M, :U)), (W(M, :U), W(M, :L)), (W(M, :L), W(M, :L)))
+            @test kron(t1, t2) ≈ kron(Matrix(t1), Matrix(t2))
+        end
+    end
+end
+
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
 @testset "Eigenvalues in interval for $(typeof(Mi7647))" for Mi7647 in
         (Symmetric(diagm(0 => 1.0:3.0)),
@@ -1050,6 +1059,15 @@ end
         B = T(view(M, 1:3, 1:3), uploB)
         B2 = copy(B)
         @test copyto!(A, B) == B2
+    end
+end
+
+@testset "getindex with Integers" begin
+    M = reshape(1:4,2,2)
+    for ST in (Symmetric, Hermitian)
+        S = ST(M)
+        @test_throws "invalid index" S[true, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
     end
 end
 

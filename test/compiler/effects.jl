@@ -1353,3 +1353,11 @@ global v53613 = nothing
 @test f53613() === nothing
 @test g53613() === nothing
 @test h53613() === nothing
+
+# tuple/svec effects
+@test Base.infer_effects((Vector{Any},)) do xs
+    Core.tuple(xs...)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Any},)) do xs
+    Core.svec(xs...)
+end |> Core.Compiler.is_nothrow

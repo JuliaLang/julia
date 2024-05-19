@@ -203,6 +203,24 @@ cmp(a::AnnotatedString, b::AnnotatedString) = cmp(a.string, b.string)
 ==(a::AnnotatedString, b::AbstractString) = isempty(a.annotations) && a.string == b
 ==(a::AbstractString, b::AnnotatedString) = isempty(b.annotations) && a == b.string
 
+# To prevent substring equality from hitting the generic fallback
+
+function ==(a::SubString{<:AnnotatedString}, b::SubString{<:AnnotatedString})
+    SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) ==
+        SubString(b.string.string, b.offset, b.ncodeunits, Val(:noshift)) &&
+        annotations(a) == annotations(b)
+end
+
+==(a::SubString{<:AnnotatedString}, b::AnnotatedString) =
+    annotations(a) == annotations(b) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b.string
+
+==(a::SubString{<:AnnotatedString}, b::AbstractString) =
+    isempty(annotations(a)) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b
+
+==(a::AbstractString, b::SubString{<:AnnotatedString}) = b == a
+
+==(a::AnnotatedString, b::SubString{<:AnnotatedString}) = b == a
+
 """
     annotatedstring(values...)
 
@@ -498,6 +516,24 @@ function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
                  for (region, annot) in src.annotations if first(region) >= srcpos]
     _insert_annotations!(dest, srcannots, destpos - srcpos)
     nb
+end
+
+# So that read/writes with `IOContext` (and any similar `AbstractPipe` wrappers)
+# work as expected.
+function write(io::AbstractPipe, s::Union{AnnotatedString, SubString{<:AnnotatedString}})
+    if pipe_writer(io) isa AnnotatedIOBuffer
+        write(pipe_writer(io), s)
+    else
+        invoke(write, Tuple{IO, typeof(s)}, io, s)
+    end::Int
+end
+# Can't be part of the `Union` above because it introduces method ambiguities
+function write(io::AbstractPipe, c::AnnotatedChar)
+    if pipe_writer(io) isa AnnotatedIOBuffer
+        write(pipe_writer(io), c)
+    else
+        invoke(write, Tuple{IO, typeof(c)}, io, c)
+    end::Int
 end
 
 """

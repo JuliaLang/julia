@@ -156,7 +156,7 @@ end
     end
 end
 
-@inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
+@inline function getindex(A::Bidiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.dv[i]
@@ -309,7 +309,7 @@ end
 
 iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
 isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
-function istriu(M::Bidiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::Bidiagonal, k::Integer=0)
     if M.uplo == 'U'
         if k <= 0
             return true
@@ -328,7 +328,7 @@ function istriu(M::Bidiagonal, k::Integer=0)
         end
     end
 end
-function istril(M::Bidiagonal, k::Integer=0)
+Base.@constprop :aggressive function istril(M::Bidiagonal, k::Integer=0)
     if M.uplo == 'U'
         if k >= 1
             return true
@@ -440,11 +440,16 @@ const BandedMatrix = Union{Bidiagonal,Diagonal,Tridiagonal,SymTridiagonal} # or 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const TriSym = Union{Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-@inline _mul!(C::AbstractVector, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::AbstractMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractVector, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractMatrix, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractMatrix, A::AbstractMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
 lmul!(A::Bidiagonal, B::AbstractVecOrMat) = @inline _mul!(B, A, B, MulAddMul())
 rmul!(B::AbstractMatrix, A::Bidiagonal) = @inline _mul!(B, B, A, MulAddMul())

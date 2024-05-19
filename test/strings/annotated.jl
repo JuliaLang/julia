@@ -12,6 +12,8 @@
     @test "a" * str == Base.AnnotatedString("asome string")
     @test str * "a" == Base.AnnotatedString("some stringa")
     @test str * str == Base.AnnotatedString("some stringsome string")
+    @test str[3:4] == SubString("me")
+    @test SubString("me") == str[3:4]
     Base.annotate!(str, 1:4, :thing => 0x01)
     Base.annotate!(str, 6:11, :other => 0x02)
     Base.annotate!(str, 1:11, :all => 0x03)
@@ -21,6 +23,8 @@
     #  └───┰─────┘
     #     :all
     @test str[3:4] == SubString(str, 3, 4)
+    @test str[3:4] != SubString("me")
+    @test SubString("me") != str[3:4]
     @test Base.AnnotatedString(str[3:4]) ==
         Base.AnnotatedString("me", [(1:2, :thing => 0x01), (1:2, :all => 0x03)])
     @test Base.AnnotatedString(str[3:6]) ==
@@ -209,4 +213,11 @@ end
         @test write(aio2, Base.AnnotatedChar('c', [:b => 2, :c => 3, :d => 4])) == 1
         @test Base.annotations(aio2) == [(1:2, :a => 1), (1:3, :b => 2), (3:3, :c => 3), (3:3, :d => 4)]
     end
+    # Working through an IOContext
+    aio = Base.AnnotatedIOBuffer()
+    wrapio = IOContext(aio)
+    @test write(wrapio, Base.AnnotatedString("hey", [(1:3, :x => 1)])) == 3
+    @test write(wrapio, Base.AnnotatedChar('a', [:y => 2])) == 1
+    @test read(seekstart(aio), Base.AnnotatedString) ==
+        Base.AnnotatedString("heya", [(1:3, :x => 1), (4:4, :y => 2)])
 end
