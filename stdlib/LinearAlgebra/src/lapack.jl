@@ -6274,7 +6274,6 @@ for (hetrd, elty) in
             require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
-            chkuplo(uplo)
             chkuplofinite(A, uplo) # balancing routines don't support NaNs and Infs
             tau = similar(A, $elty, max(0,n - 1))
             d = Vector{$relty}(undef, n)
