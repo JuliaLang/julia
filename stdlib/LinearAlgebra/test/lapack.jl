@@ -861,4 +861,14 @@ a = zeros(2,0), zeros(0)
     @test_throws DimensionMismatch LinearAlgebra.LAPACK.getrs!('N', A, ipiv, b)
 end
 
+@testset "hetrd ignore non-filled half" begin
+    A = rand(3,3)
+    B = copy(A)
+    B[2,1] = NaN
+    B[3,1] = Inf
+    LAPACK.hetrd!('U', A)
+    LAPACK.hetrd!('U', B)
+    @test UpperTriangular(A) == UpperTriangular(B)
+end
+
 end # module TestLAPACK
