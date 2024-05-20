@@ -666,7 +666,7 @@ julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
 true
 ```
 """
-function norm(itr, p::Real=2)
+Base.@constprop :aggressive function norm(itr, p::Real=2)
     isempty(itr) && return float(norm(zero(eltype(itr))))
     if p == 2
         return norm2(itr)
