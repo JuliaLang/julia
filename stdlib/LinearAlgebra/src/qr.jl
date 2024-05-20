@@ -546,7 +546,7 @@ function nullspace(A::QRPivoted; atol::Real=0, rtol::Real=min(size(A)...) * eps(
     m, n = size(A, 1), size(A, 2)
     (m == 0 || n == 0) && return Matrix{eigtype(eltype(A.Q))}(I, n, n)
 
-    indstart = rank(A) + 1
+    indstart = rank(A; atol, rtol) + 1
     return A.Q[:, indstart:end]
 end
 
