@@ -839,17 +839,18 @@ lowrankdowndate(C::Cholesky, v::AbstractVector) = lowrankdowndate!(copy(C), copy
 function diag(C::Cholesky{T}, k::Int = 0) where {T}
     N = size(C, 1)
     absk = abs(k)
-    z = Vector{T}(undef, N - absk)
+    iabsk = N - absk
+    z = Vector{T}(undef, iabsk)
     UL = C.factors
     if C.uplo == 'U'
-        for i in 1:N - abs(k)
+        for i in 1:iabsk
             z[i] = zero(T)
             for j in 1:min(i, i+absk)
                 z[i] += UL[j, i]'UL[j, i+absk]
             end
         end
     else
-        for i in 1:N - abs(k)
+        for i in 1:iabsk
             z[i] = zero(T)
             for j in 1:min(i, i+absk)
                 z[i] += UL[i, j]*UL[i+absk, j]'
@@ -860,8 +861,4 @@ function diag(C::Cholesky{T}, k::Int = 0) where {T}
         z .= adjoint.(z)
     end
     return z
-end
-
-function tr(C::Cholesky{T}) where {T}
-    return sum(diag(C))
 end

@@ -1018,7 +1018,7 @@ julia> tr(A)
 5
 ```
 """
-function tr(A::AbstractMatrix)
+function tr(A)
     checksquare(A)
     sum(diag(A))
 end
