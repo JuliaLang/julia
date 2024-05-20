@@ -557,9 +557,10 @@ function cond(A::QRPivoted, p::Real=2)
         return iszero(maxv) ? oftype(real(maxv), Inf) : maxv / abs(A.R[m,m])
     elseif p == 1 || p == Inf
         checksquare(A.R)
+        R = UpperTriangular(A.R)
         try
-            Rinv = inv(A.R)
-            return opnorm(A.R, p)*opnorm(Rinv, p)
+            Rinv = inv(R)
+            return opnorm(R, p)*opnorm(Rinv, p)
         catch e
             if isa(e, LAPACKException) || isa(e, SingularException)
                 return convert(float(real(eltype(A))), Inf)
