@@ -13,7 +13,6 @@ n2 = 2*n1
 
 Random.seed!(1234325)
 
-a = rand(n,n)
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 a2real = randn(n,n)/2
@@ -217,10 +216,10 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
         end
 
         @testset "Test nullspace (issue #54354)" begin
-            a15null = nullspace(qr(a[:,1:n1], ColumnNorm()))
-            @test rank([a[:,1:n1] a15null]) == 10
-            @test norm(a[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
-            @test norm(a15null'a[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
+            a15null = nullspace(qr(areal[:,1:n1], ColumnNorm()))
+            @test rank([areal[:,1:n1] a15null]) == 10
+            @test norm(areal[:,1:n1]'a15null,Inf) ≈ zero(eltya) atol=300ε
+            @test norm(a15null'areal[:,1:n1],Inf) ≈ zero(eltya) atol=400ε
             @test size(nullspace(qr(a', ColumnNorm())), 2) == 0
             @test nullspace(qr(zeros(eltya,n, n), ColumnNorm())) == Matrix(I, n, n)
         end
