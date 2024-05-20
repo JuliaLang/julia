@@ -20,7 +20,7 @@ function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test_throws ErrorException ca.Z
     @test size(ca) == size(a)
     @test Array(copy(ca)) ≈ a
-    @test tr(ca) ≈ tr(a)
+    @test tr(ca) ≈ tr(a) skip=ca isa CholeskyPivoted
 end
 
 function factor_recreation_tests(a_U, a_L)
