@@ -547,7 +547,20 @@ end
     @test det(B)  ≈  det(A) atol=eps()
     @test logdet(B)  ==  -Inf
     @test logabsdet(B)[1] == -Inf
- end
+end
+
+@testset "partly initialized factors" begin
+    @testset for uplo in ('U', 'L')
+        M = Matrix{BigFloat}(undef, 2, 2)
+        M[1,1] = M[2,2] = M[1+(uplo=='L'), 1+(uplo=='U')] = 3
+        C = Cholesky(M, uplo, 0)
+        @test C == C
+        @test C.L == C.U'
+        # parameters are arbitrary
+        C = CholeskyPivoted(M, uplo, [1,2], 2, 0.0, 0)
+        @test C.L == C.U'
+    end
+end
 
 @testset "diag" begin
     for T in (Float64, ComplexF64), k in (0, 1, -3), uplo in (:U, :L)

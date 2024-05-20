@@ -16,17 +16,58 @@ introduce a "soft scope", which affects whether
 [shadowing](https://en.wikipedia.org/wiki/Variable_shadowing)
 a global variable by the same name is allowed or not.
 
-### [Scope constructs](@id man-scope-table)
+!!! info "Summary"
+    Variables defined in global scope may be undefined in inner local scopes,
+    depending on where the code is run, in order to balance safety and convenience.
+    The hard and soft local scoping rules define the interplay between global and local variables.
+
+    However, variables defined only in local scope behave consistently in all contexts.
+    If the variable is already defined, it will be reused. If the variable is not defined,
+    it will be made available to the current and inner scopes (but not outer scopes).
+
+!!! tip "A Common Confusion"
+    If you run into an unexpectedly undefined variable,
+
+    ```julia
+    # Print the numbers 1 through 5
+    i = 0
+    while i < 5  # ERROR: UndefVarError: `i` not defined
+        i += 1
+        println(i)
+    end
+    ```
+
+    a simple fix is to change all global variable definitions into local definitions
+    by wrapping the code in a `let` block or `function`.
+
+    ```julia
+    # Print the numbers 1 through 5
+    let i = 0
+        while i < 5  # Now `i` is defined in the inner scope of the while loop
+            i += 1
+            println(i)
+        end
+    end
+    ```
+
+    This is a common source of confusion when writing procedural scripts,
+    but it becomes a non-issue if code is moved inside functions
+    or executed interactively in the REPL.
+
+    See also the [`global`](@ref) and [`local`](@ref) keywords
+    to explicitly achieve any desired scoping behavior.
+
+### [Scope Constructs](@id man-scope-table)
 
 The constructs introducing scope blocks are:
 
-| Construct | Scope type | Allowed within |
-|:----------|:-----------|:---------------|
+| Construct | Scope Type Introduced | Scope Types Able to Contain Construct |
+|:----------|:----------------------|:--------------------------------------|
 | [`module`](@ref), [`baremodule`](@ref) | global | global |
 | [`struct`](@ref) | local (soft) | global |
-| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
 | [`macro`](@ref) | local (hard) | global |
-| functions, [`do`](@ref) blocks, [`let`](@ref) blocks, comprehensions, generators | local (hard) | global, local |
+| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
+| [`function`](@ref), [`do`](@ref), [`let`](@ref), [comprehensions](@ref man-comprehensions), [generators](@ref man-generators) | local (hard) | global, local |
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)

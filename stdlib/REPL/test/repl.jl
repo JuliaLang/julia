@@ -114,7 +114,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-# These are integration tests. If you want to unit test test e.g. completion, or
+# These are integration tests. If you want to unit test e.g. completion, or
 # exact LineEdit behavior, put them in the appropriate test files.
 # Furthermore since we are emulating an entire terminal, there may be control characters
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
@@ -1479,6 +1479,35 @@ end
         @test mods == [:Foo]
     end
 end
+
+# Test that the REPL can find `using` statements inside macro expansions
+global packages_requested = Any[]
+old_hooks = copy(REPL.install_packages_hooks)
+empty!(REPL.install_packages_hooks)
+push!(REPL.install_packages_hooks, function(pkgs)
+    append!(packages_requested, pkgs)
+end)
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+
+    # Just consume all the output - we only test that the callback ran
+    read_resp_task = @async while !eof(stdout_read)
+        readavailable(stdout_read)
+    end
+
+    write(stdin_write, "macro usingfoo(); :(using FooNotFound); end\n")
+    write(stdin_write, "@usingfoo\n")
+    write(stdin_write, "\x4")
+    Base.wait(repltask)
+    close(stdin_write)
+    close(stdout_read)
+    Base.wait(read_resp_task)
+end
+@test packages_requested == Any[:FooNotFound]
+empty!(REPL.install_packages_hooks); append!(REPL.install_packages_hooks, old_hooks)
 
 # err should reprint error if deeper than top-level
 fake_repl() do stdin_write, stdout_read, repl

@@ -288,3 +288,28 @@ function indcopy(sz::Dims, I::GenericMemory)
     src = eltype(I)[I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))] for i = 1:n]
     dst, src
 end
+
+# Wrapping a memory region in an Array
+@eval begin # @eval for the Array construction. Block for the docstring.
+    function reshape(m::GenericMemory{M, T}, dims::Vararg{Int, N}) where {M, T, N}
+        len = Core.checked_dims(dims...)
+        length(m) == len || throw(DimensionMismatch("parent has $(length(m)) elements, which is incompatible with size $(dims)"))
+        ref = MemoryRef(m)
+        $(Expr(:new, :(Array{T, N}), :ref, :dims))
+    end
+
+    """
+        view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo})
+
+    Create a vector `v::Vector{T}` backed by the specified indices of `m`. It is only safe to
+    resize `v` if `m` is subseqently not used.
+    """
+    function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
+        isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
+        @boundscheck checkbounds(m, inds)
+        ref = MemoryRef(m, first(inds)) # @inbounds would be safe here but does not help performance.
+        dims = (Int(length(inds)),)
+        $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+    end
+end
+view(m::GenericMemory, inds::Colon) = view(m, eachindex(m))

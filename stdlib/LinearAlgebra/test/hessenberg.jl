@@ -250,4 +250,19 @@ end
     @test axes(S) === (r,r)
 end
 
+@testset "copyto! with aliasing (#39460)" begin
+    M = Matrix(reshape(1:36, 6, 6))
+    A = UpperHessenberg(view(M, 1:5, 1:5))
+    A2 = copy(A)
+    B = UpperHessenberg(view(M, 2:6, 2:6))
+    @test copyto!(B, A) == A2
+end
+
+@testset "getindex with Integers" begin
+    M = reshape(1:9, 3, 3)
+    S = UpperHessenberg(M)
+    @test_throws "invalid index" S[3, true]
+    @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+end
+
 end # module TestHessenberg
