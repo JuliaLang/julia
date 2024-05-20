@@ -1199,7 +1199,7 @@ function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
         y = _BigFloat(x.prec, x.sign, x.exp, d′)
         #ccall((:mpfr_custom_move,libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
         return y
-    end
+    end::BigFloat
 end
 
 function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
@@ -1222,7 +1222,8 @@ end
 # flags
 clear_flags() = ccall((:mpfr_clear_flags, libmpfr), Cvoid, ())
 had_underflow() = ccall((:mpfr_underflow_p, libmpfr), Cint, ()) != 0
-had_overflow() = ccall((:mpfr_underflow_p, libmpfr), Cint, ()) != 0
+had_overflow() = ccall((:mpfr_overflow_p, libmpfr), Cint, ()) != 0
+had_divbyzero() = ccall((:mpfr_divby0_p, libmpfr), Cint, ()) != 0
 had_nan() = ccall((:mpfr_nanflag_p, libmpfr), Cint, ()) != 0
 had_inexact_exception() = ccall((:mpfr_inexflag_p, libmpfr), Cint, ()) != 0
 had_range_exception() = ccall((:mpfr_erangeflag_p, libmpfr), Cint, ()) != 0

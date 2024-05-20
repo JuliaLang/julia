@@ -282,6 +282,9 @@ end
         @testset "Idempotent tests" begin
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
+                if func ∈ (transpose, adjoint)
+                    @test func(func(A)) === A
+                end
             end
         end
         @testset "permutedims(::[Sym]Tridiagonal)" begin
@@ -881,13 +884,20 @@ end
     @test reverse(ST)::SymTridiagonal == reverse(Matrix(ST))
 end
 
-
 @testset "Matrix conversion for non-numeric and undef" begin
     T = Tridiagonal(fill(big(3), 3), Vector{BigInt}(undef, 4), fill(big(3), 3))
     M = Matrix(T)
     T[diagind(T)] .= 4
     M[diagind(M)] .= 4
     @test diag(T) == diag(M)
+end
+
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    for S in (Tridiagonal(ev, dv, ev), SymTridiagonal(dv, ev))
+        @test_throws "invalid index" S[3, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
 end
 
 end # module TestTridiagonal

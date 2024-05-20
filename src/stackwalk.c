@@ -736,10 +736,15 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         size_t ip = jl_bt_entry_header(bt_entry); // zero-indexed
         jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
         jl_value_t *def = (jl_value_t*)jl_core_module; // just used as a token here that isa Module
-        if (jl_is_method_instance(code)) {
+        if (jl_is_code_instance(code)) {
+            jl_code_instance_t *ci = (jl_code_instance_t*)code;
+            def = (jl_value_t*)ci->def;
+            code = jl_atomic_load_relaxed(&ci->inferred);
+        } else if (jl_is_method_instance(code)) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)code;
             def = code;
             // When interpreting a method instance, need to unwrap to find the code info
-            code = jl_atomic_load_relaxed(&((jl_method_instance_t*)code)->uninferred);
+            code = mi->def.method->source;
         }
         if (jl_is_code_info(code)) {
             jl_code_info_t *src = (jl_code_info_t*)code;

@@ -1240,54 +1240,6 @@ end
     return rewrap_unionall(R, s00)
 end
 
-@nospecs function getfield_notuninit(typ0, name)
-    if isa(typ0, Const)
-        # If the object is Const, then we know exactly the bit patterns that
-        # must be returned by getfield if not an error
-        return true
-    end
-    typ0 = widenconst(typ0)
-    typ = unwrap_unionall(typ0)
-    if isa(typ, Union)
-        return getfield_notuninit(rewrap_unionall(typ.a, typ0), name) &&
-               getfield_notuninit(rewrap_unionall(typ.b, typ0), name)
-    end
-    isa(typ, DataType) || return false
-    isabstracttype(typ) && !isconstType(typ) && return false # cannot say anything about abstract types
-    if typ.name.n_uninitialized == 0
-        # Types such as tuples and named tuples that can't be instantiated with undefined fields,
-        # so we don't need to be conservative here
-        return true
-    end
-    if !isa(name, Const)
-        isvarargtype(name) && return false
-        if !hasintersect(widenconst(name), Union{Int,Symbol})
-            return true # no undefined behavior if thrown
-        end
-        # field isn't known precisely, but let's check if all the fields can't be
-        # initialized with undefined value so to avoid being too conservative
-        fcnt = fieldcount_noerror(typ)
-        fcnt === nothing && return false
-        all(i::Int->is_undefref_fieldtype(fieldtype(typ,i)), (datatype_min_ninitialized(typ)+1):fcnt) && return true
-        return false
-    end
-    name = name.val
-    if isa(name, Symbol)
-        fidx = fieldindex(typ, name, false)
-        fidx === nothing && return true # no undefined behavior if thrown
-    elseif isa(name, Int)
-        fidx = name
-    else
-        return true # no undefined behavior if thrown
-    end
-    fcnt = fieldcount_noerror(typ)
-    fcnt === nothing && return false
-    0 < fidx ≤ fcnt || return true # no undefined behavior if thrown
-    fidx ≤ datatype_min_ninitialized(typ) && return true # always defined
-    ftyp = fieldtype(typ, fidx)
-    is_undefref_fieldtype(ftyp) && return true # always initialized
-    return false
-end
 # checks if a field of this type is guaranteed to be defined to a value
 # and that access to an uninitialized field will cause an `UndefRefError` or return zero
 # - is_undefref_fieldtype(String) === true
@@ -2042,7 +1994,6 @@ add_tfunc(Core.memoryrefmodify!, 5, 5, memoryrefmodify!_tfunc, 20)
 add_tfunc(Core.memoryrefreplace!, 6, 6, memoryrefreplace!_tfunc, 20)
 add_tfunc(Core.memoryrefsetonce!, 5, 5, memoryrefsetonce!_tfunc, 20)
 
-
 @nospecs function memoryref_isassigned_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
     return _memoryref_isassigned_tfunc(𝕃, mem, order, boundscheck)
 end
@@ -2224,9 +2175,12 @@ end
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
 end
 
-# Query whether the given builtin is guaranteed not to throw given the argtypes
-@nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
+# Query whether the given builtin is guaranteed not to throw given the `argtypes`.
+# `argtypes` can be assumed not to contain varargs.
+function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any},
+                          @nospecialize(rt))
     ⊑ = partialorder(𝕃)
+    na = length(argtypes)
     if f === memoryref
         return memoryref_builtin_common_nothrow(argtypes)
     elseif f === memoryrefoffset
@@ -2242,13 +2196,7 @@ end
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
-    end
-
-    # These builtins are not-vararg, so if we have varars, here, we can't guarantee
-    # the correct number of arguments.
-    na = length(argtypes)
-    (na ≠ 0 && isvarargtype(argtypes[end])) && return false
-    if f === Core._typevar
+    elseif f === Core._typevar
         na == 3 || return false
         return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
     elseif f === invoke
@@ -2273,8 +2221,6 @@ end
     elseif f === (<:)
         na == 2 || return false
         return subtype_nothrow(𝕃, argtypes[1], argtypes[2])
-    elseif f === UnionAll
-        return na == 2 && (argtypes[1] ⊑ TypeVar && argtypes[2] ⊑ Type)
     elseif f === isdefined
         return isdefined_nothrow(𝕃, argtypes)
     elseif f === Core.sizeof
@@ -2382,7 +2328,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     typeof,
     compilerbarrier,
     Core._typevar,
-    donotdelete
+    donotdelete,
 ]
 
 const _ARGMEM_BUILTINS = Any[
@@ -2462,16 +2408,6 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     # :consistent if the argtype is immutable
     consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
         ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
-    # taint `:consistent` if accessing `isbitstype`-type object field that may be initialized
-    # with undefined value: note that we don't need to taint `:consistent` if accessing
-    # uninitialized non-`isbitstype` field since it will simply throw `UndefRefError`
-    # NOTE `getfield_notuninit` conservatively checks if this field is never initialized
-    # with undefined value to avoid tainting `:consistent` too aggressively
-    # TODO this should probably taint `:noub`, however, it would hinder concrete eval for
-    # `REPLInterpreter` that can ignore `:consistent-cy`, causing worse completions
-    if !(length(argtypes) ≥ 2 && getfield_notuninit(obj, argtypes[2]))
-        consistent = ALWAYS_FALSE
-    end
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
@@ -2563,8 +2499,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL;
             consistent = ALWAYS_FALSE,
             notaskstate = false,
-            nothrow
-        )
+            nothrow)
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
@@ -2584,7 +2519,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt)
+        nothrow = builtin_nothrow(𝕃, f, argtypes, rt)
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
@@ -2600,7 +2535,6 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly, noub)
     end
 end
-
 
 function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     nargs = length(argtypes)
@@ -2634,13 +2568,13 @@ end
 
 function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
     pc = sv.currpc
+    handler_info = sv.handler_info
     while true
-        handleridx = sv.handler_at[pc][1]
-        if handleridx == 0
+        pchandler = gethandler(sv, pc)
+        if pchandler === nothing
             # No local scope available - inherited from the outside
             return Any
         end
-        pchandler = sv.handlers[handleridx]
         # Remember that we looked at this handler, so we get re-scheduled
         # if the scope information changes
         isdefined(pchandler, :scope_uses) || (pchandler.scope_uses = Int[])
@@ -2658,6 +2592,8 @@ function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
 end
 current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
 
+hasvarargtype(argtypes::Vector{Any}) = !isempty(argtypes) && isvarargtype(argtypes[end])
+
 """
     builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
 
@@ -2665,7 +2601,13 @@ Compute throw-ness of a builtin function call. `argtypes` should not include `f`
 """
 function builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
     rt === Bottom && return false
-    contains_is(_PURE_BUILTINS, f) && return true
+    if f === tuple || f === svec
+        return true
+    elseif hasvarargtype(argtypes)
+        return false
+    elseif contains_is(_PURE_BUILTINS, f)
+        return true
+    end
     return _builtin_nothrow(𝕃, f, argtypes, rt)
 end
 
@@ -2690,7 +2632,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                 return Bottom
             end
         end
-        iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
+        iidx = Int(reinterpret(Int32, f)) + 1
         if iidx < 0 || iidx > length(T_IFUNC)
             # unknown intrinsic
             return Any
@@ -2714,8 +2656,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         end
         tf = T_FFUNC_VAL[fidx]
     end
-    tf = tf::Tuple{Int, Int, Any}
-    if !isempty(argtypes) && isvarargtype(argtypes[end])
+    if hasvarargtype(argtypes)
         if length(argtypes) - 1 > tf[2]
             # definitely too many arguments
             return Bottom
@@ -2745,8 +2686,6 @@ _iszero(@nospecialize x) = x === Intrinsics.xor_int(x, x)
 _isneg1(@nospecialize x) = _iszero(Intrinsics.not_int(x))
 _istypemin(@nospecialize x) = !_iszero(x) && Intrinsics.neg_int(x) === x
 
-
-
 function builtin_exct(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any}, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
         return intrinsic_exct(𝕃, f, argtypes)
@@ -2756,7 +2695,6 @@ end
 
 function div_nothrow(f::IntrinsicFunction, @nospecialize(arg1), @nospecialize(arg2))
     isa(arg2, Const) || return false
-
     den_val = arg2.val
     _iszero(den_val) && return false
     f !== Intrinsics.checked_sdiv_int && return true
@@ -2771,18 +2709,17 @@ function known_is_valid_intrinsic_elptr(𝕃::AbstractLattice, @nospecialize(ptr
 end
 
 function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::Vector{Any})
-    if !isempty(argtypes) && isvarargtype(argtypes[end])
+    if hasvarargtype(argtypes)
         return Any
     end
 
     # First check that we have the correct number of arguments
-    iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
+    iidx = Int(reinterpret(Int32, f)) + 1
     if iidx < 1 || iidx > length(T_IFUNC)
         # invalid intrinsic (system will crash)
         return Any
     end
     tf = T_IFUNC[iidx]
-    tf = tf::Tuple{Int, Int, Any}
     if !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
         return ArgumentError
@@ -2794,7 +2731,8 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     # that it won't
     f === Intrinsics.llvmcall && return Any
 
-    if f === Intrinsics.checked_udiv_int || f === Intrinsics.checked_urem_int || f === Intrinsics.checked_srem_int || f === Intrinsics.checked_sdiv_int
+    if (f === Intrinsics.checked_udiv_int || f === Intrinsics.checked_urem_int ||
+        f === Intrinsics.checked_srem_int || f === Intrinsics.checked_sdiv_int)
         # Nothrow as long as the second argument is guaranteed not to be zero
         arg1 = argtypes[1]
         arg2 = argtypes[2]
@@ -2846,8 +2784,8 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
     end
 
     if f in (Intrinsics.sext_int, Intrinsics.zext_int, Intrinsics.trunc_int,
-        Intrinsics.fptoui, Intrinsics.fptosi, Intrinsics.uitofp,
-        Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
+             Intrinsics.fptoui, Intrinsics.fptosi, Intrinsics.uitofp,
+             Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
         # If !isconcrete, `ty` may be Union{} at runtime even if we have
         # isprimitivetype(ty).
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
@@ -2909,14 +2847,13 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         # llvmcall can do arbitrary things
         return Effects()
     end
-
     if contains_is(_INCONSISTENT_INTRINSICS, f)
         consistent = ALWAYS_FALSE
     else
         consistent = ALWAYS_TRUE
     end
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes)
+    nothrow = intrinsic_nothrow(f, argtypes)
     inaccessiblememonly = ALWAYS_TRUE
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
 end
@@ -3160,7 +3097,6 @@ add_tfunc(Core.swapglobal!, 3, 4, swapglobal!_tfunc, 3)
 add_tfunc(Core.modifyglobal!, 4, 5, modifyglobal!_tfunc, 3)
 add_tfunc(Core.replaceglobal!, 4, 6, replaceglobal!_tfunc, 3)
 add_tfunc(Core.setglobalonce!, 3, 5, setglobalonce!_tfunc, 3)
-
 
 @nospecs function setglobal!_nothrow(M, s, newty, o)
     global_order_nothrow(o, #=loading=#false, #=storing=#true) || return false
