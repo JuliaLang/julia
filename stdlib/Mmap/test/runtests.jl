@@ -336,8 +336,9 @@ open(file, "r+") do s
     finalize(A); A = nothing; GC.gc()
     A = mmap(s, Vector{UInt8}, (10,), 1)
     Mmap.sync!(A)
-    finalize(A); A = nothing; GC.gc()
+    finalize(A); A = nothing;
 end
+GC.gc()
 rm(file)
 
 @testset "Docstrings" begin
