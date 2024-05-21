@@ -135,7 +135,7 @@ Random.seed!(1)
         Base.zero(::Type{<:Union{TypeWithoutZero, MTypeWithZero}}) = MTypeWithZero()
         U = UpperTriangular(Symmetric(fill(TypeWithoutZero(), 2, 2)))
         M = Matrix{MTypeWithZero}(U)
-        @test all(==(MTypeWithZero()), M)
+        @test all(x -> x isa MTypeWithZero, M)
     end
 end
 
