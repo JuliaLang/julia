@@ -932,7 +932,7 @@ end
 end
 
 @testset "reverse dim on empty" begin
-    @test reverse(Diagonal([]),dims=1) == Diagonal([])
+    @test reverse(Diagonal(Float64[]),dims=1) == Diagonal(Float64[])
 end
 
 @testset "ndims and friends" begin
