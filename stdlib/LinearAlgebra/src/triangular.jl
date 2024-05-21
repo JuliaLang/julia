@@ -524,7 +524,11 @@ function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
     return dest
 end
 function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
-    copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
+    if haszero(eltype(dest)) # we may use zero for the eltype in triu!/tril!
+        copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
+    else # we will need to index into dest to obtain the zero elements, so ensure that it is fully initialized
+        copyto!(dest, parent(U))
+    end
     _triangularize!(U)(dest)
     if U isa Union{UnitUpperTriangular, UnitLowerTriangular}
         dest[diagind(dest)] .= @view U[diagind(U, IndexCartesian())]

@@ -128,6 +128,14 @@ Random.seed!(1)
         for M in (D, Bu, Bl, Tri, Sym)
             @test Matrix(M) == zeros(TypeWithZero, 3, 3)
         end
+
+        mutable struct MTypeWithZero end
+        Base.convert(::Type{MTypeWithZero}, ::TypeWithoutZero) = MTypeWithZero()
+        Base.zero(x::Union{TypeWithoutZero, MTypeWithZero}) = zero(typeof(x))
+        Base.zero(::Type{<:Union{TypeWithoutZero, MTypeWithZero}}) = MTypeWithZero()
+        U = UpperTriangular(Symmetric(fill(TypeWithoutZero(), 2, 2)))
+        M = Matrix{MTypeWithZero}(U)
+        @test all(==(MTypeWithZero()), M)
     end
 end
 
