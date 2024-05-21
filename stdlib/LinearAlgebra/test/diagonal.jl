@@ -626,7 +626,6 @@ end
     @test reverse(D)::Diagonal == reverse(Matrix(D))
 end
 
-
 @testset "inverse" begin
     for d in Any[randn(n), Int[], [1, 2, 3], [1im, 2im, 3im], [1//1, 2//1, 3//1], [1+1im//1, 2//1, 3im//1]]
         D = Diagonal(d)

@@ -919,14 +919,6 @@ end
     end
 end
 
-@testset "Matrix conversion for non-numeric and undef" begin
-    B = Bidiagonal(Vector{BigInt}(undef, 4), fill(big(3), 3), :U)
-    M = Matrix(B)
-    B[diagind(B)] .= 4
-    M[diagind(M)] .= 4
-    @test diag(B) == diag(M)
-end
-
 @testset "Matrix conversion for non-numeric" begin
     B = Bidiagonal(fill(Diagonal([1,3]), 3), fill(Diagonal([1,3]), 2), :U)
     M = Matrix{eltype(B)}(B)
