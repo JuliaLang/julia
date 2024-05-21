@@ -131,8 +131,9 @@ Random.seed!(1)
 
         mutable struct MTypeWithZero end
         Base.convert(::Type{MTypeWithZero}, ::TypeWithoutZero) = MTypeWithZero()
-        Base.zero(x::Union{TypeWithoutZero, MTypeWithZero}) = zero(typeof(x))
-        Base.zero(::Type{<:Union{TypeWithoutZero, MTypeWithZero}}) = MTypeWithZero()
+        Base.convert(::Type{MTypeWithZero}, ::TypeWithZero) = MTypeWithZero()
+        Base.zero(x::MTypeWithZero) = zero(typeof(x))
+        Base.zero(::Type{MTypeWithZero}) = MTypeWithZero()
         U = UpperTriangular(Symmetric(fill(TypeWithoutZero(), 2, 2)))
         M = Matrix{MTypeWithZero}(U)
         @test all(x -> x isa MTypeWithZero, M)

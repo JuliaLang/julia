@@ -524,15 +524,8 @@ function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
     return dest
 end
 function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
-    if haszero(eltype(dest)) # we may use zero for the eltype in triu!/tril!
-        copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
-    else # we will need to index into dest to obtain the zero elements, so ensure that it is fully initialized
-        copyto!(dest, parent(U))
-    end
-    _triangularize!(U)(dest)
-    if U isa Union{UnitUpperTriangular, UnitLowerTriangular}
-        dest[diagind(dest)] .= @view U[diagind(U, IndexCartesian())]
-    end
+    copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
+    copytrito!(dest, U, U isa UpperOrUnitUpperTriangular ? 'L' : 'U')
     return dest
 end
 function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular{<:Any, <:StridedMatrix})
@@ -541,7 +534,7 @@ function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular{<:Any, <:Stride
     return dest
 end
 # for strided matrices, we explicitly loop over the arrays to improve cache locality
-# This fuses the copytrito! and triu/l operations
+# This fuses the copytrito! for the two halves
 function copyto_unaliased!(dest::StridedMatrix, U::UpperOrUnitUpperTriangular{<:Any, <:StridedMatrix})
     isunit = U isa UnitUpperTriangular
     for col in axes(dest,2)
