@@ -621,4 +621,9 @@ end
     end
 end
 
+@testset "Issue #50328: parsing negative years" begin
+    @test Date("-2013-10-10") == Date(-2013, 10, 10)
+    @test Date("-2013") == Date(-2013, 01, 01)
+end
+
 end
