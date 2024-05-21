@@ -730,7 +730,10 @@ end
 
 @testset "reverse" begin
     A = randn(5, 5)
-    for (T, Trev) in ((UpperTriangular, LowerTriangular), (UnitUpperTriangular, UnitLowerTriangular))
+    for (T, Trev) in ((UpperTriangular, LowerTriangular),
+            (UnitUpperTriangular, UnitLowerTriangular),
+            (LowerTriangular, UpperTriangular),
+            (UnitLowerTriangular, UnitUpperTriangular))
         A = T(randn(5, 5))
         AM = Matrix(A)
         @test reverse(A, dims=1) == reverse(AM, dims=1)
