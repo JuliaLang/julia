@@ -736,6 +736,7 @@ end
         @test reverse(A, dims=1) == reverse(AM, dims=1)
         @test reverse(A, dims=2) == reverse(AM, dims=2)
         @test reverse(A)::Trev == reverse(AM)
+    end
 end
 
 # dimensional correctness:
