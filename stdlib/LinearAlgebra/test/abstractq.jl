@@ -91,7 +91,7 @@ n = 5
         @test Q * x ≈ Q.Q * x
         @test Q' * x ≈ Q.Q' * x
     end
-    A = rand(Float64, 5, 3)
+    A = randn(Float64, 5, 3)
     F = qr(A)
     Q = MyQ(F.Q)
     Prect = Matrix(F.Q)
@@ -102,6 +102,30 @@ n = 5
     @test Q ≈ Prect
     @test Q ≈ Psquare
     @test Q ≈ F.Q*I
+    # matrix division
+    q, r = F
+    R = randn(Float64, 5, 5)
+    @test q / r ≈ Matrix(q) / r
+    @test_throws DimensionMismatch MyQ(q) / r # doesn't have size flexibility
+    @test q / R ≈ collect(q) / R
+    @test copy(r') \ q' ≈ (q / r)'
+    @test_throws DimensionMismatch copy(r') \ MyQ(q')
+    @test r \ q' ≈ r \ Matrix(q)'
+    @test R \ q' ≈ R \ MyQ(q') ≈ R \ collect(q')
+    @test R \ q ≈ R \ MyQ(q) ≈ R \ collect(q)
+    B = copy(A')
+    G = lq(B)
+    l, q = G
+    L = R
+    @test l \ q ≈ l \ Matrix(q)
+    @test_throws DimensionMismatch l \ MyQ(q)
+    @test L \ q ≈ L \ collect(q)
+    @test q' / copy(l') ≈ (l \ q)'
+    @test_throws DimensionMismatch MyQ(q') / copy(l')
+    @test q' / l ≈ Matrix(q)' / l
+    @test q' / L ≈ MyQ(q') / L ≈ collect(q)' / L
+    @test q / L ≈ Matrix(q) / L
+    @test MyQ(q) / L ≈ collect(q) / L
 end
 
 end # module
