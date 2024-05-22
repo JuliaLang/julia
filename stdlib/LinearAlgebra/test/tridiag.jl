@@ -862,6 +862,28 @@ end
     @test axes(B) === (ax, ax)
 end
 
+@testset "Reverse operation on Tridiagonal" begin
+    for n in 5:6
+        d = randn(n)
+        dl = randn(n - 1)
+        du = randn(n - 1)
+        T = Tridiagonal(dl, d, du)
+        @test reverse(T, dims=1) == reverse(Matrix(T), dims=1)
+        @test reverse(T, dims=2) == reverse(Matrix(T), dims=2)
+        @test reverse(T)::Tridiagonal == reverse(Matrix(T)) == reverse!(copy(T))
+    end
+end
+
+@testset "Reverse operation on SymTridiagonal" begin
+    n = 5
+    d = randn(n)
+    dl = randn(n - 1)
+    ST = SymTridiagonal(d, dl)
+    @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
+    @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
+    @test reverse(ST)::SymTridiagonal == reverse(Matrix(ST))
+end
+
 @testset "getindex with Integers" begin
     dv, ev = 1:4, 1:3
     for S in (Tridiagonal(ev, dv, ev), SymTridiagonal(dv, ev))
