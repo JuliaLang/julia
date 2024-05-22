@@ -203,6 +203,11 @@ const minsubf16_32 = Float32(minsubf16)
 # issues #33076
 @test Float16(1f5) == Inf16
 
+# issue #52394
+@test Float16(10^8 // (10^9 + 1)) == convert(Float16, 10^8 // (10^9 + 1)) == Float16(0.1)
+@test Float16((typemax(UInt128)-0x01) // typemax(UInt128)) == Float16(1.0)
+@test Float32((typemax(UInt128)-0x01) // typemax(UInt128)) == Float32(1.0)
+
 @testset "conversion to Float16 from" begin
     for T in (Float32, Float64, BigFloat)
         @testset "conversion from $T" begin

@@ -114,7 +114,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-# These are integration tests. If you want to unit test test e.g. completion, or
+# These are integration tests. If you want to unit test e.g. completion, or
 # exact LineEdit behavior, put them in the appropriate test files.
 # Furthermore since we are emulating an entire terminal, there may be control characters
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
@@ -1480,6 +1480,35 @@ end
     end
 end
 
+# Test that the REPL can find `using` statements inside macro expansions
+global packages_requested = Any[]
+old_hooks = copy(REPL.install_packages_hooks)
+empty!(REPL.install_packages_hooks)
+push!(REPL.install_packages_hooks, function(pkgs)
+    append!(packages_requested, pkgs)
+end)
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+
+    # Just consume all the output - we only test that the callback ran
+    read_resp_task = @async while !eof(stdout_read)
+        readavailable(stdout_read)
+    end
+
+    write(stdin_write, "macro usingfoo(); :(using FooNotFound); end\n")
+    write(stdin_write, "@usingfoo\n")
+    write(stdin_write, "\x4")
+    Base.wait(repltask)
+    close(stdin_write)
+    close(stdout_read)
+    Base.wait(read_resp_task)
+end
+@test packages_requested == Any[:FooNotFound]
+empty!(REPL.install_packages_hooks); append!(REPL.install_packages_hooks, old_hooks)
+
 # err should reprint error if deeper than top-level
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin
@@ -1675,6 +1704,56 @@ fake_repl() do stdin_write, stdout_read, repl
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
 end
 
+try # test the functionality of `UndefVarError_hint` against `Base.remove_linenums!`
+    @assert isempty(Base.Experimental._hint_handlers)
+    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
+
+    # check the requirement to trigger the hint via `UndefVarError_hint`
+    @test !isdefined(Main, :remove_linenums!) && Base.ispublic(Base, :remove_linenums!)
+
+    fake_repl() do stdin_write, stdout_read, repl
+        backend = REPL.REPLBackend()
+        repltask = @async REPL.run_repl(repl; backend)
+        write(stdin_write,
+              "remove_linenums!\n\"ZZZZZ\"\n")
+        txt = readuntil(stdout_read, "ZZZZZ")
+        write(stdin_write, '\x04')
+        wait(repltask)
+        @test occursin("Hint: a global variable of this name also exists in Base.", txt)
+    end
+finally
+    empty!(Base.Experimental._hint_handlers)
+end
+
+try # test the functionality of `UndefVarError_hint` against import clashes
+    @assert isempty(Base.Experimental._hint_handlers)
+    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
+
+    @eval module X
+
+    module A
+    export x
+    x = 1
+    end # A
+
+    module B
+    export x
+    x = 2
+    end # B
+
+    using .A, .B
+
+    end # X
+
+    expected_message = string("\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+    @test_throws expected_message X.x
+finally
+    empty!(Base.Experimental._hint_handlers)
+end
+
 # Hints for tab completes
 
 fake_repl() do stdin_write, stdout_read, repl
@@ -1748,4 +1827,10 @@ let io = IOBuffer()
     @test REPL.banner(io; short=true) === nothing
     seek(io, 0)
     @test countlines(io) == 2
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(REPL)
+    @test_broken isempty(undoc)
+    @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
 end

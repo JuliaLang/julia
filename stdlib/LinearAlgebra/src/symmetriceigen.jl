@@ -1,8 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # preserve HermOrSym wrapper
-eigencopy_oftype(A::Hermitian, S) = Hermitian(copy_similar(A, S), sym_uplo(A.uplo))
-eigencopy_oftype(A::Symmetric, S) = Symmetric(copy_similar(A, S), sym_uplo(A.uplo))
+# Call `copytrito!` instead of `copy_similar` to only copy the matching triangular half
+eigencopy_oftype(A::Hermitian, S) = Hermitian(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
+eigencopy_oftype(A::Symmetric, S) = Symmetric(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
 
 default_eigen_alg(A) = DivideAndConquer()
 
@@ -17,6 +18,13 @@ function eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, alg::Algo
     else
         throw(ArgumentError("Unsupported value for `alg` keyword."))
     end
+end
+function eigen(A::RealHermSymComplexHerm{Float16}; sortby::Union{Function,Nothing}=nothing)
+    S = eigtype(eltype(A))
+    E = eigen!(eigencopy_oftype(A, S), sortby=sortby)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
+    return Eigen(values, vectors)
 end
 
 """
@@ -354,4 +362,43 @@ function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{F
     ldiv!(L, A)
     rdiv!(A, U)
     return eigvals!(A; sortby)
+end
+
+eigen(A::Hermitian{<:Complex, <:Tridiagonal}; kwargs...) =
+    _eigenhermtridiag(A; kwargs...)
+# disambiguation
+function eigen(A::Hermitian{Complex{Float16}, <:Tridiagonal}; kwargs...)
+    E = _eigenhermtridiag(A; kwargs...)
+    values = convert(AbstractVector{Float16}, E.values)
+    vectors = convert(AbstractMatrix{ComplexF16}, E.vectors)
+    return Eigen(values, vectors)
+end
+function _eigenhermtridiag(A::Hermitian{<:Complex,<:Tridiagonal}; kwargs...)
+    (; dl, d, du) = parent(A)
+    N = length(d)
+    if N <= 1
+        eigen(parent(A); kwargs...)
+    else
+        if A.uplo == 'U'
+            E = du'
+            Er = abs.(du)
+        else
+            E = dl
+            Er = abs.(E)
+        end
+        S = Vector{eigtype(eltype(A))}(undef, N)
+        S[1] = 1
+        for i ∈ 1:N-1
+            S[i+1] = iszero(Er[i]) ? oneunit(eltype(S)) : S[i] * sign(E[i])
+        end
+        B = SymTridiagonal(float.(real.(d)), Er)
+        Λ, Φ = eigen(B; kwargs...)
+        return Eigen(Λ, Diagonal(S) * Φ)
+    end
+end
+
+function eigvals(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
+    (; dl, d, du) = parent(A)
+    Er = A.uplo == 'U' ? abs.(du) : abs.(dl)
+    eigvals(SymTridiagonal(float.(real.(d)), Er); kwargs...)
 end

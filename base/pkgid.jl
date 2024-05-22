@@ -23,7 +23,7 @@ function hash(pkg::PkgId, h::UInt)
     return h
 end
 
-show(io::IO, pkg::PkgId) =
+show(io::IO,  ::MIME"text/plain", pkg::PkgId) =
     print(io, pkg.name, " [", pkg.uuid === nothing ? "top-level" : pkg.uuid, "]")
 
 function binpack(pkg::PkgId)
@@ -37,7 +37,8 @@ end
 
 function binunpack(s::String)
     io = IOBuffer(s)
-    @assert read(io, UInt8) === 0x00
+    z = read(io, UInt8)
+    @assert z === 0x00
     uuid = read(io, UInt128)
     name = read(io, String)
     return PkgId(UUID(uuid), name)

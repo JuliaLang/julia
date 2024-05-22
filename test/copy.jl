@@ -213,11 +213,13 @@ end
 @testset "copying CodeInfo" begin
     _testfunc() = nothing
     ci,_ = code_typed(_testfunc, ())[1]
-    ci.edges = [_testfunc]
+    if isdefined(ci, :edges)
+        ci.edges = [_testfunc]
 
-    ci2 = copy(ci)
-    # Test that edges are not shared
-    @test ci2.edges !== ci.edges
+        ci2 = copy(ci)
+        # Test that edges are not shared
+        @test ci2.edges !== ci.edges
+    end
 end
 
 @testset "issue #34025" begin
@@ -246,6 +248,11 @@ end
     @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
 end
 
+@testset "deepcopy_internal big" begin
+    @inferred Base.deepcopy_internal(big(1), IdDict())
+    @inferred Base.deepcopy_internal(big(1.0), IdDict())
+end
+
 @testset "`copyto!`'s unaliasing" begin
     a = view([1:3;], :)
     @test copyto!(a, 2, a, 1, 2) == [1;1:2;]
@@ -267,4 +274,6 @@ end
     @test a.lock !== b.lock
     @test islocked(a.lock)
     @test !islocked(b.lock)
+    @inferred deepcopy(a)
+    @inferred deepcopy(a.lock)
 end

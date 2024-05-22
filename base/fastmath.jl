@@ -6,7 +6,7 @@
 # strict IEEE semantics.
 
 # This allows the following transformations. For more information see
-# http://llvm.org/docs/LangRef.html#fast-math-flags:
+# https://llvm.org/docs/LangRef.html#fast-math-flags:
 # nnan: No NaNs - Allow optimizations to assume the arguments and
 #       result are not NaN. Such optimizations are required to retain
 #       defined behavior over NaNs, but the value of the result is
@@ -101,9 +101,12 @@ const rewrite_op =
 function make_fastmath(expr::Expr)
     if expr.head === :quote
         return expr
-    elseif expr.head === :call && expr.args[1] === :^ && expr.args[3] isa Integer
-        # mimic Julia's literal_pow lowering of literal integer powers
-        return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(expr.args[2]), Val{expr.args[3]}())
+    elseif expr.head === :call && expr.args[1] === :^
+        ea = expr.args
+        if length(ea) >= 3 && isa(ea[3], Int)
+            # mimic Julia's literal_pow lowering of literal integer powers
+            return Expr(:call, :(Base.FastMath.pow_fast), make_fastmath(ea[2]), Val(ea[3]))
+        end
     end
     op = get(rewrite_op, expr.head, :nothing)
     if op !== :nothing
@@ -136,7 +139,7 @@ may violate strict IEEE semantics. This allows the fastest possible operation,
 but results are undefined -- be careful when doing this, as it may change numerical
 results.
 
-This sets the [LLVM Fast-Math flags](http://llvm.org/docs/LangRef.html#fast-math-flags),
+This sets the [LLVM Fast-Math flags](https://llvm.org/docs/LangRef.html#fast-math-flags),
 and corresponds to the `-ffast-math` option in clang. See [the notes on performance
 annotations](@ref man-performance-annotations) for more details.
 
@@ -309,7 +312,7 @@ end
         Complex{T}(c, s)
     end
 
-    # See <http://en.cppreference.com/w/cpp/numeric/complex>
+    # See <https://en.cppreference.com/w/cpp/numeric/complex>
     pow_fast(x::T, y::T) where {T<:ComplexTypes} = exp(y*log(x))
     pow_fast(x::T, y::Complex{T}) where {T<:FloatTypes} = exp(y*log(x))
     pow_fast(x::Complex{T}, y::T) where {T<:FloatTypes} = exp(y*log(x))
@@ -363,6 +366,10 @@ for f in (:^, :atan, :hypot, :log)
         $f_fast(x::Number, y::Number) = $f_fast(promote(x, y)...)
         # fall-back implementation that applies after promotion
         $f_fast(x::T, y::T) where {T<:Number} = $f(x, y)
+    end
+    # Issue 53886 - avoid promotion of Int128 etc to be consistent with non-fastmath
+    if f === :^
+        @eval $f_fast(x::Number, y::Integer) = $f(x, y)
     end
 end
 

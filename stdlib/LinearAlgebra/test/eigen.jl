@@ -45,12 +45,13 @@ aimg  = randn(n,n)/2
             @test eigvecs(f) === f.vectors
             @test Array(f) ≈ a
 
-            for T in (Tridiagonal(a), Hermitian(Tridiagonal(a)))
+            for T in (Tridiagonal(a), Hermitian(Tridiagonal(a), :U), Hermitian(Tridiagonal(a), :L))
                 f = eigen(T)
                 d, v = f
                 for i in 1:size(a,2)
                     @test T*v[:,i] ≈ d[i]*v[:,i]
                 end
+                @test eigvals(T) ≈ d
                 @test det(T) ≈ det(f)
                 @test inv(T) ≈ inv(f)
             end
@@ -211,10 +212,22 @@ end
 end
 
 @testset "equality of eigen factorizations" begin
-    A = randn(3, 3)
-    @test eigen(A) == eigen(A)
-    @test hash(eigen(A)) == hash(eigen(A))
-    @test isequal(eigen(A), eigen(A))
+    A1 = Float32[1 0; 0 2]
+    A2 = Float64[1 0; 0 2]
+    EA1 = eigen(A1)
+    EA2 = eigen(A2)
+    @test EA1 == EA2
+    @test hash(EA1) == hash(EA2)
+    @test isequal(EA1, EA2)
+
+    # trivial RHS to ensure that values match exactly
+    B1 = Float32[1 0; 0 1]
+    B2 = Float64[1 0; 0 1]
+    EA1B1 = eigen(A1, B1)
+    EA2B2 = eigen(A2, B2)
+    @test EA1B1 == EA2B2
+    @test hash(EA1B1) == hash(EA2B2)
+    @test isequal(EA1B1, EA2B2)
 end
 
 @testset "Float16" begin

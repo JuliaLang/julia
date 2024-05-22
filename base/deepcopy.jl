@@ -115,7 +115,7 @@ function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
                 xi = deepcopy_internal(xi, stackdict)::typeof(xi)
             end
             di = Core.memoryref(dr, i, false)
-            di = Core.memoryrefset!(di, xi, :not_atomic, false)
+            Core.memoryrefset!(di, xi, :not_atomic, false)
         end
     end
     return dest
@@ -157,7 +157,7 @@ end
 
 function deepcopy_internal(x::AbstractLock, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = typeof(x)()
     stackdict[x] = y
@@ -166,7 +166,7 @@ end
 
 function deepcopy_internal(x::GenericCondition, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = typeof(x)(deepcopy_internal(x.lock, stackdict))
     stackdict[x] = y

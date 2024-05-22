@@ -116,8 +116,8 @@ julia> using Base.Threads
 julia> nthreadpools()
 2
 
-julia> threadpool()
-:default
+julia> threadpool() # the main thread is in the interactive thread pool
+:interactive
 
 julia> nthreads(:default)
 3
@@ -132,6 +132,10 @@ julia> nthreads()
 !!! note
     The zero-argument version of `nthreads` returns the number of threads
     in the default pool.
+
+!!! note
+    Depending on whether Julia has been started with interactive threads,
+    the main thread is either in the default or interactive thread pool.
 
 Either or both numbers can be replaced with the word `auto`, which causes
 Julia to choose a reasonable default.
@@ -223,11 +227,11 @@ julia> sum_multi_bad(1:1_000_000)
 Note that the result is not `500000500000` as it should be, and will most likely change each evaluation.
 
 To fix this, buffers that are specific to the task may be used to segment the sum into chunks that are race-free.
-Here `sum_single` is reused, with its own internal buffer `s`. The input vector `a` is split into `nthreads()`
+Here `sum_single` is reused, with its own internal buffer `s`. The input vector `a` is split into at most `nthreads()`
 chunks for parallel work. We then use `Threads.@spawn` to create tasks that individually sum each chunk. Finally, we sum the results from each task using `sum_single` again:
 ```julia-repl
 julia> function sum_multi_good(a)
-           chunks = Iterators.partition(a, length(a) ÷ Threads.nthreads())
+           chunks = Iterators.partition(a, cld(length(a), Threads.nthreads()))
            tasks = map(chunks) do chunk
                Threads.@spawn sum_single(chunk)
            end
@@ -385,8 +389,9 @@ julia> acc[]
 #### [Per-field atomics](@id man-atomics)
 
 We can also use atomics on a more granular level using the [`@atomic`](@ref
-Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap), and
-[`@atomicreplace`](@ref Base.@atomicreplace) macros.
+Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap),
+[`@atomicreplace`](@ref Base.@atomicreplace) macros, and
+[`@atomiconce`](@ref Base.@atomiconce) macros.
 
 Specific details of the memory model and other details of the design are written
 in the [Julia Atomics

@@ -124,6 +124,18 @@ fill!(r, -6.3)
 fill!(r, -1.1)
 @test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1) .- 1.1
 
+# issue #35199
+function issue35199_test(sizes, dims)
+    M = rand(Float64, sizes)
+    ax = axes(M)
+    n1 = @allocations Base.reduced_indices(ax, dims)
+    return @test n1 == 0
+end
+for dims in (1, 2, (1,), (2,), (1,2))
+    sizes = (64, 3)
+    issue35199_test(sizes, dims)
+end
+
 # Small arrays with init=false
 let A = reshape(1:15, 3, 5)
     R = fill(1, 3)
@@ -564,8 +576,8 @@ end
 @testset "type of sum(::Array{$T}" for T in [UInt8, Int8, Int32, Int64, BigInt]
     result = sum(T[1 2 3; 4 5 6; 7 8 9], dims=2)
     @test result == hcat([6, 15, 24])
-    @test eltype(result) === (T <: Base.SmallSigned ? Int :
-                              T <: Base.SmallUnsigned ? UInt :
+    @test eltype(result) === (T <: Base.BitSignedSmall ? Int :
+                              T <: Base.BitUnsignedSmall ? UInt :
                               T)
 end
 

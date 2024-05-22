@@ -1057,7 +1057,9 @@ end
                 $ew HasDepWithExtensions.do_something() || error("do_something errored")
                 using ExtDep2
                 $ew using ExtDep2
-                $ew HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+                using ExtDep3
+                $ew using ExtDep3
+                $ew HasExtensions.ext_dep_loaded || error("ext_dep_loaded not set")
             end
             """
             return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
@@ -1105,6 +1107,8 @@ end
             Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
             using ExtDep2
             Base.get_extension(HasExtensions, :ExtensionFolder) isa Module || error("expected extension to load")
+            using ExtDep3
+            Base.get_extension(HasExtensions, :ExtensionDep) isa Module || error("expected extension to load")
         end
         """
         for compile in (`--compiled-modules=no`, ``)
@@ -1112,6 +1116,36 @@ end
             proj = joinpath(@__DIR__, "project", "Extensions")
             cmd_proj_ext = addenv(cmd_proj_ext, "JULIA_LOAD_PATH" => join([joinpath(proj, "HasExtensions.jl"), joinpath(proj, "EnvWithDeps")], sep))
             run(cmd_proj_ext)
+        end
+
+        # Sysimage extensions
+        # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet.
+        # if it gets moved out, this test will need to be updated.
+        # We run this test in a new process so we are not vulnerable to a previous test having loaded LinearAlgebra
+        sysimg_ext_test_code = """
+            uuid_key = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
+            Base.in_sysimage(uuid_key) || error("LinearAlgebra not in sysimage")
+            haskey(Base.explicit_loaded_modules, uuid_key) && error("LinearAlgebra already loaded")
+            using HasExtensions
+            Base.get_extension(HasExtensions, :LinearAlgebraExt) === nothing || error("unexpectedly got an extension")
+            using LinearAlgebra
+            haskey(Base.explicit_loaded_modules, uuid_key) || error("LinearAlgebra not loaded")
+            Base.get_extension(HasExtensions, :LinearAlgebraExt) isa Module || error("expected extension to load")
+        """
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
+        run(cmd)
+
+
+        # Extensions in implicit environments
+        old_load_path = copy(LOAD_PATH)
+        try
+            empty!(LOAD_PATH)
+            push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ImplicitEnv"))
+            pkgid_B = Base.PkgId(Base.uuid5(Base.identify_package("A").uuid, "BExt"), "BExt")
+            @test Base.identify_package(pkgid_B, "B") isa Base.PkgId
+        finally
+            copy!(LOAD_PATH, old_load_path)
         end
     finally
         try
@@ -1307,15 +1341,18 @@ end
 
 @testset "relocatable upgrades #51989" begin
     mktempdir() do depot
-        project_path = joinpath(depot, "project")
+        # realpath is needed because Pkg is used for one of the precompile paths below, and Pkg calls realpath on the
+        # project path so the cache file slug will be different if the tempdir is given as a symlink
+        # (which it often is on MacOS) which would break the test.
+        project_path = joinpath(realpath(depot), "project")
         mkpath(project_path)
 
         # Create fake `Foo.jl` package with two files:
-        foo_path = joinpath(depot, "dev", "Foo")
+        foo_path = joinpath(depot, "dev", "Foo51989")
         mkpath(joinpath(foo_path, "src"))
-        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
             println(io, """
-            module Foo
+            module Foo51989
             include("internal.jl")
             end
             """)
@@ -1325,7 +1362,7 @@ end
         end
         open(joinpath(foo_path, "Project.toml"); write=true) do io
             println(io, """
-            name = "Foo"
+            name = "Foo51989"
             uuid = "00000000-0000-0000-0000-000000000001"
             version = "1.0.0"
             """)
@@ -1333,27 +1370,27 @@ end
 
         # In our depot, `dev` and then `precompile` this `Foo` package.
         @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo"); Pkg.precompile(); exit(0)'`,
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo51989"); Pkg.precompile(); exit(0)'`,
             "JULIA_DEPOT_PATH" => depot))
 
         # Get the size of the generated `.ji` file so that we can ensure that it gets altered
-        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo")
+        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo51989")
         cache_path = joinpath(foo_compiled_path, only(filter(endswith(".ji"), readdir(foo_compiled_path))))
         cache_size = filesize(cache_path)
 
         # Next, remove the dependence on `internal.jl` and delete it:
         rm(joinpath(foo_path, "src", "internal.jl"))
-        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
             truncate(io, 0)
             println(io, """
-            module Foo
+            module Foo51989
             end
             """)
         end
 
         # Try to load `Foo`; this should trigger recompilation, not an error!
         @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo; exit(0)'`,
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo51989; exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
         ))
 
@@ -1409,7 +1446,7 @@ end
 end
 
 @testset "command-line flags" begin
-    mktempdir() do dir
+    mktempdir() do depot_path mktempdir() do dir
         # generate a Parent.jl and Child.jl package, with Parent depending on Child
         open(joinpath(dir, "Child.jl"), "w") do io
             println(io, """
@@ -1428,6 +1465,7 @@ end
             code = "using $name"
             cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
                         "JULIA_LOAD_PATH" => dir,
+                        "JULIA_DEPOT_PATH" => depot_path,
                         "JULIA_DEBUG" => "loading")
 
             out = Pipe()
@@ -1484,5 +1522,111 @@ end
         @test occursin(r"Loading object cache file .+ for Child", log)
         @test occursin(r"Generating object cache file for Parent", log)
         @test occursin(r"Loading object cache file .+ for Parent", log)
+    end end
+end
+
+@testset "including non-existent file throws proper error #52462" begin
+    mktempdir() do depot
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+
+        # Create a `Foo.jl` package
+        foo_path = joinpath(depot, "dev", "Foo52462")
+        mkpath(joinpath(foo_path, "src"))
+        open(joinpath(foo_path, "src", "Foo52462.jl"); write=true) do io
+            println(io, """
+            module Foo52462
+            include("non-existent.jl")
+            end
+            """)
+        end
+        open(joinpath(foo_path, "Project.toml"); write=true) do io
+            println(io, """
+            name = "Foo52462"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        end
+
+        file = joinpath(depot, "dev", "non-existent.jl")
+        @test_throws SystemError("opening file $(repr(file))") include(file)
+    end
+end
+
+@testset "-m" begin
+    rot13proj = joinpath(@__DIR__, "project", "Rot13")
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13 --project nowhere ABJURER`) == "--cebwrpg abjurer NOWHERE "
+end
+
+@testset "workspace loading" begin
+   old_load_path = copy(LOAD_PATH)
+   try
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject"))
+       @test Base.get_preferences()["value"] == 1
+       @test Base.get_preferences()["x"] == 1
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "sub"))
+       id = Base.identify_package("Devved")
+       @test isfile(Base.locate_package(id))
+       @test Base.identify_package("Devved2") === nothing
+       id3 = Base.identify_package("MyPkg")
+       @test isfile(Base.locate_package(id3))
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "PackageThatIsSub"))
+       id_pkg = Base.identify_package("PackageThatIsSub")
+       @test Base.identify_package(id_pkg, "Devved") === nothing
+       id_dev2 = Base.identify_package(id_pkg, "Devved2")
+       @test isfile(Base.locate_package(id_dev2))
+       id_mypkg = Base.identify_package("MyPkg")
+       @test isfile(Base.locate_package(id_mypkg))
+       id_dev = Base.identify_package(id_mypkg, "Devved")
+       @test isfile(Base.locate_package(id_dev))
+       @test Base.get_preferences()["value"] == 2
+       @test Base.get_preferences()["x"] == 1
+       @test Base.get_preferences()["y"] == 2
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "PackageThatIsSub", "test"))
+       id_pkg = Base.identify_package("PackageThatIsSub")
+       @test isfile(Base.locate_package(id_pkg))
+       @test Base.identify_package(id_pkg, "Devved") === nothing
+       id_dev2 = Base.identify_package(id_pkg, "Devved2")
+       @test isfile(Base.locate_package(id_dev2))
+       id_mypkg = Base.identify_package("MyPkg")
+       @test isfile(Base.locate_package(id_mypkg))
+       id_dev = Base.identify_package(id_mypkg, "Devved")
+       @test isfile(Base.locate_package(id_dev))
+       @test Base.get_preferences()["value"] == 3
+       @test Base.get_preferences()["x"] == 1
+       @test Base.get_preferences()["y"] == 2
+       @test Base.get_preferences()["z"] == 3
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "test"))
+       id_mypkg = Base.identify_package("MyPkg")
+       id_dev = Base.identify_package(id_mypkg, "Devved")
+       @test isfile(Base.locate_package(id_dev))
+       @test Base.identify_package("Devved2") === nothing
+
+    finally
+       copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+@testset "project path handling" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "ProjectPath"))
+        id_project = Base.identify_package("ProjectPath")
+        Base.locate_package(id_project)
+        @test Base.locate_package(id_project) == joinpath(@__DIR__, "project", "ProjectPath", "CustomPath.jl")
+
+        id_dep = Base.identify_package("ProjectPathDep")
+        @test Base.locate_package(id_dep) == joinpath(@__DIR__, "project", "ProjectPath", "ProjectPathDep", "CustomPath.jl")
+    finally
+        copy!(LOAD_PATH, old_load_path)
     end
 end

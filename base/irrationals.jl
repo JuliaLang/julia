@@ -28,6 +28,9 @@ See also [`AbstractIrrational`](@ref).
 """
 struct Irrational{sym} <: AbstractIrrational end
 
+typemin(::Type{T}) where {T<:Irrational} = T()
+typemax(::Type{T}) where {T<:Irrational} = T()
+
 show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
 
 function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}

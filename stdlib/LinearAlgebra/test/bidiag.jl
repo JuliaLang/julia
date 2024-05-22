@@ -22,6 +22,9 @@ using .Main.FillArrays
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
@@ -163,6 +166,9 @@ Random.seed!(1)
 
         @testset for func in (conj, transpose, adjoint)
             @test func(func(T)) == T
+            if func ∈ (transpose, adjoint)
+                @test func(func(T)) === T
+            end
         end
 
         @testset "permutedims(::Bidiagonal)" begin
@@ -831,6 +837,26 @@ end
     end
 end
 
+@testset "copyto!" begin
+    ev, dv = [1:4;], [1:5;]
+    B = Bidiagonal(dv, ev, :U)
+    B2 = copyto!(zero(B), B)
+    @test B2 == B
+    for (ul1, ul2) in ((:U, :L), (:L, :U))
+        B3 = Bidiagonal(dv, zero(ev), ul1)
+        B2 = Bidiagonal(zero(dv), zero(ev), ul2)
+        @test copyto!(B2, B3) == B3
+    end
+
+    @testset "mismatched sizes" begin
+        dv2 = [4; @view dv[2:end]]
+        @test copyto!(B, Bidiagonal([4], Int[], :U)) == Bidiagonal(dv2, ev, :U)
+        @test copyto!(B, Bidiagonal([4], Int[], :L)) == Bidiagonal(dv2, ev, :U)
+        @test copyto!(B, Bidiagonal(Int[], Int[], :U)) == Bidiagonal(dv, ev, :U)
+        @test copyto!(B, Bidiagonal(Int[], Int[], :L)) == Bidiagonal(dv, ev, :U)
+    end
+end
+
 @testset "copyto! with UniformScaling" begin
     @testset "Fill" begin
         for len in (4, InfiniteArrays.Infinity())
@@ -859,6 +885,52 @@ end
     B = Bidiagonal(dv, uv, :U)
     ax = axes(dv, 1)
     @test axes(B) === (ax, ax)
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    B = Bidiagonal([1:2;], [1;], :U)
+    @test S * B == A * B
+    @test B * S == B * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, B) == mul!(C2, A, B)
+    @test mul!(C1, S, B, 1, 2) == mul!(C2, A, B, 1 ,2)
+    @test mul!(C1, B, S) == mul!(C2, B, A)
+    @test mul!(C1, B, S, 1, 2) == mul!(C2, B, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test B * sv == B * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, B, sv) == mul!(C2, B, v)
+    @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
+end
+
+@testset "Reverse operation on Bidiagonal" begin
+    n = 5
+    d = randn(n)
+    e = randn(n - 1)
+    for uplo in (:U, :L)
+        B = Bidiagonal(d, e, uplo)
+        @test reverse(B, dims=1) == reverse(Matrix(B), dims=1)
+        @test reverse(B, dims=2) == reverse(Matrix(B), dims=2)
+        @test reverse(B)::Bidiagonal == reverse(Matrix(B))
+    end
+end
+
+@testset "Matrix conversion for non-numeric" begin
+    B = Bidiagonal(fill(Diagonal([1,3]), 3), fill(Diagonal([1,3]), 2), :U)
+    M = Matrix{eltype(B)}(B)
+    @test M isa Matrix{eltype(B)}
+    @test M == B
+end
+
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    B = Bidiagonal(dv, ev, :U)
+    @test_throws "invalid index" B[3, true]
+    @test B[1,2] == B[Int8(1),UInt16(2)] == B[big(1), Int16(2)]
 end
 
 end # module TestBidiagonal

@@ -254,7 +254,7 @@ When issuing a hint, the output should typically start with `\\n`.
 If you define custom exception types, your `showerror` method can
 support hints by calling [`Experimental.show_error_hints`](@ref).
 
-# Example
+# Examples
 
 ```
 julia> module Hinter
@@ -280,6 +280,7 @@ Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby tri
 ```
 julia> Hinter.only_int(1.0)
 ERROR: MethodError: no method matching only_int(::Float64)
+The function `only_int` exists, but no method is defined for this combination of argument types.
 Did you mean to call `any_number`?
 Closest candidates are:
     ...

@@ -12,6 +12,8 @@ Base.open
 Base.IOStream
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)
+Base.Pipe
+Base.link_pipe!
 Base.fdio
 Base.flush
 Base.close
@@ -37,6 +39,7 @@ Base.eof
 Base.isreadonly
 Base.iswritable
 Base.isreadable
+Base.isexecutable
 Base.isopen
 Base.fd
 Base.redirect_stdio

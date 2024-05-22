@@ -94,6 +94,9 @@ end
 
     conv_res = @test_throws MethodError convert(NamedTuple{(:a,),Tuple{I}} where I<:AbstractString, (;a=1))
     @test conv_res.value.f === convert && conv_res.value.args === (AbstractString, 1)
+
+    conv6 = convert(NamedTuple{(:a,),Tuple{NamedTuple{(:b,), Tuple{Int}}}}, ((1,),))
+    @test conv6 === (a = (b = 1,),)
 end
 
 @test NamedTuple{(:a,:c)}((b=1,z=2,c=3,aa=4,a=5)) === (a=5, c=3)
@@ -133,6 +136,14 @@ end
 @test_throws ArgumentError map(+, (x=1, y=2), (y=10, x=20))
 @test map(string, (x=1, y=2)) == (x="1", y="2")
 @test map(round, (x=UInt, y=Int), (x=3.1, y=2//3)) == (x=UInt(3), y=1)
+
+@testset "filter" begin
+    @test filter(isodd, (a=1,b=2,c=3)) === (a=1, c=3)
+    @test filter(i -> true, (;)) === (;)
+    longnt = NamedTuple{ntuple(i -> Symbol(:a, i), 20)}(ntuple(identity, 20))
+    @test filter(iseven, longnt) === NamedTuple{ntuple(i -> Symbol(:a, 2i), 10)}(ntuple(i -> 2i, 10))
+    @test filter(x -> x<2, (longnt..., z=1.5)) === (a1=1, z=1.5)
+end
 
 @test merge((a=1, b=2), (a=10,)) == (a=10, b=2)
 @test merge((a=1, b=2), (a=10, z=20)) == (a=10, b=2, z=20)
@@ -425,4 +436,19 @@ end
 let c = (a=1, b=2),
     d = (b=3, c=(d=1,))
     @test @inferred(mergewith51009((x,y)->y, c, d)) === (a = 1, b = 3, c = (d = 1,))
+end
+
+@test_throws ErrorException NamedTuple{(), Union{}}
+for NT in (NamedTuple{(:a, :b), Union{}}, NamedTuple{(:a, :b), T} where T<:Union{})
+    @test fieldtype(NT, 1) == Union{}
+    @test fieldtype(NT, :b) == Union{}
+    @test_throws ErrorException fieldtype(NT, :c)
+    @test_throws BoundsError fieldtype(NT, 0)
+    @test_throws BoundsError fieldtype(NT, 3)
+    @test Base.return_types((Type{NT},)) do NT; fieldtype(NT, :a); end == Any[Type{Union{}}]
+    @test fieldtype(NamedTuple{<:Any, Union{}}, 1) == Union{}
+end
+let NT = NamedTuple{<:Any, Union{}}
+    @test fieldtype(NT, 100) == Union{}
+    @test only(Base.return_types((Type{NT},)) do NT; fieldtype(NT, 100); end) >: Type{Union{}}
 end
