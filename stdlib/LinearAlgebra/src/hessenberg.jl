@@ -90,6 +90,8 @@ Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
 Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Int, j::Int) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
 
+Base._reverse(A::UpperHessenberg, dims) = reverse!(Matrix(A); dims)
+
 Base.@propagate_inbounds function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1
         x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *

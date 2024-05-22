@@ -728,6 +728,20 @@ end
 # Issue 16196
 @test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(fill(1., 3), [1,2,3]) == fill(1., 3)
 
+@testset "reverse" begin
+    A = randn(5, 5)
+    for (T, Trev) in ((UpperTriangular, LowerTriangular),
+            (UnitUpperTriangular, UnitLowerTriangular),
+            (LowerTriangular, UpperTriangular),
+            (UnitLowerTriangular, UnitUpperTriangular))
+        A = T(randn(5, 5))
+        AM = Matrix(A)
+        @test reverse(A, dims=1) == reverse(AM, dims=1)
+        @test reverse(A, dims=2) == reverse(AM, dims=2)
+        @test reverse(A)::Trev == reverse(AM)
+    end
+end
+
 # dimensional correctness:
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
