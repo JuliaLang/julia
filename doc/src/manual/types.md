@@ -1595,7 +1595,7 @@ Here is a brief summary of the different output functions in Julia and how they 
 * The 3-argument [`show(io, ::MIME"text/plain", x)`](@ref) method is verbose pretty-printing of `x`. By default (if no verbose method is defined for `typeof(x)`), it calls the 2-argument `show(io, x)`.  It is called by the 2-argument `repr("text/plain", x)`.   Other 3-argument `show` methods can be defined for additional MIME types as discussed above, to enable richer display of `x` in some interactive environments.
 * The 2-argument [`show(io, x)`](@ref) is the default simple text representation of `x`. It is called by the 1-argument [`repr(x)`](@ref), and is typically the format you might employ to input `x` into Julia. The 1-argument `show(x)` calls `show(stdout, x)`.
 * [`print(io, x)`](@ref) by default calls `show(io, x)`, but a few types have a distinct `print` format — most notably, when `x` is a string, `print` outputs the raw text whereas `show` outputs an escaped string enclosed in quotation marks.  The 1-argument `print(x)` calls `print(stdout, x)`. `print` is also called by [`string(x)`](@ref).
-* [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `Int32` will be written as 4 bytes.
+* [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `x::Int32` will be written as 4 bytes.
 
 ## "Value types"
 
