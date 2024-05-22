@@ -573,6 +573,8 @@ wrapper_char(A::Hermitian) =  WrapperChar('H', A.uplo == 'U')
 wrapper_char(A::Hermitian{<:Real}) = WrapperChar('S', A.uplo == 'U')
 wrapper_char(A::Symmetric) = WrapperChar('S', A.uplo == 'U')
 
+isNTC(A::AbstractArray) = uppercase(wrapper_char(A)) in ('N', 'T', 'C')
+
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     # merge the result of this before return, so that we can type-assert the return such
     # that even if the tmerge is inaccurate, inference can still identify that the
