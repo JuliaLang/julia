@@ -202,6 +202,13 @@ let n = 10
     end
 end
 
+@testset "Reverse operation on UpperHessenberg" begin
+    A = UpperHessenberg(randn(5, 5))
+    @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+    @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+    @test reverse(A) == reverse(Matrix(A))
+end
+
 @testset "hessenberg(::AbstractMatrix)" begin
     n = 10
     A = Tridiagonal(rand(n-1), rand(n), rand(n-1))
@@ -258,5 +265,11 @@ end
     @test copyto!(B, A) == A2
 end
 
+@testset "getindex with Integers" begin
+    M = reshape(1:9, 3, 3)
+    S = UpperHessenberg(M)
+    @test_throws "invalid index" S[3, true]
+    @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+end
 
 end # module TestHessenberg

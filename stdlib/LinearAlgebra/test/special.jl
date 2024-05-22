@@ -111,6 +111,7 @@ Random.seed!(1)
         struct TypeWithZero end
         Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
         Base.convert(::Type{TypeWithZero}, ::TypeWithoutZero) = TypeWithZero()
+        Base.zero(x::Union{TypeWithoutZero, TypeWithZero}) = zero(typeof(x))
         Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
         LinearAlgebra.symmetric(::TypeWithoutZero, ::Symbol) = TypeWithoutZero()
         LinearAlgebra.symmetric_type(::Type{TypeWithoutZero}) = TypeWithoutZero
@@ -127,6 +128,15 @@ Random.seed!(1)
         for M in (D, Bu, Bl, Tri, Sym)
             @test Matrix(M) == zeros(TypeWithZero, 3, 3)
         end
+
+        mutable struct MTypeWithZero end
+        Base.convert(::Type{MTypeWithZero}, ::TypeWithoutZero) = MTypeWithZero()
+        Base.convert(::Type{MTypeWithZero}, ::TypeWithZero) = MTypeWithZero()
+        Base.zero(x::MTypeWithZero) = zero(typeof(x))
+        Base.zero(::Type{MTypeWithZero}) = MTypeWithZero()
+        U = UpperTriangular(Symmetric(fill(TypeWithoutZero(), 2, 2)))
+        M = Matrix{MTypeWithZero}(U)
+        @test all(x -> x isa MTypeWithZero, M)
     end
 end
 

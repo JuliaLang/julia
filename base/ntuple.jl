@@ -75,6 +75,7 @@ julia> ntuple(i -> 2*i, Val(4))
         Tuple(f(i) for i = 1:N)
     end
 end
+typeof(function ntuple end).name.max_methods = UInt8(5)
 
 @inline function fill_to_length(t::Tuple, val, ::Val{_N}) where {_N}
     M = length(t)
