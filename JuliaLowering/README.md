@@ -28,8 +28,10 @@ This work is intended to
 
 Note this is a very early work in progress; most things probably don't work!
 
-1. Check out the caf/lowering-2 branch of JuliaSyntax.jl
-2. Run the demo `include("test/lowering.jl")`
+1. Use a recent dev version of Julia (need at least version 1.12.0-DEV.512)
+2. Check out the caf/lowering-2 branch of [JuliaSyntax](https://github.com/JuliaLang/JuliaSyntax.jl)
+3. Get the latest version of [JuliaSyntaxFormatter](https://github.com/c42f/JuliaSyntaxFormatter.jl)
+4. Run the demo `include("test/demo.jl")`
 
 # Design Notes
 

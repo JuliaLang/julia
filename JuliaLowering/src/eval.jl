@@ -6,79 +6,74 @@ function lower(mod::Module, ex)
     ex4
 end
 
-# CodeInfo constructor. TODO: Should be in Core?
-function _CodeInfo(code,
-         codelocs,
-         ssavaluetypes,
-         ssaflags,
-         method_for_inference_limit_heuristics,
-         linetable,
-         slotnames,
-         slotflags,
-         slottypes,
-         rettype,
-         parent,
-         edges,
-         min_world,
-         max_world,
-         inferred,
-         propagate_inbounds,
-         has_fcall,
-         nospecializeinfer,
-         inlining,
-         constprop,
-         purity,
-         inlining_cost)
-    @eval $(Expr(:new, :(Core.CodeInfo),
-           convert(Vector{Any}, code),
-           convert(Vector{Int32}, codelocs),
-           convert(Any, ssavaluetypes),
-           convert(Vector{UInt32}, ssaflags),
-           convert(Any, method_for_inference_limit_heuristics),
-           convert(Any, linetable),
-           convert(Vector{Symbol}, slotnames),
-           convert(Vector{UInt8}, slotflags),
-           convert(Any, slottypes),
-           convert(Any, rettype),
-           convert(Any, parent),
-           convert(Any, edges),
-           convert(UInt64, min_world),
-           convert(UInt64, max_world),
-           convert(Bool, inferred),
-           convert(Bool, propagate_inbounds),
-           convert(Bool, has_fcall),
-           convert(Bool, nospecializeinfer),
-           convert(UInt8, inlining),
-           convert(UInt8, constprop),
-           convert(UInt16, purity),
-           convert(UInt16, inlining_cost)))
+_CodeInfo_need_ver = v"1.12.0-DEV.512"
+if VERSION < _CodeInfo_need_ver
+    function _CodeInfo(args...)
+        error("Constructing a CodeInfo using JuliaLowering currently requires Julia version $_CodeInfo_need_ver or greater")
+    end
+else
+    # debuginfo changed completely as of https://github.com/JuliaLang/julia/pull/52415
+    # nargs / isva was added as of       https://github.com/JuliaLang/julia/pull/54341
+    # CodeInfo constructor. TODO: Should be in Core
+    let
+        fns = fieldnames(Core.CodeInfo)
+        fts = fieldtypes(Core.CodeInfo)
+        conversions = [:(convert($t, $n)) for (t,n) in zip(fts, fns)]
+
+        expected_fns = (:code, :debuginfo, :ssavaluetypes, :ssaflags, :slotnames, :slotflags, :slottypes, :parent, :method_for_inference_limit_heuristics, :edges, :min_world, :max_world, :nargs, :propagate_inbounds, :has_fcall, :nospecializeinfer, :isva, :inlining, :constprop, :purity, :inlining_cost)
+        expected_fts = (Vector{Any}, Core.DebugInfo, Any, Vector{UInt32}, Vector{Symbol}, Vector{UInt8}, Any, Any, Any, Any, UInt64, UInt64, UInt64, Bool, Bool, Bool, Bool, UInt8, UInt8, UInt16, UInt16)
+
+        code = if fns != expected_fns || fts != expected_fts
+            :(function _CodeInfo(args...)
+                error("Unrecognized CodeInfo layout: Maybe version $VERSION is to new for this version of JuliaLowering?")
+            end)
+        else
+            :(function _CodeInfo($(fns...))
+                $(Expr(:new, :(Core.CodeInfo), conversions...))
+            end)
+        end
+
+        eval(@__MODULE__, code)
+    end
+end
+
+function ir_debug_info(ex)
+    code = children(ex)
+    # Record low resolution locations in debug info
+    num_stmts = length(code)
+    codelocs = zeros(Int32, 3*num_stmts)
+
+    topfile = Symbol(filename(ex))
+    topline,_ = source_location(ex)
+
+    edges = Core.DebugInfo[]
+
+    for i in 1:num_stmts
+        line,_ = source_location(code[i])
+        # TODO: Macro inlining stack filename(code[i])
+        codelocs[3*i-2]   = line
+        codelocs[3*i-1] = 0 # Index into edges
+        codelocs[3*i  ] = 0 # Index into edges[linetable]
+    end
+
+    codelocs = @ccall jl_compress_codelocs(topline::Int32, codelocs::Any,
+                                            num_stmts::Csize_t)::String
+    edges = Core.svec(edges...)
+    Core.DebugInfo(topfile, nothing, edges, codelocs)
 end
 
 # Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the
 # Julia runtime
-function to_code_info(ex, mod, funcname, var_info, slot_rewrites)
+function to_code_info(ex, mod, funcname, nargs, var_info, slot_rewrites)
     input_code = children(ex)
-    # Convert code to Expr and record low res locations in table
-    num_stmts = length(input_code)
-    code = Vector{Any}(undef, num_stmts)
-    codelocs = Vector{Int32}(undef, num_stmts)
-    linetable_map = Dict{Tuple{Int,String}, Int32}()
-    linetable = Any[]
-    for i in 1:length(code)
-        code[i] = to_lowered_expr(mod, var_info, input_code[i])
-        fname = filename(input_code[i])
-        lineno, _ = source_location(input_code[i])
-        loc = (lineno, fname)
-        codelocs[i] = get!(linetable_map, loc) do
-            inlined_at = 0 # FIXME: nonzero for expanded macros
-            full_loc = Core.LineInfoNode(mod, Symbol(funcname), Symbol(fname),
-                                         Int32(lineno), Int32(inlined_at))
-            push!(linetable, full_loc)
-            length(linetable)
-        end
-    end
+    code = Any[to_lowered_expr(mod, var_info, ex) for ex in input_code]
 
-    # FIXME
+    debuginfo = ir_debug_info(ex)
+
+    # TODO: Set ssaflags based on call site annotations:
+    # - @inbounds annotations
+    # - call site @inline / @noinline
+    # - call site @assume_effects
     ssaflags = zeros(UInt32, length(code))
 
     nslots = length(slot_rewrites)
@@ -97,29 +92,53 @@ function to_code_info(ex, mod, funcname, var_info, slot_rewrites)
         slotflags[i] = 0x00  # FIXME!!
     end
 
+    # TODO: Set true for @propagate_inbounds
+    propagate_inbounds  = false
+    # TODO: Set true if there's a foreigncall
+    has_fcall           = false
+    # TODO: Set for @nospecializeinfer
+    nospecializeinfer   = false
+    # TODO: Set based on @inline -> 0x01 or @noinline -> 0x02
+    inlining            = 0x00
+    # TODO: Set based on @constprop :aggressive -> 0x01 or @constprop :none -> 0x02
+    constprop           = 0x00
+    # TODO: Set based on Base.@assume_effects
+    purity              = 0x0000
+
+    # The following CodeInfo fields always get their default values for
+    # uninferred code.
+    ssavaluetypes      = length(code) # Why does the runtime code do this?
+    slottypes          = nothing
+    parent             = nothing
+    method_for_inference_limit_heuristics = nothing
+    edges               = nothing
+    min_world           = Csize_t(1)
+    max_world           = typemax(Csize_t)
+    isva                = false
+    inlining_cost       = 0xffff
+
     _CodeInfo(
         code,
-        codelocs,
-        num_stmts,         # ssavaluetypes (why put num_stmts in here??)
+        debuginfo,
+        ssavaluetypes,
         ssaflags,
-        nothing,           #  method_for_inference_limit_heuristics
-        linetable,
         slotnames,
         slotflags,
-        nothing,           #  slottypes
-        Any,               #  rettype
-        nothing,           #  parent
-        nothing,           #  edges
-        Csize_t(1),        #  min_world
-        typemax(Csize_t),  #  max_world
-        false,             #  inferred
-        false,             #  propagate_inbounds
-        false,             #  has_fcall
-        false,             #  nospecializeinfer
-        0x00,              #  inlining
-        0x00,              #  constprop
-        0x0000,            #  purity
-        0xffff,            #  inlining_cost
+        slottypes,
+        parent,
+        method_for_inference_limit_heuristics,
+        edges,
+        min_world,
+        max_world,
+        nargs,
+        propagate_inbounds,
+        has_fcall,
+        nospecializeinfer,
+        isva,
+        inlining,
+        constprop,
+        purity,
+        inlining_cost
     )
 end
 
@@ -161,7 +180,8 @@ function to_lowered_expr(mod, var_info, ex)
         funcname = ex.lambda_info.is_toplevel_thunk ?
             "top-level scope" :
             "none"              # FIXME
-        ir = to_code_info(ex[1], mod, funcname, var_info, ex.slot_rewrites)
+        nargs = length(ex.lambda_info.args)
+        ir = to_code_info(ex[1], mod, funcname, nargs, var_info, ex.slot_rewrites)
         if ex.lambda_info.is_toplevel_thunk
             Expr(:thunk, ir)
         else
