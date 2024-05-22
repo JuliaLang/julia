@@ -462,19 +462,8 @@ end
 _fullstride2(A, f=identity) = f(stride(A, 2)) >= size(A, 1)
 # for some standard StridedArrays, the _fullstride2 condition is known to hold at compile-time
 # We specialize the function for certain StridedArray subtypes
-
-# Similar to Base.RangeIndex, but only include range types where the step is statically known to be non-zero
-const IncreasingRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}}
-const NonConstRangeIndex = Union{IncreasingRangeIndex, StepRange{<:BitInteger, <:BitInteger}}
-# StridedArray subtypes for which _fullstride2(::T) === true is known from the type
-const DenseOrStridedReshapedReinterpreted = Union{DenseArray, Base.StridedReshapedArray, Base.StridedReinterpretArray}
-# Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
-StridedSubArrayStandard{T,N,A,
-    I<:Tuple{Vararg{Union{NonConstRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
-_fullstride2(A::Union{DenseOrStridedReshapedReinterpreted,StridedSubArrayStandard}, ::typeof(abs)) = true
-StridedSubArrayIncr{T,N,A,
-    I<:Tuple{Vararg{Union{IncreasingRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
-_fullstride2(A::Union{DenseOrStridedReshapedReinterpreted,StridedSubArrayIncr}, ::typeof(identity)) = true
+_fullstride2(A::StridedArrayStdSubArray, ::typeof(abs)) = true
+_fullstride2(A::StridedArrayStdSubArrayIncr, ::typeof(identity)) = true
 
 Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar,
                 A::StridedVecOrMat{T}, x::StridedVector{T},
