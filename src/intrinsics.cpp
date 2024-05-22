@@ -640,7 +640,9 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
                 setName(ctx.emission_context, vx, "bitcast_coercion");
         } else {
             vx = emit_bitcast(ctx, vx, llvmt);
-            setName(ctx.emission_context, vx, "bitcast_coercion");
+            if (isa<Instruction>(vx) && !vx->hasName())
+                // emit_bitcast may undo another bitcast
+                setName(ctx.emission_context, vx, "bitcast_coercion");
         }
     }
 
