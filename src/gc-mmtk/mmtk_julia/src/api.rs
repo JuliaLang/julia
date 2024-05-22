@@ -360,7 +360,7 @@ pub extern "C" fn mmtk_memory_region_copy(
     dst_addr: Address,
     count: usize,
 ) {
-    use crate::edges::JuliaMemorySlice;
+    use crate::slots::JuliaMemorySlice;
     let src = JuliaMemorySlice {
         owner: src_obj,
         start: src_addr,
@@ -402,9 +402,7 @@ pub extern "C" fn mmtk_object_reference_write_post(
     memory_manager::object_reference_write_post(
         mutator,
         src,
-        crate::edges::JuliaVMEdge::Simple(mmtk::vm::edge_shape::SimpleEdge::from_address(
-            Address::ZERO,
-        )),
+        crate::slots::JuliaVMSlot::Simple(mmtk::vm::slot::SimpleSlot::from_address(Address::ZERO)),
         target.into(),
     )
 }
@@ -418,9 +416,7 @@ pub extern "C" fn mmtk_object_reference_write_slow(
     use mmtk::MutatorContext;
     mutator.barrier().object_reference_write_slow(
         src,
-        crate::edges::JuliaVMEdge::Simple(mmtk::vm::edge_shape::SimpleEdge::from_address(
-            Address::ZERO,
-        )),
+        crate::slots::JuliaVMSlot::Simple(mmtk::vm::slot::SimpleSlot::from_address(Address::ZERO)),
         target.into(),
     );
 }

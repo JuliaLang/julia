@@ -2,37 +2,37 @@ use atomic::Atomic;
 use mmtk::{
     util::{Address, ObjectReference},
     vm::{
-        edge_shape::{Edge, SimpleEdge},
+        slot::{SimpleSlot, Slot},
         RootsWorkFactory,
     },
 };
 
-/// If a VM supports multiple kinds of edges, we can use tagged union to represent all of them.
+/// If a VM supports multiple kinds of slots, we can use tagged union to represent all of them.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub enum JuliaVMEdge {
-    Simple(SimpleEdge),
-    Offset(OffsetEdge),
+pub enum JuliaVMSlot {
+    Simple(SimpleSlot),
+    Offset(OffsetSlot),
 }
 
-unsafe impl Send for JuliaVMEdge {}
+unsafe impl Send for JuliaVMSlot {}
 
-impl Edge for JuliaVMEdge {
+impl Slot for JuliaVMSlot {
     fn load(&self) -> Option<ObjectReference> {
         match self {
-            JuliaVMEdge::Simple(e) => e.load(),
-            JuliaVMEdge::Offset(e) => e.load(),
+            JuliaVMSlot::Simple(e) => e.load(),
+            JuliaVMSlot::Offset(e) => e.load(),
         }
     }
 
     fn store(&self, object: ObjectReference) {
         match self {
-            JuliaVMEdge::Simple(e) => e.store(object),
-            JuliaVMEdge::Offset(e) => e.store(object),
+            JuliaVMSlot::Simple(e) => e.store(object),
+            JuliaVMSlot::Offset(e) => e.store(object),
         }
     }
 }
 
-impl std::fmt::Debug for JuliaVMEdge {
+impl std::fmt::Debug for JuliaVMSlot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Simple(e) => write!(f, "{}", e.as_address()),
@@ -42,14 +42,14 @@ impl std::fmt::Debug for JuliaVMEdge {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct OffsetEdge {
+pub struct OffsetSlot {
     slot_addr: *mut Atomic<Address>,
     offset: usize,
 }
 
-unsafe impl Send for OffsetEdge {}
+unsafe impl Send for OffsetSlot {}
 
-impl OffsetEdge {
+impl OffsetSlot {
     pub fn new_no_offset(address: Address) -> Self {
         Self {
             slot_addr: address.to_mut_ptr(),
@@ -73,7 +73,7 @@ impl OffsetEdge {
     }
 }
 
-impl Edge for OffsetEdge {
+impl Slot for OffsetSlot {
     fn load(&self) -> Option<ObjectReference> {
         let middle = unsafe { (*self.slot_addr).load(atomic::Ordering::Relaxed) };
         let begin = middle - self.offset;
@@ -95,12 +95,12 @@ pub struct JuliaMemorySlice {
     pub count: usize,
 }
 
-impl mmtk::vm::edge_shape::MemorySlice for JuliaMemorySlice {
-    type Edge = JuliaVMEdge;
-    type EdgeIterator = JuliaMemorySliceEdgeIterator;
+impl mmtk::vm::slot::MemorySlice for JuliaMemorySlice {
+    type SlotType = JuliaVMSlot;
+    type SlotIterator = JuliaMemorySliceSlotIterator;
 
-    fn iter_edges(&self) -> Self::EdgeIterator {
-        JuliaMemorySliceEdgeIterator {
+    fn iter_slots(&self) -> Self::SlotIterator {
+        JuliaMemorySliceSlotIterator {
             cursor: self.start,
             limit: self.start.shift::<Address>(self.count as isize),
         }
@@ -156,21 +156,21 @@ impl mmtk::vm::edge_shape::MemorySlice for JuliaMemorySlice {
     }
 }
 
-pub struct JuliaMemorySliceEdgeIterator {
+pub struct JuliaMemorySliceSlotIterator {
     cursor: Address,
     limit: Address,
 }
 
-impl Iterator for JuliaMemorySliceEdgeIterator {
-    type Item = JuliaVMEdge;
+impl Iterator for JuliaMemorySliceSlotIterator {
+    type Item = JuliaVMSlot;
 
-    fn next(&mut self) -> Option<JuliaVMEdge> {
+    fn next(&mut self) -> Option<JuliaVMSlot> {
         if self.cursor >= self.limit {
             None
         } else {
-            let edge = self.cursor;
+            let slot = self.cursor;
             self.cursor = self.cursor.shift::<ObjectReference>(1);
-            Some(JuliaVMEdge::Simple(SimpleEdge::from_address(edge)))
+            Some(JuliaVMSlot::Simple(SimpleSlot::from_address(slot)))
         }
     }
 }
@@ -202,7 +202,7 @@ impl<T: Copy> RootsWorkBuffer<T> {
 
 #[repr(C)]
 pub struct RootsWorkClosure {
-    pub report_edges_func: extern "C" fn(
+    pub report_slots_func: extern "C" fn(
         buf: *mut Address,
         size: usize,
         cap: usize,
@@ -227,7 +227,7 @@ pub struct RootsWorkClosure {
 }
 
 impl RootsWorkClosure {
-    extern "C" fn report_simple_edges<F: RootsWorkFactory<JuliaVMEdge>>(
+    extern "C" fn report_simple_slots<F: RootsWorkFactory<JuliaVMSlot>>(
         buf: *mut Address,
         size: usize,
         cap: usize,
@@ -237,10 +237,10 @@ impl RootsWorkClosure {
         if !buf.is_null() {
             let buf = unsafe { Vec::<Address>::from_raw_parts(buf, size, cap) }
                 .into_iter()
-                .map(|addr| JuliaVMEdge::Simple(SimpleEdge::from_address(addr)))
+                .map(|addr| JuliaVMSlot::Simple(SimpleSlot::from_address(addr)))
                 .collect();
             let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
-            factory.create_process_edge_roots_work(buf);
+            factory.create_process_roots_work(buf);
         }
 
         if renew {
@@ -250,7 +250,7 @@ impl RootsWorkClosure {
         }
     }
 
-    extern "C" fn report_nodes<F: RootsWorkFactory<JuliaVMEdge>>(
+    extern "C" fn report_nodes<F: RootsWorkFactory<JuliaVMSlot>>(
         buf: *mut ObjectReference,
         size: usize,
         cap: usize,
@@ -270,7 +270,7 @@ impl RootsWorkClosure {
         }
     }
 
-    extern "C" fn report_tpinned_nodes<F: RootsWorkFactory<JuliaVMEdge>>(
+    extern "C" fn report_tpinned_nodes<F: RootsWorkFactory<JuliaVMSlot>>(
         buf: *mut ObjectReference,
         size: usize,
         cap: usize,
@@ -290,9 +290,9 @@ impl RootsWorkClosure {
         }
     }
 
-    pub fn from_roots_work_factory<F: RootsWorkFactory<JuliaVMEdge>>(factory: &mut F) -> Self {
+    pub fn from_roots_work_factory<F: RootsWorkFactory<JuliaVMSlot>>(factory: &mut F) -> Self {
         RootsWorkClosure {
-            report_edges_func: Self::report_simple_edges::<F>,
+            report_slots_func: Self::report_simple_slots::<F>,
             report_nodes_func: Self::report_nodes::<F>,
             report_tpinned_nodes_func: Self::report_tpinned_nodes::<F>,
             factory_ptr: factory as *mut F as *mut libc::c_void,

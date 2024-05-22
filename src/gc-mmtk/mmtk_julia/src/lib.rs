@@ -19,10 +19,10 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 pub mod active_plan;
 pub mod api;
 pub mod collection;
-pub mod edges;
 pub mod object_model;
 pub mod reference_glue;
 pub mod scanning;
+pub mod slots;
 pub mod util;
 
 pub mod julia_finalizer;
@@ -36,7 +36,7 @@ pub mod julia_types;
 #[derive(Default)]
 pub struct JuliaVM;
 
-use crate::edges::JuliaVMEdge;
+use crate::slots::JuliaVMSlot;
 
 impl VMBinding for JuliaVM {
     const MAX_ALIGNMENT: usize = 64;
@@ -46,8 +46,8 @@ impl VMBinding for JuliaVM {
     type VMCollection = collection::VMCollection;
     type VMActivePlan = active_plan::VMActivePlan;
     type VMReferenceGlue = reference_glue::VMReferenceGlue;
-    type VMMemorySlice = edges::JuliaMemorySlice;
-    type VMEdge = JuliaVMEdge;
+    type VMMemorySlice = slots::JuliaMemorySlice;
+    type VMSlot = JuliaVMSlot;
 }
 
 /// This is used to ensure we initialize MMTk at a specified timing.
@@ -92,12 +92,12 @@ lazy_static! {
     pub static ref MUTATORS: RwLock<HashMap<Address, Address>> = RwLock::new(HashMap::new());
 }
 
-type ProcessEdgeFn = *const extern "C" fn(closure: Address, slot: Address);
+type ProcessSlotFn = *const extern "C" fn(closure: Address, slot: Address);
 
 #[repr(C)]
 pub struct Julia_Upcalls {
     pub scan_julia_exc_obj:
-        extern "C" fn(obj: Address, closure: Address, process_edge: ProcessEdgeFn),
+        extern "C" fn(obj: Address, closure: Address, process_slot: ProcessSlotFn),
     pub get_stackbase: extern "C" fn(tid: u16) -> usize,
     pub mmtk_jl_run_finalizers: extern "C" fn(tls: OpaquePointer),
     pub jl_throw_out_of_memory_error: extern "C" fn(),
@@ -113,7 +113,7 @@ pub struct Julia_Upcalls {
     pub get_marked_finalizers_list: extern "C" fn() -> Address,
     pub arraylist_grow: extern "C" fn(Address, usize),
     pub get_jl_gc_have_pending_finalizers: extern "C" fn() -> *mut i32,
-    pub scan_vm_specific_roots: extern "C" fn(closure: *mut crate::edges::RootsWorkClosure),
+    pub scan_vm_specific_roots: extern "C" fn(closure: *mut crate::slots::RootsWorkClosure),
     pub update_inlined_array: extern "C" fn(to: Address, from: Address),
     pub prepare_to_collect: extern "C" fn(),
 }

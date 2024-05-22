@@ -11,8 +11,8 @@ extern "C" {
 
 typedef void* MMTk_Mutator;
 typedef void* MMTk_TraceLocal;
-typedef void (*ProcessEdgeFn)(void* closure, void* slot);
-typedef void (*ProcessOffsetEdgeFn)(void* closure, void* slot, int offset);
+typedef void (*ProcessSlotFn)(void* closure, void* slot);
+typedef void (*ProcessOffsetSlotFn)(void* closure, void* slot, int offset);
 
 typedef struct {
     void** ptr;
@@ -20,7 +20,7 @@ typedef struct {
 } RootsWorkBuffer;
 
 typedef struct {
-    RootsWorkBuffer (*report_edges_func)(void** buf, size_t size, size_t cap, void* data, bool renew);
+    RootsWorkBuffer (*report_slots_func)(void** buf, size_t size, size_t cap, void* data, bool renew);
     RootsWorkBuffer (*report_nodes_func)(void** buf, size_t size, size_t cap, void* data, bool renew);
     RootsWorkBuffer (*report_tpinned_nodes_func)(void** buf, size_t size, size_t cap, void* data, bool renew);
     void* data;
@@ -70,7 +70,7 @@ extern uintptr_t JULIA_MALLOC_BYTES;
 // * int is 4 bytes
 // * size_t is 8 bytes
 typedef struct {
-    void (* scan_julia_exc_obj) (void* obj, void* closure, ProcessEdgeFn process_edge);
+    void (* scan_julia_exc_obj) (void* obj, void* closure, ProcessSlotFn process_slot);
     void* (* get_stackbase) (int16_t tid);
     void (* mmtk_jl_run_finalizers) (void* tls);
     void (* jl_throw_out_of_memory_error) (void);
