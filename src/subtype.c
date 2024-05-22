@@ -3139,11 +3139,13 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
         if (root != vb) icount--;
         if (root->innervars != NULL) {
-            size_t len = jl_array_nrows(root->innervars);
+            jl_array_t *rinnervars = root->innervars;
+            JL_GC_PROMISE_ROOTED(rinnervars);
+            size_t len = jl_array_nrows(rinnervars);
             if (icount > len)
-                jl_array_grow_end(root->innervars, icount - len);
+                jl_array_grow_end(rinnervars, icount - len);
             if (icount < len)
-                jl_array_del_end(root->innervars, len - icount);
+                jl_array_del_end(rinnervars, len - icount);
         }
         else if (icount > 0) {
             root->innervars = jl_alloc_array_1d(jl_array_any_type, icount);
