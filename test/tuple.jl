@@ -532,6 +532,8 @@ end
     for n = 0:15
         @test ntuple(identity, Val(n)) == ntuple(identity, n)
     end
+
+    @test Core.Compiler.return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
 end
 
 struct A_15703{N}

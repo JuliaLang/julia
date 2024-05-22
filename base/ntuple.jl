@@ -72,7 +72,7 @@ julia> ntuple(i -> 2*i, Val(4))
     if @generated
         :(@ntuple $N i -> f(i))
     else
-        Tuple(f(i) for i = 1:N)
+        Tuple(f(i) for i = 1:(N::Int))
     end
 end
 typeof(function ntuple end).name.max_methods = UInt8(5)
