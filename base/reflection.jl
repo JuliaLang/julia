@@ -976,7 +976,7 @@ julia> struct Foo
        end
 
 julia> Base.fieldindex(Foo, :z)
-ERROR: type Foo has no field z
+ERROR: FieldError: type Foo has no field z
 Stacktrace:
 [...]
 

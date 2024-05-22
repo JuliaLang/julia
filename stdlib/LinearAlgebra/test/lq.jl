@@ -50,7 +50,7 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     for (ii, lq_obj) in enumerate(lqa)
                         @test ref_obs[ii] == lq_obj
                     end
-                    @test_throws ErrorException lqa.Z
+                    @test_throws FieldError lqa.Z
                     @test Array(copy(adjoint(lqa))) ≈ a'
                     @test q*squareQ(q)' ≈ Matrix(I, n, n)
                     @test l*q ≈ a

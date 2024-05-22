@@ -17,7 +17,7 @@ function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test logabsdet_ca[1] ≈ logabsdet_a[1]
     @test logabsdet_ca[2] ≈ logabsdet_a[2]
     @test isposdef(ca)
-    @test_throws ErrorException ca.Z
+    @test_throws FieldError ca.Z
     @test size(ca) == size(a)
     @test Array(copy(ca)) ≈ a
     @test tr(ca) ≈ tr(a) skip=ca isa CholeskyPivoted

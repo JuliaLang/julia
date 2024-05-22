@@ -2831,7 +2831,7 @@ end
     @test a == 5
     @test b == 6
 
-    @test_throws ErrorException (; a, b) = (x=1,)
+    @test_throws FieldError (; a, b) = (x=1,)
 
     @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x end), :error)
     @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x, y end), :error)
