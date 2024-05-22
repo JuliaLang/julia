@@ -24,7 +24,8 @@ end
 function MacroExpansionContext(ctx, mod::Module)
     graph = ensure_attributes(syntax_graph(ctx),
                               var_id=VarId,
-                              scope_layer=LayerId)
+                              scope_layer=LayerId,
+                              __macro_ctx__=Nothing)
     layers = Vector{ScopeLayer}()
     MacroExpansionContext(graph, Ref{VarId}(1), layers, new_scope_layer(layers, mod, false))
 end
@@ -36,108 +37,28 @@ function new_scope_layer(layers, mod::Module, is_macro_expansion)
 end
 
 #--------------------------------------------------
-function _contains_active_interp(ex, depth)
-    k = kind(ex)
-    if k == K"$" && depth == 0
-        return true
-    end
-    inner_depth = k == K"quote" ? depth + 1 :
-                  k == K"$"     ? depth - 1 :
-                  depth
-    return any(_contains_active_interp(c, inner_depth) for c in children(ex))
-end
-
-function expand_interpolation(ctx, interp_ctx_var, ex)
-    @ast ctx ex [K"call"
-        interpolate_value::K"Value"
-        interp_ctx_var
-        [K"inert" ex]
-        expand_forms_1(ctx, ex)
-    ]
-end
-
-# TODO: Rewrite this recursive expansion to happen partially at
-# runtime rather than entirely in lowering? That is, we'd expand to
-# 
-# interpolate_expression(ex, val1, val2, ...)
-#
-# where `ex` is an inert version of the quoted block and `val1, val2, ...` are
-# the expressions within `$` escaping.
-#
-# Advantages:
-# * Much more compact lowered AST
-# * Clearer lowered AST - `ex` only appears once, rather than many times
-# * Smaller runtime API surface area
-#
-# Disadvantages:
-# * Recursive traversal and processing of quote depth appears both here and in
-#   the runtime. But can unify the traversal code?
-#
-# Beware tricky expansion gotchas like getting the meaning of the following correct
-#
-# x = 42
-# macro m()
-#     simplequote
-#         println(x)
-#         quote
-#             $x, x
-#         end
-#     end
-# end
-#
-function expand_quote_content(ctx, interp_ctx_var, ex, depth)
-    if !_contains_active_interp(ex, depth)
-        return @ast ctx ex [K"call"
-            copy_ast::K"Value"
-            interp_ctx_var
-            ex::K"Value"
-        ]
-    end
-
-    # We have an interpolation deeper in the tree somewhere - expand to an
-    # expression 
-    inner_depth = kind(ex) == K"quote" ? depth + 1 :
-                  kind(ex) == K"$"     ? depth - 1 :
-                  depth
-    expanded_children = SyntaxList(ctx)
-    for e in children(ex)
-        if kind(e) == K"$" && inner_depth == 0
-            for x in children(e)
-                push!(expanded_children, expand_interpolation(ctx, interp_ctx_var, x))
-            end
-        else
-            push!(expanded_children, expand_quote_content(ctx, interp_ctx_var, e, inner_depth))
+# Expansion of quoted expressions
+function collect_unquoted!(ctx, unquoted, ex, depth)
+    if kind(ex) == K"$" && depth == 0
+        push!(unquoted, @ast ctx ex [K"tuple" children(ex)...])
+    else
+        inner_depth = kind(ex) == K"quote" ? depth + 1 :
+                      kind(ex) == K"$"     ? depth - 1 :
+                      depth
+        for e in children(ex)
+            collect_unquoted!(ctx, unquoted, e, inner_depth)
         end
     end
-
-    return @ast ctx ex [K"call"
-        interpolate_node::K"Value"
-        interp_ctx_var
-        [K"inert" ex]
-        expanded_children...
-    ]
+    return unquoted
 end
 
 function expand_quote(ctx, ex)
-    interp_ctx_var = ssavar(ctx, ex)
-    expanded = if kind(ex) == K"$"
-        @chk numchildren(ex) == 1
-        e1 = ex[1]
-        if kind(e1) == K"..."
-            throw(LoweringError(e1, "`...` expression outside of call"))
-        end
-        expand_interpolation(ctx, interp_ctx_var, e1)
-    else
-        expand_quote_content(ctx, interp_ctx_var, ex, 0)
-    end
-    @ast ctx ex [K"block"
-        [K"="
-           interp_ctx_var
-           [K"call"
-               InterpolationContext::K"Value"
-           ]
-        ]
-        expanded
+    unquoted = SyntaxTree[]
+    collect_unquoted!(ctx, unquoted, ex, 0)
+    @ast ctx ex [K"call"
+        interpolate_ast::K"Value"
+        [K"inert" ex]
+        unquoted...
     ]
 end
 
@@ -246,7 +167,8 @@ function expand_macro(ctx, ex)
         end
         new_layer = new_scope_layer(ctx.scope_layers, parentmodule(macfunc), true)
         ctx2 = MacroExpansionContext(ctx.graph, ctx.next_var_id, ctx.scope_layers, new_layer)
-        expand_forms_1(ctx2, expanded)
+        # Add wrapper block for macro expansion provenance tracking
+        @ast ctx ex [K"block" expand_forms_1(ctx2, expanded)]
     else
         @ast ctx ex expanded::K"Value"
     end
@@ -281,7 +203,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         @ast ctx ex ex=>K"Identifier"
     elseif k == K"quote"
         @chk numchildren(ex) == 1
-        expand_quote(ctx, ex[1])
+        expand_forms_1(ctx, expand_quote(ctx, ex[1]))
     elseif k == K"module" || k == K"toplevel" || k == K"inert"
         ex
     elseif k == K"macrocall"

@@ -214,27 +214,88 @@ end
 
 struct InterpolationContext{Graph} <: AbstractLoweringContext
     graph::Graph
+    values::Tuple
+    current_index::Ref{Int}
 end
 
-function InterpolationContext()
-    graph = SyntaxGraph()
-    ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-                       value=Any, name_val=String, scope_layer=LayerId)
-    InterpolationContext(freeze_attrs(graph))
+function _contains_active_interp(ex, depth)
+    k = kind(ex)
+    if k == K"$" && depth == 0
+        return true
+    end
+    inner_depth = k == K"quote" ? depth + 1 :
+                  k == K"$"     ? depth - 1 :
+                  depth
+    return any(_contains_active_interp(c, inner_depth) for c in children(ex))
 end
 
 # Produce interpolated node for `$x` syntax
-function interpolate_value(ctx, srcref, x)
+function _interpolated_value(ctx, srcref, x)
     if x isa SyntaxTree
-        if x.graph === ctx.graph
-            x
-        else
-            copy_ast(ctx, x)
-        end
+        x.graph === ctx.graph ? x : copy_ast(ctx, x)
     else
-        makeleaf(ctx, sourceref(srcref), K"Value", x)
+        makeleaf(ctx, srcref, K"Value", x)
     end
 end
+
+function _interpolate_ast(ctx::InterpolationContext, ex, depth)
+    if !_contains_active_interp(ex, depth)
+        return ex
+    end
+
+    # We have an interpolation deeper in the tree somewhere - expand to an
+    # expression 
+    inner_depth = kind(ex) == K"quote" ? depth + 1 :
+                  kind(ex) == K"$"     ? depth - 1 :
+                  depth
+    expanded_children = SyntaxList(ctx)
+    for e in children(ex)
+        if kind(e) == K"$" && inner_depth == 0
+            vals = ctx.values[ctx.current_index[]]::Tuple
+            ctx.current_index[] += 1
+            for (i,v) in enumerate(vals)
+                srcref = numchildren(e) == 1 ? e[1] : e[i]
+                push!(expanded_children, _interpolated_value(ctx, srcref, v))
+            end
+        else
+            push!(expanded_children, _interpolate_ast(ctx, e, inner_depth))
+        end
+    end
+
+    makenode(ctx, ex, head(ex), expanded_children)
+end
+
+function interpolate_ast(ex, values...)
+    if kind(ex) == K"$"
+        TODO(ex, "\$ in interpolate_ast")
+    end
+    # Construct graph for interpolation context. We inherit this from the macro
+    # context where possible by detecting it using __macro__ctx__. This feels
+    # hacky though.
+    #
+    # Perhaps we should use a ScopedValue for this instead or get it from
+    # __context__? Nothing feels great here.
+    graph = nothing
+    for vals in values
+        for v in vals
+            if v isa SyntaxTree && !isnothing(getattr(syntax_graph(v), :__macro_ctx__, nothing))
+                graph = syntax_graph(v)
+                break
+            end
+        end
+    end
+    if isnothing(graph)
+        graph = SyntaxGraph()
+        ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
+                           value=Any, name_val=String, scope_layer=LayerId)
+    end
+    ctx = InterpolationContext(graph, values, Ref(1))
+    # We must copy the AST into our context to use it as the source reference
+    # of generated expressions.
+    ex1 = copy_ast(ctx, ex)
+    _interpolate_ast(ctx, ex1, 0)
+end
+
 
 # Produce node corresponding to `srcref` when there was an interpolation among
 # `children`

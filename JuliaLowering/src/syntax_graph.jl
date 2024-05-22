@@ -424,6 +424,10 @@ function reparent(ctx, ex::SyntaxTree)
     SyntaxTree(graph, ex.id)
 end
 
+function ensure_attributes(ex::SyntaxTree; kws...)
+    reparent(ensure_attributes(syntax_graph(ex); kws...), ex)
+end
+
 syntax_graph(ex::SyntaxTree) = ex.graph
 
 function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::JuliaSyntax.ParseStream; kws...)

@@ -3,7 +3,10 @@
 using JuliaSyntax
 using JuliaLowering
 
-using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode
+using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode, sourcetext
+
+using JuliaSyntaxFormatter
+using JuliaSyntaxFormatter: FormatContext
 
 #-------------------------------------------------------------------------------
 # Demos of the prototype
@@ -158,6 +161,16 @@ Base.eval(M, quote
     end
 end)
 
+JuliaLowering.include_string(M, """
+xx = "xx in M"
+macro test_inert_quote()
+    println(xx)
+    @inert quote
+        (\$xx, xx)
+    end
+end
+""")
+
 function wrapscope(ex, scope_type)
     makenode(ex, ex, K"scope_block", ex; scope_type=scope_type)
 end
@@ -192,13 +205,60 @@ end
 # end
 # """
 
+src = """
+begin
+   x = 10
+   y = 20
+   let x = y + x
+       z = "some string \$x \$y"
+
+       function f(y)
+           a = M.@foo z
+           "\$z \$y \$a \$x"
+       end
+       print(x)
+   end
+   print(x)
+end
+"""
+
+src = """
+M.@set_global_in_parent "bent hygiene!"
+"""
+
+# src = """
+# begin
+# M.@__LINE__
+# end
+# """
+
+# src = """@foo z"""
+
 # TODO:
 # "hygiene bending" / (being unhygenic, or bending hygiene to the context of a
 # macro argument on purpose)
 # * bend to macro name to get to parent layer?
 # * already needed in `#self#` argument
 
+function printsrc(ex; color_by=nothing, kws...)
+    format_token_style = if !isnothing(color_by)
+        e->get(e, color_by, nothing)
+    else
+        e->nothing
+    end
+    print(JuliaSyntaxFormatter.format(ex; format_token_style, kws...))
+end
+
+function annotate_scopes(mod, ex)
+    ex = ensure_attributes(ex, var_id=Int)
+    ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex)
+    ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
+    ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
+    ex
+end
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
+ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)
 @info "Input code" ex
 
@@ -212,13 +272,15 @@ ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
 ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
 @info "Resolved scopes" ex_scoped
 
+#printsrc(ex, color_by=:var_id)
+#printsrc(ex_macroexpand, color_by=:scope_layer)
+
 ctx4, ex_compiled = JuliaLowering.linearize_ir(ctx3, ex_scoped)
 @info "Linear IR" ex_compiled
 
 ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.var_info, ex_compiled)
 @info "CodeInfo" ex_expr
 
-x = 1
 eval_result = Base.eval(in_mod, ex_expr)
 @info "Eval" eval_result
 

@@ -171,6 +171,48 @@ let
 end
 """))
 
+# interpolations at multiple depths
+ex = JuliaLowering.include_string(test_mod, """
+let
+    args = (:x,:y)
+    quote
+        x = 1
+        y = 2
+        quote
+            f(\$\$(args...))
+        end
+    end
+end
+""")
+@test ex ~ @ast_ [K"block"
+    [K"="
+        "x"::K"Identifier"
+        1::K"Integer"
+    ]
+    [K"="
+        "y"::K"Identifier"
+        2::K"Integer"
+    ]
+    [K"quote"
+        [K"block"
+            [K"call"
+                "f"::K"Identifier"
+                [K"$"
+                    "x"::K"Identifier"
+                    "y"::K"Identifier"
+                ]
+            ]
+        ]
+    ]
+]
+@test sourcetext(ex[3][1][1][2]) == "\$\$(args...)"
+@test sourcetext(ex[3][1][1][2][1]) == "x"
+@test sourcetext(ex[3][1][1][2][2]) == "y"
+
+ex2 = JuliaLowering.eval(test_mod, ex)
+@test sourcetext(ex2[1][2]) == "x"
+@test sourcetext(ex2[1][3]) == "y"
+
 #-------------------------------------------------------------------------------
 # Macro expansion
 
