@@ -1,13 +1,6 @@
 # Lowering pass 1: Macro expansion, simple normalizations and quote expansion
 
 """
-Unique symbolic identity for a variable
-"""
-const VarId = Int
-
-const LayerId = Int
-
-"""
 A `ScopeLayer` is a mechanism for automatic hygienic macros; every identifier
 is assigned to a particular layer and can only match against bindings which are
 themselves part of that layer.
@@ -152,7 +145,11 @@ end
 struct MacroContext <: AbstractLoweringContext
     graph::SyntaxGraph
     macroname::SyntaxTree
-    mod::Module
+    scope_layer::ScopeLayer
+end
+
+function adopt_scope(ex, ctx::MacroContext)
+    adopt_scope(ex, ctx.scope_layer.id)
 end
 
 struct MacroExpansionError
@@ -170,32 +167,32 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
     ctx = exc.context
     if !isnothing(ctx)
         print(io, " while expanding ", ctx.macroname,
-              " in module ", ctx.mod)
+              " in module ", ctx.scope_layer.mod)
     end
     print(io, ":\n")
     src = sourceref(exc.ex)
     highlight(io, src.file, first_byte(src):last_byte(src), note=exc.msg)
 end
 
-function maybe_set_scope_layer!(ex, id)
+function set_scope_layer!(ex, id, force)
     k = kind(ex)
     if (k == K"Identifier" || k == K"MacroName" || (is_operator(k) && !haschildren(ex))) &&
-            !hasattr(ex, :scope_layer)
+            (force || !hasattr(ex, :scope_layer))
         setattr!(ex; scope_layer=id)
     end
 end
 
-function set_scope_layer_recursive!(ex, id)
+function set_scope_layer_recursive!(ex, id, force)
     k = kind(ex)
     if k == K"module" || k == K"toplevel"
         return
     end
     if haschildren(ex)
         for c in children(ex)
-            set_scope_layer_recursive!(c, id)
+            set_scope_layer_recursive!(c, id, force)
         end
     else
-        maybe_set_scope_layer!(ex, id)
+        set_scope_layer!(ex, id, force)
     end
     ex
 end
@@ -224,9 +221,9 @@ function expand_macro(ctx, ex)
     #   a macro expansion.
     # In either case, we need to set any unset scope layers before passing the
     # arguments to the macro call.
-    macro_args = [set_scope_layer_recursive!(e, ctx.current_layer.id)
+    macro_args = [set_scope_layer_recursive!(e, ctx.current_layer.id, false)
                   for e in children(ex)[2:end]]
-    mctx = MacroContext(ctx.graph, macname, ctx.current_layer.mod)
+    mctx = MacroContext(ctx.graph, macname, ctx.current_layer)
     expanded = try
         # TODO: Allow invoking old-style macros for compat
         invokelatest(macfunc, mctx, macro_args...)
@@ -269,7 +266,7 @@ need to be dealt with before other lowering.
   interpolations)
 """
 function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
-    maybe_set_scope_layer!(ex, ctx.current_layer.id)
+    set_scope_layer!(ex, ctx.current_layer.id, false)
     k = kind(ex)
     if k == K"Identifier"
         # TODO: Insert is_placeholder() transformation here.

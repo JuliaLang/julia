@@ -357,11 +357,12 @@ function expand_macro_def(ctx, ex)
     name = sig[1]
     args = remove_empty_parameters(children(sig))
     @chk kind(args[end]) != K"parameters" (args[end], "macros cannot accept keyword arguments")
+    context_arg = adopt_scope(@ast(ctx, sig, "__context__"::K"Identifier"), name)
     ret = @ast ctx ex [K"function"
         [K"call"(sig)
             _make_macro_name(ctx, name)
             [K"::"
-                "__context__"::K"Identifier"(scope_layer=name.scope_layer)
+                context_arg
                 MacroContext::K"Value"
             ]
             # flisp: We don't mark these @nospecialize because all arguments to

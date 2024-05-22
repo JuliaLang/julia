@@ -1,6 +1,13 @@
 #-------------------------------------------------------------------------------
 abstract type AbstractLoweringContext end
 
+"""
+Unique symbolic identity for a variable
+"""
+const VarId = Int
+
+const LayerId = Int
+
 function syntax_graph(ctx::AbstractLoweringContext)
     ctx.graph
 end
@@ -274,7 +281,9 @@ function mapchildren(f, ctx, ex)
     return ex2
 end
 
-# Copy AST `ex` into `ctx`
+"""
+Copy AST `ex` into `ctx`
+"""
 function copy_ast(ctx, ex)
     if haschildren(ex)
         cs = SyntaxList(ctx)
@@ -295,6 +304,21 @@ function copy_ast(ctx, ex)
         end
     end
     return ex2
+end
+
+"""
+    adopt_scope(ex, ref)
+
+Copy `ex`, adopting the scope layer of `ref`.
+"""
+function adopt_scope(ex, scope_layer::LayerId)
+    ex1 = copy_ast(ex, ex)
+    set_scope_layer_recursive!(ex1, scope_layer, true)
+    ex1
+end
+
+function adopt_scope(ex, ref::SyntaxTree)
+    adopt_scope(ex, ref.scope_layer)
 end
 
 #-------------------------------------------------------------------------------

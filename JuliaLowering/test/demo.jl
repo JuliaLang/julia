@@ -84,12 +84,12 @@ end
 
 JuliaLowering.include_string(Main, """
 module M
-    using JuliaLowering: JuliaLowering, @ast, @chk
+    using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope
     using JuliaSyntax
 
     # Introspection
     macro __MODULE__()
-        __context__.mod
+        __context__.scope_layer.mod
     end
 
     macro __FILE__()
@@ -110,19 +110,29 @@ module M
         end)
     end
 
-    a_global = nothing
-
     macro set_a_global(val)
         :(begin
             global a_global = \$val
         end)
     end
+
+    macro set_global_in_parent(ex)
+        e1 = adopt_scope(:(sym_introduced_from_M), __context__)
+        quote
+            \$e1 = \$ex
+        end
+    end
 end
 """)
 
 Base.eval(M, quote
+    function var"@inert"(__context__::JuliaLowering.MacroContext, ex)
+        @chk kind(ex) == K"quote"
+        @ast __context__ ex [K"inert" ex]
+    end
+
     # Recursive macro call
-    function var"@recursive"(__context__, N)
+    function var"@recursive"(__context__::JuliaLowering.MacroContext, N)
         @chk kind(N) == K"Integer"
         Nval = N.value::Int
         if Nval < 1
@@ -153,7 +163,7 @@ function wrapscope(ex, scope_type)
 end
 
 function softscope_test(ex)
-    g = JuliaLowering.ensure_attributes(ex.graph, scope_type=Symbol)
+    g = ensure_attributes(ex.graph, scope_type=Symbol)
     wrapscope(wrapscope(JuliaLowering.reparent(g, ex), :neutral), :soft)
 end
 

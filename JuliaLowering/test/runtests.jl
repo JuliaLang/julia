@@ -176,12 +176,12 @@ end
 
 JuliaLowering.include_string(test_mod, """
 module M
-    using JuliaLowering: JuliaLowering, @ast, @chk
+    using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope
     using JuliaSyntax
 
     # Introspection
     macro __MODULE__()
-        __context__.mod
+        __context__.scope_layer.mod
     end
 
     macro __FILE__()
@@ -213,6 +213,14 @@ module M
         :(begin
             global \$ex = \$val
         end)
+    end
+
+    macro set_global_in_parent(ex)
+        e1 = adopt_scope(:(sym_introduced_from_M), __context__)
+        quote
+            \$e1 = \$ex
+            nothing
+        end
     end
 
     # # Recursive macro call
@@ -250,6 +258,11 @@ begin
     M.a_global
 end
 """) == 42
+
+JuliaLowering.include_string(test_mod, """
+M.@set_global_in_parent "bent hygiene!"
+""")
+@test test_mod.sym_introduced_from_M == "bent hygiene!"
 
 JuliaLowering.include_string(test_mod, "M.@set_other_global global_in_test_mod 100")
 @test !isdefined(test_mod.M, :global_in_test_mod)
