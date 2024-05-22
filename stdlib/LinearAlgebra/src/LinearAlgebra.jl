@@ -190,6 +190,7 @@ end
 abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
+struct RobustRepresentations <: Algorithm end
 
 # Pivoting strategies for matrix factorization algorithms.
 abstract type PivotingStrategy end
