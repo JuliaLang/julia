@@ -101,7 +101,7 @@ void cv_autorelease(fl_context_t *fl_ctx, cvalue_t *cv)
     autorelease(fl_ctx, cv);
 }
 
-static value_t cprim(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
+value_t cprim(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
 {
     cprim_t *pcp = (cprim_t*)alloc_words(fl_ctx, CPRIM_NWORDS-1+NWORDS(sz));
     pcp->type = type;

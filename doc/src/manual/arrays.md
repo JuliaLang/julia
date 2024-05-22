@@ -398,7 +398,7 @@ the result in single precision by writing:
 Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 ```
 
-## Generator Expressions
+## [Generator Expressions](@id man-generators)
 
 Comprehensions can also be written without the enclosing square brackets, producing an object
 known as a generator. This object can be iterated to produce values on demand, instead of allocating
@@ -793,7 +793,7 @@ Indexing by a boolean vector `B` is effectively the same as indexing by the
 vector of integers that is returned by [`findall(B)`](@ref). Similarly, indexing
 by a `N`-dimensional boolean array is effectively the same as indexing by the
 vector of `CartesianIndex{N}`s where its values are `true`. A logical index
-must be a array of the same shape as the dimension(s) it indexes into, or it
+must be an array of the same shape as the dimension(s) it indexes into, or it
 must be the only index provided and match the shape of the one-dimensional
 reshaped view of the array it indexes into. It is generally more efficient
 to use boolean arrays as indices directly instead of first calling [`findall`](@ref).
@@ -889,7 +889,7 @@ in their implementations, other arrays — like [`Diagonal`](@ref) — need the
 full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
 introspect which is which).
 
-!!! warnings
+!!! warning
 
     When iterating over all the indices for an array, it is
     better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.

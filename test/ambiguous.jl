@@ -75,7 +75,7 @@ let io = IOBuffer()
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
     @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+    @test_throws("Calling invoke(f, t, args...) would throw:\nMethodError: no method matching ambig",
                  which(ambig, (UInt8, Int)))
     @test length(code_typed(ambig, (UInt8, Int))) == 0
 end
@@ -332,23 +332,22 @@ end
 @test length(detect_unbound_args(M25341; recursive=true)) == 1
 
 # Test that Core and Base are free of UndefVarErrors
-# not using isempty so this prints more information when it fails
 @testset "detect_unbound_args in Base and Core" begin
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
         pop!(need_to_handle_undef_sparam, which(Core.Compiler.eltype, Tuple{Type{Tuple{Any}}}))
-        @test_broken need_to_handle_undef_sparam == Set()
+        @test_broken isempty(need_to_handle_undef_sparam)
         pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
-        @test need_to_handle_undef_sparam == Set()
+        @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
-        @test_broken need_to_handle_undef_sparam == Set()
+        @test_broken isempty(need_to_handle_undef_sparam)
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
@@ -357,7 +356,7 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
-        @test need_to_handle_undef_sparam == Set()
+        @test isempty(need_to_handle_undef_sparam)
     end
 end
 

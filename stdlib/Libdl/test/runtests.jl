@@ -329,3 +329,7 @@ end
     lazy_name_lazy_lib = LazyLibrary(libname)
     @test dlpath(lazy_name_lazy_lib) == realpath(string(libname))
 end; end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Libdl))
+end

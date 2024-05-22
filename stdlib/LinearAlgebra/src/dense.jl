@@ -14,6 +14,7 @@ const NRM2_CUTOFF = 32
 const ISONE_CUTOFF = 2^21 # 2M
 
 function isone(A::AbstractMatrix)
+    require_one_based_indexing(A)  # multiplication not defined yet among offset matrices
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -106,6 +107,11 @@ norm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
 norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
+# Conservative assessment of types that have zero(T) defined for themselves
+haszero(::Type) = false
+haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
+@propagate_inbounds _zero(M::AbstractArray{T}, i, j) where {T} = haszero(T) ? zero(T) : zero(M[i,j])
+
 """
     triu!(M, k::Integer)
 
@@ -136,7 +142,7 @@ function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            @inbounds M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
@@ -173,12 +179,13 @@ function tril!(M::AbstractMatrix, k::Integer)
     require_one_based_indexing(M)
     m, n = size(M)
     for j in max(1, k + 1):n
-        @inbounds for i in 1:min(j - k - 1, m)
-            M[i,j] = zero(M[i,j])
+        for i in 1:min(j - k - 1, m)
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
 end
+
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 """
@@ -210,12 +217,15 @@ function diagind(::IndexCartesian, m::Integer, n::Integer, k::Integer=0)
 end
 
 """
-    diagind(M::AbstractMatrix, [k::Integer=0,] indstyle::IndexStyle = IndexLinear())
+    diagind(M::AbstractMatrix, k::Integer = 0, indstyle::IndexStyle = IndexLinear())
+    diagind(M::AbstractMatrix, indstyle::IndexStyle = IndexLinear())
 
 An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 Optionally, an index style may be specified which determines the type of the range returned.
 If `indstyle isa IndexLinear` (default), this returns an `AbstractRange{Integer}`.
 On the other hand, if `indstyle isa IndexCartesian`, this returns an `AbstractRange{CartesianIndex{2}}`.
+
+If `k` is not provided, it is assumed to be `0` (corresponding to the main diagonal).
 
 See also: [`diag`](@ref), [`diagm`](@ref), [`Diagonal`](@ref).
 
@@ -227,9 +237,15 @@ julia> A = [1 2 3; 4 5 6; 7 8 9]
  4  5  6
  7  8  9
 
-julia> diagind(A,-1)
+julia> diagind(A, -1)
 2:4:6
+
+julia> diagind(A, IndexCartesian())
+StepRangeLen(CartesianIndex(1, 1), CartesianIndex(1, 1), 3)
 ```
+
+!!! compat "Julia 1.11"
+     Specifying an `IndexStyle` requires at least Julia 1.11.
 """
 function diagind(A::AbstractMatrix, k::Integer=0, indexstyle::IndexStyle = IndexLinear())
     require_one_based_indexing(A)
@@ -321,7 +337,7 @@ function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}..
     mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
     nmax = mapreduce(x -> length(x.second) + max(0,Int(x.first)), max, kv; init=0)
     m, n = size
-    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch(lazy"invalid size=$size"))
     return m, n
 end
 function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
@@ -476,8 +492,8 @@ julia> reshape(kron(v,w), (length(w), length(v)))
 ```
 """
 function kron(A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) where {T,S}
-    R = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
-    return kron!(R, A, B)
+    C = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
+    return kron!(C, A, B)
 end
 function kron(a::AbstractVector{T}, b::AbstractVector{S}) where {T,S}
     c = Vector{promote_op(*,T,S)}(undef, length(a)*length(b))
@@ -689,22 +705,29 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         V = mul!(C[3]*P, true, C[1]*I, true, true) #V = C[1]*I + C[3]*P
         for k in 2:(div(length(C), 2) - 1)
             P *= A2
-            mul!(U, C[2k + 2], P, true, true) # U += C[2k+2]*P
-            mul!(V, C[2k + 1], P, true, true) # V += C[2k+1]*P
+            for ind in eachindex(P)
+                U[ind] += C[2k + 2] * P[ind]
+                V[ind] += C[2k + 1] * P[ind]
+            end
         end
 
         U = A * U
 
         # Padé approximant:  (V-U)\(V+U)
         tmp1, tmp2 = A, A2 # Reuse already allocated arrays
-        tmp1 .= V .- U
-        tmp2 .= V .+ U
+        for ind in eachindex(tmp1)
+            tmp1[ind] = V[ind] - U[ind]
+            tmp2[ind] = V[ind] + U[ind]
+        end
         X = LAPACK.gesv!(tmp1, tmp2)[1]
     else
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
         if s > 0
             si = ceil(Int,s)
-            A ./= convert(T,2^si)
+            twopowsi = convert(T,2^si)
+            for ind in eachindex(A)
+                A[ind] /= twopowsi
+            end
         end
         CC = T[64764752532480000.,32382376266240000.,7771770303897600.,
                 1187353796428800.,  129060195264000.,  10559470521600.,
@@ -719,8 +742,10 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         # Allocation economical version of:
         # U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
         #           CC[8].*A6 .+ CC[6].*A4 .+ CC[4]*A2+CC[2]*I)
-        tmp1 .= CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2
-        tmp2 .= CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2
+        for ind in eachindex(tmp1)
+            tmp1[ind] = CC[14]*A6[ind] + CC[12]*A4[ind] + CC[10]*A2[ind]
+            tmp2[ind] = CC[8]*A6[ind] + CC[6]*A4[ind] + CC[4]*A2[ind]
+        end
         mul!(tmp2, true,CC[2]*I, true, true) # tmp2 .+= CC[2]*I
         U = mul!(tmp2, A6, tmp1, true, true)
         U, tmp1 = mul!(tmp1, A, U), A # U = A * U0
@@ -728,13 +753,17 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         # Allocation economical version of:
         # V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
         #           CC[7].*A6 .+ CC[5].*A4 .+ CC[3]*A2 .+ CC[1]*I
-        tmp1 .= CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2
-        tmp2 .= CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2
+        for ind in eachindex(tmp1)
+            tmp1[ind] = CC[13]*A6[ind] + CC[11]*A4[ind] + CC[9]*A2[ind]
+            tmp2[ind] = CC[7]*A6[ind] + CC[5]*A4[ind] + CC[3]*A2[ind]
+        end
         mul!(tmp2, true, CC[1]*I, true, true) # tmp2 .+= CC[1]*I
         V = mul!(tmp2, A6, tmp1, true, true)
 
-        tmp1 .= V .+ U
-        tmp2 .= V .- U # tmp2 already contained V but this seems more readable
+        for ind in eachindex(tmp1)
+            tmp1[ind] = V[ind] + U[ind]
+            tmp2[ind] = V[ind] - U[ind] # tmp2 already contained V but this seems more readable
+        end
         X = LAPACK.gesv!(tmp2, tmp1)[1] # X now contains r_13 in Higham 2008
 
         if s > 0
@@ -1630,7 +1659,7 @@ function cond(A::AbstractMatrix, p::Real=2)
             end
         end
     end
-    throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
+    throw(ArgumentError(lazy"p-norm must be 1, 2 or Inf, got $p"))
 end
 
 ## Lyapunov and Sylvester equation

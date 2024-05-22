@@ -30,6 +30,8 @@ Base.schedule
 Base.errormonitor
 Base.@sync
 Base.wait
+Base.waitany
+Base.waitall
 Base.fetch(t::Task)
 Base.fetch(x::Any)
 Base.timedwait
@@ -51,6 +53,7 @@ Base.trylock
 Base.islocked
 Base.ReentrantLock
 Base.@lock
+Base.Lockable
 ```
 
 ## Channels
@@ -61,6 +64,7 @@ Base.Channel
 Base.Channel(::Function)
 Base.put!(::Channel, ::Any)
 Base.take!(::Channel)
+Base.isfull(::Channel)
 Base.isready(::Channel)
 Base.fetch(::Channel)
 Base.close(::Channel)

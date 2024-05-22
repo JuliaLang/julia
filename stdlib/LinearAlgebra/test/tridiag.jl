@@ -282,6 +282,9 @@ end
         @testset "Idempotent tests" begin
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
+                if func ∈ (transpose, adjoint)
+                    @test func(func(A)) === A
+                end
             end
         end
         @testset "permutedims(::[Sym]Tridiagonal)" begin
@@ -788,6 +791,35 @@ using .Main.SizedArrays
     end
 end
 
+@testset "copyto! between SymTridiagonal and Tridiagonal" begin
+    ev, dv = [1:4;], [1:5;]
+    S = SymTridiagonal(dv, ev)
+    T = Tridiagonal(zero(ev), zero(dv), zero(ev))
+    @test copyto!(T, S) == S
+    @test copyto!(zero(S), T) == T
+
+    ev2 = [1:5;]
+    S = SymTridiagonal(dv, ev2)
+    T = Tridiagonal(zeros(length(ev2)-1), zero(dv), zeros(length(ev2)-1))
+    @test copyto!(T, S) == S
+    @test copyto!(zero(S), T) == T
+
+    T2 = Tridiagonal(ones(length(ev)), zero(dv), zero(ev))
+    @test_throws "cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
+
+    @testset "mismatched sizes" begin
+        dv2 = [4; @view dv[2:end]]
+        @test copyto!(S, SymTridiagonal([4], Int[])) == SymTridiagonal(dv2, ev)
+        @test copyto!(T, SymTridiagonal([4], Int[])) == Tridiagonal(ev, dv2, ev)
+        @test copyto!(S, Tridiagonal(Int[], [4], Int[])) == SymTridiagonal(dv2, ev)
+        @test copyto!(T, Tridiagonal(Int[], [4], Int[])) == Tridiagonal(ev, dv2, ev)
+        @test copyto!(S, SymTridiagonal(Int[], Int[])) == SymTridiagonal(dv, ev)
+        @test copyto!(T, SymTridiagonal(Int[], Int[])) == Tridiagonal(ev, dv, ev)
+        @test copyto!(S, Tridiagonal(Int[], Int[], Int[])) == SymTridiagonal(dv, ev)
+        @test copyto!(T, Tridiagonal(Int[], Int[], Int[])) == Tridiagonal(ev, dv, ev)
+    end
+end
+
 @testset "copyto! with UniformScaling" begin
     @testset "Tridiagonal" begin
         @testset "Fill" begin
@@ -828,6 +860,36 @@ end
     @test axes(B) === (ax, ax)
     B = SymTridiagonal(dv, uv)
     @test axes(B) === (ax, ax)
+end
+
+@testset "Reverse operation on Tridiagonal" begin
+    for n in 5:6
+        d = randn(n)
+        dl = randn(n - 1)
+        du = randn(n - 1)
+        T = Tridiagonal(dl, d, du)
+        @test reverse(T, dims=1) == reverse(Matrix(T), dims=1)
+        @test reverse(T, dims=2) == reverse(Matrix(T), dims=2)
+        @test reverse(T)::Tridiagonal == reverse(Matrix(T)) == reverse!(copy(T))
+    end
+end
+
+@testset "Reverse operation on SymTridiagonal" begin
+    n = 5
+    d = randn(n)
+    dl = randn(n - 1)
+    ST = SymTridiagonal(d, dl)
+    @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
+    @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
+    @test reverse(ST)::SymTridiagonal == reverse(Matrix(ST))
+end
+
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    for S in (Tridiagonal(ev, dv, ev), SymTridiagonal(dv, ev))
+        @test_throws "invalid index" S[3, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
 end
 
 end # module TestTridiagonal

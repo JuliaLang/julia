@@ -103,17 +103,20 @@ end
     has_offset_axes(A, B, ...)
 
 Return `true` if the indices of `A` start with something other than 1 along any axis.
-If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
+If multiple arguments are passed, equivalent to `has_offset_axes(A) || has_offset_axes(B) || ...`.
 
 See also [`require_one_based_indexing`](@ref).
 """
+has_offset_axes() = false
 has_offset_axes(A) = _any_tuple(x->Int(first(x))::Int != 1, false, axes(A)...)
 has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
-# Use `_any_tuple` to avoid unneeded invoke.
-# note: this could call `any` directly if the compiler can infer it
-has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
 has_offset_axes(::Colon) = false
 has_offset_axes(::Array) = false
+# note: this could call `any` directly if the compiler can infer it. We don't use _any_tuple
+# here because it stops full elision in some cases (#49332) and we don't need handling of
+# `missing` (has_offset_axes(A) always returns a Bool)
+has_offset_axes(A, As...) = has_offset_axes(A) || has_offset_axes(As...)
+
 
 """
     require_one_based_indexing(A::AbstractArray)
@@ -881,7 +884,7 @@ julia> empty([1.0, 2.0, 3.0], String)
 String[]
 ```
 """
-empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = similar(a, U, 0)
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
@@ -893,12 +896,17 @@ emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 In-place [`copy`](@ref) of `src` into `dst`, discarding any pre-existing
 elements in `dst`.
 If `dst` and `src` are of the same type, `dst == src` should hold after
-the call. If `dst` and `src` are multidimensional arrays, they must have
+the call. If `dst` and `src` are vector types, they must have equal
+offset. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 
 See also [`copyto!`](@ref).
+
+!!! note
+    When operating on vector types, if `dst` and `src` are not of the
+    same length, `dst` is resized to `length(src)` prior to the `copy`.
 
 !!! compat "Julia 1.1"
     This method requires at least Julia 1.1. In Julia 1.0 this method
@@ -1075,22 +1083,13 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if srcstyle isa IndexLinear
             # Single-index implementation
             @inbounds for i in srcinds
-                if isassigned(src, i)
-                    dest[i + Δi] = src[i]
-                else
-                    _unsetindex!(dest, i + Δi)
-                end
+                dest[i + Δi] = src[i]
             end
         else
             # Dual-index implementation
             i = idf - 1
-            @inbounds for a in eachindex(src)
-                i += 1
-                if isassigned(src, a)
-                    dest[i] = src[a]
-                else
-                    _unsetindex!(dest, i)
-                end
+            @inbounds for a in src
+                dest[i+=1] = a
             end
         end
     else
@@ -1098,22 +1097,14 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if iterdest == itersrc
             # Shared-iterator implementation
             for I in iterdest
-                if isassigned(src, I)
-                    @inbounds dest[I] = src[I]
-                else
-                    _unsetindex!(dest, I)
-                end
+                @inbounds dest[I] = src[I]
             end
         else
             # Dual-iterator implementation
             ret = iterate(iterdest)
-            @inbounds for a in itersrc
+            @inbounds for a in src
                 idx, state = ret::NTuple{2,Any}
-                if isassigned(src, a)
-                    dest[idx] = src[a]
-                else
-                    _unsetindex!(dest, idx)
-                end
+                dest[idx] = a
                 ret = iterate(iterdest, state)
             end
         end
@@ -1142,11 +1133,7 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
     src′ = unalias(dest, src)
     @inbounds for i = 0:n-1
-        if isassigned(src′, sstart+i)
-            dest[dstart+i] = src′[sstart+i]
-        else
-            _unsetindex!(dest, dstart+i)
-        end
+        dest[dstart+i] = src′[sstart+i]
     end
     return dest
 end
@@ -1157,7 +1144,7 @@ function copy(a::AbstractArray)
 end
 
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
-                 A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
+               A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
     if length(ir_dest) != length(ir_src)
         throw(ArgumentError(LazyString("source and destination must have same size (got ",
             length(ir_src)," and ",length(ir_dest),")")))
@@ -1214,7 +1201,26 @@ function copymutable(a::AbstractArray)
 end
 copymutable(itr) = collect(itr)
 
-zero(x::AbstractArray{T}) where {T} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
+zero(x::AbstractArray) = map(zero, x)
+
+function _one(unit::T, mat::AbstractMatrix) where {T}
+    (rows, cols) = axes(mat)
+    (length(rows) == length(cols)) ||
+      throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
+    zer = zero(unit)::T
+    require_one_based_indexing(mat)
+    I = similar(mat, T)
+    fill!(I, zer)
+    for i ∈ rows
+        I[i, i] = unit
+    end
+    I
+end
+
+one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
+oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
@@ -1270,8 +1276,11 @@ end
 """
     getindex(A, inds...)
 
-Return a subset of array `A` as specified by `inds`, where each `ind` may be,
-for example, an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+Return a subset of array `A` as selected by the indices `inds`.
+
+Each index may be any [supported index type](@ref man-supported-index-types), such
+as an [`Integer`](@ref), [`CartesianIndex`](@ref), [range](@ref Base.AbstractRange), or [array](@ref man-multi-dim-arrays) of supported indices.
+A [:](@ref Base.Colon) may be used to select all elements along a specific dimension, and a boolean array (e.g. an `Array{Bool}` or a [`BitArray`](@ref)) may be used to filter for elements where the corresponding index is `true`.
 
 When `inds` selects multiple elements, this function returns a newly
 allocated array. To index multiple elements without making a copy,
@@ -1298,6 +1307,27 @@ julia> getindex(A, 2:4)
 3-element Vector{Int64}:
  3
  2
+ 4
+
+julia> getindex(A, 2, 1)
+3
+
+julia> getindex(A, CartesianIndex(2, 1))
+3
+
+julia> getindex(A, :, 2)
+2-element Vector{Int64}:
+ 2
+ 4
+
+julia> getindex(A, 2, :)
+2-element Vector{Int64}:
+ 3
+ 4
+
+julia> getindex(A, A .> 2)
+2-element Vector{Int64}:
+ 3
  4
 ```
 """
@@ -1608,13 +1638,15 @@ eltypeof(x::AbstractArray) = eltype(x)
 
 promote_eltypeof() = error()
 promote_eltypeof(v1) = eltypeof(v1)
-promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
+promote_eltypeof(v1, v2) = promote_type(eltypeof(v1), eltypeof(v2))
+promote_eltypeof(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltypeof(y)), promote_eltypeof(v1, v2), vs...))
 promote_eltypeof(v1::T, vs::T...) where {T} = eltypeof(v1)
 promote_eltypeof(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 promote_eltype() = error()
 promote_eltype(v1) = eltype(v1)
-promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+promote_eltype(v1, v2) = promote_type(eltype(v1), eltype(v2))
+promote_eltype(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltype(y)), promote_eltype(v1, v2), vs...))
 promote_eltype(v1::T, vs::T...) where {T} = eltype(T)
 promote_eltype(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
@@ -1986,23 +2018,90 @@ The keyword also accepts `Val(dims)`.
     For multiple dimensions `dims = Val(::Tuple)` was added in Julia 1.8.
 
 # Examples
+
+Concatenate two arrays in different dimensions:
+```jldoctest
+julia> a = [1 2 3]
+1×3 Matrix{Int64}:
+ 1  2  3
+
+julia> b = [4 5 6]
+1×3 Matrix{Int64}:
+ 4  5  6
+
+julia> cat(a, b; dims=1)
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+
+julia> cat(a, b; dims=2)
+1×6 Matrix{Int64}:
+ 1  2  3  4  5  6
+
+julia> cat(a, b; dims=(1, 2))
+2×6 Matrix{Int64}:
+ 1  2  3  0  0  0
+ 0  0  0  4  5  6
+```
+
+# Extended Help
+
+Concatenate 3D arrays:
+```jldoctest
+julia> a = ones(2, 2, 3);
+
+julia> b = ones(2, 2, 4);
+
+julia> c = cat(a, b; dims=3);
+
+julia> size(c) == (2, 2, 7)
+true
+```
+
+Concatenate arrays of different sizes:
 ```jldoctest
 julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 2×6×1 Array{Float64, 3}:
 [:, :, 1] =
  1.0  2.0  3.14159  10.0  10.0  10.0
  3.0  4.0  3.14159  10.0  10.0  10.0
+```
 
+Construct a block diagonal matrix:
+```
 julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
  0  1  1  0  0  0  0
  0  1  1  0  0  0  0
  0  0  0  1  1  1  1
+```
 
+```
 julia> cat(1, [2], [3;;]; dims=Val(2))
 1×3 Matrix{Int64}:
  1  2  3
+```
+
+!!! note
+    `cat` does not join two strings, you may want to use `*`.
+
+```jldoctest
+julia> a = "aaa";
+
+julia> b = "bbb";
+
+julia> cat(a, b; dims=1)
+2-element Vector{String}:
+ "aaa"
+ "bbb"
+
+julia> cat(a, b; dims=2)
+1×2 Matrix{String}:
+ "aaa"  "bbb"
+
+julia> a * b
+"aaabbb"
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
@@ -3108,9 +3207,8 @@ julia> foreach((x, y) -> println(x, " with ", y), tri, 'a':'z')
 7 with c
 ```
 """
-foreach(f) = (f(); nothing)
 foreach(f, itr) = (for x in itr; f(x); end; nothing)
-foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
+foreach(f, itr, itrs...) = (for z in zip(itr, itrs...); f(z...); end; nothing)
 
 ## map over arrays ##
 
@@ -3282,10 +3380,6 @@ end
 concatenate_setindex!(R, v, I...) = (R[I...] .= (v,); R)
 concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
-## 0 arguments
-
-map(f) = f()
-
 ## 1 argument
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
@@ -3421,7 +3515,7 @@ julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is 
  102.0
 ```
 """
-map(f, iters...) = collect(Generator(f, iters...))
+map(f, it, iters...) = collect(Generator(f, it, iters...))
 
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
@@ -3553,9 +3647,9 @@ end
 ## 1-d circshift ##
 function circshift!(a::AbstractVector, shift::Integer)
     n = length(a)
-    n == 0 && return
+    n == 0 && return a
     shift = mod(shift, n)
-    shift == 0 && return
+    shift == 0 && return a
     l = lastindex(a)
     reverse!(a, firstindex(a), l-shift)
     reverse!(a, l-shift+1, lastindex(a))

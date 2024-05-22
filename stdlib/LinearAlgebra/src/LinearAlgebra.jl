@@ -7,7 +7,7 @@ functionality.
 """
 module LinearAlgebra
 
-import Base: \, /, *, ^, +, -, ==
+import Base: \, /, //, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
     asin, asinh, atan, atanh, axes, big, broadcast, cbrt, ceil, cis, collect, conj, convert,
     copy, copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
@@ -16,9 +16,9 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     permutedims, permuterows!, power_by_squaring, promote_rule, real, sec, sech, setindex!,
     show, similar, sin, sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc,
     typed_hcat, vec, view, zero
-using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
+using Base: IndexLinear, promote_eltype, promote_op, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
-    splat
+    splat, BitInteger
 using Base.Broadcast: Broadcasted, broadcasted
 using Base.PermutedDimsArrays: CommutativeOps
 using OpenBLAS_jll
@@ -78,6 +78,7 @@ export
     cholesky,
     cond,
     condskeel,
+    copy_adjoint!,
     copy_transpose!,
     copyto!,
     copytrito!,
@@ -190,10 +191,54 @@ abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
 
+# Pivoting strategies for matrix factorization algorithms.
 abstract type PivotingStrategy end
+
+"""
+    NoPivot
+
+Pivoting is not performed. Matrix factorizations such as the LU factorization
+may fail without pivoting, and may also be numerically unstable for floating-point matrices in the face of roundoff error.
+This pivot strategy is mainly useful for pedagogical purposes.
+"""
 struct NoPivot <: PivotingStrategy end
+
+"""
+    RowNonZero
+
+First non-zero element in the remaining rows is chosen as the pivot element.
+
+Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable — this strategy
+is mainly useful for comparison to hand calculations (which typically use this strategy) or for other
+algebraic types (e.g. rational numbers) not susceptible to roundoff errors.   Otherwise, the default
+`RowMaximum` pivoting strategy should be generally preferred in Gaussian elimination.
+
+Note that the [element type](@ref eltype) of the matrix must admit an [`iszero`](@ref)
+method.
+"""
 struct RowNonZero <: PivotingStrategy end
+
+"""
+    RowMaximum
+
+The maximum-magnitude element in the remaining rows is chosen as the pivot element.
+This is the default strategy for LU factorization of floating-point matrices, and is sometimes
+referred to as the "partial pivoting" algorithm.
+
+Note that the [element type](@ref eltype) of the matrix must admit an [`abs`](@ref) method,
+whose result type must admit a [`<`](@ref) method.
+"""
 struct RowMaximum <: PivotingStrategy end
+
+"""
+    ColumnNorm
+
+The column with the maximum norm is used for subsequent computation.  This
+is used for pivoted QR factorization.
+
+Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref) and
+[`abs`](@ref) methods, whose respective result types must admit a [`<`](@ref) method.
+"""
 struct ColumnNorm <: PivotingStrategy end
 
 using Base: DimOrInd
@@ -236,6 +281,28 @@ stride1(x::DenseArray) = stride(x, 1)::Int
 @noinline _chkstride1(ok::Bool) = ok || error("matrix does not have contiguous columns")
 @inline _chkstride1(ok::Bool, A, B...) = _chkstride1(ok & (stride1(A) == 1), B...)
 
+# Subtypes of StridedArrays that satisfy certain properties on their strides
+# Similar to Base.RangeIndex, but only include range types where the step is statically known to be non-zero
+const IncreasingRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}}
+const NonConstRangeIndex = Union{IncreasingRangeIndex, StepRange{<:BitInteger, <:BitInteger}}
+# StridedArray subtypes for which _fullstride2(::T) === true is known from the type
+DenseOrStridedReshapedReinterpreted{T,N} =
+    Union{DenseArray{T,N}, Base.StridedReshapedArray{T,N}, Base.StridedReinterpretArray{T,N}}
+# Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
+StridedSubArrayStandard{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{Vararg{Union{NonConstRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
+StridedArrayStdSubArray{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayStandard{T,N}}
+# Similar to Base.StridedSubArray, except with a IncreasingRangeIndex instead of a RangeIndex
+StridedSubArrayIncr{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{Vararg{Union{IncreasingRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
+StridedArrayStdSubArrayIncr{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayIncr{T,N}}
+# These subarrays have a stride of 1 along the first dimension
+StridedSubArrayAUR{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{AbstractUnitRange{<:BitInteger}}} = Base.StridedSubArray{T,N,A,I}
+StridedArrayStride1{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayIncr{T,N}}
+# StridedMatrixStride1 may typically be forwarded to LAPACK methods
+StridedMatrixStride1{T} = StridedArrayStride1{T,2}
+
 """
     LinearAlgebra.checksquare(A)
 
@@ -254,14 +321,14 @@ julia> LinearAlgebra.checksquare(A, B)
 """
 function checksquare(A)
     m,n = size(A)
-    m == n || throw(DimensionMismatch("matrix is not square: dimensions are $(size(A))"))
+    m == n || throw(DimensionMismatch(lazy"matrix is not square: dimensions are $(size(A))"))
     m
 end
 
 function checksquare(A...)
     sizes = Int[]
     for a in A
-        size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
+        size(a,1)==size(a,2) || throw(DimensionMismatch(lazy"matrix is not square: dimensions are $(size(a))"))
         push!(sizes, size(a,1))
     end
     return sizes
@@ -473,30 +540,58 @@ const ⋅ = dot
 const × = cross
 export ⋅, ×
 
+# Separate the char corresponding to the wrapper from that corresponding to the uplo
+# In most cases, the former may be constant-propagated, while the latter usually can't be.
+# This improves type-inference in wrap for Symmetric/Hermitian matrices
+# A WrapperChar is equivalent to `isuppertri ? uppercase(wrapperchar) : lowercase(wrapperchar)`
+struct WrapperChar <: AbstractChar
+    wrapperchar :: Char
+    isuppertri :: Bool
+end
+function Base.Char(w::WrapperChar)
+    T = w.wrapperchar
+    if T ∈ ('N', 'T', 'C') # known cases where isuppertri is true
+        T
+    else
+        _isuppertri(w) ? uppercase(T) : lowercase(T)
+    end
+end
+Base.codepoint(w::WrapperChar) = codepoint(Char(w))
+WrapperChar(n::UInt32) = WrapperChar(Char(n))
+WrapperChar(c::Char) = WrapperChar(c, isuppercase(c))
+# We extract the wrapperchar so that the result may be constant-propagated
+# This doesn't return a value of the same type on purpose
+Base.uppercase(w::WrapperChar) = uppercase(w.wrapperchar)
+Base.lowercase(w::WrapperChar) = lowercase(w.wrapperchar)
+_isuppertri(w::WrapperChar) = w.isuppertri
+_isuppertri(x::AbstractChar) = isuppercase(x) # compatibility with earlier Char-based implementation
+_uplosym(x) = _isuppertri(x) ? (:U) : (:L)
+
 wrapper_char(::AbstractArray) = 'N'
 wrapper_char(::Adjoint) = 'C'
 wrapper_char(::Adjoint{<:Real}) = 'T'
 wrapper_char(::Transpose) = 'T'
-wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
-wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
-wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
+wrapper_char(A::Hermitian) =  WrapperChar('H', A.uplo == 'U')
+wrapper_char(A::Hermitian{<:Real}) = WrapperChar('S', A.uplo == 'U')
+wrapper_char(A::Symmetric) = WrapperChar('S', A.uplo == 'U')
 
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
-    if tA == 'N'
-        return A
-    elseif tA == 'T'
-        return transpose(A)
-    elseif tA == 'C'
-        return adjoint(A)
-    elseif tA == 'H'
-        return Hermitian(A, :U)
-    elseif tA == 'h'
-        return Hermitian(A, :L)
-    elseif tA == 'S'
-        return Symmetric(A, :U)
-    else # tA == 's'
-        return Symmetric(A, :L)
+    # merge the result of this before return, so that we can type-assert the return such
+    # that even if the tmerge is inaccurate, inference can still identify that the
+    # `_generic_matmatmul` signature still matches and doesn't require missing backedges
+    tA_uc = uppercase(tA)
+    B = if tA_uc == 'N'
+        A
+    elseif tA_uc == 'T'
+        transpose(A)
+    elseif tA_uc == 'C'
+        adjoint(A)
+    elseif tA_uc == 'H'
+        Hermitian(A, _uplosym(tA))
+    elseif tA_uc == 'S'
+        Symmetric(A, _uplosym(tA))
     end
+    return B::AbstractVecOrMat
 end
 
 _unwrap(A::AbstractVecOrMat) = A
@@ -525,6 +620,20 @@ _makevector(x::AbstractVector) = Vector(x)
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
+# destination type for matmul
+matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
+matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
+matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+# diagonal is special, as it does not change the structure of the other matrix
+# we call similar without a size to preserve the type of the matrix wherever possible
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+
+# Special handling for adj/trans vec
+matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
+
+# TODO: remove once not used anymore in SparseArrays.jl
 # some trait like this would be cool
 # onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
 # but we are actually asking for oneunit(T), that is, however, defined for generic T as
@@ -633,7 +742,7 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     end
 
     if parallel
-        let Distributed = Base.require(Base.PkgId(
+        let Distributed = Base.require_stdlib(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             nworkers = @invokelatest Distributed.nworkers()
             results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))

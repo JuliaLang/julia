@@ -19,7 +19,8 @@ Number
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = (@_nospecializeinfer_meta; t)
-typejoin(@nospecialize(t), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u)) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(typejoin(t, s), u))
+typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; afoldl(typejoin, typejoin(t, s, u), ts...))
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
     @_nospecializeinfer_meta
@@ -299,7 +300,8 @@ function promote_type end
 
 promote_type()  = Bottom
 promote_type(T) = T
-promote_type(T, S, U, V...) = (@inline; promote_type(T, promote_type(S, U, V...)))
+promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
+promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type(::Type{T}, ::Type{T}) where {T} = T
@@ -373,7 +375,9 @@ function _promote(x::T, y::S) where {T,S}
     return (convert(R, x), convert(R, y))
 end
 promote_typeof(x) = typeof(x)
-promote_typeof(x, xs...) = (@inline; promote_type(typeof(x), promote_typeof(xs...)))
+promote_typeof(x, y) = (@inline; promote_type(typeof(x), typeof(y)))
+promote_typeof(x, y, z) = (@inline; promote_type(typeof(x), typeof(y), typeof(z)))
+promote_typeof(x, y, z, a...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, typeof(y)), promote_typeof(x, y, z), a...))
 function _promote(x, y, z)
     @inline
     R = promote_typeof(x, y, z)
@@ -430,7 +434,11 @@ end
 """
     ^(x, y)
 
-Exponentiation operator. If `x` is a matrix, computes matrix exponentiation.
+Exponentiation operator.
+
+If `x` and `y` are integers, the result may overflow.
+To enter numbers in scientific notation, use [`Float64`](@ref) literals
+such as `1.2e3` rather than `1.2 * 10^3`.
 
 If `y` is an `Int` literal (e.g. `2` in `x^2` or `-3` in `x^-3`), the Julia code
 `x^y` is transformed by the compiler to `Base.literal_pow(^, x, Val(y))`, to
@@ -440,20 +448,31 @@ where usually `^ == Base.^` unless `^` has been defined in the calling
 namespace.) If `y` is a negative integer literal, then `Base.literal_pow`
 transforms the operation to `inv(x)^-y` by default, where `-y` is positive.
 
+See also [`exp2`](@ref), [`<<`](@ref).
+
 # Examples
 ```jldoctest
 julia> 3^5
 243
 
-julia> A = [1 2; 3 4]
-2×2 Matrix{Int64}:
- 1  2
- 3  4
+julia> 3^-1  # uses Base.literal_pow
+0.3333333333333333
 
-julia> A^3
-2×2 Matrix{Int64}:
- 37   54
- 81  118
+julia> p = -1;
+
+julia> 3^p
+ERROR: DomainError with -1:
+Cannot raise an integer x to a negative power -1.
+[...]
+
+julia> 3.0^p
+0.3333333333333333
+
+julia> 10^19 > 0  # integer overflow
+false
+
+julia> big(10)^19 == 1e19
+true
 ```
 """
 ^(x::Number, y::Number) = ^(promote(x,y)...)

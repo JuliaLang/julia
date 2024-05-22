@@ -184,11 +184,7 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
-    if commutative
-        @test r == Core.Compiler.tuplemerge(b, a)
-    else
-        @test_broken r == Core.Compiler.tuplemerge(b, a)
-    end
+    @test r == Core.Compiler.tuplemerge(b, a) broken=!commutative
 end
 tuplemerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
 tuplemerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
@@ -238,13 +234,18 @@ tuplemerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{Char, Int}}, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}}
 @test Core.Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{Int, Int}}, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Vector) == Union{Nothing, AbstractVector}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, AbstractArray{Int}}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Array) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractArray{Int}}, Vector) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector}, Matrix{Int}) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Vector) == Union{Nothing, Int, AbstractVector}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Matrix) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, Int, AbstractArray{Int}}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Array) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractArray{Int}}, Vector) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector}, Matrix{Int}) == Union{Nothing, Int, AbstractArray}
 @test Core.Compiler.tmerge(Union{Nothing, AbstractFloat}, Integer) == Union{Nothing, AbstractFloat, Integer}
+@test Core.Compiler.tmerge(AbstractVector, AbstractMatrix) == Union{AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Nothing}, AbstractMatrix) == Union{Nothing, AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Int}, AbstractMatrix) == Union{Int, AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Integer}, AbstractMatrix) == Union{Integer, AbstractArray}
+@test Core.Compiler.tmerge(Union{AbstractVector, Nothing, Int}, AbstractMatrix) == Union{Nothing, Int, AbstractArray}
 
 # test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
 # Specifically test with base types of a trivial type, a simple union, a complicated union, and a tuple.
@@ -675,7 +676,6 @@ end
 function test_inferred_static(arrow::Pair, all_ssa)
     code, rt = arrow
     @test isdispatchelem(rt)
-    @test code.inferred
     for i = 1:length(code.code)
         e = code.code[i]
         test_inferred_static(e)
@@ -1622,24 +1622,24 @@ let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Co
     @test memoryref_isassigned_tfunc(Any, Any, Any) === Bool
     @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Vararg{Any}]) == Bool
     @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Symbol, Bool, Vararg{Bool}]) == Bool
-    @test memoryrefset!_tfunc(MemoryRef{Int}, Int, Symbol, Bool) === MemoryRef{Int}
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Int, Symbol, Bool) === Int
     let ua = MemoryRef{<:Integer}
-        @test memoryrefset!_tfunc(ua, Int, Symbol, Bool) === ua
+        @test memoryrefset!_tfunc(ua, Int, Symbol, Bool) === Int
     end
-    @test memoryrefset!_tfunc(GenericMemoryRef, Int, Symbol, Bool) === GenericMemoryRef
-    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Int, Symbol, Bool) === GenericMemoryRef{:not_atomic}
-    @test memoryrefset!_tfunc(Any, Int, Symbol, Bool) === Any
+    @test memoryrefset!_tfunc(GenericMemoryRef, Int, Symbol, Bool) === Int
+    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Int, Symbol, Bool) === Int
+    @test memoryrefset!_tfunc(Any, Int, Symbol, Bool) === Int
     @test memoryrefset!_tfunc(MemoryRef{String}, Int, Symbol, Bool) === Union{}
     @test memoryrefset!_tfunc(String, Char, Symbol, Bool) === Union{}
-    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Symbol, Bool) === MemoryRef{Int}
-    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Any, Any) === MemoryRef{Int}
-    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Any, Any, Any) === GenericMemoryRef{:not_atomic}
-    @test memoryrefset!_tfunc(GenericMemoryRef, Any, Any, Any) === GenericMemoryRef
-    @test memoryrefset!_tfunc(Any, Any, Any, Any) === Any # also probably could be GenericMemoryRef
-    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Any}]) == MemoryRef{Int}
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Symbol, Bool) === Any # could improve this to Int
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Any, Any) === Any # could improve this to Int
+    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Any, Any, Any) === Any
+    @test memoryrefset!_tfunc(GenericMemoryRef, Any, Any, Any) === Any
+    @test memoryrefset!_tfunc(Any, Any, Any, Any) === Any
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Any}]) == Any
     @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Symbol}]) == Union{}
-    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Vararg{Bool}]) == MemoryRef{Int}
-    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Bool, Vararg{Any}]) == MemoryRef{Int}
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Vararg{Bool}]) === Any # could improve this to Int
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Bool, Vararg{Any}]) === Any # could improve this to Int
     @test memoryrefoffset_tfunc(MemoryRef) == memoryrefoffset_tfunc(GenericMemoryRef) == Int
     @test memoryrefoffset_tfunc(Memory) == memoryrefoffset_tfunc(GenericMemory) == Union{}
     @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{MemoryRef}]) == Int
@@ -1698,7 +1698,6 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
     @test opt.src.ssavaluetypes isa Vector{Any}
-    @test !opt.src.inferred
     @test opt.mod === Base
 end
 
@@ -1938,6 +1937,8 @@ function f24852_kernel_cinfo(world::UInt, source, fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
+    code_info.nargs = 4
+    code_info.isva = false
     # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
     # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
     return match.method, code_info
@@ -4436,7 +4437,7 @@ let x = Tuple{Int,Any}[
         #=19=# (0, Expr(:pop_exception, Core.SSAValue(2)))
         #=20=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
-    handler_at, handlers = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    (;handler_at, handlers) = Core.Compiler.compute_trycatch(last.(x))
     @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
 end
 
@@ -4486,8 +4487,10 @@ let
                # Vararg
         #=va=# Bound, unbound,         # => Tuple{Integer,Integer} (invalid `TypeVar` widened beforehand)
         } where Bound<:Integer
-    argtypes = Core.Compiler.most_general_argtypes(method, specTypes, true)
+    argtypes = Core.Compiler.most_general_argtypes(method, specTypes)
     popfirst!(argtypes)
+    # N.B.: `argtypes` do not have va processing applied yet
+    @test length(argtypes) == 12
     @test argtypes[1] == Integer
     @test argtypes[2] == Integer
     @test argtypes[3] == Type{Bound} where Bound<:Integer
@@ -4498,7 +4501,8 @@ let
     @test argtypes[8] == Any
     @test argtypes[9] == Union{Nothing,Bound} where Bound<:Integer
     @test argtypes[10] == Any
-    @test argtypes[11] == Tuple{Integer,Integer}
+    @test argtypes[11] == Integer
+    @test argtypes[12] == Integer
 end
 
 # make sure not to call `widenconst` on `TypeofVararg` objects
@@ -4680,11 +4684,11 @@ end
 
     a = Tuple{Vararg{Tuple{}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}
+    @test a == Union{Tuple{Tuple{Vararg{Tuple{}}}}, Tuple{Vararg{Tuple{}}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}
+    @test a == Tuple{Vararg{Union{Tuple{Tuple{Vararg{Tuple{}}}}, Tuple{Vararg{Tuple{}}}}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}}}
+    @test a == Tuple
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
     @test a == Tuple
 end
@@ -4937,10 +4941,21 @@ g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
 # This is somewhat sensitive to the exact recursion level that inference is willing to do, but the intention
 # is to test the case where inference limited a recursion, but then a forced constprop nevertheless managed
 # to terminate the call.
+@newinterp RecurseInterpreter
+let CC = Core.Compiler
+    function CC.const_prop_entry_heuristic(interp::RecurseInterpreter, result::CC.MethodCallResult,
+                                           si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+        if result.rt isa CC.LimitedAccuracy
+            return force # allow forced constprop to recurse into unresolved cycles
+        end
+        return @invoke CC.const_prop_entry_heuristic(interp::CC.AbstractInterpreter, result::CC.MethodCallResult,
+                                                     si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+    end
+end
 Base.@constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
 Base.@constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...)
 type_level_recurse_entry() = Val{type_level_recurse1(1)}()
-@test Base.return_types(type_level_recurse_entry, ()) |> only == Val{1}
+@test Base.infer_return_type(type_level_recurse_entry, (); interp=RecurseInterpreter()) == Val{1}
 
 # Test that inference doesn't give up if it can potentially refine effects,
 # even if the return type is Any.
@@ -5590,6 +5605,13 @@ end |> only === Float64
 @test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
 @test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError
 
+# exception type inference for `:new`
+struct NewExctInference
+    a::Int
+    @eval NewExctInference(a) = $(Expr(:new, :NewExctInference, :a))
+end
+@test Base.infer_exception_type(NewExctInference, (Float64,)) == TypeError
+
 # semi-concrete interpretation accuracy
 # https://github.com/JuliaLang/julia/issues/50037
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
@@ -5614,3 +5636,115 @@ end
 let 𝕃 = Core.Compiler.fallback_lattice
     @test apply_type_tfunc(𝕃, Const(Tuple{Vararg{Any,N}} where N), Int) == Type{NTuple{_A, Any}} where _A
 end
+
+# Issue #52613
+@test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar
+
+# https://github.com/JuliaLang/julia/issues/53590
+func53590(b) = b ? Int : Float64
+function issue53590(b1, b2)
+    T1 = func53590(b1)
+    T2 = func53590(b2)
+    return typejoin(T1, T2)
+end
+@test issue53590(true, true) == Int
+@test issue53590(true, false) == Real
+@test issue53590(false, false) == Float64
+@test issue53590(false, true) == Real
+
+# Expr(:throw_undef_if_not) handling
+@eval function has_tuin()
+    $(Expr(:throw_undef_if_not, :x, false))
+end
+@test Core.Compiler.return_type(has_tuin, Tuple{}) === Union{}
+@test_throws UndefVarError has_tuin()
+
+function gen_tuin_from_arg(world::UInt, source, _, _)
+    ci = make_codeinfo(Any[
+        Expr(:throw_undef_if_not, :x, Core.Argument(2)),
+        ReturnNode(true),
+    ]; slottypes=Any[Any, Bool])
+    ci.slotnames = Symbol[:var"#self#", :def]
+    ci.nargs = 2
+    ci.isva = false
+    ci
+end
+
+@eval function has_tuin2(def)
+    $(Expr(:meta, :generated, gen_tuin_from_arg))
+    $(Expr(:meta, :generated_only))
+end
+@test_throws UndefVarError has_tuin2(false)
+@test has_tuin2(true)
+
+# issue #53585
+let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
+    @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
+    @test only(Base.return_types(vcat, t)) == Vector{Float64}
+end
+
+# Infinite loop in inference on SSA assignment
+const stop_infinite_loop::Base.Threads.Atomic{Bool} = Base.Threads.Atomic{Bool}(false)
+function gen_infinite_loop_ssa_generator(world::UInt, source, _)
+    ci = make_codeinfo(Any[
+        # Block 1
+        (),
+        # Block 2
+        PhiNode(Int32[1, 5], Any[SSAValue(1), SSAValue(3)]),
+        Expr(:call, tuple, SSAValue(2)),
+        Expr(:call, getindex, GlobalRef(@__MODULE__, :stop_infinite_loop)),
+        GotoIfNot(SSAValue(4), 2),
+        # Block 3
+        ReturnNode(SSAValue(2))
+    ]; slottypes=Any[Any])
+    ci.slotnames = Symbol[:var"#self#"]
+    ci.nargs = 1
+    ci.isva = false
+    ci
+end
+
+@eval function gen_infinite_loop_ssa()
+    $(Expr(:meta, :generated, gen_infinite_loop_ssa_generator))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+
+# We want to make sure that both this returns `Tuple` and that
+# it doesn't infinite loop inside inference.
+@test Core.Compiler.return_type(gen_infinite_loop_ssa, Tuple{}) === Tuple
+
+# inference local cache lookup with extended lattice elements that may be transformed
+# by `matching_cache_argtypes`
+@newinterp CachedConditionalInterp
+Base.@constprop :aggressive function func_cached_conditional(x, y)
+    if x
+        @noinline sin(y)
+    else
+        0.0
+    end
+end;
+function test_func_cached_conditional(y)
+    y₁ = func_cached_conditional(isa(y, Float64), y)
+    y₂ = func_cached_conditional(isa(y, Float64), y)
+    return y₁, y₂
+end;
+let interp = CachedConditionalInterp();
+    @test Base.infer_return_type(test_func_cached_conditional, (Any,); interp) == Tuple{Float64, Float64}
+    @test count(interp.inf_cache) do result
+        result.linfo.def.name === :func_cached_conditional
+    end == 1
+end
+
+# fieldcount on `Tuple` should constant fold, even though `.fields` not const
+@test fully_eliminated(Base.fieldcount, Tuple{Type{Tuple{Nothing, Int, Int}}})
+
+# Vararg-constprop regression from MutableArithmetics (#54341)
+global SIDE_EFFECT54341::Int
+function foo54341(a, b, c, d, args...)
+    # Side effect to force constprop rather than semi-concrete
+    global SIDE_EFFECT54341 = a + b + c + d
+    return SIDE_EFFECT54341
+end
+bar54341(args...) = foo54341(4, args...)
+
+@test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int

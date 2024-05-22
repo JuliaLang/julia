@@ -4,6 +4,45 @@
 
 module Filesystem
 
+"""
+    JL_O_APPEND
+    JL_O_ASYNC
+    JL_O_CLOEXEC
+    JL_O_CREAT
+    JL_O_DIRECT
+    JL_O_DIRECTORY
+    JL_O_DSYNC
+    JL_O_EXCL
+    JL_O_FSYNC
+    JL_O_LARGEFILE
+    JL_O_NDELAY
+    JL_O_NOATIME
+    JL_O_NOCTTY
+    JL_O_NOFOLLOW
+    JL_O_NONBLOCK
+    JL_O_PATH
+    JL_O_RANDOM
+    JL_O_RDONLY
+    JL_O_RDWR
+    JL_O_RSYNC
+    JL_O_SEQUENTIAL
+    JL_O_SHORT_LIVED
+    JL_O_SYNC
+    JL_O_TEMPORARY
+    JL_O_TMPFILE
+    JL_O_TRUNC
+    JL_O_WRONLY
+
+Enum constant for the `open` syscall, where `JL_O_*` corresponds to the `O_*` constant.
+See [the libuv docs](https://docs.libuv.org/en/v1.x/fs.html#file-open-constants) for more details.
+"""
+(:JL_O_APPEND, :JL_O_ASYNC, :JL_O_CLOEXEC, :JL_O_CREAT, :JL_O_DIRECT,
+ :JL_O_DIRECTORY, :JL_O_DSYNC, :JL_O_EXCL, :JL_O_FSYNC, :JL_O_LARGEFILE,
+ :JL_O_NOATIME, :JL_O_NOCTTY, :JL_O_NDELAY, :JL_O_NOFOLLOW, :JL_O_NONBLOCK,
+ :JL_O_PATH, :JL_O_RANDOM, :JL_O_RDONLY, :JL_O_RDWR, :JL_O_RSYNC,
+ :JL_O_SEQUENTIAL, :JL_O_SHORT_LIVED, :JL_O_SYNC, :JL_O_TEMPORARY,
+ :JL_O_TMPFILE, :JL_O_TRUNC, :JL_O_WRONLY)
+
 const S_IFDIR  = 0o040000  # directory
 const S_IFCHR  = 0o020000  # character device
 const S_IFBLK  = 0o060000  # block device
@@ -31,6 +70,36 @@ const S_IWOTH = 0o0002  # write by other
 const S_IXOTH = 0o0001  # execute by other
 const S_IRWXO = 0o0007  # mask for other permissions
 
+"""
+    S_IRUSR
+    S_IWUSR
+    S_IXUSR
+    S_IRGRP
+    S_IWGRP
+    S_IXGRP
+    S_IROTH
+    S_IWOTH
+    S_IXOTH
+
+Constants for file access permission bits.
+The general structure is `S_I[permission][class]`
+where `permission` is `R` for read, `W` for write, and `X` for execute,
+and `class` is `USR` for user/owner, `GRP` for group, and `OTH` for other.
+"""
+(:S_IRUSR, :S_IWUSR, :S_IXUSR, :S_IRGRP, :S_IWGRP, :S_IXGRP, :S_IROTH, :S_IWOTH, :S_IXOTH)
+
+"""
+    S_IRWXU
+    S_IRWXG
+    S_IRWXO
+
+Constants for file access permission masks, i.e. the combination of read, write,
+and execute permissions for a class.
+The general structure is `S_IRWX[class]`
+where `class` is `U` for user/owner, `G` for group, and `O` for other.
+"""
+(:S_IRWXU, :S_IRWXG, :S_IRWXO)
+
 export File,
        StatStruct,
        # open,
@@ -47,7 +116,6 @@ export File,
        JL_O_SHORT_LIVED,
        JL_O_SEQUENTIAL,
        JL_O_RANDOM,
-       JL_O_NOCTTY,
        JL_O_NOCTTY,
        JL_O_NONBLOCK,
        JL_O_NDELAY,
@@ -72,7 +140,8 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
+    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize,
+    isexecutable, isreadable, iswritable
 
 import .Base.RefValue
 
@@ -195,9 +264,13 @@ end
 
 function read(f::File, ::Type{UInt8})
     check_open(f)
-    ret = ccall(:jl_fs_read_byte, Int32, (OS_HANDLE,), f.handle)
+    p = Ref{UInt8}()
+    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
+                f.handle, p, 1)
     uv_error("read", ret)
-    return ret % UInt8
+    @assert ret <= sizeof(p) == 1
+    ret < 1 && throw(EOFError())
+    return p[] % UInt8
 end
 
 function read(f::File, ::Type{Char})
@@ -292,6 +365,86 @@ function touch(f::File)
     end
     f
 end
+
+"""
+    isexecutable(path::String)
+
+Return `true` if the given `path` has executable permissions.
+
+!!! note
+    This permission may change before the user executes `path`,
+    so it is recommended to execute the file and handle the error if that fails,
+    rather than calling `isexecutable` first.
+
+!!! note
+    Prior to Julia 1.6, this did not correctly interrogate filesystem
+    ACLs on Windows, therefore it would return `true` for any
+    file.  From Julia 1.6 on, it correctly determines whether the
+    file is marked as executable or not.
+
+See also [`ispath`](@ref), [`isreadable`](@ref), [`iswritable`](@ref).
+"""
+function isexecutable(path::String)
+    # We use `access()` and `X_OK` to determine if a given path is
+    # executable by the current user.  `X_OK` comes from `unistd.h`.
+    X_OK = 0x01
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, X_OK) == 0
+end
+isexecutable(path::AbstractString) = isexecutable(String(path))
+
+"""
+    isreadable(path::String)
+
+Return `true` if the access permissions for the given `path` permitted reading by the current user.
+
+!!! note
+    This permission may change before the user calls `open`,
+    so it is recommended to just call `open` alone and handle the error if that fails,
+    rather than calling `isreadable` first.
+
+!!! note
+    Currently this function does not correctly interrogate filesystem
+    ACLs on Windows, therefore it can return wrong results.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also [`ispath`](@ref), [`isexecutable`](@ref), [`iswritable`](@ref).
+"""
+function isreadable(path::String)
+    # We use `access()` and `R_OK` to determine if a given path is
+    # readable by the current user.  `R_OK` comes from `unistd.h`.
+    R_OK = 0x04
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, R_OK) == 0
+end
+isreadable(path::AbstractString) = isreadable(String(path))
+
+"""
+    iswritable(path::String)
+
+Return `true` if the access permissions for the given `path` permitted writing by the current user.
+
+!!! note
+    This permission may change before the user calls `open`,
+    so it is recommended to just call `open` alone and handle the error if that fails,
+    rather than calling `iswritable` first.
+
+!!! note
+    Currently this function does not correctly interrogate filesystem
+    ACLs on Windows, therefore it can return wrong results.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also [`ispath`](@ref), [`isexecutable`](@ref), [`isreadable`](@ref).
+"""
+function iswritable(path::String)
+    # We use `access()` and `W_OK` to determine if a given path is
+    # writeable by the current user.  `W_OK` comes from `unistd.h`.
+    W_OK = 0x02
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
+end
+iswritable(path::AbstractString) = iswritable(String(path))
 
 
 end

@@ -14,7 +14,7 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp
 endif
 
 ifneq ($(USE_BINARYBUILDER_CURL),1)
-CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
+CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN) -Wl,-rpath,$(build_shlibdir)
 
 # On older Linuces (those that use OpenSSL < 1.1) we include `libpthread` explicitly.
 # It doesn't hurt to include it explicitly elsewhere, so we do so.

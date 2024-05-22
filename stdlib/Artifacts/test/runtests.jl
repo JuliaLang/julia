@@ -261,3 +261,7 @@ end
     @test length(Base.manifest_names) == 2n # there are two manifest names per project name
     @test length(Base.preferences_names) == n
 end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Artifacts))
+end

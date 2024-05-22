@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl
 baremodule SuiteSparse_jll
 using Base, Libdl, libblastrampoline_jll
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -58,7 +57,7 @@ elseif Sys.isapple()
     const libbtf = "@rpath/libbtf.2.dylib"
     const libcamd = "@rpath/libcamd.3.dylib"
     const libccolamd = "@rpath/libccolamd.3.dylib"
-    const libcholmod = "@rpath/libcholmod.4.dylib"
+    const libcholmod = "@rpath/libcholmod.5.dylib"
     const libcolamd = "@rpath/libcolamd.3.dylib"
     const libklu = "@rpath/libklu.2.dylib"
     const libldl = "@rpath/libldl.3.dylib"
@@ -71,7 +70,7 @@ else
     const libbtf = "libbtf.so.2"
     const libcamd = "libcamd.so.3"
     const libccolamd = "libccolamd.so.3"
-    const libcholmod = "libcholmod.so.4"
+    const libcholmod = "libcholmod.so.5"
     const libcolamd = "libcolamd.so.3"
     const libklu = "libklu.so.2"
     const libldl = "libldl.so.3"

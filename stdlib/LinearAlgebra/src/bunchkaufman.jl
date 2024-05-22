@@ -150,7 +150,7 @@ The following functions are available for `BunchKaufman` objects:
 [`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref),
 [`ishermitian`](@ref), [`getindex`](@ref).
 
-[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
+[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](https://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
 
 # Examples
 ```jldoctest
@@ -297,6 +297,17 @@ end
 Base.propertynames(B::BunchKaufman, private::Bool=false) =
     (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
 
+function Base.:(==)(B1::BunchKaufman, B2::BunchKaufman)
+    # check for the equality between properties instead of fields
+    B1.p == B2.p || return false
+    if B1.uplo == 'L'
+        B1.L == B2.L || return false
+    else
+        B1.U == B2.U || return false
+    end
+    return (B1.D == B2.D)
+end
+
 function getproperties!(B::BunchKaufman{T,<:StridedMatrix}) where {T<:BlasFloat}
     # NOTE: Unlike in the 'getproperty' function, in this function L/U and D are computed in place.
     if B.rook
@@ -429,7 +440,7 @@ end
 
 ## reconstruct the original matrix
 ## TODO: understand the procedure described at
-## http://www.nag.com/numeric/FL/nagdoc_fl22/pdf/F07/f07mdf.pdf
+## https://www.nag.com/numeric/FL/nagdoc_fl22/pdf/F07/f07mdf.pdf
 
 
 ##--------------------------------------------------------------------------
