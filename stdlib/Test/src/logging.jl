@@ -40,6 +40,9 @@ mutable struct TestLogger <: AbstractLogger
     logs::Vector{LogRecord}  # Guarded by lock.
     min_level::LogLevel
     catch_exceptions::Bool
+    # Note: shouldlog_args only maintains the info for the most recent log message, which
+    # may not be meaningful in a multithreaded program. See:
+    # https://github.com/JuliaLang/julia/pull/54497#discussion_r1603691606
     shouldlog_args  # Guarded by lock.
     message_limits::Dict{Any,Int}  # Guarded by lock.
     respect_maxlog::Bool
