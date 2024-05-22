@@ -345,3 +345,16 @@ Base.show(io::IO, a::IntWrap) = print(io, "IntWrap(", a.x, ")")
         @test r2 isa IntWrap && r2.x === 103 === r[].x && r2 !== r[]
     end
 end)()
+
+@testset "issue #54548" begin
+    @inline passthrough(ptr::Core.LLVMPtr{T,A}) where {T,A} = Base.llvmcall(("""
+            define ptr addrspace(1) @entry(ptr addrspace(1) %0) #0 {
+            entry:
+                ret ptr addrspace(1) %0
+            }
+
+            attributes #0 = { alwaysinline }""", "entry"),
+        Core.LLVMPtr{T,A}, Tuple{Core.LLVMPtr{T,A}}, ptr)
+    f(gws) = passthrough(Core.bitcast(Core.LLVMPtr{UInt32,1}, gws))
+    f(C_NULL)
+end
