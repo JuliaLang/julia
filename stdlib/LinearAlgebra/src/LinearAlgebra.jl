@@ -241,6 +241,8 @@ Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref
 """
 struct ColumnNorm <: PivotingStrategy end
 
+using Base: DimOrInd
+
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
 # see PR 16416
