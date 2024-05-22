@@ -454,6 +454,7 @@
     XX(jl_tagged_gensym) \
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
+    XX(jl_task_stack_buffer) \
     XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
