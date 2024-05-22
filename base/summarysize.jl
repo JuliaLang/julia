@@ -56,9 +56,13 @@ function summarysize(obj;
             end
         else
             nf = nfields(x)
-            ft = typeof(x).types
-            if !isbitstype(ft[i]) && isdefined(x, i)
-                val = getfield(x, i)
+            dt = typeof(x)
+            dtfd = Base.DataTypeFieldDesc(dt)
+            if isdefined(x, i)
+                f = getfield(x, i)
+                if dtfd[i].isptr || !Base.datatype_pointerfree(typeof(f))
+                    val = f
+                end
             end
         end
         if nf > i

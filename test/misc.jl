@@ -573,6 +573,17 @@ end
 # issue #44780
 @test summarysize(BigInt(2)^1000) > summarysize(BigInt(2))
 
+# issue #53061
+mutable struct S53061
+    x::Union{Float64, Tuple{Float64, Float64}}
+    y::Union{Float64, Tuple{Float64, Float64}}
+end
+let s = S53061[S53061(rand(), (rand(),rand())) for _ in 1:10^5]
+    sz1 = summarysize(s)
+    sz2 = summarysize(s)
+    @test sz1 == sz2
+end
+
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
 # empty arrays
