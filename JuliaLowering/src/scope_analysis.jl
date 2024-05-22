@@ -177,10 +177,6 @@ function lookup_var(ctx, varkey::VarKey, exclude_toplevel_globals=false)
     return exclude_toplevel_globals ? nothing : get(ctx.global_vars, varkey, nothing)
 end
 
-function current_scope(ctx)
-    last(ctx.scope_stack)
-end
-
 function var_kind(ctx, id::VarId)
     ctx.var_info[id].kind
 end
@@ -208,7 +204,7 @@ end
 # identifiers to ctx.var_info and constructing a lookup table from identifier
 # names to their variable IDs
 function analyze_scope(ctx, ex, scope_type, lambda_info)
-    parentscope = isempty(ctx.scope_stack) ? nothing : current_scope(ctx)
+    parentscope = isempty(ctx.scope_stack) ? nothing : ctx.scope_stack[end]
     is_outer_lambda_scope = kind(ex) == K"lambda"
     is_toplevel = !isnothing(lambda_info) && lambda_info.is_toplevel_thunk
     in_toplevel_thunk = is_toplevel || (!is_outer_lambda_scope && parentscope.in_toplevel_thunk)

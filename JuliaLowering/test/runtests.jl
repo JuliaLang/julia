@@ -54,6 +54,24 @@ JuliaLowering.eval(test_mod, wrapscope(assign_z_2, :hard))
 JuliaLowering.eval(test_mod, wrapscope(wrapscope(assign_z_2, :neutral), :soft))
 @test test_mod.z == 2
 
+#-------------------------------------------------------------------------------
+# Function calls
+# Splatting
+@test JuliaLowering.include_string(test_mod, """
+let
+    x = 1
+    y = 2
+    zs = (3,4)
+    w = 5
+    (tuple(zs...),
+     tuple(zs..., w),
+     tuple(y, zs...),
+     tuple(x, y, zs..., w))
+end
+""") == ((3,4),
+         (3,4,5),
+         (2,3,4),
+         (1,2,3,4,5))
 
 #-------------------------------------------------------------------------------
 # Functions

@@ -76,13 +76,50 @@ function expand_let(ctx, ex)
     return blk
 end
 
+# Wrap unsplatted arguments in `tuple`:
+# `[a, b, xs..., c]` -> `[(a, b), xs, (c,)]`
+function _wrap_unsplatted_args(ctx, call_ex, args)
+    wrapped = SyntaxList(ctx)
+    i = 1
+    while i <= length(args)
+        if kind(args[i]) == K"..."
+            splatarg = args[i]
+            @chk numchildren(splatarg) == 1
+            push!(wrapped, splatarg[1])
+        else
+            i1 = i
+            # Find range of non-splatted args
+            while i < length(args) && kind(args[i+1]) != K"..."
+                i += 1
+            end
+            push!(wrapped, @ast ctx call_ex [K"call" "tuple"::K"core" args[i1:i]...])
+        end
+        i += 1
+    end
+    wrapped
+end
+
 function expand_call(ctx, ex)
-    cs = expand_forms_2(ctx, children(ex))
-    if is_infix_op_call(ex) || is_postfix_op_call(ex)
-        cs[1], cs[2] = cs[2], cs[1]
+    cs = children(ex)
+    if is_infix_op_call(ex)
+        @chk numchildren(ex) == 3
+        cs = [cs[2], cs[1], cs[3]]
+    elseif is_postfix_op_call(ex)
+        @chk numchildren(ex) == 2
+        cs = [cs[2], cs[1]]
     end
     # TODO: keywords
-    @ast ctx ex [K"call" cs...]
+    if any(kind(c) == K"..." for c in cs)
+        # Splatting, eg, `f(a, xs..., b)`
+        @ast ctx ex [K"call" 
+            "_apply_iterate"::K"core"
+            "iterate"::K"top"
+            expand_forms_2(ctx, cs[1])
+            expand_forms_2(ctx, _wrap_unsplatted_args(ctx, ex, cs[2:end]))...
+        ]
+    else
+        @ast ctx ex [K"call" expand_forms_2(ctx, cs)...]
+    end
 end
 
 # Strip variable type declarations from within a `local` or `global`, returning
@@ -533,10 +570,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree)
         end
     elseif k == K"tuple"
         # TODO: named tuples
-        @ast ctx ex [K"call" 
+        expand_forms_2(ctx, @ast ctx ex [K"call" 
             "tuple"::K"core"
-            expand_forms_2(ctx, children(ex))...
-        ]
+            children(ex)...
+        ])
     elseif k == K"$"
         throw(LoweringError(ex, "`\$` expression outside quote"))
     elseif k == K"module"
