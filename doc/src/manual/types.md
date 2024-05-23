@@ -1597,7 +1597,7 @@ Here is a brief summary of the different output functions in Julia and how they 
 * [`print(io, x)`](@ref) by default calls `show(io, x)`, but a few types have a distinct `print` format — most notably, when `x` is a string, `print` outputs the raw text whereas `show` outputs an escaped string enclosed in quotation marks.  The 1-argument `print(x)` calls `print(stdout, x)`. `print` is also called by [`string(x)`](@ref).
 * [`write(io, x)`](@ref), if it is defined (it generally has *no* default definition for new types), writes a "raw" binary representation of `x` to `io`, e.g. an `x::Int32` will be written as 4 bytes.
 
-It's also helpful to be familiar with the metadata that can be attached to an `io` stream by an [`IOContext`](@ref) wrapper.  For example, the REPL sets the `:limit => true` flag from `display` for an evaluated expression, in order to limit the output to fit in the terminal; you can query this flag with `get(io, :limit, false)`.   And when displaying an object as part of a container (e.g. as an element of an array), the `:compact => true` flag is set, which you can query with `get(io, :compact, false)`.
+It's also helpful to be familiar with the metadata that can be attached to an `io` stream by an [`IOContext`](@ref) wrapper.  For example, the REPL sets the `:limit => true` flag from `display` for an evaluated expression, in order to limit the output to fit in the terminal; you can query this flag with `get(io, :limit, false)`.   And when displaying an object contained within, for example, a multi-column matrix, the `:compact => true` flag could be set, which you can query with `get(io, :compact, false)`.
 
 ## "Value types"
 
