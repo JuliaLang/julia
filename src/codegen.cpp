@@ -5252,8 +5252,12 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
         result = mark_julia_type(ctx, r, true, rt);
     }
-    if (result.typ == jl_bottom_type)
+    if (result.typ == jl_bottom_type) {
+#ifndef JL_NDEBUG
+        emit_error(ctx, "(Internal Error - IR Validity): Returned from function we expected not to.");
+#endif
         CreateTrap(ctx.builder);
+    }
     return result;
 }
 
@@ -6524,7 +6528,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
 
             SmallVector<jl_value_t *, 0> env_component_ts(nargs-4);
             for (size_t i = 0; i < nargs - 4; ++i) {
-                env_component_ts[i] = argv[4+i].typ;
+                jl_value_t *typ = argv[4+i].typ;
+                if (typ == jl_bottom_type) {
+                    JL_GC_POP();
+                    return jl_cgval_t();
+                }
+                env_component_ts[i] = typ;
             }
 
             env_t = jl_apply_tuple_type_v(env_component_ts.data(), nargs-4);
@@ -9751,9 +9760,6 @@ jl_llvm_functions_t jl_emit_code(
         jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(jl_current_task));
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
-#ifndef JL_NDEBUG
-        abort();
-#endif
     }
 
     return decls;
