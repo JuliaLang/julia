@@ -683,7 +683,7 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
         return nothing
     end
     if lwr isa Symbol
-        return isdefined(context_module, lwr) ? Const(getfield(context_module, lwr)) : nothing
+        return isdefined(context_module, lwr) ? Const(getglobal(context_module, lwr)) : nothing
     end
     lwr isa Expr || return Const(lwr) # `ex` is literal
     isexpr(lwr, :thunk) || return nothing # lowered to `Expr(:error, ...)` or similar

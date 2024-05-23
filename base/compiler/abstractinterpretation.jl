@@ -2842,12 +2842,17 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, sv::
         if is_mutation_free_argtype(rt)
             inaccessiblememonly = ALWAYS_TRUE
         end
-    elseif InferenceParams(interp).assume_bindings_static
-        consistent = inaccessiblememonly = ALWAYS_TRUE
-        if isdefined_globalref(g)
-            nothrow = true
-        else
-            rt = Union{}
+    else
+        if InferenceParams(interp).assume_bindings_static
+            consistent = inaccessiblememonly = ALWAYS_TRUE
+            if isdefined_globalref(g)
+                nothrow = true
+            else
+                rt = Union{}
+            end
+        end
+        if istoplevel(sv) && !(rt isa Const) && isdefined_globalref(g)
+            rt = Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
         end
     end
     return RTEffects(rt, nothrow ? Union{} : UndefVarError, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))

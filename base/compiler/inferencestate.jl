@@ -339,7 +339,9 @@ mutable struct InferenceState
             ipo_effects = Effects(ipo_effects; nonoverlayed=is_nonoverlayed(def))
         end
 
-        restrict_abstract_call_sites = isa(def, Module)
+        restrict_abstract_call_sites = isa(def, Module) && !(any(code) do @nospecialize stmt
+            isexpr(stmt, :meta) && any(@nospecialize(x)->x===:force_compile, stmt.args)
+        end)
 
         # some more setups
         InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_info)
@@ -948,6 +950,9 @@ is_constproped(::IRInterpretationState) = true
 
 is_cached(sv::InferenceState) = !iszero(sv.cache_mode & CACHE_MODE_GLOBAL)
 is_cached(::IRInterpretationState) = false
+
+istoplevel(sv::InferenceState) = sv.linfo.def isa Module
+istoplevel(sv::IRInterpretationState) = sv.mi.def isa Module
 
 method_info(sv::InferenceState) = sv.method_info
 method_info(sv::IRInterpretationState) = sv.method_info

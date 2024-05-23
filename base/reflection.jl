@@ -2181,6 +2181,36 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     return effects
 end
 
+function code_typed_toplevel(context_module::Module, @nospecialize(ex);
+                             world::UInt=get_world_counter(),
+                             interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
+    lwr = try
+        Meta.lower(context_module, ex)
+    catch
+        return nothing
+    end
+    if lwr isa Symbol
+        return nothing # TODO
+    elseif !(lwr isa Expr)
+        return nothing # TODO # `ex` is literal
+    end
+    isexpr(lwr, :thunk) || return nothing # lowered to `Expr(:error, ...)` or similar
+    src = lwr.args[1]::Core.CodeInfo
+    resolve_toplevel_symbols!(src, context_module)
+    mi = @ccall jl_method_instance_for_thunk(src::Any, context_module::Any)::Ref{Core.MethodInstance}
+    code = Core.Compiler.typeinf_ext_toplevel(interp, mi, Core.Compiler.SOURCE_MODE_FORCE_SOURCE_UNCACHED)
+    return code
+end
+
+function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
+    @ccall jl_resolve_globals_in_ir(
+        #=jl_array_t *stmts=# src.code::Any,
+        #=jl_module_t *m=# mod::Any,
+        #=jl_svec_t *sparam_vals=# Core.svec()::Any,
+        #=int binding_effects=# 0::Int)::Cvoid
+    return src
+end
+
 """
     print_statement_costs(io::IO, f, types)
 

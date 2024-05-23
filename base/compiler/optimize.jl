@@ -1233,7 +1233,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         renumber_cfg_stmts!(sv.cfg, blockchangemap)
     end
 
-    meta = process_meta!(code, InferenceParams(sv.inlining.interp).assume_bindings_static)
+    meta = process_meta!(code,
+        InferenceParams(sv.inlining.interp).assume_bindings_static,
+        sv.linfo.def isa Module)
     strip_trailing_junk!(code, ssavaluetypes, ssaflags, di, sv.cfg, stmtinfo)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
@@ -1244,7 +1246,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes)
 end
 
-function process_meta!(code::Vector{Any}, assume_bindings_static::Bool)
+function process_meta!(code::Vector{Any}, assume_bindings_static::Bool, istoplevel::Bool)
     meta = Expr[]
     for i = 1:length(code)
         stmt = code[i]
@@ -1257,6 +1259,7 @@ function process_meta!(code::Vector{Any}, assume_bindings_static::Bool)
     # into `meta::Vector{Any}`, making it accessible for various optimization passes.
     # The `replace_code_newstyle!` needs to filter out these temporary nodes inserted here.
     pushfirst!(meta, Expr(:assume_bindings_static, assume_bindings_static))
+    pushfirst!(meta, Expr(:istoplevel, istoplevel))
     return meta
 end
 
@@ -1270,6 +1273,17 @@ function assume_bindings_static(ir::IRCode)
     return false
 end
 assume_bindings_static(compact::IncrementalCompact) = assume_bindings_static(compact.ir)
+
+function istoplevel(ir::IRCode)
+    for node = ir.meta
+        node.head === :meta && break
+        if node.head === :istoplevel
+            return node.args[1]::Bool
+        end
+    end
+    return false
+end
+istoplevel(compact::IncrementalCompact) = istoplevel(compact.ir)
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
