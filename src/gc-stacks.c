@@ -56,7 +56,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
     void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
     if (stk == MAP_FAILED)
         return MAP_FAILED;
-    jl_atomic_fetch_add(&num_stack_mappings, 1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
 # else
