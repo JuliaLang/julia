@@ -3056,6 +3056,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             pwrap->next = inew;
         else
             allvars = inew;
+        vcount++;
     }
 
     // Re-sort the innervar inside the (reversed) var list.
