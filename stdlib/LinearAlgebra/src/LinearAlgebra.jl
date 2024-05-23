@@ -573,7 +573,9 @@ wrapper_char(A::Hermitian) =  WrapperChar('H', A.uplo == 'U')
 wrapper_char(A::Hermitian{<:Real}) = WrapperChar('S', A.uplo == 'U')
 wrapper_char(A::Symmetric) = WrapperChar('S', A.uplo == 'U')
 
-isNTC(A::AbstractArray) = uppercase(wrapper_char(A)) in ('N', 'T', 'C')
+wrapper_char_NTC(A::AbstractArray) = uppercase(wrapper_char(A)) == 'N'
+wrapper_char_NTC(A::Union{StridedArray, Adjoint, Transpose}) = true
+wrapper_char_NTC(A::Union{Symmetric, Hermitian}) = false
 
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     # merge the result of this before return, so that we can type-assert the return such

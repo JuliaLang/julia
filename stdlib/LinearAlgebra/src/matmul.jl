@@ -300,7 +300,7 @@ true
         _unwrap(A),
         _unwrap(B),
         α, β,
-        Val(isNTC(A) & isNTC(B))
+        Val(wrapper_char_NTC(A) & wrapper_char_NTC(B))
     )
 
 # this indirection allows is to specialize on the types of the wrappers of A and B to some extent,
