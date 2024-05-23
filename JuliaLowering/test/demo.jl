@@ -8,6 +8,23 @@ using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attribu
 using JuliaSyntaxFormatter
 using JuliaSyntaxFormatter: FormatContext
 
+function formatsrc(ex; color_by=nothing, kws...)
+    format_token_style = if !isnothing(color_by)
+        e->get(e, color_by, nothing)
+    else
+        e->nothing
+    end
+    Text(JuliaSyntaxFormatter.format(ex; format_token_style, kws...))
+end
+
+function annotate_scopes(mod, ex)
+    ex = ensure_attributes(ex, var_id=Int)
+    ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex)
+    ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
+    ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
+    ex
+end
+
 #-------------------------------------------------------------------------------
 # Demos of the prototype
 
@@ -85,48 +102,7 @@ end
 # end
 # """
 
-JuliaLowering.include_string(Main, """
-module M
-    using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope
-    using JuliaSyntax
-
-    # Introspection
-    macro __MODULE__()
-        __context__.scope_layer.mod
-    end
-
-    macro __FILE__()
-        JuliaLowering.filename(__context__.macroname)
-    end
-
-    macro __LINE__()
-        JuliaLowering.source_location(__context__.macroname)[1]
-    end
-
-    someglobal = "global in module M"
-
-    # Macro with local variables
-    macro foo(ex)
-        :(begin
-            x = "`x` from @foo"
-            (x, someglobal, \$ex)
-        end)
-    end
-
-    macro set_a_global(val)
-        :(begin
-            global a_global = \$val
-        end)
-    end
-
-    macro set_global_in_parent(ex)
-        e1 = adopt_scope(:(sym_introduced_from_M), __context__)
-        quote
-            \$e1 = \$ex
-        end
-    end
-end
-""")
+JuliaLowering.include(Main, "demo_include.jl")
 
 Base.eval(M, quote
     function var"@inert"(__context__::JuliaLowering.MacroContext, ex)
@@ -180,17 +156,33 @@ function softscope_test(ex)
     wrapscope(wrapscope(JuliaLowering.reparent(g, ex), :neutral), :soft)
 end
 
+# src = """
+# M.@test_inert_quote()
+# """
+
+# src = """
+# macro mmm(a; b=2)
+# end
+# macro A.b(ex)
+# end
+# """
+
+src = """
+M.@set_global_in_parent "bent hygiene!"
+"""
+
+# src = """
+# begin
+# M.@__LINE__
+# end
+# """
+
+# src = """@foo z"""
+
 src = """
 begin
     x = 42
     M.@foo x
-end
-"""
-
-src = """
-begin
-    M.@set_a_global 42
-    M.a_global
 end
 """
 
@@ -199,10 +191,14 @@ end
 # """
 
 # src = """
-# macro mmm(a; b=2)
+# begin
+#     M.@set_a_global 1000
+#     M.a_global
 # end
-# macro A.b(ex)
-# end
+# """
+
+# src = """
+# M.@set_global_in_parent "bent hygiene!"
 # """
 
 src = """
@@ -222,40 +218,12 @@ begin
 end
 """
 
-src = """
-M.@set_global_in_parent "bent hygiene!"
-"""
-
 # src = """
 # begin
-# M.@__LINE__
+#     x = -1
+#     M.@baz x
 # end
 # """
-
-# src = """@foo z"""
-
-# TODO:
-# "hygiene bending" / (being unhygenic, or bending hygiene to the context of a
-# macro argument on purpose)
-# * bend to macro name to get to parent layer?
-# * already needed in `#self#` argument
-
-function printsrc(ex; color_by=nothing, kws...)
-    format_token_style = if !isnothing(color_by)
-        e->get(e, color_by, nothing)
-    else
-        e->nothing
-    end
-    print(JuliaSyntaxFormatter.format(ex; format_token_style, kws...))
-end
-
-function annotate_scopes(mod, ex)
-    ex = ensure_attributes(ex, var_id=Int)
-    ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex)
-    ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
-    ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
-    ex
-end
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
@@ -264,23 +232,20 @@ ex = ensure_attributes(ex, var_id=Int)
 
 in_mod = Main
 ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
-@info "Macro expanded" ex_macroexpand
+@info "Macro expanded" formatsrc(ex_macroexpand, color_by=:scope_layer)
 
 ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
-@info "Desugared" ex_desugar
+@info "Desugared" formatsrc(ex_desugar, color_by=:scope_layer)
 
 ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
-@info "Resolved scopes" ex_scoped
-
-#printsrc(ex, color_by=:var_id)
-#printsrc(ex_macroexpand, color_by=:scope_layer)
+@info "Resolved scopes" formatsrc(ex_scoped, color_by=:var_id)
 
 ctx4, ex_compiled = JuliaLowering.linearize_ir(ctx3, ex_scoped)
-@info "Linear IR" ex_compiled
+@info "Linear IR" formatsrc(ex_compiled, color_by=:var_id)
 
-ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.var_info, ex_compiled)
-@info "CodeInfo" ex_expr
-
-eval_result = Base.eval(in_mod, ex_expr)
-@info "Eval" eval_result
-
+# ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.var_info, ex_compiled)
+# @info "CodeInfo" ex_expr
+#
+# eval_result = Base.eval(in_mod, ex_expr)
+# @info "Eval" eval_result
+#
