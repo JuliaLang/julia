@@ -748,6 +748,7 @@ end
 @testset "code_llvm on opaque_closure" begin
     let ci = code_typed(+, (Int, Int))[1][1]
         ir = Core.Compiler.inflate_ir(ci)
+        ir.argtypes[1] = Tuple{}
         @test ir.debuginfo.def === nothing
         ir.debuginfo.def = Symbol(@__FILE__)
         oc = Core.OpaqueClosure(ir)
