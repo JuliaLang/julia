@@ -1415,7 +1415,10 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
         memset(jv, 0, jl_field_offset(type, 0));
     }
     for (i = 0; i < nf; i++) {
-        set_nth_field(type, jv, i, va_arg(args, jl_value_t*), 0);
+	jl_value_t *arg = va_arg(args, jl_value_t*);
+	assert(arg != (jl_value_t*)&jl_nothing);
+	assert(arg != (jl_value_t*)&jl_nothing_type);
+        set_nth_field(type, jv, i, arg, 0);
     }
     va_end(args);
     return jv;
@@ -1642,6 +1645,8 @@ static inline void memassign_safe(int hasptr, jl_value_t *parent, char *dst, con
 
 void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT
 {
+    assert(rhs != (jl_value_t*)&jl_nothing);
+    assert(rhs != (jl_value_t*)&jl_nothing_type);
     size_t offs = jl_field_offset(st, i);
     if (rhs == NULL) { // TODO: this should be invalid, but it happens frequently in ircode.c
         assert(jl_field_isptr(st, i) && *(jl_value_t**)((char*)v + offs) == NULL);

@@ -2074,8 +2074,6 @@ static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block)
     }
 }
 
-#if 0 // this code is likely useful, but currently unused
-#ifndef JL_NDEBUG
 static void CreateConditionalAbort(IRBuilder<> &irbuilder, Value *test)
 {
     Function *f = irbuilder.GetInsertBlock()->getParent();
@@ -2090,8 +2088,6 @@ static void CreateConditionalAbort(IRBuilder<> &irbuilder, Value *test)
     irbuilder.CreateUnreachable();
     irbuilder.SetInsertPoint(postBB);
 }
-#endif
-#endif
 
 
 #include "cgutils.cpp"
@@ -9050,6 +9046,7 @@ static void init_jit_functions(void)
     global_jlvalue_to_llvm(new JuliaVariable{"jl_true", true, size2pjlvalue}, &jl_true);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_false", true, size2pjlvalue}, &jl_false);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_nothing", true, size2pjlvalue}, &jl_nothing);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_ptr_nothing", true, size2pjlvalue}, &jl_ptr_nothing);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_emptysvec", true, size2pjlvalue}, (jl_value_t**)&jl_emptysvec);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_emptytuple", true, size2pjlvalue}, &jl_emptytuple);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_diverror_exception", true, size2pjlvalue}, &jl_diverror_exception);

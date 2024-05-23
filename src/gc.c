@@ -1761,6 +1761,7 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
 // Push a work item to the queue
 STATIC_INLINE void gc_ptr_queue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT
 {
+    assert(obj != (jl_value_t*)&jl_nothing);
     ws_array_t *old_a = ws_queue_push(&mq->ptr_queue, &obj, sizeof(jl_value_t*));
     // Put `old_a` in `reclaim_set` to be freed after the mark phase
     if (__unlikely(old_a != NULL))
@@ -2218,6 +2219,7 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     uint32_t nr = nroots >> 2;
+    size_t j = 0;
     while (1) {
         jl_value_t ***rts = (jl_value_t ***)(((void **)s) + 2);
         for (uint32_t i = 0; i < nr; i++) {
@@ -2242,6 +2244,10 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
                 if (new_obj < (jl_value_t*)((uintptr_t)jl_max_tags << 4))
                     continue;
             }
+	    if (new_obj == (jl_value_t*)&jl_nothing) {
+		fprintf(stderr, " j: %zu\n", j);
+		assert(0);
+	    }
             gc_try_claim_and_push(mq, new_obj, NULL);
             gc_heap_snapshot_record_frame_to_object_edge(s, new_obj);
         }
@@ -2254,6 +2260,7 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
         assert(new_nroots <= UINT32_MAX);
         nroots = (uint32_t)new_nroots;
         nr = nroots >> 2;
+	j += 1;
     }
 }
 
@@ -2377,6 +2384,8 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
     gc_mark_objarray(ptls, parent, objs, objs + nobjs, 1, nptr);
 }
 
+JL_DLLEXPORT jl_task_t *jl_latest_task;
+
 // Enqueue and mark all outgoing references from `new_obj` which have not been marked
 // yet. `meta_updated` is mostly used to make sure we don't update metadata twice for
 // objects which have been enqueued into the `remset`
@@ -2442,6 +2451,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 else if (foreign_alloc)
                     objprofile_count(jl_task_type, bits == GC_OLD_MARKED, sizeof(jl_task_t));
                 jl_task_t *ta = (jl_task_t *)new_obj;
+		jl_latest_task = ta;
                 gc_scrub_record_task(ta);
                 if (gc_cblist_task_scanner) {
                     int16_t tid = jl_atomic_load_relaxed(&ta->tid);

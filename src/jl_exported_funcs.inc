@@ -200,6 +200,7 @@
     XX(jl_gc_sync_total_bytes) \
     XX(jl_gc_total_hrtime) \
     XX(jl_gdblookup) \
+    XX(jl_gdblookuplinfo) \
     XX(jl_generating_output) \
     XX(jl_generic_function_def) \
     XX(jl_gensym) \

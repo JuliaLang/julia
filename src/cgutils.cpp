@@ -1863,7 +1863,6 @@ static void emit_lockstate_value(jl_codectx_t &ctx, const jl_cgval_t &strct, boo
     emit_lockstate_value(ctx, boxed(ctx, strct), newstate);
 }
 
-
 // If `nullcheck` is not NULL and a pointer NULL check is necessary
 // store the pointer to be checked in `*nullcheck` instead of checking it
 static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, jl_value_t *jltype,
@@ -2017,9 +2016,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     }
     Value *r = nullptr;
     if (issetfield || isswapfield || isreplacefield)  {
-        if (isboxed)
+        if (isboxed) {
             r = boxed(ctx, rhs);
-        else if (aliasscope || Order != AtomicOrdering::NotAtomic || CountTrackedPointers(realelty).count) {
+	    Value *r_is_jl_ptr_nothing = ctx.builder.CreateICmpEQ(r, track_pjlvalue(ctx, literal_pointer_val(ctx, jl_ptr_nothing)));
+            CreateConditionalAbort(ctx.builder, r_is_jl_ptr_nothing);
+        } else if (aliasscope || Order != AtomicOrdering::NotAtomic || CountTrackedPointers(realelty).count) {
             r = emit_unbox(ctx, realelty, rhs, jltype);
             if (realelty != elty)
                 r = ctx.builder.CreateZExt(r, elty);
@@ -2164,6 +2165,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             rhs = newval(oldval);
             if (isboxed) {
                 r = boxed(ctx, rhs);
+                Value *r_is_jl_ptr_nothing = ctx.builder.CreateICmpEQ(r, track_pjlvalue(ctx, literal_pointer_val(ctx, jl_ptr_nothing)));
+                CreateConditionalAbort(ctx.builder, r_is_jl_ptr_nothing);
             }
             else if (Order != AtomicOrdering::NotAtomic || CountTrackedPointers(realelty).count) {
                 r = emit_unbox(ctx, realelty, rhs, jltype);
@@ -3925,6 +3928,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 Value *fval = NULL;
                 if (jl_field_isptr(sty, i)) {
                     fval = boxed(ctx, fval_info, field_promotable);
+			Value *fval_is_jl_ptr_nothing = ctx.builder.CreateICmpEQ(fval, track_pjlvalue(ctx, literal_pointer_val(ctx, jl_ptr_nothing)));
+			CreateConditionalAbort(ctx.builder, fval_is_jl_ptr_nothing);
                     if (!init_as_value) {
                         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
                         StoreInst *SI = cast<StoreInst>(ai.decorateInst(
