@@ -1549,6 +1549,9 @@ for (gemmt, elty) in
                         C::AbstractVecOrMat{$elty})
             chkuplo(uplo)
             require_one_based_indexing(A, B, C)
+            if C === A || C === B
+                throw(ArgumentError("output matrix must not be aliased with any input matrix"))
+            end
             m = size(A, transA == 'N' ? 1 : 2)
             ka = size(A, transA == 'N' ? 2 : 1)
             kb = size(B, transB == 'N' ? 1 : 2)
@@ -1629,6 +1632,9 @@ for (gemm, elty) in
 #               error("gemm!: BLAS module requires contiguous matrix columns")
 #           end  # should this be checked on every call?
             require_one_based_indexing(A, B, C)
+            if C === A || C === B
+                throw(ArgumentError("output matrix must not be aliased with any input matrix"))
+            end
             m = size(A, transA == 'N' ? 1 : 2)
             ka = size(A, transA == 'N' ? 2 : 1)
             kb = size(B, transB == 'N' ? 1 : 2)
@@ -1694,6 +1700,9 @@ for (mfname, elty) in ((:dsymm_,:Float64),
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
+            if C === A || C === B
+                throw(ArgumentError("output matrix must not be aliased with any input matrix"))
+            end
             M, N = size(B)
             if side == 'L'
                 if j != m
@@ -1784,6 +1793,9 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
+            if C === A || C === B
+                throw(ArgumentError("output matrix must not be aliased with any input matrix"))
+            end
             M, N = size(B)
             if side == 'L'
                 if j != m
@@ -1894,6 +1906,9 @@ for (fname, elty) in ((:dsyrk_,:Float64),
             chkuplo(uplo)
             require_one_based_indexing(A, C)
             n = checksquare(C)
+            if C === A
+                throw(ArgumentError("output matrix must not be aliased with the input matrix"))
+            end
             nn = size(A, trans == 'N' ? 1 : 2)
             if nn != n throw(DimensionMismatch(lazy"C has size ($n,$n), corresponding dimension of A is $nn")) end
             k  = size(A, trans == 'N' ? 2 : 1)
@@ -1951,6 +1966,9 @@ for (fname, elty, relty) in ((:zherk_, :ComplexF64, :Float64),
             chkuplo(uplo)
             require_one_based_indexing(A, C)
             n = checksquare(C)
+            if C === A
+                throw(ArgumentError("output matrix must not be aliased with the input matrix"))
+            end
             nn = size(A, trans == 'N' ? 1 : 2)
             if nn != n
                 throw(DimensionMismatch(lazy"the matrix to update has dimension $n but the implied dimension of the update is $(size(A, trans == 'N' ? 1 : 2))"))
