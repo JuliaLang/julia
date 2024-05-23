@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using StyledStrings # see https://github.com/JuliaLang/StyledStrings.jl/issues/61
+
 @testset "AnnotatedString" begin
     str = Base.AnnotatedString("some string")
     @test str == Base.AnnotatedString(str.string, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[])
