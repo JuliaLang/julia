@@ -808,6 +808,62 @@ end
 @test_throws ArgumentError("invalid index: \"foo\" of type String") [1]["foo"]
 @test_throws ArgumentError("invalid index: nothing of type Nothing") [1][nothing]
 
+# issue #53618
+@testset "FieldErrorHint" begin
+    struct FieldFoo
+        a::Float32
+        b::Int64
+    end
+
+    s = FieldFoo(1, 2)
+
+    @test s.a == 1.0f0
+    @test s.b == 2
+    @test_throws FieldError s.c
+
+    ex = try
+        s.c
+    catch e
+        e
+    end::FieldError
+
+    # Check error message first
+    errorMsg = sprint(Base.showerror, ex)
+    @test occursin("FieldError: type FieldFoo has no field c", errorMsg)
+
+    d = Dict(s => 1)
+
+    for fld in fieldnames(Dict)
+        ex = try
+            getfield(d, fld)
+        catch e
+            print(e)
+        end
+        @test !(ex isa Type) || ex <: FieldError
+    end
+    @test_throws FieldError d.a
+
+    ex = try
+        d.c
+    catch e
+        e
+    end::FieldError
+
+    errorMsg = sprint(Base.showerror, ex)
+    @test occursin("FieldError: type Dict has no field c", errorMsg)
+    # Check hint message
+    hintExpected = """
+        Did you mean to access dict values using key: `c` ?
+        Consider using `indexing` operation.
+        Example:
+            ```julia
+            dict = Dict(c=>someValue)
+            dict[c]
+            ```
+        """
+    @test occursin(hintExpected, errorMsg)
+end
+
 # test showing MethodError with type argument
 struct NoMethodsDefinedHere; end
 let buf = IOBuffer()
