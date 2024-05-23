@@ -772,4 +772,45 @@ end
     end
 end
 
+
+@testset "Zero Forwarding To Parents Of Wrapped Arrays" begin
+    struct WrappedArray{T,N} <: AbstractArray{T,N}
+        A::Array{T,N}
+    end
+
+    Base.zero(A::WrappedArray) = WrappedArray(zero(A.A))
+    Base.size(A::WrappedArray) = size(A.A)
+    Base.getindex(A::WrappedArray, i::Int) = A.A[i]
+    Base.getindex(A::WrappedArray{T, N}, I::Vararg{Int, N}) where {T, N} = A.A[I...]
+    Base.setindex!(A::WrappedArray, v, i::Int) = setindex!(A.A, v, i)
+    Base.setindex!(A::WrappedArray{T, N}, v, I::Vararg{Int, N}) where {T, N} = setindex!(A.A, v, I...)
+    Base.cconvert(::Type{Ptr{T}}, A::WrappedArray{T}) where T = Base.cconvert(Ptr{T}, A.A)
+
+    Base.strides(A::WrappedArray) = strides(A.A)
+    Base.elsize(::Type{WrappedArray{T,N}}) where {T,N} = Base.elsize(Array{T,N})
+
+    @testset "zero(::ArrayWrapper) should forward to the parent" begin
+        # Github Issue #53014
+        #
+        for ArrayType in (WrappedArray, Array)
+            Stat_mat = ArrayType([1 2; 2 3])
+            S_z = Symmetric(Stat_mat)
+            H_z = Hermitian(Stat_mat)
+            A_z = Adjoint(Stat_mat)
+            L_t_z = LowerTriangular(Stat_mat)
+            T_z = Transpose(Stat_mat)
+            U_h_z = UpperHessenberg(Stat_mat)
+            U_t_z = UpperTriangular(Stat_mat)
+
+            mats = Any[S_z, H_z, A_z, L_t_z, T_z, U_h_z, U_t_z]
+            for A in mats
+                if isdefined(A, :uplo)
+                @test zero(A).uplo == A.uplo
+                end
+                @test typeof(zero(A)) == typeof(A)
+            end
+        end
+    end
+end
+
 end # module TestSpecial
