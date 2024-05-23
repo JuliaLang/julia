@@ -74,7 +74,7 @@ real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
-function istriu(A::UpperHessenberg, k::Integer=0)
+Base.@constprop :aggressive function istriu(A::UpperHessenberg, k::Integer=0)
     k <= -1 && return true
     return _istriu(A, k)
 end
@@ -87,8 +87,10 @@ end
 Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
     i <= j+1 ? isassigned(H.data, i, j) : true
 
-Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
+Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Int, j::Int) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
+
+Base._reverse(A::UpperHessenberg, dims) = reverse!(Matrix(A); dims)
 
 Base.@propagate_inbounds function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1

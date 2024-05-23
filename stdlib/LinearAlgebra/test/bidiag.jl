@@ -166,6 +166,9 @@ Random.seed!(1)
 
         @testset for func in (conj, transpose, adjoint)
             @test func(func(T)) == T
+            if func ∈ (transpose, adjoint)
+                @test func(func(T)) === T
+            end
         end
 
         @testset "permutedims(::Bidiagonal)" begin
@@ -904,17 +907,30 @@ end
     @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
 end
 
-@testset "Matrix conversion for non-numeric and undef" begin
-    B = Bidiagonal(Vector{BigInt}(undef, 4), fill(big(3), 3), :U)
-    M = Matrix(B)
-    B[diagind(B)] .= 4
-    M[diagind(M)] .= 4
-    @test diag(B) == diag(M)
+@testset "Reverse operation on Bidiagonal" begin
+    n = 5
+    d = randn(n)
+    e = randn(n - 1)
+    for uplo in (:U, :L)
+        B = Bidiagonal(d, e, uplo)
+        @test reverse(B, dims=1) == reverse(Matrix(B), dims=1)
+        @test reverse(B, dims=2) == reverse(Matrix(B), dims=2)
+        @test reverse(B)::Bidiagonal == reverse(Matrix(B))
+    end
+end
 
+@testset "Matrix conversion for non-numeric" begin
     B = Bidiagonal(fill(Diagonal([1,3]), 3), fill(Diagonal([1,3]), 2), :U)
     M = Matrix{eltype(B)}(B)
     @test M isa Matrix{eltype(B)}
     @test M == B
+end
+
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    B = Bidiagonal(dv, ev, :U)
+    @test_throws "invalid index" B[3, true]
+    @test B[1,2] == B[Int8(1),UInt16(2)] == B[big(1), Int16(2)]
 end
 
 end # module TestBidiagonal

@@ -114,6 +114,7 @@ Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 AbstractMatrix{T}(D::Diagonal{T}) where {T} = copy(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
+Matrix(D::Diagonal{Any}) = Matrix{Any}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 function Matrix{T}(D::Diagonal) where {T}
     B = Matrix{T}(undef, size(D))
@@ -187,6 +188,10 @@ end
 diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
 diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
+Base._reverse(A::Diagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::Diagonal, ::Colon) = Diagonal(reverse(A.diag))
+Base._reverse!(A::Diagonal, ::Colon) = (reverse!(A.diag); A)
+
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
@@ -223,8 +228,8 @@ iszero(D::Diagonal) = all(iszero, D.diag)
 isone(D::Diagonal) = all(isone, D.diag)
 isdiag(D::Diagonal) = all(isdiag, D.diag)
 isdiag(D::Diagonal{<:Number}) = true
-istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
-istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
+Base.@constprop :aggressive istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
+Base.@constprop :aggressive istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
 function triu!(D::Diagonal{T}, k::Integer=0) where T
     n = size(D,1)
     if !(-n + 1 <= k <= n + 1)
