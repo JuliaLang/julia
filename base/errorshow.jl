@@ -369,7 +369,7 @@ end
 
 function showerror(io::IO, exc::FieldError)
     @nospecialize
-    println(io, "FieldError: type $(exc.type) has no field $(exc.field)")
+    print(io, "FieldError: type $(exc.type) has no field $(exc.field)")
     Base.Experimental.show_error_hints(io, exc)
 end
 

@@ -2840,7 +2840,7 @@ end
     f((; a, b)) = a, b
     @test f((b=3, a=4)) == (4, 3)
     @test f((b=3, c=2, a=4)) == (4, 3)
-    @test_throws ErrorException f((;))
+    @test_throws FieldError f((;))
 
     # with type annotation
     let num, den, a, b
