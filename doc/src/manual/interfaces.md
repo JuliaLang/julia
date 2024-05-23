@@ -403,7 +403,7 @@ perhaps range-types `Ind` of your own design. For more information, see
 | `Base.elsize(::Type{<:A})`                      |                                        | Return the stride between consecutive elements in the array.                                       |
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                              |
 | `strides(A)`                                    | `strides(a::DenseArray{<:Any, 0}) = (); strides(a::DenseArray) = (1, accumulate(*, Base.front(size(a)))...);` | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple. Required iff `A` does not subtype `DenseArray`. |
-| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension i.    |
 
 A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
 Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
