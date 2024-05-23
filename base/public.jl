@@ -62,6 +62,8 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+    method_argnames,
+    signature_type,
 
 # Opperators
     operator_associativity,

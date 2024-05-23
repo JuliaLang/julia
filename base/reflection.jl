@@ -1124,12 +1124,15 @@ function signature_type(@nospecialize(f), @nospecialize(argtypes))
 end
 
 """
-    signature_type(m::Method) -> Union{Tuple, Nothing}
+    signature_type(m::Method) -> Type{<:Tuple}
 
-Retrieve the signature type of a `Method`. Returns a `Tuple` type the first element of which is
+Retrieve the signature type of a `Method`. Returns a `Tuple` type, the first element of which is
 the `typeof` the function for the method. The remaining elements are the types of the arguments.
 
-For methods that are `OpaqueClosure`s or `Builtin`s, `nothing` is returned.
+For methods that are `OpaqueClosure`s or `Builtin`s, `Tuple{}` is returned. However, this
+behavior is not stable because future improvements to the compiler may allow improved reflection for
+these types.
+
 # Examples
 ```jldoctest
 julia> f(x::Int, y) = x + y
@@ -1141,10 +1144,7 @@ Tuple{typeof(f), Int, Any}
 ```
 """
 function signature_type(m::Method)
-    if m.sig !== Tuple # OpaqueClosure or Builtin
-        return m.sig
-    end
-    return nothing
+    return m.sig
 end
 
 """
@@ -1223,7 +1223,8 @@ end
 # high-level, more convenient method lookup functions
 
 """
-`MethodList` is a type for reflecting and pretty-printing a subset of methods.
+`MethodList` is a type for reflecting and pretty-printing a subset of methods. It is returned by
+[`methods`](@ref).
 """
 mutable struct MethodList <: AbstractArray{Method,1}
     ms::Array{Method,1}
@@ -1246,7 +1247,7 @@ end
     methods(f, [types], [module]) -> AbstractVector{Method}
 
 Return a list of [`Method`](@ref)s for `f`. The returned container type is not specified.
-Use `collect(methods(f))` to construct a `Vector{Method}`. 
+Use `collect(methods(f))` to construct a `Vector{Method}`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
