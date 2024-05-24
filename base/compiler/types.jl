@@ -91,9 +91,6 @@ mutable struct InferenceResult
     is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
     ci::CodeInstance         # CodeInstance if this result has been added to the cache
     function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::Union{Nothing,BitVector})
-        def = mi.def
-        nargs = def isa Method ? Int(def.nargs) : 0
-        @assert length(argtypes) == nargs "invalid `argtypes` for `mi`"
         return new(mi, argtypes, overridden_by_const, nothing, nothing, nothing,
             WorldRange(), Effects(), Effects(), NULL_ANALYSIS_RESULTS, false)
     end

@@ -540,6 +540,29 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
     return;
 }
 
+JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
+                                   jl_code_instance_t *expected_ci,
+                                   jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
+{
+    JL_GC_PUSH1(&ci);
+    if (jl_is_method(mi->def.method))
+        JL_LOCK(&mi->def.method->writelock);
+    jl_code_instance_t *oldci = jl_atomic_load_relaxed(&mi->cache);
+    int ret = 0;
+    if (oldci == expected_ci) {
+        jl_atomic_store_relaxed(&ci->next, oldci);
+        if (oldci)
+            jl_gc_wb(ci, oldci);
+        jl_atomic_store_release(&mi->cache, ci);
+        jl_gc_wb(mi, ci);
+        ret = 1;
+    }
+    if (jl_is_method(mi->def.method))
+        JL_UNLOCK(&mi->def.method->writelock);
+    JL_GC_POP();
+    return ret;
+}
+
 static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
 {
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
@@ -748,7 +771,7 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
                 vm = T_has_tv ? jl_type_unionall(v, T) : T;
                 if (N_has_tv)
                     N = NULL;
-                vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1); // this cannot throw for these inputs
+                vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1, 0); // this cannot throw for these inputs
             }
             sp++;
             decl = ((jl_unionall_t*)decl)->body;
@@ -997,7 +1020,7 @@ static void jl_compilation_sig(
             // avoid Vararg{Type{Type{...}}}
             if (jl_is_type_type(type_i) && jl_is_type_type(jl_tparam0(type_i)))
                 type_i = (jl_value_t*)jl_type_type;
-            type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1); // this cannot throw for these inputs
+            type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1, 0); // this cannot throw for these inputs
         }
         else {
             type_i = inst_varargp_in_env(decl, sparams);
@@ -2587,8 +2610,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_callptr_t ucache_invoke = jl_atomic_load_acquire(&ucache->invoke);
         if (ucache_invoke == NULL) {
             if ((!jl_is_method(def) || def->source == jl_nothing) &&
-                (jl_atomic_load_relaxed(&ucache->def->uninferred) == jl_nothing ||
-                 jl_atomic_load_relaxed(&ucache->def->uninferred) == NULL)) {
+                !jl_cached_uninferred(jl_atomic_load_relaxed(&ucache->def->cache), world)) {
                 jl_throw(jl_new_struct(jl_missingcodeerror_type, (jl_value_t*)mi));
             }
             jl_generate_fptr_for_unspecialized(ucache);

@@ -138,6 +138,11 @@ tag = "ANY"
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
+@testset "code_warntype OpaqueClosure" begin
+    g = Base.Experimental.@opaque Tuple{Float64} x -> 0.0
+    @test warntype_hastag(g, Tuple{Float64}, "::Float64")
+end
+
 end # module WarnType
 
 # Adds test for PR #17636
@@ -743,6 +748,7 @@ end
 @testset "code_llvm on opaque_closure" begin
     let ci = code_typed(+, (Int, Int))[1][1]
         ir = Core.Compiler.inflate_ir(ci)
+        ir.argtypes[1] = Tuple{}
         @test ir.debuginfo.def === nothing
         ir.debuginfo.def = Symbol(@__FILE__)
         oc = Core.OpaqueClosure(ir)

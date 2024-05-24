@@ -1,8 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=TYPED
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame,FinalLowerGC)' -S %s | FileCheck %s --check-prefixes=OPAQUE
 
 
 declare void @boxed_simple({} addrspace(10)*, {} addrspace(10)*)
@@ -15,7 +13,6 @@ declare void @one_arg_boxed({} addrspace(10)*)
 define void @try_catch(i64 %a, i64 %b)
 {
 ; Because of the returns_twice function, we need to keep aboxed live everywhere
-; TYPED: %gcframe = alloca {} addrspace(10)*, i32 4
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 4
 top:
     %sigframe = alloca [208 x i8], align 16
