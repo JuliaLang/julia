@@ -9,6 +9,7 @@ public
 
 # Types
     AbstractLock,
+    AbstractPipe,
     AsyncCondition,
     CodeUnits,
     Event,

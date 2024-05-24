@@ -666,8 +666,11 @@ julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
 true
 ```
 """
-function norm(itr, p::Real=2)
+Base.@constprop :aggressive function norm(itr, p::Real=2)
     isempty(itr) && return float(norm(zero(eltype(itr))))
+    v, s = iterate(itr)
+    !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
+        "cannot evaluate norm recursively if the type of the initial element is identical to that of the container"))
     if p == 2
         return norm2(itr)
     elseif p == 1
@@ -1086,7 +1089,7 @@ julia> tr(A)
 5
 ```
 """
-function tr(A::AbstractMatrix)
+function tr(A)
     checksquare(A)
     sum(diag(A))
 end

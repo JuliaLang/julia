@@ -246,6 +246,10 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
+Base._reverse(A::UpperOrUnitUpperTriangular, dims::Integer) = reverse!(Matrix(A); dims)
+Base._reverse(A::UpperTriangular, ::Colon) = LowerTriangular(reverse(A.data))
+Base._reverse(A::UnitUpperTriangular, ::Colon) = UnitLowerTriangular(reverse(A.data))
+
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
         iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
@@ -268,6 +272,10 @@ end
     end
     return A
 end
+
+Base._reverse(A::LowerOrUnitLowerTriangular, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::LowerTriangular, ::Colon) = UpperTriangular(reverse(A.data))
+Base._reverse(A::UnitLowerTriangular, ::Colon) = UnitUpperTriangular(reverse(A.data))
 
 @propagate_inbounds function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
@@ -525,10 +533,7 @@ function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
 end
 function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
     copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
-    _triangularize!(U)(dest)
-    if U isa Union{UnitUpperTriangular, UnitLowerTriangular}
-        dest[diagind(dest)] .= @view U[diagind(U, IndexCartesian())]
-    end
+    copytrito!(dest, U, U isa UpperOrUnitUpperTriangular ? 'L' : 'U')
     return dest
 end
 function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular{<:Any, <:StridedMatrix})
@@ -537,7 +542,7 @@ function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular{<:Any, <:Stride
     return dest
 end
 # for strided matrices, we explicitly loop over the arrays to improve cache locality
-# This fuses the copytrito! and triu/l operations
+# This fuses the copytrito! for the two halves
 function copyto_unaliased!(dest::StridedMatrix, U::UpperOrUnitUpperTriangular{<:Any, <:StridedMatrix})
     isunit = U isa UnitUpperTriangular
     for col in axes(dest,2)

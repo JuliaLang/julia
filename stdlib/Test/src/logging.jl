@@ -2,6 +2,7 @@
 
 using Logging: Logging, AbstractLogger, LogLevel, Info, with_logger
 import Base: occursin
+using Base: @lock
 
 #-------------------------------------------------------------------------------
 """
@@ -35,11 +36,15 @@ struct Ignored ; end
 #-------------------------------------------------------------------------------
 # Logger with extra test-related state
 mutable struct TestLogger <: AbstractLogger
-    logs::Vector{LogRecord}
+    lock::ReentrantLock
+    logs::Vector{LogRecord}  # Guarded by lock.
     min_level::LogLevel
     catch_exceptions::Bool
-    shouldlog_args
-    message_limits::Dict{Any,Int}
+    # Note: shouldlog_args only maintains the info for the most recent log message, which
+    # may not be meaningful in a multithreaded program. See:
+    # https://github.com/JuliaLang/julia/pull/54497#discussion_r1603691606
+    shouldlog_args  # Guarded by lock.
+    message_limits::Dict{Any,Int}  # Guarded by lock.
     respect_maxlog::Bool
 end
 
@@ -80,15 +85,17 @@ Test Passed
 ```
 """
 TestLogger(; min_level=Info, catch_exceptions=false, respect_maxlog=true) =
-    TestLogger(LogRecord[], min_level, catch_exceptions, nothing, Dict{Any, Int}(), respect_maxlog)
+    TestLogger(ReentrantLock(), LogRecord[], min_level, catch_exceptions, nothing, Dict{Any, Int}(), respect_maxlog)
 Logging.min_enabled_level(logger::TestLogger) = logger.min_level
 
 function Logging.shouldlog(logger::TestLogger, level, _module, group, id)
-    if get(logger.message_limits, id, 1) > 0
-        logger.shouldlog_args = (level, _module, group, id)
-        true
-    else
-        false
+    @lock logger.lock begin
+        if get(logger.message_limits, id, 1) > 0
+            logger.shouldlog_args = (level, _module, group, id)
+            return true
+        else
+            return false
+        end
     end
 end
 
@@ -98,12 +105,17 @@ function Logging.handle_message(logger::TestLogger, level, msg, _module,
     if logger.respect_maxlog
         maxlog = get(kwargs, :maxlog, nothing)
         if maxlog isa Core.BuiltinInts
-            remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
-            logger.message_limits[id] = remaining - 1
-            remaining > 0 || return
+            @lock logger.lock begin
+                remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+                logger.message_limits[id] = remaining - 1
+                remaining > 0 || return
+            end
         end
     end
-    push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
+    r = LogRecord(level, msg, _module, group, id, file, line, kwargs)
+    @lock logger.lock begin
+        push!(logger.logs, r)
+    end
 end
 
 # Catch exceptions for the test logger only if specified
@@ -112,7 +124,9 @@ Logging.catch_exceptions(logger::TestLogger) = logger.catch_exceptions
 function collect_test_logs(f; kwargs...)
     logger = TestLogger(; kwargs...)
     value = with_logger(f, logger)
-    logger.logs, value
+    @lock logger.lock begin
+        return copy(logger.logs), value
+    end
 end
 
 

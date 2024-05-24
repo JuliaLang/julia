@@ -115,6 +115,7 @@ module IteratorsMD
     oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(Returns(1), Val(N)))
 
     # arithmetic, min/max
+    @inline (+)(index::CartesianIndex) = index
     @inline (-)(index::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(-, index.I))
     @inline (+)(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =

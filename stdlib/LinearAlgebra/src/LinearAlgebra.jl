@@ -190,6 +190,7 @@ end
 abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
+struct RobustRepresentations <: Algorithm end
 
 # Pivoting strategies for matrix factorization algorithms.
 abstract type PivotingStrategy end
@@ -240,6 +241,8 @@ Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref
 [`abs`](@ref) methods, whose respective result types must admit a [`<`](@ref) method.
 """
 struct ColumnNorm <: PivotingStrategy end
+
+using Base: DimOrInd
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,

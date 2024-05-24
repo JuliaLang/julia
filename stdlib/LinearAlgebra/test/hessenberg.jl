@@ -202,6 +202,13 @@ let n = 10
     end
 end
 
+@testset "Reverse operation on UpperHessenberg" begin
+    A = UpperHessenberg(randn(5, 5))
+    @test reverse(A, dims=1) == reverse(Matrix(A), dims=1)
+    @test reverse(A, dims=2) == reverse(Matrix(A), dims=2)
+    @test reverse(A) == reverse(Matrix(A))
+end
+
 @testset "hessenberg(::AbstractMatrix)" begin
     n = 10
     A = Tridiagonal(rand(n-1), rand(n), rand(n-1))
