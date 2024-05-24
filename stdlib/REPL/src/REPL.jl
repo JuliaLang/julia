@@ -1230,22 +1230,34 @@ function setup_interface(
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 global pkg_mode
                 if pkg_mode === nothing
-                    pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                    REPLExt = Base.require_stdlib(pkgid, "REPLExt")
-                    pkg_mode = nothing
-                    if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
-                        for mode in repl.interface.modes
-                            if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
-                                pkg_mode = mode
-                                break
+                    LineEdit.clear_line(LineEdit.terminal(s))
+                    # use 6 .'s here because its the same width as the most likely `@v1.xx` env name
+                    print(LineEdit.terminal(s), styled"{blue,bold:({gray:......}) pkg> }")
+                    # spawn Pkg load to avoid blocking typing during loading. Typing will block if only 1 thread
+                    t_replswitch = Threads.@spawn begin
+                        pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+                        REPLExt = Base.require_stdlib(pkgid, "REPLExt")
+                        if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
+                            for mode in repl.interface.modes
+                                if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
+                                    pkg_mode = mode
+                                    break
+                                end
+                            end
+                        end
+                        if pkg_mode !== nothing
+                            buf = copy(LineEdit.buffer(s))
+                            transition(s, pkg_mode) do
+                                LineEdit.state(s, pkg_mode).input_buffer = buf
                             end
                         end
                     end
-                end
-                if pkg_mode !== nothing
-                    buf = copy(LineEdit.buffer(s))
-                    transition(s, pkg_mode) do
-                        LineEdit.state(s, pkg_mode).input_buffer = buf
+                    Base.errormonitor(t_replswitch)
+                    # while loading just accept all keys, no keymap functionality
+                    while !istaskdone(t_replswitch)
+                        c = read(stdin, Char)
+                        istaskdone(t_replswitch) && break
+                        edit_insert(s, c)
                     end
                     return
                 end
