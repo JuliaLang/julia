@@ -896,12 +896,17 @@ emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 In-place [`copy`](@ref) of `src` into `dst`, discarding any pre-existing
 elements in `dst`.
 If `dst` and `src` are of the same type, `dst == src` should hold after
-the call. If `dst` and `src` are multidimensional arrays, they must have
+the call. If `dst` and `src` are vector types, they must have equal
+offset. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 
 See also [`copyto!`](@ref).
+
+!!! note
+    When operating on vector types, if `dst` and `src` are not of the
+    same length, `dst` is resized to `length(src)` prior to the `copy`.
 
 !!! compat "Julia 1.1"
     This method requires at least Julia 1.1. In Julia 1.0 this method
@@ -1078,45 +1083,28 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if srcstyle isa IndexLinear
             # Single-index implementation
             @inbounds for i in srcinds
-                if isassigned(src, i)
-                    dest[i + Δi] = src[i]
-                else
-                    _unsetindex!(dest, i + Δi)
-                end
+                dest[i + Δi] = src[i]
             end
         else
             # Dual-index implementation
             i = idf - 1
-            @inbounds for a in eachindex(src)
-                i += 1
-                if isassigned(src, a)
-                    dest[i] = src[a]
-                else
-                    _unsetindex!(dest, i)
-                end
+            @inbounds for a in src
+                dest[i+=1] = a
             end
         end
     else
         iterdest, itersrc = eachindex(dest), eachindex(src)
         if iterdest == itersrc
             # Shared-iterator implementation
-            @inbounds for I in iterdest
-                if isassigned(src, I)
-                    dest[I] = src[I]
-                else
-                    _unsetindex!(dest, I)
-                end
+            for I in iterdest
+                @inbounds dest[I] = src[I]
             end
         else
             # Dual-iterator implementation
             ret = iterate(iterdest)
-            @inbounds for a in itersrc
+            @inbounds for a in src
                 idx, state = ret::NTuple{2,Any}
-                if isassigned(src, a)
-                    dest[idx] = src[a]
-                else
-                    _unsetindex!(dest, idx)
-                end
+                dest[idx] = a
                 ret = iterate(iterdest, state)
             end
         end
@@ -1145,11 +1133,7 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
     src′ = unalias(dest, src)
     @inbounds for i = 0:n-1
-        if isassigned(src′, sstart+i)
-            dest[dstart+i] = src′[sstart+i]
-        else
-            _unsetindex!(dest, dstart+i)
-        end
+        dest[dstart+i] = src′[sstart+i]
     end
     return dest
 end
@@ -1160,7 +1144,7 @@ function copy(a::AbstractArray)
 end
 
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
-                 A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
+               A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
     if length(ir_dest) != length(ir_src)
         throw(ArgumentError(LazyString("source and destination must have same size (got ",
             length(ir_src)," and ",length(ir_dest),")")))
@@ -1220,6 +1204,23 @@ copymutable(itr) = collect(itr)
 zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
 zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
 zero(x::AbstractArray) = map(zero, x)
+
+function _one(unit::T, mat::AbstractMatrix) where {T}
+    (rows, cols) = axes(mat)
+    (length(rows) == length(cols)) ||
+      throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
+    zer = zero(unit)::T
+    require_one_based_indexing(mat)
+    I = similar(mat, T)
+    fill!(I, zer)
+    for i ∈ rows
+        I[i, i] = unit
+    end
+    I
+end
+
+one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
+oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
@@ -1473,20 +1474,7 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
-function _unsetindex!(A::AbstractArray, i::Integer...)
-    @_propagate_inbounds_meta
-    _unsetindex!(A, map(to_index, i)...)
-end
-
-function _unsetindex!(A::AbstractArray{T}, i::Int...) where T
-    # this provides a fallback method which is a no-op if the element is already unassigned
-    # such that copying into an uninitialized object generally always will work,
-    # even if the specific custom array type has not implemented `_unsetindex!`
-    @inline
-    @boundscheck checkbounds(A, i...)
-    allocatedinline(T) || @inbounds(!isassigned(A, i...)) || throw(MethodError(_unsetindex!, (A, i...)))
-    return A
-end
+_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
 
 """
     parent(A)

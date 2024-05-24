@@ -32,11 +32,14 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
     void *stk = VirtualAlloc(NULL, bufsz, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (stk == NULL)
         return MAP_FAILED;
+
+    // set up a guard page to detect stack overflow
     DWORD dwOldProtect;
     if (!VirtualProtect(stk, jl_guard_size, PAGE_READWRITE | PAGE_GUARD, &dwOldProtect)) {
         VirtualFree(stk, 0, MEM_RELEASE);
         return MAP_FAILED;
     }
+
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
@@ -50,21 +53,41 @@ static void free_stack(void *stkbuf, size_t bufsz)
 
 #else
 
+# ifdef _OS_OPENBSD_
+static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
+{
+    void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    if (stk == MAP_FAILED)
+        return MAP_FAILED;
+
+    // we don't set up a guard page to detect stack overflow: on OpenBSD, any
+    // mmap-ed region has guard page managed by the kernel, so there is no
+    // need for it. Additionally, a memory region used as stack (memory
+    // allocated with MAP_STACK option) has strict permission, and you can't
+    // "create" a guard page on such memory by using `mprotect` on it
+
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
+    return stk;
+}
+# else
 static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
     void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stk == MAP_FAILED)
         return MAP_FAILED;
+
 #if !defined(JL_HAVE_UCONTEXT) && !defined(JL_HAVE_SIGALTSTACK)
-    // setup a guard page to detect stack overflow
+    // set up a guard page to detect stack overflow
     if (mprotect(stk, jl_guard_size, PROT_NONE) == -1) {
         munmap(stk, bufsz);
         return MAP_FAILED;
     }
 #endif
+
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
+# endif
 
 static void free_stack(void *stkbuf, size_t bufsz)
 {

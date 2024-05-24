@@ -64,13 +64,15 @@ ifeq ($(OS), Linux)
 DEP_LIBS += unwind
 else ifeq ($(OS), FreeBSD)
 DEP_LIBS += unwind
+else ifeq ($(OS), OpenBSD)
+DEP_LIBS += llvmunwind
 else ifeq ($(OS), Darwin)
 DEP_LIBS += llvmunwind
 endif
 endif
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
@@ -117,7 +119,6 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 DEP_LIBS += gmp
 endif
 
-ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 DEP_LIBS += mbedtls
 endif
@@ -134,8 +135,9 @@ ifeq ($(USE_SYSTEM_CURL), 0)
 DEP_LIBS += curl
 endif
 
+ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 DEP_LIBS += libgit2
-endif # USE_SYSTEM_LIBGIT2
+endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr

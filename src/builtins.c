@@ -115,7 +115,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                     continue; // skip this field (it is #undef)
                 }
             }
-            if (!ft->layout->flags.haspadding) {
+            if (!ft->layout->flags.haspadding && ft->layout->flags.isbitsegal) {
                 if (!bits_equal(ao, bo, ft->layout->size))
                     return 0;
             }
@@ -284,7 +284,7 @@ inline int jl_egal__bits(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t
     if (sz == 0)
         return 1;
     size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0 || !dt->layout->flags.haspadding)
+    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal))
         return bits_equal(a, b, sz);
     return compare_fields(a, b, dt);
 }
@@ -394,7 +394,7 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
     if (sz == 0)
         return ~h;
     size_t f, nf = jl_datatype_nfields(dt);
-    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->npointers == 0)) {
+    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal && dt->layout->npointers == 0)) {
         // operate element-wise if there are unused bits inside,
         // otherwise just take the whole data block at once
         // a few select pointers (notably symbol) also have special hash values
@@ -1564,11 +1564,11 @@ JL_CALLABLE(jl_f_apply_type)
         jl_vararg_t *vm = (jl_vararg_t*)args[0];
         if (!vm->T) {
             JL_NARGS(apply_type, 2, 3);
-            return (jl_value_t*)jl_wrap_vararg(args[1], nargs == 3 ? args[2] : NULL, 1);
+            return (jl_value_t*)jl_wrap_vararg(args[1], nargs == 3 ? args[2] : NULL, 1, 0);
         }
         else if (!vm->N) {
             JL_NARGS(apply_type, 2, 2);
-            return (jl_value_t*)jl_wrap_vararg(vm->T, args[1], 1);
+            return (jl_value_t*)jl_wrap_vararg(vm->T, args[1], 1, 0);
         }
     }
     else if (jl_is_unionall(args[0])) {
@@ -2474,7 +2474,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
     add_builtin("TypeofVararg", (jl_value_t*)jl_vararg_type);
     add_builtin("SimpleVector", (jl_value_t*)jl_simplevector_type);
-    add_builtin("Vararg", (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0));
+    add_builtin("Vararg", (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0));
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);

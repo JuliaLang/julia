@@ -700,4 +700,6 @@ end
 
 _global_logstate = LogState(SimpleLogger())
 
+include("logging/ConsoleLogger.jl")
+
 end # CoreLogging

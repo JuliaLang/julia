@@ -50,7 +50,15 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     JL_GC_PUSH2(&sigtype, &selected_rt);
     sigtype = jl_argtype_with_function(captures, (jl_value_t*)argt);
 
-    jl_method_instance_t *mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
+    jl_method_instance_t *mi = NULL;
+    if (source->source) {
+        mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
+    } else {
+        mi = (jl_method_instance_t *)jl_atomic_load_relaxed(&source->specializations);
+        if (!jl_subtype(sigtype, mi->specTypes)) {
+            jl_error("sigtype mismatch in optimized opaque closure");
+        }
+    }
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
     jl_code_instance_t *ci = NULL;
@@ -147,7 +155,8 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     jl_atomic_store_release(&meth->deleted_world, world);
 
     if (isinferred) {
-        sigtype = jl_argtype_with_function(env, (jl_value_t*)argt);
+        jl_value_t *argslotty = jl_array_ptr_ref(ci->slottypes, 0);
+        sigtype = jl_argtype_with_function_type(argslotty, (jl_value_t*)argt);
         jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)root, sigtype, jl_emptysvec);
         inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
             0, world, world, 0, 0, jl_nothing, 0, ci->debuginfo);

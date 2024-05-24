@@ -44,10 +44,14 @@ precompile_test_harness() do load_path
             @test isdefined(ci, :next)
             @test ci.owner === nothing
             @test ci.max_world == typemax(UInt)
+            @test Base.module_build_id(TestAbsIntPrecompile1) ==
+                Base.object_build_id(ci)
             ci = ci.next
             @test !isdefined(ci, :next)
             @test ci.owner === cache_owner
             @test ci.max_world == typemax(UInt)
+            @test Base.module_build_id(TestAbsIntPrecompile1) ==
+                Base.object_build_id(ci)
         end
         let m = only(methods(sum, (Vector{Float64},)))
             found = false
@@ -57,10 +61,14 @@ precompile_test_harness() do load_path
                     @test isdefined(ci, :next)
                     @test ci.owner === cache_owner
                     @test ci.max_world == typemax(UInt)
+                    @test Base.module_build_id(TestAbsIntPrecompile1) ==
+                        Base.object_build_id(ci)
                     ci = ci.next
                     @test !isdefined(ci, :next)
                     @test ci.owner === nothing
                     @test ci.max_world == typemax(UInt)
+                    @test Base.module_build_id(TestAbsIntPrecompile1) ==
+                        Base.object_build_id(ci)
                     found = true
                     break
                 end

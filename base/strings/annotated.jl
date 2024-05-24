@@ -25,6 +25,17 @@ and a value (`Any`), paired together as a `Pair{Symbol, <:Any}`.
 Labels do not need to be unique, the same region can hold multiple annotations
 with the same label.
 
+Code written for `AnnotatedString`s in general should conserve the following
+properties:
+- Which characters an annotation is applied to
+- The order in which annotations are applied to each character
+
+Additional semantics may be introduced by specific uses of `AnnotatedString`s.
+
+A corollary of these rules is that adjacent, consecutively placed, annotations
+with identical labels and values are equivalent to a single annotation spanning
+the combined range.
+
 See also [`AnnotatedChar`](@ref), [`annotatedstring`](@ref),
 [`annotations`](@ref), and [`annotate!`](@ref).
 
@@ -159,6 +170,22 @@ function getindex(s::AnnotatedString, i::Integer)
     end
 end
 
+# To make `AnnotatedString`s repr-evaluable, we need to override
+# the generic `AbstractString` 2-arg show method.
+
+function show(io::IO, s::A) where {A <: AnnotatedString}
+    show(io, A)
+    print(io, '(')
+    show(io, s.string)
+    print(io, ", ")
+    show(IOContext(io, :typeinfo => typeof(annotations(s))), annotations(s))
+    print(io, ')')
+end
+
+# But still use the generic `AbstractString` fallback for the 3-arg show.
+show(io::IO, ::MIME"text/plain", s::AnnotatedString) =
+    invoke(show, Tuple{IO, AbstractString}, io, s)
+
 ## AbstractChar interface ##
 
 ncodeunits(c::AnnotatedChar) = ncodeunits(c.char)
@@ -175,6 +202,24 @@ cmp(a::AnnotatedString, b::AnnotatedString) = cmp(a.string, b.string)
 
 ==(a::AnnotatedString, b::AbstractString) = isempty(a.annotations) && a.string == b
 ==(a::AbstractString, b::AnnotatedString) = isempty(b.annotations) && a == b.string
+
+# To prevent substring equality from hitting the generic fallback
+
+function ==(a::SubString{<:AnnotatedString}, b::SubString{<:AnnotatedString})
+    SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) ==
+        SubString(b.string.string, b.offset, b.ncodeunits, Val(:noshift)) &&
+        annotations(a) == annotations(b)
+end
+
+==(a::SubString{<:AnnotatedString}, b::AnnotatedString) =
+    annotations(a) == annotations(b) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b.string
+
+==(a::SubString{<:AnnotatedString}, b::AbstractString) =
+    isempty(annotations(a)) && SubString(a.string.string, a.offset, a.ncodeunits, Val(:noshift)) == b
+
+==(a::AbstractString, b::SubString{<:AnnotatedString}) = b == a
+
+==(a::AnnotatedString, b::SubString{<:AnnotatedString}) = b == a
 
 """
     annotatedstring(values...)
@@ -239,36 +284,6 @@ annotatedstring(c::AnnotatedChar) =
 
 AnnotatedString(s::SubString{<:AnnotatedString}) = annotatedstring(s)
 
-"""
-    annotatedstring_optimize!(str::AnnotatedString)
-
-Merge contiguous identical annotations in `str`.
-"""
-function annotatedstring_optimize!(s::AnnotatedString)
-    last_seen = Dict{Pair{Symbol, Any}, Int}()
-    i = 1
-    while i <= length(s.annotations)
-        region, keyval = s.annotations[i]
-        prev = get(last_seen, keyval, 0)
-        if prev > 0
-            lregion, _ = s.annotations[prev]
-            if last(lregion) + 1 == first(region)
-                s.annotations[prev] =
-                    setindex(s.annotations[prev],
-                             first(lregion):last(region),
-                             1)
-                deleteat!(s.annotations, i)
-            else
-                delete!(last_seen, keyval)
-            end
-        else
-            last_seen[keyval] = i
-            i += 1
-        end
-    end
-    s
-end
-
 function repeat(str::AnnotatedString, r::Integer)
     r == 0 && return one(AnnotatedString)
     r == 1 && return str
@@ -276,19 +291,19 @@ function repeat(str::AnnotatedString, r::Integer)
     annotations = Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}()
     len = ncodeunits(str)
     fullregion = firstindex(str):lastindex(str)
-    for (region, annot) in str.annotations
-        if region == fullregion
-            push!(annotations, (firstindex(unannot):lastindex(unannot), annot))
+    if allequal(first, str.annotations) && first(first(str.annotations)) == fullregion
+        newfullregion = firstindex(unannot):lastindex(unannot)
+        for (_, annot) in str.annotations
+            push!(annotations, (newfullregion, annot))
         end
-    end
-    for offset in 0:len:(r-1)*len
-        for (region, annot) in str.annotations
-            if region != fullregion
+    else
+        for offset in 0:len:(r-1)*len
+            for (region, annot) in str.annotations
                 push!(annotations, (region .+ offset, annot))
             end
         end
     end
-    AnnotatedString(unannot, annotations) |> annotatedstring_optimize!
+    AnnotatedString(unannot, annotations)
 end
 
 repeat(str::SubString{<:AnnotatedString}, r::Integer) =
@@ -319,14 +334,9 @@ reverse(s::SubString{<:AnnotatedString}) = reverse(AnnotatedString(s))
 function _annotate!(annlist::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any}))
     label, val = labelval
     if val === nothing
-        indices = searchsorted(annlist, (range,), by=first)
-        labelindex = filter(i -> first(annlist[i][2]) === label, indices)
-        for index in Iterators.reverse(labelindex)
-            deleteat!(annlist, index)
-        end
+        deleteat!(annlist, findall(ann -> ann[1] == range && first(ann[2]) === label, annlist))
     else
-        sortedindex = searchsortedlast(annlist, (range,), by=first) + 1
-        insert!(annlist, sortedindex, (range, Pair{Symbol, Any}(label, val)))
+        push!(annlist, (range, Pair{Symbol, Any}(label, val)))
     end
 end
 
@@ -336,6 +346,9 @@ end
 
 Annotate a `range` of `str` (or the entire string) with a labeled value (`label` => `value`).
 To remove existing `label` annotations, use a value of `nothing`.
+
+The order in which annotations are applied to `str` is semantically meaningful,
+as described in [`AnnotatedString`](@ref).
 """
 annotate!(s::AnnotatedString, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any})) =
     (_annotate!(s.annotations, range, labelval); s)
@@ -368,6 +381,9 @@ annotations that overlap with `position` will be returned.
 Annotations are provided together with the regions they apply to, in the form of
 a vector of region–annotation tuples.
 
+In accordance with the semantics documented in [`AnnotatedString`](@ref), the
+order of annotations returned matches the order in which they were applied.
+
 See also: `annotate!`.
 """
 annotations(s::AnnotatedString) = s.annotations
@@ -398,6 +414,51 @@ annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
 Get all annotations of `chr`, in the form of a vector of annotation pairs.
 """
 annotations(c::AnnotatedChar) = c.annotations
+
+## Character transformation helper function, c.f. `unicode.jl`.
+
+"""
+    annotated_chartransform(f::Function, str::AnnotatedString, state=nothing)
+
+Transform every character in `str` with `f`, adjusting annotation regions as
+appropriate. `f` must take one of two forms, either:
+- `f(c::Char) -> Char`, or
+- `f(c::Char, state) -> (Char, state)`.
+
+This works by comparing the number of code units of each character before and
+after transforming with `f`, recording and aggregating any differences, then
+applying them to the annotation regions.
+
+Returns an `AnnotatedString{String}` (regardless of the original underling
+string type of `str`).
+"""
+function annotated_chartransform(f::Function, str::AnnotatedString, state=nothing)
+    outstr = IOBuffer()
+    annots = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    bytepos = firstindex(str) - 1
+    offsets = [bytepos => 0]
+    for c in str.string
+        oldnb = ncodeunits(c)
+        bytepos += oldnb
+        if isnothing(state)
+            c = f(c)
+        else
+            c, state = f(c, state)
+        end
+        nb = write(outstr, c)
+        if nb != oldnb
+            push!(offsets, bytepos => last(last(offsets)) + nb - oldnb)
+        end
+    end
+    for annot in str.annotations
+        region, value = annot
+        start, stop = first(region), last(region)
+        start_offset = last(offsets[findlast(<=(start) ∘ first, offsets)::Int])
+        stop_offset  = last(offsets[findlast(<=(stop) ∘ first, offsets)::Int])
+        push!(annots, ((start + start_offset):(stop + stop_offset), value))
+    end
+    AnnotatedString(String(take!(outstr)), annots)
+end
 
 ## AnnotatedIOBuffer
 
@@ -439,7 +500,8 @@ function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:A
     write(io.io, String(astr))
 end
 
-write(io::AnnotatedIOBuffer, c::AnnotatedChar) = write(io, AnnotatedString(c))
+write(io::AnnotatedIOBuffer, c::AnnotatedChar) =
+    write(io, AnnotatedString(string(c), map(a -> (1:ncodeunits(c), a), annotations(c))))
 write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
 write(io::AnnotatedIOBuffer, b::UInt8) = write(io.io, b)
@@ -456,10 +518,37 @@ function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
     nb
 end
 
+# So that read/writes with `IOContext` (and any similar `AbstractPipe` wrappers)
+# work as expected.
+function write(io::AbstractPipe, s::Union{AnnotatedString, SubString{<:AnnotatedString}})
+    if pipe_writer(io) isa AnnotatedIOBuffer
+        write(pipe_writer(io), s)
+    else
+        invoke(write, Tuple{IO, typeof(s)}, io, s)
+    end::Int
+end
+# Can't be part of the `Union` above because it introduces method ambiguities
+function write(io::AbstractPipe, c::AnnotatedChar)
+    if pipe_writer(io) isa AnnotatedIOBuffer
+        write(pipe_writer(io), c)
+    else
+        invoke(write, Tuple{IO, typeof(c)}, io, c)
+    end::Int
+end
+
+"""
+    _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, span::UnitRange{Int})
+
+Erase the presence of `annotations` within a certain `span`.
+
+This operates by removing all elements of `annotations` that are entirely
+contained in `span`, truncating ranges that partially overlap, and splitting
+annotations that subsume `span` to just exist either side of `span`.
+"""
 function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, span::UnitRange{Int})
     # Clear out any overlapping pre-existing annotations.
     filter!(((region, _),) -> first(region) < first(span) || last(region) > last(span), annotations)
-    extras = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    extras = Tuple{Int, Tuple{UnitRange{Int}, Pair{Symbol, Any}}}[]
     for i in eachindex(annotations)
         region, annot = annotations[i]
         # Test for partial overlap
@@ -470,30 +559,67 @@ function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int},
             # If `span` fits exactly within `region`, then we've only copied over
             # the beginning overhang, but also need to conserve the end overhang.
             if first(region) < first(span) && last(span) < last(region)
-                push!(extras, (last(span)+1:last(region), annot))
+                push!(extras, (i, (last(span)+1:last(region), annot)))
             end
         end
-        # Insert any extra entries in the appropriate position
-        for entry in extras
-            sortedindex = searchsortedlast(annotations, (first(entry),), by=first) + 1
-            insert!(annotations, sortedindex, entry)
-        end
+    end
+    # Insert any extra entries in the appropriate position
+    for (offset, (i, entry)) in enumerate(extras)
+        insert!(annotations, i + offset, entry)
     end
     annotations
 end
 
+"""
+    _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, offset::Int = position(io))
+
+Register new `annotations` in `io`, applying an `offset` to their regions.
+
+The largely consists of simply shifting the regions of `annotations` by `offset`
+and pushing them onto `io`'s annotations. However, when it is possible to merge
+the new annotations with recent annotations in accordance with the semantics
+outlined in [`AnnotatedString`](@ref), we do so. More specifically, when there
+is a run of the most recent annotations that are also present as the first
+`annotations`, with the same value and adjacent regions, the new annotations are
+merged into the existing recent annotations by simply extending their range.
+
+This is implemented so that one can say write an `AnnotatedString` to an
+`AnnotatedIOBuffer` one character at a time without needlessly producing a
+new annotation for each character.
+"""
 function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, offset::Int = position(io))
-    if !eof(io)
-        for (region, annot) in annotations
-            region = first(region)+offset:last(region)+offset
-            sortedindex = searchsortedlast(io.annotations, (region,), by=first) + 1
-            insert!(io.annotations, sortedindex, (region, annot))
+    run = 0
+    if !isempty(io.annotations) && last(first(last(io.annotations))) == offset
+        for i in reverse(axes(annotations, 1))
+            annot = annotations[i]
+            first(first(annot)) == 1 || continue
+            if last(annot) == last(last(io.annotations))
+                valid_run = true
+                for runlen in 1:i
+                    new_range, new_annot = annotations[begin+runlen-1]
+                    old_range, old_annot = io.annotations[end-i+runlen]
+                    if last(old_range) != offset || first(new_range) != 1 || old_annot != new_annot
+                        valid_run = false
+                        break
+                    end
+                end
+                if valid_run
+                    run = i
+                    break
+                end
+            end
         end
-    else
-        for (region, annot) in annotations
-            region = first(region)+offset:last(region)+offset
-            push!(io.annotations, (region, annot))
-        end
+    end
+    for runindex in 0:run-1
+        old_index = lastindex(io.annotations) - run + 1 + runindex
+        old_region, annot = io.annotations[old_index]
+        new_region, _ = annotations[begin+runindex]
+        io.annotations[old_index] = (first(old_region):last(new_region)+offset, annot)
+    end
+    for index in run+1:lastindex(annotations)
+        region, annot = annotations[index]
+        start, stop = first(region), last(region)
+        push!(io.annotations, (start+offset:stop+offset, annot))
     end
 end
 

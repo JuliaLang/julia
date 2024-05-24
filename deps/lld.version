@@ -1,3 +1,5 @@
+# -*- makefile -*-
+
 ## jll artifact
 LLD_JLL_NAME := LLD
-LLD_JLL_VER := 16.0.6+4
+LLD_JLL_VER := 17.0.6+4

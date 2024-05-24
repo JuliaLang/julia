@@ -978,13 +978,6 @@ end
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
 
-
-@testset "Iterators.tail_if_any" begin
-    @test Iterators.tail_if_any(()) == ()
-    @test Iterators.tail_if_any((1, 2)) == (2,)
-    @test Iterators.tail_if_any((1,)) == ()
-end
-
 @testset "IteratorSize trait for zip" begin
     @test Base.IteratorSize(zip()) == Base.IsInfinite()                     # for zip of empty tuple
     @test Base.IteratorSize(zip((1,2,3), repeated(0))) == Base.HasLength()  # for zip of ::HasLength and ::IsInfinite
@@ -1037,12 +1030,31 @@ let itr = (i for i in 1:9) # Base.eltype == Any
     @test collect(zip(repeat([Iterators.Stateful(itr)], 3)...)) == [(1, 2, 3), (4, 5, 6), (7, 8, 9)]
 end
 
-@testset "no single-argument map methods" begin
-    maps = (tuple, Returns(nothing), (() -> nothing))
-    mappers = (Iterators.map, map, foreach)
-    for f ∈ maps, m ∈ mappers
-        @test !applicable(m, f)
-        @test !hasmethod(m, Tuple{typeof(f)})
+@testset "map/reduce/mapreduce without an iterator argument" begin
+    maps = map(Returns, (nothing, 3, 3:2, 3:3, (), (3,)))
+    mappers1 = (Iterators.map, map, foreach, reduce, foldl, foldr)
+    mappers2 = (mapreduce, mapfoldl, mapfoldr)
+
+    @testset "map/reduce" begin
+        @testset "r: $r" for r ∈ mappers1
+            @testset "f: $f" for f ∈ maps
+                @test_throws MethodError r(f)
+                @test !applicable(r, f)
+                @test !hasmethod(r, Tuple{typeof(f)})
+            end
+        end
+    end
+
+    @testset "mapreduce" begin
+        @testset "mr: $mr" for mr ∈ mappers2
+            @testset "f: $f" for f ∈ maps
+                @testset "g: $g" for g ∈ maps
+                    @test_throws MethodError mr(f, g)
+                    @test !applicable(mr, f, g)
+                    @test !hasmethod(mr, Tuple{typeof(f),typeof(g)})
+                end
+            end
+        end
     end
 end
 

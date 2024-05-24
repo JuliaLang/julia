@@ -14,6 +14,7 @@ const NRM2_CUTOFF = 32
 const ISONE_CUTOFF = 2^21 # 2M
 
 function isone(A::AbstractMatrix)
+    require_one_based_indexing(A)  # multiplication not defined yet among offset matrices
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -336,7 +337,7 @@ function diagm_size(size::Tuple{Int,Int}, kv::Pair{<:Integer,<:AbstractVector}..
     mmax = mapreduce(x -> length(x.second) - min(0,Int(x.first)), max, kv; init=0)
     nmax = mapreduce(x -> length(x.second) + max(0,Int(x.first)), max, kv; init=0)
     m, n = size
-    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch("invalid size=$size"))
+    (m ≥ mmax && n ≥ nmax) || throw(DimensionMismatch(lazy"invalid size=$size"))
     return m, n
 end
 function diagm_container(size, kv::Pair{<:Integer,<:AbstractVector}...)
@@ -491,8 +492,8 @@ julia> reshape(kron(v,w), (length(w), length(v)))
 ```
 """
 function kron(A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) where {T,S}
-    R = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
-    return kron!(R, A, B)
+    C = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
+    return kron!(C, A, B)
 end
 function kron(a::AbstractVector{T}, b::AbstractVector{S}) where {T,S}
     c = Vector{promote_op(*,T,S)}(undef, length(a)*length(b))
@@ -704,22 +705,29 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         V = mul!(C[3]*P, true, C[1]*I, true, true) #V = C[1]*I + C[3]*P
         for k in 2:(div(length(C), 2) - 1)
             P *= A2
-            mul!(U, C[2k + 2], P, true, true) # U += C[2k+2]*P
-            mul!(V, C[2k + 1], P, true, true) # V += C[2k+1]*P
+            for ind in eachindex(P)
+                U[ind] += C[2k + 2] * P[ind]
+                V[ind] += C[2k + 1] * P[ind]
+            end
         end
 
         U = A * U
 
         # Padé approximant:  (V-U)\(V+U)
         tmp1, tmp2 = A, A2 # Reuse already allocated arrays
-        tmp1 .= V .- U
-        tmp2 .= V .+ U
+        for ind in eachindex(tmp1)
+            tmp1[ind] = V[ind] - U[ind]
+            tmp2[ind] = V[ind] + U[ind]
+        end
         X = LAPACK.gesv!(tmp1, tmp2)[1]
     else
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
         if s > 0
             si = ceil(Int,s)
-            A ./= convert(T,2^si)
+            twopowsi = convert(T,2^si)
+            for ind in eachindex(A)
+                A[ind] /= twopowsi
+            end
         end
         CC = T[64764752532480000.,32382376266240000.,7771770303897600.,
                 1187353796428800.,  129060195264000.,  10559470521600.,
@@ -734,8 +742,10 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         # Allocation economical version of:
         # U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
         #           CC[8].*A6 .+ CC[6].*A4 .+ CC[4]*A2+CC[2]*I)
-        tmp1 .= CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2
-        tmp2 .= CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2
+        for ind in eachindex(tmp1)
+            tmp1[ind] = CC[14]*A6[ind] + CC[12]*A4[ind] + CC[10]*A2[ind]
+            tmp2[ind] = CC[8]*A6[ind] + CC[6]*A4[ind] + CC[4]*A2[ind]
+        end
         mul!(tmp2, true,CC[2]*I, true, true) # tmp2 .+= CC[2]*I
         U = mul!(tmp2, A6, tmp1, true, true)
         U, tmp1 = mul!(tmp1, A, U), A # U = A * U0
@@ -743,13 +753,17 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         # Allocation economical version of:
         # V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
         #           CC[7].*A6 .+ CC[5].*A4 .+ CC[3]*A2 .+ CC[1]*I
-        tmp1 .= CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2
-        tmp2 .= CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2
+        for ind in eachindex(tmp1)
+            tmp1[ind] = CC[13]*A6[ind] + CC[11]*A4[ind] + CC[9]*A2[ind]
+            tmp2[ind] = CC[7]*A6[ind] + CC[5]*A4[ind] + CC[3]*A2[ind]
+        end
         mul!(tmp2, true, CC[1]*I, true, true) # tmp2 .+= CC[1]*I
         V = mul!(tmp2, A6, tmp1, true, true)
 
-        tmp1 .= V .+ U
-        tmp2 .= V .- U # tmp2 already contained V but this seems more readable
+        for ind in eachindex(tmp1)
+            tmp1[ind] = V[ind] + U[ind]
+            tmp2[ind] = V[ind] - U[ind] # tmp2 already contained V but this seems more readable
+        end
         X = LAPACK.gesv!(tmp2, tmp1)[1] # X now contains r_13 in Higham 2008
 
         if s > 0
@@ -1645,7 +1659,7 @@ function cond(A::AbstractMatrix, p::Real=2)
             end
         end
     end
-    throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
+    throw(ArgumentError(lazy"p-norm must be 1, 2 or Inf, got $p"))
 end
 
 ## Lyapunov and Sylvester equation

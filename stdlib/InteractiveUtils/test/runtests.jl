@@ -138,6 +138,11 @@ tag = "ANY"
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
+@testset "code_warntype OpaqueClosure" begin
+    g = Base.Experimental.@opaque Tuple{Float64} x -> 0.0
+    @test warntype_hastag(g, Tuple{Float64}, "::Float64")
+end
+
 end # module WarnType
 
 # Adds test for PR #17636
@@ -279,6 +284,43 @@ let x..y = 0
     @test (@which 1..2).name === :..
 end
 
+# issue #53691
+let a = -1
+    @test (@which 2^a).name === :^
+    @test (@which 2^0x1).name === :^
+end
+
+let w = Vector{Any}(undef, 9)
+    @testset "@which x^literal" begin
+        w[1] = @which 2^0
+        w[2] = @which 2^1
+        w[3] = @which 2^2
+        w[4] = @which 2^3
+        w[5] = @which 2^-1
+        w[6] = @which 2^-2
+        w[7] = @which 2^10
+        w[8] = @which big(2.0)^1
+        w[9] = @which big(2.0)^-1
+        @test all(getproperty.(w, :name) .=== :literal_pow)
+        @test length(Set(w)) == length(w) # all methods distinct
+    end
+end
+
+# PR 53713
+if Int === Int64
+    # literal_pow only for exponents x: -2^63 <= x < 2^63 #53860 (all Int)
+    @test (@which 2^-9223372036854775809).name === :^
+    @test (@which 2^-9223372036854775808).name === :literal_pow
+    @test (@which 2^9223372036854775807).name === :literal_pow
+    @test (@which 2^9223372036854775808).name === :^
+elseif Int === Int32
+    # literal_pow only for exponents x: -2^31 <= x < 2^31 #53860 (all Int)
+    @test (@which 2^-2147483649).name === :^
+    @test (@which 2^-2147483648).name === :literal_pow
+    @test (@which 2^2147483647).name === :literal_pow
+    @test (@which 2^2147483648).name === :^
+end
+
 # issue #13464
 try
     @which x = 1
@@ -286,7 +328,6 @@ try
 catch err13464
     @test startswith(err13464.msg, "expression is not a function call")
 end
-
 module MacroTest
 export @macrotest
 macro macrotest(x::Int, y::Symbol) end
@@ -707,6 +748,7 @@ end
 @testset "code_llvm on opaque_closure" begin
     let ci = code_typed(+, (Int, Int))[1][1]
         ir = Core.Compiler.inflate_ir(ci)
+        ir.argtypes[1] = Tuple{}
         @test ir.debuginfo.def === nothing
         ir.debuginfo.def = Symbol(@__FILE__)
         oc = Core.OpaqueClosure(ir)

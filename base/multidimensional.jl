@@ -4,7 +4,7 @@
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
-                  convert, show, iterate, promote_rule, to_indices
+                  convert, show, iterate, promote_rule, to_indices, copy
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
@@ -115,6 +115,7 @@ module IteratorsMD
     oneunit(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(Returns(1), Val(N)))
 
     # arithmetic, min/max
+    @inline (+)(index::CartesianIndex) = index
     @inline (-)(index::CartesianIndex{N}) where {N} =
         CartesianIndex{N}(map(-, index.I))
     @inline (+)(index1::CartesianIndex{N}, index2::CartesianIndex{N}) where {N} =
@@ -475,6 +476,8 @@ module IteratorsMD
 
     @inline in(i::CartesianIndex, r::CartesianIndices) = false
     @inline in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N} = all(map(in, i.I, r.indices))
+
+    copy(iter::CartesianIndices) = iter
 
     simd_outer_range(iter::CartesianIndices{0}) = iter
     function simd_outer_range(iter::CartesianIndices)
@@ -1608,12 +1611,6 @@ end
             end
         end
     end
-end
-
-# _unsetindex
-@propagate_inbounds function Base._unsetindex!(A::AbstractArray, i::CartesianIndex)
-    Base._unsetindex!(A, to_indices(A, (i,))...)
-    return A
 end
 
 ## permutedims

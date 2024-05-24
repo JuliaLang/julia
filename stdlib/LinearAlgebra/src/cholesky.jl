@@ -427,7 +427,7 @@ The following functions are available for `CholeskyPivoted` objects:
 [`size`](@ref), [`\\`](@ref), [`inv`](@ref), [`det`](@ref), and [`rank`](@ref).
 
 The argument `tol` determines the tolerance for determining the rank.
-For negative values, the tolerance is the machine precision.
+For negative values, the tolerance is equal to `eps()*size(A,1)*maximum(diag(A))`.
 
 If you have a matrix `A` that is slightly non-Hermitian due to roundoff errors in its construction,
 wrap it in `Hermitian(A)` before passing it to `cholesky` in order to treat it as perfectly Hermitian.
@@ -515,13 +515,28 @@ copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.ran
 size(C::Union{Cholesky, CholeskyPivoted}) = size(C.factors)
 size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 
+function _choleskyUfactor(Cfactors, Cuplo)
+    if Cuplo === 'U'
+        return UpperTriangular(Cfactors)
+    else
+        return copy(LowerTriangular(Cfactors)')
+    end
+end
+function _choleskyLfactor(Cfactors, Cuplo)
+    if Cuplo === 'L'
+        return LowerTriangular(Cfactors)
+    else
+        return copy(UpperTriangular(Cfactors)')
+    end
+end
+
 function getproperty(C::Cholesky, d::Symbol)
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d === :U
-        return UpperTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
+        _choleskyUfactor(Cfactors, Cuplo)
     elseif d === :L
-        return LowerTriangular(Cuplo === char_uplo(d) ? Cfactors : copy(Cfactors'))
+        _choleskyLfactor(Cfactors, Cuplo)
     elseif d === :UL
         return (Cuplo === 'U' ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors))
     else
@@ -531,13 +546,18 @@ end
 Base.propertynames(F::Cholesky, private::Bool=false) =
     (:U, :L, :UL, (private ? fieldnames(typeof(F)) : ())...)
 
+function Base.:(==)(C1::Cholesky, C2::Cholesky)
+    C1.uplo == C2.uplo || return false
+    C1.uplo == 'L' ? (C1.L == C2.L) : (C1.U == C2.U)
+end
+
 function getproperty(C::CholeskyPivoted{T}, d::Symbol) where {T}
     Cfactors = getfield(C, :factors)
     Cuplo    = getfield(C, :uplo)
     if d === :U
-        return UpperTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        _choleskyUfactor(Cfactors, Cuplo)
     elseif d === :L
-        return LowerTriangular(sym_uplo(Cuplo) == d ? Cfactors : copy(Cfactors'))
+        _choleskyLfactor(Cfactors, Cuplo)
     elseif d === :p
         return getfield(C, :piv)
     elseif d === :P
@@ -553,6 +573,11 @@ function getproperty(C::CholeskyPivoted{T}, d::Symbol) where {T}
 end
 Base.propertynames(F::CholeskyPivoted, private::Bool=false) =
     (:U, :L, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
+
+function Base.:(==)(C1::CholeskyPivoted, C2::CholeskyPivoted)
+    (C1.uplo == C2.uplo && C1.p == C2.p) || return false
+    C1.uplo == 'L' ? (C1.L == C2.L) : (C1.U == C2.U)
+end
 
 issuccess(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
@@ -835,3 +860,30 @@ then `CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses
 `O(n^2)` operations.
 """
 lowrankdowndate(C::Cholesky, v::AbstractVector) = lowrankdowndate!(copy(C), copy(v))
+
+function diag(C::Cholesky{T}, k::Int = 0) where {T}
+    N = size(C, 1)
+    absk = abs(k)
+    iabsk = N - absk
+    z = Vector{T}(undef, iabsk)
+    UL = C.factors
+    if C.uplo == 'U'
+        for i in 1:iabsk
+            z[i] = zero(T)
+            for j in 1:min(i, i+absk)
+                z[i] += UL[j, i]'UL[j, i+absk]
+            end
+        end
+    else
+        for i in 1:iabsk
+            z[i] = zero(T)
+            for j in 1:min(i, i+absk)
+                z[i] += UL[i, j]*UL[i+absk, j]'
+            end
+        end
+    end
+    if !(T <: Real) && k < 0
+        z .= adjoint.(z)
+    end
+    return z
+end

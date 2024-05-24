@@ -251,12 +251,14 @@ let c = Ref(0),
     @test c[] == 100
 end
 
-@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+@test_throws ConcurrencyViolationError("deadlock detected: cannot wait on current task") wait(current_task())
+
+@test_throws ConcurrencyViolationError("Cannot yield to currently running task!") yield(current_task())
 
 # issue #41347
 let t = @async 1
     wait(t)
-    @test_throws ErrorException yield(t)
+    @test_throws ConcurrencyViolationError yield(t)
 end
 
 let t = @async error(42)

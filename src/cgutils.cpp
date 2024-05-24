@@ -57,10 +57,14 @@ static Value *maybe_decay_untracked(jl_codectx_t &ctx, Value *V)
 static Value *decay_derived(jl_codectx_t &ctx, Value *V)
 {
     Type *T = V->getType();
-    if (cast<PointerType>(T)->getAddressSpace() == AddressSpace::Derived)
+    if (T->getPointerAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
+    #if JL_LLVM_VERSION >= 170000
+    Type *NewT = PointerType::get(T, AddressSpace::Derived);
+    #else
     Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
+    #endif
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -68,9 +72,13 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
 static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
 {
     Type *T = V->getType();
-    if (cast<PointerType>(T)->getAddressSpace() != AddressSpace::Tracked)
+    if (T->getPointerAddressSpace() != AddressSpace::Tracked)
         return V;
+    #if JL_LLVM_VERSION >= 170000
+    Type *NewT = PointerType::get(T, AddressSpace::Derived);
+    #else
     Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
+    #endif
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -295,7 +303,7 @@ void jl_debugcache_t::initialize(Module *m) {
 
 static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 {
-    unsigned AS = cast<PointerType>(V->getType())->getAddressSpace();
+    unsigned AS = V->getType()->getPointerAddressSpace();
     if (AS != AddressSpace::Tracked && AS != AddressSpace::Derived)
         return V;
     V = decay_derived(ctx, V);
@@ -586,7 +594,11 @@ static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
     if (isa<PointerType>(jl_value) &&
         v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
         // Cast to the proper address space
+        #if JL_LLVM_VERSION >= 170000
+        Type *jl_value_addr = PointerType::get(jl_value, v->getType()->getPointerAddressSpace());
+        #else
         Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
+        #endif
         ++EmittedPointerBitcast;
         return ctx.builder.CreateBitCast(v, jl_value_addr);
     }
@@ -1008,6 +1020,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     if (sz == 0)
         return;
     assert(align_dst && "align must be specified");
+    #if JL_LLVM_VERSION < 170000
     // If the types are small and simple, use load and store directly.
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
     // that interferes with other optimizations.
@@ -1039,7 +1052,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
             dst = emit_bitcast(ctx, dst, srcty);
         }
         else if (dstel->isSized() && dstel->isSingleValueType() &&
-                 DL.getTypeStoreSize(dstel) == sz) {
+                DL.getTypeStoreSize(dstel) == sz) {
             directel = dstel;
             src = emit_bitcast(ctx, src, dstty);
         }
@@ -1054,6 +1067,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
             return;
         }
     }
+    #endif
     ++EmittedMemcpys;
 
     // the memcpy intrinsic does not allow to specify different alias tags
@@ -2200,7 +2214,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             }
             else if (!isboxed) {
                 assert(jl_is_concrete_type(jltype));
-                needloop = ((jl_datatype_t*)jltype)->layout->flags.haspadding;
+                needloop = ((jl_datatype_t*)jltype)->layout->flags.haspadding ||
+                          !((jl_datatype_t*)jltype)->layout->flags.isbitsegal;
                 Value *SameType = emit_isa(ctx, cmp, jltype, Twine()).first;
                 if (SameType != ConstantInt::getTrue(ctx.builder.getContext())) {
                     BasicBlock *SkipBB = BasicBlock::Create(ctx.builder.getContext(), "skip_xchg", ctx.f);
@@ -3038,6 +3053,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     PointerType *PT = cast<PointerType>(mem->getType());
     assert(PT == ctx.types().T_prjlvalue);
     Value *addr = emit_bitcast(ctx, mem, ctx.types().T_jlgenericmemory->getPointerTo(PT->getAddressSpace()));
+    addr = decay_derived(ctx, addr);
     addr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, addr, 1);
     setName(ctx.emission_context, addr, ".data_ptr");
     PointerType *PPT = cast<PointerType>(ctx.types().T_jlgenericmemory->getElementType(1));
@@ -3465,7 +3481,11 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
     for (auto *User : Val->users()) {
         if (isa<GetElementPtrInst>(User)) {
             GetElementPtrInst *Inst = cast<GetElementPtrInst>(User);
+            #if JL_LLVM_VERSION >= 170000
+            Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
+            #else
             Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
+            #endif
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
         else if (isa<IntrinsicInst>(User)) {
@@ -3474,7 +3494,11 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
         }
         else if (isa<BitCastInst>(User)) {
             BitCastInst *Inst = cast<BitCastInst>(User);
+            #if JL_LLVM_VERSION >= 170000
+            Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
+            #else
             Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
+            #endif
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
     }
@@ -3521,7 +3545,11 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 Value *decayed = decay_derived(ctx, box);
                 AllocaInst *originalAlloca = cast<AllocaInst>(vinfo.V);
                 box->takeName(originalAlloca);
+                #if JL_LLVM_VERSION >= 170000
+                decayed = maybe_bitcast(ctx, decayed, PointerType::get(originalAlloca->getType(), AddressSpace::Derived));
+                #else
                 decayed = maybe_bitcast(ctx, decayed, PointerType::getWithSamePointeeType(originalAlloca->getType(), AddressSpace::Derived));
+                #endif
                 // Warning: Very illegal IR here temporarily
                 originalAlloca->mutateType(decayed->getType());
                 recursively_adjust_ptr_type(originalAlloca, 0, AddressSpace::Derived);
@@ -3725,7 +3753,7 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg
 
 static jl_cgval_t union_store(jl_codectx_t &ctx,
         Value *ptr, Value *ptindex, jl_cgval_t rhs, jl_cgval_t cmp,
-        jl_value_t *jltype, MDNode *tbaa, MDNode *aliasscope, MDNode *tbaa_tindex,
+        jl_value_t *jltype, MDNode *tbaa, MDNode *tbaa_tindex,
         AtomicOrdering Order, AtomicOrdering FailOrder,
         Value *needlock, bool issetfield, bool isreplacefield, bool isswapfield, bool ismodifyfield, bool issetfieldonce,
         const jl_cgval_t *modifyop, const Twine &fname)
@@ -3783,7 +3811,7 @@ static jl_cgval_t union_store(jl_codectx_t &ctx,
     }
     Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jltype);
     tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_unionselbyte);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_tindex);
     ai.decorateInst(ctx.builder.CreateAlignedStore(tindex, ptindex, Align(1)));
     // copy data
     if (!rhs.isghost) {
@@ -3839,7 +3867,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
                 emit_bitcast(ctx, addr, getInt8PtrTy(ctx.builder.getContext())),
                 ConstantInt::get(ctx.types().T_size, fsz1));
         setNameWithField(ctx.emission_context, ptindex, get_objname, sty, idx0, Twine(".tindex_ptr"));
-        return union_store(ctx, addr, ptindex, rhs, cmp, jfty, tbaa, nullptr, ctx.tbaa().tbaa_unionselbyte,
+        return union_store(ctx, addr, ptindex, rhs, cmp, jfty, tbaa, ctx.tbaa().tbaa_unionselbyte,
             Order, FailOrder,
             needlock, issetfield, isreplacefield, isswapfield, ismodifyfield, issetfieldonce,
             modifyop, fname);

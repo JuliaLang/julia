@@ -9,6 +9,7 @@ public
 
 # Types
     AbstractLock,
+    AbstractPipe,
     AsyncCondition,
     CodeUnits,
     Event,
@@ -83,6 +84,17 @@ public
     @constprop,
     @locals,
     @propagate_inbounds,
+
+# External processes
+    shell_escape,
+    shell_split,
+    shell_escape_posixly,
+    shell_escape_csh,
+    shell_escape_wincmd,
+    escape_microsoft_c_args,
+
+# Strings
+    escape_raw_string,
 
 # IO
     # types
