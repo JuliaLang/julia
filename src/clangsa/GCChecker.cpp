@@ -795,57 +795,54 @@ static bool isMutexUnlock(StringRef name) {
            false;
 }
 
-#if LLVM_VERSION_MAJOR >= 13
-#define endswith_lower endswith_insensitive
-#endif
 
 bool GCChecker::isGCTrackedType(QualType QT) {
   return isJuliaType(
              [](StringRef Name) {
-               if (Name.endswith_lower("jl_value_t") ||
-                   Name.endswith_lower("jl_svec_t") ||
-                   Name.endswith_lower("jl_sym_t") ||
-                   Name.endswith_lower("jl_expr_t") ||
-                   Name.endswith_lower("jl_code_info_t") ||
-                   Name.endswith_lower("jl_array_t") ||
-                   Name.endswith_lower("jl_genericmemory_t") ||
-                   //Name.endswith_lower("jl_genericmemoryref_t") ||
-                   Name.endswith_lower("jl_method_t") ||
-                   Name.endswith_lower("jl_method_instance_t") ||
-                   Name.endswith_lower("jl_debuginfo_t") ||
-                   Name.endswith_lower("jl_tupletype_t") ||
-                   Name.endswith_lower("jl_datatype_t") ||
-                   Name.endswith_lower("jl_typemap_entry_t") ||
-                   Name.endswith_lower("jl_typemap_level_t") ||
-                   Name.endswith_lower("jl_typename_t") ||
-                   Name.endswith_lower("jl_module_t") ||
-                   Name.endswith_lower("jl_tupletype_t") ||
-                   Name.endswith_lower("jl_gc_tracked_buffer_t") ||
-                   Name.endswith_lower("jl_binding_t") ||
-                   Name.endswith_lower("jl_ordereddict_t") ||
-                   Name.endswith_lower("jl_tvar_t") ||
-                   Name.endswith_lower("jl_typemap_t") ||
-                   Name.endswith_lower("jl_unionall_t") ||
-                   Name.endswith_lower("jl_methtable_t") ||
-                   Name.endswith_lower("jl_cgval_t") ||
-                   Name.endswith_lower("jl_codectx_t") ||
-                   Name.endswith_lower("jl_ast_context_t") ||
-                   Name.endswith_lower("jl_code_instance_t") ||
-                   Name.endswith_lower("jl_excstack_t") ||
-                   Name.endswith_lower("jl_task_t") ||
-                   Name.endswith_lower("jl_uniontype_t") ||
-                   Name.endswith_lower("jl_method_match_t") ||
-                   Name.endswith_lower("jl_vararg_t") ||
-                   Name.endswith_lower("jl_opaque_closure_t") ||
-                   Name.endswith_lower("jl_globalref_t") ||
+               if (Name.ends_with_insensitive("jl_value_t") ||
+                   Name.ends_with_insensitive("jl_svec_t") ||
+                   Name.ends_with_insensitive("jl_sym_t") ||
+                   Name.ends_with_insensitive("jl_expr_t") ||
+                   Name.ends_with_insensitive("jl_code_info_t") ||
+                   Name.ends_with_insensitive("jl_array_t") ||
+                   Name.ends_with_insensitive("jl_genericmemory_t") ||
+                   //Name.ends_with_insensitive("jl_genericmemoryref_t") ||
+                   Name.ends_with_insensitive("jl_method_t") ||
+                   Name.ends_with_insensitive("jl_method_instance_t") ||
+                   Name.ends_with_insensitive("jl_debuginfo_t") ||
+                   Name.ends_with_insensitive("jl_tupletype_t") ||
+                   Name.ends_with_insensitive("jl_datatype_t") ||
+                   Name.ends_with_insensitive("jl_typemap_entry_t") ||
+                   Name.ends_with_insensitive("jl_typemap_level_t") ||
+                   Name.ends_with_insensitive("jl_typename_t") ||
+                   Name.ends_with_insensitive("jl_module_t") ||
+                   Name.ends_with_insensitive("jl_tupletype_t") ||
+                   Name.ends_with_insensitive("jl_gc_tracked_buffer_t") ||
+                   Name.ends_with_insensitive("jl_binding_t") ||
+                   Name.ends_with_insensitive("jl_ordereddict_t") ||
+                   Name.ends_with_insensitive("jl_tvar_t") ||
+                   Name.ends_with_insensitive("jl_typemap_t") ||
+                   Name.ends_with_insensitive("jl_unionall_t") ||
+                   Name.ends_with_insensitive("jl_methtable_t") ||
+                   Name.ends_with_insensitive("jl_cgval_t") ||
+                   Name.ends_with_insensitive("jl_codectx_t") ||
+                   Name.ends_with_insensitive("jl_ast_context_t") ||
+                   Name.ends_with_insensitive("jl_code_instance_t") ||
+                   Name.ends_with_insensitive("jl_excstack_t") ||
+                   Name.ends_with_insensitive("jl_task_t") ||
+                   Name.ends_with_insensitive("jl_uniontype_t") ||
+                   Name.ends_with_insensitive("jl_method_match_t") ||
+                   Name.ends_with_insensitive("jl_vararg_t") ||
+                   Name.ends_with_insensitive("jl_opaque_closure_t") ||
+                   Name.ends_with_insensitive("jl_globalref_t") ||
                    // Probably not technically true for these, but let's allow it
-                   Name.endswith_lower("typemap_intersection_env") ||
-                   Name.endswith_lower("interpreter_state") ||
-                   Name.endswith_lower("jl_typeenv_t") ||
-                   Name.endswith_lower("jl_stenv_t") ||
-                   Name.endswith_lower("jl_varbinding_t") ||
-                   Name.endswith_lower("set_world") ||
-                   Name.endswith_lower("jl_codectx_t")) {
+                   Name.ends_with_insensitive("typemap_intersection_env") ||
+                   Name.ends_with_insensitive("interpreter_state") ||
+                   Name.ends_with_insensitive("jl_typeenv_t") ||
+                   Name.ends_with_insensitive("jl_stenv_t") ||
+                   Name.ends_with_insensitive("jl_varbinding_t") ||
+                   Name.ends_with_insensitive("set_world") ||
+                   Name.ends_with_insensitive("jl_codectx_t")) {
                  return true;
                }
                return false;

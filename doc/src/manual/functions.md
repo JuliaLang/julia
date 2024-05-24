@@ -174,7 +174,7 @@ julia> function hypot(x, y)
                return x*sqrt(1 + r*r)
            end
            if y == 0
-               return zero(x)
+               return x
            end
            r = x/y
            return y*sqrt(1 + r*r)

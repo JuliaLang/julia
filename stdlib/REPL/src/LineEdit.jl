@@ -179,11 +179,11 @@ struct EmptyHistoryProvider <: HistoryProvider end
 
 reset_state(::EmptyHistoryProvider) = nothing
 
-complete_line(c::EmptyCompletionProvider, s) = String[], "", true
+complete_line(c::EmptyCompletionProvider, s; hint::Bool=false) = String[], "", true
 
 # complete_line can be specialized for only two arguments, when the active module
 # doesn't matter (e.g. Pkg does this)
-complete_line(c::CompletionProvider, s, ::Module) = complete_line(c, s)
+complete_line(c::CompletionProvider, s, ::Module; hint::Bool=false) = complete_line(c, s; hint)
 
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
@@ -380,7 +380,7 @@ function check_for_hint(s::MIState)
         # Requires making space for them earlier in refresh_multi_line
         return clear_hint(st)
     end
-    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
+    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return clear_hint(st)
     # Don't complete for single chars, given e.g. `x` completes to `xor`
     if length(partial) > 1 && should_complete
@@ -416,8 +416,8 @@ function clear_hint(s::ModeState)
     end
 end
 
-function complete_line(s::PromptState, repeats::Int, mod::Module)
-    completions, partial, should_complete = complete_line(s.p.complete, s, mod)::Tuple{Vector{String},String,Bool}
+function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false)
+    completions, partial, should_complete = complete_line(s.p.complete, s, mod; hint)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -2149,8 +2149,8 @@ setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
 setmodifiers!(c) = nothing
 
 # Search Mode completions
-function complete_line(s::SearchState, repeats, mod::Module)
-    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod)
+function complete_line(s::SearchState, repeats, mod::Module; hint::Bool=false)
+    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod; hint)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)

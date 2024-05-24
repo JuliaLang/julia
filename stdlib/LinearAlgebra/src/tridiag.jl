@@ -157,7 +157,8 @@ axes(M::SymTridiagonal) = (ax = axes(M.dv, 1); (ax, ax))
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
 
-copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
+# copyto! for matching axes
+_copyto_banded!(dest::SymTridiagonal, src::SymTridiagonal) =
     (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
 
 #Elementary operations
@@ -166,7 +167,10 @@ for func in (:conj, :copy, :real, :imag)
 end
 
 transpose(S::SymTridiagonal) = S
-adjoint(S::SymTridiagonal{<:Real}) = S
+adjoint(S::SymTridiagonal{<:Number}) = SymTridiagonal(vec(adjoint(S.dv)), vec(adjoint(S.ev)))
+adjoint(S::SymTridiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}}) =
+    SymTridiagonal(adjoint(parent(S.dv)), adjoint(parent(S.ev)))
+
 permutedims(S::SymTridiagonal) = S
 function permutedims(S::SymTridiagonal, perm)
     Base.checkdims_perm(S, S, perm)
@@ -331,7 +335,7 @@ end
 
 # tril and triu
 
-function istriu(M::SymTridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::SymTridiagonal, k::Integer=0)
     if k <= -1
         return true
     elseif k == 0
@@ -340,7 +344,7 @@ function istriu(M::SymTridiagonal, k::Integer=0)
         return iszero(_evview(M)) && iszero(M.dv)
     end
 end
-istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
+Base.@constprop :aggressive istril(M::SymTridiagonal, k::Integer) = istriu(M, -k)
 iszero(M::SymTridiagonal) =  iszero(_evview(M)) && iszero(M.dv)
 isone(M::SymTridiagonal) =  iszero(_evview(M)) && all(isone, M.dv)
 isdiag(M::SymTridiagonal) =  iszero(_evview(M))
@@ -444,7 +448,7 @@ end
     end
 end
 
-@inline function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
+@inline function getindex(A::SymTridiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return symmetric((@inbounds A.dv[i]), :U)::symmetric_type(eltype(A.dv))
@@ -456,6 +460,10 @@ end
         return zero(T)
     end
 end
+
+Base._reverse(A::SymTridiagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::SymTridiagonal, dims::Colon) = SymTridiagonal(reverse(A.dv), reverse(A.ev))
+Base._reverse!(A::SymTridiagonal, dims::Colon) = (reverse!(A.dv); reverse!(A.ev); A)
 
 @inline function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
@@ -606,7 +614,13 @@ similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), sim
 similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(M.d, T, dims)
 
 # Operations on Tridiagonal matrices
-copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
+# copyto! for matching axes
+function _copyto_banded!(dest::Tridiagonal, src::Tridiagonal)
+    copyto!(dest.dl, src.dl)
+    copyto!(dest.d, src.d)
+    copyto!(dest.du, src.du)
+    dest
+end
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
@@ -615,7 +629,9 @@ for func in (:conj, :copy, :real, :imag)
     end
 end
 
-adjoint(S::Tridiagonal{<:Real}) = Tridiagonal(S.du, S.d, S.dl)
+adjoint(S::Tridiagonal{<:Number}) = Tridiagonal(vec(adjoint(S.du)), vec(adjoint(S.d)), vec(adjoint(S.dl)))
+adjoint(S::Tridiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}}) =
+    Tridiagonal(adjoint(parent(S.du)), adjoint(parent(S.d)), adjoint(parent(S.dl)))
 transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
 permutedims(T::Tridiagonal) = Tridiagonal(T.du, T.d, T.dl)
 function permutedims(T::Tridiagonal, perm)
@@ -673,7 +689,7 @@ end
     end
 end
 
-@inline function getindex(A::Tridiagonal{T}, i::Integer, j::Integer) where T
+@inline function getindex(A::Tridiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.d[i]
@@ -684,6 +700,18 @@ end
     else
         return zero(T)
     end
+end
+
+Base._reverse(A::Tridiagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::Tridiagonal, dims::Colon) = Tridiagonal(reverse(A.du), reverse(A.d), reverse(A.dl))
+function Base._reverse!(A::Tridiagonal, dims::Colon)
+    n = length(A.du) # == length(A.dl), & always 1-based
+    # reverse and swap A.dl and A.du:
+    @inbounds for i in 1:n
+        A.dl[i], A.du[n+1-i] = A.du[n+1-i], A.dl[i]
+    end
+    reverse!(A.d)
+    return A
 end
 
 @inline function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
@@ -711,7 +739,7 @@ end
 
 iszero(M::Tridiagonal) = iszero(M.dl) && iszero(M.d) && iszero(M.du)
 isone(M::Tridiagonal) = iszero(M.dl) && all(isone, M.d) && iszero(M.du)
-function istriu(M::Tridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::Tridiagonal, k::Integer=0)
     if k <= -1
         return true
     elseif k == 0
@@ -722,7 +750,7 @@ function istriu(M::Tridiagonal, k::Integer=0)
         return iszero(M.dl) && iszero(M.d) && iszero(M.du)
     end
 end
-function istril(M::Tridiagonal, k::Integer=0)
+Base.@constprop :aggressive function istril(M::Tridiagonal, k::Integer=0)
     if k >= 1
         return true
     elseif k == 0
@@ -980,4 +1008,22 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
         end
     end
     return B
+end
+
+# combinations of Tridiagonal and Symtridiagonal
+# copyto! for matching axes
+function _copyto_banded!(A::Tridiagonal, B::SymTridiagonal)
+    Bev = _evview(B)
+    A.du .= Bev
+    # Broadcast identity for numbers to access the faster copyto! path
+    # This uses the fact that transpose(x::Number) = x and symmetric(x::Number) = x
+    A.dl .= (eltype(B) <: Number ? identity : transpose).(Bev)
+    A.d .= (eltype(B) <: Number ? identity : symmetric).(B.dv)
+    return A
+end
+function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
+    issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal"))
+    A.dv .= B.d
+    _evview(A) .= B.du
+    return A
 end

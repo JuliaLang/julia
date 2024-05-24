@@ -468,7 +468,7 @@ function take!(io::IOBuffer)
         elseif io.writable
             data = view(io.data, io.offset+1:nbytes+io.offset)
         else
-            data = copyto!(StringVector(io.size), 1, io.data, io.offset + 1, nbytes)
+            data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
         end
     else
         nbytes = bytesavailable(io)
