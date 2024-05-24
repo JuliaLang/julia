@@ -2200,6 +2200,7 @@ issue52644(::UnionAll) = :UnionAll
 let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
         issue52644(t.tuple)
     end |> only |> first
+    ir.argtypes[1] = Tuple{}
     irfunc = Core.OpaqueClosure(ir)
     @test irfunc(Issue52644(Tuple{})) === :DataType
     @test irfunc(Issue52644(Tuple{<:Integer})) === :UnionAll
@@ -2208,6 +2209,7 @@ issue52644_single(x::DataType) = :DataType
 let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
         issue52644_single(t.tuple)
     end |> only |> first
+    ir.argtypes[1] = Tuple{}
     irfunc = Core.OpaqueClosure(ir)
     @test irfunc(Issue52644(Tuple{})) === :DataType
     @test_throws MethodError irfunc(Issue52644(Tuple{<:Integer}))

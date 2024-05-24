@@ -63,24 +63,24 @@ end
 
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
-            (:log_debug, "Debug:",   "@ Base ~/somefile.jl:42")
+            (:blue,      "Debug:",   "@ Base ~/somefile.jl:42")
         @test Logging.default_metafmt(Logging.Info,  Main, :g, :i, "a.jl", 1) ==
-            (:log_info,  "Info:",    "")
+            (:cyan,      "Info:",    "")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2) ==
-            (:log_warn,  "Warning:", "@ Main b.jl:2")
+            (:yellow,    "Warning:", "@ Main b.jl:2")
         @test Logging.default_metafmt(Logging.Error, Main, :g, :i, "", 0) ==
-            (:log_error, "Error:",   "@ Main :0")
+            (:light_red, "Error:",   "@ Main :0")
         # formatting of nothing
         @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, "b.jl", 2) ==
-            (:log_warn,  "Warning:", "@ b.jl:2")
+            (:yellow,    "Warning:", "@ b.jl:2")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, nothing, 2) ==
-            (:log_warn,  "Warning:", "@ Main")
+            (:yellow,    "Warning:", "@ Main")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", nothing) ==
-            (:log_warn,  "Warning:", "@ Main b.jl")
+            (:yellow,    "Warning:", "@ Main b.jl")
         @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, nothing, 2) ==
-            (:log_warn,  "Warning:", "")
+            (:yellow,    "Warning:", "")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2:5) ==
-            (:log_warn,  "Warning:", "@ Main b.jl:2-5")
+            (:yellow,    "Warning:", "@ Main b.jl:2-5")
     end
 
     function dummy_metafmt(level, _module, group, id, file, line)
@@ -265,9 +265,9 @@ end
     # Basic colorization test
     @test genmsg("line1\nline2", color=true) ==
     """
-    \e[36m\e[1m┌\e[39m\e[22m \e[36m\e[1mPREFIX\e[39m\e[22m line1
-    \e[36m\e[1m│\e[39m\e[22m line2
-    \e[36m\e[1m└\e[39m\e[22m \e[90mSUFFIX\e[39m
+    \e[36m\e[1m┌ \e[22m\e[39m\e[36m\e[1mPREFIX \e[22m\e[39mline1
+    \e[36m\e[1m│ \e[22m\e[39mline2
+    \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
     """
 
 end

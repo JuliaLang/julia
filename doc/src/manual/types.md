@@ -1481,8 +1481,8 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
 ```
 
 where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
-the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(stdout, MIME("text/plain"), z)`,
-which in turn defaults to `show(stdout, z)`, but you should *not* define new [`display`](@ref)
+the REPL calls `display(z)` to display the result `z` of executing a line, which defaults to `show(io, MIME("text/plain"), z)` (where `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref)),
+which in turn defaults to `show(io, z)`, but you should *not* define new [`display`](@ref)
 methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref Multimedia-I/O)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display

@@ -288,12 +288,7 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     return (false, true, true)
 end
 
-"""
-    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
-        (consistent::Bool, removable::Bool, nothrow::Bool)
-
-Returns a tuple of `(:consistent, :removable, :nothrow)` flags for a given statement.
-"""
+# Returns a tuple of `(:consistent, :removable, :nothrow)` flags for a given statement.
 function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.
     isa(stmt, PiNode) && return (true, true, true)
@@ -317,12 +312,6 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return (false, false, false)
-            if f === UnionAll
-                # TODO: This is a weird special case - should be determined in inference
-                argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-                nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
-                return (true, nothrow, nothrow)
-            end
             if f === Intrinsics.cglobal || f === Intrinsics.llvmcall
                 # TODO: these are not yet linearized
                 return (false, false, false)
@@ -1264,14 +1253,13 @@ end
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
-    nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
     @timeit "domtree 1" domtree = construct_domtree(ir)
-    defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.stmt)
+    defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
-    resize!(ir.argtypes, nargs)
+    resize!(ir.argtypes, ci.nargs)
     return ir
 end
 

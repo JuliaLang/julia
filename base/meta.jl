@@ -5,8 +5,6 @@ Convenience functions for metaprogramming.
 """
 module Meta
 
-using ..CoreLogging
-
 export quot,
        isexpr,
        isidentifier,

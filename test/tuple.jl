@@ -532,6 +532,8 @@ end
     for n = 0:15
         @test ntuple(identity, Val(n)) == ntuple(identity, n)
     end
+
+    @test Core.Compiler.return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
 end
 
 struct A_15703{N}
@@ -654,6 +656,8 @@ end
 
     f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
     @test @inferred(f()) == (9, 2:2, 3:3)
+
+    @test Base.return_types(Base.setindex, Tuple{Tuple,Nothing,Int}) == [Tuple]
 end
 
 @testset "inferable range indexing with constant values" begin

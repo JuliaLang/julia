@@ -1199,7 +1199,7 @@ function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
         y = _BigFloat(x.prec, x.sign, x.exp, d′)
         #ccall((:mpfr_custom_move,libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
         return y
-    end
+    end::BigFloat
 end
 
 function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}

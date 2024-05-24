@@ -136,10 +136,10 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     JL_GC_PUSHARGS(argv, nargs - 1);
     size_t i;
     for (i = 1; i < nargs; i++)
-        argv[i] = eval_value(args[i], s);
+        argv[i-1] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
-    jl_value_t *result = jl_invoke(argv[1], &argv[2], nargs - 2, meth);
+    jl_value_t *result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, meth);
     JL_GC_POP();
     return result;
 }
@@ -766,8 +766,8 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     }
     else {
         s->module = mi->def.method->module;
-        size_t defargs = mi->def.method->nargs;
-        int isva = mi->def.method->isva ? 1 : 0;
+        size_t defargs = src->nargs;
+        int isva = src->isva;
         size_t i;
         s->locals[0] = f;
         assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -805,7 +805,13 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
         assert(jl_is_method_instance(specializations));
         jl_method_instance_t *mi = (jl_method_instance_t *)specializations;
         jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
-        code = jl_uncompress_ir(source, ci, jl_atomic_load_relaxed(&ci->inferred));
+        jl_value_t *src = jl_atomic_load_relaxed(&ci->inferred);
+        if (!src) {
+            // This can happen if somebody did :new_opaque_closure with broken IR. This is definitely bad
+            // and UB, but let's try to be slightly nicer than segfaulting here for people debugging.
+            jl_error("Internal Error: Opaque closure with no source at all");
+        }
+        code = jl_uncompress_ir(source, ci, src);
     }
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;

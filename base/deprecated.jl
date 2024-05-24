@@ -24,6 +24,7 @@ const __internal_changes_list = (
     :invertedlinetables,
     :codeinforefactor,
     :miuninferredrm,
+    :codeinfonargs  # #54341
     # Add new change names above this line
 )
 

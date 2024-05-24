@@ -1080,6 +1080,9 @@ setup_interface(
     extra_repl_keymap::Any = repl.options.extra_keymap
 ) = setup_interface(repl, hascolor, extra_repl_keymap)
 
+# we have to grab this after Pkg is loaded so cache it
+pkg_mode::Union{Nothing,LineEdit.Prompt} = nothing
+
 # This non keyword method can be precompiled which is important
 function setup_interface(
     repl::LineEditREPL,
@@ -1225,18 +1228,20 @@ function setup_interface(
         end,
         ']' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                REPLExt = Base.require_stdlib(pkgid, "REPLExt")
-                pkg_mode = nothing
-                if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
-                    for mode in repl.interface.modes
-                        if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
-                            pkg_mode = mode
-                            break
+                global pkg_mode
+                if pkg_mode === nothing
+                    pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+                    REPLExt = Base.require_stdlib(pkgid, "REPLExt")
+                    pkg_mode = nothing
+                    if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
+                        for mode in repl.interface.modes
+                            if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
+                                pkg_mode = mode
+                                break
+                            end
                         end
                     end
                 end
-                # TODO: Cache the `pkg_mode`?
                 if pkg_mode !== nothing
                     buf = copy(LineEdit.buffer(s))
                     transition(s, pkg_mode) do

@@ -88,6 +88,9 @@ Standard library changes
 #### LinearAlgebra
 
 * `rank` can now take a `QRPivoted` matrix to allow rank estimation via QR factorization ([#54283]).
+* Added keyword argument `alg` to `eigen`, `eigen!`, `eigvals` and `eigvals!` for self-adjoint
+  matrix types (i.e., the type union `RealHermSymComplexHerm`) that allows one to switch
+  between different eigendecomposition algorithms ([#49355]).
 
 #### Logging
 
