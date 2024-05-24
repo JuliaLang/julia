@@ -82,7 +82,7 @@ f3(A::Array{T}) where {T<:Any} = 3
 f4(A::Array{Any}) = 4
 ```
 
-The signature - as described in [Function calls](@ref) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
+The signature - as described in [Function calls](@ref Function-calls) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
 All but `f4` can be called with `a = [1,2]`; all but `f2` can be called with `b = Any[1,2]`.
 
 Let's look at these types a little more closely:
@@ -93,13 +93,15 @@ UnionAll
   var: TypeVar
     name: Symbol T
     lb: Union{}
-    ub: Any
+    ub: abstract type Any
   body: UnionAll
     var: TypeVar
       name: Symbol N
       lb: Union{}
-      ub: Any
-    body: Array{T, N} <: DenseArray{T, N}
+      ub: abstract type Any
+    body: mutable struct Array{T, N} <: DenseArray{T, N}
+      ref::MemoryRef{T}
+      size::NTuple{N, Int64}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
@@ -179,13 +181,13 @@ TypeName
     var: TypeVar
       name: Symbol T
       lb: Union{}
-      ub: Any
+      ub: abstract type Any
     body: UnionAll
       var: TypeVar
         name: Symbol N
         lb: Union{}
-        ub: Any
-      body: Array{T, N} <: DenseArray{T, N}
+        ub: abstract type Any
+      body: mutable struct Array{T, N} <: DenseArray{T, N}
   cache: SimpleVector
     ...
 
@@ -198,7 +200,6 @@ TypeName
     defs: Nothing nothing
     cache: Nothing nothing
     max_args: Int64 0
-    kwsorter: #undef
     module: Module Core
     : Int64 0
     : Int64 0
@@ -478,7 +479,7 @@ We have not yet worked out a complete algorithm for this.
 Most operations for dealing with types are found in the files `jltypes.c` and `subtype.c`.
 A good way to start is to watch subtyping in action.
 Build Julia with `make debug` and fire up Julia within a debugger.
-[gdb debugging tips](@ref) has some tips which may be useful.
+[gdb debugging tips](@ref gdb-debugging-tips) has some tips which may be useful.
 
 Because the subtyping code is used heavily in the REPL itself -- and hence breakpoints in this
 code get triggered often -- it will be easiest if you make the following definition:
@@ -520,10 +521,6 @@ than the other.)  Likewise, `Tuple{Int,Vararg{Int}}` is not a subtype of `Tuple{
 considered more specific. However, `morespecific` does get a bonus for length: in particular,
 `Tuple{Int,Int}` is more specific than `Tuple{Int,Vararg{Int}}`.
 
-If you're debugging how methods get sorted, it can be convenient to define the function:
-
-```julia
-type_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b)
-```
-
-which allows you to test whether tuple type `a` is more specific than tuple type `b`.
+Additionally, if 2 methods are defined with identical signatures, per type-equal, then they
+will instead by compared by order of addition, such that the later method is more specific
+than the earlier one.

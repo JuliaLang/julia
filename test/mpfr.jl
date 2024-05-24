@@ -653,6 +653,10 @@ end
     @test typeof(round(Int64, x)) == Int64 && round(Int64, x) == 42
     @test typeof(round(Int, x)) == Int && round(Int, x) == 42
     @test typeof(round(UInt, x)) == UInt && round(UInt, x) == 0x2a
+
+    # Issue #44662
+    @test_throws InexactError round(Integer, big(Inf))
+    @test_throws InexactError round(Integer, big(NaN))
 end
 @testset "string representation" begin
     str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012"
@@ -1020,5 +1024,67 @@ end
     for x in (2f0, pi, 7.8, big(ℯ))
         @test big(typeof(x)) == typeof(big(x))
         @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
+    end
+end
+
+@testset "precision base" begin
+    setprecision(53) do
+        @test precision(Float64, base=10) == precision(BigFloat, base=10) == 15
+    end
+    for (p, b) in ((100,10), (50,100))
+        setprecision(p, base=b) do
+            @test precision(BigFloat, base=10) == 100
+            @test precision(BigFloat, base=100) == 50
+            @test precision(BigFloat) == precision(BigFloat, base=2) == 333
+        end
+    end
+end
+
+@testset "issue #50642" begin
+    setprecision(BigFloat, 500) do
+        bf = big"1.4901162082026128889687591176485489397376143775948511e-07"
+        @test Float16(bf) == Float16(2.0e-7)
+    end
+end
+
+# PR #54284
+import Base.MPFR: clear_flags, had_underflow, had_overflow, had_divbyzero,
+    had_nan, had_inexact_exception, had_range_exception
+
+function all_flags_54284()
+    (
+        had_underflow(),
+        had_overflow(),
+        had_divbyzero(),
+        had_nan(),
+        had_inexact_exception(),
+        had_range_exception(),
+    )
+end
+@testset "MPFR flags" begin
+    let x, a = floatmin(BigFloat), b = floatmax(BigFloat), c = zero(BigFloat)
+        clear_flags()
+        @test !any(all_flags_54284())
+
+        x = a - a # normal
+        @test all_flags_54284() == (false, false, false, false, false, false)
+        x = 1 / c # had_divbyzero
+        @test all_flags_54284() == (false, false, true, false, false, false)
+        clear_flags()
+        x = nextfloat(a) - a # underflow
+        @test all_flags_54284() == (true, false, false, false, true, false)
+        clear_flags()
+        x = 1 / a # overflow
+        @test all_flags_54284() == (false, true, false, false, true, false)
+        clear_flags()
+        x = c / c # nan
+        @test all_flags_54284() == (false, false, false, true, false, false)
+        clear_flags()
+        x = prevfloat(BigFloat(1.0)) * 100 # inexact
+        @test all_flags_54284() == (false, false, false, false, true, false)
+        clear_flags()
+        try convert(Int, b); catch; end # range exception
+        @test all_flags_54284() == (false, false, false, false, false, true)
+        clear_flags()
     end
 end

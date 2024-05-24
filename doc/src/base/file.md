@@ -1,6 +1,8 @@
 # Filesystem
 
 ```@docs
+Base.read(::String)
+Base.write(::String, ::Any)
 Base.Filesystem.pwd
 Base.Filesystem.cd(::AbstractString)
 Base.Filesystem.cd(::Function)
@@ -15,6 +17,7 @@ Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.RawFD
 Base.stat
+Base.Filesystem.diskstat
 Base.Filesystem.lstat
 Base.Filesystem.ctime
 Base.Filesystem.mtime
@@ -57,6 +60,8 @@ Base.Filesystem.normpath
 Base.Filesystem.realpath
 Base.Filesystem.relpath
 Base.Filesystem.expanduser
+Base.Filesystem.contractuser
+Base.Filesystem.samefile
 Base.Filesystem.splitdir
 Base.Filesystem.splitdrive
 Base.Filesystem.splitext

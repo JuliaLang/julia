@@ -194,10 +194,11 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     to the maximum number of elements that can be held in the channel at any time. For example, `Channel(32)`
     creates a channel that can hold a maximum of 32 objects of any type. A `Channel{MyType}(64)` can
     hold up to 64 objects of `MyType` at any time.
-  * If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available.
-  * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
+  * If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available (see [`isempty`](@ref)).
+  * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available (see [`isfull`](@ref)).
   * [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
     waits for an object to become available.
+  * Note that if another task is currently waiting to `put!` an object into a channel, a channel can have more items available than its capacity.
   * A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
     freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
     On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
@@ -289,7 +290,7 @@ julia> @elapsed while n > 0 # print out results
 0.029772311
 ```
 
-Instead of `errormonitor(t)`, a more robust solution may be use use `bind(results, t)`, as that will
+Instead of `errormonitor(t)`, a more robust solution may be to use `bind(results, t)`, as that will
 not only log any unexpected failures, but also force the associated resources to close and propagate
 the exception everywhere.
 

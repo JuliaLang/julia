@@ -202,3 +202,30 @@ const minsubf16_32 = Float32(minsubf16)
 
 # issues #33076
 @test Float16(1f5) == Inf16
+
+# issue #52394
+@test Float16(10^8 // (10^9 + 1)) == convert(Float16, 10^8 // (10^9 + 1)) == Float16(0.1)
+@test Float16((typemax(UInt128)-0x01) // typemax(UInt128)) == Float16(1.0)
+@test Float32((typemax(UInt128)-0x01) // typemax(UInt128)) == Float32(1.0)
+
+@testset "conversion to Float16 from" begin
+    for T in (Float32, Float64, BigFloat)
+        @testset "conversion from $T" begin
+            for i in 1:2^16
+                f = reinterpret(Float16, UInt16(i-1))
+                isfinite(f) || continue
+                if f < 0
+                    epsdown = T(eps(f))/2
+                    epsup   = issubnormal(f) ? epsdown : T(eps(nextfloat(f)))/2
+                else
+                    epsup   = T(eps(f))/2
+                    epsdown = issubnormal(f) ? epsup : T(eps(prevfloat(f)))/2
+                end
+                @test isequal(f*(-1)^(f === Float16(0)),  Float16(nextfloat(T(f) - epsdown)))
+                @test isequal(f*(-1)^(f === -Float16(0)), Float16(prevfloat(T(f) + epsup)))
+                @test isequal(prevfloat(f), Float16(prevfloat(T(f) - epsdown)))
+                @test isequal(nextfloat(f), Float16(nextfloat(T(f) + epsup)))
+            end
+        end
+    end
+end

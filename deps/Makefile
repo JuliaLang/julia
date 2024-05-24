@@ -8,7 +8,6 @@ BUILDDIR := scratch
 else
 BUILDDIR := .
 endif
-include $(SRCDIR)/Versions.make
 include $(JULIAHOME)/Make.inc
 include $(SRCDIR)/tools/common.mk
 include $(SRCDIR)/tools/git-external.mk
@@ -25,9 +24,9 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 #
 # autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
 # custom Makefile rules: openlibm dsfmt libsuitesparse lapack blastrampoline openblas utf8proc objconv libwhich
-# CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls
+# CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls libtracyclient
 #
-# downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
+# downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2, libtracyclient
 #
 # to debug 'define' rules, replace eval at the usage site with info or error
 
@@ -37,17 +36,26 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-DEP_LIBS :=
+DEP_LIBS := JuliaSyntax
 
-# Always use libblastrampoline
+ifeq ($(USE_SYSTEM_LIBBLASTRAMPOLINE), 0)
 DEP_LIBS += blastrampoline
+endif
 
 ifeq ($(USE_SYSTEM_CSL), 0)
 DEP_LIBS += csl
 endif
 
+ifeq ($(SANITIZE), 1)
+DEP_LIBS += sanitizers
+endif
+
 ifeq ($(USE_SYSTEM_LIBUV), 0)
 DEP_LIBS += libuv
+endif
+
+ifeq ($(WITH_TRACY), 1)
+DEP_LIBS += libtracyclient
 endif
 
 ifeq ($(DISABLE_LIBUNWIND), 0)
@@ -56,13 +64,15 @@ ifeq ($(OS), Linux)
 DEP_LIBS += unwind
 else ifeq ($(OS), FreeBSD)
 DEP_LIBS += unwind
+else ifeq ($(OS), OpenBSD)
+DEP_LIBS += llvmunwind
 else ifeq ($(OS), Darwin)
 DEP_LIBS += llvmunwind
 endif
 endif
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
@@ -88,6 +98,10 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 DEP_LIBS += llvm
 endif
 
+ifeq ($(USE_SYSTEM_LLD), 0)
+DEP_LIBS += lld
+endif
+
 ifeq ($(USE_SYSTEM_PCRE), 0)
 DEP_LIBS += pcre
 endif
@@ -105,7 +119,6 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 DEP_LIBS += gmp
 endif
 
-ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 DEP_LIBS += mbedtls
 endif
@@ -122,8 +135,9 @@ ifeq ($(USE_SYSTEM_CURL), 0)
 DEP_LIBS += curl
 endif
 
+ifeq ($(USE_SYSTEM_LIBGIT2), 0)
 DEP_LIBS += libgit2
-endif # USE_SYSTEM_LIBGIT2
+endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
@@ -147,6 +161,16 @@ ifeq ($(USE_SYSTEM_P7ZIP), 0)
 DEP_LIBS += p7zip
 endif
 
+ifeq ($(USE_INTEL_JITEVENTS), 1)
+ifeq ($(USE_BINARYBUILDER_LLVM), 0)
+DEP_LIBS += ittapi
+endif
+endif
+
+ifeq ($(WITH_ITTAPI),1)
+DEP_LIBS += ittapi
+endif
+
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
@@ -158,15 +182,19 @@ DEP_LIBS += lapack
 endif
 endif
 
+ifeq ($(USE_SYSTEM_LIBWHICH), 0)
 ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
 endif
+endif
+
+DEP_LIBS_STAGED := $(DEP_LIBS)
 
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	libsuitesparse
+	sanitizers libsuitesparse lld libtracyclient ittapi JuliaSyntax
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -201,6 +229,8 @@ distcleanall: $(addprefix distclean-, $(DEP_LIBS_ALL))
 getall: $(addprefix get-, $(DEP_LIBS_ALL))
 
 include $(SRCDIR)/csl.mk
+include $(SRCDIR)/sanitizers.mk
+include $(SRCDIR)/ittapi.mk
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk
@@ -211,6 +241,7 @@ include $(SRCDIR)/blastrampoline.mk
 include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/libsuitesparse.mk
+include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
@@ -221,7 +252,10 @@ include $(SRCDIR)/nghttp2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
-include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/p7zip.mk
+include $(SRCDIR)/libtracyclient.mk
+
+# vendored Julia libs
+include $(SRCDIR)/JuliaSyntax.mk
 
 include $(SRCDIR)/tools/uninstallers.mk

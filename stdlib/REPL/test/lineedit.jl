@@ -29,7 +29,7 @@ function transform!(f, s, i = -1) # i is char-based (not bytes) buffer position
     # simulate what happens in LineEdit.set_action!
     s isa LineEdit.MIState && (s.current_action = :unknown)
     status = f(s)
-    if s isa LineEdit.MIState && status != :ignore
+    if s isa LineEdit.MIState && status !== :ignore
         # simulate what happens in LineEdit.prompt!
         s.last_action = s.current_action
     end
@@ -306,21 +306,21 @@ seek(buf,0)
 
 ## edit_delete_prev_word ##
 
-buf = IOBuffer("type X\n ")
+buf = IOBuffer(Vector{UInt8}("type X\n "), read=true, write=true)
 seekend(buf)
 @test !isempty(@inferred(LineEdit.edit_delete_prev_word(buf)))
 @test position(buf) == 5
 @test buf.size == 5
 @test content(buf) == "type "
 
-buf = IOBuffer("4 +aaa+ x")
+buf = IOBuffer(Vector{UInt8}("4 +aaa+ x"), read=true, write=true)
 seek(buf,8)
 @test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test position(buf) == 3
 @test buf.size == 4
 @test content(buf) == "4 +x"
 
-buf = IOBuffer("x = func(arg1,arg2 , arg3)")
+buf = IOBuffer(Vector{UInt8}("x = func(arg1,arg2 , arg3)"), read=true, write=true)
 seekend(buf)
 LineEdit.char_move_word_left(buf)
 @test position(buf) == 21
@@ -375,6 +375,25 @@ let buf = IOBuffer()
     @test content(buf) == "βγαεδ"
     LineEdit.edit_transpose_chars(buf)
     @test content(buf) == "βγαδε"
+
+
+    # Transposing a one-char buffer should behave like Emacs
+    seek(buf, 0)
+    @inferred(LineEdit.edit_clear(buf))
+    edit_insert(buf, "a")
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == "a"
+    seekend(buf)
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == "a"
+    @test position(buf) == 0
+
+    # Transposing an empty buffer shouldn't implode
+    seek(buf, 0)
+    LineEdit.edit_clear(buf)
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == ""
+    @test position(buf) == 0
 end
 
 @testset "edit_word_transpose" begin
@@ -455,7 +474,8 @@ end
 # julia> is 6 characters + 1 character for space,
 # so the rest of the terminal is 73 characters
 #########################################################################
-let buf = IOBuffer(
+withenv("COLUMNS"=>"80") do
+    buf = IOBuffer(
         "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
     seek(buf, 4)
     outbuf = IOBuffer()
@@ -895,4 +915,28 @@ end
     @test get_last_word("a[1]") == "1"
     @test get_last_word("a[b[]]") == "b"
     @test get_last_word("a[]") == "a[]"
+end
+
+@testset "show_completions" begin
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+
+    function getcompletion(completions)
+        promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
+        REPL.LineEdit.show_completions(promptstate, completions)
+        return String(take!(term.out_stream))
+    end
+
+    # When the number of completions is less than
+    # LineEdit.MULTICOLUMN_THRESHOLD, they should be in a single column.
+    strings = ["abcdef", "123456", "ijklmn"]
+    @assert length(strings) < LineEdit.MULTICOLUMN_THRESHOLD
+    @test getcompletion(strings) == "\033[0B\n\rabcdef\n\r123456\n\rijklmn\n"
+
+    # But with more than the threshold there should be multiple columns
+    strings2 = repeat(["foo"], LineEdit.MULTICOLUMN_THRESHOLD + 1)
+    @test getcompletion(strings2) == "\033[0B\n\rfoo\r\e[5Cfoo\n\rfoo\r\e[5Cfoo\n\rfoo\r\e[5Cfoo\n"
+
+    # Check that newlines in completions are handled correctly (issue #45836)
+    strings3 = ["abcdef", "123456\nijklmn"]
+    @test getcompletion(strings3) == "\033[0B\nabcdef\n123456\nijklmn\n"
 end

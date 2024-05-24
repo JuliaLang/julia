@@ -1,5 +1,6 @@
 #!/bin/bash
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #
 # Usage:
 #     contrib/asan/build.sh <path> [<make_targets>...]
@@ -39,11 +40,7 @@ if [ ! -d "$TOOLCHAIN" ]; then
     cp "$HERE/Make.user.tools"  "$TOOLCHAIN/Make.user"
 fi
 
-make -C "$TOOLCHAIN/deps" install-clang install-llvm-tools
-
-# TODO: https://github.com/JuliaPackaging/Yggdrasil/issues/3359
-rm "$TOOLCHAIN/usr/tools/clang++"
-ln -s "$TOOLCHAIN/usr/bin/clang" "$TOOLCHAIN/usr/tools/clang++"
+make -C "$TOOLCHAIN/deps" install-clang install-llvm-tools install-patchelf
 
 echo
 echo "Building Julia..."

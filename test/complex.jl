@@ -44,7 +44,12 @@ end
     @testset for T in (Float16, Float32, Float64, BigFloat)
         t = true
         f = false
-
+        @testset "equality" begin
+            @test isequal(T(0.0)*im, T(0.0))
+            @test !isequal(T(0.0)*im, T(-0.0))
+            @test isequal(Complex(T(-0.0), T(0.0)), T(-0.0))
+            @test !isequal(T(-0.0)*im, T(-0.0))
+        end
         @testset "add and subtract" begin
             @test isequal(T(+0.0) + im, Complex(T(+0.0), T(+1.0)))
             @test isequal(T(-0.0) + im, Complex(T(-0.0), T(+1.0)))
@@ -378,6 +383,7 @@ import Base.Math.@horner
     @test isequal(log1p(complex(-2, 1e-10)), log(1 + complex(-2, 1e-10)))
     @test isequal(log1p(complex(1, Inf)), complex(Inf, pi/2))
     @test isequal(log1p(complex(1, -Inf)), complex(Inf, -pi/2))
+    @test isequal(log1p(complex(1e-200, 5e-175)), complex(1e-200, 5e-175))
 
     for z in (1e-10+1e-9im, 1e-10-1e-9im, -1e-10+1e-9im, -1e-10-1e-9im)
         @test log1p(z) ≈ @horner(z, 0, 1, -0.5, 1/3, -0.25, 0.2)
@@ -935,6 +941,7 @@ end
     @test cispi(0.0+0.0im) == cispi(0)
     @test cispi(1.0+0.0im) == cispi(1)
     @test cispi(2.0+0.0im) == cispi(2)
+    @test cispi(5im) ≈ exp(-5pi) rtol=1e-10 # https://github.com/JuliaLang/julia/pull/45945
 end
 
 @testset "exp2" begin
@@ -1039,7 +1046,7 @@ end
 @testset "corner cases of division, issue #22983" begin
     # These results abide by ISO/IEC 10967-3:2006(E) and
     # mathematical definition of division of complex numbers.
-    for T in (Float32, Float64, BigFloat)
+    for T in (Float16, Float32, Float64, BigFloat)
         @test isequal(one(T) / zero(Complex{T}), one(Complex{T}) / zero(Complex{T}))
         @test isequal(one(T) / zero(Complex{T}), Complex{T}(NaN, NaN))
         @test isequal(one(Complex{T}) / zero(T), Complex{T}(Inf, NaN))
@@ -1050,7 +1057,7 @@ end
 end
 
 @testset "division by Inf, issue#23134" begin
-    @testset "$T" for T in (Float32, Float64, BigFloat)
+    @testset "$T" for T in (Float16, Float32, Float64, BigFloat)
         @test isequal(one(T) / complex(T(Inf)),         complex(zero(T), -zero(T)))
         @test isequal(one(T) / complex(T(Inf), one(T)), complex(zero(T), -zero(T)))
         @test isequal(one(T) / complex(T(Inf), T(NaN)), complex(zero(T), -zero(T)))
@@ -1088,8 +1095,10 @@ end
         @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
 
         # divide complex by complex Inf
-        @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T))) broken=(T==Float64)
-        @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T))) broken=(T in (Float32, Float64))
+        @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(complex(T(Inf)) / complex(T(Inf), T(-Inf)), complex(T(NaN), T(NaN)))
+        @test isequal(complex(T(NaN)) / complex(T(-Inf), T(Inf)), complex(T(NaN), T(NaN)))
     end
 end
 

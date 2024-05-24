@@ -1,5 +1,30 @@
 # [Documentation](@id man-documentation)
 
+## Accessing Documentation
+
+Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
+by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
+
+```julia
+?cos
+?@time
+?r""
+```
+
+will show documentation for the relevant function, macro or string macro respectively. Most Julia
+environments provide a way to access documentation directly:
+- [VS Code](https://www.julia-vscode.org/) shows documentation when you hover over a function name.
+  You can also use the Julia panel in the sidebar to search for documentation.
+- In [Pluto](https://github.com/fonsp/Pluto.jl), open the "Live Docs" panel on the bottom right.
+- In [Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
+  under the cursor.
+
+
+`Docs.hasdoc(module, name)::Bool` tells whether a name has a docstring. `Docs.undocumented_names(module; all)`
+returns the undocumented names in a module.
+
+## Writing Documentation
+
 Julia enables package developers and users to document functions, types and other objects easily
 via a built-in documentation system.
 
@@ -202,21 +227,6 @@ As in the example above, we recommend following some simple conventions when wri
    material above the header; you can access the full help by adding a '?'
    at the beginning of the expression (i.e., "??foo" rather than "?foo").
 
-## Accessing Documentation
-
-Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
-by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
-
-```julia
-?cos
-?@time
-?r""
-```
-
-will show documentation for the relevant function, macro or string macro respectively. In
-[Juno](http://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
-under the cursor.
-
 ## Functions & Methods
 
 Functions in Julia may have multiple implementations, known as methods. While it's good practice
@@ -297,25 +307,26 @@ Or for use with Julia's metaprogramming functionality:
 ```julia
 for (f, op) in ((:add, :+), (:subtract, :-), (:multiply, :*), (:divide, :/))
     @eval begin
-        $f(a,b) = $op(a,b)
+        $f(a, b) = $op(a, b)
     end
 end
-@doc "`add(a,b)` adds `a` and `b` together" add
-@doc "`subtract(a,b)` subtracts `b` from `a`" subtract
+@doc "`add(a, b)` adds `a` and `b` together" add
+@doc "`subtract(a, b)` subtracts `b` from `a`" subtract
 ```
 
-Documentation written in non-toplevel blocks, such as `begin`, `if`, `for`, and `let`, is
-added to the documentation system as blocks are evaluated. For example:
+Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, `let`, and
+inner constructors, should be added to the documentation system via `@doc` as
+well. For example:
 
 ```julia
 if condition()
-    "..."
+    @doc "..."
     f(x) = x
 end
 ```
 
 will add documentation to `f(x)` when `condition()` is `true`. Note that even if `f(x)` goes
-out of scope at the end of the block, its documentation will remain.
+out of scope at the end of a block, its documentation will remain.
 
 It is possible to make use of metaprogramming to assist in the creation of documentation.
 When using string-interpolation within the docstring you will need to use an extra `$` as
@@ -396,7 +407,7 @@ f(x) = x
 
 "..."
 function f(x)
-    x
+    return x
 end
 
 "..."
@@ -423,10 +434,13 @@ Adds docstring `"..."` to the `@m(::Any)` macro definition.
 
 ```julia
 "..."
-:(@m)
+:(@m1)
+
+"..."
+macro m2 end
 ```
 
-Adds docstring `"..."` to the macro named `@m`.
+Adds docstring `"..."` to the macros named `@m1` and `@m2`.
 
 ### Types
 
@@ -447,6 +461,20 @@ end
 
 Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
 
+```
+"..."
+T1
+
+"..."
+T2
+
+"..."
+T3
+```
+
+Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
+The previous version is the preferred syntax, however both are equivalent.
+
 ```julia
 "..."
 struct T
@@ -454,11 +482,17 @@ struct T
     x
     "y"
     y
+
+    @doc "Inner constructor"
+    function T()
+        new(...)
+    end
 end
 ```
 
-Adds docstring `"..."` to type `T`, `"x"` to field `T.x` and `"y"` to field `T.y`. Also applicable
-to `mutable struct` types.
+Adds docstring `"..."` to type `T`, `"x"` to field `T.x`, `"y"` to field `T.y`,
+and `"Inner constructor"` to the inner constructor `T()`. Also applicable to
+`mutable struct` types.
 
 ### Modules
 

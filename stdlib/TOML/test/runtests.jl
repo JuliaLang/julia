@@ -16,6 +16,7 @@ function roundtrip(data)
 end
 
 include("readme.jl")
+include("utils/utils.jl")
 include("toml_test.jl")
 include("values.jl")
 include("invalids.jl")
@@ -24,3 +25,7 @@ include("print.jl")
 include("parse.jl")
 
 @inferred TOML.parse("foo = 3")
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(TOML))
+end

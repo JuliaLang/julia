@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenLibm_jll.jl
 baremodule OpenLibm_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -13,16 +12,16 @@ export libopenlibm
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libopenlibm_handle = C_NULL
-libopenlibm_path = ""
+artifact_dir::String = ""
+libopenlibm_handle::Ptr{Cvoid} = C_NULL
+libopenlibm_path::String = ""
 
 if Sys.iswindows()
     const libopenlibm = "libopenlibm.dll"
 elseif Sys.isapple()
-    const libopenlibm = "@rpath/libopenlibm.3.dylib"
+    const libopenlibm = "@rpath/libopenlibm.4.dylib"
 else
-    const libopenlibm = "libopenlibm.so.3"
+    const libopenlibm = "libopenlibm.so.4"
 end
 
 function __init__()

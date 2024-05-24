@@ -23,6 +23,3 @@ See also:
   * [`stderr`](@ref)
   * [`ENV`](@ref)
   * [`ENDIAN_BOM`](@ref)
-  * `Libc.MS_ASYNC`
-  * `Libc.MS_INVALIDATE`
-  * `Libc.MS_SYNC`

@@ -9,7 +9,7 @@ function mirror_callback(remote::Ptr{Ptr{Cvoid}}, repo_ptr::Ptr{Cvoid},
     ensure_initialized()
     # Create the remote with a mirroring url
     fetch_spec = "+refs/*:refs/*"
-    err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
+    err = ccall((:git_remote_create_with_fetchspec, libgit2), Cint,
                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Cstring),
                 remote, repo_ptr, name, url, fetch_spec)
     err != 0 && return Cint(err)
@@ -43,7 +43,7 @@ end
 function user_abort()
     ensure_initialized()
     # Note: Potentially it could be better to just throw a Julia error.
-    ccall((:giterr_set_str, :libgit2), Cvoid,
+    ccall((:giterr_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, user cancelled credential request.")
     return Cint(Error.EUSER)
@@ -51,7 +51,7 @@ end
 
 function prompt_limit()
     ensure_initialized()
-    ccall((:giterr_set_str, :libgit2), Cvoid,
+    ccall((:giterr_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, maximum number of prompts reached.")
     return Cint(Error.EAUTH)
@@ -59,7 +59,7 @@ end
 
 function exhausted_abort()
     ensure_initialized()
-    ccall((:giterr_set_str, :libgit2), Cvoid,
+    ccall((:giterr_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "All authentication methods have failed.")
     return Cint(Error.EAUTH)
@@ -79,7 +79,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
 
     # first try ssh-agent if credentials support its usage
     if p.use_ssh_agent && username_ptr != Cstring(C_NULL) && (!revised || !isfilled(cred))
-        err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
+        err = ccall((:git_cred_ssh_key_from_agent, libgit2), Cint,
                     (Ptr{Ptr{Cvoid}}, Cstring), libgit2credptr, username_ptr)
 
         p.use_ssh_agent = false  # use ssh-agent only one time
@@ -91,12 +91,15 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
             cred.user = unsafe_string(username_ptr)
         end
 
-        cred.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
-            default = joinpath(homedir(), ".ssh", "id_rsa")
-            if isempty(cred.prvkey) && isfile(default)
-                default
-            else
-                cred.prvkey
+        if haskey(ENV, "SSH_KEY_PATH")
+            cred.prvkey = ENV["SSH_KEY_PATH"]
+        elseif isempty(cred.prvkey)
+            for keytype in ("rsa", "ecdsa")
+                private_key_file = joinpath(homedir(), ".ssh", "id_$keytype")
+                if isfile(private_key_file)
+                    cred.prvkey = private_key_file
+                    break
+                end
             end
         end
 
@@ -172,7 +175,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     if !revised
         return exhausted_abort()
     end
-    return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
+    return ccall((:git_cred_ssh_key_new, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
 end
@@ -192,9 +195,9 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     if p.use_git_helpers && (!revised || !isfilled(cred))
         git_cred = GitCredential(p.config, p.url)
 
-         # Use `deepcopy` to ensure shredding the `git_cred` does not shred the `cred`s copy
+         # Use `copy` to ensure shredding the `git_cred` does not shred the `cred`s copy
         cred.user = something(git_cred.username, "")
-        cred.pass = deepcopy(something(git_cred.password, ""))
+        cred.pass = git_cred.password !== nothing ? copy(git_cred.password) : ""
         Base.shred!(git_cred)
         revised = true
 
@@ -232,7 +235,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
         return exhausted_abort()
     end
 
-    return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
+    return ccall((:git_cred_userpass_plaintext_new, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pass)
 end
@@ -273,21 +276,23 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     # information cached inside the payload.
     if isempty(p.url)
         p.url = unsafe_string(url_ptr)
-        m = match(URL_REGEX, p.url)
+        m = match(URL_REGEX, p.url)::RegexMatch
 
         p.scheme = something(m[:scheme], SubString(""))
         p.username = something(m[:user], SubString(""))
-        p.host = m[:host]
+        p.host = something(m[:host])
 
         # When an explicit credential is supplied we will make sure to use the given
         # credential during the first callback by modifying the allowed types. The
         # modification only is in effect for the first callback since `allowed_types` cannot
         # be mutated.
-        if p.explicit !== nothing
-            cred = p.explicit
+        cache = p.cache
+        explicit = p.explicit
+        if explicit !== nothing
+            cred = explicit
 
             # Copy explicit credentials to avoid mutating approved credentials.
-            # invalidation fix from cred being non-inferrable
+            # invalidation fix from cred being non-inferable
             p.credential = Base.invokelatest(deepcopy, cred)
 
             if isa(cred, SSHCredential)
@@ -297,16 +302,15 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
             else
                 allowed_types &= Cuint(0)  # Unhandled credential type
             end
-        elseif p.cache !== nothing
+        elseif cache !== nothing
             cred_id = credential_identifier(p.scheme, p.host)
 
             # Perform a deepcopy as we do not want to mutate approved cached credentials
-            if haskey(p.cache, cred_id)
-                # invalidation fix from p.cache[cred_id] being non-inferrable
-                p.credential = Base.invokelatest(deepcopy, p.cache[cred_id])
+            if haskey(cache, cred_id)
+                # invalidation fix from cache[cred_id] being non-inferable
+                p.credential = Base.invokelatest(deepcopy, cache[cred_id])
             end
         end
-
         p.first_pass = true
     else
         p.first_pass = false
@@ -335,7 +339,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     if err == 0
         if p.explicit !== nothing
             ensure_initialized()
-            ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
+            ccall((:giterr_set_str, libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
                   "The explicitly provided credential is incompatible with the requested " *
                   "authentication methods.")
         end
@@ -366,8 +370,8 @@ struct CertHostKey
     sha1    :: NTuple{20,UInt8}
     sha256  :: NTuple{32,UInt8}
     type    :: Cint
+    hostkey :: Ptr{Cchar}
     len     :: Csize_t
-    data    :: NTuple{1024,UInt8}
 end
 
 function verify_host_error(message::AbstractString)
@@ -433,18 +437,18 @@ function ssh_knownhost_check(
     host  :: AbstractString,
     cert  :: CertHostKey,
 )
-    key = collect(cert.data)[1:cert.len]
+    key = unsafe_wrap(Array, cert.hostkey, cert.len)
     return ssh_knownhost_check(files, host, key)
 end
 
 function ssh_knownhost_check(
     files :: AbstractVector{<:AbstractString},
     host  :: AbstractString,
-    key   :: Vector{UInt8},
+    key   :: Vector{Cchar},
 )
     if (m = match(r"^(.+):(\d+)$", host)) !== nothing
         host = m.captures[1]
-        port = parse(Int, m.captures[2])
+        port = parse(Int, something(m.captures[2]))
     else
         port = 22 # default SSH port
     end
@@ -476,7 +480,7 @@ function ssh_knownhost_check(
             hosts  :: Ptr{Cvoid},
             host   :: Cstring,
             port   :: Cint,
-            key    :: Ptr{UInt8},
+            key    :: Ptr{Cchar},
             len    :: Csize_t,
             mask   :: Cint,
             C_NULL :: Ptr{Ptr{KnownHost}},
@@ -499,6 +503,11 @@ function ssh_knownhost_check(
     return Consts.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND
 end
 
+function trace_callback(level::Cint, msg::Cstring)::Cint
+    println(stderr, "[$level]: $(unsafe_string(msg))")
+    return 0
+end
+
 "C function pointer for `mirror_callback`"
 mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}))
 "C function pointer for `credentials_callback`"
@@ -507,3 +516,5 @@ credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstr
 fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Any))
 "C function pointer for `certificate_callback`"
 certificate_cb() = @cfunction(certificate_callback, Cint, (Ptr{CertHostKey}, Cint, Ptr{Cchar}, Ptr{Cvoid}))
+"C function pointer for `trace_callback`"
+trace_cb() = @cfunction(trace_callback, Cint, (Cint, Cstring))

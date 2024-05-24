@@ -34,3 +34,19 @@ mktempdir() do dir
   close(file)
 
 end
+
+import Base.Filesystem: S_IRUSR, S_IRGRP, S_IROTH
+@testset "types of permission mask constants" begin
+  @test S_IRUSR & ~S_IRGRP == S_IRUSR
+  @test typeof(S_IRUSR) == typeof(S_IRGRP) == typeof(S_IROTH)
+end
+
+@testset "Base.Filesystem docstrings" begin
+  undoc = Docs.undocumented_names(Base.Filesystem)
+  @test_broken isempty(undoc)
+  @test undoc == [:File, :Filesystem, :cptree, :futime, :rename, :sendfile, :unlink]
+end
+
+@testset "write return type" begin
+    @test Base.return_types(write, (Base.Filesystem.File, UInt8)) == [Int]
+end

@@ -4,7 +4,6 @@
 
 baremodule LLVMLibUnwind_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -14,9 +13,9 @@ export llvmlibunwind
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-llvmlibunwind_handle = C_NULL
-llvmlibunwind_path = ""
+artifact_dir::String = ""
+llvmlibunwind_handle::Ptr{Cvoid} = C_NULL
+llvmlibunwind_path::String = ""
 
 const llvmlibunwind = "libunwind"
 

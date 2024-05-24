@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/REPL/docs/src/index.md"
+```
+
 # The Julia REPL
 
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into
@@ -7,8 +11,9 @@ shell modes. The REPL can be started by simply calling `julia` with no arguments
 on the executable:
 
 ```@eval
+using REPL
 io = IOBuffer()
-Base.banner(io)
+REPL.banner(io)
 banner = String(take!(io))
 import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia>\n```")
@@ -32,7 +37,7 @@ julia> string(1 + 2)
 "3"
 ```
 
-There are a number useful features unique to interactive work. In addition to showing the result,
+There are a number of useful features unique to interactive work. In addition to showing the result,
 the REPL also binds the result to the variable `ans`. A trailing semicolon on the line can be
 used as a flag to suppress showing the result.
 
@@ -43,16 +48,18 @@ julia> ans
 "12"
 ```
 
-In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting
-text that starts with `julia> ` into the REPL. In that case, only expressions starting with
-`julia> ` are parsed, others are removed. This makes it possible to paste a chunk of code
-that has been copied from a REPL session without having to scrub away prompts and outputs. This
-feature is enabled by default but can be disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`.
-If it is enabled, you can try it out by pasting the code block above this paragraph straight into
-the REPL. This feature does not work on the standard Windows command prompt due to its limitation
-at detecting when a paste occurs.
+In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting text
+that starts with `julia> ` into the REPL. In that case, only expressions starting with `julia> ` (as
+well as the other REPL mode prompts: `shell> `, `help?> `, `pkg>` ) are parsed, but others are
+removed. This makes it possible to paste a chunk of text that has been copied from a REPL session
+without having to scrub away prompts and outputs. This feature is enabled by default but can be
+disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is enabled, you can try it
+out by pasting the code block above this paragraph straight into the REPL. This feature does not
+work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
 
-Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
+A non-[`nothing`](@ref) result of executing an expression is displayed by the REPL using the [`show`](@ref) function
+with a specific [`IOContext`](@ref) (via [`display`](@ref), which defaults to calling
+`show(io, MIME("text/plain"), ans)`, which in turn defaults to `show(io, ans)`).
 In particular, the `:limit` attribute is set to `true`.
 Other attributes can receive in certain `show` methods a default value if it's not already set,
 like `:compact`.
@@ -135,6 +142,8 @@ REPL.stripmd
 Base.Docs.apropos
 ```
 
+Another feature of help mode is the ability to access extended docstrings. You can do this by typing something like `??Print` rather than `?Print` which will display the `# Extended help` section from the source codes documentation.
+
 Help mode can be exited by pressing backspace at the beginning of the line.
 
 ### [Shell mode](@id man-shell-mode)
@@ -209,6 +218,10 @@ Just as `^R` is a reverse search, `^S` is a forward search, with the prompt ```(
  The two may be used in conjunction with each other to move through the previous or next matching
 results, respectively.
 
+All executed commands in the Julia REPL are logged into `~/.julia/logs/repl_history.jl` along with a timestamp of when it was executed
+and the current REPL mode you were in. Search mode queries this log file in order to find the commands which you previously ran.
+This can be disabled at startup by passing the `--history-file=no` flag to Julia.
+
 ## Key bindings
 
 The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced
@@ -219,7 +232,7 @@ to do so), or pressing Esc and then the key.
 
 | Keybinding          | Description                                                                                                |
 |:------------------- |:---------------------------------------------------------------------------------------------------------- |
-| **Program control** |                                                                                                            |
+| **Program control** |                                                                                                            |
 | `^D`                | Exit (when buffer is empty)                                                                                |
 | `^C`                | Interrupt or cancel                                                                                        |
 | `^L`                | Clear console screen                                                                                       |
@@ -227,7 +240,7 @@ to do so), or pressing Esc and then the key.
 | meta-Return/Enter   | Insert new line without executing it                                                                       |
 | `?` or `;`          | Enter help or shell mode (when at start of a line)                                                         |
 | `^R`, `^S`          | Incremental history search, described above                                                                |
-| **Cursor movement** |                                                                                                            |
+| **Cursor movement** |                                                                                                            |
 | Right arrow, `^F`   | Move right one character                                                                                   |
 | Left arrow, `^B`    | Move left one character                                                                                    |
 | ctrl-Right, `meta-F`| Move right one word                                                                                        |
@@ -245,7 +258,7 @@ to do so), or pressing Esc and then the key.
 | `^-Space ^-Space`   | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
 | `^G`                | De-activate the region (i.e. make it not highlighted)                                                      |
 | `^X^X`              | Exchange the current position with the mark                                                                |
-| **Editing**         |                                                                                                            |
+| **Editing**         |                                                                                                            |
 | Backspace, `^H`     | Delete the previous character, or the whole region when it's active                                        |
 | Delete, `^D`        | Forward delete one character (when buffer has text)                                                        |
 | meta-Backspace      | Delete the previous word                                                                                   |
@@ -253,6 +266,7 @@ to do so), or pressing Esc and then the key.
 | `^W`                | Delete previous text up to the nearest whitespace                                                          |
 | `meta-w`            | Copy the current region in the kill ring                                                                   |
 | `meta-W`            | "Kill" the current region, placing the text in the kill ring                                               |
+| `^U`                | "Kill" to beginning of line, placing the text in the kill ring                                             |
 | `^K`                | "Kill" to end of line, placing the text in the kill ring                                                   |
 | `^Y`                | "Yank" insert the text from the kill ring                                                                  |
 | `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
@@ -264,9 +278,10 @@ to do so), or pressing Esc and then the key.
 | `meta-l`            | Change the next word to lowercase                                                                          |
 | `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
-| `meta-Left Arrow`   | indent the current line on the left                                                                        |
-| `meta-Right Arrow`  | indent the current line on the right                                                                       |
-| `meta-.`            | insert last word from previous history entry                                                               |
+| `meta-Left Arrow`   | Indent the current line on the left                                                                        |
+| `meta-Right Arrow`  | Indent the current line on the right                                                                       |
+| `meta-.`            | Insert last word from previous history entry                                                               |
+| `meta-e`            | Edit the current input in an editor                                                                        |
 
 ### Customizing keybindings
 
@@ -304,7 +319,7 @@ Users should refer to `LineEdit.jl` to discover the available actions on key inp
 
 ## Tab completion
 
-In both the Julian and help modes of the REPL, one can enter the first few characters of a function
+In the Julian, pkg and help modes of the REPL, one can enter the first few characters of a function
 or type and then press the tab key to get a list all matches:
 
 ```julia-repl
@@ -325,6 +340,13 @@ If you hit tab again, then you get the list of things that might complete this:
 julia> mapfold[TAB]
 mapfoldl mapfoldr
 ```
+
+When a single complete tab-complete result is available at the end of an input line and 2 or more characters
+have been typed, a hint of the completion will show in a lighter color.
+This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
+
+!!! compat "Julia 1.11"
+    Tab-complete hinting was added in Julia 1.11
 
 Like other components of the REPL, the search is case-sensitive:
 
@@ -406,7 +428,7 @@ Tab completion can also help completing fields:
 ```julia-repl
 julia> x = 3 + 4im;
 
-julia> julia> x.[TAB][TAB]
+julia> x.[TAB][TAB]
 im re
 
 julia> import UUIDs
@@ -550,6 +572,106 @@ ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
 
+
+## Changing the contextual module which is active at the REPL
+
+When entering expressions at the REPL, they are by default evaluated in the `Main` module;
+
+```julia-repl
+julia> @__MODULE__
+Main
+```
+
+It is possible to change this contextual module via the function
+`REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
+and pressing the keybinding Alt-m with the cursor on the module name (Esc-m on MacOS).
+Pressing the keybinding on an empty prompt toggles the context between the previously active
+non-`Main` module and `Main`. The active module is shown in the prompt (unless it is `Main`):
+
+```julia-repl
+julia> using REPL
+
+julia> REPL.activate(Base)
+
+(Base) julia> @__MODULE__
+Base
+
+(Base) julia> using REPL # Need to load REPL into Base module to use it
+
+(Base) julia> REPL.activate(Main)
+
+julia>
+
+julia> Core<Alt-m> # using the keybinding to change module
+
+(Core) julia>
+
+(Core) julia> <Alt-m> # going back to Main via keybinding
+
+julia>
+
+julia> <Alt-m> # going back to previously-active Core via keybinding
+
+(Core) julia>
+```
+
+Functions that take an optional module argument often defaults to the REPL
+context module. As an example, calling `varinfo()` will show the variables of
+the current active module:
+
+```julia-repl
+julia> module CustomMod
+           export var, f
+           var = 1
+           f(x) = x^2
+       end;
+
+julia> REPL.activate(CustomMod)
+
+(Main.CustomMod) julia> varinfo()
+  name         size summary
+  ––––––––– ––––––– ––––––––––––––––––––––––––––––––––
+  CustomMod         Module
+  f         0 bytes f (generic function with 1 method)
+  var       8 bytes Int64
+```
+
+## Numbered prompt
+
+It is possible to get an interface which is similar to the IPython REPL and the Mathematica notebook with numbered input prompts and output prefixes. This is done by calling `REPL.numbered_prompt!()`. If you want to have this enabled on startup, add
+
+```julia
+atreplinit() do repl
+    @eval import REPL
+    if !isdefined(repl, :interface)
+        repl.interface = REPL.setup_interface(repl)
+    end
+    REPL.numbered_prompt!(repl)
+end
+```
+
+to your `startup.jl` file. In numbered prompt the variable `Out[n]` (where `n` is an integer) can be used to refer to earlier results:
+
+```julia-repl
+In [1]: 5 + 3
+Out[1]: 8
+
+In [2]: Out[1] + 5
+Out[2]: 13
+
+In [3]: Out
+Out[3]: Dict{Int64, Any} with 2 entries:
+  2 => 13
+  1 => 8
+```
+
+!!! note
+    Since all outputs from previous REPL evaluations are saved in the `Out` variable, one should be careful if they are returning many
+    large in-memory objects like arrays, since they will be protected from garbage collection so long as a reference to them remains in
+    `Out`. If you need to remove references to objects in `Out`, you can clear the entire history it stores with `empty!(Out)`, or clear
+    an individual entry with `Out[n] = nothing`.
+
+
 ## TerminalMenus
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
@@ -627,7 +749,7 @@ Output:
 
 ```
 Select the fruits you like:
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
  > [X] orange
    [X] grape
@@ -653,7 +775,7 @@ For instance, the default multiple-selection menu
 julia> menu = MultiSelectMenu(options, pagesize=5);
 
 julia> request(menu) # ASCII is used by default
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
    [X] orange
    [ ] grape
@@ -663,11 +785,11 @@ v  [ ] blueberry
 
 can instead be rendered with Unicode selection and navigation characters with
 
-```julia
+```julia-repl
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    ⬚ apple
    ✓ orange
    ⬚ grape
@@ -677,12 +799,12 @@ julia> request(menu)
 
 More fine-grained configuration is also possible:
 
-```julia
+```julia-repl
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YEP!", unchecked="NOPE", cursor='⧐');
 
 julia> request(menu)
 julia> request(menu)
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    NOPE apple
    YEP! orange
    NOPE grape
@@ -721,6 +843,13 @@ Base.atreplinit
 ```
 
 ### TerminalMenus
+
+### Menus
+
+```@docs
+REPL.TerminalMenus.RadioMenu
+REPL.TerminalMenus.MultiSelectMenu
+```
 
 #### Configuration
 

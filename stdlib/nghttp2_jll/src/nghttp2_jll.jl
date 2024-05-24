@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/nghttp2_jll.jl
 baremodule nghttp2_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -13,9 +12,9 @@ export libnghttp2
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libnghttp2_handle = C_NULL
-libnghttp2_path = ""
+artifact_dir::String = ""
+libnghttp2_handle::Ptr{Cvoid} = C_NULL
+libnghttp2_path::String = ""
 
 if Sys.iswindows()
     const libnghttp2 = "libnghttp2-14.dll"

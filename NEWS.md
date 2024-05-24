@@ -1,113 +1,132 @@
-Julia v1.8 Release Notes
+Julia v1.12 Release Notes
 ========================
-
 
 New language features
 ---------------------
 
-* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
-* `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
-* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
-
 Language changes
 ----------------
 
+ - When methods are replaced with exactly equivalent ones, the old method is no
+   longer deleted implicitly simultaneously, although the new method does take
+   priority and become more specific than the old method. Thus if the new
+   method is deleted later, the old method will resume operating. This can be
+   useful to mocking frameworks (such as in SparseArrays, Pluto, and Mocking,
+   among others), as they do not need to explicitly restore the old method.
+   While inference and compilation still must be repeated with this, it also
+   may pave the way for inference to be able to intelligently re-use the old
+   results, once the new method is deleted. ([#53415])
+
+ - Macro expansion will no longer eargerly recurse into into `Expr(:toplevel)`
+   expressions returned from macros. Instead, macro expansion of `:toplevel`
+   expressions will be delayed until evaluation time. This allows a later
+   expression within a given `:toplevel` expression to make use of macros
+   defined earlier in the same `:toplevel` expression. ([#53515])
 
 Compiler/Runtime improvements
 -----------------------------
 
+- Generated LLVM IR now uses actual pointer types instead of passing pointers as integers.
+  This affects `llvmcall`: Inline LLVM IR should be updated to use `i8*` or `ptr` instead of
+  `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
+  IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
 
 Command-line option changes
 ---------------------------
 
+* The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
+  This `main` function should be declared using `@main` to indicate that it is an entry point.
 
 Multi-threading changes
 -----------------------
 
-
 Build system changes
 --------------------
-
 
 New library functions
 ---------------------
 
-* `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
+* The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
+* `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
 
 New library features
 --------------------
 
-* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
-  contains "some message" regardless of the specific exception type.
-  Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
+* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
+* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
+* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
+* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
+  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
+  no longer required there for correctness to avoid data races ([#52461]).
+* After a process exits, `closewrite` will no longer be automatically called on
+  the stream passed to it. Call `wait` on the process instead to ensure the
+  content is fully written, then call `closewrite` manually to avoid
+  data-races. Or use the callback form of `open` to have all that handled
+  automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `filter` can now act on a `NamedTuple` ([#50795]).
+* `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
+  the uniquing checking ([#53474])
+* `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
 
 Standard library changes
 ------------------------
 
-* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
-* The `length` function on certain ranges of certain specific element types no longer checks for integer
-  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
-  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
-  constructing the range. ([#40382])
-* TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+* `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
 
-#### InteractiveUtils
-* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
+#### StyledStrings
+
+#### JuliaSyntaxHighlighting
 
 #### Package Manager
 
 #### LinearAlgebra
 
-#### Markdown
+* `rank` can now take a `QRPivoted` matrix to allow rank estimation via QR factorization ([#54283]).
+* Added keyword argument `alg` to `eigen`, `eigen!`, `eigvals` and `eigvals!` for self-adjoint
+  matrix types (i.e., the type union `RealHermSymComplexHerm`) that allows one to switch
+  between different eigendecomposition algorithms ([#49355]).
+
+#### Logging
 
 #### Printf
-* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
+
+#### Profile
 
 #### Random
 
 #### REPL
 
-* ` ?(x, y` followed by TAB displays all methods that can be called
-  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
-  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
-  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
-  to allow any compatible methods.
+#### SuiteSparse
 
 #### SparseArrays
 
-#### Dates
+#### Test
 
-#### Downloads
+#### Dates
 
 #### Statistics
 
-#### Sockets
-
-#### Tar
-
 #### Distributed
 
-#### UUIDs
-
-#### Mmap
+#### Unicode
 
 #### DelimitedFiles
 
-#### Logging
-* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
-  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
-
+#### InteractiveUtils
 
 Deprecated or removed
 ---------------------
 
-
 External dependencies
 ---------------------
 
-
 Tooling Improvements
----------------------
-
+--------------------
 
 <!--- generated by NEWS-update.jl: -->

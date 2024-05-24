@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Make a copy of the original environment
+original_env = copy(ENV)
+
 using Test, Base.CoreLogging
 import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
     handle_message, shouldlog, min_enabled_level, catch_exceptions
@@ -100,12 +103,12 @@ end
         logmsg = (function() @info msg x=y end,
                   function() @info msg x=y z=1+1 end)[i]
         @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true logmsg()
-        @test_throws UndefVarError(:msg) collect_test_logs(logmsg)
-        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:msg)
+        @test_throws UndefVarError(:msg, :local) collect_test_logs(logmsg)
+        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:msg, :local)
         msg = "the msg"
         @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true logmsg()
-        @test_throws UndefVarError(:y) collect_test_logs(logmsg)
-        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:y)
+        @test_throws UndefVarError(:y, :local) collect_test_logs(logmsg)
+        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:y, :local)
         y = "the y"
         @test_logs (Info,"the msg") logmsg()
         @test only(collect_test_logs(logmsg)[1]).kwargs[:x] === "the y"
@@ -120,8 +123,8 @@ end
     @test length(logger.logs) == 1
     record = logger.logs[1]
     @test record._module == Base.Core
-    @test record.group == :somegroup
-    @test record.id == :asdf
+    @test record.group === :somegroup
+    @test record.id === :asdf
     @test record.file == "/a/file"
     @test record.line == -10
     # Test consistency with shouldlog() function arguments
@@ -151,6 +154,21 @@ end
     @test_throws MethodError @macrocall(@error)
 end
 
+@testset "Any type" begin
+    @test_logs (:info, sum) @info sum
+    # TODO: make this work (here we want `@test_logs` to fail)
+    # @test_fails @test_logs (:info, "sum") @info sum   # `sum` works, `"sum"` does not
+
+    # check that the message delivered to the user works
+    mktempdir() do dir
+        path_stdout = joinpath(dir, "stdout.txt")
+        path_stderr = joinpath(dir, "stderr.txt")
+        redirect_stdio(stdout=path_stdout, stderr=path_stderr) do
+            @info sum
+        end
+        @test occursin("Info: sum", read(path_stderr, String))
+    end
+end
 
 #-------------------------------------------------------------------------------
 # Early log level filtering
@@ -420,11 +438,32 @@ end
     (record,), _ = collect_test_logs() do
         @info "test"
     end
-    @test record.group == :corelogging  # name of this file
+    @test record.group === :corelogging  # name of this file
 end
 
 @testset "complicated kwargs logging macro" begin
     @test_logs (:warn, "foo")  @warn "foo" argvals=:((DoNotCare{$(Expr(:escape, :Any))}(),))
 end
 
+@testset "stdlib path" begin
+    logger = TestLogger()
+    with_logger(logger) do
+        @info "foo" _file=joinpath(Sys.BUILD_STDLIB_PATH, "InteractiveUtils", "src", "InteractiveUtils.jl")
+    end
+    logs = logger.logs
+    @test length(logs) == 1
+    record = logs[1]
+    @test isfile(record.file)
+end
+
+end
+
+# Restore the original environment
+for k in keys(ENV)
+    if !haskey(original_env, k)
+        delete!(ENV, k)
+    end
+end
+for (k, v) in pairs(original_env)
+    ENV[k] = v
 end

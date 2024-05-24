@@ -36,7 +36,7 @@ function skipblank(io::IO)
 end
 
 """
-Returns true if the line contains only (and, unless allowempty,
+Return true if the line contains only (and, unless allowempty,
 at least one of) the characters given.
 """
 function linecontains(io::IO, chars; allow_whitespace = true,
