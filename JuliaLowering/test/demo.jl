@@ -8,11 +8,26 @@ using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attribu
 using JuliaSyntaxFormatter
 using JuliaSyntaxFormatter: FormatContext
 
+# Extract variable kind for highlighting purposes
+function var_kind(e)
+    id = get(e, :var_id, nothing)
+    if isnothing(id)
+        return nothing
+    end
+    info = get(ctx3.var_info, id, nothing)
+    if isnothing(info)
+        return nothing
+    end
+    return info.kind
+end
+
 function formatsrc(ex; color_by=nothing, kws...)
-    format_token_style = if !isnothing(color_by)
+    format_token_style = if isnothing(color_by)
+        e->nothing
+    elseif color_by isa Symbol
         e->get(e, color_by, nothing)
     else
-        e->nothing
+        color_by
     end
     Text(JuliaSyntaxFormatter.format(ex; format_token_style, kws...))
 end
