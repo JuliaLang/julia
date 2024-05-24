@@ -448,7 +448,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::S
         _add::MulAddMul = MulAddMul()) where {T<:BlasFloat} =
     generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
 
-Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
+function generic_matmatmul_wrapper!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
                     α::Number, β::Number, ::Val{true}) where {T<:BlasReal}
     gemm_wrapper!(C, tA, tB, A, B, α, β)
 end
