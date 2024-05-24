@@ -537,7 +537,7 @@ function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot 
     cholesky!(Hermitian(B, sym_uplo(S.uplo)), NoPivot(); check = check)
 end
 
-# zero forwarding to parents fr wrapped arrays
+# zero forwarding to parents for wrapped arrays
 # issue #53014
 for func in [:zero, #=Any others?=#]
     for Wrapper in [:Symmetric, :Hermitian, :Adjoint, LowerTriangular, Transpose, UpperHessenberg, UpperTriangular#=Any others?=#]
