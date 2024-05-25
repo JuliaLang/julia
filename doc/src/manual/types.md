@@ -1589,7 +1589,8 @@ to adjust printing.
 
 ### Output-function summary
 
-Here is a brief summary of the different output functions in Julia and how they are related.  Most new types should only need to define `show` methods, if anything.
+Here is a brief summary of the different output functions in Julia and how they are related.
+Most new types should only need to define `show` methods, if anything.
 
 * [`display(x)`](@ref) tells the current environment to display `x` in whatever way it thinks best. (This might even be a graphical display in something like a Jupyter or Pluto notebook.) By default (e.g. in scripts or in the text REPL), it calls `show(io, "text/plain", x)`, or equivalently `show(io, MIME"text/plain"(), x)`, for an appropriate `io` stream. (In the REPL, `io` is an [`IOContext`](@ref) wrapper around [`stdout`](@ref).) The REPL uses `display` to output the result of an evaluated expression.
 * The 3-argument [`show(io, ::MIME"text/plain", x)`](@ref) method is verbose pretty-printing of `x`. By default (if no 3-argument method is defined for `typeof(x)`), it calls the 2-argument `show(io, x)`.  It is called by the 2-argument `repr("text/plain", x)`.   Other 3-argument `show` methods can be defined for additional MIME types as discussed above, to enable richer display of `x` in some interactive environments.
