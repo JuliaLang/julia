@@ -535,10 +535,12 @@ nested `where`, e.g. `where S<:Real where T`.
 
 ### Methods with anonymous arguments
 
-Methods can be defined with anonymous arguments, where the value of the argument is not bound to a variable.
-This pattern can be helpful for indicating that the behavior of the function with respect to that argument only depends on the type of the input and not its value.
+Methods can be defined with anonymous arguments, where the value of the argument is not bound to a
+variable.  This pattern can be helpful for indicating that the behavior of the function with
+respect to that argument only depends on the type of the input and not its value.
 
-In the following contrived example, the behavior of the function `foo` is the same for any two arguments sharing the same type.
+In the following contrived example, the behavior of the function `foo` is the same for any two
+arguments sharing the same type.
 
 ```jldoctest
 julia> foo(x::Integer) = "this is an integer"
@@ -570,9 +572,11 @@ julia> foo(1.5)
 "this is not an integer"
 ```
 
-As a more useful example, consider this implementation of the [`eltype`](@ref) method for AbstractVectors.
-Here, we want the same result for any two inputs of the same type.
-In particular, since the element type of a Vector is represented as the type parameter, we can use that type parameter to return the correct answer without resorting to looking at the value of the argument.
+As a more useful example, consider this implementation of the [`eltype`](@ref) method for
+AbstractVectors.  Here, we want the same result for any two inputs of the same type.  In
+particular, since the element type of a Vector is represented as the type parameter, we can use
+that type parameter to return the correct answer without resorting to looking at the value of the
+argument.
 
 ```jldoctest
 julia> eltype(::Type{<:AbstractArray{T}}) where {T} = T
@@ -585,9 +589,12 @@ julia> eltype([1, 2]) <: Integer
 true
 ```
 
-Note that we still bind the parametric type `T` in the method signature for use in the body of the method, even though we do not bind the value of the argument to a variable.
+Note that we still bind the parametric type `T` in the method signature for use in the body of the
+method, even though we do not bind the value of the argument to a variable.
 
-In general, methods with anonymous arguments are more likely to be useful for methods with [`Type{T}` parametric types](@ref man-typet-type), where the inputs to methods are types, rather than specific instantiated values.
+In general, methods with anonymous arguments are more likely to be useful for methods with
+[`Type{T}` parametric types](@ref man-typet-type), where the inputs to methods are types, rather
+than specific instantiated values.
 
 
 Redefining Methods
