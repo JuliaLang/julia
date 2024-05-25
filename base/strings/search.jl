@@ -20,7 +20,7 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
     @inbounds isvalid(s, i) || string_index_err(s, i)
     c = pred.x
-    c ≤ '\x7f' && return nothing_sentinel(_search(s, c % UInt8, i))
+    c ≤ '\x7f' && return nothing_sentinel(_search(s, first_utf8_byte(c), i))
     while true
         i = _search(s, first_utf8_byte(c), i)
         i == 0 && return nothing
@@ -39,11 +39,13 @@ const DenseBytes = Union{
 
 const ByteArray = Union{DenseBytes, DenseArrayType{Int8}}
 
-findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
-    nothing_sentinel(_search(a, pred.x))
+function findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray)
+    nothing_sentinel(_search(a, convert(eltype(a), pred.x)))
+end
 
-findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
-    nothing_sentinel(_search(a, pred.x, i))
+function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer)
+    nothing_sentinel(_search(a, convert(eltype(a), pred.x), i))
+end
 
 findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
 findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
@@ -70,9 +72,9 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-                  s::String, i::Integer)
+                  s::Union{String, SubString{String}}, i::Integer)
     c = pred.x
-    c ≤ '\x7f' && return nothing_sentinel(_rsearch(s, c % UInt8, i))
+    c ≤ '\x7f' && return nothing_sentinel(_rsearch(s, first_utf8_byte(c), i))
     b = first_utf8_byte(c)
     while true
         i = _rsearch(s, b, i)
@@ -83,15 +85,15 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
 end
 
 findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
-    nothing_sentinel(_rsearch(a, pred.x))
+    nothing_sentinel(_rsearch(a, convert(eltype(a), pred.x)))
 
 findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
-    nothing_sentinel(_rsearch(a, pred.x, i))
+    nothing_sentinel(_rsearch(a, convert(eltype(a), pred.x), i))
 
 findlast(::typeof(iszero), a::ByteArray) = nothing_sentinel(_rsearch(a, zero(UInt8)))
 findprev(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
 
-function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
+function _rsearch(a::Union{String,SubString{String},ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
         return i == 0 ? 0 : throw(BoundsError(a, i))
     end
@@ -525,7 +527,7 @@ function _rsearchindex(s::AbstractString,
     end
 end
 
-function _rsearchindex(s::String, t::String, i::Integer)
+function _rsearchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)
     # Check for fast case of a single byte
     if lastindex(t) == 1
         return something(findprev(isequal(t[1]), s, i), 0)

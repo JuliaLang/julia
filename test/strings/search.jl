@@ -429,6 +429,13 @@ end
             @test_throws BoundsError findprev(pattern, A, -3)
         end
     end
+
+    @test_throws InexactError findfirst(==(UInt8(-1)), [0xff])
+    @test_throws InexactError findnext(==(UInt8(-1)), [0xff], 1)
+    @test_throws InexactError findprev(==(UInt8(-1)), [0xff], 1)
+    @test_throws InexactError findfirst([UInt8(-1)], [0xff])
+    @test_throws InexactError findnext([UInt8(-1)], [0xff], 1)
+    @test_throws InexactError findprev([UInt8(-1)], Union{UInt8, Int8}[0xff], 1)
 end
 
 # issue 32568

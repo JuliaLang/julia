@@ -223,6 +223,7 @@ hash(x::Char, h::UInt) =
     hash_uint64(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
 
 first_utf8_byte(c::Char) = (bitcast(UInt32, c) >> 24) % UInt8
+first_utf8_byte(c::AbstractChar) = first_utf8_byte(Char(c)::Char)
 
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
