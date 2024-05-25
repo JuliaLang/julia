@@ -359,10 +359,10 @@ function _resolve_scopes!(ctx, ex)
         # Resolve args and static parameters so that variable IDs get pushed
         # back into the original tree (not required for downstream processing)
         for a in lambda_info.args
-            resolve_scopes!(ctx, a)
+            _resolve_scopes!(ctx, a)
         end
         for a in lambda_info.static_parameters
-            resolve_scopes!(ctx, a)
+            _resolve_scopes!(ctx, a)
         end
         for e in children(ex)
             _resolve_scopes!(ctx, e)

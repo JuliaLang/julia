@@ -23,41 +23,48 @@ end
 _node_id(ex::NodeId) = ex
 _node_id(ex::SyntaxTree) = ex.id
 
-_node_ids() = ()
-_node_ids(::Nothing, cs...) = _node_ids(cs...)
-_node_ids(c, cs...) = (_node_id(c), _node_ids(cs...)...)
+_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_same_graph(graph, ex); ex.id)
 
-function _makenode(graph::SyntaxGraph, srcref, head, children; attrs...)
+_node_ids(graph::SyntaxGraph) = ()
+_node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)
+_node_ids(graph::SyntaxGraph, c, cs...) = (_node_id(graph, c), _node_ids(graph, cs...)...)
+_node_ids(graph::SyntaxGraph, cs::SyntaxList, cs1...) = (_node_ids(graph, cs...)..., _node_ids(graph, cs1...)...)
+function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
+    check_same_graph(graph, cs)
+    cs.ids
+end
+
+function makeleaf(graph::SyntaxGraph, srcref, head; attrs...)
     id = newnode!(graph)
-    # TODO: Having this list seeems hacky? Use makeleaf everywhere instead.
-    if isnothing(children) || kind(head) in (K"Identifier", K"core", K"top", K"SSAValue", K"Value", K"slot") || is_literal(head)
-        @assert isnothing(children) || length(children) == 0
-    else
-        setchildren!(graph, id, children)
-    end
-    srcref_attr = srcref isa SyntaxTree ? srcref.id : srcref
-    setattr!(graph, id; source=srcref_attr, attrs...)
+    source = srcref isa SyntaxTree ? _node_id(graph, srcref) : srcref
+    setattr!(graph, id; source=source, attrs...)
     sethead!(graph, id, head)
     return SyntaxTree(graph, id)
 end
 
-function makenode(ctx, srcref, head, children::Union{Nothing,SyntaxTree}...; attrs...)
-    _makenode(syntax_graph(ctx), srcref, head, _node_ids(children...); attrs...)
+function makenode(graph::SyntaxGraph, srcref, head, children...; attrs...)
+    id = newnode!(graph)
+    setchildren!(graph, id, _node_ids(graph, children...))
+    source = srcref isa SyntaxTree ? _node_id(graph, srcref) : srcref
+    setattr!(graph, id; source=source, attrs...)
+    sethead!(graph, id, head)
+    return SyntaxTree(graph, id)
 end
 
-function makenode(ctx::Union{AbstractLoweringContext,SyntaxTree},
-                  srcref, head, children::SyntaxList; attrs...)
-    graph = syntax_graph(ctx)
-    syntax_graph(ctx) === syntax_graph(children) || error("Mismatching graphs")
-    _makenode(graph, srcref, head, children.ids; attrs...)
+function makenode(ctx, srcref, head, children...; attrs...)
+    makenode(syntax_graph(ctx), srcref, head, children...; attrs...)
+end
+
+function makeleaf(ctx, srcref, kind; kws...)
+    makeleaf(syntax_graph(ctx), srcref, kind; kws...)
 end
 
 function makeleaf(ctx, srcref, kind, value; kws...)
     graph = syntax_graph(ctx)
     if kind == K"Identifier" || kind == K"core" || kind == K"top" || kind == K"Symbol" || kind == K"globalref"
-        _makenode(graph, srcref, kind, nothing; name_val=value, kws...)
+        makeleaf(graph, srcref, kind; name_val=value, kws...)
     elseif kind == K"SSAValue"
-        _makenode(graph, srcref, kind, nothing; var_id=value, kws...)
+        makeleaf(graph, srcref, kind; var_id=value, kws...)
     else
         val = kind == K"Integer" ? convert(Int,     value) :
               kind == K"Float"   ? convert(Float64, value) :
@@ -65,12 +72,8 @@ function makeleaf(ctx, srcref, kind, value; kws...)
               kind == K"Char"    ? convert(Char,    value) :
               kind == K"Value"   ? value                   :
               error("Unexpected leaf kind `$kind`")
-        _makenode(graph, srcref, kind, nothing; value=val, kws...)
+        makeleaf(graph, srcref, kind; value=val, kws...)
     end
-end
-
-function makeleaf(ctx, srcref, kind; kws...)
-    _makenode(syntax_graph(ctx), srcref, kind, nothing; kws...)
 end
 
 # Convenience functions to create leaf nodes referring to identifiers within
@@ -245,7 +248,7 @@ function copy_attrs!(dest, src)
 end
 
 function mapleaf(ctx, src, kind)
-    ex = _makenode(syntax_graph(ctx), src, kind, nothing)
+    ex = makeleaf(syntax_graph(ctx), src, kind)
     # TODO: Value coersion might be broken here due to use of `name_val` vs
     # `value` vs ... ?
     copy_attrs!(ex, src)

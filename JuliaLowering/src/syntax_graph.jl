@@ -157,6 +157,13 @@ Return `SyntaxGraph` associated with `ctx`
 """
 syntax_graph(graph::SyntaxGraph) = graph
 
+function check_same_graph(x, y)
+    if syntax_graph(x) !== syntax_graph(y)
+        @info "" syntax_graph(x) syntax_graph(y) x y
+        error("Mismatching syntax graphs")
+    end
+end
+
 #-------------------------------------------------------------------------------
 struct SyntaxTree{GraphType}
     graph::GraphType
@@ -462,7 +469,7 @@ function Base.getindex(v::SyntaxList, r::UnitRange)
 end
 
 function Base.setindex!(v::SyntaxList, tree::SyntaxTree, i::Int)
-    v.graph === tree.graph || error("Mismatching syntax graphs")
+    check_same_graph(v, tree)
     v.ids[i] = tree.id
 end
 
@@ -471,7 +478,7 @@ function Base.setindex!(v::SyntaxList, id::NodeId, i::Int)
 end
 
 function Base.push!(v::SyntaxList, tree::SyntaxTree)
-    v.graph === tree.graph || error("Mismatching syntax graphs")
+    check_same_graph(v, tree)
     push!(v.ids, tree.id)
 end
 
@@ -483,7 +490,7 @@ function Base.append!(v::SyntaxList, exs)
 end
 
 function Base.append!(v::SyntaxList, exs::SyntaxList)
-    v.graph === exs.graph || error("Mismatching syntax graphs")
+    check_same_graph(v, exs)
     append!(v.ids, exs.ids)
     v
 end

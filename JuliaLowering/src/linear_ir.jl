@@ -150,7 +150,7 @@ end
 # needs to be done. In value position, it returns an expression computing
 # the needed value.
 #
-# TODO: is it ok to return `nothing` if we have no value in some sense
+# TODO: Is it ok to return `nothing` if we have no value in some sense?
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"Identifier" || is_literal(k) || k == K"SSAValue" || k == K"quote" || k == K"inert" ||
