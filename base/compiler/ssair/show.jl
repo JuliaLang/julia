@@ -91,6 +91,7 @@ end
 
 show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io, Core.SlotNumber(val.n), indent, prec)
 
+show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
 function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String, unstable_ssa::BitSet = BitSet())
     args = String[let
         e = stmt.edges[i]
