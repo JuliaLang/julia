@@ -82,9 +82,11 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa PhiNode
-        show_unquoted_phinode(io, stmt, indent, "#", unstable_ssa)
+        show_unquoted_phinode(io, stmt, indent, "#")
     elseif stmt isa GotoIfNot
-        show_unquoted_gotoifnot(io, stmt, indent, "#", unstable_ssa)
+        show_unquoted_gotoifnot(io, stmt, indent, "#")
+    elseif stmt isa ReturnNode
+        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0, show_type ? unstable_ssa : nothing)
     # everything else in the IR, defer to the generic AST printer
     elseif stmt isa Expr
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0, 0, show_type ? unstable_ssa : nothing)
@@ -97,17 +99,13 @@ end
 show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io, Core.SlotNumber(val.n), indent, prec)
 
 show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
-function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String, unstable_ssa::BitSet = BitSet())
+function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String, unstable_ssa::Union{Nothing, BitSet} = nothing)
     args = String[let
         e = stmt.edges[i]
         v = !isassigned(stmt.values, i) ? "#undef" :
             sprint(; context=io) do io′
                 val = stmt.values[i]
-                if val isa SSAValue
-                    show_unquoted(io′, stmt.values[i], indent, -1, unstable_ssa)
-                else
-                    show_unquoted(io′, stmt.values[i], indent)
-                end
+                show_unquoted(io′, val, indent)
             end
         "$prefix$e => $v"
         end for i in 1:length(stmt.edges)
@@ -117,17 +115,17 @@ function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::Strin
     print(io, ')')
 end
 
-function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, prec::Int, unstable_ssa::BitSet = BitSet())
+function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, prec::Int, unstable_ssa::Union{Nothing, BitSet} = nothing)
     print(io, "φᶜ (")
     first = true
     for v in stmt.values
         first ? (first = false) : print(io, ", ")
-        show_unquoted(io, v, indent, prec, unstable_ssa)
+        show_unquoted(io, v, indent, prec)
     end
     print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::PiNode, indent::Int, prec::Int, unstable_ssa::BitSet=BitSet())
+function show_unquoted(io::IO, stmt::PiNode, indent::Int, prec::Int, unstable_ssa::Union{Nothing, BitSet} = nothing)
     print(io, "π (")
     show_unquoted(io, stmt.val, indent, prec, unstable_ssa)
     print(io, ", ")
@@ -135,7 +133,7 @@ function show_unquoted(io::IO, stmt::PiNode, indent::Int, prec::Int, unstable_ss
     print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, prec::Int, unstable_ssa::BitSet = BitSet())
+function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, prec::Int, unstable_ssa::Union{Nothing, BitSet} = nothing)
     print(io, "ϒ (")
     if isdefined(stmt, :val)
         if stmt.val isa SSAValue
@@ -149,7 +147,7 @@ function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, prec::Int, unstab
     print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, prec::Int, unstable_ssa::BitSet = BitSet())
+function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, prec::Int, unstable_ssa::Union{Nothing, BitSet} = nothing)
     if !isdefined(stmt, :val)
         print(io, "unreachable")
     else
@@ -163,9 +161,9 @@ function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, prec::Int, unstabl
 end
 
 show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int) = show_unquoted_gotoifnot(io, stmt, indent, "%")
-function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String, unstable_ssa::BitSet = BitSet())
+function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String)
     print(io, "goto ", prefix, stmt.dest, " if not ")
-    show_unquoted(io, stmt.cond, indent, 0, unstable_ssa)
+    show_unquoted(io, stmt.cond, indent, 0)
 end
 
 function should_print_ssa_type(@nospecialize node)
