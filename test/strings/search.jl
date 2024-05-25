@@ -296,6 +296,101 @@ end
     @test findnext(",b", "foo,bar,baz", 10) === nothing
     @test findfirst("az", "foo,bar,baz") == 10:11
     @test findnext("az", "foo,bar,baz", 12) === nothing
+# See the comments in #54579
+@testset "Search for invalid chars" begin
+    @test findfirst(==('\xff'), "abc\xffde") == 4
+    @test findprev(isequal('\xa6'), "abc\xa69", 5) == 4
+    @test isnothing(findfirst(==('\xff'), "abcdeæd"))
+
+    @test isnothing(findnext(==('\xa6'), "æ", 1))
+    @test isnothing(findprev(==('\xa6'), "æa", 2))
+end
+
+# string forward search with a single-char string
+@test findfirst("x", astr) === nothing
+@test findfirst("H", astr) == 1:1
+@test findnext("H", astr, 2) === nothing
+@test findfirst("l", astr) == 3:3
+@test findnext("l", astr, 4) == 4:4
+@test findnext("l", astr, 5) == 11:11
+@test findnext("l", astr, 12) === nothing
+@test findfirst("\n", astr) == 14:14
+@test findnext("\n", astr, 15) === nothing
+
+@test findfirst("z", u8str) === nothing
+@test findfirst("∄", u8str) === nothing
+@test findfirst("∀", u8str) == 1:1
+@test findnext("∀", u8str, 4) === nothing
+@test findfirst("∃", u8str) == 13:13
+@test findnext("∃", u8str, 16) === nothing
+@test findfirst("x", u8str) == 26:26
+@test findnext("x", u8str, 27) == 43:43
+@test findnext("x", u8str, 44) === nothing
+@test findfirst("ε", u8str) == 5:5
+@test findnext("ε", u8str, 7) == 54:54
+@test findnext("ε", u8str, 56) === nothing
+
+# strifindprev  backward search with a single-char string
+@test findlast("x", astr) === nothing
+@test findlast("H", astr) == 1:1
+@test findprev("H", astr, 2) == 1:1
+@test findprev("H", astr, 0) === nothing
+@test findlast("l", astr) == 11:11
+@test findprev("l", astr, 10) == 4:4
+@test findprev("l", astr, 4) == 4:4
+@test findprev("l", astr, 3) == 3:3
+@test findprev("l", astr, 2) === nothing
+@test findlast("\n", astr) == 14:14
+@test findprev("\n", astr, 13) === nothing
+
+@test findlast("z", u8str) === nothing
+@test findlast("∄", u8str) === nothing
+@test findlast("∀", u8str) == 1:1
+@test findprev("∀", u8str, 0) === nothing
+#TODO: setting the limit in the middle of a wide char
+#      makes findnext fail but findprev succeed.
+#      Should findprev fail as well?
+#@test findprev("∀", u8str, 2) === nothing # gives 1:3
+@test findlast("∃", u8str) == 13:13
+@test findprev("∃", u8str, 12) === nothing
+@test findlast("x", u8str) == 43:43
+@test findprev("x", u8str, 42) == 26:26
+@test findprev("x", u8str, 25) === nothing
+@test findlast("ε", u8str) == 54:54
+@test findprev("ε", u8str, 53) == 5:5
+@test findprev("ε", u8str, 4) === nothing
+
+# string forward search with a single-char regex
+@test findfirst(r"x", astr) === nothing
+@test findfirst(r"H", astr) == 1:1
+@test findnext(r"H", astr, 2) === nothing
+@test findfirst(r"l", astr) == 3:3
+@test findnext(r"l", astr, 4) == 4:4
+@test findnext(r"l", astr, 5) == 11:11
+@test findnext(r"l", astr, 12) === nothing
+@test findfirst(r"\n", astr) == 14:14
+@test findnext(r"\n", astr, 15) === nothing
+@test findfirst(r"z", u8str) === nothing
+@test findfirst(r"∄", u8str) === nothing
+@test findfirst(r"∀", u8str) == 1:1
+@test findnext(r"∀", u8str, 4) === nothing
+@test findfirst(r"∀", u8str) == findfirst(r"\u2200", u8str)
+@test findnext(r"∀", u8str, 4) == findnext(r"\u2200", u8str, 4)
+@test findfirst(r"∃", u8str) == 13:13
+@test findnext(r"∃", u8str, 16) === nothing
+@test findfirst(r"x", u8str) == 26:26
+@test findnext(r"x", u8str, 27) == 43:43
+@test findnext(r"x", u8str, 44) === nothing
+@test findfirst(r"ε", u8str) == 5:5
+@test findnext(r"ε", u8str, 7) == 54:54
+@test findnext(r"ε", u8str, 56) === nothing
+for i = 1:lastindex(astr)
+    @test findnext(r"."s, astr, i) == i:i
+end
+for i = 1:lastindex(u8str)
+    if isvalid(u8str,i)
+        @test findnext(r"."s, u8str, i) == i:i
+    end
 end
 
 @testset "issue #9365" begin
