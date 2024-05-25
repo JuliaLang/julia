@@ -297,6 +297,17 @@ end
 Base.propertynames(B::BunchKaufman, private::Bool=false) =
     (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
 
+function Base.:(==)(B1::BunchKaufman, B2::BunchKaufman)
+    # check for the equality between properties instead of fields
+    B1.p == B2.p || return false
+    if B1.uplo == 'L'
+        B1.L == B2.L || return false
+    else
+        B1.U == B2.U || return false
+    end
+    return (B1.D == B2.D)
+end
+
 function getproperties!(B::BunchKaufman{T,<:StridedMatrix}) where {T<:BlasFloat}
     # NOTE: Unlike in the 'getproperty' function, in this function L/U and D are computed in place.
     if B.rook

@@ -111,8 +111,8 @@ end
             for name in names(mod, all=true)
                 isdefined(mod, name) || continue
                 value = getfield(mod, name)
-
                 if value isa Module
+                    value === Main && continue
                     test_exceptions(value, visited)
                 elseif value isa Type
                     str = string(value)
@@ -126,4 +126,37 @@ end
     end
     visited = test_exceptions(Base)
     test_exceptions(Core, visited)
+end
+
+# inference quality test for `error`
+@test Base.infer_return_type(error, (Any,)) === Union{}
+@test Base.infer_return_type(xs->error(xs...), (Vector{Any},)) === Union{}
+module Issue54029
+export raise54029
+Base.Experimental.@max_methods 1
+raise54029(x) = error(x)
+end
+using .Issue54029
+@test Base.infer_return_type(raise54029, (Any,)) === Union{}
+@test Base.infer_return_type(xs->raise54029(xs...), (Vector{Any},)) === Union{}
+
+@testset "CompositeException" begin
+    ce = CompositeException()
+    @test isempty(ce)
+    @test length(ce) == 0
+    @test eltype(ce) == Any
+    str = sprint(showerror, ce)
+    @test str == "CompositeException()\n"
+    push!(ce, ErrorException("something sad has happened"))
+    @test !isempty(ce)
+    @test length(ce) == 1
+    pushfirst!(ce, ErrorException("something sad has happened even earlier"))
+    @test length(ce) == 2
+    # test iterate
+    for ex in ce
+        @test ex isa ErrorException
+    end
+    push!(ce, ErrorException("something sad has happened yet again"))
+    str = sprint(showerror, ce)
+    @test str == "something sad has happened even earlier\n\n...and 2 more exceptions.\n"
 end

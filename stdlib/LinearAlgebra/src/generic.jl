@@ -49,6 +49,74 @@ end
     end
 end
 
+"""
+    @stable_muladdmul
+
+Replaces a function call, that has a `MulAddMul(alpha, beta)` constructor as an
+argument, with a branch over possible values of `isone(alpha)` and `iszero(beta)`
+and constructs `MulAddMul{isone(alpha), iszero(beta)}` explicitly in each branch.
+For example, 'f(x, y, MulAddMul(alpha, beta))` is transformed into
+```
+if isone(alpha)
+    if iszero(beta)
+        f(x, y, MulAddMul{true, true, typeof(alpha), typeof(beta)}(alpha, beta))
+    else
+        f(x, y, MulAddMul{true, false, typeof(alpha), typeof(beta)}(alpha, beta))
+    end
+else
+    if iszero(beta)
+        f(x, y, MulAddMul{false, true, typeof(alpha), typeof(beta)}(alpha, beta))
+    else
+        f(x, y, MulAddMul{false, false, typeof(alpha), typeof(beta)}(alpha, beta))
+    end
+end
+```
+This avoids the type instability of the `MulAddMul(alpha, beta)` constructor,
+which causes runtime dispatch in case alpha and zero are not constants.
+"""
+macro stable_muladdmul(expr)
+    expr.head == :call || throw(ArgumentError("Can only handle function calls."))
+    for (i, e) in enumerate(expr.args)
+        e isa Expr || continue
+        if e.head == :call && e.args[1] == :MulAddMul && length(e.args) == 3
+            e.args[2] isa Symbol || continue
+            e.args[3] isa Symbol || continue
+            local asym = e.args[2]
+            local bsym = e.args[3]
+
+            local e_sub11 = copy(expr)
+            e_sub11.args[i] = :(MulAddMul{true, true, typeof($asym), typeof($bsym)}($asym, $bsym))
+
+            local e_sub10 = copy(expr)
+            e_sub10.args[i] = :(MulAddMul{true, false, typeof($asym), typeof($bsym)}($asym, $bsym))
+
+            local e_sub01 = copy(expr)
+            e_sub01.args[i] = :(MulAddMul{false, true, typeof($asym), typeof($bsym)}($asym, $bsym))
+
+            local e_sub00 = copy(expr)
+            e_sub00.args[i] = :(MulAddMul{false, false, typeof($asym), typeof($bsym)}($asym, $bsym))
+
+            local e_out = quote
+                if isone($asym)
+                    if iszero($bsym)
+                        $e_sub11
+                    else
+                        $e_sub10
+                    end
+                else
+                    if iszero($bsym)
+                        $e_sub01
+                    else
+                        $e_sub00
+                    end
+                end
+            end
+            return esc(e_out)
+        end
+    end
+    throw(ArgumentError("No valid MulAddMul expression found."))
+end
+
 MulAddMul() = MulAddMul{true,true,Bool,Bool}(true, false)
 
 @inline (::MulAddMul{true})(x) = x
@@ -110,7 +178,7 @@ end
 
 function generic_mul!(C::AbstractArray, X::AbstractArray, s::Number, _add::MulAddMul)
     if length(C) != length(X)
-        throw(DimensionMismatch("first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
+        throw(DimensionMismatch(lazy"first array has length $(length(C)) which does not match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
         @inbounds _modify!(_add, X[IX] * s, C, IC)
@@ -120,7 +188,7 @@ end
 
 function generic_mul!(C::AbstractArray, s::Number, X::AbstractArray, _add::MulAddMul)
     if length(C) != length(X)
-        throw(DimensionMismatch("first array has length $(length(C)) which does not
+        throw(DimensionMismatch(lazy"first array has length $(length(C)) which does not
 match the length of the second, $(length(X))."))
     end
     for (IC, IX) in zip(eachindex(C), eachindex(X))
@@ -598,8 +666,11 @@ julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
 true
 ```
 """
-function norm(itr, p::Real=2)
+Base.@constprop :aggressive function norm(itr, p::Real=2)
     isempty(itr) && return float(norm(zero(eltype(itr))))
+    v, s = iterate(itr)
+    !isnothing(s) && !ismissing(v) && v == itr && throw(ArgumentError(
+        "cannot evaluate norm recursively if the type of the initial element is identical to that of the container"))
     if p == 2
         return norm2(itr)
     elseif p == 1
@@ -740,7 +811,7 @@ julia> opnorm(A, 1)
 5.0
 ```
 """
-function opnorm(A::AbstractMatrix, p::Real=2)
+Base.@constprop :aggressive function opnorm(A::AbstractMatrix, p::Real=2)
     if p == 2
         return opnorm2(A)
     elseif p == 1
@@ -748,7 +819,7 @@ function opnorm(A::AbstractMatrix, p::Real=2)
     elseif p == Inf
         return opnormInf(A)
     else
-        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
+        throw(ArgumentError(lazy"invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
 end
 
@@ -886,7 +957,7 @@ dot(x::Number, y::Number) = conj(x) * y
 function dot(x::AbstractArray, y::AbstractArray)
     lx = length(x)
     if lx != length(y)
-        throw(DimensionMismatch("first array has length $(lx) which does not match the length of the second, $(length(y))."))
+        throw(DimensionMismatch(lazy"first array has length $(lx) which does not match the length of the second, $(length(y))."))
     end
     if lx == 0
         return dot(zero(eltype(x)), zero(eltype(y)))
@@ -1018,7 +1089,7 @@ julia> tr(A)
 5
 ```
 """
-function tr(A::AbstractMatrix)
+function tr(A)
     checksquare(A)
     sum(diag(A))
 end
@@ -1464,7 +1535,7 @@ julia> axpy!(2, x, y)
 function axpy!(α, x::AbstractArray, y::AbstractArray)
     n = length(x)
     if n != length(y)
-        throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $n, but y has length $(length(y))"))
     end
     iszero(α) && return y
     for (IY, IX) in zip(eachindex(y), eachindex(x))
@@ -1475,7 +1546,7 @@ end
 
 function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
     if length(rx) != length(ry)
-        throw(DimensionMismatch("rx has length $(length(rx)), but ry has length $(length(ry))"))
+        throw(DimensionMismatch(lazy"rx has length $(length(rx)), but ry has length $(length(ry))"))
     elseif !checkindex(Bool, eachindex(IndexLinear(), x), rx)
         throw(BoundsError(x, rx))
     elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
@@ -1509,7 +1580,7 @@ julia> axpby!(2, x, 2, y)
 """
 function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     if length(x) != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     iszero(α) && isone(β) && return y
     for (IX, IY) in zip(eachindex(x), eachindex(y))
@@ -1549,7 +1620,7 @@ function rotate!(x::AbstractVector, y::AbstractVector, c, s)
     require_one_based_indexing(x, y)
     n = length(x)
     if n != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     @inbounds for i = 1:n
         xi, yi = x[i], y[i]
@@ -1572,7 +1643,7 @@ function reflect!(x::AbstractVector, y::AbstractVector, c, s)
     require_one_based_indexing(x, y)
     n = length(x)
     if n != length(y)
-        throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
     @inbounds for i = 1:n
         xi, yi = x[i], y[i]
@@ -1613,7 +1684,7 @@ Multiplies `A` in-place by a Householder reflection on the left. It is equivalen
     require_one_based_indexing(x)
     m, n = size(A, 1), size(A, 2)
     if length(x) != m
-        throw(DimensionMismatch("reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
+        throw(DimensionMismatch(lazy"reflector has length $(length(x)), which must match the first dimension of matrix A, $m"))
     end
     m == 0 && return A
     @inbounds for j = 1:n
@@ -1943,7 +2014,8 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     BLAS.chkuplo(uplo)
     m,n = size(A)
     m1,n1 = size(B)
-    (m1 < m || n1 < n) && throw(DimensionMismatch("B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+    A = Base.unalias(B, A)
     if uplo == 'U'
         for j=1:n
             for i=1:min(j,m)
@@ -1958,4 +2030,8 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
         end
     end
     return B
+end
+# Forward LAPACK-compatible strided matrices to lacpy
+function copytrito!(B::StridedMatrixStride1{T}, A::StridedMatrixStride1{T}, uplo::AbstractChar) where {T<:BlasFloat}
+    LAPACK.lacpy!(B, A, uplo)
 end

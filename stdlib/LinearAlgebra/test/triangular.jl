@@ -28,7 +28,7 @@ debug && println("Test basic type functionality")
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 @testset for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
-    for (t1, uplo1) in ((UpperTriangular, :U),
+    @testset for (t1, uplo1) in ((UpperTriangular, :U),
                         (UnitUpperTriangular, :U),
                         (LowerTriangular, :L),
                         (UnitLowerTriangular, :L))
@@ -339,8 +339,8 @@ debug && println("Test basic type functionality")
         @test ((A1\A1)::t1) ≈ M1 \ M1
 
         # Begin loop for second Triangular matrix
-        for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
-            for (t2, uplo2) in ((UpperTriangular, :U),
+        @testset for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
+            @testset for (t2, uplo2) in ((UpperTriangular, :U),
                                 (UnitUpperTriangular, :U),
                                 (LowerTriangular, :L),
                                 (UnitLowerTriangular, :L))
@@ -359,6 +359,7 @@ debug && println("Test basic type functionality")
                 # Binary operations
                 @test A1 + A2 == M1 + M2
                 @test A1 - A2 == M1 - M2
+                @test kron(A1,A2) == kron(M1,M2)
 
                 # Triangular-Triangular multiplication and division
                 @test A1*A2 ≈ M1*M2
@@ -727,6 +728,20 @@ end
 # Issue 16196
 @test UpperTriangular(Matrix(1.0I, 3, 3)) \ view(fill(1., 3), [1,2,3]) == fill(1., 3)
 
+@testset "reverse" begin
+    A = randn(5, 5)
+    for (T, Trev) in ((UpperTriangular, LowerTriangular),
+            (UnitUpperTriangular, UnitLowerTriangular),
+            (LowerTriangular, UpperTriangular),
+            (UnitLowerTriangular, UnitUpperTriangular))
+        A = T(randn(5, 5))
+        AM = Matrix(A)
+        @test reverse(A, dims=1) == reverse(AM, dims=1)
+        @test reverse(A, dims=2) == reverse(AM, dims=2)
+        @test reverse(A)::Trev == reverse(AM)
+    end
+end
+
 # dimensional correctness:
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
@@ -969,7 +984,7 @@ end
     end
 end
 
-@testset "arithmetic with an immutable parent" begin
+@testset "immutable and non-strided parent" begin
     F = FillArrays.Fill(2, (4,4))
     for UT in (UnitUpperTriangular, UnitLowerTriangular)
         U = UT(F)
@@ -979,6 +994,13 @@ end
     F = FillArrays.Fill(3im, (4,4))
     for U in (UnitUpperTriangular(F), UnitLowerTriangular(F))
         @test imag(F) == imag(collect(F))
+    end
+
+    @testset "copyto!" begin
+        for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+            @test Matrix(T(F)) == T(F)
+        end
+        @test copyto!(zeros(eltype(F), length(F)), UpperTriangular(F)) == vec(UpperTriangular(F))
     end
 end
 
@@ -995,6 +1017,14 @@ end
             @test_throws BoundsError copyto!(T(A), T(B))
         end
     end
+end
+
+@testset "uppertriangular/lowertriangular" begin
+    M = rand(2,2)
+    @test LinearAlgebra.uppertriangular(M) === UpperTriangular(M)
+    @test LinearAlgebra.lowertriangular(M) === LowerTriangular(M)
+    @test LinearAlgebra.uppertriangular(UnitUpperTriangular(M)) === UnitUpperTriangular(M)
+    @test LinearAlgebra.lowertriangular(UnitLowerTriangular(M)) === UnitLowerTriangular(M)
 end
 
 @testset "arithmetic with partly uninitialized matrices" begin
@@ -1014,6 +1044,7 @@ end
             @test 2\L == 2\B
             @test real(L) == real(B)
             @test imag(L) == imag(B)
+            @test kron(L,L) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(L) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(L) broken=!(A isa Matrix)
         end
@@ -1035,9 +1066,42 @@ end
             @test 2\U == 2\B
             @test real(U) == real(B)
             @test imag(U) == imag(B)
+            @test kron(U,U) == kron(B,B)
             @test transpose!(MT(copy(A))) == transpose(U) broken=!(A isa Matrix)
             @test adjoint!(MT(copy(A))) == adjoint(U) broken=!(A isa Matrix)
         end
+    end
+end
+
+@testset "kron with triangular matrices of matrices" begin
+    for T in (UpperTriangular, LowerTriangular)
+        t = T(fill(ones(2,2), 2, 2))
+        m = Matrix(t)
+        @test kron(t, t) ≈ kron(m, m)
+    end
+end
+
+@testset "copyto! with aliasing (#39460)" begin
+    M = Matrix(reshape(1:36, 6, 6))
+    @testset for T in (UpperTriangular, LowerTriangular)
+        A = T(view(M, 1:5, 1:5))
+        A2 = copy(A)
+        B = T(view(M, 2:6, 2:6))
+        @test copyto!(B, A) == A2
+    end
+end
+
+@testset "getindex with Integers" begin
+    M = reshape(1:4,2,2)
+    for Ttype in (UpperTriangular, UnitUpperTriangular)
+        T = Ttype(M)
+        @test_throws "invalid index" T[2, true]
+        @test T[1,2] == T[Int8(1),UInt16(2)] == T[big(1), Int16(2)]
+    end
+    for Ttype in (LowerTriangular, UnitLowerTriangular)
+        T = Ttype(M)
+        @test_throws "invalid index" T[true, 2]
+        @test T[2,1] == T[Int8(2),UInt16(1)] == T[big(2), Int16(1)]
     end
 end
 

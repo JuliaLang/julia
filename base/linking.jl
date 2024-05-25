@@ -79,7 +79,7 @@ end
 const VERBOSE = Ref{Bool}(false)
 
 function __init__()
-    VERBOSE[] = Base.get_bool_env("JULIA_VERBOSE_LINKING", false)
+    VERBOSE[] = something(Base.get_bool_env("JULIA_VERBOSE_LINKING", false), false)
 
     __init_lld_path()
     __init_dsymutil_path()

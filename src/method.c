@@ -212,7 +212,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
             }
-            if (e->head == jl_method_sym || e->head == jl_module_sym) {
+            if (e->head == jl_method_sym || e->head == jl_module_sym || e->head == jl_throw_undef_if_not_sym) {
                 i++;
             }
             for (; i < nargs; i++) {
@@ -420,6 +420,10 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     jl_code_info_t *li = NULL;
     JL_GC_PUSH1(&li);
     li = jl_new_code_info_uninit();
+
+    jl_expr_t *arglist = (jl_expr_t*)jl_exprarg(ir, 0);
+    li->nargs = jl_array_len(arglist);
+
     assert(jl_is_expr(ir));
     jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ir, 2);
 
@@ -610,7 +614,6 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->def.value = NULL;
     mi->specTypes = NULL;
     mi->sparam_vals = jl_emptysvec;
-    jl_atomic_store_relaxed(&mi->uninferred, NULL);
     mi->backedges = NULL;
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->inInference = 0;
@@ -643,6 +646,8 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->constprop = 0;
     src->inlining = 0;
     src->purity.bits = 0;
+    src->nargs = 0;
+    src->isva = 0;
     src->inlining_cost = UINT16_MAX;
     return src;
 }
@@ -684,26 +689,62 @@ JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *
     return func;
 }
 
+JL_DLLEXPORT jl_code_instance_t *jl_cached_uninferred(jl_code_instance_t *codeinst, size_t world)
+{
+    for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
+        if (codeinst->owner != (void*)jl_uninferred_sym)
+            continue;
+        if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
+            return codeinst;
+        }
+    }
+    return NULL;
+}
+
+JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi, jl_code_instance_t *checked, size_t world, jl_code_instance_t *newci)
+{
+    while (!jl_mi_try_insert(mi, checked, newci)) {
+        jl_code_instance_t *new_checked = jl_atomic_load_relaxed(&mi->cache);
+        // Check if another thread inserted a CodeInstance that covers this world
+        jl_code_instance_t *other = jl_cached_uninferred(new_checked, world);
+        if (other)
+            return other;
+        checked = new_checked;
+    }
+    // Successfully inserted
+    return newci;
+}
+
+
+
 // Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world)
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t world, jl_code_instance_t **cache)
 {
-    jl_value_t *uninferred = jl_atomic_load_relaxed(&linfo->uninferred);
-    if (uninferred) {
-        assert(jl_is_code_info(uninferred)); // make sure this did not get `nothing` put here
-        return (jl_code_info_t*)jl_copy_ast((jl_value_t*)uninferred);
+    jl_code_instance_t *cache_ci = jl_atomic_load_relaxed(&mi->cache);
+    jl_code_instance_t *uninferred_ci = jl_cached_uninferred(cache_ci, world);
+    if (uninferred_ci) {
+        // The uninferred code is in `inferred`, but that is a bit of a misnomer here.
+        // This is the cached output the generated function (or top-level thunk).
+        // This cache has a non-standard owner (indicated by `->owner === :uninferred`),
+        // so it doesn't get confused for inference results.
+        jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&uninferred_ci->inferred);
+        assert(jl_is_code_info(src)); // make sure this did not get `nothing` put here
+        return (jl_code_info_t*)jl_copy_ast((jl_value_t*)src);
     }
 
     JL_TIMING(STAGED_FUNCTION, STAGED_FUNCTION);
-    jl_value_t *tt = linfo->specTypes;
-    jl_method_t *def = linfo->def.method;
-    jl_timing_show_method_instance(linfo, JL_TIMING_DEFAULT_BLOCK);
+    jl_value_t *tt = mi->specTypes;
+    jl_method_t *def = mi->def.method;
+    jl_timing_show_method_instance(mi, JL_TIMING_DEFAULT_BLOCK);
     jl_value_t *generator = def->generator;
     assert(generator != NULL);
     assert(jl_is_method(def));
     jl_code_info_t *func = NULL;
     jl_value_t *ex = NULL;
-    JL_GC_PUSH2(&ex, &func);
+    jl_code_info_t *uninferred = NULL;
+    jl_code_instance_t *ci = NULL;
+    JL_GC_PUSH4(&ex, &func, &uninferred, &ci);
     jl_task_t *ct = jl_current_task;
     int last_lineno = jl_lineno;
     int last_in = ct->ptls->in_pure_callback;
@@ -717,17 +758,17 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
-        ex = jl_call_staged(def, generator, world, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
+        ex = jl_call_staged(def, generator, world, mi->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
 
         // do some post-processing
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
             jl_array_t *stmts = (jl_array_t*)func->code;
-            jl_resolve_globals_in_ir(stmts, def->module, linfo->sparam_vals, 1);
+            jl_resolve_globals_in_ir(stmts, def->module, mi->sparam_vals, 1);
         }
         else {
             // Lower the user's expression and resolve references to the type parameters
-            func = jl_expand_and_resolve(ex, def->module, linfo->sparam_vals);
+            func = jl_expand_and_resolve(ex, def->module, mi->sparam_vals);
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == jl_error_sym) {
                     ct->ptls->in_pure_callback = 0;
@@ -735,26 +776,50 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
                 }
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
             }
+            // TODO: This should ideally be in the lambda expression,
+            // but currently our isva determination is non-syntactic
+            func->isva = def->isva;
         }
 
         // If this generated function has an opaque closure, cache it for
         // correctness of method identity
+        int needs_cache_for_correctness = 0;
         for (int i = 0; i < jl_array_nrows(func->code); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_new_opaque_closure_sym) {
                 if (jl_options.incremental && jl_generating_output())
                     jl_error("Impossible to correctly handle OpaqueClosure inside @generated returned during precompile process.");
-                jl_value_t *uninferred = jl_copy_ast((jl_value_t*)func);
-                jl_value_t *old = NULL;
-                if (jl_atomic_cmpswap(&linfo->uninferred, &old, uninferred)) {
-                    jl_gc_wb(linfo, uninferred);
-                }
-                else {
-                    assert(jl_is_code_info(old));
-                    func = (jl_code_info_t*)old;
-                }
+                needs_cache_for_correctness = 1;
                 break;
             }
+        }
+
+        if (cache || needs_cache_for_correctness) {
+            uninferred = (jl_code_info_t*)jl_copy_ast((jl_value_t*)func);
+            ci = jl_new_codeinst_for_uninferred(mi, uninferred);
+
+            if (uninferred->edges != jl_nothing) {
+                // N.B.: This needs to match `store_backedges` on the julia side
+                jl_array_t *edges = (jl_array_t*)uninferred->edges;
+                for (size_t i = 0; i < jl_array_len(edges); ++i) {
+                    jl_value_t *kind = jl_array_ptr_ref(edges, i);
+                    if (jl_is_method_instance(kind)) {
+                        jl_method_instance_add_backedge((jl_method_instance_t*)kind, jl_nothing, mi);
+                    } else if (jl_is_mtable(kind)) {
+                        jl_method_table_add_backedge((jl_methtable_t*)kind, jl_array_ptr_ref(edges, ++i), (jl_value_t*)mi);
+                    } else {
+                        jl_method_instance_add_backedge((jl_method_instance_t*)jl_array_ptr_ref(edges, ++i), kind, mi);
+                    }
+                }
+            }
+
+            jl_code_instance_t *cached_ci = jl_cache_uninferred(mi, cache_ci, world, ci);
+            if (cached_ci != ci) {
+                func = (jl_code_info_t*)jl_copy_ast(jl_atomic_load_relaxed(&cached_ci->inferred));
+                assert(jl_is_code_info(func));
+            }
+            if (cache)
+                *cache = cached_ci;
         }
 
         ct->ptls->in_pure_callback = last_in;
@@ -897,6 +962,8 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         jl_array_ptr_set(copy, i, st);
     }
     src = jl_copy_code_info(src);
+    src->isva = m->isva; // TODO: It would be nice to reverse this
+    assert(m->nargs == src->nargs);
     src->code = copy;
     jl_gc_wb(src, copy);
     m->slot_syms = jl_compress_argnames(src->slotnames);

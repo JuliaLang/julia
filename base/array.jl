@@ -219,12 +219,7 @@ function _unsetindex!(A::Array, i::Int)
     @inbounds _unsetindex!(GenericMemoryRef(A.ref, i))
     return A
 end
-function _unsetindex!(A::Array, i::Int...)
-    @inline
-    @boundscheck checkbounds(A, i...)
-    @inbounds _unsetindex!(A, _to_linear_index(A, i...))
-    return A
-end
+
 
 # TODO: deprecate this (aligned_sizeof and/or elsize and/or sizeof(Some{T}) are more correct)
 elsize(::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
@@ -275,13 +270,13 @@ function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
 end
 
 """
-    unsafe_copyto!(dest::Array, do, src::Array, so, N)
+    unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
 
-Copy `N` elements from a source array to a destination, starting at the linear index `so` in the
-source and `do` in the destination (1-indexed).
+Copy `n` elements from a source array to a destination, starting at the linear index `soffs` in the
+source and `doffs` in the destination (1-indexed).
 
 The `unsafe` prefix on this function indicates that no validation is performed to ensure
-that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
+that n is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
 the same manner as C.
 """
 function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
@@ -291,10 +286,10 @@ function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
 end
 
 """
-    copyto!(dest, do, src, so, N)
+    copyto!(dest, doffs, src, soffs, n)
 
-Copy `N` elements from collection `src` starting at the linear index `so`, to array `dest` starting at
-the index `do`. Return `dest`.
+Copy `n` elements from collection `src` starting at the linear index `soffs`, to array `dest` starting at
+the index `doffs`. Return `dest`.
 """
 copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
 copyto!(dest::Array, doffs::Integer, src::Memory, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
@@ -308,7 +303,7 @@ function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Arr
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
-    @inbounds let dest = GenericMemoryRef(dest isa Array ? getfield(dest, :ref) : dest, doffs)
+    @inbounds let dest = GenericMemoryRef(dest isa Array ? getfield(dest, :ref) : dest, doffs),
                   src = GenericMemoryRef(src isa Array ? getfield(src, :ref) : src, soffs)
         unsafe_copyto!(dest, src, n)
     end
@@ -529,6 +524,7 @@ function fill end
 fill(v, dims::DimOrInd...) = fill(v, dims)
 fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
 fill(v, dims::NTuple{N, Integer}) where {N} = (a=Array{typeof(v),N}(undef, dims); fill!(a, v); a)
+fill(v, dims::NTuple{N, DimOrInd}) where {N} = (a=similar(Array{typeof(v),N}, dims); fill!(a, v); a)
 fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
 
 """
@@ -589,23 +585,13 @@ for (fname, felt) in ((:zeros, :zero), (:ones, :one))
             fill!(a, $felt(T))
             return a
         end
+        function $fname(::Type{T}, dims::NTuple{N, DimOrInd}) where {T,N}
+            a = similar(Array{T,N}, dims)
+            fill!(a, $felt(T))
+            return a
+        end
     end
 end
-
-function _one(unit::T, x::AbstractMatrix) where T
-    require_one_based_indexing(x)
-    m,n = size(x)
-    m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    # Matrix{T}(I, m, m)
-    I = zeros(T, m, m)
-    for i in 1:m
-        I[i,i] = unit
-    end
-    I
-end
-
-one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
-oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
@@ -3079,55 +3065,4 @@ intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
     else
         _getindex(v, i)
     end
-end
-
-"""
-    wrap(Array, m::Union{Memory{T}, MemoryRef{T}}, dims)
-
-Create an array of size `dims` using `m` as the underlying memory. This can be thought of as a safe version
-of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointers.
-"""
-function wrap end
-
-# validity checking for _wrap calls, separate from allocation of Array so that it can be more likely to inline into the caller
-function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
-    mem = ref.mem
-    mem_len = length(mem) + 1 - memoryrefoffset(ref)
-    len = Core.checked_dims(dims...)
-    @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
-    if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
-        mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-        ref = MemoryRef(mem)
-    end
-    return ref
-end
-
-@noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(
-    "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $proddims > $len, so that the array would have more elements than the underlying memory can store."))
-
-@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
-    dims = convert(Dims, dims)
-    ref = _wrap(m, dims)
-    $(Expr(:new, :(Array{T, N}), :ref, :dims))
-end
-
-@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
-    dims = convert(Dims, dims)
-    ref = _wrap(MemoryRef(m), dims)
-    $(Expr(:new, :(Array{T, N}), :ref, :dims))
-end
-@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
-    dims = (Int(l),)
-    ref = _wrap(m, dims)
-    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
-end
-@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
-    dims = (Int(l),)
-    ref = _wrap(MemoryRef(m), (l,))
-    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
-end
-@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}) where {T}
-    ref = MemoryRef(m)
-    dims = (length(m),)
-    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end

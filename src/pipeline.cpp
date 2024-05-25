@@ -189,10 +189,11 @@ namespace {
         // }
     }
 
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     static inline void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
-        if (!llvm_only)
-            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass()));
+        if (!llvm_only){
+            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass(true)));
+        }
         MPM.addPass(VerifierPass());
     }
 #endif
@@ -332,7 +333,7 @@ namespace {
 
 static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeEarlySimplificationMarkerPass());
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     addVerificationPasses(MPM, options.llvm_only);
 #endif
     if (options.enable_early_simplifications) {
@@ -805,6 +806,17 @@ void NewPM::run(Module &M) {
 #else
     StandardInstrumentations SI(false);
 #endif
+#if JL_LLVM_VERSION >= 170000
+    PassInstrumentationCallbacks PIC;
+    adjustPIC(PIC);
+    TimePasses.registerCallbacks(PIC);
+    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
+    LoopAnalysisManager LAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+    SI.registerCallbacks(PIC, &MAM);
+    SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
+#else
     FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
@@ -814,6 +826,7 @@ void NewPM::run(Module &M) {
     LoopAnalysisManager LAM;
     CGSCCAnalysisManager CGAM;
     ModuleAnalysisManager MAM;
+#endif
     PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
     PB.registerLoopAnalyses(LAM);
     PB.registerFunctionAnalyses(FAM);

@@ -20,6 +20,7 @@ function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test_throws ErrorException ca.Z
     @test size(ca) == size(a)
     @test Array(copy(ca)) ≈ a
+    @test tr(ca) ≈ tr(a) skip=ca isa CholeskyPivoted
 end
 
 function factor_recreation_tests(a_U, a_L)
@@ -546,6 +547,28 @@ end
     @test det(B)  ≈  det(A) atol=eps()
     @test logdet(B)  ==  -Inf
     @test logabsdet(B)[1] == -Inf
- end
+end
+
+@testset "partly initialized factors" begin
+    @testset for uplo in ('U', 'L')
+        M = Matrix{BigFloat}(undef, 2, 2)
+        M[1,1] = M[2,2] = M[1+(uplo=='L'), 1+(uplo=='U')] = 3
+        C = Cholesky(M, uplo, 0)
+        @test C == C
+        @test C.L == C.U'
+        # parameters are arbitrary
+        C = CholeskyPivoted(M, uplo, [1,2], 2, 0.0, 0)
+        @test C.L == C.U'
+    end
+end
+
+@testset "diag" begin
+    for T in (Float64, ComplexF64), k in (0, 1, -3), uplo in (:U, :L)
+        A = randn(T, 100, 100)
+        P = Hermitian(A' * A, uplo)
+        C = cholesky(P)
+        @test diag(P, k) ≈ diag(C, k)
+    end
+end
 
 end # module TestCholesky

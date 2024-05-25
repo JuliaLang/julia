@@ -325,9 +325,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     error("")
                 end
             end
-        elseif isterminator(stmt) && idx != last(ir.cfg.blocks[bb].stmts)
-            @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
-            error("")
+        elseif isterminator(stmt)
+            if idx != last(ir.cfg.blocks[bb].stmts)
+                @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
+                error("")
+            end
+            if !isa(stmt, ReturnNode) && ir[SSAValue(idx)][:type] !== Any
+                @verify_error "Explicit terminators (other than ReturnNode) must have `Any` type"
+                error("")
+            end
         else
             isforeigncall = false
             if isa(stmt, Expr)

@@ -236,7 +236,7 @@ end
 # Effect modeling for Core.compilerbarrier
 @test Base.infer_effects(Base.inferencebarrier, Tuple{Any}) |> Core.Compiler.is_removable_if_unused
 
-# allocation/access of uninitialized fields should taint the :consistent-cy
+# effects modeling for allocation/access of uninitialized fields
 struct Maybe{T}
     x::T
     Maybe{T}() where T = new{T}()
@@ -244,57 +244,9 @@ struct Maybe{T}
     Maybe(x::T) where T = new{T}(x)
 end
 Base.getindex(x::Maybe) = x.x
-
 struct SyntacticallyDefined{T}
     x::T
 end
-
-import Core.Compiler: Const, getfield_notundefined
-for T = (Base.RefValue, Maybe) # both mutable and immutable
-    for name = (Const(1), Const(:x))
-        @test getfield_notundefined(T{String}, name)
-        @test getfield_notundefined(T{Integer}, name)
-        @test getfield_notundefined(T{Union{String,Integer}}, name)
-        @test getfield_notundefined(Union{T{String},T{Integer}}, name)
-        @test !getfield_notundefined(T{Int}, name)
-        @test !getfield_notundefined(T{<:Integer}, name)
-        @test !getfield_notundefined(T{Union{Int32,Int64}}, name)
-        @test !getfield_notundefined(T, name)
-    end
-    # throw doesn't account for undefined behavior
-    for name = (Const(0), Const(2), Const(1.0), Const(:y), Const("x"),
-                Float64, String, Nothing)
-        @test getfield_notundefined(T{String}, name)
-        @test getfield_notundefined(T{Int}, name)
-        @test getfield_notundefined(T{Integer}, name)
-        @test getfield_notundefined(T{<:Integer}, name)
-        @test getfield_notundefined(T{Union{Int32,Int64}}, name)
-        @test getfield_notundefined(T, name)
-    end
-    # should not be too conservative when field isn't known very well but object information is accurate
-    @test getfield_notundefined(T{String}, Int)
-    @test getfield_notundefined(T{String}, Symbol)
-    @test getfield_notundefined(T{Integer}, Int)
-    @test getfield_notundefined(T{Integer}, Symbol)
-    @test !getfield_notundefined(T{Int}, Int)
-    @test !getfield_notundefined(T{Int}, Symbol)
-    @test !getfield_notundefined(T{<:Integer}, Int)
-    @test !getfield_notundefined(T{<:Integer}, Symbol)
-end
-# should be conservative when object information isn't accurate
-@test !getfield_notundefined(Any, Const(1))
-@test !getfield_notundefined(Any, Const(:x))
-# tuples and namedtuples should be okay if not given accurate information
-for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tuple,
-                    NamedTuple{(:a, :b), Tuple{Int,Int}}, NamedTuple{(:x,),Tuple{Any}}, NamedTuple],
-    FieldType = Any[Int, Symbol, Any]
-    @test getfield_notundefined(TupleType, FieldType)
-end
-# skip analysis on fields that are known to be defined syntactically
-@test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
-@test Core.Compiler.getfield_notundefined(Const(Main), Const(:var))
-@test Core.Compiler.getfield_notundefined(Const(Main), Const(42))
-# high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
 end |> !Core.Compiler.is_consistent
@@ -904,7 +856,6 @@ end |> Core.Compiler.is_foldable_nothrow
 @test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
-@test Core.Compiler.getfield_notundefined(WrapperOneField{Float64}, Symbol)
 @test Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
@@ -996,7 +947,7 @@ end
 let effects = Base.infer_effects() do
         isdefined(defined_ref, :x)
     end
-    @test Core.Compiler.is_consistent(effects)
+    @test !Core.Compiler.is_consistent(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
 let effects = Base.infer_effects() do
@@ -1096,13 +1047,15 @@ function f2_optrefine()
     end
     return true
 end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine; optimize=false))
 @test Core.Compiler.is_nothrow(Base.infer_effects(f2_optrefine))
 
 function f3_optrefine(x)
     @fastmath sqrt(x)
     return x
 end
-@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine))
+@test !Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine; optimize=false))
+@test Core.Compiler.is_consistent(Base.infer_effects(f3_optrefine, (Float64,)))
 
 # Check that :consistent is properly modeled for throwing statements
 const GLOBAL_MUTABLE_SWITCH = Ref{Bool}(false)
@@ -1390,10 +1343,21 @@ let; Base.Experimental.@force_compile; func52843(); end
 
 @noinline f53613() = @assert isdefined(@__MODULE__, :v53613)
 g53613() = f53613()
+h53613() = g53613()
 @test !Core.Compiler.is_consistent(Base.infer_effects(f53613))
-@test_broken !Core.Compiler.is_consistent(Base.infer_effects(g53613))
+@test !Core.Compiler.is_consistent(Base.infer_effects(g53613))
 @test_throws AssertionError f53613()
 @test_throws AssertionError g53613()
+@test_throws AssertionError h53613()
 global v53613 = nothing
 @test f53613() === nothing
 @test g53613() === nothing
+@test h53613() === nothing
+
+# tuple/svec effects
+@test Base.infer_effects((Vector{Any},)) do xs
+    Core.tuple(xs...)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Any},)) do xs
+    Core.svec(xs...)
+end |> Core.Compiler.is_nothrow

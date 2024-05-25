@@ -196,14 +196,18 @@ const andand = AndAnd()
 broadcasted(::AndAnd, a, b) = broadcasted((a, b) -> a && b, a, b)
 function broadcasted(::AndAnd, a, bc::Broadcasted)
     bcf = flatten(bc)
-    broadcasted((a, args...) -> a && bcf.f(args...), a, bcf.args...)
+    # Vararg type signature to specialize on args count. This is necessary for performance
+    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a && bcf.f(args...), a, bcf.args...)
 end
 struct OrOr end
 const oror = OrOr()
 broadcasted(::OrOr, a, b) = broadcasted((a, b) -> a || b, a, b)
 function broadcasted(::OrOr, a, bc::Broadcasted)
     bcf = flatten(bc)
-    broadcasted((a, args...) -> a || bcf.f(args...), a, bcf.args...)
+    # Vararg type signature to specialize on args count. This is necessary for performance
+    # and innexpensive because this should only ever get called with 1+N = length(bc.args)
+    broadcasted(((a, args::Vararg{Any, N}) where {N}) -> a || bcf.f(args...), a, bcf.args...)
 end
 
 Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{<:Any,Axes,F,Args}) where {NewStyle,Axes,F,Args} =
@@ -345,6 +349,7 @@ function flatten(bc::Broadcasted)
     #          makeargs[3] = ((w, x, y, z)) -> z
     makeargs = make_makeargs(bc.args)
     f = Base.maybeconstructor(bc.f)
+    # TODO: consider specializing on args... if performance problems emerge:
     newf = (args...) -> (@inline; f(prepare_args(makeargs, args)...))
     return Broadcasted(bc.style, newf, args, bc.axes)
 end
@@ -517,8 +522,8 @@ function _bcs(shape::Tuple, newshape::Tuple)
     return (_bcs1(shape[1], newshape[1]), _bcs(tail(shape), tail(newshape))...)
 end
 # _bcs1 handles the logic for a single dimension
-_bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $b"))))
-_bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths $a and $(length(b))")))
+_bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch(LazyString("arrays could not be broadcast to a common size; got a dimension with lengths ", a, " and ", b)))))
+_bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(DimensionMismatch(LazyString("arrays could not be broadcast to a common size; got a dimension with lengths ", a, " and ", length(b)))))
 _bcs1(a, b::Integer) = _bcs1(b, a)
 _bcs1(a, b) = _bcsm(b, a) ? axistype(b, a) : _bcsm(a, b) ? axistype(a, b) : throw(DimensionMismatch(LazyString("arrays could not be broadcast to a common size: a has axes ", a, " and b has axes ", b)))
 # _bcsm tests whether the second index is consistent with the first
@@ -1057,7 +1062,7 @@ end
 
 
 @noinline throwdm(axdest, axsrc) =
-    throw(DimensionMismatch("destination axes $axdest are not compatible with source axes $axsrc"))
+    throw(DimensionMismatch(LazyString("destination axes ", axdest, " are not compatible with source axes ", axsrc)))
 
 function restart_copyto_nonleaf!(newdest, dest, bc, val, I, iter, state, count)
     # Function barrier that makes the copying to newdest type stable

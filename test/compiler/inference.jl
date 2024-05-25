@@ -1937,6 +1937,8 @@ function f24852_kernel_cinfo(world::UInt, source, fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
+    code_info.nargs = 4
+    code_info.isva = false
     # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
     # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
     return match.method, code_info
@@ -4435,7 +4437,7 @@ let x = Tuple{Int,Any}[
         #=19=# (0, Expr(:pop_exception, Core.SSAValue(2)))
         #=20=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
-    handler_at, handlers = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    (;handler_at, handlers) = Core.Compiler.compute_trycatch(last.(x))
     @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
 end
 
@@ -4485,8 +4487,10 @@ let
                # Vararg
         #=va=# Bound, unbound,         # => Tuple{Integer,Integer} (invalid `TypeVar` widened beforehand)
         } where Bound<:Integer
-    argtypes = Core.Compiler.most_general_argtypes(method, specTypes, true)
+    argtypes = Core.Compiler.most_general_argtypes(method, specTypes)
     popfirst!(argtypes)
+    # N.B.: `argtypes` do not have va processing applied yet
+    @test length(argtypes) == 12
     @test argtypes[1] == Integer
     @test argtypes[2] == Integer
     @test argtypes[3] == Type{Bound} where Bound<:Integer
@@ -4497,7 +4501,8 @@ let
     @test argtypes[8] == Any
     @test argtypes[9] == Union{Nothing,Bound} where Bound<:Integer
     @test argtypes[10] == Any
-    @test argtypes[11] == Tuple{Integer,Integer}
+    @test argtypes[11] == Integer
+    @test argtypes[12] == Integer
 end
 
 # make sure not to call `widenconst` on `TypeofVararg` objects
@@ -5600,6 +5605,13 @@ end |> only === Float64
 @test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
 @test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError
 
+# exception type inference for `:new`
+struct NewExctInference
+    a::Int
+    @eval NewExctInference(a) = $(Expr(:new, :NewExctInference, :a))
+end
+@test Base.infer_exception_type(NewExctInference, (Float64,)) == TypeError
+
 # semi-concrete interpretation accuracy
 # https://github.com/JuliaLang/julia/issues/50037
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
@@ -5647,6 +5659,24 @@ end
 @test Core.Compiler.return_type(has_tuin, Tuple{}) === Union{}
 @test_throws UndefVarError has_tuin()
 
+function gen_tuin_from_arg(world::UInt, source, _, _)
+    ci = make_codeinfo(Any[
+        Expr(:throw_undef_if_not, :x, Core.Argument(2)),
+        ReturnNode(true),
+    ]; slottypes=Any[Any, Bool])
+    ci.slotnames = Symbol[:var"#self#", :def]
+    ci.nargs = 2
+    ci.isva = false
+    ci
+end
+
+@eval function has_tuin2(def)
+    $(Expr(:meta, :generated, gen_tuin_from_arg))
+    $(Expr(:meta, :generated_only))
+end
+@test_throws UndefVarError has_tuin2(false)
+@test has_tuin2(true)
+
 # issue #53585
 let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
     @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
@@ -5668,6 +5698,8 @@ function gen_infinite_loop_ssa_generator(world::UInt, source, _)
         ReturnNode(SSAValue(2))
     ]; slottypes=Any[Any])
     ci.slotnames = Symbol[:var"#self#"]
+    ci.nargs = 1
+    ci.isva = false
     ci
 end
 
@@ -5680,3 +5712,39 @@ end
 # We want to make sure that both this returns `Tuple` and that
 # it doesn't infinite loop inside inference.
 @test Core.Compiler.return_type(gen_infinite_loop_ssa, Tuple{}) === Tuple
+
+# inference local cache lookup with extended lattice elements that may be transformed
+# by `matching_cache_argtypes`
+@newinterp CachedConditionalInterp
+Base.@constprop :aggressive function func_cached_conditional(x, y)
+    if x
+        @noinline sin(y)
+    else
+        0.0
+    end
+end;
+function test_func_cached_conditional(y)
+    y₁ = func_cached_conditional(isa(y, Float64), y)
+    y₂ = func_cached_conditional(isa(y, Float64), y)
+    return y₁, y₂
+end;
+let interp = CachedConditionalInterp();
+    @test Base.infer_return_type(test_func_cached_conditional, (Any,); interp) == Tuple{Float64, Float64}
+    @test count(interp.inf_cache) do result
+        result.linfo.def.name === :func_cached_conditional
+    end == 1
+end
+
+# fieldcount on `Tuple` should constant fold, even though `.fields` not const
+@test fully_eliminated(Base.fieldcount, Tuple{Type{Tuple{Nothing, Int, Int}}})
+
+# Vararg-constprop regression from MutableArithmetics (#54341)
+global SIDE_EFFECT54341::Int
+function foo54341(a, b, c, d, args...)
+    # Side effect to force constprop rather than semi-concrete
+    global SIDE_EFFECT54341 = a + b + c + d
+    return SIDE_EFFECT54341
+end
+bar54341(args...) = foo54341(4, args...)
+
+@test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int
