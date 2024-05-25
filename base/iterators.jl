@@ -1586,6 +1586,7 @@ end
 
 IteratorSize(::Type{<:IterableStatePairs{T}}) where T = IteratorSize(T)
 length(x::IterableStatePairs) = length(x.x)
+Base.eltype(::Type{Base.Iterators.IterableStatePairs{T}}) where T = Tuple{Any, eltype(T)}
 
 function iterate(x::IterableStatePairs, state=first(keys(x.x)))
     it = iterate(x.x, state)
