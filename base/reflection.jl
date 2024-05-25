@@ -1238,7 +1238,7 @@ list for instances of a type without instantiating any object. Another
 difference is that the type `T` need not be concrete.
 
 If `types` is specified, return the methods whose types match.
-If `module` is specified, return the methods defined in that module.
+If `module` is specified, only return the methods defined in that module.
 Multiple modules can also be specified as an array.
 
 # Example
