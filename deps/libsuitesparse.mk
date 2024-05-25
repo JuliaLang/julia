@@ -59,8 +59,8 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
 	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
-	$(MAKE) -C $(dir $<)
-	$(MAKE) -C $(dir $<) install
+	$(CMAKE) --build $(dir $<)
+	$(CMAKE) --install $(dir $<)
 	echo 1 > $@
 
 ifeq ($(OS),WINNT)
@@ -70,7 +70,7 @@ LIBSUITESPARSE_SHLIB_ENV:=LD_LIBRARY_PATH="$(build_shlibdir)"
 endif
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 	for PROJ in $(shell echo $(subst ;, ,$(LIBSUITESPARSE_PROJECTS))); do \
-		$(LIBSUITESPARSE_SHLIB_ENV) $(MAKE) -C $(dir $<)$${PROJ} default $(LIBSUITESPARSE_MFLAGS) || exit 1; \
+		$(LIBSUITESPARSE_SHLIB_ENV) $(CMAKE) --build $(dir $<)$${PROJ} default $(LIBSUITESPARSE_MFLAGS) || exit 1; \
 	done
 	echo 1 > $@
 
