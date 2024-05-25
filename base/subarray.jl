@@ -351,8 +351,8 @@ FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Var
 # parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
 # so we may just forward the indexing to the parent
 # This may only be done for non-offset ranges, as the result would otherwise have offset axes
-const OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
-function getindex(V::FastContiguousSubArray, i::OneBasedRanges)
+const _OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
+function getindex(V::FastContiguousSubArray, i::_OneBasedRanges)
     @inline
     @boundscheck checkbounds(V, i)
     @inbounds r = V.parent[_reindexlinear(V, i)]
