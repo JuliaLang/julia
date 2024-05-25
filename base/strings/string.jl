@@ -27,11 +27,6 @@ function Base.showerror(io::IO, exc::StringIndexError)
     end
 end
 
-const ByteArray = Union{
-    DenseVector{<:Union{UInt8, Int8}},
-    FastContiguousSubArray{<:Union{UInt8, Int8},1,<:DenseVector{<:Union{UInt8, Int8}}},
-}
-
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
 """
