@@ -45,7 +45,7 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     while true
         i = _search(s, first_utf8_byte(c), i)
         i == 0 && return nothing
-        pred(s[i]) && return i
+        isvalid(s, i) && pred(s[i]) && return i
         i = nextind(s, i)
     end
 end
@@ -108,7 +108,7 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     while true
         i = _rsearch(s, b, i)
         i == 0 && return nothing
-        pred(s[i]) && return i
+        isvalid(s, i) && pred(s[i]) && return i
         i = prevind(s, i)
     end
 end
