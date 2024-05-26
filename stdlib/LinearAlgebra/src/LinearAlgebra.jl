@@ -499,6 +499,33 @@ See also: `copymutable_oftype`.
 """
 copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
 
+"""
+    BandIndex(band, index)
+
+Represent a Cartesian index as a linear index along a band.
+This type is primarily meant to index into a specific band without branches,
+so, for best performance, `band` should be a compile-time constant.
+"""
+struct BandIndex
+    band :: Int
+    index :: Int
+end
+function _cartinds(b::BandIndex)
+    (; band, index) = b
+    bandg0 = max(band,0)
+    row = index - band + bandg0
+    col = index + bandg0
+    CartesianIndex(row, col)
+end
+function Base.to_indices(A, inds, t::Tuple{BandIndex, Vararg{Any}})
+    to_indices(A, inds, (_cartinds(first(t)), Base.tail(t)...))
+end
+function Base.checkbounds(::Type{Bool}, A::AbstractMatrix, b::BandIndex)
+    checkbounds(Bool, A, _cartinds(b))
+end
+function Base.checkbounds(A::Broadcasted, b::BandIndex)
+    checkbounds(A, _cartinds(b))
+end
 
 include("adjtrans.jl")
 include("transpose.jl")
