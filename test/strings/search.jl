@@ -429,13 +429,22 @@ end
             @test_throws BoundsError findprev(pattern, A, -3)
         end
     end
+end
 
-    @test_throws InexactError findfirst(==(UInt8(-1)), [0xff])
-    @test_throws InexactError findnext(==(UInt8(-1)), [0xff], 1)
-    @test_throws InexactError findprev(==(UInt8(-1)), [0xff], 1)
-    @test_throws InexactError findfirst([UInt8(-1)], [0xff])
-    @test_throws InexactError findnext([UInt8(-1)], [0xff], 1)
-    @test_throws InexactError findprev([UInt8(-1)], Union{UInt8, Int8}[0xff], 1)
+# Issue 54578
+@testset "No conflation of Int8 and UInt8" begin
+    # Work for mixed types if the values are the same
+    @test findfirst(==(Int8(1)), [0x01]) == 1
+    @test findnext(iszero, Int8[0, -2, 0, -3], 2) == 3
+    @test findfirst(Int8[1,4], UInt8[0, 2, 4, 1, 8, 1, 4, 2]) == 6:7
+    @test findprev(UInt8[5, 6], Int8[1, 9, 2, 5, 6, 3], 6) == 4:5
+
+    # Returns nothing for the same methods if the values are different,
+    # even if the bitpatterns are the same
+    @test isnothing(findfirst(==(Int8(-1)), [0xff]))
+    @test isnothing(findnext(isequal(0xff), Int8[-1, -2, -1], 2))
+    @test isnothing(findfirst(UInt8[0xff, 0xfe], Int8[0, -1, -2, 1, 8, 1, 4, 2]))
+    @test isnothing(findprev(UInt8[0xff, 0xfe], Int8[1, 9, 2, -1, -2, 3], 6))
 end
 
 # issue 32568

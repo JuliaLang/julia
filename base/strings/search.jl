@@ -10,6 +10,27 @@ match strings with [`match`](@ref).
 """
 abstract type AbstractPattern end
 
+# TODO: These unions represent bytes in memory that can be accessed via a pointer.
+# this property is used throughout Julia, e.g. also in IO code.
+# This deserves a better solution - see #53178.
+# If such a better solution comes in place, these unions should be replaced.
+const DenseInt8 = Union{
+    <:DenseArray{Int8},
+    <:FastContiguousSubArray{Int8,N,<:DenseArray} where N
+}
+
+# Note: This union is different from that above in that it includes CodeUnits.
+# Currently, this is redundant as CodeUnits <: DenseVector, but this subtyping
+# is buggy and may be removed in the future, see #54002
+const DenseUInt8 = Union{
+    <:DenseArray{UInt8},
+    <:FastContiguousSubArray{UInt8,N,<:DenseArray} where N,
+    CodeUnits{UInt8, <:Union{String, SubString{String}}},
+    <:FastContiguousSubArray{UInt8,N,<:CodeUnits{UInt8, <:Union{String, SubString{String}}}} where N,
+}
+
+const DenseUInt8OrInt8 = Union{DenseUInt8, DenseInt8}
+
 nothing_sentinel(i) = i == 0 ? nothing : i
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
@@ -39,31 +60,39 @@ const DenseBytes = Union{
 
 const ByteArray = Union{DenseBytes, DenseArrayType{Int8}}
 
-function findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray)
-    nothing_sentinel(_search(a, convert(eltype(a), pred.x)))
+function findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{UInt8, Int8}}, a::Union{DenseInt8, DenseUInt8})
+    findnext(pred, a, firstindex(a))
 end
 
-function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer)
-    nothing_sentinel(_search(a, convert(eltype(a), pred.x), i))
+function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
+    nothing_sentinel(_search(a, pred.x, i))
 end
 
-findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
-findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
+function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
+    nothing_sentinel(_search(a, pred.x, i))
+end
 
-function _search(a::Union{String,SubString{String},<:ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
-    if i < 1
+# iszero is special, in that the bitpattern for zero for Int8 and UInt8 is the same,
+# so we can use memchr even if we search for an Int8 in an UInt8 array or vice versa
+findfirst(::typeof(iszero), a::DenseUInt8OrInt8) = nothing_sentinel(_search(a, zero(UInt8)))
+findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
+
+function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = 1)
+    @boundscheck if i < 1
         throw(BoundsError(a, i))
     end
     n = sizeof(a)
-    if i > n
+    @boundscheck if i > n
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
-    p = pointer(a)
-    q = GC.@preserve a ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
+    GC.@preserve a begin
+        p = pointer(a)
+        q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
+    end
     return q == C_NULL ? 0 : Int(q-p+1)
 end
 
-function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
+function _search(a::DenseUInt8, b::AbstractChar, i::Integer = 1)
     if isascii(b)
         _search(a,UInt8(b),i)
     else
@@ -84,16 +113,23 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
 end
 
-findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
-    nothing_sentinel(_rsearch(a, convert(eltype(a), pred.x)))
+function findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::DenseUInt8OrInt8)
+    findprev(pred, a, lastindex(a))
+end
 
-findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
-    nothing_sentinel(_rsearch(a, convert(eltype(a), pred.x), i))
+function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
+    nothing_sentinel(_rsearch(a, pred.x, i))
+end
 
-findlast(::typeof(iszero), a::ByteArray) = nothing_sentinel(_rsearch(a, zero(UInt8)))
-findprev(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
+function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
+    nothing_sentinel(_rsearch(a, pred.x, i))
+end
 
-function _rsearch(a::Union{String,SubString{String},ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
+# See comments above for findfirst(::typeof(iszero)) methods
+findlast(::typeof(iszero), a::DenseUInt8OrInt8) = nothing_sentinel(_rsearch(a, zero(UInt8)))
+findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
+
+function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
         return i == 0 ? 0 : throw(BoundsError(a, i))
     end
@@ -101,12 +137,14 @@ function _rsearch(a::Union{String,SubString{String},ByteArray}, b::Union{Int8,UI
     if i > n
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
-    p = pointer(a)
-    q = GC.@preserve a ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
+    GC.@preserve a begin
+        p = pointer(a)
+        q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
+    end
     return q == C_NULL ? 0 : Int(q-p+1)
 end
 
-function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
+function _rsearch(a::DenseUInt8, b::AbstractChar, i::Integer = length(a))
     if isascii(b)
         _rsearch(a,UInt8(b),i)
     else
@@ -187,7 +225,7 @@ end
 
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 
-function _searchindex(s::Union{AbstractString,ByteArray},
+function _searchindex(s::Union{AbstractString,DenseUInt8OrInt8},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
     x = Iterators.peel(t)
@@ -350,7 +388,7 @@ julia> findnext('o', "Hello to the world", 6)
 findnext(ch::AbstractChar, string::AbstractString, start::Integer) =
     findnext(==(ch), string, start)
 
-"""
+    """
     findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
              A::AbstractVector{<:Union{Int8,UInt8}},
              start::Integer)
@@ -392,7 +430,7 @@ julia> findfirst("Julia", "JuliaLang")
 findlast(pattern::AbstractString, string::AbstractString) =
     findprev(pattern, string, lastindex(string))
 
-"""
+    """
     findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
              A::AbstractVector{<:Union{Int8,UInt8}})
 
@@ -473,9 +511,9 @@ julia> findall(UInt8[1,2], UInt8[1,2,3,1,2])
      This method requires at least Julia 1.3.
 """
 
-function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
-                 s::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
-                 ; overlap::Bool=false)
+function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{T}},
+                 s::Union{AbstractString, AbstractPattern, AbstractVector{T}},
+                 ; overlap::Bool=false) where T <: Union{Int8, UInt8}
     found = UnitRange{Int}[]
     i, e = firstindex(s), lastindex(s)
     while true
@@ -665,7 +703,7 @@ julia> findprev('o', "Hello to the world", 18)
 findprev(ch::AbstractChar, string::AbstractString, start::Integer) =
     findprev(==(ch), string, start)
 
-"""
+    """
     findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
              A::AbstractVector{<:Union{Int8,UInt8}},
              start::Integer)
@@ -685,6 +723,7 @@ findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
          A::AbstractVector{<:Union{Int8,UInt8}},
          start::Integer) =
     _rsearch(A, pattern, start)
+
 """
     occursin(needle::Union{AbstractString,AbstractPattern,AbstractChar}, haystack::AbstractString)
 
