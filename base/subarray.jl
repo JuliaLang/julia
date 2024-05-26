@@ -366,14 +366,6 @@ const MutableDenseArrayType{T,N} = Union{
     FastContiguousSubArray{T,N,<:Memory}
 }
 
-# Note: Currently, CodeUnits <: DenseVector, which makes this union redundant w.r.t
-# DenseArrayType{UInt8}, but this is a bug, and may be removed in future versions
-# of Julia. See #54002
-const DenseBytes = Union{
-    <:DenseArrayType{UInt8},
-    CodeUnits{UInt8, <:Union{String, SubString{String}}},
-}
-
 # parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
 # so we may just forward the indexing to the parent
 # This may only be done for non-offset ranges, as the result would otherwise have offset axes
