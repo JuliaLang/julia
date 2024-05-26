@@ -702,16 +702,17 @@ end
     end
 end
 
-Base._reverse(A::Tridiagonal, dims) = reverse!(Matrix(A); dims)
-Base._reverse(A::Tridiagonal, dims::Colon) = Tridiagonal(reverse(A.du), reverse(A.d), reverse(A.dl))
-function Base._reverse!(A::Tridiagonal, dims::Colon)
-    n = length(A.du) # == length(A.dl), & always 1-based
-    # reverse and swap A.dl and A.du:
-    @inbounds for i in 1:n
-        A.dl[i], A.du[n+1-i] = A.du[n+1-i], A.dl[i]
+@inline function getindex(A::Tridiagonal{T}, b::BandIndex) where T
+    @boundscheck checkbounds(A, b)
+    if b.band == 0
+        return @inbounds A.d[b.index]
+    elseif b.band == -1
+        return @inbounds A.dl[b.index]
+    elseif b.band == 1
+        return @inbounds A.du[b.index]
+    else
+        return zero(T)
     end
-    reverse!(A.d)
-    return A
 end
 
 @inline function setindex!(A::Tridiagonal, x, i::Integer, j::Integer)
@@ -734,6 +735,19 @@ function Base.replace_in_print_matrix(A::Tridiagonal,i::Integer,j::Integer,s::Ab
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
 
+# reverse
+
+Base._reverse(A::Tridiagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::Tridiagonal, dims::Colon) = Tridiagonal(reverse(A.du), reverse(A.d), reverse(A.dl))
+function Base._reverse!(A::Tridiagonal, dims::Colon)
+    n = length(A.du) # == length(A.dl), & always 1-based
+    # reverse and swap A.dl and A.du:
+    @inbounds for i in 1:n
+        A.dl[i], A.du[n+1-i] = A.du[n+1-i], A.dl[i]
+    end
+    reverse!(A.d)
+    return A
+end
 
 #tril and triu
 
