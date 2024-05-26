@@ -1218,7 +1218,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
             if (!raw)
                 f->addFnAttr(Attribute::NoUnwind);
         });
-        auto TMBase = jl_ExecutionEngine->cloneTargetMachine();
+        auto TMBase = jl_ExecutionEngine->cloneTargetMachine("", "");
         LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(TMBase.get());
         legacy::PassManager PM;
         addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());

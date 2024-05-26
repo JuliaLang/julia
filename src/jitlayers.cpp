@@ -2243,12 +2243,14 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
 
 //TargetMachine pass-through methods
 
-std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
+std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine(std::string targettriple, std::string cpu) const
 {
+    cpu = (cpu == "") ? getTargetCPU() : cpu;
+    targettriple = (targettriple == "") ? getTargetTriple().str() : targettriple;
     auto NewTM = std::unique_ptr<TargetMachine>(getTarget()
         .createTargetMachine(
-            getTargetTriple().str(),
-            getTargetCPU(),
+            targettriple,
+            cpu,
             getTargetFeatureString(),
             getTargetOptions(),
             TM->getRelocationModel(),

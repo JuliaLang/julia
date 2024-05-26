@@ -550,7 +550,7 @@ public:
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
 
     // TargetMachine pass-through methods
-    std::unique_ptr<TargetMachine> cloneTargetMachine() const JL_NOTSAFEPOINT;
+    std::unique_ptr<TargetMachine> cloneTargetMachine(std::string targettriple, std::string cpu) const JL_NOTSAFEPOINT;
     const Triple& getTargetTriple() const JL_NOTSAFEPOINT;
     StringRef getTargetFeatureString() const JL_NOTSAFEPOINT;
     StringRef getTargetCPU() const JL_NOTSAFEPOINT;

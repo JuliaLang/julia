@@ -1996,6 +1996,8 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         return;
     }
 
+    std::string targetcpu(params.cpu);
+    std::string targettriple(params.targettriple);
     // get the source code for this function
     jl_code_info_t *src = NULL;
     jl_code_instance_t *codeinst = NULL;
@@ -2075,7 +2077,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             }
             assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             if (optimize) {
-                NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
+                NewPM PM{jl_ExecutionEngine->cloneTargetMachine(targettriple, targetcpu), getOptLevel(jl_options.opt_level)};
                 //Safe b/c context lock is held by output
                 PM.run(*m.getModuleUnlocked());
                 assert(!verifyLLVMIR(*m.getModuleUnlocked()));
