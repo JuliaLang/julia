@@ -273,6 +273,12 @@ end
     end
     @test_throws MethodError @fastmath(^(2))
 end
+# issue #53857
+@testset "fast_pow" begin
+    n = Int64(2)^52
+    @test @fastmath (1 + 1 / n) ^ n ≈ ℯ
+    @test @fastmath (1 + 1 / n) ^ 4503599627370496 ≈ ℯ
+end
 
 @testset "sincos fall-backs" begin
     struct FloatWrapper
