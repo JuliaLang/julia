@@ -29,7 +29,7 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
 end
 
-const ByteArray = Union{DenseArrayType{UInt8}, DenseArrayType{Int8}}
+const ByteArray = Union{DenseBytes, DenseArrayType{Int8}}
 
 findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
     nothing_sentinel(_search(a, pred.x))

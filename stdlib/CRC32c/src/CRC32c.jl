@@ -36,7 +36,7 @@ but note that the result may be endian-dependent.
 function crc32c end
 
 
-function crc32c(a::DenseArrayType{UInt8}, crc::UInt32=0x00000000)
+function crc32c(a::DenseBytes, crc::UInt32=0x00000000)
     Base._crc32c(a, crc)
 end
 
