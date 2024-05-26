@@ -429,6 +429,9 @@ end
             @test_throws BoundsError findprev(pattern, A, -3)
         end
     end
+
+    @test findall([0x01, 0x02], [0x03, 0x01, 0x02, 0x01, 0x02, 0x06]) == [2:3, 4:5]
+    @test isempty(findall([0x04, 0x05], [0x03, 0x04, 0x06]))
 end
 
 # Issue 54578

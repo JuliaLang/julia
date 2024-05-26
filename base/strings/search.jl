@@ -388,7 +388,7 @@ julia> findnext('o', "Hello to the world", 6)
 findnext(ch::AbstractChar, string::AbstractString, start::Integer) =
     findnext(==(ch), string, start)
 
-    """
+"""
     findnext(pattern::AbstractVector{<:Union{Int8,UInt8}},
              A::AbstractVector{<:Union{Int8,UInt8}},
              start::Integer)
@@ -430,7 +430,7 @@ julia> findfirst("Julia", "JuliaLang")
 findlast(pattern::AbstractString, string::AbstractString) =
     findprev(pattern, string, lastindex(string))
 
-    """
+"""
     findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
              A::AbstractVector{<:Union{Int8,UInt8}})
 
@@ -510,10 +510,9 @@ julia> findall(UInt8[1,2], UInt8[1,2,3,1,2])
 !!! compat "Julia 1.3"
      This method requires at least Julia 1.3.
 """
-
-function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{T}},
-                 s::Union{AbstractString, AbstractPattern, AbstractVector{T}},
-                 ; overlap::Bool=false) where T <: Union{Int8, UInt8}
+function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{UInt8}},
+                 s::Union{AbstractString, AbstractPattern, AbstractVector{UInt8}},
+                 ; overlap::Bool=false)
     found = UnitRange{Int}[]
     i, e = firstindex(s), lastindex(s)
     while true
@@ -703,7 +702,7 @@ julia> findprev('o', "Hello to the world", 18)
 findprev(ch::AbstractChar, string::AbstractString, start::Integer) =
     findprev(==(ch), string, start)
 
-    """
+"""
     findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
              A::AbstractVector{<:Union{Int8,UInt8}},
              start::Integer)
@@ -723,7 +722,6 @@ findprev(pattern::AbstractVector{<:Union{Int8,UInt8}},
          A::AbstractVector{<:Union{Int8,UInt8}},
          start::Integer) =
     _rsearch(A, pattern, start)
-
 """
     occursin(needle::Union{AbstractString,AbstractPattern,AbstractChar}, haystack::AbstractString)
 
