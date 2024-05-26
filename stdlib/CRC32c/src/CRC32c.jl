@@ -8,7 +8,7 @@ See [`CRC32c.crc32c`](@ref) for more information.
 module CRC32c
 
 import Base.FastContiguousSubArray
-import Base: DenseArrayType
+import Base: DenseBytes
 
 export crc32c
 
