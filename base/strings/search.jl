@@ -15,18 +15,18 @@ abstract type AbstractPattern end
 # This deserves a better solution - see #53178.
 # If such a better solution comes in place, these unions should be replaced.
 const DenseInt8 = Union{
-    <:DenseArray{Int8},
-    <:FastContiguousSubArray{Int8,N,<:DenseArray} where N
+    DenseArray{Int8},
+    FastContiguousSubArray{Int8,N,<:DenseArray} where N
 }
 
 # Note: This union is different from that above in that it includes CodeUnits.
 # Currently, this is redundant as CodeUnits <: DenseVector, but this subtyping
 # is buggy and may be removed in the future, see #54002
 const DenseUInt8 = Union{
-    <:DenseArray{UInt8},
-    <:FastContiguousSubArray{UInt8,N,<:DenseArray} where N,
+    DenseArray{UInt8},
+    FastContiguousSubArray{UInt8,N,<:DenseArray} where N,
     CodeUnits{UInt8, <:Union{String, SubString{String}}},
-    <:FastContiguousSubArray{UInt8,N,<:CodeUnits{UInt8, <:Union{String, SubString{String}}}} where N,
+    FastContiguousSubArray{UInt8,N,<:CodeUnits{UInt8, <:Union{String, SubString{String}}}} where N,
 }
 
 const DenseUInt8OrInt8 = Union{DenseUInt8, DenseInt8}
