@@ -408,11 +408,15 @@ should have at the terminal.
 
 ### `NO_COLOR`
 
-If set to anything besides `""`, then colored text will be disabled on the REPL. Can be overridden with the `--color=yes` flag. This environmental variable is [commonly recognized by command-line applications](https://no-color.org/).
+If set to anything besides `""`, then colored text will be disabled on the REPL. Can be
+overridden with the `--color=yes` flag. This environmental variable is [commonly recognized
+by command-line applications](https://no-color.org/).
 
 ### `FORCE_COLOR`
 
-If set to anything besides `""`, then colored text will be forced on the REPL. Can *not* be overridden with the `--color` flag. This environmental variable is [commonly recognized by command-line applications](https://force-color.org/).
+If set to anything besides `""`, then colored text will be forced on the REPL. Can *not* be
+overridden with the `--color` flag. This environmental variable is [commonly recognized by
+command-line applications](https://force-color.org/).
 
 ## System and Package Image Building
 
