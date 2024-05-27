@@ -47,11 +47,6 @@ function precompile_test_harness(@nospecialize(f), separate::Bool)
     nothing
 end
 
-@testset "object_build_id" begin
-    @test Base.object_build_id([1]) === nothing
-    @test Base.object_build_id(Base) == Base.module_build_id(Base)
-end
-
 # method root provenance
 
 rootid(m::Module) = Base.module_build_id(Base.parentmodule(m)) % UInt64
@@ -387,9 +382,6 @@ precompile_test_harness(false) do dir
         @test objectid(Foo.a_vec_int) === Foo.oid_vec_int
         @test objectid(Foo.a_mat_int) === Foo.oid_mat_int
         @test Foo.oid_vec_int !== Foo.oid_mat_int
-        @test Base.object_build_id(Foo.a_vec_int) == Base.object_build_id(Foo.a_mat_int)
-        @test Base.object_build_id(Foo) == Base.module_build_id(Foo)
-        @test Base.object_build_id(Foo.a_vec_int) == Base.module_build_id(Foo)
     end
 
     @eval begin function ccallable_test()
@@ -1778,14 +1770,10 @@ let newinterp_path = abspath("compiler/newinterp.jl")
                 @test isdefined(ci, :next)
                 @test ci.owner === nothing
                 @test ci.max_world == typemax(UInt)
-                @test Base.module_build_id(CustomAbstractInterpreterCaching) ==
-                    Base.object_build_id(ci)
                 ci = ci.next
                 @test !isdefined(ci, :next)
                 @test ci.owner === cache_owner
                 @test ci.max_world == typemax(UInt)
-                @test Base.module_build_id(CustomAbstractInterpreterCaching) ==
-                    Base.object_build_id(ci)
             end
             let m = only(methods(sum, (Vector{Float64},)))
                 found = false
@@ -1795,14 +1783,10 @@ let newinterp_path = abspath("compiler/newinterp.jl")
                         @test isdefined(ci, :next)
                         @test ci.owner === cache_owner
                         @test ci.max_world == typemax(UInt)
-                        @test Base.module_build_id(CustomAbstractInterpreterCaching) ==
-                            Base.object_build_id(ci)
                         ci = ci.next
                         @test !isdefined(ci, :next)
                         @test ci.owner === nothing
                         @test ci.max_world == typemax(UInt)
-                        @test Base.module_build_id(CustomAbstractInterpreterCaching) ==
-                            Base.object_build_id(ci)
                         found = true
                         break
                     end
