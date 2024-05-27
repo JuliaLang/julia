@@ -2245,10 +2245,17 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
 
 std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine(std::string targettriple, std::string cpu) const
 {
-    cpu = (cpu == "") ? getTargetCPU() : cpu;
+    std::string Error;
+    const llvm::Target* target = llvm::TargetRegistry::lookupTarget(targettriple, Error);
+    if (!target) {
+        jl_error("Target lookup failed: Given Target Not Found. Will use default Target Machine");
+    }
+    target = (!target) ? &getTarget() : target;
     targettriple = (targettriple == "") ? getTargetTriple().str() : targettriple;
-    auto NewTM = std::unique_ptr<TargetMachine>(getTarget()
-        .createTargetMachine(
+    cpu = (cpu == "") ? getTargetCPU() : cpu;
+
+    auto NewTM = std::unique_ptr<TargetMachine>(target
+        ->createTargetMachine(
             targettriple,
             cpu,
             getTargetFeatureString(),
