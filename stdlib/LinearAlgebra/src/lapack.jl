@@ -7156,7 +7156,6 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         #     ..
         function lacpy!(B::AbstractMatrix{$elty}, A::AbstractMatrix{$elty}, uplo::AbstractChar)
             require_one_based_indexing(A, B)
-            chkuplo(uplo)
             chkstride1(A, B)
             m, n = size(A)
             m1, n1 = size(B)
@@ -7166,12 +7165,14 @@ for (fn, elty) in ((:dlacpy_, :Float64),
                 else
                     (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
                 end
-            else # uplo == 'L'
+            elseif uplo == 'L'
                 if m < n
                     (m1 < m || n1 < m) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$m)"))
                 else
                     (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
                 end
+            else
+                (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
             end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
