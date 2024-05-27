@@ -229,16 +229,18 @@ module A
 end
 end # module TestMod42092
 
-let
-    @test Set(names(TestMod42092.A)) == Set([:A])
-    @test Set(names(TestMod42092.A, imported = true)) == Set([:A, :M2])
-    @test Set(names(TestMod42092.A, usings = true)) == Set([:A, :f, :C, :y, :M1, :m1_x])
-    @test Set(names(TestMod42092.A, all = true)) == Set([:A, :B, :C, :eval, :include, Symbol("#eval"), Symbol("#include")])
-    @test Set(names(TestMod42092.A, all = true, usings = true)) == Set([:A, :B, :C, :f, :y, :M1, :m1_x, :eval, :include, Symbol("#eval"), Symbol("#include")])
-    @test Set(names(TestMod42092.A, imported = true, usings = true)) == Set([:A, :M2, :f, :C, :y, :M1, :m1_x])
-    @test Set(names(TestMod42092.A, all=true, imported = true, usings = true)) == Set([:A, :B, :C, :M2, :f, :y, :M1, :m1_x, :eval, :include, Symbol("#eval"), Symbol("#include")])
+let defaultset = Set((:A,))
+    imported = Set((:M2,))
+    usings = Set((:A, :f, :C, :y, :M1, :m1_x))
+    allset = Set((:A, :B, :C, :eval, :include, Symbol("#eval"), Symbol("#include")))
+    @test Set(names(TestMod42092.A)) == defaultset
+    @test Set(names(TestMod42092.A, imported=true)) == defaultset ∪ imported
+    @test Set(names(TestMod42092.A, usings=true)) == defaultset ∪ usings
+    @test Set(names(TestMod42092.A, all=true)) == allset
+    @test Set(names(TestMod42092.A, all=true, usings=true)) == allset ∪ usings
+    @test Set(names(TestMod42092.A, imported=true, usings=true)) == defaultset ∪ imported ∪ usings
+    @test Set(names(TestMod42092.A, all=true, imported=true, usings=true)) == allset ∪ imported ∪ usings
 end
-
 
 let
     using .TestMod7648

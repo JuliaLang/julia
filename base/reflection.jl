@@ -95,8 +95,7 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
 
 See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
-names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
-    sort!(unsorted_names(m; all, imported, usings))
+names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
 unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
     ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, usings)
 
