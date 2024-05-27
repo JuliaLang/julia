@@ -7156,10 +7156,23 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         #     ..
         function lacpy!(B::AbstractMatrix{$elty}, A::AbstractMatrix{$elty}, uplo::AbstractChar)
             require_one_based_indexing(A, B)
+            chkuplo(uplo)
             chkstride1(A, B)
-            m,n = size(A)
-            m1,n1 = size(B)
-            (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+            m, n = size(A)
+            m1, n1 = size(B)
+            if uplo == 'U'
+                if n < m
+                    (m1 < n || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($n,$n)"))
+                else
+                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+                end
+            else # uplo == 'L'
+                if m < n
+                    (m1 < m || n1 < m) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$m)"))
+                else
+                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+                end
+            end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             ccall((@blasfunc($fn), libblastrampoline), Cvoid,
