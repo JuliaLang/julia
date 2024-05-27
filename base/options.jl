@@ -102,12 +102,13 @@ function is_file_tracked(file::Symbol)
 end
 
 function colored_text(opts::JLOptions)
-    if !isempty(get(ENV, "FORCE_COLOR", ""))
-        color = true
-    elseif !isempty(get(ENV, "NO_COLOR", "")) && opts.color == 0  # `--color=auto`
+    color = nothing
+    if opts.color != 0
+        color = (opts.color == 1)
+    elseif haskey(ENV, "NO_COLOR")
         color = false
-    else
-        color = (opts.color != 0) ? (opts.color == 1) : nothing
+    elseif haskey(ENV, "FORCE_COLOR")
+        color = true
     end
     return color
 end
