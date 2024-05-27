@@ -100,9 +100,9 @@ if !(Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le)
     s = open(file, "r")
     m = mmap(s)
     @test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
-    finalize(m); m=nothing; GC.gc()
+    finalize(m); m=nothing;
 end
-
+GC.gc()
 write(file, "Hello World\n")
 
 s = open(file, "r")
