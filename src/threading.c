@@ -951,6 +951,7 @@ JL_DLLEXPORT int jl_alignment(size_t sz)
 #include <time.h>
 
 volatile int heartbeat_enabled;
+uv_thread_t heartbeat_uvtid;
 uv_sem_t heartbeat_on_sem,              // jl_heartbeat_enable -> thread
          heartbeat_off_sem;             // thread -> jl_heartbeat_enable
 int heartbeat_interval_s,
@@ -965,12 +966,17 @@ void jl_heartbeat_threadfun(void *arg);
 // start the heartbeat thread with heartbeats disabled
 void jl_init_heartbeat(void)
 {
-    uv_thread_t uvtid;
     heartbeat_enabled = 0;
     uv_sem_init(&heartbeat_on_sem, 0);
     uv_sem_init(&heartbeat_off_sem, 0);
-    uv_thread_create(&uvtid, jl_heartbeat_threadfun, NULL);
-    uv_thread_detach(&uvtid);
+    uv_thread_create(&heartbeat_uvtid, jl_heartbeat_threadfun, NULL);
+    uv_thread_detach(&heartbeat_uvtid);
+}
+
+int jl_inside_heartbeat_thread(void)
+{
+    uv_thread_t curr_uvtid = uv_thread_self();
+    return curr_uvtid == heartbeat_uvtid;
 }
 
 // enable/disable heartbeats
@@ -1141,6 +1147,11 @@ void jl_heartbeat_threadfun(void *arg)
 
 void jl_init_heartbeat(void)
 {
+}
+
+int jl_inside_heartbeat_thread(void)
+{
+    return 0;
 }
 
 JL_DLLEXPORT int jl_heartbeat_enable(int heartbeat_s, int show_tasks_after_n,
