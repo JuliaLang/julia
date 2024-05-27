@@ -824,6 +824,9 @@ julia> s = takestring!(io)
 julia> isempty(take!(io)) # io is now empty
 true
 ```
+
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
 """
 function takestring!(io::IOBuffer)
     nbytes = filesize(io)
