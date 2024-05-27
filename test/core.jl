@@ -6251,6 +6251,16 @@ let
     @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A5)), 6)
 end
 
+# More unsafe_wrap
+let
+    a = [1, 2, 3]
+    GC.@preserve a begin
+        m = unsafe_wrap(Memory{Int}, pointer(a), (3,))
+        @test m == a
+        @test m isa Memory{Int}
+    end
+end
+
 # copyto!
 A23567 = Vector{Union{Float64, Nothing}}(undef, 5)
 B23567 = collect(Union{Float64, Nothing}, 1.0:3.0)
