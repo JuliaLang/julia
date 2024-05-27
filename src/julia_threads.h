@@ -373,6 +373,9 @@ JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
 
+JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize);
+JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize);
+
 #ifdef __cplusplus
 }
 #endif
