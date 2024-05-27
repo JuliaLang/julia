@@ -406,17 +406,18 @@ should have at the terminal.
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
-### `NO_COLOR`
+### [`NO_COLOR`](@id NO_COLOR)
 
-If set to anything besides `""`, then colored text will be disabled on the REPL. Can be
-overridden with the `--color=yes` flag. This environmental variable is [commonly recognized
-by command-line applications](https://no-color.org/).
+When this variable is present and not an empty string (regardless of its value) then colored
+text will be disabled on the REPL. Can be overridden with the flag `--color=yes` or with the
+environmental variable [`FORCE_COLOR`](@ref FORCE_COLOR). This environmental variable is
+[commonly recognized by command-line applications](https://no-color.org/).
 
-### `FORCE_COLOR`
+### [`FORCE_COLOR`](@id FORCE_COLOR)
 
-If set to anything besides `""`, then colored text will be forced on the REPL. Can *not* be
-overridden with the `--color` flag. This environmental variable is [commonly recognized by
-command-line applications](https://force-color.org/).
+When this variable is present and not an empty string (regardless of its value) then
+colored text will be enabled on the REPL. Can be overridden with the flag `--color=no`. This
+environmental variable is [commonly recognized by command-line applications](https://force-color.org/).
 
 ## System and Package Image Building
 
