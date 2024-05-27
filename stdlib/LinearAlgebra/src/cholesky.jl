@@ -255,8 +255,16 @@ function _chol!(x::Number, _)
     rx = real(x)
     iszero(rx) && return (rx, convert(BlasInt, 1))
     rxr = sqrt(abs(rx))
-    rval =  convert(promote_type(typeof(x), typeof(rxr)), rxr)
+    rval = convert(promote_type(typeof(x), typeof(rxr)), rxr)
     return (rval, convert(BlasInt, rx != abs(x)))
+end
+
+function _cholpivoted!(x::Number, tol)
+    rx = real(x)
+    iszero(rx) && return (rx, convert(BlasInt, 1))
+    rxr = sqrt(abs(rx))
+    rval = convert(promote_type(typeof(x), typeof(rxr)), rxr)
+    return (rval, convert(BlasInt, !(rx == abs(x) > tol)))
 end
 
 ## for StridedMatrices, check that matrix is symmetric/Hermitian
@@ -333,12 +341,12 @@ e.g. for integer types.
 function cholesky!(A::AbstractMatrix, ::RowMaximum; tol = 0.0, check::Bool = true)
     checksquare(A)
     if !ishermitian(A)
-        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
+        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
                             tol, convert(BlasInt, -1))
-        check && chkfullrank(C)
+        check && checkpositivedefinite(convert(BlasInt, -1))
         return C
     else
-        return cholesky!(Hermitian(A), RowMaximum(); tol = tol, check = check)
+        return cholesky!(Hermitian(A), RowMaximum(); tol, check)
     end
 end
 @deprecate cholesky!(A::StridedMatrix, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
@@ -738,7 +746,7 @@ end
 
 function chkfullrank(C::CholeskyPivoted)
     if C.rank < size(C.factors, 1)
-        throw(RankDeficientException(C.info))
+        throw(RankDeficientException(C.rank))
     end
 end
 
