@@ -369,7 +369,7 @@ end
 
 function showerror(io::IO, exc::FieldError)
     @nospecialize
-    print(io, "FieldError: type $(exc.type) has no field $(exc.field)")
+    print(io, "FieldError: type $(exc.type |> nameof) has no field $(exc.field)")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -1097,7 +1097,7 @@ function fielderror_hint_handler(io, exc)
     @nospecialize
     field = exc.field
     type = exc.type
-    if type == :Dict
+    if type <: Dict
         println(io,
             """
             \nDid you mean to access dict values using key: `$field` ?
