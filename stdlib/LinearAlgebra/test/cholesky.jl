@@ -275,11 +275,23 @@ end
         @test !issuccess(cholesky!(copy(M); check = false))
     end
     if T !== BigFloat # generic pivoted cholesky is not implemented
-        for M in (A, Hermitian(A), B)
-            @test_throws PosDefException cholesky(M, RowMaximum())
-            @test_throws PosDefException cholesky!(copy(M), RowMaximum())
-            @test_throws PosDefException cholesky(M, RowMaximum(); check = true)
-            @test_throws PosDefException cholesky!(copy(M), RowMaximum(); check = true)
+        for M in (A, Hermitian(A)) # hermitian, but not semi-positive definite
+            @test_throws RankDeficientException cholesky(M, RowMaximum())
+            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum())
+            @test_throws RankDeficientException cholesky(M, RowMaximum(); check = true)
+            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum(); check = true)
+            @test !issuccess(cholesky(M, RowMaximum(); check = false))
+            @test !issuccess(cholesky!(copy(M), RowMaximum(); check = false))
+            C = cholesky(M, RowMaximum(); check = false)
+            @test_throws RankDeficientException chkfullrank(C)
+            C = cholesky!(copy(M), RowMaximum(); check = false)
+            @test_throws RankDeficientException chkfullrank(C)
+        end
+        for M in (B,) # not hermitian
+            @test_throws PosDefException(-1) cholesky(M, RowMaximum())
+            @test_throws PosDefException(-1) cholesky!(copy(M), RowMaximum())
+            @test_throws PosDefException(-1) cholesky(M, RowMaximum(); check = true)
+            @test_throws PosDefException(-1) cholesky!(copy(M), RowMaximum(); check = true)
             @test !issuccess(cholesky(M, RowMaximum(); check = false))
             @test !issuccess(cholesky!(copy(M), RowMaximum(); check = false))
             C = cholesky(M, RowMaximum(); check = false)
