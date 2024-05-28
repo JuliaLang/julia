@@ -410,14 +410,14 @@ should have at the terminal.
 
 When this variable is present and not an empty string (regardless of its value) then colored
 text will be disabled on the REPL. Can be overridden with the flag `--color=yes` or with the
-environmental variable [`FORCE_COLOR`](@ref FORCE_COLOR). This environmental variable is
+environment variable [`FORCE_COLOR`](@ref FORCE_COLOR). This environment variable is
 [commonly recognized by command-line applications](https://no-color.org/).
 
 ### [`FORCE_COLOR`](@id FORCE_COLOR)
 
 When this variable is present and not an empty string (regardless of its value) then
 colored text will be enabled on the REPL. Can be overridden with the flag `--color=no`. This
-environmental variable is [commonly recognized by command-line applications](https://force-color.org/).
+environment variable is [commonly recognized by command-line applications](https://force-color.org/).
 
 ## System and Package Image Building
 
