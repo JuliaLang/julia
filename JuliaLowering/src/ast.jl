@@ -344,11 +344,6 @@ function is_sym_decl(x)
     k == K"Identifier" || k == K"::"
 end
 
-# Identifier made of underscores
-function is_placeholder(ex)
-    kind(ex) == K"Identifier" && all(==('_'), ex.name_val)
-end
-
 function is_identifier(x)
     k = kind(x)
     k == K"Identifier" || k == K"var" || is_operator(k) || is_macro_name(k)

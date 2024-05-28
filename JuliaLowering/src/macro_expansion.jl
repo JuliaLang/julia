@@ -191,8 +191,11 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     set_scope_layer!(ex, ctx.current_layer.id, false)
     k = kind(ex)
     if k == K"Identifier"
-        # TODO: Insert is_placeholder() transformation here.
-        ex
+        if all(==('_'), ex.name_val)
+            @ast ctx ex ex=>K"Placeholder"
+        else
+            ex
+        end
     elseif k == K"var" || k == K"char" || k == K"parens"
         # Strip "container" nodes
         @chk numchildren(ex) == 1

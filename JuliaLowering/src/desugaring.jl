@@ -179,7 +179,7 @@ function analyze_function_arg(full_ex)
     ex = full_ex
     while true
         k = kind(ex)
-        if k == K"Identifier" || k == K"tuple"
+        if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
             name = ex
             break
         elseif k == K"::"
@@ -279,7 +279,7 @@ function expand_function_def(ctx, ex)
         arg_types = SyntaxList(ctx)
         for (i,arg) in enumerate(args)
             info = analyze_function_arg(arg)
-            aname = (isnothing(info.name) || is_placeholder(info.name)) ?
+            aname = (isnothing(info.name) || kind(info.name) == K"Placeholder") ?
                     unused(ctx, arg) : info.name
             push!(arg_names, aname)
             atype = !isnothing(info.type) ? info.type : Any_type(ctx, arg)
@@ -606,7 +606,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree)
     else
         if k == K"="
             @chk numchildren(ex) == 2
-            if kind(ex[1]) ∉ (K"Identifier", K"SSAValue")
+            if kind(ex[1]) ∉ KSet"Identifier Placeholder SSAValue"
                 TODO(ex, "destructuring assignment")
             end
         end

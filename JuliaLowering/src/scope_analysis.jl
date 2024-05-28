@@ -63,7 +63,7 @@ function _find_scope_vars!(assignments, locals, globals, used_names, ex)
     # elseif k == K"method" TODO static parameters
     elseif k == K"="
         v = decl_var(ex[1])
-        if !(kind(v) in KSet"SSAValue globalref outerref" || is_placeholder(v))
+        if !(kind(v) in KSet"SSAValue globalref outerref Placeholder")
             get!(assignments, VarKey(v), v)
         end
         _find_scope_vars!(assignments, locals, globals, used_names, ex[2])
@@ -339,9 +339,6 @@ end
 function _resolve_scopes!(ctx, ex)
     k = kind(ex)
     if k == K"Identifier"
-        if is_placeholder(ex)
-            return # FIXME - make these K"placeholder"?
-        end
         id = lookup_var(ctx, VarKey(ex))
         setattr!(ctx.graph, ex.id, var_id=id)
     elseif !haschildren(ex) || is_quoted(ex) || k == K"toplevel"

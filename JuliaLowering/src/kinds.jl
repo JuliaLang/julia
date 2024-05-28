@@ -10,6 +10,8 @@ function _insert_kinds()
             # A literal Julia value of any kind, as might be inserted by the AST
             # during macro expansion
             "Value"
+            # An identifier composed entirely of underscores
+            "Placeholder"
             # A (quoted) `Symbol`
             "Symbol"
             # TODO: Use `meta` for inbounds and loopinfo etc?

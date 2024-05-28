@@ -164,6 +164,10 @@ function check_same_graph(x, y)
     end
 end
 
+function similar_graph(x, y)
+    syntax_graph(x).edges === syntax_graph(y).edges
+end
+
 #-------------------------------------------------------------------------------
 struct SyntaxTree{GraphType}
     graph::GraphType
@@ -299,6 +303,25 @@ function sourceref(tree::SyntaxTree)
     end
 end
 
+function is_ancestor(ex, ancestor)
+    if !similar_graph(ex, ancestor)
+        return false
+    end
+    sources = ex.graph.source
+    id::NodeId = ex.id
+    while true
+        s = get(sources, id, nothing)
+        if s isa NodeId
+            id = s
+            if id == ancestor.id
+                return true
+            end
+        else
+            return false
+        end
+    end
+end
+
 JuliaSyntax.filename(tree::SyntaxTree) = filename(sourceref(tree))
 JuliaSyntax.source_location(::Type{LineNumberNode}, tree::SyntaxTree) = source_location(LineNumberNode, sourceref(tree))
 JuliaSyntax.source_location(tree::SyntaxTree) = source_location(sourceref(tree))
@@ -325,12 +348,13 @@ attrsummary(name, value::Number) = "$name=$value"
 function _value_string(ex)
     k = kind(ex)
     str = k == K"Identifier" || k == K"MacroName" || is_operator(k) ? ex.name_val :
-          k == K"SSAValue"   ? "ssa"                 :
-          k == K"core"       ? "core.$(ex.name_val)" :
-          k == K"top"        ? "top.$(ex.name_val)"  :
-          k == K"Symbol"     ? ":$(ex.name_val)" :
-          k == K"globalref"  ? "$(ex.mod).$(ex.name_val)" :
-          k == K"slot"       ? "slot" :
+          k == K"Placeholder" ? ex.name_val :
+          k == K"SSAValue"    ? "ssa"                 :
+          k == K"core"        ? "core.$(ex.name_val)" :
+          k == K"top"         ? "top.$(ex.name_val)"  :
+          k == K"Symbol"      ? ":$(ex.name_val)" :
+          k == K"globalref"   ? "$(ex.mod).$(ex.name_val)" :
+          k == K"slot"        ? "slot" :
           repr(get(ex, :value, nothing))
     id = get(ex, :var_id, nothing)
     if !isnothing(id)

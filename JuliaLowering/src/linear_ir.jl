@@ -154,15 +154,15 @@ end
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"Identifier" || is_literal(k) || k == K"SSAValue" || k == K"quote" || k == K"inert" ||
-            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol"
+            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" || k == K"Placeholder"
         # TODO: other kinds: copyast the_exception $ globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall
+        if needs_value && k == K"Placeholder"
+            # TODO: ensure outterref, globalref work here
+            throw(LoweringError(ex, "all-underscore identifiers are write-only and their values cannot be used in expressions"))
+        end
         if in_tail_pos
             emit_return(ctx, ex, ex)
         elseif needs_value
-            if is_placeholder(ex)
-                # TODO: ensure outterref, globalref work here
-                throw(LoweringError(ex, "all-underscore identifiers are write-only and their values cannot be used in expressions"))
-            end
             ex
         else
             if k == K"Identifier"
@@ -184,19 +184,22 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"="
         lhs = ex[1]
-        # TODO: Handle underscore
-        rhs = compile(ctx, ex[2], true, false)
-        # TODO look up arg-map for renaming if lhs was reassigned
-        if needs_value && !isnothing(rhs)
-            r = emit_assign_tmp(ctx, rhs)
-            emit(ctx, ex, K"=", lhs, r)
-            if in_tail_pos
-                emit_return(ctx, ex, r)
-            else
-                r
-            end
+        if kind(lhs) == K"Placeholder"
+            compile(ctx, ex[2], needs_value, in_tail_pos)
         else
-            emit_assignment(ctx, ex, lhs, rhs)
+            rhs = compile(ctx, ex[2], true, false)
+            # TODO look up arg-map for renaming if lhs was reassigned
+            if needs_value && !isnothing(rhs)
+                r = emit_assign_tmp(ctx, rhs)
+                emit(ctx, ex, K"=", lhs, r)
+                if in_tail_pos
+                    emit_return(ctx, ex, r)
+                else
+                    r
+                end
+            else
+                emit_assignment(ctx, ex, lhs, rhs)
+            end
         end
     elseif k == K"block" || k == K"scope_block"
         nc = numchildren(ex)
