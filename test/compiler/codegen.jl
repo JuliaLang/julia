@@ -938,3 +938,12 @@ BigStructAnyInt() = BigStructAnyInt((Union{Base.inferencebarrier(Float64), Int}=
 @test egal_any54109(Torture1_54109(), Torture1_54109())
 @test egal_any54109(Torture2_54109(), Torture2_54109())
 @test !egal_any54109(Torture1_54109(), Torture1_54109((DefaultOr54109(2.0, false) for i = 1:897)...))
+
+function foo54599()
+    pkgid = Base.identify_package("Test")
+    println(devnull,pkgid)
+    println(devnull, pkgid.uuid)
+    pkgid.uuid
+end
+
+@test foo54599() !== nothing
