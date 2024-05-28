@@ -2245,15 +2245,10 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
 
 std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine(std::string targettriple, std::string cpu) const
 {
-    llvm::InitializeAllTargets();
-    llvm::InitializeAllTargetMCs();
-    llvm::InitializeAllTargetInfos();
-    llvm::InitializeAllAsmParsers();
-    llvm::InitializeAllAsmPrinters();
     std::string Error;
     const llvm::Target* target = llvm::TargetRegistry::lookupTarget(targettriple, Error);
     if (!target) {
-        llvm::errs() << "Error : "<< Error << "\n";
+        // llvm::errs() << "Error : "<< Error << "\n";
     }
     target = (!target) ? &getTarget() : target;
     targettriple = (targettriple == "") ? getTargetTriple().str() : targettriple;
