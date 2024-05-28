@@ -55,6 +55,7 @@ Command-line option changes
   difference between defining a `main` function and executing the code directly at the end of the script ([#50974]).
 * The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
   cause Julia to consider loading existing cache files, but not to create new ones ([#50586], [#52573]).
+* The `--project` argument now accepts `@script` to give a path to a directory with a Project.toml relative to the passed script file. `--project=@script/foo` for the `foo` subdirectory. If no path is given after (i.e. `--project=@script`) then (like `--project=@.`) the directory and its parents are searched for a Project.toml ([#50864] and [#53352])
 
 Multi-threading changes
 -----------------------
