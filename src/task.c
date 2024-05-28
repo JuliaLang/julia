@@ -1649,6 +1649,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     JL_GC_PROMISE_ROOTED(ct);
     jl_set_pgcstack(&ct->gcstack);
     assert(jl_current_task == ct);
+    assert(jl_current_task->ptls == ptls);
 
 #ifdef _COMPILER_TSAN_ENABLED_
     ct->ctx.tsan_state = __tsan_get_current_fiber();

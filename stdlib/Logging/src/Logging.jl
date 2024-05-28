@@ -8,8 +8,6 @@ and available by default.
 """
 module Logging
 
-using StyledStrings
-
 # Import the CoreLogging implementation into Logging as new const bindings.
 # Doing it this way (rather than with import) makes these symbols accessible to
 # tab completion.
@@ -70,7 +68,10 @@ Alias for [`LogLevel(1_000_001)`](@ref LogLevel).
 const AboveMaxLevel = Base.CoreLogging.AboveMaxLevel
 
 using Base.CoreLogging:
-    closed_stream
+    closed_stream, ConsoleLogger, default_metafmt
+
+# Some packages use `Logging.default_logcolor`
+const default_logcolor = Base.CoreLogging.default_logcolor
 
 export
     AbstractLogger,
@@ -94,8 +95,6 @@ export
     Error,
     AboveMaxLevel
 
-include("ConsoleLogger.jl")
-
 # The following are also part of the public API, but not exported:
 #
 # 1. Log levels:
@@ -103,9 +102,5 @@ include("ConsoleLogger.jl")
 #
 # 2. AbstractLogger message related functions:
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
-
-function __init__()
-    global_logger(ConsoleLogger())
-end
 
 end

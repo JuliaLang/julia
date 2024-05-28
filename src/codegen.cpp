@@ -3180,22 +3180,16 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     if (bp == NULL)
         return jl_cgval_t();
     bp = julia_binding_pvalue(ctx, bp);
+    jl_value_t *ty = nullptr;
     if (bnd) {
         jl_value_t *v = jl_atomic_load_acquire(&bnd->value); // acquire value for ty
-        if (v != NULL) {
-            if (bnd->constp)
-                return mark_julia_const(ctx, v);
-            LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-            setName(ctx.emission_context, v, jl_symbol_name(name));
-            v->setOrdering(order);
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
-            ai.decorateInst(v);
-            jl_value_t *ty = jl_atomic_load_relaxed(&bnd->ty);
-            return mark_julia_type(ctx, v, true, ty);
-        }
+        if (v != NULL && bnd->constp)
+            return mark_julia_const(ctx, v);
+        ty = jl_atomic_load_relaxed(&bnd->ty);
     }
-    // todo: use type info to avoid undef check
-    return emit_checked_var(ctx, bp, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding);
+    if (ty == nullptr)
+        ty = (jl_value_t*)jl_any_type;
+    return update_julia_type(ctx, emit_checked_var(ctx, bp, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
 }
 
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
@@ -3799,6 +3793,8 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     bool needlock = isatomic && layout->size > MAX_ATOMIC_SIZE;
     size_t elsz = layout->size;
     size_t al = layout->alignment;
+    if (al > JL_HEAP_ALIGNMENT)
+        al = JL_HEAP_ALIGNMENT;
     if (isatomic == (order == jl_memory_order_notatomic)) {
         emit_atomic_error(ctx,
                 issetmemory ?
@@ -3876,7 +3872,7 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
         ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, idx0);
         *ret = union_store(ctx, data, ptindex, val, cmp, ety,
-            ctx.tbaa().tbaa_arraybuf, nullptr, ctx.tbaa().tbaa_arrayselbyte,
+            ctx.tbaa().tbaa_arraybuf, ctx.tbaa().tbaa_arrayselbyte,
             Order, FailOrder,
             nullptr, issetmemory, isreplacememory, isswapmemory, ismodifymemory, issetmemoryonce,
             modifyop, fname);
@@ -4126,6 +4122,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             bool isunion = layout->flags.arrayelem_isunion;
             size_t elsz = layout->size;
             size_t al = layout->alignment;
+            if (al > JL_HEAP_ALIGNMENT)
+                al = JL_HEAP_ALIGNMENT;
             bool needlock = isatomic && !isboxed && elsz > MAX_ATOMIC_SIZE;
             AtomicOrdering Order = (needlock || order <= jl_memory_order_notatomic)
                                     ? (isboxed ? AtomicOrdering::Unordered : AtomicOrdering::NotAtomic)
@@ -5455,7 +5453,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
         }
         jl_binding_t *bnd = jl_get_binding(modu, name);
         if (bnd) {
-            if (jl_atomic_load_relaxed(&bnd->value) != NULL)
+            if (jl_atomic_load_acquire(&bnd->value) != NULL && bnd->constp)
                 return mark_julia_const(ctx, jl_true);
             Value *bp = julia_binding_gv(ctx, bnd);
             bp = julia_binding_pvalue(ctx, bp);

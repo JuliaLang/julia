@@ -2,8 +2,6 @@
 
 module HeapSnapshot
 
-using Unicode
-
 """
     assemble_snapshot(filepath::AbstractString, out_file::AbstractString)
 
@@ -236,7 +234,7 @@ function print_str_escape_json(stream::IO, s::AbstractString)
             print(stream, "\\t")
         elseif '\x00' <= c <= '\x1f'
             print(stream, "\\u", lpad(string(UInt16(c), base=16), 4, '0'))
-        elseif !Unicode.isassigned(c)
+        elseif !isvalid(c)
             # we have to do this because vscode's viewer doesn't like the replace character
             print(stream, "[invalid unicode character]")
         else

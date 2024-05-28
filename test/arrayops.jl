@@ -3203,6 +3203,7 @@ end
     @test @inferred(view(mem, 3:8))::Vector{Int} == 13:18
     @test @inferred(view(mem, 20:19))::Vector{Int} == []
     @test @inferred(view(mem, -5:-7))::Vector{Int} == []
+    @test @inferred(view(mem, :))::Vector{Int} == mem
     @test @inferred(reshape(mem, 5, 2))::Matrix{Int} == reshape(11:20, 5, 2)
 
     # 53990
@@ -3217,6 +3218,7 @@ end
 
     @test @inferred(view(empty_mem, 1:0))::Vector{Module} == []
     @test @inferred(view(empty_mem, 10:3))::Vector{Module} == []
+    @test @inferred(view(empty_mem, :))::Vector{Module} == empty_mem
     @test isempty(@inferred(reshape(empty_mem, 0, 7, 1))::Array{Module, 3})
 
     offset_inds = OffsetArrays.IdOffsetRange(values=3:6, indices=53:56)

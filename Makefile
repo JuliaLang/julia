@@ -61,6 +61,10 @@ $(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$$(bu
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
+# Build the HTML docs (skipped if already exists, notably in tarballs)
+$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
+	@$(MAKE) docs
+
 julia-symlink: julia-cli-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
 	echo '@"%~dp0/'"$$(echo '$(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE))')"'" %*' | tr / '\\' > $(BUILDROOT)/julia.bat
@@ -272,7 +276,7 @@ define stringreplace
 endef
 
 
-install: $(build_depsbindir)/stringreplace docs
+install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) $(JULIA_BUILD_MODE)
 	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir) $(private_libexecdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
@@ -530,7 +534,7 @@ app:
 darwinframework:
 	$(MAKE) -C $(JULIAHOME)/contrib/mac/framework
 
-light-source-dist.tmp: docs
+light-source-dist.tmp: $(BUILDROOT)/doc/_build/html/en/index.html
 ifneq ($(BUILDROOT),$(JULIAHOME))
 	$(error make light-source-dist does not work in out-of-tree builds)
 endif

@@ -401,8 +401,11 @@ include("weakkeydict.jl")
 include("scopedvalues.jl")
 using .ScopedValues
 
+# metaprogramming
+include("meta.jl")
+
 # Logging
-include("logging.jl")
+include("logging/logging.jl")
 using .CoreLogging
 
 include("env.jl")
@@ -493,9 +496,6 @@ include("combinatorics.jl")
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
-
-# metaprogramming
-include("meta.jl")
 
 # Stack frames and traces
 include("stacktraces.jl")
@@ -633,6 +633,8 @@ function __init__()
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
     end
+
+    CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end
 

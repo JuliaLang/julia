@@ -5645,3 +5645,12 @@ end
 @test issue53590(true, false) == Real
 @test issue53590(false, false) == Float64
 @test issue53590(false, true) == Real
+
+# issue #53585
+let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
+    @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
+    @test only(Base.return_types(vcat, t)) == Vector{Float64}
+end
+
+# fieldcount on `Tuple` should constant fold, even though `.fields` not const
+@test fully_eliminated(Base.fieldcount, Tuple{Type{Tuple{Nothing, Int, Int}}})

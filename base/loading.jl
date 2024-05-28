@@ -2224,7 +2224,7 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         run_package_callbacks(uuidkey)
     else
         m = get(loaded_modules, uuidkey, nothing)
-        if m !== nothing
+        if m !== nothing && !haskey(explicit_loaded_modules, uuidkey)
             explicit_loaded_modules[uuidkey] = m
             run_package_callbacks(uuidkey)
         end
@@ -2499,7 +2499,7 @@ function require_stdlib(uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
         run_package_callbacks(uuidkey)
     else
         # if the user deleted their bundled depot, next try to load it completely normally
-        newm = _require(uuidkey)
+        newm = _require_prelocked(uuidkey)
     end
     return newm
     end

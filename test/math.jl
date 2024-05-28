@@ -47,6 +47,17 @@ has_fma = Dict(
         clamp!(x, 1, 3)
         @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
     end
+
+    @test clamp(typemax(UInt64), Int64) === typemax(Int64)
+    @test clamp(typemin(Int), UInt64) === typemin(UInt64)
+    @test clamp(Int16(-1), UInt16) === UInt16(0)
+    @test clamp(-1, 2, UInt(0)) === UInt(2)
+    @test clamp(typemax(UInt16), Int16) === Int16(32767)
+
+    # clamp should not allocate a BigInt for typemax(Int16)
+    x = big(2) ^ 100
+    @test (@allocated clamp(x, Int16)) == 0
+
 end
 
 @testset "constants" begin

@@ -78,7 +78,7 @@ find_uplo(bc::Broadcasted) = mapfoldl(find_uplo, merge_uplos, Broadcast.cat_nest
 function structured_broadcast_alloc(bc, ::Type{Bidiagonal}, ::Type{ElType}, n) where {ElType}
     uplo = n > 0 ? find_uplo(bc) : 'U'
     n1 = max(n - 1, 0)
-    if uplo == 'T'
+    if count_structedmatrix(Bidiagonal, bc) > 1 && uplo == 'T'
         return Tridiagonal(Array{ElType}(undef, n1), Array{ElType}(undef, n), Array{ElType}(undef, n1))
     end
     return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n1), uplo)
@@ -133,6 +133,8 @@ fails as `zero(::Tuple{Int})` is not defined. However,
 iszerodefined(::Type) = false
 iszerodefined(::Type{<:Number}) = true
 iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
+
+count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_nested(bc); init = 0)
 
 fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
@@ -204,7 +206,7 @@ function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     end
     for i = 1:size(dest, 1)-1
         v = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
-        v == (@inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))) || throw(ArgumentError("broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
+        v == (@inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))) || throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
         dest.ev[i] = v
     end
     return dest

@@ -312,3 +312,4 @@ end
         $(Expr(:new, :(Array{T, 1}), :ref, :dims))
     end
 end
+view(m::GenericMemory, inds::Colon) = view(m, eachindex(m))
