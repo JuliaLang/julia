@@ -2780,8 +2780,8 @@ static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_da
         }
     }
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
-        return ctx.tbaa().tbaa_const; //TODO: it seems odd to have a field with a tbaa that doesn't alias it's containings struct's tbaa
-                                      //Does the fact that this is marked as constant make this fine? 
+        return ctx.tbaa().tbaa_const; //TODO: it seems odd to have a field with a tbaa that doesn't alias it's containing struct's tbaa
+                                      //Does the fact that this is marked as constant make this fine?
     return tbaa;
 }
 
