@@ -404,8 +404,8 @@ end
     @test isempty(findall(isequal('K'), ""))
     @test isempty(findall(isequal('α'), ""))
 
-    # Finds an invalid char ONLY if it's at a char boundrary in the string,
-    # i.e. iterating the string would emit char character.
+    # Finds an invalid char ONLY if it's at a char boundary in the string,
+    # i.e. iterating the string would emit the given char.
     findall(==('\xfe'), "abκæøc\xfeα\xfeβå!") == [10, 13]
     findall(==('\xaf'), "abκæ读α\xe8\xaf\xfeβå!") == Int[]
 end
