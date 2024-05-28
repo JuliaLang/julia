@@ -992,11 +992,7 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 }
 
 uint8_t _binding_is_from_explicit_using(jl_binding_t *b) {
-    return (jl_atomic_load_relaxed(&b->owner) != NULL && b->owner != b && !b->imported &&
-            // Modules implicitly get all exported names from Base and Core as if they had
-            // written `using Base`, but we don't show those via `names()`.
-            // b->owner->value != (jl_value_t*)jl_base_module && b->owner->value != (jl_value_t*)jl_core_module);
-            b->globalref->mod != jl_base_module && b->globalref->mod != jl_core_module);
+    return (jl_atomic_load_relaxed(&b->owner) != NULL && b->owner != b && !b->imported);
 }
 
 void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
@@ -1037,15 +1033,13 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, 
     if (usings) {
         for(int i=(int)m->usings.len-1; i >= 0; --i) {
             jl_module_t *imp = module_usings_getidx(m, i);
-            if (imp != jl_base_module && imp != jl_core_module) {
-                // Add all the _exported_ names from imp into a.
-                _jl_module_names_into_array(a, imp, 0, 0, 0);
-                // Add the name of imp itself, unless the user requested `all=true` and it's
-                // a submodule of `m`, since then its name would have already been added by
-                // `all=true`, since it's a binding in `m`.
-                if (!all || imp->parent != m) {
-                    _append_symbol_to_bindings_array(a, imp->name);
-                }
+            // Add all the _exported_ names from imp into a.
+            _jl_module_names_into_array(a, imp, 0, 0, 0);
+            // Add the name of imp itself, unless the user requested `all=true` and it's
+            // a submodule of `m`, since then its name would have already been added by
+            // `all=true`, since it's a binding in `m`.
+            if (!all || imp->parent != m) {
+                _append_symbol_to_bindings_array(a, imp->name);
             }
         }
     }

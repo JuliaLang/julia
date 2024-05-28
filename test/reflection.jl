@@ -136,7 +136,7 @@ using Test
 import Base.convert
 import ..curmod_name, ..curmod
 using ..TestMod36529: x36529   # doesn't import TestMod36529 or y36529, even though it's exported
-export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
+export a9475, c7648, f9475, foo7648, foo7648_nomethods, Foo7648
 
 const c7648 = 8
 d7648 = 9
@@ -149,10 +149,11 @@ module TestModSub9475
     using Test
     using ..TestMod7648
     import ..curmod_name
-    export a9475, foo9475
+    export a9475, f9475, f42092
     a9475 = 5
     b9475 = 7
-    foo9475(x) = x
+    f9475(x) = x
+    f42092(x) = x
     let
         @test Base.binding_module(@__MODULE__, :a9475) == @__MODULE__
         @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
@@ -176,28 +177,24 @@ let
     @test Base.binding_module(TestMod7648, :d7648) == TestMod7648
     @test Base.binding_module(TestMod7648, :a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
-    @test Set(names(TestMod7648))==Set([:TestMod7648, :a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods, :Foo7648])
-    @test Set(names(TestMod7648, all = true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
-                                                :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                                :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include")])
-    @test Set(names(TestMod7648, all = true, imported = true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
-                                                      :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                                      :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include"),
-                                                      :convert, :curmod_name, :curmod])
-    @test Set(names(TestMod7648, usings = true)) == Set([:x36529, :Test,  Symbol("@inferred"), Symbol("@test"), Symbol("@test_broken"),
-                                        Symbol("@test_deprecated"), Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"),
-                                        Symbol("@test_throws"), Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict,
-                                        :GenericOrder, :GenericSet, :GenericString, :Test, :TestSetException, :detect_ambiguities, :detect_unbound_args,
-                                        :TestMod7648, :TestModSub9475, :TestMod7648, :a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods,
-                                        :Foo7648, Symbol("@__MODULE__"), :Base, :LogRecord, :(==), :(===), :TestLogger])
-    @test Set(names(TestMod7648, all = true, usings = true)) == Set([:x36529, :Test,  Symbol("@inferred"), Symbol("@test"), Symbol("@test_broken"),
-                                        Symbol("@test_deprecated"), Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"),
-                                        Symbol("@test_throws"), Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict,
-                                        :GenericOrder, :GenericSet, :GenericString, :Test, :TestSetException, :detect_ambiguities, :detect_unbound_args,
-                                        :TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
-                                        :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                        :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include"), Symbol("@__MODULE__"), :Base,
-                                        :LogRecord, :(==), :(===), :TestLogger])
+    defaultset = Set(Symbol[:Foo7648, :TestMod7648, :a9475, :c7648, :f9475, :foo7648, :foo7648_nomethods])
+    allset = defaultset ∪ Set(Symbol[
+        Symbol("#eval"), Symbol("#foo7648"), Symbol("#foo7648_nomethods"), Symbol("#include"),
+        :TestModSub9475, :d7648, :eval, :f7648, :include])
+    imported = Set(Symbol[:convert, :curmod_name, :curmod])
+    usings_from_Test = Set(Symbol[
+        Symbol("@inferred"), Symbol("@test"), Symbol("@test_broken"), Symbol("@test_deprecated"),
+        Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"), Symbol("@test_throws"),
+        Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict, :GenericOrder,
+        :GenericSet, :GenericString, :LogRecord, :Test, :TestLogger, :TestSetException,
+        :detect_ambiguities, :detect_unbound_args])
+    usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
+    usings = Set(Symbol[:x36529, :TestModSub9475, :f42092]) ∪ usings_from_Test ∪ usings_from_Base
+    @test Set(names(TestMod7648)) == defaultset
+    @test Set(names(TestMod7648, all=true)) == allset
+    @test Set(names(TestMod7648, all=true, imported=true)) == allset ∪ imported
+    @test Set(names(TestMod7648, usings=true)) == defaultset ∪ usings
+    @test Set(names(TestMod7648, all=true, usings=true)) == allset ∪ usings
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
@@ -231,7 +228,8 @@ end # module TestMod42092
 
 let defaultset = Set((:A,))
     imported = Set((:M2,))
-    usings = Set((:A, :f, :C, :y, :M1, :m1_x))
+    usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
+    usings = Set((:A, :f, :C, :y, :M1, :m1_x)) ∪ usings_from_Base
     allset = Set((:A, :B, :C, :eval, :include, Symbol("#eval"), Symbol("#include")))
     @test Set(names(TestMod42092.A)) == defaultset
     @test Set(names(TestMod42092.A, imported=true)) == defaultset ∪ imported
@@ -250,10 +248,10 @@ let
     @test parentmodule(foo7648, (Any,)) == TestMod7648
     @test parentmodule(foo7648) == TestMod7648
     @test parentmodule(foo7648_nomethods) == TestMod7648
-    @test parentmodule(foo9475, (Any,)) == TestMod7648.TestModSub9475
-    @test parentmodule(foo9475) == TestMod7648.TestModSub9475
+    @test parentmodule(f9475, (Any,)) == TestMod7648.TestModSub9475
+    @test parentmodule(f9475) == TestMod7648.TestModSub9475
     @test parentmodule(Foo7648) == TestMod7648
-    @test parentmodule(first(methods(foo9475))) == TestMod7648.TestModSub9475
+    @test parentmodule(first(methods(f9475))) == TestMod7648.TestModSub9475
     @test parentmodule(first(methods(foo7648))) == TestMod7648
     @test nameof(Foo7648) === :Foo7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
