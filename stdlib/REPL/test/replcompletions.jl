@@ -2138,8 +2138,11 @@ for (s, compl) in (("2*CompletionFoo.nam", "named"),
                    ("CompletionFoo.type_test + CompletionFoo.unicode_αβγ.", "yy"),
                    ("(CompletionFoo.type_test + CompletionFoo.unicode_αβγ).", "xx"),
                    ("foo'CompletionFoo.test!1", "test!12"))
-    c, r = test_complete(s)
-    @test only(c) == compl
+    @testset let s=s, compl=compl
+        c, r = test_complete_noshift(s)
+        @test length(c) == 1
+        @test only(c) == compl
+    end
 end
 
 # allows symbol completion within incomplete :macrocall

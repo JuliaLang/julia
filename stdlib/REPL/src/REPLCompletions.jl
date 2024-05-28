@@ -137,7 +137,6 @@ end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString; kwargs...)
     ssyms = names(mod; kwargs...)
-    # all || filter!(Base.Fix1(Base.isexported, mod), ssyms) # TODO revisit
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
@@ -147,7 +146,8 @@ function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString; 
 end
 
 # REPL Symbol Completions
-function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), context_module::Module=Main)
+function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), context_module::Module;
+                         force::Bool=false)
     mod = context_module
 
     lookup_module = true
@@ -176,20 +176,16 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
-        p = let mod=mod, modname=nameof(mod)
-            (s::Symbol) -> !Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool && !(mod === Main && s === :MainInclude)
+        fmnames = let modname = nameof(mod), is_mod_access = mod!==context_module, is_main = mod===Main
+            filtered_mod_names(mod, name; all=true, imported=true, usings=true) do s::Symbol
+                return (!Base.isdeprecated(mod, s) &&
+                        s != modname &&
+                        ffunc(mod, s)::Bool &&
+                        (!is_mod_access || force || (mod === Core || mod === Base || !isimplicitname(s))) &&
+                        !(is_main && s === :MainInclude))
+            end
         end
-        # Looking for a binding in a module
-        if mod == context_module
-            # special case `Core` and `Base` bindings
-            # - `Core` bindings should be added to every modules
-            # - `Base` bindings should be added to non-bare modules
-            append!(suggestions, filtered_mod_names(p, Core, name))
-            isdefined(mod, :Base) && append!(suggestions, filtered_mod_names(p, Base, name))
-            append!(suggestions, filtered_mod_names(p, mod, name; all=true, imported=true, usings=true))
-        else # dot-accessed module context
-            append!(suggestions, filtered_mod_names(p, mod, name; all=true, usings=true))
-        end
+        append!(suggestions, fmnames)
     elseif val !== nothing # looking for a property of an instance
         try
             for property in propertynames(val, false)
@@ -205,6 +201,10 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         add_field_completions!(suggestions, name, t)
     end
     return suggestions
+end
+
+let implicitnames = delete!(Set(names(Module(); usings=true)), :anonymous) # delete the name of the anonymous module itself
+    global isimplicitname(name::Symbol) = name in implicitnames
 end
 
 function add_field_completions!(suggestions::Vector{Completion}, name::String, @nospecialize(t))
@@ -1065,7 +1065,7 @@ end
 function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc),
                                context_module::Module, string::String, name::String,
                                pos::Int, dotpos::Int, startpos::Int;
-                               comp_keywords=false)
+                               comp_keywords::Bool=false, force::Bool=false)
     ex = nothing
     if comp_keywords
         append!(suggestions, complete_keyword(name))
@@ -1160,7 +1160,7 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
             end
         end
     end
-    append!(suggestions, complete_symbol(ex, name, ffunc, context_module))
+    append!(suggestions, complete_symbol(ex, name, ffunc, context_module; force))
     return sort!(unique(suggestions), by=completion_text), (dotpos+1):pos, true
 end
 
@@ -1227,7 +1227,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         dotpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
         name = string[startpos:pos]
         return complete_identifiers!(Completion[], ffunc, context_module, string, name, pos,
-                                     dotpos, startpos)
+                                     dotpos, startpos; force=shift)
     elseif inc_tag === :cmd
         # TODO: should this call shell_completions instead of partially reimplementing it?
         let m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial)) # fuzzy shell_parse in reverse
@@ -1415,7 +1415,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     dotpos < startpos && (dotpos = startpos - 1)
     return complete_identifiers!(suggestions, ffunc, context_module, string, name, pos,
                                  dotpos, startpos;
-                                 comp_keywords)
+                                 comp_keywords, force=shift)
 end
 
 module_filter(mod::Module, x::Symbol) =

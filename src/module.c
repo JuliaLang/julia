@@ -1001,7 +1001,7 @@ void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
     jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)name);
 }
 
-void _jl_module_names_into_array(jl_array_t* a, jl_module_t *m, int all, int imported, int usings)
+void _jl_module_names_into_array(jl_array_t* a, jl_module_t *m, int all, int imported, int usings, int exported)
 {
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
@@ -1011,8 +1011,8 @@ void _jl_module_names_into_array(jl_array_t* a, jl_module_t *m, int all, int imp
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        if (b->value != (jl_value_t*)m &&
-            (b->publicp ||
+        if ((b->value != (jl_value_t*)m) &&
+            ((exported ? b->exportp : b->publicp) ||
              (imported && b->imported) ||
              (usings && _binding_is_from_explicit_using(b)) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || main_public))) &&
@@ -1029,12 +1029,12 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, 
     JL_GC_PUSH1(&a);
     // First, encode the module's name
     _append_symbol_to_bindings_array(a, m->name);
-    _jl_module_names_into_array(a, m, all, imported, usings);
+    _jl_module_names_into_array(a, m, all, imported, usings, 0);
     if (usings) {
         for(int i=(int)m->usings.len-1; i >= 0; --i) {
             jl_module_t *imp = module_usings_getidx(m, i);
             // Add all the _exported_ names from imp into a.
-            _jl_module_names_into_array(a, imp, 0, 0, 0);
+            _jl_module_names_into_array(a, imp, 0, 0, 0, 1);
             // Add the name of imp itself, unless the user requested `all=true` and it's
             // a submodule of `m`, since then its name would have already been added by
             // `all=true`, since it's a binding in `m`.
