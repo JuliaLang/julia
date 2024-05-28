@@ -70,6 +70,9 @@ const AboveMaxLevel = Base.CoreLogging.AboveMaxLevel
 using Base.CoreLogging:
     closed_stream, ConsoleLogger, default_metafmt
 
+# Some packages use `Logging.default_logcolor`
+const default_logcolor = Base.CoreLogging.default_logcolor
+
 export
     AbstractLogger,
     LogLevel,
