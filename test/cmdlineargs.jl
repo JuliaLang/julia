@@ -429,9 +429,30 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "isinteractive()" -i`) == "true"
 
     # --color
-    @test readchomp(`$exename --color=yes -E "Base.have_color"`) == "true"
-    @test readchomp(`$exename --color=no -E "Base.have_color"`) == "false"
-    @test errors_not_signals(`$exename --color=false`)
+    function color_cmd(; flag, no_color=nothing, force_color=nothing)
+        cmd = `$exename --color=$flag -E "Base.have_color"`
+        return addenv(cmd, "NO_COLOR" => no_color, "FORCE_COLOR" => force_color)
+    end
+
+    @test readchomp(color_cmd(flag="auto")) == "nothing"
+    @test readchomp(color_cmd(flag="no")) == "false"
+    @test readchomp(color_cmd(flag="yes")) == "true"
+    @test errors_not_signals(color_cmd(flag="false"))
+    @test errors_not_signals(color_cmd(flag="true"))
+
+    @test readchomp(color_cmd(flag="auto", no_color="")) == "nothing"
+    @test readchomp(color_cmd(flag="auto", no_color="1")) == "false"
+    @test readchomp(color_cmd(flag="no", no_color="1")) == "false"
+    @test readchomp(color_cmd(flag="yes", no_color="1")) == "true"
+
+    @test readchomp(color_cmd(flag="auto", force_color="")) == "nothing"
+    @test readchomp(color_cmd(flag="auto", force_color="1")) == "true"
+    @test readchomp(color_cmd(flag="no", force_color="1")) == "false"
+    @test readchomp(color_cmd(flag="yes", force_color="1")) == "true"
+
+    @test readchomp(color_cmd(flag="auto", no_color="1", force_color="1")) == "true"
+    @test readchomp(color_cmd(flag="no", no_color="1", force_color="1")) == "false"
+    @test readchomp(color_cmd(flag="yes", no_color="1", force_color="1")) == "true"
 
     # --history-file
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)"
