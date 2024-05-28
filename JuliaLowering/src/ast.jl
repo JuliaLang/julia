@@ -34,46 +34,57 @@ function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
     cs.ids
 end
 
-function makeleaf(graph::SyntaxGraph, srcref, head; attrs...)
+function makeleaf(graph::SyntaxGraph, srcref, proto; attrs...)
     id = newnode!(graph)
     source = srcref isa SyntaxTree ? _node_id(graph, srcref) : srcref
+    ex = SyntaxTree(graph, id)
+    copy_attrs!(ex, proto)
     setattr!(graph, id; source=source, attrs...)
-    sethead!(graph, id, head)
-    return SyntaxTree(graph, id)
+    return ex
 end
 
-function makenode(graph::SyntaxGraph, srcref, head, children...; attrs...)
+function makenode(graph::SyntaxGraph, srcref, proto, children...; attrs...)
     id = newnode!(graph)
     setchildren!(graph, id, _node_ids(graph, children...))
     source = srcref isa SyntaxTree ? _node_id(graph, srcref) : srcref
+    ex = SyntaxTree(graph, id)
+    copy_attrs!(ex, proto)
     setattr!(graph, id; source=source, attrs...)
-    sethead!(graph, id, head)
     return SyntaxTree(graph, id)
 end
 
-function makenode(ctx, srcref, head, children...; attrs...)
-    makenode(syntax_graph(ctx), srcref, head, children...; attrs...)
+function makenode(ctx, srcref, proto, children...; attrs...)
+    makenode(syntax_graph(ctx), srcref, proto, children...; attrs...)
 end
 
-function makeleaf(ctx, srcref, kind; kws...)
-    makeleaf(syntax_graph(ctx), srcref, kind; kws...)
+function makeleaf(ctx, srcref, proto; kws...)
+    makeleaf(syntax_graph(ctx), srcref, proto; kws...)
 end
 
-function makeleaf(ctx, srcref, kind, value; kws...)
+function makeleaf(ctx, srcref, k::Kind, value; kws...)
     graph = syntax_graph(ctx)
-    if kind == K"Identifier" || kind == K"core" || kind == K"top" || kind == K"Symbol" || kind == K"globalref"
-        makeleaf(graph, srcref, kind; name_val=value, kws...)
-    elseif kind == K"SSAValue"
-        makeleaf(graph, srcref, kind; var_id=value, kws...)
+    if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" || k == K"globalref"
+        makeleaf(graph, srcref, k; name_val=value, kws...)
+    elseif k == K"SSAValue"
+        makeleaf(graph, srcref, k; var_id=value, kws...)
     else
-        val = kind == K"Integer" ? convert(Int,     value) :
-              kind == K"Float"   ? convert(Float64, value) :
-              kind == K"String"  ? convert(String,  value) :
-              kind == K"Char"    ? convert(Char,    value) :
-              kind == K"Value"   ? value                   :
-              error("Unexpected leaf kind `$kind`")
-        makeleaf(graph, srcref, kind; value=val, kws...)
+        val = k == K"Integer" ? convert(Int,     value) :
+              k == K"Float"   ? convert(Float64, value) :
+              k == K"String"  ? convert(String,  value) :
+              k == K"Char"    ? convert(Char,    value) :
+              k == K"Value"   ? value                   :
+              error("Unexpected leaf kind `$k`")
+        makeleaf(graph, srcref, k; value=val, kws...)
     end
+end
+
+# TODO: Replace this with makeleaf variant?
+function mapleaf(ctx, src, kind)
+    ex = makeleaf(syntax_graph(ctx), src, kind)
+    # TODO: Value coersion might be broken here due to use of `name_val` vs
+    # `value` vs ... ?
+    copy_attrs!(ex, src)
+    ex
 end
 
 # Convenience functions to create leaf nodes referring to identifiers within
@@ -88,7 +99,7 @@ top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
 
 # Create a new SSA variable
 function ssavar(ctx::AbstractLoweringContext, srcref)
-    makenode(ctx, srcref, K"SSAValue", var_id=new_var_id(ctx))
+    makeleaf(ctx, srcref, K"SSAValue", var_id=new_var_id(ctx))
 end
 
 # Assign `ex` to an SSA variable.
@@ -247,12 +258,8 @@ function copy_attrs!(dest, src)
     end
 end
 
-function mapleaf(ctx, src, kind)
-    ex = makeleaf(syntax_graph(ctx), src, kind)
-    # TODO: Value coersion might be broken here due to use of `name_val` vs
-    # `value` vs ... ?
-    copy_attrs!(ex, src)
-    ex
+function copy_attrs!(dest, head::Union{Kind,JuliaSyntax.SyntaxHead})
+    sethead!(dest.graph, dest.id, head)
 end
 
 function mapchildren(f, ctx, ex)

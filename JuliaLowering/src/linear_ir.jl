@@ -280,7 +280,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         id = ex.var_id
         slot_id = get(slot_rewrites, id, nothing)
         if !isnothing(slot_id)
-            makenode(ctx, ex, K"slot"; var_id=slot_id)
+            makeleaf(ctx, ex, K"slot"; var_id=slot_id)
         else
             # TODO: look up any static parameters
             info = ctx.var_info[id]
@@ -295,7 +295,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     elseif is_literal(k) || is_quoted(k) || k == K"global"
         ex
     elseif k == K"SSAValue"
-        makenode(ctx, ex, K"SSAValue"; var_id=ssa_rewrites[ex.var_id])
+        makeleaf(ctx, ex, K"SSAValue"; var_id=ssa_rewrites[ex.var_id])
     elseif k == K"goto" || k == K"enter" || k == K"gotoifnot"
         TODO(ex, "_renumber $k")
     elseif k == K"lambda"

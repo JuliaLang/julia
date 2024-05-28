@@ -243,7 +243,7 @@ end
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)
-@info "Input code" ex
+@info "Input code" formatsrc(ex)
 
 in_mod = Main
 ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
