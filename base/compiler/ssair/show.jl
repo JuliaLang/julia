@@ -87,7 +87,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         show_unquoted_gotoifnot(io, stmt, indent, "#", unstable_ssa)
     # everything else in the IR, defer to the generic AST printer
     elseif stmt isa Expr
-        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0, 0, unstable_ssa)
+        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0, 0, show_type ? unstable_ssa : nothing)
     else
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
     end
