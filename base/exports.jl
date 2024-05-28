@@ -1090,6 +1090,7 @@ public
     Fix2,
     Generator,
     ImmutableDict,
+    Lockable,
     OneTo,
     LogRange,
     AnnotatedString,
