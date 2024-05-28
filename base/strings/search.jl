@@ -102,6 +102,30 @@ function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
     end
 end
 
+function findall(
+    pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+    s::Union{String, SubString{String}}
+)
+    c = Char(pred.x)::Char
+    byte = first_utf8_byte(c)
+
+    # ASCII chars can never be part of another Char, even in the presence of
+    # invalid UTF8 strings, so we can forward to a simpler, more efficient
+    # byte search
+    isascii(c) && return findall(==(byte), codeunits(s))
+    result = Int[]
+    i = firstindex(s)
+    while true
+        i = _search(s, byte, i)
+        iszero(i) && return result
+        # If the char is invalid, it's possible that its first byte is
+        # inside another char. If so, indexing into the string will throw an
+        # error, so we need to check for valid indices
+        isvalid(s, i) && pred(s[i]) && push!(result, i)
+        i += 1
+    end
+end
+
 """
     findfirst(pattern::AbstractString, string::AbstractString)
     findfirst(pattern::AbstractPattern, string::String)

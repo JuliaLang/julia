@@ -395,6 +395,21 @@ s_18109 = "fooα🐨βcd3"
     @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
 end
 
+@testset "Findall char in string" begin
+    @test findall(==('w'), "wabcwewwawk") == [1, 5, 7, 8, 10]
+    @test isempty(findall(isequal("w"), "abcde!,"))
+    @test findall(==('读'), "联国读大会一九四二月十读日第号决通过并颁布读") == [7, 34, 64]
+
+    # Empty string
+    @test isempty(findall(isequal('K'), ""))
+    @test isempty(findall(isequal('α'), ""))
+
+    # Finds an invalid char ONLY if it's at a char boundrary in the string,
+    # i.e. iterating the string would emit char character.
+    findall(==('\xfe'), "abκæøc\xfeα\xfeβå!") == [10, 13]
+    findall(==('\xaf'), "abκæ读α\xe8\xaf\xfeβå!") == Int[]
+end
+
 # issue 37280
 @testset "UInt8, Int8 vector" begin
     for T in [Int8, UInt8], VT in [Int8, UInt8]
