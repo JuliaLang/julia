@@ -3049,6 +3049,8 @@ julia> x = [1, 2]; x'x  # adjoint vector * vector
     /(x, y)
 
 Right division operator: multiplication of `x` by the inverse of `y` on the right.
+Gives optimal code when `x` and `y` are Float32, otherwise likely Float64 result, still
+one assembly instruction, but the slowest basic math one in CPUs, and even slower in GPUs.
 
 Gives floating-point results for integer arguments.
 See [`÷`](@ref div) for integer division, or [`//`](@ref) for [`Rational`](@ref) results.
