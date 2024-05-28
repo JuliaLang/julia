@@ -10,7 +10,9 @@ an integer according to the rounding mode `r`. In other words, the quantity
 
     round(x / y, r)
 
-without any intermediate rounding.
+without any intermediate rounding. `div` is faster when x and y are 32-bit integers,
+then 64-bit, but then also slower when they are 16-bit or smaller. Mixed sizes, e.g.
+32-bit x and 64-bit y is suboptimal, since it gives slower 64-bit division.
 
 !!! compat "Julia 1.4"
     The three-argument method taking a `RoundingMode` requires Julia 1.4 or later.
