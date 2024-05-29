@@ -82,7 +82,7 @@ julia> `echo "foo bar"`[2]
 You can also pass a `IOBuffer`, and later read from it:
 
 ```jldoctest
-julia> io = PipeBuffer();
+julia> io = PipeBuffer(); # PipeBuffer is a type of IOBuffer
 
 julia> run(`echo world`, devnull, io, stderr);
 
