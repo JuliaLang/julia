@@ -108,6 +108,9 @@ Standard library changes
 
 #### REPL
 
+- Using the new `usings=true` feature of the `names()` function, REPL completions can now
+  complete names that have been explicitly `using`-ed. ([#54610])
+
 #### SuiteSparse
 
 #### SparseArrays

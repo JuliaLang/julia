@@ -135,9 +135,8 @@ function appendmacro!(syms, macros, needle, endchar)
     end
 end
 
-function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
-    ssyms = names(mod, all = all, imported = imported)
-    all || filter!(Base.Fix1(Base.isexported, mod), ssyms)
+function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString; kwargs...)
+    ssyms = names(mod; kwargs...)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
@@ -147,7 +146,7 @@ function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, 
 end
 
 # REPL Symbol Completions
-function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), context_module::Module=Main)
+function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), context_module::Module)
     mod = context_module
 
     lookup_module = true
@@ -173,23 +172,22 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
 
     suggestions = Completion[]
     if lookup_module
-        # We will exclude the results that the user does not want, as well
-        # as excluding Main.Main.Main, etc., because that's most likely not what
-        # the user wants
-        p = let mod=mod, modname=nameof(mod)
-            (s::Symbol) -> !Base.isdeprecated(mod, s) && s != modname && ffunc(mod, s)::Bool && !(mod === Main && s === :MainInclude)
-        end
-        # Looking for a binding in a module
-        if mod == context_module
-            # Also look in modules we got through `using`
-            mods = ccall(:jl_module_usings, Any, (Any,), context_module)::Vector
-            for m in mods
-                append!(suggestions, filtered_mod_names(p, m::Module, name))
+        fmnames = let modname = nameof(mod),
+                      is_main = mod===Main
+            filtered_mod_names(mod, name; all=true, imported=true, usings=true) do s::Symbol
+                if Base.isdeprecated(mod, s)
+                    return false
+                elseif s === modname
+                    return false # exclude `Main.Main.Main`, etc.
+                elseif !ffunc(mod, s)::Bool
+                    return false
+                elseif is_main && s === :MainInclude
+                    return false
+                end
+                return true
             end
-            append!(suggestions, filtered_mod_names(p, mod, name, true, true))
-        else
-            append!(suggestions, filtered_mod_names(p, mod, name, true, false))
         end
+        append!(suggestions, fmnames)
     elseif val !== nothing # looking for a property of an instance
         try
             for property in propertynames(val, false)
@@ -1065,7 +1063,7 @@ end
 function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc),
                                context_module::Module, string::String, name::String,
                                pos::Int, dotpos::Int, startpos::Int;
-                               comp_keywords=false)
+                               comp_keywords::Bool=false)
     ex = nothing
     if comp_keywords
         append!(suggestions, complete_keyword(name))
