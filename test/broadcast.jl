@@ -808,8 +808,8 @@ let
 end
 
 let
-  bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
-  @test isbits(Broadcast.flatten(bc).f)
+    bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
+    @test isbits(Broadcast.flatten(bc).f)
 end
 
 # Issue #26127: multiple splats in a fused dot-expression
