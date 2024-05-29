@@ -22,6 +22,9 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power           |
 | `x % y`    | remainder      | equivalent to `rem(x, y)`               |
 
+Many more (Unicode) infix operators are defined for possible use, e.g. `⋅` (for dot product) and `×` (for cross-product), and those only get the defined meaning after `using LinearAlgebra`.
+They can be typed in with `\cdot`, `\times`, and `÷` by `\div`, and then press the TAB key.
+
 A numeric literal placed directly before an identifier or parentheses, e.g. `2x` or `2(x + y)`, is treated as a multiplication, except with higher precedence than other binary operations.  See [Numeric Literal Coefficients](@ref man-numeric-literal-coefficients) for details.
 
 Julia's promotion system makes arithmetic operations on mixtures of argument types "just work"
