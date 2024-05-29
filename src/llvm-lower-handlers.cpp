@@ -41,13 +41,14 @@ using namespace llvm;
 /* Lowers Julia Exception Handlers and colors EH frames.
  *
  *  Our task is to lower:
- * call void @julia.except_enter(ct)
+ * call {i32, ptr} @julia.except_enter(ct)
  * <...>
  * call void jl_pop_handler(1)
  *
  * to
  *
  * call void @jl_enter_handler(ct, jl_handler *%buff)
+ * call i32 @jl_setjmp(jmpbuf[] %buff, 0)
  * <...>
  * call void jl_pop_handler(1)
  *
@@ -209,7 +210,25 @@ static bool lowerExcHandlers(Function &F) {
             new_enter->setMetadata(LLVMContext::MD_dbg, dbg);
             sj->setMetadata(LLVMContext::MD_dbg, dbg);
         }
-        enter->replaceAllUsesWith(sj);
+        SmallVector<Instruction*> ToErase;
+        for (auto *U : enter->users()) {
+            if (auto *EEI = dyn_cast<ExtractValueInst>(U)) {
+                if (EEI->getNumIndices() == 1) {
+                    if (EEI->getIndices()[0] == 0)
+                        EEI->replaceAllUsesWith(sj);
+                    else
+                        EEI->replaceAllUsesWith(buff);
+                    ToErase.push_back(EEI);
+                }
+            }
+        }
+        for (auto *EEI : ToErase)
+            EEI->eraseFromParent();
+        if (!enter->use_empty()) {
+            Value *agg = InsertValueInst::Create(UndefValue::get(enter->getType()), sj, ArrayRef<unsigned>(0), "", enter);
+            agg = InsertValueInst::Create(agg, buff, ArrayRef<unsigned>(1), "", enter);
+            enter->replaceAllUsesWith(agg);
+        }
         enter->eraseFromParent();
     }
     // Insert lifetime end intrinsics after every leave.
