@@ -992,7 +992,8 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 }
 
 uint8_t _binding_is_from_explicit_using(jl_binding_t *b) {
-    return (jl_atomic_load_relaxed(&b->owner) != NULL && b->owner != b && !b->imported);
+    jl_binding_t *owner = jl_atomic_load_relaxed(&b->owner);
+    return (owner != NULL && owner != b && !b->imported);
 }
 
 void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
@@ -1011,7 +1012,7 @@ void _jl_module_names_into_array(jl_array_t* a, jl_module_t *m, int all, int imp
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        if ((b->value != (jl_value_t*)m) &&
+        if ((jl_atomic_load_relaxed(&b->value) != (jl_value_t*)m) &&
             ((exported ? b->exportp : b->publicp) ||
              (imported && b->imported) ||
              (usings && _binding_is_from_explicit_using(b)) ||
