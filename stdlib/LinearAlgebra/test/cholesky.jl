@@ -143,14 +143,12 @@ end
         end
 
         #pivoted upper Cholesky
-        if eltya != BigFloat
-            cpapd = cholesky(apdh, RowMaximum())
-            unary_ops_tests(apdh, cpapd, ε*κ*n)
-            @test rank(cpapd) == n
-            @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
+        cpapd = cholesky(apdh, RowMaximum())
+        unary_ops_tests(apdh, cpapd, ε*κ*n)
+        @test rank(cpapd) == n
+        @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
 
-            @test cpapd.P*cpapd.L*cpapd.U*cpapd.P' ≈ apd
-        end
+        @test cpapd.P*cpapd.L*cpapd.U*cpapd.P' ≈ apd
 
         for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
@@ -167,22 +165,17 @@ end
 
                 @test norm(a*(capd\(a'*b)) - b,1)/norm(b,1) <= ε*κ*n # Ad hoc, revisit
 
-                if eltya != BigFloat && eltyb != BigFloat
-                    lapd = cholesky(apdhL)
-                    @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
-                    @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
-                end
+                lapd = cholesky(apdhL)
+                @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
+                @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
-                if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
+                cpapd = cholesky(apdh, RowMaximum())
+                @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
+                @test norm(apd * (cpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
-                    cpapd = cholesky(apdh, RowMaximum())
-                    @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
-                    @test norm(apd * (cpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
-
-                    lpapd = cholesky(apdhL, RowMaximum())
-                    @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
-                    @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
-                end
+                lpapd = cholesky(apdhL, RowMaximum())
+                @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
+                @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
             end
         end
 
@@ -201,13 +194,11 @@ end
                 ldiv!(capd, BB)
                 @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(apd * BB - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                if eltya != BigFloat
-                    cpapd = cholesky(apdh, RowMaximum())
-                    BB = copy(B)
-                    ldiv!(cpapd, BB)
-                    @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                    @test norm(apd * BB - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                end
+                cpapd = cholesky(apdh, RowMaximum())
+                BB = copy(B)
+                ldiv!(cpapd, BB)
+                @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(apd * BB - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
             end
         end
 
@@ -232,18 +223,16 @@ end
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                if eltya != BigFloat
-                    cpapd = cholesky(eltya <: Complex ? apdh : apds, RowMaximum())
-                    BB = copy(B)
-                    rdiv!(BB, cpapd)
-                    @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                    @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                    cpapd = cholesky(eltya <: Complex ? apdhL : apdsL, RowMaximum())
-                    BB = copy(B)
-                    rdiv!(BB, cpapd)
-                    @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                    @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                end
+                cpapd = cholesky(eltya <: Complex ? apdh : apds, RowMaximum())
+                BB = copy(B)
+                rdiv!(BB, cpapd)
+                @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL, RowMaximum())
+                BB = copy(B)
+                rdiv!(BB, cpapd)
+                @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+                @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
             end
         end
         if eltya <: BlasFloat
@@ -274,19 +263,29 @@ end
         @test !LinearAlgebra.issuccess(cholesky(M; check = false))
         @test !LinearAlgebra.issuccess(cholesky!(copy(M); check = false))
     end
-    if T !== BigFloat # generic pivoted cholesky is not implemented
-        for M in (A, Hermitian(A), B)
-            @test_throws RankDeficientException cholesky(M, RowMaximum())
-            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum())
-            @test_throws RankDeficientException cholesky(M, RowMaximum(); check = true)
-            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum(); check = true)
-            @test !LinearAlgebra.issuccess(cholesky(M, RowMaximum(); check = false))
-            @test !LinearAlgebra.issuccess(cholesky!(copy(M), RowMaximum(); check = false))
-            C = cholesky(M, RowMaximum(); check = false)
-            @test_throws RankDeficientException chkfullrank(C)
-            C = cholesky!(copy(M), RowMaximum(); check = false)
-            @test_throws RankDeficientException chkfullrank(C)
-        end
+    for M in (A, Hermitian(A)) # hermitian, but not semi-positive definite
+        @test_throws RankDeficientException cholesky(M, RowMaximum())
+        @test_throws RankDeficientException cholesky!(copy(M), RowMaximum())
+        @test_throws RankDeficientException cholesky(M, RowMaximum(); check = true)
+        @test_throws RankDeficientException cholesky!(copy(M), RowMaximum(); check = true)
+        @test !issuccess(cholesky(M, RowMaximum(); check = false))
+        @test !issuccess(cholesky!(copy(M), RowMaximum(); check = false))
+        C = cholesky(M, RowMaximum(); check = false)
+        @test_throws RankDeficientException chkfullrank(C)
+        C = cholesky!(copy(M), RowMaximum(); check = false)
+        @test_throws RankDeficientException chkfullrank(C)
+    end
+    for M in (B,) # not hermitian
+        @test_throws PosDefException(-1) cholesky(M, RowMaximum())
+        @test_throws PosDefException(-1) cholesky!(copy(M), RowMaximum())
+        @test_throws PosDefException(-1) cholesky(M, RowMaximum(); check = true)
+        @test_throws PosDefException(-1) cholesky!(copy(M), RowMaximum(); check = true)
+        @test !issuccess(cholesky(M, RowMaximum(); check = false))
+        @test !issuccess(cholesky!(copy(M), RowMaximum(); check = false))
+        C = cholesky(M, RowMaximum(); check = false)
+        @test_throws RankDeficientException chkfullrank(C)
+        C = cholesky!(copy(M), RowMaximum(); check = false)
+        @test_throws RankDeficientException chkfullrank(C)
     end
     @test !isposdef(A)
     str = sprint((io, x) -> show(io, "text/plain", x), cholesky(A; check = false))
@@ -366,10 +365,6 @@ end
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
-end
-
-@testset "fail for non-BLAS element types" begin
-    @test_throws ArgumentError cholesky!(Hermitian(rand(Float16, 5,5)), RowMaximum())
 end
 
 @testset "cholesky Diagonal" begin
