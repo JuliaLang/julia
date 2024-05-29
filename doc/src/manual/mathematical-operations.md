@@ -29,7 +29,7 @@ naturally and automatically. See [Conversion and Promotion](@ref conversion-and-
 system.
 
 The `÷` sign can be conveniently typed by writing `\div<tab>` to the REPL or Julia IDE. See the [manual section on Unicode input](@ref Unicode-Input) for more information.
-Many more (Unicode) infix aritmetic operators are defined for possible use, e.g. `⋅` (for dot product) and `×` (for cross-product), and those only get the defined meaning after `using LinearAlgebra`.
+Many more (Unicode) infix arithmetic operators are defined for possible use, e.g. `⋅` (for dot product) and `×` (for cross-product), and those only get the defined meaning after `using LinearAlgebra`.
 They can be typed in with `\cdot`, and `\times`, and then press the TAB key.
 
 Here are some simple examples using arithmetic operators:
