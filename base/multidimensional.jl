@@ -1047,18 +1047,13 @@ end
 
 ### from abstractarray.jl
 
-# In the common case where we have two views into the same parent, aliasing checks
-# are _much_ easier and more important to get right
 function mightalias(A::SubArray{T,<:Any,P}, B::SubArray{T,<:Any,P}) where {T,P}
-    if !_parentsmatch(A.parent, B.parent)
-        # We cannot do any better than the usual dataids check
-        return !_isdisjoint(dataids(A), dataids(B))
-    end
-    # Now we know that A.parent === B.parent. This means that the indices of A
-    # and B are the same length and indexing into the same dimensions. We can
-    # just walk through them and check for overlaps: O(ndims(A)). We must finally
-    # ensure that the indices don't alias with either parent
-    return _indicesmightoverlap(A.indices, B.indices) ||
+    # There are two ways that subarrays might _problematically_ alias one another:
+    #   1. The parents the same and the indices (potentially) overlap OR
+    #   2. One's parent is used in the other's indices
+    # Note that it's ok for the indices to be shared as those should not be mutated,
+    # so we can always do better than the default _isdisjoint(dataids(A), dataids(B))
+    return (_parentsmatch(A.parent, B.parent) && _indicesmightoverlap(A.indices, B.indices)) ||
         !_isdisjoint(dataids(A.parent), _splatmap(dataids, B.indices)) ||
         !_isdisjoint(dataids(B.parent), _splatmap(dataids, A.indices))
 end

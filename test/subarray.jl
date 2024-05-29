@@ -1077,6 +1077,21 @@ end
     end
 end
 
+@testset "aliasing check with shared indices" begin
+    indices = [1,3]
+    a = rand(3)
+    av = @view a[indices]
+    b = rand(3)
+    bv = @view b[indices]
+    @test !Base.mightalias(av, bv)
+    @test Base.mightalias(a, av)
+    @test Base.mightalias(b, bv)
+    @test Base.mightalias(indices, av)
+    @test Base.mightalias(indices, bv)
+    @test Base.mightalias(view(indices, :), av)
+    @test Base.mightalias(view(indices, :), bv)
+end
+
 @testset "aliasing check with reshaped subarrays" begin
     C = rand(2,1)
     V1 = @view C[1, :]
