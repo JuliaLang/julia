@@ -4,6 +4,9 @@ Julia v1.12 Release Notes
 New language features
 ---------------------
 
+- A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
+  find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
+
 Language changes
 ----------------
 
@@ -17,7 +20,7 @@ Language changes
    may pave the way for inference to be able to intelligently re-use the old
    results, once the new method is deleted. ([#53415])
 
- - Macro expansion will no longer eargerly recurse into into `Expr(:toplevel)`
+ - Macro expansion will no longer eagerly recurse into into `Expr(:toplevel)`
    expressions returned from macros. Instead, macro expansion of `:toplevel`
    expressions will be delayed until evaluation time. This allows a later
    expression within a given `:toplevel` expression to make use of macros

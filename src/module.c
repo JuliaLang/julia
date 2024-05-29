@@ -991,10 +991,19 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
     return (jl_value_t*)a;
 }
 
-JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
+uint8_t _binding_is_from_explicit_using(jl_binding_t *b) {
+    jl_binding_t *owner = jl_atomic_load_relaxed(&b->owner);
+    return (owner != NULL && owner != b && !b->imported);
+}
+
+void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
+    jl_array_grow_end(a, 1);
+    //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
+    jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)name);
+}
+
+void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings)
 {
-    jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
-    JL_GC_PUSH1(&a);
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
         jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
@@ -1003,15 +1012,39 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        if ((b->publicp ||
+        if (((b->publicp) ||
              (imported && b->imported) ||
+             (usings && _binding_is_from_explicit_using(b)) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || main_public))) &&
-            (all || (!b->deprecated && !hidden))) {
-            jl_array_grow_end(a, 1);
-            // n.b. change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
-            jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)asname);
+            (all || (!b->deprecated && !hidden)))
+            _append_symbol_to_bindings_array(a, asname);
+    }
+}
+
+void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
+{
+    jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
+    for (size_t i = 0; i < jl_svec_len(table); i++) {
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
+        if ((void*)b == jl_nothing)
+            break;
+        if (b->exportp && (all || !b->deprecated))
+            _append_symbol_to_bindings_array(a, b->globalref->name);
+    }
+}
+
+JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int usings)
+{
+    jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
+    JL_GC_PUSH1(&a);
+    append_module_names(a, m, all, imported, usings);
+    if (usings) {
+        // If `usings` is specified, traverse the list of `using`-ed modules and incorporate
+        // the names exported by those modules into the list.
+        for(int i=(int)m->usings.len-1; i >= 0; --i) {
+            jl_module_t *usinged = module_usings_getidx(m, i);
+            append_exported_names(a, usinged, all);
         }
-        table = jl_atomic_load_relaxed(&m->bindings);
     }
     JL_GC_POP();
     return (jl_value_t*)a;
