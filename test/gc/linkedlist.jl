@@ -1,11 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct ListNode
-  key::Int64
-  next::ListNode
-  ListNode() = new()
-  ListNode(x)= new(x)
-  ListNode(x,y) = new(x,y);
+    key::Int64
+    next::ListNode
+    ListNode() = new()
+    ListNode(x)= new(x)
+    ListNode(x,y) = new(x,y);
 end
 
 function list(N=16*1024^2)
