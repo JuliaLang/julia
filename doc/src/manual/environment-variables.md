@@ -234,7 +234,7 @@ Specifies the preferred registry flavor. Currently supported values are `conserv
 (the default), which will only publish resources that have been processed by the storage
 server (and thereby have a higher probability of being available from the PkgServers),
 whereas `eager` will publish registries whose resources have not necessarily been
-processed by the storage servers.  Users behind restrictive firewalls that do not allow
+processed by the storage servers. Users behind restrictive firewalls that do not allow
 downloading from arbitrary servers should not use the `eager` flavor.
 
 !!! compat "Julia 1.7"
@@ -321,7 +321,7 @@ a master process to establish a connection before dying.
 ### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
 An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
-available to Julia.  If `$JULIA_NUM_THREADS` is not positive or is not set, or
+available to Julia. If `$JULIA_NUM_THREADS` is not positive or is not set, or
 if the number of CPU threads cannot be determined through system calls, then the
 number of threads is set to `1`.
 
