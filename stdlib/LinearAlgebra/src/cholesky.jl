@@ -260,23 +260,6 @@ function _chol!(x::Number, _)
 end
 
 # _chol!. Internal methods for calling unpivoted Cholesky
-Base.@propagate_inbounds function _swap_rowcols!(A, ::Type{LowerTriangular}, n, j, q)
-    j == q && return
-    @assert j < q
-    # swap rows and cols without touching the possibly undef-ed triangle
-    A[q, q] = A[j, j]
-    for k in 1:j-1 # initial horizontal segments
-        A[j,k], A[q,k] = A[q,k], A[j,k]
-    end
-    for k in j+1:q-1 # intermediate segments
-        A[k,j], A[q,k] = conj(A[q,k]), conj(A[k,j])
-    end
-    A[q,j] = conj(A[q,j]) # corner case
-    for k in q+1:n # final vertical segments
-        A[k,j], A[k,q] = A[k,q], A[k,j]
-    end
-    return
-end
 Base.@propagate_inbounds function _swap_rowcols!(A, ::Type{UpperTriangular}, n, j, q)
     j == q && return
     @assert j < q
@@ -294,12 +277,28 @@ Base.@propagate_inbounds function _swap_rowcols!(A, ::Type{UpperTriangular}, n, 
     end
     return
 end
+Base.@propagate_inbounds function _swap_rowcols!(A, ::Type{LowerTriangular}, n, j, q)
+    j == q && return
+    @assert j < q
+    # swap rows and cols without touching the possibly undef-ed triangle
+    A[q, q] = A[j, j]
+    for k in 1:j-1 # initial horizontal segments
+        A[j,k], A[q,k] = A[q,k], A[j,k]
+    end
+    for k in j+1:q-1 # intermediate segments
+        A[k,j], A[q,k] = conj(A[q,k]), conj(A[k,j])
+    end
+    A[q,j] = conj(A[q,j]) # corner case
+    for k in q+1:n # final vertical segments
+        A[k,j], A[k,q] = A[k,q], A[k,j]
+    end
+    return
+end
 
 function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, check::Bool)
     # checks
     Base.require_one_based_indexing(A)
     n = LinearAlgebra.checksquare(A)
-
     # initialization
     piv = collect(1:n)
     dots = zeros(real(eltype(A)), n)
@@ -318,7 +317,7 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
         _swap_rowcols!(A, UpperTriangular, n, 1, q)
         piv[1], piv[q] = piv[q], piv[1]
         A[1,1] = ajj = sqrt(ajj)
-        A[1, 2:n] .= A[1, 2:n] ./ ajj
+        @views A[1, 2:n] .= A[1, 2:n] ./ ajj
 
         for j in 2:n
             for k in j:n
@@ -387,7 +386,6 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
             dots[j], dots[q] = dots[q], dots[j]
             piv[j], piv[q] = piv[q], piv[j]
             # update
-            ajj = temp[q]
             A[j,j] = ajj = sqrt(ajj)
             @views if j < n
                 mul!(A[(j+1):n, j], A[(j+1):n, 1:(j-1)], A[j, 1:(j-1)], -1, true)
