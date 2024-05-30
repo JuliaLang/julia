@@ -259,7 +259,7 @@ function _chol!(x::Number, _)
     return (rval, convert(BlasInt, rx != abs(x)))
 end
 
-# _chol!. Internal methods for calling unpivoted Cholesky
+# _cholpivoted!. Internal methods for calling pivoted Cholesky
 Base.@propagate_inbounds function _swap_rowcols!(A, ::Type{UpperTriangular}, n, j, q)
     j == q && return
     @assert j < q
@@ -294,7 +294,12 @@ Base.@propagate_inbounds function _swap_rowcols!(A, ::Type{LowerTriangular}, n, 
     end
     return
 end
-
+### BLAS/LAPACK element types
+_cholpivoted!(A::StridedMatrix{<:BlasFloat}, ::Type{UpperTriangular}, tol::Real, check::Bool) =
+    LAPACK.pstrf!('U', A, tol)
+_cholpivoted!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular}, tol::Real, check::Bool) =
+    LAPACK.pstrf!('L', A, tol)
+## Non BLAS/LAPACK element types (generic)
 function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, check::Bool)
     # checks
     Base.require_one_based_indexing(A)
@@ -396,8 +401,6 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
     end
 end
 
-## for StridedMatrices, check that matrix is symmetric/Hermitian
-
 # cholesky!. Destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
 ## No pivoting (default)
@@ -442,12 +445,6 @@ end
 @deprecate cholesky!(A::RealHermSymComplexHerm, ::Val{false}; check::Bool = true) cholesky!(A, NoPivot(); check) false
 
 ## With pivoting
-### BLAS/LAPACK element types
-_cholpivoted!(A::StridedMatrix{<:BlasFloat}, ::Type{UpperTriangular}, tol::Real, check::Bool) =
-    LAPACK.pstrf!('U', A, tol)
-_cholpivoted!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular}, tol::Real, check::Bool) =
-    LAPACK.pstrf!('L', A, tol)
-
 ### Non BLAS/LAPACK element types (generic).
 function cholesky!(A::RealHermSymComplexHerm, ::RowMaximum; tol = 0.0, check::Bool = true)
     AA, piv, rank, info = _cholpivoted!(A.data, A.uplo == 'U' ? UpperTriangular : LowerTriangular, tol, check)
@@ -457,7 +454,6 @@ function cholesky!(A::RealHermSymComplexHerm, ::RowMaximum; tol = 0.0, check::Bo
 end
 @deprecate cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
 
-### for AbstractMatrix, check that matrix is symmetric/Hermitian
 """
     cholesky!(A::AbstractMatrix, RowMaximum(); tol = 0.0, check = true) -> CholeskyPivoted
 
