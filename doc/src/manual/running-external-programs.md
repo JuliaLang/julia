@@ -79,6 +79,18 @@ julia> `echo "foo bar"`[2]
 "foo bar"
 ```
 
+You can also pass a `IOBuffer`, and later read from it:
+
+```jldoctest
+julia> io = PipeBuffer(); # PipeBuffer is a type of IOBuffer
+
+julia> run(`echo world`, devnull, io, stderr);
+
+julia> readlines(io)
+1-element Vector{String}:
+ "world"
+```
+
 ## [Interpolation](@id command-interpolation)
 
 Suppose you want to do something a bit more complicated and use the name of a file in the variable
