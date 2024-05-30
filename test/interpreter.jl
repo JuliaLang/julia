@@ -30,3 +30,6 @@ let p = Pipe(),
     wait(proc)
     close(p)
 end
+
+# Test contextual execution mechanism in interpreter (#54360)
+@test success(pipeline(`$(Base.julia_cmd()) --compile=min -E 'include("compiler/contextual.jl")'`; stderr))

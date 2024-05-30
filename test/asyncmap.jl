@@ -64,7 +64,7 @@ let
     end
     @test e isa CapturedException
     @test e.ex == ErrorException("captured")
-    @test e.processed_bt[2][1].func == :f42105
+    @test e.processed_bt[2][1].func === :f42105
 end
 
 include("generic_map_tests.jl")

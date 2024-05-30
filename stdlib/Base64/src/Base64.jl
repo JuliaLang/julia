@@ -33,7 +33,7 @@ include("decode.jl")
 """
     stringmime(mime, x; context=nothing)
 
-Returns an `AbstractString` containing the representation of `x` in the
+Return an `AbstractString` containing the representation of `x` in the
 requested `mime` type. This is similar to [`repr(mime, x)`](@ref) except
 that binary data is base64-encoded as an ASCII string.
 

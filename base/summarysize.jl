@@ -26,7 +26,7 @@ julia> Base.summarysize(1.0)
 8
 
 julia> Base.summarysize(Ref(rand(100)))
-848
+864
 
 julia> sizeof(Ref(rand(100)))
 8
@@ -49,9 +49,9 @@ function summarysize(obj;
             if isassigned(x, i)
                 val = x[i]
             end
-        elseif isa(x, Array)
+        elseif isa(x, GenericMemory)
             nf = length(x)
-            if ccall(:jl_array_isassigned, Cint, (Any, UInt), x, i - 1) != 0
+            if @inbounds @inline isassigned(x, i)
                 val = x[i]
             end
         else
@@ -77,7 +77,7 @@ end
 (ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj)
 # define the general case separately to make sure it is not specialized for every type
 @noinline function _summarysize(ss::SummarySize, @nospecialize obj)
-    isdefined(typeof(obj), :instance) && return 0
+    issingletontype(typeof(obj)) && return 0
     # NOTE: this attempts to discover multiple copies of the same immutable value,
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
@@ -126,14 +126,14 @@ function (ss::SummarySize)(obj::Core.TypeName)
     return Core.sizeof(obj) + (isdefined(obj, :mt) ? ss(obj.mt) : 0)
 end
 
-function (ss::SummarySize)(obj::Array)
+function (ss::SummarySize)(obj::GenericMemory)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
-    headersize = 4*sizeof(Int) + 8 + max(0, ndims(obj)-2)*sizeof(Int)
+    headersize = 2*sizeof(Int)
     size::Int = headersize
     datakey = unsafe_convert(Ptr{Cvoid}, obj)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
-        dsize = Core.sizeof(obj)
+        dsize = sizeof(obj)
         T = eltype(obj)
         if isbitsunion(T)
             # add 1 union selector byte for each element
@@ -170,7 +170,7 @@ function (ss::SummarySize)(obj::Module)
                 if isa(value, UnionAll)
                     value = unwrap_unionall(value)
                 end
-                if isa(value, DataType) && value.name.module === obj && value.name.name === binding
+                if isa(value, DataType) && parentmodule(value) === obj && nameof(value) === binding
                     # charge a TypeName to its module (but not to the type)
                     size += ss(value.name)::Int
                 end

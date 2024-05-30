@@ -16,6 +16,10 @@ JL_EXPORTED_DATA_POINTERS(XX)
 JL_EXPORTED_DATA_SYMBOLS(XX)
 #undef XX
 
+// define a copy of exported data
+#define jl_max_tags 64
+JL_DLLEXPORT void *jl_small_typeof[(jl_max_tags << 4) / sizeof(void*)]; // 16-bit aligned, like the GC
+
 // Declare list of exported functions (sans type)
 #define XX(name)    JL_DLLEXPORT void name(void);
 typedef void (anonfunc)(void);

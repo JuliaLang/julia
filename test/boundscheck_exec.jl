@@ -239,24 +239,22 @@ if bc_opt != bc_off
     @test_throws BoundsError BadVector20469([1,2,3])[:]
 end
 
-# Ensure iteration over arrays is vectorizable with boundschecks off
+# Ensure iteration over arrays is vectorizable
 function g27079(X)
     r = 0
-    @inbounds for x in X
+    for x in X
         r += x
     end
     r
 end
-if bc_opt == bc_default || bc_opt == bc_off
-    @test occursin("vector.body", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
-end
+
+@test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
 
 # Boundschecking removal of indices with different type, see #40281
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)
-typed_40281 = sprint((io, args...) -> code_warntype(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
+llvm_40281 = sprint((io, args...) -> code_llvm(io, args...; optimize=true), getindex_40281, Tuple{Array{Float64, 3}, Int, UInt8, Int})
 if bc_opt == bc_default || bc_opt == bc_off
-    @test occursin("arrayref(false", typed_40281)
-    @test !occursin("arrayref(true", typed_40281)
+    @test !occursin("call void @ijl_bounds_error_ints", llvm_40281)
 end
 
 # Given this is a sub-processed test file, not using @testsets avoids
@@ -283,7 +281,6 @@ begin # Pass inbounds meta to getindex on CartesianIndices (#42115)
     end
 end
 
-
 # Test that --check-bounds=off doesn't permit const prop of indices into
 # function that are not dynamically reachable (the same test for @inbounds
 # is in the compiler tests).
@@ -294,5 +291,10 @@ function f_boundscheck_elim(n)
     ntuple(x->getfield(sin, x), n)
 end
 @test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+
+# https://github.com/JuliaArrays/StaticArrays.jl/issues/1155
+@test Base.return_types() do
+    typeintersect(Int, Integer)
+end |> only === Type{Int}
 
 end

@@ -354,7 +354,7 @@ value_t fl_ioreaduntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     ios_setbuf(&dest, data, 80, 0);
     char delim = get_delim_arg(fl_ctx, args[1], "io.readuntil");
     ios_t *src = toiostream(fl_ctx, args[0], "io.readuntil");
-    size_t n = ios_copyuntil(&dest, src, delim);
+    size_t n = ios_copyuntil(&dest, src, delim, 1);
     cv->len = n;
     if (dest.buf != data) {
         // outgrew initial space
@@ -376,7 +376,7 @@ value_t fl_iocopyuntil(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     ios_t *dest = toiostream(fl_ctx, args[0], "io.copyuntil");
     ios_t *src = toiostream(fl_ctx, args[1], "io.copyuntil");
     char delim = get_delim_arg(fl_ctx, args[2], "io.copyuntil");
-    return size_wrap(fl_ctx, ios_copyuntil(dest, src, delim));
+    return size_wrap(fl_ctx, ios_copyuntil(dest, src, delim, 1));
 }
 
 value_t fl_iocopy(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)

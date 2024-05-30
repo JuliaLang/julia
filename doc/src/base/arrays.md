@@ -30,6 +30,8 @@ Base.StridedArray
 Base.StridedVector
 Base.StridedMatrix
 Base.StridedVecOrMat
+Base.Memory
+Base.MemoryRef
 Base.Slices
 Base.RowSlices
 Base.ColumnSlices
@@ -95,6 +97,8 @@ Base.Broadcast.result_style
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.nextind
+Base.prevind
 Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 Base.copy!
 Base.isassigned
@@ -120,7 +124,7 @@ accessing the first 10 elements of `x`. Writing to a view, e.g. `v[3] = 2`, writ
 
 Slicing operations like `x[1:10]` create a copy by default in Julia. `@view x[1:10]` changes it to make a view. The
 `@views` macro can be used on a whole block of code (e.g. `@views function foo() .... end` or `@views begin ... end`)
-to change all the slicing operations in that block to use views.  Sometimes making a copy of the data is faster and
+to change all the slicing operations in that block to use views. Sometimes making a copy of the data is faster and
 sometimes using a view is faster, as described in the [performance tips](@ref man-performance-views).
 
 ```@docs
@@ -145,6 +149,7 @@ Base.vcat
 Base.hcat
 Base.hvcat
 Base.hvncat
+Base.stack
 Base.vect
 Base.circshift
 Base.circshift!

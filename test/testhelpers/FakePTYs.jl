@@ -39,7 +39,7 @@ function open_fake_pty()
         rc = ccall(:unlockpt, Cint, (Cint,), fdm)
         rc != 0 && error("unlockpt")
 
-        fds = ccall(:open, Cint, (Ptr{UInt8}, Cint),
+        fds = ccall(:open, Cint, (Ptr{UInt8}, Cint, UInt32...),
             ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), O_RDWR | O_NOCTTY)
         pts = RawFD(fds)
 

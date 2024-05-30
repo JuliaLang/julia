@@ -4,7 +4,6 @@
 
 baremodule dSFMT_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -14,9 +13,9 @@ export libdSFMT
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libdSFMT_handle = C_NULL
-libdSFMT_path = ""
+artifact_dir::String = ""
+libdSFMT_handle::Ptr{Cvoid} = C_NULL
+libdSFMT_path::String = ""
 
 if Sys.iswindows()
     const libdSFMT = "libdSFMT.dll"

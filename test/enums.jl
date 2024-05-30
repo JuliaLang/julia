@@ -94,18 +94,18 @@ end
 
 # other Integer types of enum members
 @enum Test3::UInt8 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
-@test Test3.size == 1
+@test Core.sizeof(Test3) == 1
 @test UInt8(_one_Test3) === 0x01
 @test length(instances(Test3)) == 3
 
 @enum Test4::UInt16 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
-@test Test4.size == 2
+@test Core.sizeof(Test4) == 2
 
 @enum Test5::UInt32 _one_Test5=0x01 _two_Test5=0x00000002 _three_Test5=0x00000003
-@test Test5.size == 4
+@test Core.sizeof(Test5) == 4
 
 @enum Test6::UInt128 _one_Test6=0x00000000000000000000000000000001 _two_Test6=0x00000000000000000000000000000002
-@test Test6.size == 16
+@test Core.sizeof(Test6) == 16
 @test typeof(Integer(_one_Test6)) == UInt128
 
 # enum values must be integers
@@ -178,6 +178,15 @@ end
 @enum HashEnum1 Enum1_a=1
 @enum HashEnum2 Enum2_a=1
 @test hash(Enum1_a) != hash(Enum2_a)
+
+# PR #49777: Check that `Base.hash` can be specialized by the user without
+# overwriting a method definition.
+@enum HashEnum3 Enum3_a=1
+@test which(hash, (HashEnum3, UInt)).sig != Tuple{typeof(hash), HashEnum3, UInt64}
+
+# Check that generic `hash` on custom enum subtypes works.
+struct HashEnum4 <: Enum{Int} end
+@test hash(HashEnum4(), zero(UInt)) == invoke(hash, Tuple{Any, UInt}, HashEnum4(), zero(UInt))
 
 @test (Vector{Fruit}(undef, 3) .= apple) == [apple, apple, apple]
 

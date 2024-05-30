@@ -20,6 +20,7 @@ function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test_throws ErrorException ca.Z
     @test size(ca) == size(a)
     @test Array(copy(ca)) ≈ a
+    @test tr(ca) ≈ tr(a) skip=ca isa CholeskyPivoted
 end
 
 function factor_recreation_tests(a_U, a_L)
@@ -260,11 +261,12 @@ end
     end
 end
 
-@testset "behavior for non-positive definite matrices" for T in (Float64, ComplexF64)
+@testset "behavior for non-positive definite matrices" for T in (Float64, ComplexF64, BigFloat)
     A = T[1 2; 2 1]
     B = T[1 2; 0 1]
+    C = T[2 0; 0 0]
     # check = (true|false)
-    for M in (A, Hermitian(A), B)
+    for M in (A, Hermitian(A), B, C)
         @test_throws PosDefException cholesky(M)
         @test_throws PosDefException cholesky!(copy(M))
         @test_throws PosDefException cholesky(M; check = true)
@@ -272,17 +274,19 @@ end
         @test !LinearAlgebra.issuccess(cholesky(M; check = false))
         @test !LinearAlgebra.issuccess(cholesky!(copy(M); check = false))
     end
-    for M in (A, Hermitian(A), B)
-        @test_throws RankDeficientException cholesky(M, RowMaximum())
-        @test_throws RankDeficientException cholesky!(copy(M), RowMaximum())
-        @test_throws RankDeficientException cholesky(M, RowMaximum(); check = true)
-        @test_throws RankDeficientException cholesky!(copy(M), RowMaximum(); check = true)
-        @test !LinearAlgebra.issuccess(cholesky(M, RowMaximum(); check = false))
-        @test !LinearAlgebra.issuccess(cholesky!(copy(M), RowMaximum(); check = false))
-        C = cholesky(M, RowMaximum(); check = false)
-        @test_throws RankDeficientException chkfullrank(C)
-        C = cholesky!(copy(M), RowMaximum(); check = false)
-        @test_throws RankDeficientException chkfullrank(C)
+    if T !== BigFloat # generic pivoted cholesky is not implemented
+        for M in (A, Hermitian(A), B)
+            @test_throws RankDeficientException cholesky(M, RowMaximum())
+            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum())
+            @test_throws RankDeficientException cholesky(M, RowMaximum(); check = true)
+            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum(); check = true)
+            @test !LinearAlgebra.issuccess(cholesky(M, RowMaximum(); check = false))
+            @test !LinearAlgebra.issuccess(cholesky!(copy(M), RowMaximum(); check = false))
+            C = cholesky(M, RowMaximum(); check = false)
+            @test_throws RankDeficientException chkfullrank(C)
+            C = cholesky!(copy(M), RowMaximum(); check = false)
+            @test_throws RankDeficientException chkfullrank(C)
+        end
     end
     @test !isposdef(A)
     str = sprint((io, x) -> show(io, "text/plain", x), cholesky(A; check = false))
@@ -303,6 +307,7 @@ end
     v = rand(5)
     @test cholesky(Diagonal(v)) \ B ≈ Diagonal(v) \ B
     @test B / cholesky(Diagonal(v)) ≈ B / Diagonal(v)
+    @test inv(cholesky(Diagonal(v)))::Diagonal ≈ Diagonal(1 ./ v)
 end
 
 struct WrappedVector{T} <: AbstractVector{T}
@@ -389,9 +394,9 @@ end
 
     # complex
     D = complex(D)
-    CD = cholesky(D)
-    CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{ComplexF64}
+    CD = cholesky(Hermitian(D))
+    CM = cholesky(Matrix(Hermitian(D)))
+    @test CD isa Cholesky{ComplexF64,<:Diagonal}
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
@@ -404,6 +409,12 @@ end
 
     # InexactError for Int
     @test_throws InexactError cholesky!(Diagonal([2, 1]))
+end
+
+@testset "Cholesky for AbstractMatrix" begin
+    S = SymTridiagonal(fill(2.0, 4), ones(3))
+    C = cholesky(S)
+    @test C.L * C.U ≈ S
 end
 
 @testset "constructor with non-BlasInt arguments" begin
@@ -536,6 +547,28 @@ end
     @test det(B)  ≈  det(A) atol=eps()
     @test logdet(B)  ==  -Inf
     @test logabsdet(B)[1] == -Inf
- end
+end
+
+@testset "partly initialized factors" begin
+    @testset for uplo in ('U', 'L')
+        M = Matrix{BigFloat}(undef, 2, 2)
+        M[1,1] = M[2,2] = M[1+(uplo=='L'), 1+(uplo=='U')] = 3
+        C = Cholesky(M, uplo, 0)
+        @test C == C
+        @test C.L == C.U'
+        # parameters are arbitrary
+        C = CholeskyPivoted(M, uplo, [1,2], 2, 0.0, 0)
+        @test C.L == C.U'
+    end
+end
+
+@testset "diag" begin
+    for T in (Float64, ComplexF64), k in (0, 1, -3), uplo in (:U, :L)
+        A = randn(T, 100, 100)
+        P = Hermitian(A' * A, uplo)
+        C = cholesky(P)
+        @test diag(P, k) ≈ diag(C, k)
+    end
+end
 
 end # module TestCholesky

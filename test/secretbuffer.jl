@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base: SecretBuffer, SecretBuffer!, shred!, isshredded
-using Test
+using Test, Random
 
 @testset "SecretBuffer" begin
     @testset "original unmodified" begin
@@ -128,5 +128,46 @@ using Test
         null_ptr = Ptr{UInt8}(C_NULL)
         @test_throws ArgumentError Base.unsafe_SecretBuffer!(null_ptr)
         @test_throws ArgumentError Base.unsafe_SecretBuffer!(null_ptr, 0)
+    end
+
+    @testset "copiers" begin
+        s1 = SecretBuffer()
+        write(s1, "hello world")
+        seekstart(s1)
+
+        s2 = copy(s1)
+        write(s2, 'c')
+        seekstart(s2)
+
+        @test read(s1) == codeunits("hello world")
+        @test read(s2) == codeunits("cello world")
+
+        shred!(s1)
+        @test isshredded(s1)
+        @test !isshredded(s2)
+        shred!(s2)
+
+        # Copying into a bigger destination
+        s3 = SecretBuffer()
+        s4 = SecretBuffer()
+        write(s3, "original")
+        seekstart(s3)
+        write(s4, randstring(1234))
+        s4data = s4.data
+        copy!(s4, s3)
+        @test s3.data == s4.data
+        @test read(s3) == read(s4) == codeunits("original")
+        @test all(iszero, s4data)
+        shred!(s3); shred!(s4)
+
+        # Copying into a smaller destination
+        s5 = SecretBuffer()
+        s6 = SecretBuffer("sekrit")
+        str = randstring(321)
+        write(s5, str)
+        seekstart(s5)
+        copy!(s6, s5)
+        @test read(s5) == read(s6) == codeunits(str)
+        shred!(s5); shred!(s6)
     end
 end

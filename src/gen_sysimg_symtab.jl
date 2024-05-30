@@ -15,12 +15,6 @@ function _eachmethod(f, m::Module, visited, vmt)
             x = getfield(m, nm)
             if isa(x, Module) && !in(x, visited)
                 _eachmethod(f, x, visited, vmt)
-            elseif isa(x, Function)
-                mt = typeof(x).name.mt
-                if !in(mt, vmt)
-                    push!(vmt, mt)
-                    Base.visit(f, mt)
-                end
             elseif isa(x, Type)
                 x = Base.unwrap_unionall(x)
                 if isa(x, DataType) && isdefined(x.name, :mt)
@@ -69,5 +63,5 @@ function outputline(io, name)
     println(io, "jl_symbol(\"", name, "\"),")
 end
 
-open(f->foreach(l->outputline(f,l), take(syms, 100)), "common_symbols1.inc", "w")
-open(f->foreach(l->outputline(f,l), take(drop(syms, 100), 254)), "common_symbols2.inc", "w")
+open(f->foreach(l->outputline(f,l), take(syms, 94)), "common_symbols1.inc", "w")
+open(f->foreach(l->outputline(f,l), take(drop(syms, 94), 254)), "common_symbols2.inc", "w")

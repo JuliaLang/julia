@@ -4,7 +4,7 @@
 # Emphasis
 # ––––––––
 
-mutable struct Italic
+mutable struct Italic <: MarkdownElement
     text
 end
 
@@ -20,7 +20,7 @@ function underscore_italic(stream::IO, md::MD)
     return result === nothing ? nothing : Italic(parseinline(result, md))
 end
 
-mutable struct Bold
+mutable struct Bold <: MarkdownElement
     text
 end
 
@@ -66,7 +66,7 @@ end
 # Images & Links
 # ––––––––––––––
 
-mutable struct Image
+mutable struct Image <: MarkdownElement
     url::String
     alt::String
 end
@@ -85,7 +85,7 @@ function image(stream::IO, md::MD)
     end
 end
 
-mutable struct Link
+mutable struct Link <: MarkdownElement
     text
     url::String
 end
@@ -112,7 +112,7 @@ function footnote_link(stream::IO, md::MD)
         if isempty(str)
             return
         else
-            ref = match(regex, str).captures[1]
+            ref = (match(regex, str)::AbstractMatch).captures[1]
             return Footnote(ref, nothing)
         end
     end
@@ -156,7 +156,7 @@ end
 # Punctuation
 # –––––––––––
 
-mutable struct LineBreak end
+mutable struct LineBreak <: MarkdownElement end
 
 @trigger '\\' ->
 function linebreak(stream::IO, md::MD)
