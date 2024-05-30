@@ -17,8 +17,7 @@ LOADER_CFLAGS += -DGLIBCXX_LEAST_VERSION_SYMBOL=\"$(shell echo "$(CSL_NEXT_GLIBC
 endif
 
 ifeq ($(OS),WINNT)
-LOADER_LDFLAGS += -municode -mconsole -nostdlib --disable-auto-import \
-                  --disable-runtime-pseudo-reloc -lntdll -lkernel32 -lpsapi
+LOADER_LDFLAGS += -municode -mconsole -nostdlib -lntdll -lkernel32 -lpsapi
 else ifeq ($(OS),Linux)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
 else ifeq ($(OS),FreeBSD)
