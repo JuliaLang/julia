@@ -343,3 +343,9 @@ end
     x = @fastmath maximum(Float16[1,2,3]; init = Float16(0))
     @test x == Float16(3)
 end
+
+@testset "Test promotion of >=3 arg fastmath" begin
+    # Bug caught in https://github.com/JuliaLang/julia/pull/54513#discussion_r1620553369
+    x = @fastmath 1. + 1. + 1f0
+    @test x == 3.0
+end
