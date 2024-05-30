@@ -33,6 +33,9 @@ const DenseUInt8OrInt8 = Union{DenseUInt8, DenseInt8}
 
 nothing_sentinel(i) = i == 0 ? nothing : i
 
+n_bytes_of(x::Union{String, SubString{String}}) = ncodeunits(x)
+n_bytes_of(x::DenseUInt8OrInt8) = length(x)
+
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::Union{String, SubString{String}}, i::Integer)
     if i < 1 || i > sizeof(s)
@@ -78,11 +81,11 @@ findfirst(::typeof(iszero), a::DenseUInt8OrInt8) = nothing_sentinel(_search(a, z
 findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
 
 function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = 1)
-    @boundscheck if i < 1
+    if i < 1
         throw(BoundsError(a, i))
     end
-    n = sizeof(a)
-    @boundscheck if i > n
+    n = n_bytes_of(a)
+    if i > n
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
     GC.@preserve a begin
@@ -129,11 +132,11 @@ end
 findlast(::typeof(iszero), a::DenseUInt8OrInt8) = nothing_sentinel(_rsearch(a, zero(UInt8)))
 findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
 
-function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
+function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = n_bytes_of(a))
     if i < 1
         return i == 0 ? 0 : throw(BoundsError(a, i))
     end
-    n = sizeof(a)
+    n = n_bytes_of(a)
     if i > n
         return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
