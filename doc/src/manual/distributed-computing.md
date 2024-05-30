@@ -186,7 +186,7 @@ end
 ```
 
 In order to refer to `MyType` across all processes, `DummyModule.jl` needs to be loaded on
-every process.  Calling `include("DummyModule.jl")` loads it only on a single process.  To
+every process. Calling `include("DummyModule.jl")` loads it only on a single process. To
 load it on every process, use the [`@everywhere`](@ref) macro (starting Julia with `julia -p
 2`):
 
@@ -198,7 +198,7 @@ loaded
 ```
 
 As usual, this does not bring `DummyModule` into scope on any of the process, which requires
-[`using`](@ref) or [`import`](@ref).  Moreover, when `DummyModule` is brought into scope on one process, it
+[`using`](@ref) or [`import`](@ref). Moreover, when `DummyModule` is brought into scope on one process, it
 is not on any other:
 
 ```julia-repl
