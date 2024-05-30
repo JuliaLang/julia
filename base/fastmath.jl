@@ -286,7 +286,7 @@ for op in (:+, :*, :min, :max)
         # definitions down to avoid losing type information.
         # type promotion
         $op_fast(a::Number, b::Number, c::Number, xs::Number...) =
-        $op_fast(promote(x,y,c,xs...)...)
+            $op_fast(promote(a,b,c,xs...)...)
         # fall-back implementation that applies after promotion
         $op_fast(a::T, b::T, c::T, xs::T...) where {T<:Number} = (@inline; afoldl($op_fast, ($op_fast)(($op_fast)(a,b),c), xs...))
     end
