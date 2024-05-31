@@ -1233,7 +1233,6 @@ end
 
 size(m::MethodList) = size(m.ms)
 getindex(m::MethodList, i::Integer) = m.ms[i]
-collect(m::MethodList) = m.ms
 
 function MethodList(mt::Core.MethodTable)
     ms = Method[]
