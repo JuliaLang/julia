@@ -303,9 +303,10 @@ end
 @noinline function throw_setindex_structuralzero_error(T, @nospecialize(x))
     _struct_zero_half_str(::Type{<:UpperTriangular}) = "lower"
     _struct_zero_half_str(::Type{<:LowerTriangular}) = "upper"
-    throw(ArgumentError(LazyString("cannot set indices in the", _struct_zero_half_str(T),
-            " triangular part ",
-            lazy"of an $(nameof(T)) matrix to a nonzero value ($x)")))
+    Ts = _struct_zero_half_str(T)
+    Tn = nameof(T)
+    throw(ArgumentError(
+        lazy"cannot set indices in the $Ts triangular part of an $Tn matrix to a nonzero value ($x)"))
 end
 
 @inline function fill!(A::UpperTriangular, x)
