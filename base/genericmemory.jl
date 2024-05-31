@@ -5,7 +5,19 @@
 """
     GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: AbstractVector{T}
 
-One-dimensional dense array with elements of type `T`.
+One-dimensional, fixed-size, dense array with elements of type `T`.
+
+`kind` can currently be either `:not_atomic` or `:atomic`. For details on what `:atomic` implies, see [`AtomicMemory`](@ref)
+
+`addrspace` can currently only be set to Core.CPU. It is designed to  to permit extension by other systems
+such as GPUs, which might define values such as:
+```
+module CUDA
+const Generic = bitcast(Core.AddrSpace{CUDA}, 0)
+const Global = bitcast(Core.AddrSpace{CUDA}, 1)
+end
+```
+The exact semantics of these other addrspaces is defined by the specific backend, but will error if the user is attempting to access these on the CPU.
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
@@ -15,7 +27,7 @@ GenericMemory
 """
     Memory{T} == GenericMemory{:not_atomic, T, Core.CPU}
 
-One-dimensional dense array with elements of type `T`.
+One-dimensional, fixed-size, dense array with elements of type `T`.
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
@@ -25,8 +37,9 @@ Memory
 """
     AtomicMemory{T} == GenericMemory{:atomic, T, Core.CPU}
 
-One-dimensional dense array with elements of type `T`, where each element is
+One-dimensional, fixed-size, dense array with elements of type `T`, where each element is
 independently atomic when accessed, and cannot be set non-atomically.
+For details, see [Atomic Operations](@ref man-atomic-operations)
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
