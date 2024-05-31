@@ -249,12 +249,15 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @noinline function throw_nonzeroerror(T, @nospecialize(x), i, j)
     _upper_lower_str(::Type{<:UpperOrUnitUpperTriangular}) = "upper"
     _upper_lower_str(::Type{<:LowerOrUnitLowerTriangular}) = "lower"
-    throw(ArgumentError(LazyString("cannot set index in the ", _upper_lower_str(T), " triangular part",
-            lazy"($i, $j) of an $(nameof(T)) matrix to a nonzero value ($x)")))
+    Ts = _upper_lower_str(T)
+    Tn = nameof(T)
+    throw(ArgumentError(
+        lazy"cannot set index in the $Ts triangular part ($i, $j) of an $Tn matrix to a nonzero value ($x)"))
 end
 @noinline function throw_nononeerror(T, @nospecialize(x), i, j)
-    throw(ArgumentError(LazyString("cannot set index on the diagonal",
-            lazy"($i, $j) of an $(nameof(T)) matrix to a non-unit value ($x)")))
+    Tn = nameof(T)
+    throw(ArgumentError(
+        lazy"cannot set index on the diagonal ($i, $j) of an $Tn matrix to a non-unit value ($x)"))
 end
 
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
