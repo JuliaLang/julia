@@ -537,8 +537,9 @@ const undef = UndefInitializer()
 memoryref(mem::GenericMemory) = memoryrefnew(mem)
 memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
 memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
-memoryref(ref::GenericMemoryRef, i::Bool) = error()
-memoryref(ref::GenericMemoryRef, i::Integer, ::Bool) = error()
+GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
+GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
+GenericMemoryRef(mem::GenericMemoryRef, i::Integer) = memoryref(mem, i)
 
 const Memory{T} = GenericMemory{:not_atomic, T, CPU}
 const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
