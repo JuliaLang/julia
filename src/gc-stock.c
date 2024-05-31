@@ -2141,7 +2141,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 if (gc_cblist_task_scanner) {
                     int16_t tid = jl_atomic_load_relaxed(&ta->tid);
                     gc_invoke_callbacks(jl_gc_cb_task_scanner_t, gc_cblist_task_scanner,
-                                        (ta, tid != -1 && ta == gc_all_tls_states[tid]->root_task));
+                                        (ta, tid != -1 && ta == gc_all_tls_states[tid]->root_task, ptls));
                 }
         #ifdef COPY_STACKS
                 void *stkbuf = ta->stkbuf;
