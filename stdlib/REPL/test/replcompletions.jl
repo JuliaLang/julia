@@ -2219,6 +2219,12 @@ let s = "using Base."
     @test res
     @test "BinaryPlatforms" in c
 end
+# JuliaLang/julia#53999
+let s = "using Base.Sort, Base.Th"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Threads" in c
+end
 # test cases with the `.` accessor
 module Issue52922
 module Inner1
@@ -2301,10 +2307,4 @@ let s = "TestImplicitUsing.@asse"
     c, r, res = test_complete_context(s)
     @test res
     @test "@assert" in c
-end
-# JuliaLang/julia#53999
-let s = "using Base.Thre"
-    c, r, res = test_complete_context(s)
-    @test res
-    @test "Threads" in c
 end
