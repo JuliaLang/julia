@@ -19,6 +19,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
         require_one_based_indexing(data)
+        _checkcontiguous(Bool, data) || throw(ArgumentError("data must be stored contiguously in memory"))
         return new(data, false, readable, writable, seekable, append, length(data), maxsize, 1, 0, -1)
     end
 end

@@ -388,3 +388,8 @@ end
     b = pushfirst!([0x02], 0x01)
     @test take!(IOBuffer(b)) == [0x01, 0x02]
 end
+
+@testset "#54636 test IOBuffer checks data is contiguous" begin
+    b = @view(collect(0x00:0x03)[begin:2:end])
+    @test_throws ArgumentError IOBuffer(b)
+end
