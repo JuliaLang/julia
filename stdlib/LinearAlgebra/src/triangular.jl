@@ -246,14 +246,23 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
-Base._reverse(A::UpperOrUnitUpperTriangular, dims::Integer) = reverse!(Matrix(A); dims)
-Base._reverse(A::UpperTriangular, ::Colon) = LowerTriangular(reverse(A.data))
-Base._reverse(A::UnitUpperTriangular, ::Colon) = UnitLowerTriangular(reverse(A.data))
+@noinline function throw_nonzeroerror(T, @nospecialize(x), i, j)
+    _upper_lower_str(::Type{<:UpperOrUnitUpperTriangular}) = "upper"
+    _upper_lower_str(::Type{<:LowerOrUnitLowerTriangular}) = "lower"
+    Ts = _upper_lower_str(T)
+    Tn = nameof(T)
+    throw(ArgumentError(
+        lazy"cannot set index in the $Ts triangular part ($i, $j) of an $Tn matrix to a nonzero value ($x)"))
+end
+@noinline function throw_nononeerror(T, @nospecialize(x), i, j)
+    Tn = nameof(T)
+    throw(ArgumentError(
+        lazy"cannot set index on the diagonal ($i, $j) of an $Tn matrix to a non-unit value ($x)"))
+end
 
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
-            lazy"($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
+        iszero(x) || throw_nonzeroerror(typeof(A), x, i, j)
     else
         A.data[i,j] = x
     end
@@ -262,25 +271,18 @@ end
 
 @propagate_inbounds function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
-            lazy"($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
+        iszero(x) || throw_nonzeroerror(typeof(A), x, i, j)
     elseif i == j
-        x == oneunit(x) || throw(ArgumentError(lazy"cannot set index on the diagonal ($i, $j) " *
-            lazy"of a UnitUpperTriangular matrix to a non-unit value ($x)"))
+        x == oneunit(x) || throw_nononeerror(typeof(A), x, i, j)
     else
         A.data[i,j] = x
     end
     return A
 end
 
-Base._reverse(A::LowerOrUnitLowerTriangular, dims) = reverse!(Matrix(A); dims)
-Base._reverse(A::LowerTriangular, ::Colon) = UpperTriangular(reverse(A.data))
-Base._reverse(A::UnitLowerTriangular, ::Colon) = UnitUpperTriangular(reverse(A.data))
-
 @propagate_inbounds function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
-            lazy"($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
+        iszero(x) || throw_nonzeroerror(typeof(A), x, i, j)
     else
         A.data[i,j] = x
     end
@@ -289,33 +291,45 @@ end
 
 @propagate_inbounds function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
-            lazy"($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
+        iszero(x) || throw_nonzeroerror(typeof(A), x, i, j)
     elseif i == j
-        x == oneunit(x) || throw(ArgumentError(lazy"cannot set index on the diagonal ($i, $j) " *
-            lazy"of a UnitLowerTriangular matrix to a non-unit value ($x)"))
+        x == oneunit(x) || throw_nononeerror(typeof(A), x, i, j)
     else
         A.data[i,j] = x
     end
     return A
 end
 
+@noinline function throw_setindex_structuralzero_error(T, @nospecialize(x))
+    _struct_zero_half_str(::Type{<:UpperTriangular}) = "lower"
+    _struct_zero_half_str(::Type{<:LowerTriangular}) = "upper"
+    Ts = _struct_zero_half_str(T)
+    Tn = nameof(T)
+    throw(ArgumentError(
+        lazy"cannot set indices in the $Ts triangular part of an $Tn matrix to a nonzero value ($x)"))
+end
+
 @inline function fill!(A::UpperTriangular, x)
-    iszero(x) || throw(ArgumentError("cannot set indices in the lower triangular part " *
-            lazy"of an UpperTriangular matrix to a nonzero value ($x)"))
+    iszero(x) || throw_setindex_structuralzero_error(typeof(A), x)
     for col in axes(A,2), row in firstindex(A,1):col
         @inbounds A.data[row, col] = x
     end
     A
 end
 @inline function fill!(A::LowerTriangular, x)
-    iszero(x) || throw(ArgumentError("cannot set indices in the upper triangular part " *
-            lazy"of a LowerTriangular matrix to a nonzero value ($x)"))
+    iszero(x) || throw_setindex_structuralzero_error(typeof(A), x)
     for col in axes(A,2), row in col:lastindex(A,1)
         @inbounds A.data[row, col] = x
     end
     A
 end
+
+Base._reverse(A::UpperOrUnitUpperTriangular, dims::Integer) = reverse!(Matrix(A); dims)
+Base._reverse(A::UpperTriangular, ::Colon) = LowerTriangular(reverse(A.data))
+Base._reverse(A::UnitUpperTriangular, ::Colon) = UnitLowerTriangular(reverse(A.data))
+Base._reverse(A::LowerOrUnitLowerTriangular, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::LowerTriangular, ::Colon) = UpperTriangular(reverse(A.data))
+Base._reverse(A::UnitLowerTriangular, ::Colon) = UnitUpperTriangular(reverse(A.data))
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::Union{UpperTriangular,UnitUpperTriangular},
