@@ -1125,6 +1125,8 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
             tt = ((jl_tvar_t*)tt)->ub;
         if (tt == (jl_value_t*)jl_any_type)
             return (jl_value_t*)jl_any_type;
+        if (tt == (jl_value_t*)jl_bottom_type)
+            return (jl_value_t*)jl_bottom_type;
         JL_GC_PUSH1(&f);
         if (jl_is_symbol(f))
             f = jl_box_long(field_index+1);
@@ -1363,11 +1365,11 @@ JL_CALLABLE(jl_f_apply_type)
         jl_vararg_t *vm = (jl_vararg_t*)args[0];
         if (!vm->T) {
             JL_NARGS(apply_type, 2, 3);
-            return (jl_value_t*)jl_wrap_vararg(args[1], nargs == 3 ? args[2] : NULL, 1);
+            return (jl_value_t*)jl_wrap_vararg(args[1], nargs == 3 ? args[2] : NULL, 1, 0);
         }
         else if (!vm->N) {
             JL_NARGS(apply_type, 2, 2);
-            return (jl_value_t*)jl_wrap_vararg(vm->T, args[1], 1);
+            return (jl_value_t*)jl_wrap_vararg(vm->T, args[1], 1, 0);
         }
     }
     else if (jl_is_unionall(args[0])) {
@@ -1678,7 +1680,7 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
         jl_value_t *ta = jl_svecref(old, i);
         jl_value_t *tb = jl_svecref(ft, i);
         if (jl_has_free_typevars(ta)) {
-            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
+            if (!jl_has_free_typevars(tb) || !jl_types_egal(ta, tb))
                 return 0;
         }
         else if (jl_has_free_typevars(tb) || jl_typetagof(ta) != jl_typetagof(tb) ||
@@ -2058,7 +2060,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
     add_builtin("TypeofVararg", (jl_value_t*)jl_vararg_type);
     add_builtin("SimpleVector", (jl_value_t*)jl_simplevector_type);
-    add_builtin("Vararg", (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0));
+    add_builtin("Vararg", (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0));
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);

@@ -411,6 +411,11 @@ function rename_unionall(@nospecialize(u))
     return UnionAll(nv, body{nv})
 end
 
+# remove concrete constraint on diagonal TypeVar if it comes from troot
+function widen_diagonal(@nospecialize(t), troot::UnionAll)
+    body = ccall(:jl_widen_diagonal, Any, (Any, Any), t, troot)
+end
+
 function isvarargtype(@nospecialize(t))
     return isa(t, Core.TypeofVararg)
 end

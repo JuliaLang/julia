@@ -735,7 +735,7 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
                 vm = T_has_tv ? jl_type_unionall(v, T) : T;
                 if (N_has_tv)
                     N = NULL;
-                vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1); // this cannot throw for these inputs
+                vm = (jl_value_t*)jl_wrap_vararg(vm, N, 1, 0); // this cannot throw for these inputs
             }
             sp++;
             decl = ((jl_unionall_t*)decl)->body;
@@ -984,7 +984,7 @@ static void jl_compilation_sig(
             // avoid Vararg{Type{Type{...}}}
             if (jl_is_type_type(type_i) && jl_is_type_type(jl_tparam0(type_i)))
                 type_i = (jl_value_t*)jl_type_type;
-            type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1); // this cannot throw for these inputs
+            type_i = (jl_value_t*)jl_wrap_vararg(type_i, (jl_value_t*)NULL, 1, 0); // this cannot throw for these inputs
         }
         else {
             type_i = inst_varargp_in_env(decl, sparams);
@@ -2477,7 +2477,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
     }
 
-    codeinst = jl_generate_fptr(mi, world);
+    int did_compile = 0;
+    codeinst = jl_generate_fptr(mi, world, &did_compile);
     if (!codeinst) {
         jl_method_instance_t *unspec = jl_get_unspecialized_from_mi(mi);
         jl_code_instance_t *ucache = jl_get_method_inferred(unspec, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
@@ -2517,7 +2518,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_atomic_store_release(&codeinst->invoke, ucache_invoke);
         jl_mi_cache_insert(mi, codeinst);
     }
-    else {
+    else if (did_compile) {
         record_precompile_statement(mi);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);

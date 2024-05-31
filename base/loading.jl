@@ -933,7 +933,13 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
         return path
     end
     hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
-    hash === nothing && return nothing
+    if hash === nothing
+        mbypath = manifest_uuid_path(Sys.STDLIB, pkg)
+        if mbypath isa String
+            return entry_path(mbypath, pkg.name)
+        end
+        return nothing
+    end
     hash = SHA1(hash)
     # Keep the 4 since it used to be the default
     uuid = pkg.uuid::UUID # checked within `explicit_manifest_uuid_path`

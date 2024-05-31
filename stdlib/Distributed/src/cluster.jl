@@ -92,7 +92,7 @@ mutable struct WorkerConfig
     end
 end
 
-@enum WorkerState W_CREATED W_CONNECTED W_TERMINATING W_TERMINATED
+@enum WorkerState W_CREATED W_CONNECTED W_TERMINATING W_TERMINATED W_UNKNOWN_STATE
 mutable struct Worker
     id::Int
     msg_lock::Threads.ReentrantLock # Lock for del_msgs, add_msgs, and gcflag

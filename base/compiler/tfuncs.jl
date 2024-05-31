@@ -95,7 +95,7 @@ add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 # if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 # if istype is true, the actual runtime value will definitely be a type (e.g. this is false for Union{Type{Int}, Int})
-function instanceof_tfunc(@nospecialize(t))
+function instanceof_tfunc(@nospecialize(t), @nospecialize(troot) = t)
     if isa(t, Const)
         if isa(t.val, Type) && valid_as_lattice(t.val)
             return t.val, true, isconcretetype(t.val), true
@@ -103,6 +103,7 @@ function instanceof_tfunc(@nospecialize(t))
         return Bottom, true, false, false # runtime throws on non-Type
     end
     t = widenconst(t)
+    troot = widenconst(troot)
     if t === Bottom
         return Bottom, true, true, false # runtime unreachable
     elseif t === typeof(Bottom) || !hasintersect(t, Type)
@@ -110,10 +111,15 @@ function instanceof_tfunc(@nospecialize(t))
     elseif isType(t)
         tp = t.parameters[1]
         valid_as_lattice(tp) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
+        if troot isa UnionAll
+            # Free `TypeVar`s inside `Type` has violated the "diagonal" rule.
+            # Widen them before `UnionAll` rewraping to relax concrete constraint.
+            tp = widen_diagonal(tp, troot)
+        end
         return tp, !has_free_typevars(tp), isconcretetype(tp), true
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
-        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′)
+        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, rewrap_unionall(t, troot))
         tr = rewrap_unionall(t′′, t)
         if t′′ isa DataType && t′′.name !== Tuple.name && !has_free_typevars(tr)
             # a real instance must be within the declared bounds of the type,
@@ -128,8 +134,8 @@ function instanceof_tfunc(@nospecialize(t))
         end
         return tr, isexact, isconcrete, istype
     elseif isa(t, Union)
-        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a)
-        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b)
+        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a, troot)
+        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b, troot)
         isconcrete = isconcrete_a && isconcrete_b
         istype = istype_a && istype_b
         # most users already handle the Union case, so here we assume that
@@ -2034,12 +2040,12 @@ function array_type_undefable(@nospecialize(arytype))
     end
 end
 
-function array_builtin_common_nothrow(argtypes::Vector{Any}, isarrayref::Bool)
+function array_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, isarrayref::Bool)
     first_idx_idx = isarrayref ? 3 : 4
     length(argtypes) ≥ first_idx_idx || return false
     boundscheck = argtypes[1]
     arytype = argtypes[2]
-    array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
+    array_builtin_common_typecheck(𝕃, boundscheck, arytype, argtypes, first_idx_idx) || return false
     if isarrayref
         # If we could potentially throw undef ref errors, bail out now.
         arytype = widenconst(arytype)
@@ -2056,8 +2062,9 @@ function array_builtin_common_nothrow(argtypes::Vector{Any}, isarrayref::Bool)
     return false
 end
 
-@nospecs function array_builtin_common_typecheck(boundscheck, arytype,
-    argtypes::Vector{Any}, first_idx_idx::Int)
+@nospecs function array_builtin_common_typecheck(𝕃::AbstractLattice,
+    boundscheck, arytype, argtypes::Vector{Any}, first_idx_idx::Int)
+    ⊑ = Core.Compiler.:⊑(𝕃)
     (boundscheck ⊑ Bool && arytype ⊑ Array) || return false
     for i = first_idx_idx:length(argtypes)
         argtypes[i] ⊑ Int || return false
@@ -2080,11 +2087,11 @@ end
 @nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
     ⊑ = Core.Compiler.:⊑(𝕃)
     if f === arrayset
-        array_builtin_common_nothrow(argtypes, #=isarrayref=#false) || return false
+        array_builtin_common_nothrow(𝕃, argtypes, #=isarrayref=#false) || return false
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
-        return array_builtin_common_nothrow(argtypes, #=isarrayref=#true)
+        return array_builtin_common_nothrow(𝕃, argtypes, #=isarrayref=#true)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol

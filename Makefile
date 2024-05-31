@@ -61,6 +61,10 @@ $(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$$(bu
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
+# Build the HTML docs (skipped if already exists, notably in tarballs)
+$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
+	@$(MAKE) docs
+
 julia-symlink: julia-cli-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
 	echo '@"%~dp0/'"$$(echo '$(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE))')"'" %*' | tr / '\\' > $(BUILDROOT)/julia.bat
@@ -265,7 +269,7 @@ define stringreplace
 endef
 
 
-install: $(build_depsbindir)/stringreplace docs
+install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) $(JULIA_BUILD_MODE)
 	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir) $(private_libexecdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
@@ -281,16 +285,14 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libjulia-internal-debug.dll.a $(DESTDIR)$(libdir)/
 endif
+	-$(INSTALL_M) $(wildcard $(build_private_libdir)/*.a) $(DESTDIR)$(private_libdir)/
+	-rm -f $(DESTDIR)$(private_libdir)/sys-o.a
 
-	# We have a single exception; we want 7z.dll to live in private_libexecdir, not bindir, so that 7z.exe can find it.
+	# We have a single exception; we want 7z.dll to live in private_libexecdir,
+	# not bindir, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(private_libexecdir)/
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libssp.dll.a $(DESTDIR)$(libdir)/
-	# The rest are compiler dependencies, as an example memcpy is exported by msvcrt
-	# These are files from mingw32 and required for creating shared libraries like our caches.
-	-$(INSTALL_M) $(build_libdir)/libgcc_s.a $(DESTDIR)$(libdir)/
-	-$(INSTALL_M) $(build_libdir)/libgcc.a $(DESTDIR)$(libdir)/
-	-$(INSTALL_M) $(build_libdir)/libmsvcrt.a $(DESTDIR)$(libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin
@@ -525,7 +527,7 @@ app:
 darwinframework:
 	$(MAKE) -C $(JULIAHOME)/contrib/mac/framework
 
-light-source-dist.tmp: docs
+light-source-dist.tmp: $(BUILDROOT)/doc/_build/html/en/index.html
 ifneq ($(BUILDROOT),$(JULIAHOME))
 	$(error make light-source-dist does not work in out-of-tree builds)
 endif

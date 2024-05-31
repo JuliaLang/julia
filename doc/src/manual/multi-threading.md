@@ -116,8 +116,8 @@ julia> using Base.Threads
 julia> nthreadpools()
 2
 
-julia> threadpool()
-:default
+julia> threadpool() # the main thread is in the interactive thread pool
+:interactive
 
 julia> nthreads(:default)
 3
@@ -132,6 +132,10 @@ julia> nthreads()
 !!! note
     The zero-argument version of `nthreads` returns the number of threads
     in the default pool.
+
+!!! note
+    Depending on whether Julia has been started with interactive threads,
+    the main thread is either in the default or interactive thread pool.
 
 Either or both numbers can be replaced with the word `auto`, which causes
 Julia to choose a reasonable default.

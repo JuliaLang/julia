@@ -493,9 +493,12 @@ public:
         if (GlobalValue *V = m->getNamedValue(name))
             return cast<GlobalVariable>(V);
         auto T_size = m->getDataLayout().getIntPtrType(m->getContext());
-        return new GlobalVariable(*m, _type(T_size),
+        auto var = new GlobalVariable(*m, _type(T_size),
                 isconst, GlobalVariable::ExternalLinkage,
                 NULL, name);
+        if (Triple(m->getTargetTriple()).isOSWindows())
+            var->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLImportStorageClass); // Cross-library imports must be explicit for COFF (Windows)
+        return var;
     }
     GlobalVariable *realize(jl_codectx_t &ctx);
 };
@@ -1786,9 +1789,6 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
                 G->isConstant(), GlobalVariable::ExternalLinkage,
                 nullptr, G->getName(), nullptr, G->getThreadLocalMode());
         proto->copyAttributesFrom(G);
-        // DLLImport only needs to be set for the shadow module
-        // it just gets annoying in the JIT
-        proto->setDLLStorageClass(GlobalValue::DefaultStorageClass);
         return proto;
     }
     return cast<GlobalVariable>(local);
@@ -5031,7 +5031,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ctx, ptr_phi), getInt8PtrTy(ctx.builder.getContext())),
                 maybe_bitcast(ctx, decay_derived(ctx, phi), getInt8PtrTy(ctx.builder.getContext())));
-            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, ctx.tbaa().tbaa_stack); // XXX: this TBAA is wrong for ptr_phi
+            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, best_tbaa(ctx.tbaa(), phiType));
             val.Vboxed = ptr_phi;
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, r));
             ctx.SAvalues.at(idx) = val;
@@ -6679,6 +6679,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     if (ctx.emission_context.TargetTriple.isAArch64() || ctx.emission_context.TargetTriple.isARM() || ctx.emission_context.TargetTriple.isPPC64()) {
         if (nest) {
             emit_error(ctx, "cfunction: closures are not supported on this platform");
+            JL_GC_POP();
             return jl_cgval_t();
         }
     }

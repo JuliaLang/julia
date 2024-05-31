@@ -1615,7 +1615,7 @@ function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, arg
     argtypes = Any[argextype(args[i], astate.ir) for i in 2:length(args)]
     boundcheckt = argtypes[1]
     aryt = argtypes[2]
-    if !array_builtin_common_typecheck(boundcheckt, aryt, argtypes, 3)
+    if !array_builtin_common_typecheck(𝕃ₒ, boundcheckt, aryt, argtypes, 3)
         add_thrown_escapes!(astate, pc, args, 2)
     end
     ary = args[3]
@@ -1679,7 +1679,7 @@ function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, arg
     boundcheckt = argtypes[1]
     aryt = argtypes[2]
     valt = argtypes[3]
-    if !(array_builtin_common_typecheck(boundcheckt, aryt, argtypes, 4) &&
+    if !(array_builtin_common_typecheck(𝕃ₒ, boundcheckt, aryt, argtypes, 4) &&
          arrayset_typecheck(aryt, valt))
         add_thrown_escapes!(astate, pc, args, 2)
     end

@@ -115,6 +115,8 @@ precompile_test_harness(false) do dir
                   d = den(a)
                   return h
               end
+              abstract type AbstractAlgebraMap{A} end
+              struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
           end
           """)
     write(Foo2_file,
@@ -130,7 +132,7 @@ precompile_test_harness(false) do dir
     write(Foo_file,
           """
           module $Foo_module
-              import $FooBase_module, $FooBase_module.typeA
+              import $FooBase_module, $FooBase_module.typeA, $FooBase_module.GAPGroupHomomorphism
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
@@ -211,6 +213,8 @@ precompile_test_harness(false) do dir
               Base.convert(::Type{Some{Value18343}}, ::Value18343{Some}) = 2
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
+              const GAPType1 = GAPGroupHomomorphism{Nothing, Nothing}
+              const GAPType2 = GAPGroupHomomorphism{1, 2}
 
               # issue #28297
               mutable struct Result

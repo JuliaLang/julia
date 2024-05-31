@@ -713,7 +713,7 @@ m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
 let low3 = Meta.lower(@__MODULE__, quote @m3 end)
     m3_exprs = get_expr_list(low3)
     ci = low3.args[1]::Core.CodeInfo
-    @test ci.codelocs == [4, 2]
+    @test ci.codelocs == [4, 0]
     @test is_return_ssavalue(m3_exprs[end])
 end
 

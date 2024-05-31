@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Unicode/docs/src/index.md"
+```
+
 # Unicode
 
 ```@docs

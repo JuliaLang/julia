@@ -256,3 +256,34 @@ end
         @test isapprox(typemin(T), 0.0, rtol=1)
     end
 end
+
+@testset "Conversion from floating point to unsigned integer near extremes (#51063)" begin
+    @test_throws InexactError UInt32(4.2949673f9)
+    @test_throws InexactError UInt64(1.8446744f19)
+    @test_throws InexactError UInt64(1.8446744073709552e19)
+    @test_throws InexactError UInt128(3.402823669209385e38)
+end
+
+@testset "Conversion from floating point to integer near extremes (exhaustive)" begin
+    for Ti in Base.BitInteger_types, Tf in (Float16, Float32, Float64), x in (typemin(Ti), typemax(Ti))
+        y = Tf(x)
+        for i in -3:3
+            z = nextfloat(y, i)
+
+            result = isfinite(z) ? round(BigInt, z) : error
+            result = result !== error && typemin(Ti) <= result <= typemax(Ti) ? result : error
+
+            if result === error
+                # @test_throws InexactError round(Ti, z) Broken because of #51113
+                @test_throws InexactError Ti(z)
+            else
+                @test result == round(Ti, z)
+                if isinteger(z)
+                    @test result == Ti(z)
+                else
+                    @test_throws InexactError Ti(z)
+                end
+            end
+        end
+    end
+end

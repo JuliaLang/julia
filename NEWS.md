@@ -19,7 +19,7 @@ Language changes
   define methods to explicitly handle Union{} without the ambiguities that commonly would
   result previously. This also lets the runtime optimize certain method lookups in a way
   that significantly improves load and inference times for heavily overloaded methods that
-  dispatch on Types (such as traits and constructors).
+  dispatch on Types (such as traits and constructors). ([#49349])
 * The "h bar" `ℏ` (`\hslash` U+210F) character is now treated as equivalent to `ħ` (`\hbar` U+0127).
 * The `@simd` macro now has more limited and clearer semantics: it only enables reordering and contraction
   of floating-point operations, instead of turning on all "fastmath" optimizations.

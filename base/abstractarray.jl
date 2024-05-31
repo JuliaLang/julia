@@ -103,17 +103,20 @@ end
     has_offset_axes(A, B, ...)
 
 Return `true` if the indices of `A` start with something other than 1 along any axis.
-If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
+If multiple arguments are passed, equivalent to `has_offset_axes(A) || has_offset_axes(B) || ...`.
 
 See also [`require_one_based_indexing`](@ref).
 """
+has_offset_axes() = false
 has_offset_axes(A) = _any_tuple(x->Int(first(x))::Int != 1, false, axes(A)...)
 has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
-# Use `_any_tuple` to avoid unneeded invoke.
-# note: this could call `any` directly if the compiler can infer it
-has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
 has_offset_axes(::Colon) = false
 has_offset_axes(::Array) = false
+# note: this could call `any` directly if the compiler can infer it. We don't use _any_tuple
+# here because it stops full elision in some cases (#49332) and we don't need handling of
+# `missing` (has_offset_axes(A) always returns a Bool)
+has_offset_axes(A, As...) = has_offset_axes(A) || has_offset_axes(As...)
+
 
 """
     require_one_based_indexing(A::AbstractArray)

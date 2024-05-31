@@ -1128,6 +1128,13 @@ void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
         jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
 }
 
+void jl_gc_count_freed(size_t sz) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_atomic_store_relaxed(&ptls->gc_num.freed,
+        jl_atomic_load_relaxed(&ptls->gc_num.freed) + sz);
+}
+
 static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
 {
     int gc_n_threads;
@@ -2052,7 +2059,7 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
             pushed_chunk = 1;
         }
     }
-    for (; ary8_begin < ary8_end; ary8_begin += elsize) {
+    for (; ary8_begin < scan_end; ary8_begin += elsize) {
         for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
             jl_value_t **slot = &ary8_begin[*pindex];
             new_obj = *slot;
@@ -2190,9 +2197,10 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
             break;
         }
         case GC_finlist_chunk: {
+            jl_value_t *fl_parent = c->parent;
             jl_value_t **fl_begin = c->begin;
             jl_value_t **fl_end = c->end;
-            gc_mark_finlist_(mq, fl_begin, fl_end);
+            gc_mark_finlist_(mq, fl_parent, fl_begin, fl_end);
             break;
         }
         default: {
@@ -2290,6 +2298,7 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     jl_value_t *bindingkeyset = (jl_value_t *)jl_atomic_load_relaxed(&mb_parent->bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, bindingkeyset);
     gc_try_claim_and_push(mq, bindingkeyset, &nptr);
+    gc_heap_snapshot_record_module_to_binding(mb_parent, bindings, bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->parent);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->parent, &nptr);
     size_t nusings = mb_parent->usings.len;
@@ -2308,7 +2317,7 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     }
 }
 
-void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
+void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t **fl_begin, jl_value_t **fl_end)
 {
     jl_value_t *new_obj;
     // Decide whether need to chunk finlist
@@ -2318,8 +2327,10 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
         gc_chunkqueue_push(mq, &c);
         fl_end = fl_begin + GC_CHUNK_BATCH_SIZE;
     }
+    size_t i = 0;
     for (; fl_begin < fl_end; fl_begin++) {
-        new_obj = *fl_begin;
+        jl_value_t **slot = fl_begin;
+        new_obj = *slot;
         if (__unlikely(new_obj == NULL))
             continue;
         if (gc_ptr_tag(new_obj, 1)) {
@@ -2330,6 +2341,13 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
         if (gc_ptr_tag(new_obj, 2))
             continue;
         gc_try_claim_and_push(mq, new_obj, NULL);
+        if (fl_parent != NULL) {
+            gc_heap_snapshot_record_array_edge(fl_parent, slot);
+        } else {
+            // This is a list of objects following the same format as a finlist
+            // if `fl_parent` is NULL
+            gc_heap_snapshot_record_finlist(new_obj, ++i);
+        }
     }
 }
 
@@ -2341,7 +2359,7 @@ void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start)
         return;
     jl_value_t **fl_begin = (jl_value_t **)list->items + start;
     jl_value_t **fl_end = (jl_value_t **)list->items + len;
-    gc_mark_finlist_(mq, fl_begin, fl_end);
+    gc_mark_finlist_(mq, NULL, fl_begin, fl_end);
 }
 
 JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
@@ -2708,9 +2726,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_gc_markqueue_t *mq_master = NULL;
     int master_tid = jl_atomic_load(&gc_master_tid);
-    if (master_tid == -1) {
-        return;
-    }
+    assert(master_tid != -1);
     mq_master = &gc_all_tls_states[master_tid]->mark_queue;
     void *new_obj;
     jl_gc_chunk_t c;
@@ -2801,61 +2817,49 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * Correctness argument for the mark-loop termination protocol.
  *
  * Safety properties:
- * - No work items shall be in any thread's queues when `gc_mark_loop_barrier` observes
+ * - No work items shall be in any thread's queues when `gc_should_mark` observes
  * that `gc_n_threads_marking` is zero.
  *
  * - No work item shall be stolen from the master thread (i.e. mutator thread which started
  * GC and which helped the `jl_n_markthreads` - 1 threads to mark) after
- * `gc_mark_loop_barrier` observes that `gc_n_threads_marking` is zero. This property is
+ * `gc_should_mark` observes that `gc_n_threads_marking` is zero. This property is
  * necessary because we call `gc_mark_loop_serial` after marking the finalizer list in
  * `_jl_gc_collect`, and want to ensure that we have the serial mark-loop semantics there,
  * and that no work is stolen from us at that point.
  *
  * Proof:
- * - Suppose the master thread observes that `gc_n_threads_marking` is zero in
- * `gc_mark_loop_barrier` and there is a work item left in one thread's queue at that point.
- * Since threads try to steal from all threads' queues, this implies that all threads must
- * have tried to steal from the queue which still has a work item left, but failed to do so,
- * which violates the semantics of Chase-Lev's work-stealing queue.
- *
- * - Let E1 be the event "master thread writes -1 to gc_master_tid" and E2 be the even
- * "master thread observes that `gc_n_threads_marking` is zero". Since we're using
- * sequentially consistent atomics, E1 => E2. Now suppose one thread which is spinning in
- * `gc_should_mark` tries to enter the mark-loop after E2. In order to do so, it must
- * increment `gc_n_threads_marking` to 1 in an event E3, and then read `gc_master_tid` in an
- * event E4. Since we're using sequentially consistent atomics, E3 => E4. Since we observed
- * `gc_n_threads_marking` as zero in E2, then E2 => E3, and we conclude E1 => E4, so that
- * the thread which is spinning in `gc_should_mark` must observe that `gc_master_tid` is -1
- * and therefore won't enter the mark-loop.
+ * - If a thread observes that `gc_n_threads_marking` is zero inside `gc_should_mark`, that
+ * means that no thread has work on their queue, this is guaranteed because a thread may only exit
+ * `gc_mark_and_steal` when its own queue is empty, this information is synchronized by the
+ * seq-cst fetch_add to a thread that is in `gc_should_mark`. `gc_queue_observer_lock`
+ * guarantees that once `gc_n_threads_marking` reaches zero, no thread will increment it again,
+ * because incrementing is only legal from inside the lock. Therefore, no thread will reenter
+ * the mark-loop after `gc_n_threads_marking` reaches zero.
  */
 
-int gc_should_mark(jl_ptls_t ptls)
+int gc_should_mark(void)
 {
     int should_mark = 0;
-    int n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
-    // fast path
-    if (n_threads_marking == 0) {
-        return 0;
-    }
     uv_mutex_lock(&gc_queue_observer_lock);
     while (1) {
-        int tid = jl_atomic_load(&gc_master_tid);
-        // fast path
-        if (tid == -1) {
-            break;
-        }
-        n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
-        // fast path
+        int n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
         if (n_threads_marking == 0) {
             break;
         }
+        int tid = jl_atomic_load_relaxed(&gc_master_tid);
+        assert(tid != -1);
         size_t work = gc_count_work_in_queue(gc_all_tls_states[tid]);
         for (tid = gc_first_tid; tid < gc_first_tid + jl_n_markthreads; tid++) {
-            work += gc_count_work_in_queue(gc_all_tls_states[tid]);
+            jl_ptls_t ptls2 = gc_all_tls_states[tid];
+            if (ptls2 == NULL) {
+                continue;
+            }
+            work += gc_count_work_in_queue(ptls2);
         }
         // if there is a lot of work left, enter the mark loop
         if (work >= 16 * n_threads_marking) {
-            jl_atomic_fetch_add(&gc_n_threads_marking, 1);
+            jl_atomic_fetch_add(&gc_n_threads_marking, 1); // A possibility would be to allow a thread that found lots
+                                                           // of work to increment this
             should_mark = 1;
             break;
         }
@@ -2867,9 +2871,7 @@ int gc_should_mark(jl_ptls_t ptls)
 
 void gc_wake_all_for_marking(jl_ptls_t ptls)
 {
-    jl_atomic_store(&gc_master_tid, ptls->tid);
     uv_mutex_lock(&gc_threads_lock);
-    jl_atomic_fetch_add(&gc_n_threads_marking, 1);
     uv_cond_broadcast(&gc_threads_cond);
     uv_mutex_unlock(&gc_threads_lock);
 }
@@ -2877,12 +2879,14 @@ void gc_wake_all_for_marking(jl_ptls_t ptls)
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
 {
     if (master) {
+        jl_atomic_store(&gc_master_tid, ptls->tid);
+        jl_atomic_fetch_add(&gc_n_threads_marking, 1);
         gc_wake_all_for_marking(ptls);
         gc_mark_and_steal(ptls);
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
     while (1) {
-        int should_mark = gc_should_mark(ptls);
+        int should_mark = gc_should_mark();
         if (!should_mark) {
             break;
         }
@@ -3003,27 +3007,36 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq)
 {
     // modules
     gc_try_claim_and_push(mq, jl_main_module, NULL);
-    gc_heap_snapshot_record_root((jl_value_t*)jl_main_module, "main_module");
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_main_module, "main_module");
     // invisible builtin values
     gc_try_claim_and_push(mq, jl_an_empty_vec_any, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_an_empty_vec_any, "an_empty_vec_any");
     gc_try_claim_and_push(mq, jl_module_init_order, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_module_init_order, "module_init_order");
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
         if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
             gc_try_claim_and_push(mq, jl_current_modules.table[i], NULL);
-            gc_heap_snapshot_record_root((jl_value_t*)jl_current_modules.table[i], "top level module");
+            gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_current_modules.table[i], "top level module");
         }
     }
     gc_try_claim_and_push(mq, jl_anytuple_type_type, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_anytuple_type_type, "anytuple_type_type");
     for (size_t i = 0; i < N_CALL_CACHE; i++) {
         jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
         gc_try_claim_and_push(mq, v, NULL);
+        gc_heap_snapshot_record_array_edge_index((jl_value_t*)jl_anytuple_type_type, (jl_value_t*)v, i);
     }
     gc_try_claim_and_push(mq, jl_all_methods, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_all_methods, "all_methods");
     gc_try_claim_and_push(mq, _jl_debug_method_invalidation, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_emptytuple_type, "emptytuple_type");
     gc_try_claim_and_push(mq, cmpswap_names, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)cmpswap_names, "cmpswap_names");
     gc_try_claim_and_push(mq, jl_global_roots_table, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_table, "global_roots_table");
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
@@ -3729,7 +3742,10 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
-        if (!(sz < old))
+        if (sz < old)
+            jl_atomic_store_relaxed(&ptls->gc_num.freed,
+                jl_atomic_load_relaxed(&ptls->gc_num.freed) + (old - sz));
+        else
             jl_atomic_store_relaxed(&ptls->gc_num.allocd,
                 jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (sz - old));
         jl_atomic_store_relaxed(&ptls->gc_num.realloc,
@@ -3856,7 +3872,10 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
         inc_live_bytes(allocsz - oldsz);
     }
-    else if (!(allocsz < oldsz))
+    else if (allocsz < oldsz)
+        jl_atomic_store_relaxed(&ptls->gc_num.freed,
+            jl_atomic_load_relaxed(&ptls->gc_num.freed) + (oldsz - allocsz));
+    else
         jl_atomic_store_relaxed(&ptls->gc_num.allocd,
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (allocsz - oldsz));
     jl_atomic_store_relaxed(&ptls->gc_num.realloc,

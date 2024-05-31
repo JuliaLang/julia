@@ -1825,13 +1825,17 @@ end
 
 @testset "type-based offset axes check" begin
     a = randn(ComplexF64, 10)
+    b = randn(ComplexF64, 4, 4, 4, 4)
     ta = reinterpret(Float64, a)
     tb = reinterpret(Float64, view(a, 1:2:10))
     tc = reinterpret(Float64, reshape(view(a, 1:3:10), 2, 2, 1))
+    td = view(b, :, :, 1, 1)
     # Issue #44040
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(tc, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc, tb))
+    # Issue #49332
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(td, td, td))
     # Ranges && CartesianIndices
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(1:10, Base.OneTo(10), 1.0:2.0, LinRange(1.0, 2.0, 2), 1:2:10, CartesianIndices((1:2:10, 1:2:10))))
     # Remind us to call `any` in `Base.has_offset_axes` once our compiler is ready.
@@ -1849,4 +1853,34 @@ f45952(x) = [x;;]
     A = zeros(2,2)
     @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
     @test_throws "invalid index: true of type Bool" isassigned(A, true)
+end
+
+@testset "reshape for offset arrays" begin
+    p = Base.IdentityUnitRange(3:4)
+    r = reshape(p, :, 1)
+    @test r[eachindex(r)] == UnitRange(p)
+    @test collect(r) == r
+
+    struct ZeroBasedArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+        a :: A
+        function ZeroBasedArray(a::AbstractArray)
+            Base.require_one_based_indexing(a)
+            new{eltype(a), ndims(a), typeof(a)}(a)
+        end
+    end
+    Base.parent(z::ZeroBasedArray) = z.a
+    Base.size(z::ZeroBasedArray) = size(parent(z))
+    Base.axes(z::ZeroBasedArray) = map(x -> Base.IdentityUnitRange(0:x - 1), size(parent(z)))
+    Base.getindex(z::ZeroBasedArray{<:Any, N}, i::Vararg{Int,N}) where {N} = parent(z)[map(x -> x + 1, i)...]
+    Base.setindex!(z::ZeroBasedArray{<:Any, N}, val, i::Vararg{Int,N}) where {N} = parent(z)[map(x -> x + 1, i)...] = val
+
+    z = ZeroBasedArray(collect(1:4))
+    r2 = reshape(z, :, 1)
+    @test r2[CartesianIndices(r2)] == r2[LinearIndices(r2)]
+    r2[firstindex(r2)] = 34
+    @test z[0] == 34
+    r2[eachindex(r2)] = r2 .* 2
+    for (i, j) in zip(eachindex(r2), eachindex(z))
+        @test r2[i] == z[j]
+    end
 end

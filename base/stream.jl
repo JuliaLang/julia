@@ -122,7 +122,7 @@ const DEFAULT_READ_BUFFER_SZ = 10485760 # 10 MB
 if Sys.iswindows()
     const MAX_OS_WRITE = UInt(0x1FF0_0000) # 511 MB (determined semi-empirically, limited to 31 MB on XP)
 else
-    const MAX_OS_WRITE = UInt(typemax(Csize_t))
+    const MAX_OS_WRITE = UInt(0x7FFF_0000) # almost 2 GB (both macOS and linux have this kernel restriction, although only macOS documents it)
 end
 
 
