@@ -48,12 +48,12 @@ IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
 
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
-_unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(GenericMemoryRef(A, i)); A)
+_unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(memoryref(A, i)); A)
 function _unsetindex!(A::MemoryRef{T}) where T
     @_terminates_locally_meta
     @_propagate_inbounds_meta
     @inline
-    @boundscheck GenericMemoryRef(A, 1)
+    @boundscheck memoryref(A, 1)
     mem = A.mem
     MemT = typeof(mem)
     arrayelem = datatype_arrayelem(MemT)
@@ -82,7 +82,7 @@ sizeof(a::GenericMemory) = Core.sizeof(a)
 function isassigned(a::GenericMemory, i::Int)
     @inline
     @boundscheck (i - 1)%UInt < length(a)%UInt || return false
-    return @inbounds memoryref_isassigned(GenericMemoryRef(a, i), default_access_order(a), false)
+    return @inbounds memoryref_isassigned(memoryref(a, i), default_access_order(a), false)
 end
 
 isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, default_access_order(a), @_boundscheck)
@@ -91,21 +91,21 @@ isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, default_access_order(a
 function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
     @_terminates_globally_notaskstate_meta
     n == 0 && return dest
-    @boundscheck GenericMemoryRef(dest, n), GenericMemoryRef(src, n)
+    @boundscheck memoryref(dest, n), memoryref(src, n)
     ccall(:jl_genericmemory_copyto, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int), dest.mem, dest.ptr_or_offset, src.mem, src.ptr_or_offset, Int(n))
     return dest
 end
 
 function unsafe_copyto!(dest::GenericMemoryRef, src::GenericMemoryRef, n)
     n == 0 && return dest
-    @boundscheck GenericMemoryRef(dest, n), GenericMemoryRef(src, n)
+    @boundscheck memoryref(dest, n), memoryref(src, n)
     unsafe_copyto!(dest.mem, memoryrefoffset(dest), src.mem, memoryrefoffset(src), n)
     return dest
 end
 
 function unsafe_copyto!(dest::Memory{T}, doffs, src::Memory{T}, soffs, n) where{T}
     n == 0 && return dest
-    unsafe_copyto!(GenericMemoryRef(dest, doffs), GenericMemoryRef(src, soffs), n)
+    unsafe_copyto!(memoryref(dest, doffs), memoryref(src, soffs), n)
     return dest
 end
 
@@ -209,7 +209,7 @@ getindex(A::Memory, c::Colon) = copy(A)
 
 function setindex!(A::Memory{T}, x, i1::Int) where {T}
     val = x isa T ? x : convert(T,x)::T
-    ref = memoryref(memoryref(A), i1, @_boundscheck)
+    ref = memoryrefnew(memoryref(A), i1, @_boundscheck)
     memoryrefset!(ref, val, :not_atomic, @_boundscheck)
     return A
 end
@@ -294,7 +294,7 @@ end
     function reshape(m::GenericMemory{M, T}, dims::Vararg{Int, N}) where {M, T, N}
         len = Core.checked_dims(dims...)
         length(m) == len || throw(DimensionMismatch("parent has $(length(m)) elements, which is incompatible with size $(dims)"))
-        ref = MemoryRef(m)
+        ref = memoryref(m)
         $(Expr(:new, :(Array{T, N}), :ref, :dims))
     end
 
@@ -307,7 +307,7 @@ end
     function view(m::GenericMemory{M, T}, inds::Union{UnitRange, OneTo}) where {M, T}
         isempty(inds) && return T[] # needed to allow view(Memory{T}(undef, 0), 2:1)
         @boundscheck checkbounds(m, inds)
-        ref = MemoryRef(m, first(inds)) # @inbounds would be safe here but does not help performance.
+        ref = memoryref(m, first(inds)) # @inbounds would be safe here but does not help performance.
         dims = (Int(length(inds)),)
         $(Expr(:new, :(Array{T, 1}), :ref, :dims))
     end
