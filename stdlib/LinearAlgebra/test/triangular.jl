@@ -1105,4 +1105,10 @@ end
     end
 end
 
+@testset "type-stable eigvecs" begin
+    D = Float64[1 0; 0 2]
+    V = @inferred eigvecs(UpperTriangular(D))
+    @test V == Diagonal([1, 1])
+end
+
 end # module TestTriangular
