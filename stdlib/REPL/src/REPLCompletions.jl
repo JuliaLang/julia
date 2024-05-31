@@ -1109,8 +1109,8 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
             end
             isexpr(ex, :incomplete) && (ex = nothing)
         elseif isexpr(ex, (:using, :import))
-            arg1 = ex.args[1]
-            if isexpr(arg1, :.)
+            arglast = ex.args[end] # focus on completion to the last argument
+            if isexpr(arglast, :.)
                 # We come here for cases like:
                 # - `string`: "using Mod1.Mod2.M"
                 # - `ex`: :(using Mod1.Mod2)
@@ -1120,7 +1120,7 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
                 # Note that `ffunc` is set to `module_filter` within `completions`
                 ex = nothing
                 firstdot = true
-                for arg = arg1.args
+                for arg = arglast.args
                     if arg === :.
                         # override `context_module` if multiple `.` accessors are used
                         if firstdot
