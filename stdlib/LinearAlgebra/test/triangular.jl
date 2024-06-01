@@ -1083,11 +1083,21 @@ end
 
 @testset "copyto! with aliasing (#39460)" begin
     M = Matrix(reshape(1:36, 6, 6))
-    @testset for T in (UpperTriangular, LowerTriangular)
+    @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         A = T(view(M, 1:5, 1:5))
         A2 = copy(A)
         B = T(view(M, 2:6, 2:6))
         @test copyto!(B, A) == A2
+    end
+end
+
+@testset "copyto! with different sizes" begin
+    Ap = zeros(3,3)
+    Bp = rand(2,2)
+    @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        A = T(Ap)
+        B = T(Bp)
+        @test_throws ArgumentError copyto!(A, B)
     end
 end
 

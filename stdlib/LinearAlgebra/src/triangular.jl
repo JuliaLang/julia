@@ -510,24 +510,40 @@ tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
 tr(A::UpperTriangular) = tr(A.data)
 tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
+function copyto!(dest::UpperOrLowerTriangular, U::UpperOrLowerTriangular)
+    if axes(dest) != axes(U)
+        @invoke copyto!(dest::AbstractArray, U::AbstractArray)
+    else
+        _copyto!(dest, U)
+    end
+    return dest
+end
+
 # copy and scale
-function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular}}
+for T in (:UpperTriangular, :LowerTriangular)
+    @eval function _copyto!(A::$T, B::$T)
+        @boundscheck checkbounds(A, axes(B)...)
+        copytrito!(parent(A), parent(B), uplo_char(A))
+        return A
+    end
+end
+function _copyto!(A::UnitUpperTriangular, B::UnitUpperTriangular)
     @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
     B2 = Base.unalias(A, B)
     for j = 1:n
-        for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
+        for i = 1:j-1
             @inbounds A[i,j] = B2[i,j]
         end
     end
     return A
 end
-function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular}}
+function _copyto!(A::UnitLowerTriangular, B::UnitLowerTriangular)
     @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
     B2 = Base.unalias(A, B)
     for j = 1:n
-        for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
+        for i = j+1:n
             @inbounds A[i,j] = B2[i,j]
         end
     end
