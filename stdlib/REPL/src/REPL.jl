@@ -1252,9 +1252,11 @@ function setup_interface(
                 Base.errormonitor(t_replswitch)
                 # while loading just accept all keys, no keymap functionality
                 while !istaskdone(t_replswitch)
-                    c = read(stdin, Char)
-                    istaskdone(t_replswitch) && break
-                    edit_insert(s, c)
+                    # wait but only take if task is still running
+                    peek(stdin, Char)
+                    if !istaskdone(t_replswitch)
+                        edit_insert(s, read(stdin, Char))
+                    end
                 end
             else
                 edit_insert(s, ']')
