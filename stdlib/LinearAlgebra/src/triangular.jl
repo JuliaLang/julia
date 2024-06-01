@@ -553,7 +553,7 @@ end
 _triangularize!(::UpperOrUnitUpperTriangular) = triu!
 _triangularize!(::LowerOrUnitLowerTriangular) = tril!
 
-@propagate_inboundsfunction copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
+@propagate_inbounds function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
     if axes(dest) != axes(U)
         @invoke copyto!(dest::StridedMatrix, U::AbstractArray)
     else
