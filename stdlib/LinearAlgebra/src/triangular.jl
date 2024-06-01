@@ -510,7 +510,7 @@ tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
 tr(A::UpperTriangular) = tr(A.data)
 tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
-function copyto!(dest::UpperOrLowerTriangular, U::UpperOrLowerTriangular)
+@propagate_inbounds function copyto!(dest::UpperOrLowerTriangular, U::UpperOrLowerTriangular)
     if axes(dest) != axes(U)
         @invoke copyto!(dest::AbstractArray, U::AbstractArray)
     else
@@ -521,13 +521,13 @@ end
 
 # copy and scale
 for T in (:UpperTriangular, :LowerTriangular)
-    @eval function _copyto!(A::$T, B::$T)
+    @eval @inline function _copyto!(A::$T, B::$T)
         @boundscheck checkbounds(A, axes(B)...)
         copytrito!(parent(A), parent(B), uplo_char(A))
         return A
     end
 end
-function _copyto!(A::UnitUpperTriangular, B::UnitUpperTriangular)
+@inline function _copyto!(A::UnitUpperTriangular, B::UnitUpperTriangular)
     @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
     B2 = Base.unalias(A, B)
@@ -538,7 +538,7 @@ function _copyto!(A::UnitUpperTriangular, B::UnitUpperTriangular)
     end
     return A
 end
-function _copyto!(A::UnitLowerTriangular, B::UnitLowerTriangular)
+@inline function _copyto!(A::UnitLowerTriangular, B::UnitLowerTriangular)
     @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
     B2 = Base.unalias(A, B)
@@ -553,7 +553,7 @@ end
 _triangularize!(::UpperOrUnitUpperTriangular) = triu!
 _triangularize!(::LowerOrUnitLowerTriangular) = tril!
 
-function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
+@propagate_inboundsfunction copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
     if axes(dest) != axes(U)
         @invoke copyto!(dest::StridedMatrix, U::AbstractArray)
     else
@@ -561,19 +561,20 @@ function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
     end
     return dest
 end
-function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
+@propagate_inbounds function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
     copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
     copytrito!(dest, U, U isa UpperOrUnitUpperTriangular ? 'L' : 'U')
     return dest
 end
-function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular{<:Any, <:StridedMatrix})
+@propagate_inbounds function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular{<:Any, <:StridedMatrix})
     U2 = Base.unalias(dest, U)
     copyto_unaliased!(dest, U2)
     return dest
 end
 # for strided matrices, we explicitly loop over the arrays to improve cache locality
 # This fuses the copytrito! for the two halves
-function copyto_unaliased!(dest::StridedMatrix, U::UpperOrUnitUpperTriangular{<:Any, <:StridedMatrix})
+@inline function copyto_unaliased!(dest::StridedMatrix, U::UpperOrUnitUpperTriangular{<:Any, <:StridedMatrix})
+    @boundscheck checkbounds(dest, axes(U)...)
     isunit = U isa UnitUpperTriangular
     for col in axes(dest,2)
         for row in 1:col-isunit
@@ -585,7 +586,8 @@ function copyto_unaliased!(dest::StridedMatrix, U::UpperOrUnitUpperTriangular{<:
     end
     return dest
 end
-function copyto_unaliased!(dest::StridedMatrix, L::LowerOrUnitLowerTriangular{<:Any, <:StridedMatrix})
+@inline function copyto_unaliased!(dest::StridedMatrix, L::LowerOrUnitLowerTriangular{<:Any, <:StridedMatrix})
+    @boundscheck checkbounds(dest, axes(L)...)
     isunit = L isa UnitLowerTriangular
     for col in axes(dest,2)
         for row in 1:col-!isunit
