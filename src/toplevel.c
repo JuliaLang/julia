@@ -160,7 +160,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         jl_value_t *old = NULL;
         if (!jl_atomic_cmpswap(&b->value, &old, (jl_value_t*)newm)) {
             if (!jl_is_module(old)) {
-                jl_errorf("invalid redefinition of constant %s", jl_symbol_name(name));
+                jl_errorf("E: invalid redefinition of constant %s", jl_symbol_name(name));
             }
             if (jl_generating_output())
                 jl_errorf("cannot replace module %s during compilation", jl_symbol_name(name));
@@ -628,7 +628,7 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     assert(m);
     jl_sym_t *name = asname ? asname : import->name;
     // TODO: this is a bit race-y with what error message we might print
-    jl_binding_t *b = jl_get_module_binding(m, name, 0);
+    jl_binding_t *b = jl_get_module_binding(m, name, 0, jl_atomic_load_acquire(&jl_world_counter));
     jl_binding_t *b2;
     if (b != NULL && (b2 = jl_atomic_load_relaxed(&b->owner)) != NULL) {
         if (b2->constp && jl_atomic_load_relaxed(&b2->value) == (jl_value_t*)import)

@@ -1040,6 +1040,24 @@ function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
     return false
 end
 
+function check_world_bounded(tn)
+    bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint, UInt), tn.module, tn.name, false, 1)::Core.Binding
+    if bnd !== nothing
+        while true
+            if isdefined(bnd, :owner) && isdefined(bnd, :value)
+                if bnd.value <: tn.wrapper
+                    max_world = @atomic bnd.max_world
+                    max_world == typemax(UInt) && return nothing
+                    return Int(bnd.min_world):Int(max_world)
+                end
+            end
+            isdefined(bnd, :next) || break
+            bnd = @atomic bnd.next
+        end
+    end
+    return nothing
+end
+
 function show_type_name(io::IO, tn::Core.TypeName)
     if tn === UnionAll.name
         # by coincidence, `typeof(Type)` is a valid representation of the UnionAll type.
@@ -1068,7 +1086,10 @@ function show_type_name(io::IO, tn::Core.TypeName)
             end
         end
     end
+    world = check_world_bounded(tn)
+    world !== nothing && print(io, "@world(")
     show_sym(io, sym)
+    world !== nothing && print(io, ", ", world, ")")
     quo      && print(io, ")")
     globfunc && print(io, ")")
     nothing

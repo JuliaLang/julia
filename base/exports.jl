@@ -810,6 +810,7 @@ export
     @invoke,
     invokelatest,
     @invokelatest,
+    @world,
 
 # loading source files
     __precompile__,

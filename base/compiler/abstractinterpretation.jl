@@ -2826,6 +2826,7 @@ end
 isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
 isdefinedconst_globalref(g::GlobalRef) = isconst(g) && isdefined_globalref(g)
 
+# TODO: This should verify that there is only one binding for this globalref
 function abstract_eval_globalref_type(g::GlobalRef)
     if isdefinedconst_globalref(g)
         return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
@@ -2834,10 +2835,37 @@ function abstract_eval_globalref_type(g::GlobalRef)
     ty === nothing && return Any
     return ty
 end
-abstract_eval_global(M::Module, s::Symbol) = abstract_eval_globalref_type(GlobalRef(M, s))
+
+function abstract_eval_binding_type(b::Core.Binding)
+    if isdefined(b, :owner)
+        b = b.owner
+    end
+    if isconst(b) && isdefined(b, :value)
+        return Const(b.value)
+    end
+    isdefined(b, :ty) || return Any
+    ty = b.ty
+    ty === nothing && return Any
+    return ty
+end
+function abstract_eval_global(M::Module, s::Symbol)
+    # TODO: This needs to add a new globalref to globalref edges list
+    return abstract_eval_globalref_type(GlobalRef(M, s))
+end
+
+function lookup_binding(world::UInt, g::GlobalRef)
+    ccall(:jl_lookup_module_binding, Any, (Any, Any, UInt), g.mod, g.name, world)::Union{Core.Binding, Nothing}
+end
 
 function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
-    rt = abstract_eval_globalref_type(g)
+    binding = lookup_binding(get_inference_world(interp), g)
+    if binding === nothing
+        # TODO: We could allocate a guard entry here, but that would require
+        # going through a binding replacement if the binding ends up being used.
+        return RTEffects(Any, UndefVarError, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, nothrow=false, inaccessiblememonly=ALWAYS_FALSE))
+    end
+    update_valid_age!(sv, WorldRange(binding.min_world, binding.max_world))
+    rt = abstract_eval_binding_type(binding)
     consistent = inaccessiblememonly = ALWAYS_FALSE
     nothrow = false
     if isa(rt, Const)
@@ -2848,12 +2876,12 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, sv::
         end
     elseif InferenceParams(interp).assume_bindings_static
         consistent = inaccessiblememonly = ALWAYS_TRUE
-        if isdefined_globalref(g)
+        if isdefined(binding, :value)
             nothrow = true
         else
             rt = Union{}
         end
-    elseif isdefinedconst_globalref(g)
+    elseif isdefined(binding, :value) && isconst(binding)
         nothrow = true
     end
     return RTEffects(rt, nothrow ? Union{} : UndefVarError, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))

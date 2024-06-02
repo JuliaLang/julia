@@ -222,5 +222,7 @@ ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
 include("compiler/parsing.jl")
 Core._setparser!(fl_parse)
 
+include("compiler/invalidation.jl")
+
 end # baremodule Compiler
 ))

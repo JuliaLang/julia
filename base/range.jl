@@ -1680,3 +1680,16 @@ function show(io::IO, r::LogRange{T}) where {T}
     show(io, length(r))
     print(io, ')')
 end
+
+# Implementation detail of @world
+# The rest of this is defined in essentials.jl, but UnitRange is not available
+function _resolve_in_world(world::UnitRange, gr::GlobalRef)
+    # Validate that this binding's reference covers the entire world range
+    bnd = ccall(:jl_lookup_module_binding, Any, (Any, Any, UInt), gr.mod, gr.name, first(world))::Union{Core.Binding, Nothing}
+    if bnd !== nothing
+        if bnd.max_world < last(world)
+            error("Binding does not cover the full world range")
+        end
+    end
+    _resolve_in_world(last(world), gr)
+end

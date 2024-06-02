@@ -344,6 +344,9 @@ function isconst(g::GlobalRef)
     return ccall(:jl_globalref_is_const, Cint, (Any,), g) != 0
 end
 
+isconst(b::Core.Binding) =
+    ccall(:jl_binding_is_const, Cint, (Any,), b) != 0
+
 """
     isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
 
@@ -2593,6 +2596,18 @@ Make method `m` uncallable and force recompilation of any methods that use(d) it
 """
 function delete_method(m::Method)
     ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
+end
+
+"""
+    delete_binding(mod::Module, sym::Symbol)
+
+Force the binding `mod.sym` to be undefined again, allowing it be redefined.
+Note that this operation is very expensive, requirinig a full scan of all code in the system,
+as well as potential recompilation of any methods that (may) have used binding
+information.
+"""
+function delete_binding(mod::Module, sym::Symbol)
+    ccall(:jl_disable_binding, Cvoid, (Any,), GlobalRef(mod, sym))
 end
 
 function get_methodtable(m::Method)

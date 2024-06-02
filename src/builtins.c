@@ -1371,7 +1371,7 @@ JL_CALLABLE(jl_f_get_binding_type)
     JL_TYPECHK(get_binding_type, symbol, (jl_value_t*)var);
     jl_value_t *ty = jl_get_binding_type(mod, var);
     if (ty == (jl_value_t*)jl_nothing) {
-        jl_binding_t *b = jl_get_module_binding(mod, var, 0);
+        jl_binding_t *b = jl_get_module_binding(mod, var, 0, jl_current_task->world_age);
         if (b == NULL)
             return (jl_value_t*)jl_any_type;
         jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);

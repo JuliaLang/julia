@@ -33,7 +33,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     if isdefined(ex, :scope)
         scope = ex.scope
         if scope isa Module
-            bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint), scope, var, true)::Core.Binding
+            bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint, UInt), scope, var, true, Base.get_world_counter())::Core.Binding
             if isdefined(bnd, :owner)
                 owner = bnd.owner
                 if owner === bnd

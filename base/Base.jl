@@ -550,6 +550,9 @@ for m in methods(include)
     delete_method(m)
 end
 
+# Arm binding invalidation mechanism
+const invalidate_code_for_globalref! = Core.Compiler.invalidate_code_for_globalref!
+
 # This method is here only to be overwritten during the test suite to test
 # various sysimg related invalidation scenarios.
 a_method_to_overwrite_in_test() = inferencebarrier(1)

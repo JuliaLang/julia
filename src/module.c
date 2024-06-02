@@ -175,6 +175,9 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     jl_atomic_store_relaxed(&b->value, NULL);
     jl_atomic_store_relaxed(&b->owner, NULL);
     jl_atomic_store_relaxed(&b->ty, NULL);
+    jl_atomic_store_relaxed(&b->next, NULL);
+    b->min_world = 0;
+    jl_atomic_store_relaxed(&b->max_world, (size_t)-1);
     b->globalref = NULL;
     b->constp = 0;
     b->exportp = 0;
@@ -221,7 +224,7 @@ static jl_module_t *jl_binding_dbgmodule(jl_binding_t *b, jl_module_t *m, jl_sym
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 1);
+    jl_binding_t *b = jl_get_module_binding(m, var, 1, jl_current_task->world_age);
     jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
     if (b2 != b) {
         if (b2 == NULL) {
@@ -255,7 +258,7 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 // like jl_get_binding_wr, but has different error paths and messages
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 1);
+    jl_binding_t *b = jl_get_module_binding(m, var, 1, jl_current_task->world_age);
     jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
     if (b2 != b) {
         if (b2 == NULL)
@@ -319,11 +322,12 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
     JL_LOCK(&m->lock);
     int i = (int)m->usings.len - 1;
     JL_UNLOCK(&m->lock);
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     for (; i >= 0; --i) {
         JL_LOCK(&m->lock);
         jl_module_t *imp = module_usings_getidx(m, i);
         JL_UNLOCK(&m->lock);
-        jl_binding_t *tempb = jl_get_module_binding(imp, var, 0);
+        jl_binding_t *tempb = jl_get_module_binding(imp, var, 0, world);
         if (tempb != NULL && tempb->exportp) {
             tempb = jl_resolve_owner(NULL, imp, var, st); // find the owner for tempb
             if (tempb == NULL)
@@ -334,7 +338,7 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
                 if (warn) {
                     // set usingfailed=1 to avoid repeating this warning
                     // the owner will still be NULL, so it can be later imported or defined
-                    tempb = jl_get_module_binding(m, var, 1);
+                    tempb = jl_get_module_binding(m, var, 1, world);
                     tempb->usingfailed = 1;
                     jl_printf(JL_STDERR,
                               "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
@@ -378,7 +382,7 @@ static void jl_binding_dep_message(jl_module_t *m, jl_sym_t *name, jl_binding_t 
 static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *m, jl_sym_t *var, modstack_t *st)
 {
     if (b == NULL)
-        b = jl_get_module_binding(m, var, 1);
+        b = jl_get_module_binding(m, var, 1, jl_current_task->world_age);
     jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
     if (b2 == NULL) {
         if (b->usingfailed)
@@ -432,7 +436,7 @@ static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *
 // get the current likely owner of binding when accessing m.var, without resolving the binding (it may change later)
 JL_DLLEXPORT jl_binding_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    jl_binding_t *b = jl_get_module_binding(m, var, 0, jl_current_task->world_age);
     jl_module_t *from = m;
     if (b == NULL || (!b->usingfailed && jl_atomic_load_relaxed(&b->owner) == NULL))
         b = using_resolve_binding(m, var, &from, NULL, 0);
@@ -444,7 +448,7 @@ JL_DLLEXPORT jl_binding_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
 // get type of binding m.var, without resolving the binding
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    jl_binding_t *b = jl_get_module_binding(m, var, 0, jl_current_task->world_age);
     if (b == NULL)
         return jl_nothing;
     b = jl_atomic_load_relaxed(&b->owner);
@@ -472,7 +476,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
 
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 1);
+    jl_binding_t *b = jl_get_module_binding(m, var, 1, jl_current_task->world_age);
     jl_globalref_t *globalref = b->globalref;
     assert(globalref != NULL);
     return (jl_value_t*)globalref;
@@ -481,7 +485,7 @@ JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var)
 // does module m explicitly import s?
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    jl_binding_t *b = jl_get_module_binding(m, var, 0, jl_current_task->world_age);
     return b && b->imported;
 }
 
@@ -570,7 +574,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname,
             }
         }
 
-        jl_binding_t *bto = jl_get_module_binding(to, asname, 1);
+        jl_binding_t *bto = jl_get_module_binding(to, asname, 1, jl_atomic_load_acquire(&jl_world_counter));
         if (bto == b) {
             // importing a binding on top of itself. harmless.
             return;
@@ -649,7 +653,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
             break;
         if (b->exportp && (jl_atomic_load_relaxed(&b->owner) == b || b->imported)) {
             jl_sym_t *var = b->globalref->name;
-            jl_binding_t *tob = jl_get_module_binding(to, var, 0);
+            jl_binding_t *tob = jl_get_module_binding(to, var, 0, jl_atomic_load_acquire(&jl_world_counter));
             if (tob && jl_atomic_load_relaxed(&tob->owner) != NULL &&
                 // don't warn for conflicts with the module name itself.
                 // see issue #4715
@@ -667,7 +671,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 
 JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 {
-    jl_binding_t *b = jl_get_module_binding(from, s, 1);
+    jl_binding_t *b = jl_get_module_binding(from, s, 1, jl_current_task->world_age);
     if (b->publicp) {
         // check for conflicting declarations
         if (b->exportp && !exported)
@@ -689,25 +693,25 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var) // unlike most queries
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    jl_binding_t *b = jl_get_module_binding(m, var, 0, jl_current_task->world_age);
     return b && (b->exportp || jl_atomic_load_relaxed(&b->owner) == b);
 }
 
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    jl_binding_t *b = jl_get_module_binding(m, var, 0, jl_current_task->world_age);
     return b && b->exportp;
 }
 
 JL_DLLEXPORT int jl_module_public_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    jl_binding_t *b = jl_get_module_binding(m, var, 0, jl_current_task->world_age);
     return b && b->publicp;
 }
 
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    jl_binding_t *b = jl_get_module_binding(m, var, 0, jl_current_task->world_age);
     return b && jl_atomic_load_relaxed(&b->owner) != NULL;
 }
 
@@ -727,7 +731,8 @@ static int bindingkey_eq(size_t idx, const void *var, jl_value_t *data, uint_t h
     return var == name;
 }
 
-JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, int alloc)
+extern jl_mutex_t world_counter_lock;
+JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, int alloc, size_t world)
 {
     uint_t hv = var->hash;
     for (int locked = 0; ; locked++) {
@@ -738,7 +743,19 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
             jl_binding_t *b = (jl_binding_t*)jl_svecref(bindings, idx); // relaxed
             if (locked)
                 JL_UNLOCK(&m->lock);
-            return b;
+            while (1) {
+                if (world <= jl_atomic_load_acquire(&b->max_world))
+                    break;
+                jl_binding_t *nextb = jl_atomic_load_acquire(&b->next);
+                if (!nextb)
+                    break;
+                b = nextb;
+            }
+            if (b && b->min_world <= world && world <= jl_atomic_load_acquire(&b->max_world))
+                return b;
+            if (!alloc)
+                return NULL;
+            jl_error("Attempted to re-allocate existing binding");
         }
         if (!alloc) {
             return NULL;
@@ -774,6 +791,14 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
     }
 }
 
+JL_DLLEXPORT jl_value_t *jl_lookup_module_binding(jl_module_t *m, jl_sym_t *var, size_t world)
+{
+    jl_binding_t *b = jl_get_module_binding(m, var, 0, world);
+    if (!b)
+        return jl_nothing;
+    return (jl_value_t*)b;
+}
+
 
 JL_DLLEXPORT jl_value_t *jl_get_globalref_value(jl_globalref_t *gr)
 {
@@ -803,10 +828,10 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     // this function is mostly only used during initialization, so the data races here are not too important to us
-    jl_binding_t *bp = jl_get_module_binding(m, var, 1);
+    jl_binding_t *bp = jl_get_module_binding(m, var, 1, jl_atomic_load_acquire(&jl_world_counter));
     jl_binding_t *b2 = NULL;
     if (!jl_atomic_cmpswap(&bp->owner, &b2, bp) && b2 != bp)
-        jl_errorf("invalid redefinition of constant %s", jl_symbol_name(var));
+        jl_errorf("B: invalid redefinition of constant %s", jl_symbol_name(var));
     if (jl_atomic_load_relaxed(&bp->value) == NULL) {
         jl_value_t *old_ty = NULL;
         jl_atomic_cmpswap_relaxed(&bp->ty, &old_ty, (jl_value_t*)jl_any_type);
@@ -820,7 +845,75 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
             }
         }
     }
-    jl_errorf("invalid redefinition of constant %s", jl_symbol_name(var));
+    jl_errorf("A: invalid redefinition of constant %s", jl_symbol_name(var));
+}
+
+void jl_invalidate_binding_refs(jl_globalref_t *ref, size_t new_world)
+{
+    static jl_value_t *invalidate_code_for_globalref = NULL;
+    if (invalidate_code_for_globalref == NULL && jl_base_module != NULL)
+        invalidate_code_for_globalref = jl_get_global(jl_base_module, jl_symbol("invalidate_code_for_globalref!"));
+    if (!invalidate_code_for_globalref)
+        jl_error("Binding invalidation is not permitted during bootstrap.");
+    jl_value_t *boxed_world = jl_box_ulong(new_world);
+    JL_GC_PUSH1(&boxed_world);
+    jl_call2((jl_function_t*)invalidate_code_for_globalref, (jl_value_t*)ref, boxed_world);
+    JL_GC_POP();
+}
+
+JL_DLLEXPORT void jl_replace_binding(jl_binding_t *b, jl_globalref_t *ref, jl_value_t *new_val)
+{
+    JL_LOCK(&world_counter_lock);
+    jl_task_t *ct = jl_current_task;
+    size_t new_max_world = jl_atomic_load_acquire(&jl_world_counter);
+    if (ct->world_age != new_max_world || b->max_world != (size_t)-1) {
+        JL_UNLOCK(&world_counter_lock);
+        jl_error("Bindings may only be replaced by tasks running in max world age");
+    }
+    size_t last_age = ct->world_age;
+    JL_TRY {
+        ct->world_age = jl_typeinf_world;
+        jl_invalidate_binding_refs(ref, new_max_world);
+    } JL_CATCH {
+        JL_UNLOCK(&world_counter_lock);
+        jl_rethrow();
+    }
+    ct->world_age = last_age;
+    jl_atomic_store_release(&b->max_world, new_max_world);
+    jl_atomic_store_release(&jl_world_counter, new_max_world + 1);
+
+    jl_binding_t *newb = new_binding(ref->mod, ref->name);
+    newb->min_world = new_max_world + 1;
+    newb->constp = b->constp;
+    jl_atomic_store_release(&newb->value, new_val);
+
+    // publish the binding
+    jl_atomic_store_release(&b->next, newb);
+    jl_gc_wb(b, newb);
+
+    JL_UNLOCK(&world_counter_lock);
+}
+
+JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *ref)
+{
+    jl_binding_t *bp = jl_get_module_binding(ref->mod, ref->name, 0, jl_atomic_load_acquire(&jl_world_counter));
+    if (!bp)
+        return; // Binding never existed in the first place
+    JL_LOCK(&world_counter_lock);
+    jl_task_t *ct = jl_current_task;
+    size_t new_max_world = jl_atomic_load_acquire(&jl_world_counter);
+    size_t last_age = ct->world_age;
+    JL_TRY {
+        ct->world_age = jl_typeinf_world;
+        jl_invalidate_binding_refs(ref, new_max_world);
+    } JL_CATCH {
+        JL_UNLOCK(&world_counter_lock);
+        jl_rethrow();
+    }
+    ct->world_age = last_age;
+    jl_atomic_store_release(&bp->max_world, new_max_world);
+    jl_atomic_store_release(&jl_world_counter, new_max_world + 1);
+    JL_UNLOCK(&world_counter_lock);
 }
 
 JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr)
@@ -828,6 +921,11 @@ JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr)
     jl_binding_t *b = gr->binding;
     b = jl_resolve_owner(b, gr->mod, gr->name, NULL);
     return b && b->constp;
+}
+
+JL_DLLEXPORT int jl_binding_is_const(jl_binding_t *b)
+{
+    return b->constp;
 }
 
 JL_DLLEXPORT int jl_globalref_boundp(jl_globalref_t *gr)
@@ -906,6 +1004,7 @@ jl_value_t *jl_check_binding_wr(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var
     }
     if (b->constp) {
         if (reassign) {
+            // TODO: Just disallow this entirely?
             jl_value_t *old = NULL;
             if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
                 jl_gc_wb(b, rhs);
@@ -913,15 +1012,12 @@ jl_value_t *jl_check_binding_wr(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var
             }
             if (jl_egal(rhs, old))
                 return NULL;
-            if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs))
-                reassign = 0;
-            else
-                jl_safe_printf("WARNING: redefinition of constant %s.%s. This may fail, cause incorrect answers, or produce other errors.\n",
-                               jl_symbol_name(mod->name), jl_symbol_name(var));
+            reassign = 0;
         }
-        if (!reassign)
-            jl_errorf("invalid redefinition of constant %s.%s",
-                      jl_symbol_name(mod->name), jl_symbol_name(var));
+        if (!reassign) {
+            jl_errorf("Invalid redefinition of constant %s.%s. Redefinition of constants is permitted at toplevel only.",
+                        jl_symbol_name(mod->name), jl_symbol_name(var));
+        }
     }
     return old_ty;
 }
@@ -931,6 +1027,49 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
     if (jl_check_binding_wr(b, mod, var, rhs, 1) != NULL) {
         jl_atomic_store_release(&b->value, rhs);
         jl_gc_wb(b, rhs);
+    }
+}
+
+JL_DLLEXPORT void jl_toplevel_checked_assignment(jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs, int alloc)
+{
+    jl_binding_t *b = jl_get_module_binding(mod, var, 1, jl_current_task->world_age);
+    jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
+    if (b2 != b) {
+        if (b2 == NULL) {
+            check_safe_newbinding(mod, var);
+            if (!alloc)
+                jl_errorf("Global %s.%s does not exist and cannot be assigned. Declare it using `global` before attempting assignment.", jl_symbol_name(mod->name), jl_symbol_name(var));
+        }
+        if (b2 != NULL || (!jl_atomic_cmpswap(&b->owner, &b2, b) && b2 != b)) {
+            jl_module_t *from = jl_binding_dbgmodule(b, mod, var);
+            // TODO: Permit this?
+            if (from == mod)
+                jl_errorf("cannot assign a value to imported variable %s.%s",
+                          jl_symbol_name(from->name), jl_symbol_name(var));
+            else
+                jl_errorf("cannot assign a value to imported variable %s.%s from module %s",
+                          jl_symbol_name(from->name), jl_symbol_name(var), jl_symbol_name(mod->name));
+        }
+    }
+
+    if (b->constp) {
+        jl_value_t *old = NULL;
+        if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
+            // TODO: Do we want to force one-step here?
+            jl_gc_wb(b, rhs);
+            return;
+        }
+        if (jl_egal(rhs, old)) {
+            // Tried to re-assign with the same value. No need to partition the
+            // binding.
+            return;
+        }
+        jl_replace_binding(b, b->globalref, rhs);
+    } else {
+        if (jl_check_binding_wr(b, mod, var, rhs, 1) != NULL) {
+            jl_atomic_store_release(&b->value, rhs);
+            jl_gc_wb(b, rhs);
+        }
     }
 }
 
@@ -956,7 +1095,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
     if (jl_atomic_cmpswap_relaxed(&b->ty, &ty, (jl_value_t*)jl_any_type))
         ty = (jl_value_t*)jl_any_type;
     if (b->constp)
-        jl_errorf("invalid redefinition of constant %s.%s",
+        jl_errorf("D: invalid redefinition of constant %s.%s",
                   jl_symbol_name(mod->name), jl_symbol_name(var));
     return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, mod, var);
 }
@@ -1099,6 +1238,11 @@ JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
             jl_atomic_store_relaxed(&b->owner, NULL);
     }
     JL_UNLOCK(&m->lock);
+}
+
+JL_DLLEXPORT jl_svec_t *jl_module_get_bindings(jl_module_t *m)
+{
+    return jl_atomic_load_relaxed(&m->bindings);
 }
 
 JL_DLLEXPORT void jl_init_restored_module(jl_value_t *mod)

@@ -2100,7 +2100,7 @@ static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed
 static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg, BitVector *used_arguments=nullptr, size_t *args_begin=nullptr);
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
-                                     jl_binding_t **pbnd, bool assign, bool alloc);
+                                     jl_binding_t **pbnd, bool assign, size_t world, bool alloc);
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa);
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const Twine &msg);
@@ -3190,7 +3190,7 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = NULL;
-    Value *bp = global_binding_pointer(ctx, mod, name, &bnd, false, false);
+    Value *bp = global_binding_pointer(ctx, mod, name, &bnd, false, ctx.min_world, false);
     if (bp == NULL)
         return jl_cgval_t();
     bp = julia_binding_pvalue(ctx, bp);
@@ -3212,7 +3212,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                                 const jl_cgval_t *modifyop, bool alloc)
 {
     jl_binding_t *bnd = NULL;
-    Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, alloc);
+    Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, ctx.min_world, alloc);
     if (bp == NULL)
         return jl_cgval_t();
     if (bnd && !bnd->constp) {
@@ -5449,9 +5449,9 @@ static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *
 // if the reference currently bound or assign == true,
 //   pbnd will also be assigned with the binding address
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
-                                     jl_binding_t **pbnd, bool assign, bool alloc)
+                                     jl_binding_t **pbnd, bool assign, size_t world, bool alloc)
 {
-    jl_binding_t *b = jl_get_module_binding(m, s, 1);
+    jl_binding_t *b = jl_get_module_binding(m, s, 1, world);
     if (assign) {
         if (jl_atomic_load_relaxed(&b->owner) == NULL)
             // not yet declared
@@ -6469,7 +6469,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         if (jl_is_symbol(sym)) {
             jl_binding_t *bnd = NULL;
-            Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, true);
+            Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, ctx.min_world, true);
             if (bp)
                 ctx.builder.CreateCall(prepare_call(jldeclareconst_func),
                         { bp, literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym) });
