@@ -348,6 +348,17 @@ end
             h = Fix(*, Val(1), "1", "2", "3")
             @test h() == "123"
         end
+        @testset "with integer rather than Val" begin
+            function f(x, y)
+                g = Fix(1, x, y) do x, y
+                    x = x^2
+                    y = y * 3.5
+                    x + y
+                end
+                g()
+            end
+            @inferred f(1, 2)
+        end
 
         @testset "varargs inside Fix" begin
             lazy_sum = Fix(+, Val(1), 1, 2, 3, 4, 5)

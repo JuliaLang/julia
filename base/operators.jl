@@ -1211,7 +1211,7 @@ end
 
 function (f::Fix{F,N,T})(args::Vararg{Any,M}) where {F,N,T,M}
     @inline
-    M < N - 1 || throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
+    M < N - 1 || N == 1 || throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
     return f.f(args[begin:begin+(N-2)]..., f.x..., args[begin+(N-1):end]...)
 end
 
