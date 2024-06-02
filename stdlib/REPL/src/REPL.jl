@@ -1230,6 +1230,8 @@ function setup_interface(
                 # use 6 .'s here because its the same width as the most likely `@v1.xx` env name
                 print(LineEdit.terminal(s), styled"{blue,bold:({gray:......}) pkg> }")
                 pkg_mode = nothing
+                transition_finished = false
+                iolock = Base.ReentrantLock() # to avoid race between tasks reading stdin & input buffer
                 # spawn Pkg load to avoid blocking typing during loading. Typing will block if only 1 thread
                 t_replswitch = Threads.@spawn begin
                     pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
@@ -1243,11 +1245,14 @@ function setup_interface(
                         end
                     end
                     if pkg_mode !== nothing
-                        buf = copy(LineEdit.buffer(s))
-                        transition(s, pkg_mode) do
-                            LineEdit.state(s, pkg_mode).input_buffer = buf
+                        @lock iolock begin
+                            buf = copy(LineEdit.buffer(s))
+                            transition(s, pkg_mode) do
+                                LineEdit.state(s, pkg_mode).input_buffer = buf
+                            end
+                            @invokelatest(LineEdit.check_for_hint(s)) && @invokelatest(LineEdit.refresh_line(s))
+                            transition_finished = true
                         end
-                        @invokelatest(LineEdit.check_for_hint(s)) && @invokelatest(LineEdit.refresh_line(s))
                     end
                 end
                 Base.errormonitor(t_replswitch)
@@ -1255,8 +1260,8 @@ function setup_interface(
                 while !istaskdone(t_replswitch)
                     # wait but only take if task is still running
                     peek(stdin, Char)
-                    if !istaskdone(t_replswitch)
-                        edit_insert(s, read(stdin, Char))
+                    @lock iolock begin
+                        transition_finished || edit_insert(s, read(stdin, Char))
                     end
                 end
             else
