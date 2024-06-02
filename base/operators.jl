@@ -1206,8 +1206,8 @@ struct Fix{F,N,T<:Tuple} <: Function
     Fix(f::Type{F}, ::Val{N}, x, xs...) where {F,N} = (xt=(x, xs...); new{F,N,_stable_typeof(xt)}(f, xt))
 end
 
-Fix(f::F, n::Int, x, xs...) where {F} = Fix(f, Val(n), x, xs...)
-Fix(f::Type{F}, n::Int, x, xs...) where {F} = Fix(f, Val(n), x, xs...)
+@inline Fix(f::F, n::Int, x, xs...) where {F} = Fix(f, Val(n), x, xs...)
+@inline Fix(f::Type{F}, n::Int, x, xs...) where {F} = Fix(f, Val(n), x, xs...)
 
 function (f::Fix{F,N,T})(args::Vararg{Any,M}) where {F,N,T,M}
     @inline
