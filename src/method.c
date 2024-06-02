@@ -627,7 +627,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     jl_task_t *ct = jl_current_task;
     jl_code_info_t *src =
         (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
-                                       jl_code_info_type);
+                                     jl_code_info_type);
     src->code = NULL;
     src->debuginfo = NULL;
     src->ssavaluetypes = NULL;
@@ -636,6 +636,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->slotflags = NULL;
     src->slotnames = NULL;
     src->slottypes = jl_nothing;
+    src->rettype = (jl_value_t*)jl_any_type;
     src->parent = (jl_method_instance_t*)jl_nothing;
     src->min_world = 1;
     src->max_world = ~(size_t)0;

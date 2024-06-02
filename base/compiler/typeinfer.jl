@@ -556,6 +556,9 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     me.result.result = bestguess
     ipo_effects = me.result.ipo_effects = me.ipo_effects = adjust_effects(me)
     me.result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
+    me.src.rettype = widenconst(ignorelimited(bestguess))
+    me.src.min_world = first(me.valid_worlds)
+    me.src.max_world = last(me.valid_worlds)
 
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
@@ -933,6 +936,7 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.ssavaluetypes = 1
     tree.debuginfo = DebugInfo(mi)
     tree.ssaflags = UInt32[0]
+    tree.rettype = Core.Typeof(val)
     set_inlineable!(tree, true)
     tree.parent = mi
     return tree
@@ -965,15 +969,13 @@ typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), 
     typeinf_code(interp, specialize_method(method, atype, sparams), run_optimizer)
 function typeinf_code(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     frame = typeinf_frame(interp, mi, run_optimizer)
-    frame === nothing && return nothing, Any
-    is_inferred(frame) || return nothing, Any
+    frame === nothing && return nothing
+    is_inferred(frame) || return nothing
     if result_is_constabi(interp, frame.result, run_optimizer)
         rt = frame.result.result::Const
-        return codeinfo_for_const(interp, frame.linfo, rt.val), widenconst(rt)
+        return codeinfo_for_const(interp, frame.linfo, rt.val)
     end
-    code = frame.src
-    rt = widenconst(ignorelimited(frame.result.result))
-    return code, rt
+    return frame.src
 end
 
 """

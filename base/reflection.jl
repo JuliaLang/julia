@@ -1660,12 +1660,12 @@ function code_typed_by_type(@nospecialize(tt::Type);
     asts = []
     for match in matches.matches
         match = match::Core.MethodMatch
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, optimize)
+        code = Core.Compiler.typeinf_code(interp, match, optimize)
         if code === nothing
             push!(asts, match.method => Any)
         else
             debuginfo === :none && remove_linenums!(code)
-            push!(asts, code => ty)
+            push!(asts, code => code.rettype)
         end
     end
     return asts
@@ -1682,14 +1682,19 @@ function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
                 tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
                 mi = Core.Compiler.specialize_method(m, tt, Core.svec())
                 interp = Core.Compiler.NativeInterpreter(m.primary_world)
-                return Core.Compiler.typeinf_code(interp, mi, optimize)
+                code = Core.Compiler.typeinf_code(interp, mi, optimize)
+                if code isa CodeInfo
+                    return Pair{CodeInfo, Any}(code, code.rettype)
+                end
+                error("inference not successful")
             else
                 code = _uncompressed_ir(m)
-                return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+                return Pair{CodeInfo, Any}(code, typeof(oc).parameters[2])
             end
         else
             # OC constructed from optimized IR
             codeinst = m.specializations.cache
+            # XXX: the inferred field is not normally a CodeInfo, but this assumes it is guaranteed to be always
             return Pair{CodeInfo, Any}(codeinst.inferred, codeinst.rettype)
         end
     else
@@ -2209,7 +2214,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     for match in matches.matches
         match = match::Core.MethodMatch
         println(io, match.method)
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, true)
+        code = Core.Compiler.typeinf_code(interp, match, true)
         if code === nothing
             println(io, "  inference not successful")
         else
