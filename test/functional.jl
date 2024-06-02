@@ -333,5 +333,16 @@ end
             fixed_error_f = FixN(error_f, Inf, Val(2))
             @test_throws DomainError fixed_error_f(10)
         end
+        @testset "Chaining FixN together" begin
+            f1 = FixN(*, "1", Val(1))
+            f2 = FixN(f1, "2", Val(1))
+            f3 = FixN(f2, "3", Val(1))
+            @test f3() == "123"
+
+            g1 = FixN(*, "1", Val(2))
+            g2 = FixN(g1, "2", Val(2))
+            g3 = FixN(g2, "3", Val(2))
+            @test g3("") == "123"
+        end
     end
 end
