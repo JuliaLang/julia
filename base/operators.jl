@@ -1185,26 +1185,33 @@ end
 (f::Fix2)(y) = f.f(y, f.x)
 
 """
-    FixN(f, Val(N), x...)
+    Fix(f, n, x...)
+    Fix(f, Val(n), x...)
 
-A type representing a partially-applied version of a function
-`f`, with the argument or arguments "x" inserted at the `N`th position. In other words,
-`FixN(f, Val(N), x1, x2)` behaves similarly to `(y...,) -> f(y[1:N-1]..., x1, x2, y[N:end]...)`
+A type representing a partially-applied version of a function `f`, with the argument or
+arguments "x" inserted at the `n`th position. In other words, `Fix(f, Val(n), x1, x2)`
+behaves similarly to `(y...,) -> f(y[1:n-1]..., x1, x2, y[n:end]...)`.
 
-You may also pass a number of arguments to `FixN`, with `Val(N)`, in which case they will
-be inserted at position `N`, `N+1`, and so forth.
+You may also pass a number of arguments to `Fix`, with `Val(n)`, in which case they will
+be inserted at position `n`, `n+1`, and so forth.
+
+`Val(n)` is preferred for type stability, though `n` as an argument is provided
+for convenience.
 """
-struct FixN{F,N,T<:Tuple} <: Function
+struct Fix{F,N,T<:Tuple} <: Function
     f::F
     x::T
 
-    FixN(f::F, ::Val{N}, x, xs...) where {F,N} = (xt=(x, xs...); new{F,N,_stable_typeof(xt)}(f, xt))
-    FixN(f::Type{F}, ::Val{N}, x, xs...) where {F,N} = (xt=(x, xs...); new{F,N,_stable_typeof(xt)}(f, xt))
+    Fix(f::F, ::Val{N}, x, xs...) where {F,N} = (xt=(x, xs...); new{F,N,_stable_typeof(xt)}(f, xt))
+    Fix(f::Type{F}, ::Val{N}, x, xs...) where {F,N} = (xt=(x, xs...); new{F,N,_stable_typeof(xt)}(f, xt))
 end
 
-function (f::FixN{F,N,T})(args::Vararg{Any,M}) where {F,N,T,M}
+Fix(f::F, n::Int, x, xs...) where {F} = Fix(f, Val(n), x, xs...)
+Fix(f::Type{F}, n::Int, x, xs...) where {F} = Fix(f, Val(n), x, xs...)
+
+function (f::Fix{F,N,T})(args::Vararg{Any,M}) where {F,N,T,M}
     @inline
-    M < N - 1 || throw(ArgumentError("expected at least $(N-1) arguments to a `FixN` function with `N=$(N)`"))
+    M < N - 1 || throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
     return f.f(args[begin:begin+(N-2)]..., f.x..., args[begin+(N-1):end]...)
 end
 
