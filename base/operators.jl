@@ -1185,27 +1185,27 @@ end
 (f::Fix2)(y) = f.f(y, f.x)
 
 """
-    FixN(f, x, Val(N))
+    FixN(f, Val(N), x...)
 
 A type representing a partially-applied version of a function
-`f`, with the `N`th argument fixed to the value "x". In other words,
-`FixN(f, x, Val(N))` behaves similarly to `(y...,) -> f(y[1:N-1]..., x, y[N:end]...)`
+`f`, with the argument or arguments "x" inserted at the `N`th position. In other words,
+`FixN(f, Val(N), x1, x2)` behaves similarly to `(y...,) -> f(y[1:N-1]..., x1, x2, y[N:end]...)`
+
+You may also pass a number of arguments to `FixN`, with `Val(N)`, in which case they will
+be inserted at position `N`, `N+1`, and so forth.
 """
-struct FixN{F,T,N} <: Function
+struct FixN{F,N,T<:Tuple} <: Function
     f::F
     x::T
 
-    FixN(f::F, x, ::Val{N}) where {F,N} = new{F,_stable_typeof(x),N}(f, x)
-    FixN(f::Type{F}, x, ::Val{N}) where {F,N} = new{F,_stable_typeof(x),N}(f, x)
+    FixN(f::F, ::Val{N}, x, xs...) where {F,N} = (xt=(x, xs...); new{F,N,_stable_typeof(xt)}(f, xt))
+    FixN(f::Type{F}, ::Val{N}, x, xs...) where {F,N} = (xt=(x, xs...); new{F,N,_stable_typeof(xt)}(f, xt))
 end
 
-function (f::FixN{F,T,N})(args::Vararg{Any,M}) where {F,T,N,M}
+function (f::FixN{F,N,T})(args::Vararg{Any,M}) where {F,N,T,M}
     @inline
-    if M < N - 1
-        # (This will compile away)
-        throw(ArgumentError("expected at least $(N-1) arguments to a `FixN` function with `N=$(N)`"))
-    end
-    return f.f(args[begin+0:begin+(N-2)]..., f.x, args[begin+(N-1):end]...)
+    M < N - 1 || throw(ArgumentError("expected at least $(N-1) arguments to a `FixN` function with `N=$(N)`"))
+    return f.f(args[begin+0:begin+(N-2)]..., f.x..., args[begin+(N-1):end]...)
 end
 
 """

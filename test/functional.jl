@@ -279,34 +279,34 @@ end
 
     # Now, repeat the Fix1 and Fix2 tests, but
     # with a FixN lambda function used in their place
-    test_fix1((op, arg) -> Base.FixN(op, arg, Val(1)))
-    test_fix2((op, arg) -> Base.FixN(op, arg, Val(2)))
+    test_fix1((op, arg) -> Base.FixN(op, Val(1), arg))
+    test_fix2((op, arg) -> Base.FixN(op, Val(2), arg))
 
     # Now, we do more complex tests of FixN:
     let FixN=Base.FixN
         @testset "Argument Fixation" begin
             f = (x, y, z) -> x + y * z
-            fixed_f1 = FixN(f, 10, Val(1))
+            fixed_f1 = FixN(f, Val(1), 10)
             @test fixed_f1(2, 3) == 10 + 2 * 3
 
-            fixed_f2 = FixN(f, 5, Val(2))
+            fixed_f2 = FixN(f, Val(2), 5)
             @test fixed_f2(1, 4) == 1 + 5 * 4
 
-            fixed_f3 = FixN(f, 3, Val(3))
+            fixed_f3 = FixN(f, Val(3), 3)
             @test fixed_f3(1, 2) == 1 + 2 * 3
         end
         @testset "Helpful errors" begin
             g = (x, y) -> x - y
             # Test minimum N
-            fixed_g1 = FixN(g, 100, Val(1))
+            fixed_g1 = FixN(g, Val(1), 100)
             @test fixed_g1(40) == 100 - 40
 
             # Test maximum N
-            fixed_g2 = FixN(g, 100, Val(2))
+            fixed_g2 = FixN(g, Val(2), 100)
             @test fixed_g2(150) == 150 - 100
 
             # One over
-            fixed_g3 = FixN(g, 100, Val(3))
+            fixed_g3 = FixN(g, Val(3), 100)
             @test_throws ArgumentError fixed_g3(1)
             @test_throws(
                 "expected at least 2 arguments to a `FixN` function with `N=3`",
@@ -315,12 +315,12 @@ end
         end
         @testset "Type Stability and Inference" begin
             h = (x, y) -> x / y
-            fixed_h = FixN(h, 2.0, Val(2))
+            fixed_h = FixN(h, Val(2), 2.0)
             @test @inferred(fixed_h(4.0)) == 2.0
         end
         @testset "Interaction with varargs" begin
             vararg_f = (x, y, z...) -> x + 10 * y + sum(z; init=zero(x))
-            fixed_vararg_f = FixN(vararg_f, 6, Val(2))
+            fixed_vararg_f = FixN(vararg_f, Val(2), 6)
 
             # Can call with variable number of arguments:
             @test fixed_vararg_f(1, 2, 3, 4) == 1 + 10 * 6 + sum((2, 3, 4))
@@ -330,19 +330,34 @@ end
         end
         @testset "Errors should propagate normally" begin
             error_f = (x, y) -> sin(x * y)
-            fixed_error_f = FixN(error_f, Inf, Val(2))
+            fixed_error_f = FixN(error_f, Val(2), Inf)
             @test_throws DomainError fixed_error_f(10)
         end
         @testset "Chaining FixN together" begin
-            f1 = FixN(*, "1", Val(1))
-            f2 = FixN(f1, "2", Val(1))
-            f3 = FixN(f2, "3", Val(1))
+            f1 = FixN(*, Val(1), "1")
+            f2 = FixN(f1, Val(1), "2")
+            f3 = FixN(f2, Val(1), "3")
             @test f3() == "123"
 
-            g1 = FixN(*, "1", Val(2))
-            g2 = FixN(g1, "2", Val(2))
-            g3 = FixN(g2, "3", Val(2))
+            g1 = FixN(*, Val(2), "1")
+            g2 = FixN(g1, Val(2), "2")
+            g3 = FixN(g2, Val(2), "3")
             @test g3("") == "123"
+
+            # Equivalent to:
+            h = FixN(*, Val(1), "1", "2", "3")
+            @test h() == "123"
+        end
+
+        @testset "varargs inside FixN" begin
+            lazy_sum = FixN(+, Val(1), 1, 2, 3, 4, 5)
+            @test lazy_sum() == sum((1, 2, 3, 4, 5))
+
+            joiner(t...) = join(t, " ")
+            string_inside = FixN(joiner, Val(3), "third", "fourth", "fifth")
+            @test string_inside("first", "second", "sixth") == "first second third fourth fifth sixth"
+            # Still type stable:
+            @inferred string_inside("first", "second", "sixth")
         end
     end
 end
