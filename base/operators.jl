@@ -1185,6 +1185,30 @@ end
 (f::Fix2)(y) = f.f(y, f.x)
 
 """
+    FixN(f, x, Val(N))
+
+A type representing a partially-applied version of a function
+`f`, with the `N`th argument fixed to the value "x". In other words,
+`FixN(f, x, Val(N))` behaves similarly to `(y...,) -> f(y[1:N-1]..., x, y[N:end]...)`
+"""
+struct FixN{F,T,N} <: Function
+    f::F
+    x::T
+
+    FixN(f::F, x, ::Val{N}) where {F,N} = new{F,_stable_typeof(x),N}(f, x)
+    FixN(f::Type{F}, x, ::Val{N}) where {F,N} = new{F,_stable_typeof(x),N}(f, x)
+end
+
+function (f::FixN{F,T,N})(args::Vararg{Any,M}) where {F,T,N,M}
+    @inline
+    if M < N - 1
+        # (This will compile away)
+        throw(ArgumentError("expected at least $(N-1) arguments to a `FixN` function with `N=$(N)`"))
+    end
+    return f.f(args[begin+0:begin+(N-2)]..., f.x, args[begin+(N-1):end]...)
+end
+
+"""
     isequal(x)
 
 Create a function that compares its argument to `x` using [`isequal`](@ref), i.e.
