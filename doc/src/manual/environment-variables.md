@@ -234,7 +234,7 @@ Specifies the preferred registry flavor. Currently supported values are `conserv
 (the default), which will only publish resources that have been processed by the storage
 server (and thereby have a higher probability of being available from the PkgServers),
 whereas `eager` will publish registries whose resources have not necessarily been
-processed by the storage servers.  Users behind restrictive firewalls that do not allow
+processed by the storage servers. Users behind restrictive firewalls that do not allow
 downloading from arbitrary servers should not use the `eager` flavor.
 
 !!! compat "Julia 1.7"
@@ -321,7 +321,7 @@ a master process to establish a connection before dying.
 ### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
 An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
-available to Julia.  If `$JULIA_NUM_THREADS` is not positive or is not set, or
+available to Julia. If `$JULIA_NUM_THREADS` is not positive or is not set, or
 if the number of CPU threads cannot be determined through system calls, then the
 number of threads is set to `1`.
 
@@ -376,7 +376,7 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 ## REPL formatting
 
 Environment variables that determine how REPL output should be formatted at the
-terminal. Generally, these variables should be set to [ANSI terminal escape
+terminal. The `JULIA_*_COLOR` variables should be set to [ANSI terminal escape
 sequences](https://en.wikipedia.org/wiki/ANSI_escape_code). Julia provides
 a high-level interface with much of the same functionality; see the section on
 [The Julia REPL](@ref).
@@ -405,6 +405,19 @@ should have at the terminal.
 
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
+
+### [`NO_COLOR`](@id NO_COLOR)
+
+When this variable is present and not an empty string (regardless of its value) then colored
+text will be disabled on the REPL. Can be overridden with the flag `--color=yes` or with the
+environment variable [`FORCE_COLOR`](@ref FORCE_COLOR). This environment variable is
+[commonly recognized by command-line applications](https://no-color.org/).
+
+### [`FORCE_COLOR`](@id FORCE_COLOR)
+
+When this variable is present and not an empty string (regardless of its value) then
+colored text will be enabled on the REPL. Can be overridden with the flag `--color=no`. This
+environment variable is [commonly recognized by command-line applications](https://force-color.org/).
 
 ## System and Package Image Building
 

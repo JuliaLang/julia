@@ -226,12 +226,12 @@ end
 ## Allocating the output container
 Base.similar(bc::Broadcasted, ::Type{T}) where {T} = similar(bc, T, axes(bc))
 Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}, dims) where {N,ElType} =
-    similar(Array{ElType}, dims)
+    similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}, dims) where N =
     similar(BitArray, dims)
 # In cases of conflict we fall back on Array
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{ElType}, dims) where ElType =
-    similar(Array{ElType}, dims)
+    similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{Bool}, dims) =
     similar(BitArray, dims)
 

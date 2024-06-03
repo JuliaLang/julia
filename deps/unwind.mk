@@ -40,12 +40,12 @@ $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UN
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) --build $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-checked: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) check
+	$(CMAKE) --build $(dir $@) check
 endif
 	echo 1 > $@
 
@@ -113,7 +113,7 @@ $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvmunwin
 	echo 1 > $@
 
 $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled: $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) --build $(dir $<)
 	echo 1 > $@
 
 $(eval $(call staged-install, \

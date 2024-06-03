@@ -542,9 +542,12 @@ public:
         if (GlobalValue *V = m->getNamedValue(name))
             return cast<GlobalVariable>(V);
         auto T_size = m->getDataLayout().getIntPtrType(m->getContext());
-        return new GlobalVariable(*m, _type(T_size),
+        auto var = new GlobalVariable(*m, _type(T_size),
                 isconst, GlobalVariable::ExternalLinkage,
                 NULL, name);
+        if (Triple(m->getTargetTriple()).isOSWindows())
+            var->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLImportStorageClass); // Cross-library imports must be explicit for COFF (Windows)
+        return var;
     }
     GlobalVariable *realize(jl_codectx_t &ctx);
 };
@@ -2141,9 +2144,6 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
             proto->setInitializer(G->getInitializer());
         }
         proto->copyAttributesFrom(G);
-        // DLLImport only needs to be set for the shadow module
-        // it just gets annoying in the JIT
-        proto->setDLLStorageClass(GlobalValue::DefaultStorageClass);
         return proto;
     }
     return cast<GlobalVariable>(local);

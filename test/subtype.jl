@@ -2650,3 +2650,10 @@ let S = Tuple{Val, Val{T}} where {T}, R = Tuple{Val{Val{T}}, Val{T}} where {T},
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, GenericMemory{B}}}, S{1}, R{1})
     @testintersect(Tuple{Val{A}, A} where {B, A<:Union{Val{B}, GenericMemory{:not_atomic,Int,B}}}, S{1}, R{1})
 end
+
+#issue 54516
+let S = Tuple{Val{<:T}, Union{Int,T}} where {T},
+    T = Tuple{Union{Int,T}, Val{<:T}} where {T}
+    @testintersect(S, T, !Union{})
+    @test !Base.has_free_typevars(typeintersect(S, T))
+end

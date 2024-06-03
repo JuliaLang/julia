@@ -885,14 +885,14 @@ end
 end
 
 @testset "isapprox" begin
-  # #22742: updated isapprox semantics
-  @test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
-  @test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
-  @test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
+    # #22742: updated isapprox semantics
+    @test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
+    @test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
+    @test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
 
-  # #13132: Use of `norm` kwarg for scalar arguments
-  @test isapprox(1, 1+1.0e-12, norm=abs)
-  @test !isapprox(1, 1+1.0e-12, norm=x->1)
+    # #13132: Use of `norm` kwarg for scalar arguments
+    @test isapprox(1, 1+1.0e-12, norm=abs)
+    @test !isapprox(1, 1+1.0e-12, norm=x->1)
 end
 
 # test AbstractFloat fallback pr22716

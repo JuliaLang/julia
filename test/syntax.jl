@@ -2542,19 +2542,19 @@ end
                                                               3 4 5]
 
 @test Meta.parse("for x in 1:10 g(x) end") ==
-  Meta.parse("for#==#x#==#in#==#1:10#==#g(x)#==#end")
+    Meta.parse("for#==#x#==#in#==#1:10#==#g(x)#==#end")
 @test Meta.parse("(f->f(1))() do x x+1 end") ==
-  Meta.parse("(f->f(1))()#==#do#==#x#==#x+1#==#end")
+    Meta.parse("(f->f(1))()#==#do#==#x#==#x+1#==#end")
 @test Meta.parse("while i < 10 i += 1 end") ==
-  Meta.parse("while#==#i#==#<#==#10#==#i#==#+=#==#1#==#end")
+    Meta.parse("while#==#i#==#<#==#10#==#i#==#+=#==#1#==#end")
 @test Meta.parse("begin x=1 end") == Meta.parse("begin#==#x=1#==#end")
 @test Meta.parse("if x<y x+1 elseif y>0 y+1 else z end") ==
-  Meta.parse("if#==#x<y#==#x+1#==#elseif#==#y>0#==#y+1#==#else#==#z#==#end")
+    Meta.parse("if#==#x<y#==#x+1#==#elseif#==#y>0#==#y+1#==#else#==#z#==#end")
 @test Meta.parse("function(x) x end") == Meta.parse("function(x)#==#x#==#end")
 @test Meta.parse("a ? b : c") == Meta.parse("a#==#?#==#b#==#:#==#c")
 @test_parseerror("f#==#(x)=x", "space before \"(\" not allowed in \"f (\" at none:1")
 @test Meta.parse("try f() catch e g() finally h() end") ==
-  Meta.parse("try#==#f()#==#catch#==#e#==#g()#==#finally#==#h()#==#end")
+    Meta.parse("try#==#f()#==#catch#==#e#==#g()#==#finally#==#h()#==#end")
 @test Meta.parse("@m a b") == Meta.parse("@m#==#a#==#b")
 
 # issue #37540
