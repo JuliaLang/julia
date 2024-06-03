@@ -236,15 +236,21 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
     isempty(frames) && push!(frames, frame)
-    valid_worlds = WorldRange()
+    cycle_valid_worlds = WorldRange()
+    cycle_effects = EFFECTS_TOTAL
     for caller in frames
         @assert !(caller.dont_work_on_me)
         caller.dont_work_on_me = true
-        # might might not fully intersect these earlier, so do that now
-        valid_worlds = intersect(caller.valid_worlds, valid_worlds)
+        # converge the world age range and effects for this cycle here:
+        # all frames in the cycle should have the same bits of `valid_worlds` and `effects`
+        # that are simply the intersection of each partial computation, without having
+        # dependencies on each other (unlike rt and exct)
+        cycle_valid_worlds = intersect(cycle_valid_worlds, caller.valid_worlds)
+        cycle_effects = merge_effects(cycle_effects, caller.ipo_effects)
     end
     for caller in frames
-        caller.valid_worlds = valid_worlds
+        caller.valid_worlds = cycle_valid_worlds
+        caller.ipo_effects = cycle_effects
         finish(caller, caller.interp)
     end
     for caller in frames
