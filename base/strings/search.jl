@@ -66,10 +66,6 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
 end
 
-function findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{UInt8, Int8}}, a::Union{DenseInt8, DenseUInt8})
-    findnext(pred, a, firstindex(a))
-end
-
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
     _search(a, pred.x, i)
 end
@@ -80,7 +76,6 @@ end
 
 # iszero is special, in that the bitpattern for zero for Int8 and UInt8 is the same,
 # so we can use memchr even if we search for an Int8 in an UInt8 array or vice versa
-findfirst(::typeof(iszero), a::DenseUInt8OrInt8) = _search(a, zero(UInt8))
 findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = _search(a, zero(UInt8), i)
 
 function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = firstindex(a))
@@ -98,14 +93,6 @@ function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{I
         q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-fst, b, n_bytes)
     end
     return q == C_NULL ? nothing : (q-p+fst) % Int
-end
-
-function _search(a::DenseUInt8, b::AbstractChar, i::Integer = firstindex(a))
-    if isascii(b)
-        _search(a,UInt8(b),i)
-    else
-        _search(a,codeunits(string(b)),i).start
-    end
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
@@ -126,10 +113,6 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
 end
 
-function findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::DenseUInt8OrInt8)
-    findprev(pred, a, lastindex(a))
-end
-
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
     _rsearch(a, pred.x, i)
 end
@@ -139,7 +122,6 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::Dens
 end
 
 # See comments above for findfirst(::typeof(iszero)) methods
-findlast(::typeof(iszero), a::DenseUInt8OrInt8) = _rsearch(a, zero(UInt8))
 findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = _rsearch(a, zero(UInt8), i)
 
 function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = last_byteindex(a))
@@ -157,14 +139,6 @@ function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{
         q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i-fst+1)
     end
     return q == C_NULL ? nothing : (q-p+fst) % Int
-end
-
-function _rsearch(a::DenseUInt8, b::AbstractChar, i::Integer = length(a))
-    if isascii(b)
-        _rsearch(a,UInt8(b),i)
-    else
-        _rsearch(a,codeunits(string(b)),i).start
-    end
 end
 
 function findall(
