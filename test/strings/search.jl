@@ -461,7 +461,7 @@ end
 end
 
 @testset "DenseArray with offsets" begin
-    isdefined(Main, :OffsetDenseArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetDenseArrays.jl"))
+    isdefined(Main, :OffsetDenseArrays) || @eval Main include("testhelpers/OffsetDenseArrays.jl")
 
     A = OffsetDenseArrays.OffsetDenseArray(collect(0x61:0x69), 100)
     @test findfirst(==(0x61), A) == 101
