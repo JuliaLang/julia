@@ -1250,7 +1250,9 @@ function setup_interface(
                             transition(s, pkg_mode) do
                                 LineEdit.state(s, pkg_mode).input_buffer = buf
                             end
-                            @invokelatest(LineEdit.check_for_hint(s)) && @invokelatest(LineEdit.refresh_line(s))
+                            if !isempty(s)
+                                @invokelatest(LineEdit.check_for_hint(s)) && @invokelatest(LineEdit.refresh_line(s))
+                            end
                             transition_finished = true
                         end
                     end
