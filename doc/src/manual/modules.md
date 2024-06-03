@@ -112,7 +112,7 @@ and above. To maintain compatibility with Julia 1.10 and below, use the `@compat
 
 ### Standalone `using` and `import`
 
-Possibly the most common way of loading a module is `using ModuleName`. This [loads](@ref
+For interactive use, the most common way of loading a module is `using ModuleName`. This [loads](@ref
 code-loading) the code associated with `ModuleName`, and brings
 
 1. the module name
@@ -167,6 +167,26 @@ Importantly, the module name `NiceStuff` will *not* be in the namespace. If you 
 ```jldoctest module_manual
 julia> using .NiceStuff: nice, DOG, NiceStuff
 ```
+
+!!! note
+    Qualifying the names being used as in `using Foo: Foo, f` is
+    recommended over plain `using Foo` for released packages, and other
+    code which is meant to be re-used in the future with updated dependencies
+    or future versions of julia.
+
+    The reason for this is if another dependency starts to export one of the
+    same names as `Foo` and you attempt to use that name, then previously working
+    code will error due to an ambiguity in which package the name should be
+    taken from. This is especially problematic in released packages which needs
+    to be forward-compatible with the future releases.
+
+    For example, if your package has dependencies `Foo` version `1` and `Bar`
+    version `2`, and you write `using Foo, Bar` the current versions may not
+    have any conflicting names, but if in a minor non-breaking release of `Bar`
+    version 2.x it also exports the name `f`, then suddenly calling the function
+    `f` will error because the name has become ambiguous. This issue can be
+    avoided by explicitly listing what names you want to use from which modules.
+
 
 Julia has two forms for seemingly the same thing because only `import ModuleName: f` allows adding methods to `f`
 *without a module path*.
