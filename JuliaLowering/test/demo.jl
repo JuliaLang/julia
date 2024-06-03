@@ -6,7 +6,6 @@ using JuliaLowering
 using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode, sourcetext
 
 using JuliaSyntaxFormatter
-using JuliaSyntaxFormatter: FormatContext
 
 # Extract variable kind for highlighting purposes
 function var_kind(e)
@@ -21,15 +20,8 @@ function var_kind(e)
     return info.kind
 end
 
-function formatsrc(ex; color_by=nothing, kws...)
-    format_token_style = if isnothing(color_by)
-        e->nothing
-    elseif color_by isa Symbol
-        e->get(e, color_by, nothing)
-    else
-        color_by
-    end
-    Text(JuliaSyntaxFormatter.format(ex; format_token_style, kws...))
+function formatsrc(ex; kws...)
+    Text(JuliaSyntaxFormatter.formatsrc(ex; kws...))
 end
 
 function annotate_scopes(mod, ex)
@@ -182,9 +174,9 @@ end
 # end
 # """
 
-src = """
-M.@set_global_in_parent "bent hygiene!"
-"""
+# src = """
+# M.@set_global_in_parent "bent hygiene!"
+# """
 
 # src = """
 # begin
@@ -216,22 +208,22 @@ end
 # M.@set_global_in_parent "bent hygiene!"
 # """
 
-src = """
-begin
-   x = 10
-   y = 20
-   let x = y + x
-       z = "some string \$x \$y"
-
-       function f(y)
-           a = M.@foo z
-           "\$z \$y \$a \$x"
-       end
-       print(x)
-   end
-   print(x)
-end
-"""
+# src = """
+# begin
+#    x = 10
+#    y = 20
+#    let x = y + x
+#        z = "some string \$x \$y"
+#
+#        function f(y)
+#            a = M.@foo z
+#            "\$z \$y \$a \$x"
+#        end
+#        print(x)
+#    end
+#    print(x)
+# end
+# """
 
 # src = """
 # begin
@@ -240,8 +232,15 @@ end
 # end
 # """
 
+# src = """
+#     _ = -1
+# """
 src = """
-    _ = -1
+M.@make_module
+"""
+
+src = """
+M.@nested_return_a_value
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
@@ -251,7 +250,8 @@ ex = ensure_attributes(ex, var_id=Int)
 
 in_mod = Main
 ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
-@info "Macro expanded" formatsrc(ex_macroexpand, color_by=:scope_layer)
+# @info "Macro expanded" formatsrc(ex_macroexpand, color_by=:scope_layer)
+@info "Macro expanded" formatsrc(ex_macroexpand, color_by=e->JuliaLowering.expansion_stack(e)[2:end])
 
 ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
 @info "Desugared" formatsrc(ex_desugar, color_by=:scope_layer)
@@ -262,9 +262,9 @@ ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
 ctx4, ex_compiled = JuliaLowering.linearize_ir(ctx3, ex_scoped)
 @info "Linear IR" formatsrc(ex_compiled, color_by=:var_id)
 
-# ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.var_info, ex_compiled)
-# @info "CodeInfo" ex_expr
-#
-# eval_result = Base.eval(in_mod, ex_expr)
-# @info "Eval" eval_result
-#
+ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.var_info, ex_compiled)
+@info "CodeInfo" ex_expr
+
+eval_result = Base.eval(in_mod, ex_expr)
+@info "Eval" eval_result
+

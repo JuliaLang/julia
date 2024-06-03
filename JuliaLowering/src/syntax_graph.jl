@@ -53,6 +53,14 @@ function ensure_attributes(graph::SyntaxGraph; kws...)
     freeze_attrs(g)
 end
 
+function delete_attributes(graph::SyntaxGraph, attr_names...)
+    attributes = Dict(pairs(graph.attributes)...)
+    for name in attr_names
+        delete!(attributes, name)
+    end
+    SyntaxGraph(graph.edge_ranges, graph.edges, (; pairs(attributes)...))
+end
+
 function newnode!(graph::SyntaxGraph)
     push!(graph.edge_ranges, 0:-1) # Invalid range start => leaf node
     return length(graph.edge_ranges)
@@ -99,6 +107,10 @@ end
 
 function getattr(graph::SyntaxGraph, name::Symbol, default)
     get(getfield(graph, :attributes), name, default)
+end
+
+function hasattr(graph::SyntaxGraph, name::Symbol)
+    getattr(graph, name, nothing) !== nothing
 end
 
 # FIXME: Probably terribly non-inferrable?
@@ -164,7 +176,7 @@ function check_same_graph(x, y)
     end
 end
 
-function similar_graph(x, y)
+function is_compatible_graph(x, y)
     syntax_graph(x).edges === syntax_graph(y).edges
 end
 
@@ -290,10 +302,10 @@ function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
     highlight(io, src; note="these are the bytes you're looking for 😊", context_lines_inner=20)
 end
 
-function sourceref(tree::SyntaxTree)
-    sources = tree.graph.source
-    id::NodeId = tree.id
+function _sourceref(sources, id)
+    i = 1
     while true
+        i += 1
         s = get(sources, id, nothing)
         if s isa NodeId
             id = s
@@ -303,8 +315,58 @@ function sourceref(tree::SyntaxTree)
     end
 end
 
+function sourceref(tree::SyntaxTree)
+    sources = tree.graph.source
+    id::NodeId = tree.id
+    while true
+        s = _sourceref(sources, id)
+        if s isa Tuple
+            s = s[1]
+        end
+        if s isa NodeId
+            id = s
+        else
+            return s
+        end
+    end
+end
+
+function show_expansion_stack(io::IO, exs)
+    for (i,ex) in enumerate(exs)
+        sr = sourceref(ex)
+        if i > 1
+            JuliaSyntax._printstyled(io, "\n\n", fgcolor=:light_black)
+            first = false
+        end
+        note = length(exs) == 1 ? "in source here" :
+               i > 1            ? "expanded from here" : "in macro expansion"
+        highlight(io, sr, note=note)
+    end
+end
+
+function expansion_stack(tree::SyntaxTree)
+    sources = tree.graph.source
+    id::NodeId = tree.id
+    while true
+        s = get(sources, id, nothing)
+        if s isa NodeId
+            id = s
+        else
+            refs = SyntaxList(tree)
+            if s isa Tuple
+                for i in s
+                    push!(refs, SyntaxTree(tree.graph, i))
+                end
+            else
+                push!(refs, SyntaxTree(tree.graph, id))
+            end
+            return refs
+        end
+    end
+end
+
 function is_ancestor(ex, ancestor)
-    if !similar_graph(ex, ancestor)
+    if !is_compatible_graph(ex, ancestor)
         return false
     end
     sources = ex.graph.source
@@ -329,7 +391,7 @@ JuliaSyntax.first_byte(tree::SyntaxTree) = first_byte(sourceref(tree))
 JuliaSyntax.last_byte(tree::SyntaxTree) = last_byte(sourceref(tree))
 JuliaSyntax.sourcetext(tree::SyntaxTree) = sourcetext(sourceref(tree))
 
-const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId}
+const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple}
 
 function SyntaxTree(graph::SyntaxGraph, node::SyntaxNode)
     ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=SourceAttrType,

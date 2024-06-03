@@ -11,7 +11,7 @@ generates a new layer.
 struct ScopeLayer
     id::LayerId
     mod::Module
-    is_macro_expansion::Bool
+    is_macro_expansion::Bool # FIXME
 end
 
 struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
@@ -19,21 +19,7 @@ struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
     next_var_id::Ref{VarId}
     scope_layers::Vector{ScopeLayer}
     current_layer::ScopeLayer
-end
-
-function MacroExpansionContext(ctx, mod::Module)
-    graph = ensure_attributes(syntax_graph(ctx),
-                              var_id=VarId,
-                              scope_layer=LayerId,
-                              __macro_ctx__=Nothing)
-    layers = Vector{ScopeLayer}()
-    MacroExpansionContext(graph, Ref{VarId}(1), layers, new_scope_layer(layers, mod, false))
-end
-
-function new_scope_layer(layers, mod::Module, is_macro_expansion)
-    layer = ScopeLayer(length(layers)+1, mod, is_macro_expansion)
-    push!(layers, layer)
-    return layer
+    expansion_stack::SyntaxList{GraphType}
 end
 
 #--------------------------------------------------
@@ -118,6 +104,21 @@ function set_scope_layer_recursive!(ex, id, force)
     ex
 end
 
+function setup_macro_argument(ctx, ex, layer)
+    k = kind(ex)
+    scope_layer = get(ex, :scope_layer, layer.id)
+    if k == K"module" || k == K"toplevel" || k == K"inert"
+        makenode(ctx, ex, ex, children(ex);
+                 scope_layer=scope_layer)
+    elseif haschildren(ex)
+        mapchildren(e->setup_macro_argument(ctx, e, layer), ctx, ex;
+                    scope_layer=scope_layer)
+    else
+        makeleaf(ctx, ex, ex;
+                 scope_layer=scope_layer)
+    end
+end
+
 function eval_macro_name(ctx, ex)
     # `ex1` might contain a nontrivial mix of scope layers so we can't just
     # `eval()` it, as it's already been partially lowered by this point.
@@ -142,7 +143,7 @@ function expand_macro(ctx, ex)
     #   a macro expansion.
     # In either case, we need to set any unset scope layers before passing the
     # arguments to the macro call.
-    macro_args = [set_scope_layer_recursive!(e, ctx.current_layer.id, false)
+    macro_args = [setup_macro_argument(ctx, e, ctx.current_layer)
                   for e in children(ex)[2:end]]
     mctx = MacroContext(ctx.graph, macname, ctx.current_layer)
     expanded = try
@@ -163,14 +164,31 @@ function expand_macro(ctx, ex)
             # If the macro has produced syntax outside the macro context, copy it over.
             # TODO: Do we expect this always to happen?  What is the API for access
             # to the macro expansion context?
+            #
+            # TODO: Can expand_forms_1() do the copying?
             expanded = copy_ast(ctx, expanded)
         end
-        new_layer = new_scope_layer(ctx.scope_layers, parentmodule(macfunc), true)
-        ctx2 = MacroExpansionContext(ctx.graph, ctx.next_var_id, ctx.scope_layers, new_layer)
-        # Add wrapper block for macro expansion provenance tracking
-        @ast ctx ex [K"block" expand_forms_1(ctx2, expanded)]
+        new_layer = ScopeLayer(length(ctx.scope_layers)+1, parentmodule(macfunc), true)
+        push!(ctx.scope_layers, new_layer)
+        push!(ctx.expansion_stack, ex)
+        inner_ctx = MacroExpansionContext(ctx.graph, ctx.next_var_id, ctx.scope_layers,
+                                          new_layer, ctx.expansion_stack)
+        expanded = expand_forms_1(inner_ctx, expanded)
+        pop!(ctx.expansion_stack)
     else
-        @ast ctx ex expanded::K"Value"
+        # To get `srcref` correct it's simplest to have a special case here for
+        # when the macro returns a non-AST.
+        srcref = (ex.id, Iterators.reverse(ctx.expansion_stack.ids)...)
+        expanded = @ast ctx srcref expanded::K"Value"
+    end
+    return expanded
+end
+
+function macro_stack_srcref(ctx, ex)
+    if ctx.current_layer.is_macro_expansion
+        (ex.id, Iterators.reverse(ctx.expansion_stack.ids)...)
+    else
+        ex.id
     end
 end
 
@@ -188,33 +206,29 @@ need to be dealt with before other lowering.
   interpolations)
 """
 function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
-    set_scope_layer!(ex, ctx.current_layer.id, false)
     k = kind(ex)
-    if k == K"Identifier"
-        if all(==('_'), ex.name_val)
-            @ast ctx ex ex=>K"Placeholder"
-        else
-            ex
-        end
+    if k == K"Identifier" && all(==('_'), ex.name_val)
+        @ast ctx macro_stack_srcref(ctx,ex) ex=>K"Placeholder"
+    elseif k == K"Identifier" || k == K"MacroName" ||
+            (is_operator(k) && !haschildren(ex)) # <- TODO: fix upstream
+        layerid = get(ex, :scope_layer, ctx.current_layer.id)
+        makeleaf(ctx, macro_stack_srcref(ctx,ex), ex, kind=K"Identifier", scope_layer=layerid)
     elseif k == K"var" || k == K"char" || k == K"parens"
         # Strip "container" nodes
         @chk numchildren(ex) == 1
         expand_forms_1(ctx, ex[1])
-    elseif k == K"MacroName"
-        @ast ctx ex ex=>K"Identifier"
-    elseif is_operator(k) && !haschildren(ex) # TODO: do in JuliaSyntax?
-        @ast ctx ex ex=>K"Identifier"
     elseif k == K"quote"
         @chk numchildren(ex) == 1
         expand_forms_1(ctx, expand_quote(ctx, ex[1]))
-    elseif k == K"module" || k == K"toplevel" || k == K"inert"
-        ex
     elseif k == K"macrocall"
         expand_macro(ctx, ex)
+    elseif k == K"module" || k == K"toplevel" || k == K"inert"
+        # FIXME
+        makenode(ctx, macro_stack_srcref(ctx,ex), ex, children(ex))
     elseif !haschildren(ex)
-        ex
+        makeleaf(ctx, macro_stack_srcref(ctx,ex), ex)
     else
-        mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
+        mapchildren(e->expand_forms_1(ctx,e), ctx, ex; source=macro_stack_srcref(ctx,ex))
     end
 end
 
@@ -227,6 +241,19 @@ function expand_forms_1(ctx::MacroExpansionContext, exs::Union{Tuple,AbstractVec
 end
 
 function expand_forms_1(mod::Module, ex::SyntaxTree)
-    ctx = MacroExpansionContext(ex, mod)
-    ctx, expand_forms_1(ctx, reparent(ctx, ex))
+    graph = ensure_attributes(syntax_graph(ex),
+                              var_id=VarId,
+                              scope_layer=LayerId,
+                              macro_expansion=ScopeLayer,
+                              __macro_ctx__=Nothing)
+    layers = ScopeLayer[ScopeLayer(1, mod, false)]
+    ctx = MacroExpansionContext(graph, Ref{VarId}(1), layers, layers[1], SyntaxList(graph))
+    ex2 = expand_forms_1(ctx, reparent(ctx, ex))
+    graph2 = delete_attributes(graph, :__macro_ctx__)
+    # TODO: Returning the context with pass-specific mutable data is a bad way
+    # to carry state into the next pass.
+    ctx2 = MacroExpansionContext(graph2, ctx.next_var_id, ctx.scope_layers,
+                                 ctx.current_layer, SyntaxList(graph2))
+    return ctx2, reparent(ctx2, ex2)
 end
+

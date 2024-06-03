@@ -211,6 +211,7 @@ end
 
 #-------------------------------------------------------------------------------
 # Runtime support functions called by lowering
+# TODO: Move to runtime.jl
 
 struct InterpolationContext{Graph} <: AbstractLoweringContext
     graph::Graph
@@ -239,7 +240,7 @@ function _interpolated_value(ctx, srcref, x)
 end
 
 function _interpolate_ast(ctx::InterpolationContext, ex, depth)
-    if !_contains_active_interp(ex, depth)
+    if ctx.current_index[] > length(ctx.values) || !_contains_active_interp(ex, depth)
         return ex
     end
 
@@ -270,15 +271,15 @@ function interpolate_ast(ex, values...)
         TODO(ex, "\$ in interpolate_ast")
     end
     # Construct graph for interpolation context. We inherit this from the macro
-    # context where possible by detecting it using __macro__ctx__. This feels
+    # context where possible by detecting it using __macro_ctx__. This feels
     # hacky though.
     #
     # Perhaps we should use a ScopedValue for this instead or get it from
-    # __context__? Nothing feels great here.
+    # the macro __context__? Nothing feels great here.
     graph = nothing
     for vals in values
         for v in vals
-            if v isa SyntaxTree && !isnothing(getattr(syntax_graph(v), :__macro_ctx__, nothing))
+            if v isa SyntaxTree && hasattr(syntax_graph(v), :__macro_ctx__)
                 graph = syntax_graph(v)
                 break
             end

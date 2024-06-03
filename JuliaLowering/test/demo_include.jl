@@ -56,4 +56,20 @@ module M
             end
         end
     end
+
+    macro make_module()
+        :(module X
+              blah = 10
+          end)
+    end
+
+    macro return_a_value()
+        42
+    end
+
+    macro nested_return_a_value()
+        :(
+            @return_a_value
+        )
+    end
 end

@@ -38,7 +38,7 @@ function makeleaf(graph::SyntaxGraph, srcref, proto; attrs...)
     id = newnode!(graph)
     source = srcref isa SyntaxTree ? _node_id(graph, srcref) : srcref
     ex = SyntaxTree(graph, id)
-    copy_attrs!(ex, proto)
+    copy_attrs!(ex, proto, true)
     setattr!(graph, id; source=source, attrs...)
     return ex
 end
@@ -48,7 +48,7 @@ function makenode(graph::SyntaxGraph, srcref, proto, children...; attrs...)
     setchildren!(graph, id, _node_ids(graph, children...))
     source = srcref isa SyntaxTree ? _node_id(graph, srcref) : srcref
     ex = SyntaxTree(graph, id)
-    copy_attrs!(ex, proto)
+    copy_attrs!(ex, proto, true)
     setattr!(graph, id; source=source, attrs...)
     return SyntaxTree(graph, id)
 end
@@ -249,25 +249,27 @@ end
 
 #-------------------------------------------------------------------------------
 # Mapping and copying of AST nodes
-function copy_attrs!(dest, src)
+function copy_attrs!(dest, src, all=false)
     # TODO: Make this faster?
     for (k,v) in pairs(dest.graph.attributes)
-        if (k !== :source && k !== :kind && k !== :syntax_flags) && haskey(v, src.id)
+        if (all || (k !== :source && k !== :kind && k !== :syntax_flags)) && haskey(v, src.id)
             v[dest.id] = v[src.id]
         end
     end
 end
 
-function copy_attrs!(dest, head::Union{Kind,JuliaSyntax.SyntaxHead})
-    sethead!(dest.graph, dest.id, head)
+function copy_attrs!(dest, head::Union{Kind,JuliaSyntax.SyntaxHead}, all=false)
+    if all
+        sethead!(dest.graph, dest.id, head)
+    end
 end
 
-function mapchildren(f, ctx, ex)
+function mapchildren(f, ctx, ex; extra_attrs...)
     if !haschildren(ex)
         return ex
     end
     orig_children = children(ex)
-    cs = nothing
+    cs = isempty(extra_attrs) ? nothing : SyntaxList(ctx)
     for (i,e) in enumerate(orig_children)
         c = f(e)
         if isnothing(cs)
@@ -282,12 +284,13 @@ function mapchildren(f, ctx, ex)
     end
     if isnothing(cs)
         # This function should be allocation-free if no children were changed
-        # by the mapping.
+        # by the mapping and there's no extra_attrs
         return ex
     end
     cs::SyntaxList
     ex2 = makenode(ctx, ex, head(ex), cs)
     copy_attrs!(ex2, ex)
+    setattr!(ex2; extra_attrs...)
     return ex2
 end
 
@@ -295,14 +298,18 @@ end
 Copy AST `ex` into `ctx`
 """
 function copy_ast(ctx, ex)
+    srcref = ex.source
+    if srcref isa NodeId
+        srcref = copy_ast(ctx, SyntaxTree(syntax_graph(ex), srcref))
+    end
     if haschildren(ex)
         cs = SyntaxList(ctx)
         for e in children(ex)
             push!(cs, copy_ast(ctx, e))
         end
-        ex2 = makenode(ctx, sourceref(ex), head(ex), cs)
+        ex2 = makenode(ctx, srcref, head(ex), cs)
     else
-        ex2 = makeleaf(ctx, sourceref(ex), head(ex))
+        ex2 = makeleaf(ctx, srcref, head(ex))
     end
     for (name,attr) in pairs(ex.graph.attributes)
         if (name !== :source && name !== :kind && name !== :syntax_flags) &&
