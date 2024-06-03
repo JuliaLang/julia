@@ -31,8 +31,6 @@ const DenseUInt8 = Union{
 
 const DenseUInt8OrInt8 = Union{DenseUInt8, DenseInt8}
 
-nothing_sentinel(i) = i == 0 ? nothing : i
-
 function last_utf8_byte(c::Char)
     u = reinterpret(UInt32, c)
     shift = ((4 - ncodeunits(c)) * 8) & 31
@@ -55,11 +53,11 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     @inbounds isvalid(s, i) || string_index_err(s, i)
     c = Char(pred.x)::Char
     byte = last_utf8_byte(c)
-    is_standalone_byte(byte) && return nothing_sentinel(_search(s, byte, i))
+    is_standalone_byte(byte) && return _search(s, byte, i)
     ncu = ncodeunits(c)
     while true
         i = _search(s, byte, i)
-        i == 0 && return nothing
+        isnothing(i) && return nothing
         i += 1
         index = i - ncu
         isvalid(s, index) || continue
@@ -73,17 +71,17 @@ function findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{UInt8,
 end
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
-    nothing_sentinel(_search(a, pred.x, i))
+    _search(a, pred.x, i)
 end
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
-    nothing_sentinel(_search(a, pred.x, i))
+    _search(a, pred.x, i)
 end
 
 # iszero is special, in that the bitpattern for zero for Int8 and UInt8 is the same,
 # so we can use memchr even if we search for an Int8 in an UInt8 array or vice versa
-findfirst(::typeof(iszero), a::DenseUInt8OrInt8) = nothing_sentinel(_search(a, zero(UInt8)))
-findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
+findfirst(::typeof(iszero), a::DenseUInt8OrInt8) = _search(a, zero(UInt8))
+findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = _search(a, zero(UInt8), i)
 
 function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = firstindex(a))
     fst = firstindex(a)
@@ -93,13 +91,13 @@ function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{I
     end
     n_bytes = lst - i + 1
     if i > lst
-        return i == lst+1 ? 0 : throw(BoundsError(a, i))
+        return i == lst+1 ? nothing : throw(BoundsError(a, i))
     end
     GC.@preserve a begin
         p = pointer(a)
         q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-fst, b, n_bytes)
     end
-    return q == C_NULL ? 0 : (q-p+fst) % Int
+    return q == C_NULL ? nothing : (q-p+fst) % Int
 end
 
 function _search(a::DenseUInt8, b::AbstractChar, i::Integer = firstindex(a))
@@ -114,12 +112,12 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
                   s::Union{String, SubString{String}}, i::Integer)
     c = Char(pred.x)::Char
     byte = last_utf8_byte(c)
-    is_standalone_byte(byte) && return nothing_sentinel(_rsearch(s, byte, i))
+    is_standalone_byte(byte) && return _rsearch(s, byte, i)
     ncu = ncodeunits(c)
     i = min(ncodeunits(s), i + ncu - 1)
     while true
         i = _rsearch(s, byte, i)
-        i == 0 && return nothing
+        isnothing(i) && return nothing
         index = i - ncu + 1
         i -= 1
         isvalid(s, index) || continue
@@ -133,32 +131,32 @@ function findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UI
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
-    nothing_sentinel(_rsearch(a, pred.x, i))
+    _rsearch(a, pred.x, i)
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
-    nothing_sentinel(_rsearch(a, pred.x, i))
+    _rsearch(a, pred.x, i)
 end
 
 # See comments above for findfirst(::typeof(iszero)) methods
-findlast(::typeof(iszero), a::DenseUInt8OrInt8) = nothing_sentinel(_rsearch(a, zero(UInt8)))
-findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
+findlast(::typeof(iszero), a::DenseUInt8OrInt8) = _rsearch(a, zero(UInt8))
+findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = _rsearch(a, zero(UInt8), i)
 
 function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = last_byteindex(a))
     fst = firstindex(a)
     lst = last_byteindex(a)
     if i < fst
-        return i == 0 ? 0 : throw(BoundsError(a, i))
+        return i == 0 ? nothing : throw(BoundsError(a, i))
     end
     n_bytes = lst - i + 1
     if i > lst
-        return i == lst+1 ? 0 : throw(BoundsError(a, i))
+        return i == lst+1 ? nothing : throw(BoundsError(a, i))
     end
     GC.@preserve a begin
         p = pointer(a)
         q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i-fst+1)
     end
-    return q == C_NULL ? 0 : (q-p+fst) % Int
+    return q == C_NULL ? nothing : (q-p+fst) % Int
 end
 
 function _rsearch(a::DenseUInt8, b::AbstractChar, i::Integer = length(a))
