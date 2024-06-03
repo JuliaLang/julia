@@ -406,8 +406,9 @@ end
 
     # Finds an invalid char ONLY if it's at a char boundary in the string,
     # i.e. iterating the string would emit the given char.
-    findall(==('\xfe'), "abκæøc\xfeα\xfeβå!") == [10, 13]
-    findall(==('\xaf'), "abκæ读α\xe8\xaf\xfeβå!") == Int[]
+    @test findall(==('\xfe'), "abκæøc\xfeα\xfeβå!") == [10, 13]
+    @test isempty(findall(==('\xaf'), "abκæ读α\xe8\xaf\xfeβå!"))
+    @test isempty(findall(==('\xc3'), ";æ"))
 end
 
 # issue 37280

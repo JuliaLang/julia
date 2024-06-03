@@ -18,6 +18,10 @@ function last_utf8_byte(c::Char)
     (u >> shift) % UInt8
 end
 
+# Whether the given byte is guaranteed to be the only byte in a Char
+# This holds even in the presence of invalid UTF8
+is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
+
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::Union{String, SubString{String}}, i::Integer)
     if i < 1 || i > sizeof(s)
@@ -116,8 +120,8 @@ function findall(
     byte = last_utf8_byte(c)
     ncu = ncodeunits(c)
 
-    # If only one byte: Forward to memchr
-    ncu == 1 && return findall(==(byte), codeunits(s))
+    # If only one byte, and can't be part of another Char: Forward to memchr.
+    is_standalone_byte(byte) && return findall(==(byte), codeunits(s))
     result = Int[]
     i = firstindex(s)
     while true
