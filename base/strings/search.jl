@@ -33,8 +33,8 @@ const DenseUInt8OrInt8 = Union{DenseUInt8, DenseInt8}
 
 nothing_sentinel(i) = i == 0 ? nothing : i
 
-n_bytes_of(x::Union{String, SubString{String}}) = ncodeunits(x)
-n_bytes_of(x::DenseUInt8OrInt8) = length(x)
+last_byteindex(x::Union{String, SubString{String}}) = ncodeunits(x)
+last_byteindex(x::DenseUInt8OrInt8) = lastindex(x)
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::Union{String, SubString{String}}, i::Integer)
@@ -80,22 +80,24 @@ end
 findfirst(::typeof(iszero), a::DenseUInt8OrInt8) = nothing_sentinel(_search(a, zero(UInt8)))
 findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
 
-function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = 1)
-    if i < 1
+function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = firstindex(a))
+    fst = firstindex(a)
+    lst = last_byteindex(a)
+    if i < fst
         throw(BoundsError(a, i))
     end
-    n = n_bytes_of(a)
-    if i > n
-        return i == n+1 ? 0 : throw(BoundsError(a, i))
+    n_bytes = lst - i + 1
+    if i > lst
+        return i == lst+1 ? 0 : throw(BoundsError(a, i))
     end
     GC.@preserve a begin
         p = pointer(a)
-        q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
+        q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-fst, b, n_bytes)
     end
-    return q == C_NULL ? 0 : Int(q-p+1)
+    return q == C_NULL ? 0 : (q-p+fst) % Int
 end
 
-function _search(a::DenseUInt8, b::AbstractChar, i::Integer = 1)
+function _search(a::DenseUInt8, b::AbstractChar, i::Integer = firstindex(a))
     if isascii(b)
         _search(a,UInt8(b),i)
     else
@@ -132,19 +134,21 @@ end
 findlast(::typeof(iszero), a::DenseUInt8OrInt8) = nothing_sentinel(_rsearch(a, zero(UInt8)))
 findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
 
-function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = n_bytes_of(a))
-    if i < 1
+function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = last_byteindex(a))
+    fst = firstindex(a)
+    lst = last_byteindex(a)
+    if i < fst
         return i == 0 ? 0 : throw(BoundsError(a, i))
     end
-    n = n_bytes_of(a)
-    if i > n
-        return i == n+1 ? 0 : throw(BoundsError(a, i))
+    n_bytes = lst - i + 1
+    if i > lst
+        return i == lst+1 ? 0 : throw(BoundsError(a, i))
     end
     GC.@preserve a begin
         p = pointer(a)
-        q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
+        q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i-fst)
     end
-    return q == C_NULL ? 0 : Int(q-p+1)
+    return q == C_NULL ? 0 : (q-p+fst) % Int
 end
 
 function _rsearch(a::DenseUInt8, b::AbstractChar, i::Integer = length(a))
@@ -233,7 +237,7 @@ function _searchindex(s::Union{AbstractString,DenseUInt8OrInt8},
                       i::Integer)
     x = Iterators.peel(t)
     if isnothing(x)
-        return 1 <= i <= nextind(s,lastindex(s))::Int ? i :
+        return firstindex(s) <= i <= nextind(s,lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
     t1, trest = x

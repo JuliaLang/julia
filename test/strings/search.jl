@@ -460,6 +460,25 @@ end
     @test isnothing(findprev(UInt8[0xff, 0xfe], Int8[1, 9, 2, -1, -2, 3], 6))
 end
 
+@testset "DenseArray with offsets" begin
+    isdefined(Main, :OffsetDenseArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetDenseArrays.jl"))
+
+    A = OffsetDenseArrays.OffsetDenseArray(collect(0x61:0x69), 100)
+    @test findfirst(==(0x61), A) == 101
+    @test findlast(==(0x61), A) == 101
+    @test findfirst(==(0x00), A) === nothing
+
+    @test findfirst([0x62, 0x63, 0x64], A) == 102:104
+    @test findlast([0x63, 0x64], A) == 103:104
+    @test findall([0x62, 0x63], A) == [102:103]
+
+    @test findfirst(iszero, A) === nothing
+    A = OffsetDenseArrays.OffsetDenseArray([0x01, 0x02, 0x00, 0x03], -100)
+    @test findfirst(iszero, A) == -97
+    @test findnext(==(0x02), A, -99) == -98
+    @test findnext(==(0x02), A, -97) === nothing
+end
+
 # issue 32568
 for T = (UInt, BigInt)
     for x = (4, 5)
