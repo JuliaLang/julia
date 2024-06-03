@@ -53,13 +53,18 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
         throw(BoundsError(s, i))
     end
     @inbounds isvalid(s, i) || string_index_err(s, i)
-    c = pred.x
-    c ≤ '\x7f' && return nothing_sentinel(_search(s, first_utf8_byte(c), i))
+    c = Char(pred.x)::Char
+    byte = last_utf8_byte(c)
+    is_standalone_byte(byte) && return nothing_sentinel(_search(s, byte, i))
+    ncu = ncodeunits(c)
     while true
-        i = _search(s, first_utf8_byte(c), i)
+        i = _search(s, byte, i)
         i == 0 && return nothing
-        isvalid(s, i) && pred(s[i]) && return i
-        i = nextind(s, i)
+        i += 1
+        index = i - ncu
+        isvalid(s, index) || continue
+        char = first(something(iterate(s, index)))
+        char == c && return index
     end
 end
 
@@ -107,14 +112,19 @@ end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::Union{String, SubString{String}}, i::Integer)
-    c = pred.x
-    c ≤ '\x7f' && return nothing_sentinel(_rsearch(s, first_utf8_byte(c), i))
-    b = first_utf8_byte(c)
+    c = Char(pred.x)::Char
+    byte = last_utf8_byte(c)
+    is_standalone_byte(byte) && return nothing_sentinel(_rsearch(s, byte, i))
+    ncu = ncodeunits(c)
+    i = min(ncodeunits(s), i + ncu - 1)
     while true
-        i = _rsearch(s, b, i)
+        i = _rsearch(s, byte, i)
         i == 0 && return nothing
-        isvalid(s, i) && pred(s[i]) && return i
-        i = prevind(s, i)
+        index = i - ncu + 1
+        i -= 1
+        isvalid(s, index) || continue
+        char = first(something(iterate(s, index)))
+        char == c && return index
     end
 end
 
