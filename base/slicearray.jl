@@ -75,11 +75,11 @@ end
 end
 
 """
-    eachslice(A::AbstractArray; dims, drop=true)
+    eachslice(A::AbstractArray; dims=ndims(A), drop=true)
 
 Create a [`Slices`](@ref) object that is an array of slices over dimensions `dims` of `A`, returning
-views that select all the data from the other dimensions in `A`. `dims` can either be an
-integer or a tuple of integers.
+views that select all the data from the other dimensions in `A`. Keyword `dims` can either be an
+integer or a tuple of integers, and defaults to `ndims(A)`.
 
 If `drop = true` (the default), the outer `Slices` will drop the inner dimensions, and
 the ordering of the dimensions will match those in `dims`. If `drop = false`, then the
@@ -95,6 +95,10 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectd
 
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator, and only a single dimension `dims` was supported.
+     The keyword `drop` was not supported.
+
+!!! compat "Julia 1.12"
+     Prior to Julia 1.12, they keyword `dims` had no default.
 
 # Examples
 
@@ -105,23 +109,38 @@ julia> m = [1 2 3; 4 5 6; 7 8 9]
  4  5  6
  7  8  9
 
-julia> s = eachslice(m, dims=1)
+julia> c = eachslice(m)  # dims=2, same as eachcol(m)
+3-element ColumnSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
+ [1, 4, 7]
+ [2, 5, 8]
+ [3, 6, 9]
+
+julia> c[end]
+3-element view(::Matrix{Int64}, :, 3) with eltype Int64:
+ 3
+ 6
+ 9
+
+julia> stack(c) == m
+true
+
+julia> s = eachslice(m, dims=1)  # same as eachrow(m)
 3-element RowSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
 
-julia> s[1]
-3-element view(::Matrix{Int64}, 1, :) with eltype Int64:
- 1
- 2
- 3
+julia> stack(s; dims=1) == m
+true
 
-julia> eachslice(m, dims=1, drop=false)
+julia> s2 = eachslice(m, dims=1, drop=false)  # container is 3×1 now
 3×1 Slices{Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}, 2}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
+
+julia> s2[1] == s[1]
+true
 ```
 """
 @inline function eachslice(A; dims=ndims(A), drop=true)
