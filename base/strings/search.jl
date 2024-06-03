@@ -146,7 +146,7 @@ function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{
     end
     GC.@preserve a begin
         p = pointer(a)
-        q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i-fst)
+        q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i-fst+1)
     end
     return q == C_NULL ? 0 : (q-p+fst) % Int
 end
