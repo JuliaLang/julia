@@ -246,10 +246,11 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
+_struct_zero_half_str(::Type{<:UpperTriangular}) = "lower"
+_struct_zero_half_str(::Type{<:LowerTriangular}) = "upper"
+
 @noinline function throw_nonzeroerror(T, @nospecialize(x), i, j)
-    _upper_lower_str(::Type{<:UpperOrUnitUpperTriangular}) = "upper"
-    _upper_lower_str(::Type{<:LowerOrUnitLowerTriangular}) = "lower"
-    Ts = _upper_lower_str(T)
+    Ts = _struct_zero_half_str(T)
     Tn = nameof(T)
     throw(ArgumentError(
         lazy"cannot set index in the $Ts triangular part ($i, $j) of an $Tn matrix to a nonzero value ($x)"))
@@ -301,8 +302,6 @@ end
 end
 
 @noinline function throw_setindex_structuralzero_error(T, @nospecialize(x))
-    _struct_zero_half_str(::Type{<:UpperTriangular}) = "lower"
-    _struct_zero_half_str(::Type{<:LowerTriangular}) = "upper"
     Ts = _struct_zero_half_str(T)
     Tn = nameof(T)
     throw(ArgumentError(
