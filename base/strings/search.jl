@@ -133,7 +133,7 @@ function findall(
         # checks for valid index. It would be better if there was something like
         # try_getindex(::String, ::Int) we could use.
         char = first(something(iterate(s, index)))
-        pred(char) && push!(result, index) 
+        pred(char) && push!(result, index)
     end
 end
 
