@@ -1936,49 +1936,39 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     size_t world = jl_current_task->world_age;
     JL_STREAM *stream = (JL_STREAM*)STDERR_FILENO;
 
-    jl_code_info_t *src = NULL;
-    jl_value_t *ci = jl_default_cgparams.lookup(mi, world, world);
-    if (ci == jl_nothing) {
-        ci = (jl_value_t*)jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE_UNCACHED);
-    } else {
-        ci = NULL;
-    }
-    JL_GC_PUSH2(&ci, &src);
-    if (ci) {
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
-        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method)) {
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
-        }
-    }
+    jl_code_info_t *src = jl_gdbcodetyped1(mi, world);
+    JL_GC_PUSH1(&src);
 
     jl_printf(stream, "---- dumping IR for ----\n");
     jl_static_show(stream, (jl_value_t*)mi);
     jl_printf(stream, "\n----\n");
 
-    jl_printf(stream, "\n---- unoptimized IR ----");
+    jl_printf(stream, "\n---- unoptimized IR ----\n");
     jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, false, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
-        jl_static_show(stream, ir);
+        if (ir != NULL && jl_is_string(ir))
+            jl_printf(stream, "%s", jl_string_data(ir));
     }
-    jl_printf(stream, "----\n");
+    jl_printf(stream, "\n----\n");
 
-    jl_printf(stream, "\n---- optimized IR ----");
+    jl_printf(stream, "\n---- optimized IR ----\n");
     jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
-        jl_static_show(stream, ir);
+        if (ir != NULL && jl_is_string(ir))
+            jl_printf(stream, "%s", jl_string_data(ir));
     }
-    jl_printf(stream, "----\n");
+    jl_printf(stream, "\n----\n");
 
-    jl_printf(stream, "\n---- assembly ----");
+    jl_printf(stream, "\n---- assembly ----\n");
     jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_asm(&llvmf_dump, 0, "", "source", 0, true);
-        jl_static_show(stream, ir);
+        if (ir != NULL && jl_is_string(ir))
+            jl_printf(stream, "%s", jl_string_data(ir));
     }
-    jl_printf(stream, "----\n");
+    jl_printf(stream, "\n----\n");
     JL_GC_POP();
 
     return src;
