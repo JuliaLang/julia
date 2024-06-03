@@ -2474,7 +2474,7 @@ jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi JL_PROP
 
 jl_mutex_t precomp_statement_out_lock;
 
-static void record_precompile_statement(jl_method_instance_t *mi)
+static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time)
 {
     static ios_t f_precompile;
     static JL_STREAM* s_precompile = NULL;
@@ -2497,6 +2497,8 @@ static void record_precompile_statement(jl_method_instance_t *mi)
         }
     }
     if (!jl_has_free_typevars(mi->specTypes)) {
+        if (jl_options.trace_compile_timing)
+            jl_printf(s_precompile, "#= %6.1f ms =# ", compilation_time / 1e6);
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
         jl_printf(s_precompile, ")\n");
@@ -2595,7 +2597,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     codeinst->rettype_const = unspec->rettype_const;
                     jl_atomic_store_release(&codeinst->invoke, unspec_invoke);
                     jl_mi_cache_insert(mi, codeinst);
-                    record_precompile_statement(mi);
+                    record_precompile_statement(mi, 0);
                     return codeinst;
                 }
             }
@@ -2612,7 +2614,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 0, 1, ~(size_t)0, 0, jl_nothing, 0, NULL);
             jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
             jl_mi_cache_insert(mi, codeinst);
-            record_precompile_statement(mi);
+            record_precompile_statement(mi, 0);
             return codeinst;
         }
         if (compile_option == JL_OPTIONS_COMPILE_OFF) {
@@ -2650,13 +2652,15 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
 
         JL_GC_PUSH1(&codeinst);
+        double compile_time = jl_hrtime();
         int did_compile = jl_compile_codeinst(codeinst);
+        compile_time = jl_hrtime() - compile_time;
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
             // Something went wrong. Bail to the fallback path.
             codeinst = NULL;
         } else if (did_compile) {
-            record_precompile_statement(mi);
+            record_precompile_statement(mi, compile_time);
         }
         JL_GC_POP();
     }
