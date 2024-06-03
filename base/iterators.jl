@@ -13,7 +13,7 @@ using .Base:
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
-    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
+    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
 using Core: @doc
@@ -1572,5 +1572,40 @@ only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
+
+"""
+    IterableStatePairs(x)
+
+This internal type is returned by [`pairs`](@ref), when the key is the same as
+the state of `iterate`. This allows the iterator to determine the key => value
+pairs by only calling iterate on the values.
+
+"""
+struct IterableStatePairs{T}
+    x::T
+end
+
+IteratorSize(::Type{<:IterableStatePairs{T}}) where T = IteratorSize(T)
+length(x::IterableStatePairs) = length(x.x)
+Base.eltype(::Type{IterableStatePairs{T}}) where T = Pair{<:Any, eltype(T)}
+
+function iterate(x::IterableStatePairs, state=first(keys(x.x)))
+    it = iterate(x.x, state)
+    it === nothing && return nothing
+    (state => first(it), last(it))
+end
+
+reverse(x::IterableStatePairs) = IterableStatePairs(Iterators.reverse(x.x))
+reverse(x::IterableStatePairs{<:Iterators.Reverse}) = IterableStatePairs(x.x.itr)
+
+function iterate(x::IterableStatePairs{<:Iterators.Reverse}, state=last(keys(x.x.itr)))
+    it = iterate(x.x, state)
+    it === nothing && return nothing
+    (state => first(it), last(it))
+end
+
+# According to the docs of iterate(::AbstractString), the iteration state must
+# be the same as the keys, so this is a valid optimization (see #51631)
+pairs(s::AbstractString) = IterableStatePairs(s)
 
 end
