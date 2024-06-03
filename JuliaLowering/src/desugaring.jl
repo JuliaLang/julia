@@ -215,7 +215,7 @@ function analyze_function_arg(full_ex)
             is_nospecialize=is_nospecialize)
 end
 
-function expand_function_def(ctx, ex)
+function expand_function_def(ctx, ex, docs)
     @chk numchildren(ex) in (1,2)
     name = ex[1]
     if kind(name) == K"where"
@@ -318,7 +318,7 @@ function expand_function_def(ctx, ex)
         end
         @ast ctx ex [
             K"block"
-            [K"method" function_name]
+            func = [K"method" function_name]
             [K"method"
                 function_name
                 preamble
@@ -326,7 +326,15 @@ function expand_function_def(ctx, ex)
                     body
                 ]
             ]
-            [K"unnecessary" function_name]
+            if !isnothing(docs)
+                [K"call"(docs)
+                    bind_docs!::K"Value"
+                    func
+                    docs[1]
+                    method_metadata
+                ]
+            end
+            [K"unnecessary" func]
         ]
     elseif kind(name) == K"tuple"
         TODO(name, "Anon function lowering")
@@ -527,7 +535,7 @@ This pass simplifies expressions by expanding complicated syntax sugar into a
 small set of core syntactic forms. For example, field access syntax `a.b` is
 expanded to a function call `getproperty(a, :b)`.
 """
-function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree)
+function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     k = kind(ex)
     if k == K"call"
         expand_call(ctx, ex)
@@ -541,8 +549,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree)
                 ex[2]=>K"Symbol"
             ]
         )
+    elseif k == K"doc"
+        @chk numchildren(ex) == 2
+        sig = expand_forms_2(ctx, ex[2], ex)
     elseif k == K"function"
-        expand_forms_2(ctx, expand_function_def(ctx, ex))
+        expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
         expand_forms_2(ctx, expand_macro_def(ctx, ex))
     elseif k == K"let"

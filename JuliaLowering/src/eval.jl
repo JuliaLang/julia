@@ -365,6 +365,21 @@ function module_import(into_mod::Module, is_using::Bool,
     nothing
 end
 
+function bind_docs!(f::Function, docstr, method_metadata)
+    mod = parentmodule(f)
+    bind = Base.Docs.Binding(mod, nameof(f))
+    full_sig = method_metadata[1]
+    arg_sig = Tuple{full_sig[2:end]...}
+    linenum = method_metadata[3]
+    metadata = Dict{Symbol, Any}(
+        :linenumber => linenum.line,
+        :module => mod,
+    )
+    if !isnothing(linenum.file)
+        push!(metadata, :path => string(linenum.file))
+    end
+    Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), arg_sig)
+end
 
 #-------------------------------------------------------------------------------
 # Our version of eval takes our own data structures
