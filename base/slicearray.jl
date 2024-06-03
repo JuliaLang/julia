@@ -184,7 +184,6 @@ julia> s[1]
 """
 eachrow(A::AbstractMatrix) = _eachslice(A, (1,), true)
 eachrow(A::AbstractVector) = eachrow(reshape(A, size(A,1), 1))
-eachrow(A::AbstractArray) = _eachslice(A, (1, ntuple(d -> d+2, ndims(A)-2)...), true)
 
 """
     eachcol(A::AbstractVecOrMat) <: AbstractVector
@@ -223,7 +222,6 @@ julia> s[1]
 """
 eachcol(A::AbstractMatrix) = _eachslice(A, (2,), true)
 eachcol(A::AbstractVector) = eachcol(reshape(A, size(A, 1), 1))
-eachcol(A::AbstractArray) = _eachslice(A, ntuple(d -> d+1, ndims(A)-1), true)
 
 """
     RowSlices{M,AX,S}
