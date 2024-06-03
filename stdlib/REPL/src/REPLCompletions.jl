@@ -135,18 +135,24 @@ function appendmacro!(syms, macros, needle, endchar)
     end
 end
 
-function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString; kwargs...)
-    ssyms = names(mod; kwargs...)
+function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Completion},
+                                    mod::Module, name::String)
+    ssyms = names(mod; all=true, imported=true, usings=true)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
     appendmacro!(syms, macros, "_str", "\"")
     appendmacro!(syms, macros, "_cmd", "`")
-    return [ModuleCompletion(mod, sym) for sym in syms]
+    for sym in syms
+        push!(suggestions, ModuleCompletion(mod, sym))
+    end
+    return suggestions
 end
 
 # REPL Symbol Completions
-function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), context_module::Module)
+function complete_symbol!(suggestions::Vector{Completion},
+                          @nospecialize(ex), name::String, context_module::Module;
+                          complete_modules_only::Bool=false)
     mod = context_module
 
     lookup_module = true
@@ -170,16 +176,15 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
         end
     end
 
-    suggestions = Completion[]
     if lookup_module
-        fmnames = let modname = nameof(mod),
-                      is_main = mod===Main
-            filtered_mod_names(mod, name; all=true, imported=true, usings=true) do s::Symbol
+        let modname = nameof(mod),
+            is_main = mod===Main
+            append_filtered_mod_names!(suggestions, mod, name) do s::Symbol
                 if Base.isdeprecated(mod, s)
                     return false
                 elseif s === modname
                     return false # exclude `Main.Main.Main`, etc.
-                elseif !ffunc(mod, s)::Bool
+                elseif complete_modules_only && !completes_module(mod, s)
                     return false
                 elseif is_main && s === :MainInclude
                     return false
@@ -187,7 +192,6 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
                 return true
             end
         end
-        append!(suggestions, fmnames)
     elseif val !== nothing # looking for a property of an instance
         try
             for property in propertynames(val, false)
@@ -204,6 +208,9 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
     end
     return suggestions
 end
+
+completes_module(mod::Module, x::Symbol) =
+    Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getglobal(mod, x), Module)
 
 function add_field_completions!(suggestions::Vector{Completion}, name::String, @nospecialize(t))
     if isa(t, Union)
@@ -235,7 +242,7 @@ function field_completion_eligible(@nospecialize t)
     return match.method === GENERIC_PROPERTYNAMES_METHOD
 end
 
-function complete_from_list(T::Type, list::Vector{String}, s::Union{String,SubString{String}})
+function complete_from_list!(suggestions::Vector{Completion}, T::Type, list::Vector{String}, s::Union{String,SubString{String}})
     r = searchsorted(list, s)
     i = first(r)
     n = length(list)
@@ -243,7 +250,10 @@ function complete_from_list(T::Type, list::Vector{String}, s::Union{String,SubSt
         r = first(r):i
         i += 1
     end
-    Completion[T(kw) for kw in list[r]]
+    for kw in list[r]
+        push!(suggestions, T(kw))
+    end
+    return suggestions
 end
 
 const sorted_keywords = [
@@ -254,11 +264,13 @@ const sorted_keywords = [
     "primitive type", "quote", "return", "struct",
     "try", "using", "while"]
 
-complete_keyword(s::Union{String,SubString{String}}) = complete_from_list(KeywordCompletion, sorted_keywords, s)
+complete_keyword!(suggestions::Vector{Completion}, s::Union{String,SubString{String}}) =
+    complete_from_list!(suggestions, KeywordCompletion, sorted_keywords, s)
 
 const sorted_keyvals = ["false", "true"]
 
-complete_keyval(s::Union{String,SubString{String}}) = complete_from_list(KeyvalCompletion, sorted_keyvals, s)
+complete_keyval!(suggestions::Vector{Completion}, s::Union{String,SubString{String}}) =
+    complete_from_list!(suggestions, KeyvalCompletion, sorted_keyvals, s)
 
 function do_raw_escape(s)
     # escape_raw_string with delim='`' and ignoring the rule for the ending \
@@ -1037,14 +1049,14 @@ function complete_keyword_argument(partial, last_idx, context_module)
 
     # Only add these if not in kwarg space. i.e. not in `foo(; `
     if kwargs_flag == 0
-        append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
-        append!(suggestions, complete_keyval(last_word))
+        complete_symbol!(suggestions, nothing, last_word, context_module)
+        complete_keyval!(suggestions, last_word)
     end
 
     return sort!(suggestions, by=completion_text), wordrange
 end
 
-function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)
+function get_loading_candidates(pkgstarts::String, project_file::String)
     loading_candidates = String[]
     d = Base.parsed_toml(project_file)
     pkg = get(d, "name", nothing)::Union{String, Nothing}
@@ -1057,17 +1069,25 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
             startswith(pkg, pkgstarts) && push!(loading_candidates, pkg)
         end
     end
-    return Completion[PackageCompletion(name) for name in loading_candidates]
+    return loading_candidates
 end
 
-function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc),
+function complete_loading_candidates!(suggestions::Vector{Completion}, pkgstarts::String, project_file::String)
+    for name in get_loading_candidates(pkgstarts, project_file)
+        push!(suggestions, PackageCompletion(name))
+    end
+    return suggestions
+end
+
+function complete_identifiers!(suggestions::Vector{Completion},
                                context_module::Module, string::String, name::String,
                                pos::Int, dotpos::Int, startpos::Int;
-                               comp_keywords::Bool=false)
+                               comp_keywords::Bool=false,
+                               complete_modules_only::Bool=false)
     ex = nothing
     if comp_keywords
-        append!(suggestions, complete_keyword(name))
-        append!(suggestions, complete_keyval(name))
+        complete_keyword!(suggestions, name)
+        complete_keyval!(suggestions, name)
     end
     if dotpos > 1 && string[dotpos] == '.'
         s = string[1:prevind(string, dotpos)]
@@ -1115,9 +1135,9 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
                 # - `string`: "using Mod1.Mod2.M"
                 # - `ex`: :(using Mod1.Mod2)
                 # - `name`: "M"
-                # Now we transform `ex` to `:(Mod1.Mod2)` to allow `complete_symbol` to
+                # Now we transform `ex` to `:(Mod1.Mod2)` to allow `complete_symbol!` to
                 # complete for inner modules whose name starts with `M`.
-                # Note that `ffunc` is set to `module_filter` within `completions`
+                # Note that `complete_modules_only=true` is set within `completions`
                 ex = nothing
                 firstdot = true
                 for arg = arglast.args
@@ -1158,7 +1178,7 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
             end
         end
     end
-    append!(suggestions, complete_symbol(ex, name, ffunc, context_module))
+    complete_symbol!(suggestions, ex, name, context_module; complete_modules_only)
     return sort!(unique(suggestions), by=completion_text), (dotpos+1):pos, true
 end
 
@@ -1205,7 +1225,6 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         length(matches)>0 && return Completion[DictCompletion(identifier, match) for match in sort!(matches)], loc::Int:pos, true
     end
 
-    ffunc = Returns(true)
     suggestions = Completion[]
 
     # Check if this is a var"" string macro that should be completed like
@@ -1224,7 +1243,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         startpos = first(varrange) + 4
         dotpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
         name = string[startpos:pos]
-        return complete_identifiers!(Completion[], ffunc, context_module, string, name, pos,
+        return complete_identifiers!(Completion[], context_module, string, name, pos,
                                      dotpos, startpos)
     elseif inc_tag === :cmd
         # TODO: should this call shell_completions instead of partially reimplementing it?
@@ -1365,7 +1384,6 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     end
 
     name = string[max(startpos, dotpos+1):pos]
-    comp_keywords = !isempty(name) && startpos > dotpos
     if afterusing(string, startpos)
         # We're right after using or import. Let's look only for packages
         # and modules we can reach from here
@@ -1376,7 +1394,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         if dotpos <= startpos
             for dir in Base.load_path()
                 if basename(dir) in Base.project_names && isfile(dir)
-                    append!(suggestions, project_deps_get_completion_candidates(s, dir))
+                    complete_loading_candidates!(suggestions, s, dir)
                 end
                 isdir(dir) || continue
                 for entry in _readdirx(dir)
@@ -1405,19 +1423,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                 end
             end
         end
-        ffunc = module_filter
         comp_keywords = false
+        complete_modules_only = true
+    else
+        comp_keywords = !isempty(name) && startpos > dotpos
+        complete_modules_only = false
     end
 
     startpos == 0 && (pos = -1)
     dotpos < startpos && (dotpos = startpos - 1)
-    return complete_identifiers!(suggestions, ffunc, context_module, string, name, pos,
+    return complete_identifiers!(suggestions, context_module, string, name, pos,
                                  dotpos, startpos;
-                                 comp_keywords)
+                                 comp_keywords, complete_modules_only)
 end
-
-module_filter(mod::Module, x::Symbol) =
-    Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getglobal(mod, x), Module)
 
 function shell_completions(string, pos, hint::Bool=false)
     # First parse everything up to the current position
