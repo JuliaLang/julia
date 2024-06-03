@@ -1185,27 +1185,22 @@ end
 (f::Fix2)(y) = f.f(y, f.x)
 
 """
-    Fix(f, n, x...; kws...)
-    Fix(f, Val(n), x...; kws...)
+    Fix{n}(f, x...; kws...)
     Fix(f; kws...)
 
 A type representing a partially-applied version of a function `f`, with the argument or
 arguments "x" inserted at the `n`th position, and "kws" inserted as keyword arguments.
-In other words, `Fix(f, 3, x1)` behaves similarly to `(y...) -> f(y[1], y[2], x1, y[3:end]...)`.
+In other words, `Fix{3}(f, x1)` behaves similarly to `(y...) -> f(y[1], y[2], x1, y[3:end]...)`.
 
 You may also specify keyword arguments to fix. For example, `Fix(sum; dims=1)`
 would be equivalent to `(a...; k...) -> sum(a...; dims=1, k...)`.
 
 You can also pass multiple arguments at once, which will be inserted after
 the first. You can also fix both arguments and keyword arguments in this way.
-For example, `Fix(g, 2, x1, x2; verbose=true)` would be equivalent to
+For example, `Fix{2}(g, x1, x2; verbose=true)` would be equivalent to
 `(y...; k...) -> g(y[1], x1, x2, y[2:end]...; verbose=true, k...)`.
-
-When specifying the index, `Val(n)` is preferred for type stability,
-though `n` as an argument is provided for convenience and is likely to be inlined
-by the compiler.
 """
-struct Fix{F,N,T<:Tuple,K<:NamedTuple} <: Function
+struct Fix{N,F,T<:Tuple,K<:NamedTuple} <: Function
     f::F
     x::T
     kws::K
@@ -1213,24 +1208,21 @@ struct Fix{F,N,T<:Tuple,K<:NamedTuple} <: Function
     function Fix(f::F; kws...) where {F}
         xt = ()
         knt = NamedTuple(kws)
-        new{F,0,_stable_typeof(xt),typeof(knt)}(f, xt, knt)
+        new{0,F,_stable_typeof(xt),typeof(knt)}(f, xt, knt)
     end
-    function Fix(f::F, ::Val{N}, x, xs...; kws...) where {F,N}
+    function Fix{N}(f::F, x, xs...; kws...) where {F,N}
         xt = (x, xs...)
         knt = NamedTuple(kws)
-        new{F,N,_stable_typeof(xt),typeof(knt)}(f, xt, knt)
+        new{N,F,_stable_typeof(xt),typeof(knt)}(f, xt, knt)
     end
-    function Fix(f::Type{F}, ::Val{N}, x, xs...; kws...) where {F,N}
+    function Fix{N}(f::Type{F}, x, xs...; kws...) where {F,N}
         xt = (x, xs...)
         knt = NamedTuple(kws)
-        new{F,N,_stable_typeof(xt),typeof(knt)}(f, xt, knt)
+        new{N,F,_stable_typeof(xt),typeof(knt)}(f, xt, knt)
     end
 end
 
-@inline Fix(f::F, n::Int, x, xs...; kws...) where {F} = Fix(f, Val(n), x, xs...; kws...)
-@inline Fix(f::Type{F}, n::Int, x, xs...; kws...) where {F} = Fix(f, Val(n), x, xs...; kws...)
-
-function (f::Fix{F,N,T,K})(args::Vararg{Any,M}; kws...) where {F,N,T,K,M}
+function (f::Fix{N,F,T,K})(args::Vararg{Any,M}; kws...) where {N,F,T,K,M}
     @inline
     if N > 1
         if M < N - 1

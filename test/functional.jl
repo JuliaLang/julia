@@ -279,35 +279,35 @@ end
 
     # Now, repeat the Fix1 and Fix2 tests, but
     # with a Fix lambda function used in their place
-    test_fix1((op, arg) -> Base.Fix(op, Val(1), arg))
-    test_fix2((op, arg) -> Base.Fix(op, Val(2), arg))
+    test_fix1((op, arg) -> Base.Fix{1}(op, arg))
+    test_fix2((op, arg) -> Base.Fix{2}(op, arg))
 
     # Now, we do more complex tests of Fix:
-    let Fix=Base.Fix
+    let Fix=Fix
         @testset "Argument Fixation" begin
             let f = (x, y, z) -> x + y * z
-                fixed_f1 = Fix(f, Val(1), 10)
+                fixed_f1 = Fix{1}(f, 10)
                 @test fixed_f1(2, 3) == 10 + 2 * 3
 
-                fixed_f2 = Fix(f, Val(2), 5)
+                fixed_f2 = Fix{2}(f, 5)
                 @test fixed_f2(1, 4) == 1 + 5 * 4
 
-                fixed_f3 = Fix(f, Val(3), 3)
+                fixed_f3 = Fix{3}(f, 3)
                 @test fixed_f3(1, 2) == 1 + 2 * 3
             end
         end
         @testset "Helpful errors" begin
             let g = (x, y) -> x - y
                 # Test minimum N
-                fixed_g1 = Fix(g, Val(1), 100)
+                fixed_g1 = Fix{1}(g, 100)
                 @test fixed_g1(40) == 100 - 40
 
                 # Test maximum N
-                fixed_g2 = Fix(g, Val(2), 100)
+                fixed_g2 = Fix{2}(g, 100)
                 @test fixed_g2(150) == 150 - 100
 
                 # One over
-                fixed_g3 = Fix(g, Val(3), 100)
+                fixed_g3 = Fix{3}(g, 100)
                 @test_throws ArgumentError fixed_g3(1)
                 @test_throws(
                     "expected at least 2 arguments to a `Fix` function with `N=3`",
@@ -317,13 +317,13 @@ end
         end
         @testset "Type Stability and Inference" begin
             let h = (x, y) -> x / y
-                fixed_h = Fix(h, Val(2), 2.0)
+                fixed_h = Fix{2}(h, 2.0)
                 @test @inferred(fixed_h(4.0)) == 2.0
             end
         end
         @testset "Interaction with varargs" begin
             vararg_f = (x, y, z...) -> x + 10 * y + sum(z; init=zero(x))
-            fixed_vararg_f = Fix(vararg_f, Val(2), 6)
+            fixed_vararg_f = Fix{2}(vararg_f, 6)
 
             # Can call with variable number of arguments:
             @test fixed_vararg_f(1, 2, 3, 4) == 1 + 10 * 6 + sum((2, 3, 4))
@@ -333,27 +333,27 @@ end
         end
         @testset "Errors should propagate normally" begin
             error_f = (x, y) -> sin(x * y)
-            fixed_error_f = Fix(error_f, Val(2), Inf)
+            fixed_error_f = Fix{2}(error_f, Inf)
             @test_throws DomainError fixed_error_f(10)
         end
         @testset "Chaining Fix together" begin
-            f1 = Fix(*, Val(1), "1")
-            f2 = Fix(f1, Val(1), "2")
-            f3 = Fix(f2, Val(1), "3")
+            f1 = Fix{1}(*, "1")
+            f2 = Fix{1}(f1, "2")
+            f3 = Fix{1}(f2, "3")
             @test f3() == "123"
 
-            g1 = Fix(*, Val(2), "1")
-            g2 = Fix(g1, Val(2), "2")
-            g3 = Fix(g2, Val(2), "3")
+            g1 = Fix{2}(*, "1")
+            g2 = Fix{2}(g1, "2")
+            g3 = Fix{2}(g2, "3")
             @test g3("") == "123"
 
             # Equivalent to:
-            h = Fix(*, Val(1), "1", "2", "3")
+            h = Fix{1}(*, "1", "2", "3")
             @test h() == "123"
         end
         @testset "with integer rather than Val" begin
             function f(x, y)
-                g = Fix(1, x, y) do x, y
+                g = Fix{1}(x, y) do x, y
                     x = x^2
                     y = y * 3.5
                     x + y
@@ -368,22 +368,22 @@ end
             @inferred sum_1(ones(3, 2))
         end
         @testset "with both args and kwargs" begin
-            f = Fix(sum, 1, ones(3, 2); dims=1)
+            f = Fix{1}(sum, ones(3, 2); dims=1)
             @test f() == [3.0 3.0]
             @inferred f()
 
             g(a, b, c, d; e, f, g) = join((a, b, c, d, e, f, g), " ")
-            g_fix = Fix(g, 3, "c", "d"; e="e", f="f")
+            g_fix = Fix{3}(g, "c", "d"; e="e", f="f")
 
             @test g_fix("a", "b"; g="g") == "a b c d e f g"
             @inferred g_fix("a", "b"; g="g")
         end
         @testset "varargs inside Fix" begin
-            lazy_sum = Fix(+, Val(1), 1, 2, 3, 4, 5)
+            lazy_sum = Fix{1}(+, 1, 2, 3, 4, 5)
             @test lazy_sum() == sum((1, 2, 3, 4, 5))
 
             joiner(t...) = join(t, " ")
-            string_inside = Fix(joiner, Val(3), "third", "fourth", "fifth")
+            string_inside = Fix{3}(joiner, "third", "fourth", "fifth")
             @test string_inside("first", "second", "sixth") == "first second third fourth fifth sixth"
             # Still type stable:
             @inferred string_inside("first", "second", "sixth")
