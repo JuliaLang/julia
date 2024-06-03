@@ -651,7 +651,6 @@ typedef union {
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
 #define SOURCE_MODE_FORCE_SOURCE            0x2
-#define SOURCE_MODE_FORCE_SOURCE_UNCACHED   0x3
 
 JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force, uint8_t source_mode);
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world);
