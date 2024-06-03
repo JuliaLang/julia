@@ -285,38 +285,41 @@ end
     # Now, we do more complex tests of Fix:
     let Fix=Base.Fix
         @testset "Argument Fixation" begin
-            f = (x, y, z) -> x + y * z
-            fixed_f1 = Fix(f, Val(1), 10)
-            @test fixed_f1(2, 3) == 10 + 2 * 3
+            let f = (x, y, z) -> x + y * z
+                fixed_f1 = Fix(f, Val(1), 10)
+                @test fixed_f1(2, 3) == 10 + 2 * 3
 
-            fixed_f2 = Fix(f, Val(2), 5)
-            @test fixed_f2(1, 4) == 1 + 5 * 4
+                fixed_f2 = Fix(f, Val(2), 5)
+                @test fixed_f2(1, 4) == 1 + 5 * 4
 
-            fixed_f3 = Fix(f, Val(3), 3)
-            @test fixed_f3(1, 2) == 1 + 2 * 3
+                fixed_f3 = Fix(f, Val(3), 3)
+                @test fixed_f3(1, 2) == 1 + 2 * 3
+            end
         end
         @testset "Helpful errors" begin
-            g = (x, y) -> x - y
-            # Test minimum N
-            fixed_g1 = Fix(g, Val(1), 100)
-            @test fixed_g1(40) == 100 - 40
+            let g = (x, y) -> x - y
+                # Test minimum N
+                fixed_g1 = Fix(g, Val(1), 100)
+                @test fixed_g1(40) == 100 - 40
 
-            # Test maximum N
-            fixed_g2 = Fix(g, Val(2), 100)
-            @test fixed_g2(150) == 150 - 100
+                # Test maximum N
+                fixed_g2 = Fix(g, Val(2), 100)
+                @test fixed_g2(150) == 150 - 100
 
-            # One over
-            fixed_g3 = Fix(g, Val(3), 100)
-            @test_throws ArgumentError fixed_g3(1)
-            @test_throws(
-                "expected at least 2 arguments to a `Fix` function with `N=3`",
-                fixed_g3(1)
-            )
+                # One over
+                fixed_g3 = Fix(g, Val(3), 100)
+                @test_throws ArgumentError fixed_g3(1)
+                @test_throws(
+                    "expected at least 2 arguments to a `Fix` function with `N=3`",
+                    fixed_g3(1)
+                )
+            end
         end
         @testset "Type Stability and Inference" begin
-            h = (x, y) -> x / y
-            fixed_h = Fix(h, Val(2), 2.0)
-            @test @inferred(fixed_h(4.0)) == 2.0
+            let h = (x, y) -> x / y
+                fixed_h = Fix(h, Val(2), 2.0)
+                @test @inferred(fixed_h(4.0)) == 2.0
+            end
         end
         @testset "Interaction with varargs" begin
             vararg_f = (x, y, z...) -> x + 10 * y + sum(z; init=zero(x))
@@ -359,7 +362,22 @@ end
             end
             @inferred f(1, 2)
         end
+        @testset "with fixed keywords and zero args" begin
+            sum_1 = Fix(sum; dims=1)
+            @test sum_1(ones(3, 2)) == [3.0 3.0]
+            @inferred sum_1(ones(3, 2))
+        end
+        @testset "with both args and kwargs" begin
+            f = Fix(sum, 1, ones(3, 2); dims=1)
+            @test f() == [3.0 3.0]
+            @inferred f()
 
+            g(a, b, c, d; e, f, g) = join((a, b, c, d, e, f, g), " ")
+            g_fix = Fix(g, 3, "c", "d"; e="e", f="f")
+
+            @test g_fix("a", "b"; g="g") == "a b c d e f g"
+            @inferred g_fix("a", "b"; g="g")
+        end
         @testset "varargs inside Fix" begin
             lazy_sum = Fix(+, Val(1), 1, 2, 3, 4, 5)
             @test lazy_sum() == sum((1, 2, 3, 4, 5))
