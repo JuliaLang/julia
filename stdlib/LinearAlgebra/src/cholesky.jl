@@ -330,12 +330,12 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
                 temp[k] = real(A[k,k]) - dots[k]
             end
             ajj, q = findmax(i -> temp[i], j:n)
-            q += j - 1
             if ajj ≤ stop
                 rank = j - 1
                 info = 1
                 break
             end
+            q += j - 1
             # swap
             _swap_rowcols!(A, UpperTriangular, n, j, q)
             dots[j], dots[q] = dots[q], dots[j]
@@ -870,7 +870,7 @@ end
 
 function chkfullrank(C::CholeskyPivoted)
     if C.rank < size(C.factors, 1)
-        throw(RankDeficientException(C.info))
+        throw(RankDeficientException(C.rank))
     end
 end
 
