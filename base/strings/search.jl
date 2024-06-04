@@ -44,26 +44,110 @@ is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
 last_byteindex(x::Union{String, SubString{String}}) = ncodeunits(x)
 last_byteindex(x::DenseUInt8OrInt8) = lastindex(x)
 
-function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-                  s::Union{String, SubString{String}}, i::Integer)
-    if i < 1 || i > sizeof(s)
-        i == sizeof(s) + 1 && return nothing
-        throw(BoundsError(s, i))
+"Internal type - lazy iterator over positions of char in string"
+struct FwCharPosIter{S}
+    string::S # S is assumed to be either String or SubString{String}
+    char::Char
+    # Char searchers search for the last UTF8 byte, because this byte tends to
+    # have the most variety in real texts, so any individual value is rarer.
+    # This allows more work to be done in the fast path using memchr.
+    last_char_byte::UInt8
+end
+
+function FwCharPosIter(s::Union{String, SubString{String}}, c::AbstractChar)
+    char = Char(c)::Char
+    byte = last_utf8_byte(char)
+    FwCharPosIter{typeof(s)}(s, char, byte)
+end
+
+# i is the index in the string to search from
+function Base.iterate(s::FwCharPosIter, i::Int=1)
+    # By definition, if the last byte is a standalone byte, then the char
+    # is a single-byte char where the byte can never be a subset of another char.
+    # Hence, we can simply search for the occurence of the byte itself.
+    if is_standalone_byte(s.last_char_byte)
+        i = _search(s.string, s.last_char_byte, i)
+        i === nothing ? nothing : (i, i + 1)
+    else
+        ncu = ncodeunits(s.char)
+        while true
+            i = _search(s.string, s.last_char_byte, i)
+            i === nothing && return nothing
+            # Increment i before the continue to avoid infinite loop.
+            # Since we search for the last byte in the char, the index has an offset.
+            i += 1
+            index = i - ncu
+            # The byte may be part of a different char, in which case index
+            # may be invalid.
+            isvalid(s.string, index) || continue
+            # Here, we use iterate instead of indexing, because indexing needlessly
+            # re-validates the index which we have already done here.
+            # This relies on the implementation detail that the iterator state for
+            # iterating strings is the same as the byte index.
+            char = first(something(iterate(s.string, index)))
+            char == s.char && return (index, i)
+        end
     end
-    @inbounds isvalid(s, i) || string_index_err(s, i)
-    c = Char(pred.x)::Char
-    byte = last_utf8_byte(c)
-    is_standalone_byte(byte) && return _search(s, byte, i)
-    ncu = ncodeunits(c)
-    while true
-        i = _search(s, byte, i)
-        isnothing(i) && return nothing
-        i += 1
-        index = i - ncu
-        isvalid(s, index) || continue
-        char = first(something(iterate(s, index)))
-        char == c && return index
+end
+
+"Internal type - lazy iterator over positions of char in string, in reverse order"
+struct RvCharPosIter{S}
+    string::S # S is assumed to be either String or SubString{String}
+    char::Char
+    last_char_byte::UInt8
+end
+
+IteratorSize(s::Type{<:Union{FwCharPosIter, RvCharPosIter}}) = SizeUnknown()
+eltype(::Type{<:Union{FwCharPosIter, RvCharPosIter}}) = Int
+
+function RvCharPosIter(s::Union{String, SubString{String}}, c::AbstractChar)
+    char = Char(c)::Char
+    byte = last_utf8_byte(char)
+    RvCharPosIter{typeof(s)}(s, char, byte)
+end
+
+# i is the index in the string to search from
+# This is the same implementation as FwCharPosIter, except for two differences:
+# 1. i must be decremented, not incremented because we are searching backwards
+# 2. Because we search for the last byte, the starting value of i need to be
+#    incremented in the beginning, as that byte may be found at i + ncodeunits(char) - 1.
+function Base.iterate(s::RvCharPosIter, i::Int=ncodeunits(s.string))
+    if is_standalone_byte(s.last_char_byte)
+        i = _rsearch(s.string, s.last_char_byte, i)
+        i === nothing ? nothing : (i, i - 1)
+    else
+        ncu = ncodeunits(s.char)
+        i = min(ncodeunits(s.string), i + ncu - 1)
+        while true
+            i = _rsearch(s.string, s.last_char_byte, i)
+            i === nothing && return nothing
+            index = i - ncu + 1
+            i -= 1
+            isvalid(s.string, index) || continue
+            char = first(something(iterate(s.string, index)))
+            char == s.char && return (index, i)
+        end
     end
+end
+
+function try_next(x, state)
+    y = iterate(x, state)
+    y === nothing ? nothing : first(y)
+end
+
+function findnext(
+    pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+    s::Union{String, SubString{String}},
+    i::Integer,
+)
+    i = Int(i)::Int
+    # TODO: Should these checks actually be here?
+    # It's inconsistent with how findnext for arrays work, and there is no need to
+    # throw a string error if I is not valid IMO.
+    i == ncodeunits(s) + 1 && return nothing
+    (i < 1 || i > (ncodeunits(s) + 1)) && throw(BoundsError(s, i))
+    isvalid(s, i) || string_index_err(s, i)
+    try_next(FwCharPosIter(s, pred.x), i)
 end
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
@@ -95,22 +179,12 @@ function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{I
     return q == C_NULL ? nothing : (q-p+fst) % Int
 end
 
-function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-                  s::Union{String, SubString{String}}, i::Integer)
-    c = Char(pred.x)::Char
-    byte = last_utf8_byte(c)
-    is_standalone_byte(byte) && return _rsearch(s, byte, i)
-    ncu = ncodeunits(c)
-    i = min(ncodeunits(s), i + ncu - 1)
-    while true
-        i = _rsearch(s, byte, i)
-        isnothing(i) && return nothing
-        index = i - ncu + 1
-        i -= 1
-        isvalid(s, index) || continue
-        char = first(something(iterate(s, index)))
-        char == c && return index
-    end
+function findprev(
+    pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+    s::Union{String, SubString{String}},
+    i::Integer,
+)
+    try_next(RvCharPosIter(s, pred.x), Int(i)::Int)
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
@@ -143,31 +217,9 @@ end
 
 function findall(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::Union{String, SubString{String}}
+    s::Union{String, SubString{String}},
 )
-    c = Char(pred.x)::Char
-    byte = last_utf8_byte(c)
-    ncu = ncodeunits(c)
-
-    # If only one byte, and can't be part of another Char: Forward to memchr.
-    is_standalone_byte(byte) && return findall(==(byte), codeunits(s))
-    result = Int[]
-    i = firstindex(s)
-    while true
-        i = _search(s, byte, i)
-        isnothing(i) && return result
-        i += 1
-        index = i - ncu
-        # If the char is invalid, it's possible that its first byte is
-        # inside another char. If so, indexing into the string will throw an
-        # error, so we need to check for valid indices.
-        isvalid(s, index) || continue
-        # We use iterate here instead of indexing, because indexing wastefully
-        # checks for valid index. It would be better if there was something like
-        # try_getindex(::String, ::Int) we could use.
-        char = first(something(iterate(s, index)))
-        pred(char) && push!(result, index)
-    end
+    collect(FwCharPosIter(s, pred.x))
 end
 
 """
@@ -239,7 +291,6 @@ function findnext(testf::Function, s::AbstractString, i::Integer)
     end
     return nothing
 end
-
 
 in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 
