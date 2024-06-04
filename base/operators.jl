@@ -1188,8 +1188,8 @@ end
     Fix{n}(f, x)
 
 A type representing a partially-applied version of a function `f`, with the argument or
-arguments "x" inserted at the `n`th position, and "kws" inserted as keyword arguments.
-In other words, `Fix{3}(f, x1)` behaves similarly to `(y...) -> f(y[1], y[2], x1, y[3:end]...)`.
+arguments "x" inserted at the `n`th position. In other words, `Fix{3}(f, x)` behaves
+similarly to `(y...,) -> f(y[1], y[2], x, y[3:end]...)`.
 """
 struct Fix{N,F,T} <: Function
     f::F
