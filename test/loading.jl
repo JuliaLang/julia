@@ -1544,3 +1544,16 @@ end
         @test_throws SystemError("opening file $(repr(file))") include(file)
     end
 end
+
+@testset "extension path computation name collision" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        empty!(LOAD_PATH)
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ExtNameCollision_A"))
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ExtNameCollision_B"))
+        ext_B = Base.PkgId(Base.uuid5(Base.identify_package("ExtNameCollision_B").uuid, "REPLExt"), "REPLExt")
+        @test Base.locate_package(ext_B) == joinpath(@__DIR__, "project",  "Extensions", "ExtNameCollision_B", "ext", "REPLExt.jl")
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
+end
