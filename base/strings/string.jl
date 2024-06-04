@@ -79,7 +79,7 @@ function String(v::Vector{UInt8})
     end
     # optimized empty!(v); sizehint!(v, 0) calls
     setfield!(v, :size, (0,))
-    setfield!(v, :ref, MemoryRef(Memory{UInt8}()))
+    setfield!(v, :ref, memoryref(Memory{UInt8}()))
     return str
 end
 

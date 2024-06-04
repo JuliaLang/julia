@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryref, memoryrefget, memoryrefset!
+using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryrefnew, memoryrefget, memoryrefset!
 
 const Callable = Union{Function,Type}
 
@@ -361,7 +361,7 @@ default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
 getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryref(memoryref(A), i, @_boundscheck), default_access_order(A), false))
+    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
@@ -892,16 +892,16 @@ end
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
     @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
-    memoryrefget(memoryref(getfield(A, :ref), i, false), :not_atomic, false)
+    memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
     @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
-    memoryrefset!(memoryref(getfield(A, :ref), i, false), x, :not_atomic, false)
+    memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
-setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryref(memoryref(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
+setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(memoryrefnew(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 

@@ -6789,14 +6789,14 @@ primitive type TypeWith24Bits 24 end
 TypeWith24Bits(x::UInt32) = Core.Intrinsics.trunc_int(TypeWith24Bits, x)
 let x = TypeWith24Bits(0x112233), y = TypeWith24Bits(0x445566), z = TypeWith24Bits(0x778899)
     a = [x, x]
-    Core.memoryrefset!(Core.memoryref(a.ref, 2, true), y, :not_atomic, true)
+    Core.memoryrefset!(Core.memoryrefnew(a.ref, 2, true), y, :not_atomic, true)
     @test a == [x, y]
     a[2] = z
     @test a == [x, z]
     @test pointer(a, 2) - pointer(a, 1) == 4
 
     b = [(x, x), (x, x)]
-    Core.memoryrefset!(Core.memoryref(b.ref, 2, true), (x, y), :not_atomic, true)
+    Core.memoryrefset!(Core.memoryrefnew(b.ref, 2, true), (x, y), :not_atomic, true)
     @test b == [(x, x), (x, y)]
     b[2] = (y, z)
     @test b == [(x, x), (y, z)]
