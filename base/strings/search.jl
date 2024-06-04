@@ -60,17 +60,22 @@ function FwCharPosIter(s::Union{String, SubString{String}}, c::AbstractChar)
     FwCharPosIter{typeof(s)}(s, char, byte)
 end
 
-# i is the index in the string to search from
+# i is the index in the string to search from.
+# We assume it's never < firstindex(s.string)
 function Base.iterate(s::FwCharPosIter, i::Int=1)
+    scu = ncodeunits(s.string)
+
     # By definition, if the last byte is a standalone byte, then the char
     # is a single-byte char where the byte can never be a subset of another char.
     # Hence, we can simply search for the occurence of the byte itself.
     if is_standalone_byte(s.last_char_byte)
+        i > scu && return nothing
         i = _search(s.string, s.last_char_byte, i)
         i === nothing ? nothing : (i, i + 1)
     else
         ncu = ncodeunits(s.char)
         while true
+            i > scu && return nothing
             i = _search(s.string, s.last_char_byte, i)
             i === nothing && return nothing
             # Increment i before the continue to avoid infinite loop.
@@ -107,18 +112,21 @@ function RvCharPosIter(s::Union{String, SubString{String}}, c::AbstractChar)
 end
 
 # i is the index in the string to search from
+# We assume it's never > ncodeunits(s.string)
 # This is the same implementation as FwCharPosIter, except for two differences:
 # 1. i must be decremented, not incremented because we are searching backwards
 # 2. Because we search for the last byte, the starting value of i need to be
 #    incremented in the beginning, as that byte may be found at i + ncodeunits(char) - 1.
 function Base.iterate(s::RvCharPosIter, i::Int=ncodeunits(s.string))
+    ncu = ncodeunits(s.char)
     if is_standalone_byte(s.last_char_byte)
+        i < ncu && return nothing
         i = _rsearch(s.string, s.last_char_byte, i)
         i === nothing ? nothing : (i, i - 1)
     else
-        ncu = ncodeunits(s.char)
         i = min(ncodeunits(s.string), i + ncu - 1)
         while true
+            i < ncu && return nothing
             i = _rsearch(s.string, s.last_char_byte, i)
             i === nothing && return nothing
             index = i - ncu + 1
@@ -140,41 +148,43 @@ function findnext(
     s::Union{String, SubString{String}},
     i::Integer,
 )
-    i = Int(i)::Int
-    # TODO: Should these checks actually be here?
-    # It's inconsistent with how findnext for arrays work, and there is no need to
-    # throw a string error if I is not valid IMO.
-    i == ncodeunits(s) + 1 && return nothing
-    (i < 1 || i > (ncodeunits(s) + 1)) && throw(BoundsError(s, i))
-    isvalid(s, i) || string_index_err(s, i)
-    try_next(FwCharPosIter(s, pred.x), i)
+    # TODO: Redesign these strange rules for errors, see #54584
+    scu = ncodeunits(s)
+    i == scu + 1 && return nothing
+    @boundscheck if i < 1 || i > scu + 1
+        throw(BoundsError(s, i))
+    elseif !isvalid(s, i)
+        string_index_err(s, i)
+    end
+    try_next(FwCharPosIter(s, pred.x), Int(i)::Int)
 end
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
+    @boundscheck i < firstindex(a) && throw(BoundsError(a, i))
+    i > lastindex(a) && return nothing
     _search(a, pred.x, i)
 end
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
+    @boundscheck i < firstindex(a) && throw(BoundsError(a, i))
+    i > lastindex(a) && return nothing
     _search(a, pred.x, i)
 end
 
 # iszero is special, in that the bitpattern for zero for Int8 and UInt8 is the same,
 # so we can use memchr even if we search for an Int8 in an UInt8 array or vice versa
-findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = _search(a, zero(UInt8), i)
+function findnext(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer)
+    @boundscheck i < firstindex(a) && throw(BoundsError(a, i))
+    i > lastindex(a) && return nothing
+    _search(a, zero(UInt8), i)
+end
 
+# This is essentially just a wrapper around memchr. i must be inbounds.
 function _search(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = firstindex(a))
     fst = firstindex(a)
-    lst = last_byteindex(a)
-    if i < fst
-        throw(BoundsError(a, i))
-    end
-    n_bytes = lst - i + 1
-    if i > lst
-        return i == lst+1 ? nothing : throw(BoundsError(a, i))
-    end
     GC.@preserve a begin
         p = pointer(a)
-        q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-fst, b, n_bytes)
+        q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-fst, b, last_byteindex(a) - i + 1)
     end
     return q == C_NULL ? nothing : (q-p+fst) % Int
 end
@@ -184,30 +194,38 @@ function findprev(
     s::Union{String, SubString{String}},
     i::Integer,
 )
+    # TODO: Redesign these strange rules for errors, see #54584
+    if i == ncodeunits(s) + 1 || i == 0
+        return nothing
+    end
+    @boundscheck if i < 1 || i > ncodeunits(s) + 1
+        throw(BoundsError(s, i))
+    end
     try_next(RvCharPosIter(s, pred.x), Int(i)::Int)
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},Int8}, a::DenseInt8, i::Integer)
+    @boundscheck i > lastindex(a) && throw(BoundsError(a, i))
+    i < firstindex(a) && return nothing
     _rsearch(a, pred.x, i)
 end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},UInt8}, a::DenseUInt8, i::Integer)
+    @boundscheck i > lastindex(a) && throw(BoundsError(a, i))
+    i < firstindex(a) && return nothing
     _rsearch(a, pred.x, i)
 end
 
 # See comments above for findfirst(::typeof(iszero)) methods
-findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer) = _rsearch(a, zero(UInt8), i)
+function findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer)
+    @boundscheck i > lastindex(a) && throw(BoundsError(a, i))
+    i < firstindex(a) && return nothing
+    _rsearch(a, zero(UInt8), i)
+end
 
+# This is essentially just a wrapper around memrchr. i must be inbounds.
 function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{Int8,UInt8}, i::Integer = last_byteindex(a))
     fst = firstindex(a)
-    lst = last_byteindex(a)
-    if i < fst
-        return i == 0 ? nothing : throw(BoundsError(a, i))
-    end
-    n_bytes = lst - i + 1
-    if i > lst
-        return i == lst+1 ? nothing : throw(BoundsError(a, i))
-    end
     GC.@preserve a begin
         p = pointer(a)
         q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i-fst+1)
