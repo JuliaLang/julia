@@ -220,4 +220,14 @@ end
 generate_precompile_statements()
 
 precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+
+# Helps Pkg repl mode switch
+precompile(Tuple{typeof(REPL.Terminals.clear_line), REPL.Terminals.TTYTerminal})
+precompile(Tuple{typeof(Base.print), REPL.Terminals.TTYTerminal, Base.AnnotatedString{String}})
+precompile(Tuple{typeof(Base.peek), Base.TTY, Type{Char}})
+precompile(Tuple{typeof(Base.similar), Array{String, 1}})
+precompile(Tuple{typeof(Base.Iterators.enumerate), Array{String, 1}})
+precompile(Tuple{typeof(Base.setindex!), Array{String, 1}, String, Int64})
+precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Union{Array{String, 1}, String}}}, Base.Dict{String, Any}})
+
 end # Precompile
