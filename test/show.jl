@@ -1291,7 +1291,7 @@ end
               repr == "Union{String, $(curmod_prefix)M30442.T}"
     end
     let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
-        @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
+        @test repr == "Ptr{UInt8}($(Base.repr(UInt(1))))\n"
     end
     let repr = sprint(dump, Core.svec())
         @test repr == "empty SimpleVector\n"
@@ -2694,6 +2694,10 @@ let lowered = Meta.lower(Main, Expr(:let, Expr(:block), Expr(:block, Expr(:tople
     # Check that this gets printed as `_1 = 1` not `y = 1`
     @test contains(sprint(show, ci), "_1 = 1")
 end
+
+# Pointers should be reprable
+@test is_juliarepr(pointer([1]))
+@test is_juliarepr(Ptr{Vector{Complex{Float16}}}(UInt(0xdeadbeef)))
 
 # Toplevel MethodInstance with undef :uninferred
 let topmi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());

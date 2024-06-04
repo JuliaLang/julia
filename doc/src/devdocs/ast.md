@@ -416,7 +416,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `new`
 
     Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
-    to this, and the type is always inserted by the compiler.  This is very much an internal-only
+    to this, and the type is always inserted by the compiler. This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 
   * `splatnew`
@@ -436,7 +436,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
-    error.  Yields a token which is consumed by `pop_exception`.
+    error. Yields a token which is consumed by `pop_exception`.
 
   * `leave`
 
@@ -604,11 +604,6 @@ for important details on how to modify these fields safely.
     The values of the static parameters in `specTypes`.
     For the `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`.
     But for a runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and indexable.
-
-  * `uninferred`
-
-    The uncompressed source code for a toplevel thunk. Additionally, for a generated function,
-    this is one of many places that the source code might be found.
 
   * `backedges`
 

@@ -399,8 +399,9 @@ Stacktrace:
 [...]
 ```
 
-If `T` is a [`AbstractFloat`](@ref) type,
-then it will return the closest value to `x` representable by `T`.
+If `T` is a [`AbstractFloat`](@ref) type, then it will return the
+closest value to `x` representable by `T`. Inf is treated as one
+ulp greater than `floatmax(T)` for purposes of determining nearest.
 
 ```jldoctest
 julia> x = 1/3

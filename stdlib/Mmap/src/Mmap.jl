@@ -256,7 +256,7 @@ function mmap(io::IO,
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    finalizer(A) do x
+    finalizer(A.ref.mem) do x
         @static if Sys.isunix()
             systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen) != 0)
         else

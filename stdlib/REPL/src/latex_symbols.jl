@@ -119,6 +119,46 @@ const latex_symbols = Dict(
     "\\euler" => "ℯ",
     "\\ohm" => "Ω",
 
+    # Music Symbols
+    # Music Symbols - Accidentals
+    "\\flatflat" => "𝄫",
+    "\\sharpsharp" => "𝄪",
+    # Music Symbols - Codas
+    "\\leftrepeatsign" => "𝄆",
+    "\\rightrepeatsign" => "𝄇",
+    "\\dalsegno" => "𝄉",
+    "\\dacapo" => "𝄊",
+    "\\segno" => "𝄋",
+    "\\coda" => "𝄌",
+    # Music Symbols - Clefs
+    "\\clefg" => "𝄞",
+    "\\clefg8va" => "𝄟",
+    "\\clefg8vb" => "𝄠",
+    "\\clefc" => "𝄡",
+    "\\cleff" => "𝄢",
+    "\\cleff8va" => "𝄣",
+    "\\cleff8vb" => "𝄤",
+     # Music Symbols - Rests
+    "\\restmulti" => "𝄺",
+    "\\restwhole" => "𝄻",
+    "\\resthalf" => "𝄼",
+    "\\restquarter" => "𝄽",
+    "\\rest8th" => "𝄾",
+    "\\rest16th" => "𝄿",
+    "\\rest32th" => "𝅀",
+    "\\rest64th" => "𝅁",
+    "\\rest128th" => "𝅂",
+    # Music Symbols - Notes
+    "\\notedoublewhole" => "𝅜",
+    "\\notewhole" => "𝅝",
+    "\\notehalf" => "𝅗𝅥",
+    "\\notequarter" => "𝅘𝅥",
+    "\\note8th" => "𝅘𝅥𝅮",
+    "\\note16th" => "𝅘𝅥𝅯",
+    "\\note32th" => "𝅘𝅥𝅰",
+    "\\note64th" => "𝅘𝅥𝅱",
+    "\\note128th" => "𝅘𝅥𝅲",
+
     # Superscripts
     "\\^0" => "⁰",
     "\\^1" => "¹",

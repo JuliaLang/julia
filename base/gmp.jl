@@ -832,7 +832,12 @@ Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
 Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
 Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
-Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)
+# checked_pow doesn't follow the same promotion rules as the others, above.
+Base.checked_pow(x::BigInt, p::Integer) = x^p
+Base.checked_pow(x::Integer, p::BigInt) = x^p
+Base.checked_pow(x::BigInt, p::BigInt) = x^p
+
+Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)::BigInt
 
 ## streamlined hashing for BigInt, by avoiding allocation from shifts ##
 

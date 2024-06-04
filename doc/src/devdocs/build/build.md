@@ -271,7 +271,7 @@ DEPS_GIT = llvm
 #  LLVM_BRANCH = julia-16.0.6-0
 #SHA hash of the alternate commit to check out automatically
 #  LLVM_SHA1 = $(LLVM_BRANCH)
-#List of LLVM targets to build.  It is strongly recommended to keep at least all the
+#List of LLVM targets to build. It is strongly recommended to keep at least all the
 #default targets listed in `deps/llvm.mk`, even if you don't necessarily need all of them.
 #  LLVM_TARGETS = ...
 #Use ccache for faster recompilation in case you need to restart a build.
@@ -335,8 +335,8 @@ Please note that assert builds of Julia will be slower than regular (non-assert)
 
 ## Building 32-bit Julia on a 64-bit machine
 
-Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine.  Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
-However, if you do need to recompile Julia from source one option is to use a Docker container of a 32-bit system.  At least for now, building a 32-bit version of Julia is relatively straightforward using [ubuntu 32-bit docker images](https://hub.docker.com/r/i386/ubuntu). In brief, after setting up `docker` here are the required steps:
+Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine. Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
+However, if you do need to recompile Julia from source one option is to use a Docker container of a 32-bit system. At least for now, building a 32-bit version of Julia is relatively straightforward using [ubuntu 32-bit docker images](https://hub.docker.com/r/i386/ubuntu). In brief, after setting up `docker` here are the required steps:
 
 ```sh
 $ docker pull i386/ubuntu

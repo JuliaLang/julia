@@ -137,21 +137,35 @@ iszerodefined(::Type{<:UniformScaling{T}}) where T = iszerodefined(T)
 
 count_structedmatrix(T, bc::Broadcasted) = sum(Base.Fix2(isa, T), Broadcast.cat_nested(bc); init = 0)
 
-fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
+"""
+    fzeropreserving(bc) -> Bool
+
+Return true if the broadcasted function call evaluates to zero for structural zeros of the
+structured arguments.
+
+For trivial broadcasted values such as `bc::Number`, this reduces to `iszero(bc)`.
+"""
+function fzeropreserving(bc)
+    v = fzero(bc)
+    isnothing(v) && return false
+    v2 = something(v)
+    iszerodefined(typeof(v2)) ? iszero(v2) : isequal(v2, 0)
+end
+
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
 # expression is stable.  We can test the zero-preservability by applying the function
 # in cases where all other arguments are known scalars against a zero from the structured
 # matrix. If any non-structured matrix argument is not a known scalar, we give up.
-fzero(x::Number) = x
-fzero(::Type{T}) where T = T
-fzero(r::Ref) = r[]
-fzero(t::Tuple{Any}) = t[1]
-fzero(S::StructuredMatrix) = zero(eltype(S))
-fzero(::StructuredMatrix{<:AbstractMatrix{T}}) where {T<:Number} = haszero(T) ? zero(T)*I : missing
-fzero(x) = missing
+fzero(x::Number) = Some(x)
+fzero(::Type{T}) where T = Some(T)
+fzero(r::Ref) = Some(r[])
+fzero(t::Tuple{Any}) = Some(only(t))
+fzero(S::StructuredMatrix) = Some(zero(eltype(S)))
+fzero(::StructuredMatrix{<:AbstractMatrix{T}}) where {T<:Number} = Some(haszero(T) ? zero(T)*I : nothing)
+fzero(x) = nothing
 function fzero(bc::Broadcast.Broadcasted)
     args = map(fzero, bc.args)
-    return any(ismissing, args) ? missing : bc.f(args...)
+    return any(isnothing, args) ? nothing : Some(bc.f(map(something, args)...))
 end
 
 function Base.similar(bc::Broadcasted{StructuredMatrixStyle{T}}, ::Type{ElType}) where {T,ElType}
@@ -175,12 +189,23 @@ isvalidstructbc(dest::Bidiagonal, bc::Broadcasted{StructuredMatrixStyle{Bidiagon
     (size(dest, 1) < 2 || find_uplo(bc) == dest.uplo) &&
     (isstructurepreserving(bc) || fzeropreserving(bc))
 
+@inline function getindex(bc::Broadcasted, b::BandIndex)
+    @boundscheck checkbounds(bc, b)
+    @inbounds Broadcast._broadcast_getindex(bc, b)
+end
+
+function Broadcast.newindex(A::StructuredMatrix, b::BandIndex)
+    # we use the fact that a StructuredMatrix is square,
+    # and we apply newindex to both the axes at once to obtain the result
+    size(A,1) > 1 ? b : BandIndex(0, 1)
+end
+
 function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.diag[i] = @inbounds bc[CartesianIndex(i, i)]
+        dest.diag[i] = @inbounds bc[BandIndex(0, i)]
     end
     return dest
 end
@@ -190,15 +215,15 @@ function copyto!(dest::Bidiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.dv[i] = @inbounds bc[CartesianIndex(i, i)]
+        dest.dv[i] = @inbounds bc[BandIndex(0, i)]
     end
     if dest.uplo == 'U'
         for i = 1:size(dest, 1)-1
-            dest.ev[i] = @inbounds bc[CartesianIndex(i, i+1)]
+            dest.ev[i] = @inbounds bc[BandIndex(1, i)]
         end
     else
         for i = 1:size(dest, 1)-1
-            dest.ev[i] = @inbounds bc[CartesianIndex(i+1, i)]
+            dest.ev[i] = @inbounds bc[BandIndex(-1, i)]
         end
     end
     return dest
@@ -209,11 +234,11 @@ function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.dv[i] = @inbounds bc[CartesianIndex(i, i)]
+        dest.dv[i] = @inbounds bc[BandIndex(0, i)]
     end
     for i = 1:size(dest, 1)-1
-        v = @inbounds bc[CartesianIndex(i, i+1)]
-        v == (@inbounds bc[CartesianIndex(i+1, i)]) || throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
+        v = @inbounds bc[BandIndex(1, i)]
+        v == (@inbounds bc[BandIndex(-1, i)]) || throw(ArgumentError(lazy"broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
         dest.ev[i] = v
     end
     return dest
@@ -224,11 +249,13 @@ function copyto!(dest::Tridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.d[i] = @inbounds bc[CartesianIndex(i, i)]
+        dest.d[i] = @inbounds bc[BandIndex(0, i)]
     end
     for i = 1:size(dest, 1)-1
-        dest.du[i] = @inbounds bc[CartesianIndex(i, i+1)]
-        dest.dl[i] = @inbounds bc[CartesianIndex(i+1, i)]
+        dest.du[i] = @inbounds bc[BandIndex(1, i)]
+    end
+    for i = 1:size(dest, 1)-1
+        dest.dl[i] = @inbounds bc[BandIndex(-1, i)]
     end
     return dest
 end

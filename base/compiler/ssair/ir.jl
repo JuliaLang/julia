@@ -1018,7 +1018,8 @@ function did_just_finish_bb(compact)
     result_idx = compact.result_idx
     result_bbs = compact.cfg_transform.result_bbs
     (compact.active_result_bb == length(result_bbs) + 1) ||
-    result_idx == first(result_bbs[compact.active_result_bb].stmts)
+    (result_idx == first(result_bbs[compact.active_result_bb].stmts) &&
+     compact.active_result_bb != 1)
 end
 
 function maybe_reopen_bb!(compact)

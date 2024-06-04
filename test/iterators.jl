@@ -978,13 +978,6 @@ end
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
 
-
-@testset "Iterators.tail_if_any" begin
-    @test Iterators.tail_if_any(()) == ()
-    @test Iterators.tail_if_any((1, 2)) == (2,)
-    @test Iterators.tail_if_any((1,)) == ()
-end
-
 @testset "IteratorSize trait for zip" begin
     @test Base.IteratorSize(zip()) == Base.IsInfinite()                     # for zip of empty tuple
     @test Base.IteratorSize(zip((1,2,3), repeated(0))) == Base.HasLength()  # for zip of ::HasLength and ::IsInfinite
@@ -1030,6 +1023,20 @@ end
 
 @testset "collect partition substring" begin
     @test collect(Iterators.partition(lstrip("01111", '0'), 2)) == ["11", "11"]
+end
+
+@testset "IterableStringPairs" begin
+    for s in ["", "a", "abcde", "γ", "∋γa"]
+        for T in (String, SubString, GenericString)
+            sT = T(s)
+            p = pairs(sT)
+            @test collect(p) == [k=>v for (k,v) in zip(keys(sT), sT)]
+            rv = Iterators.reverse(p)
+            @test collect(rv) == reverse([k=>v for (k,v) in zip(keys(sT), sT)])
+            rrv = Iterators.reverse(rv)
+            @test collect(rrv) == collect(p)
+        end
+    end
 end
 
 let itr = (i for i in 1:9) # Base.eltype == Any

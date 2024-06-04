@@ -9,6 +9,7 @@ public
 
 # Types
     AbstractLock,
+    AbstractPipe,
     AsyncCondition,
     CodeUnits,
     Event,
@@ -43,6 +44,7 @@ public
     split_rest,
     tail,
     checked_length,
+    elsize,
 
 # Loading
     DL_LOAD_PATH,

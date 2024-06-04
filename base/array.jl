@@ -219,12 +219,7 @@ function _unsetindex!(A::Array, i::Int)
     @inbounds _unsetindex!(GenericMemoryRef(A.ref, i))
     return A
 end
-function _unsetindex!(A::Array, i::Int...)
-    @inline
-    @boundscheck checkbounds(A, i...)
-    @inbounds _unsetindex!(A, _to_linear_index(A, i...))
-    return A
-end
+
 
 # TODO: deprecate this (aligned_sizeof and/or elsize and/or sizeof(Some{T}) are more correct)
 elsize(::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
@@ -308,7 +303,7 @@ function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Arr
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
-    @inbounds let dest = GenericMemoryRef(dest isa Array ? getfield(dest, :ref) : dest, doffs)
+    @inbounds let dest = GenericMemoryRef(dest isa Array ? getfield(dest, :ref) : dest, doffs),
                   src = GenericMemoryRef(src isa Array ? getfield(src, :ref) : src, soffs)
         unsafe_copyto!(dest, src, n)
     end

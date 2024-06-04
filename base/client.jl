@@ -229,7 +229,7 @@ incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
     startup               = (opts.startupfile != 2)
-    global have_color     = (opts.color != 0) ? (opts.color == 1) : nothing # --color=on
+    global have_color     = colored_text(opts)
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -260,7 +260,7 @@ function exec_options(opts)
     # Load Distributed module only if any of the Distributed options have been specified.
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
-        let Distributed = require_stdlib(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
+        let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             Core.eval(MainInclude, :(const Distributed = $Distributed))
             Core.eval(Main, :(using Base.MainInclude.Distributed))
         end
@@ -419,7 +419,7 @@ end
 global active_repl
 
 # run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool)
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
     if !fallback_repl && interactive
         load_InteractiveUtils()
@@ -565,8 +565,7 @@ function repl_main(_)
 
     quiet                 = (opts.quiet != 0)
     history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    return run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
+    return run_main_repl(interactiveinput, quiet, banner, history_file)
 end
 
 """

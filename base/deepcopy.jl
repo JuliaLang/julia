@@ -37,7 +37,7 @@ deepcopy_internal(x::Module, stackdict::IdDict) = error("deepcopy of Modules not
 
 function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = Core.svec(Any[deepcopy_internal(x[i], stackdict) for i = 1:length(x)]...)
     stackdict[x] = y
@@ -46,7 +46,7 @@ end
 
 function deepcopy_internal(x::String, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = GC.@preserve x unsafe_string(pointer(x), sizeof(x))
     stackdict[x] = y
@@ -58,7 +58,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     nf = nfields(x)
     if ismutable(x)
         if haskey(stackdict, x)
-            return stackdict[x]
+            return stackdict[x]::typeof(x)
         end
         y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
         stackdict[x] = y
@@ -157,7 +157,7 @@ end
 
 function deepcopy_internal(x::AbstractLock, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = typeof(x)()
     stackdict[x] = y
@@ -166,7 +166,7 @@ end
 
 function deepcopy_internal(x::GenericCondition, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
     end
     y = typeof(x)(deepcopy_internal(x.lock, stackdict))
     stackdict[x] = y

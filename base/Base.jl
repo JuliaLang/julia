@@ -402,12 +402,12 @@ include("weakkeydict.jl")
 include("scopedvalues.jl")
 using .ScopedValues
 
-# Logging
-include("logging.jl")
-using .CoreLogging
-
 # metaprogramming
 include("meta.jl")
+
+# Logging
+include("logging/logging.jl")
+using .CoreLogging
 
 include("env.jl")
 
@@ -634,6 +634,8 @@ function __init__()
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
     end
+
+    CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end
 

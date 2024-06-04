@@ -95,7 +95,7 @@ function parse(stream::IO, block::MD, config::Config; breaking = false)
 end
 
 parse(stream::IO, block::MD; breaking = false) =
-  parse(stream, block, config(block), breaking = breaking)
+    parse(stream, block, config(block), breaking = breaking)
 
 function parse(stream::IO; flavor = julia)
     isa(flavor, Symbol) && (flavor = flavors[flavor])

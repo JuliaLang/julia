@@ -693,7 +693,7 @@ macro artifact_str(name, platform=nothing)
     local artifact_dict = load_artifacts_toml(artifacts_toml)
 
     # Invalidate calling .ji file if Artifacts.toml file changes
-    Base.include_dependency(artifacts_toml)
+    Base.include_dependency(artifacts_toml, track_content = true)
 
     # Check if the user has provided `LazyArtifacts`, and thus supports lazy artifacts
     # If not, check to see if `Pkg` or `Pkg.Artifacts` has been imported.

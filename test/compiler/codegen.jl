@@ -621,10 +621,10 @@ g40612(a, b) = a[]|a[] === b[]|b[]
 
 # issue #41438
 struct A41438{T}
-  x::Ptr{T}
+    x::Ptr{T}
 end
 struct B41438{T}
-  x::T
+    x::T
 end
 f41438(y) = y[].x
 @test A41438.body.layout != C_NULL
@@ -722,14 +722,14 @@ mutable struct A42645{T}
     end
 end
 mutable struct B42645{T}
-  y::A42645{T}
+    y::A42645{T}
 end
 x42645 = 1
 function f42645()
-  res = B42645(A42645([x42645]))
-  res.y = A42645([x42645])
-  res.y.x = true
-  res
+    res = B42645(A42645([x42645]))
+    res.y = A42645([x42645])
+    res.y.x = true
+    res
 end
 @test ((f42645()::B42645).y::A42645{Int}).x
 
