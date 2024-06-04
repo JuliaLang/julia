@@ -658,7 +658,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file)
         end
-        mby_ext = project_file_ext_path(project_file, pkg.name)
+        mby_ext = project_file_ext_path(project_file, pkg)
         mby_ext === nothing || return mby_ext
         # look for manifest file and `where` stanza
         return explicit_manifest_uuid_path(project_file, pkg)
@@ -676,13 +676,13 @@ function find_ext_path(project_path::String, extname::String)
     return joinpath(project_path, "ext", extname * ".jl")
 end
 
-function project_file_ext_path(project_file::String, name::String)
+function project_file_ext_path(project_file::String, ext::PkgId)
     d = parsed_toml(project_file)
     p = project_file_path(project_file)
     exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
     if exts !== nothing
-        if name in keys(exts)
-            return find_ext_path(p, name)
+        if ext.name in keys(exts) && ext.uuid == uuid5(UUID(d["uuid"]::String), ext.name)
+            return find_ext_path(p, ext.name)
         end
     end
     return nothing
