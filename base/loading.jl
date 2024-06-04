@@ -694,7 +694,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file, pkg.name)
         end
-        mby_ext = project_file_ext_path(project_file, pkg.name)
+        mby_ext = project_file_ext_path(project_file, pkg)
         mby_ext === nothing || return mby_ext
         # look for manifest file and `where` stanza
         return explicit_manifest_uuid_path(project_file, pkg)
@@ -709,7 +709,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             if parent_project_file !== nothing
                 parentproj = project_file_name_uuid(parent_project_file, parentid.name)
                 if parentproj == parentid
-                    mby_ext = project_file_ext_path(parent_project_file, pkg.name)
+                    mby_ext = project_file_ext_path(parent_project_file, pkg)
                     mby_ext === nothing || return mby_ext
                 end
             end
@@ -725,13 +725,13 @@ function find_ext_path(project_path::String, extname::String)
     return joinpath(project_path, "ext", extname * ".jl")
 end
 
-function project_file_ext_path(project_file::String, name::String)
+function project_file_ext_path(project_file::String, ext::PkgId)
     d = parsed_toml(project_file)
     p = dirname(project_file)
     exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
     if exts !== nothing
-        if name in keys(exts)
-            return find_ext_path(p, name)
+        if ext.name in keys(exts) && ext.uuid == uuid5(UUID(d["uuid"]::String), ext.name)
+            return find_ext_path(p, ext.name)
         end
     end
     return nothing
@@ -834,9 +834,7 @@ function implicit_env_project_file_extension(dir::String, ext::PkgId)
     for pkg in readdir(dir; join=true)
         project_file = env_project_file(pkg)
         project_file isa String || continue
-        proj = project_file_name_uuid(project_file, "")
-        uuid5(proj.uuid, ext.name) == ext.uuid || continue
-        path = project_file_ext_path(project_file, ext.name)
+        path = project_file_ext_path(project_file, ext)
         if path !== nothing
             return path, project_file
         end
