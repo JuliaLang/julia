@@ -3167,7 +3167,7 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
     if (jl_is_globally_rooted(val))
         return val;
     jl_method_t *m = ctx.linfo->def.method;
-    if (jl_is_method(m)) {
+    if (!jl_options.strip_ir && jl_is_method(m)) {
         // the method might have a root for this already; use it if so
         JL_LOCK(&m->writelock);
         if (m->roots) {
