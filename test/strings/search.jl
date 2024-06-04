@@ -601,6 +601,35 @@ end
     @test findnext(==(0x02), A, -97) === nothing
 end
 
+# NOTE: The strange edge cases are tested for here, but that does not mean
+# they are intentional. Ideally, the behviour should be changed. See issue 54584
+@testset "Edge behaviours of findnext/last" begin
+    # Empty haystack causes no errors
+    @test isempty(findall(==('\x00'), ""))
+
+    # Findnext errors when i is not a valid index, findprev does not
+    @test_throws StringIndexError findnext(==('a'), "æøå", 2)
+    @test findprev(==('æ'), "æøå", 4) == 1
+
+    # Findnext errors when i < 1 or i > ncodeunits(s) + 1
+    @test_throws BoundsError findnext(==('a'), "abc", 0)
+    @test_throws BoundsError findnext(==('a'), "abc", -1)
+    @test_throws BoundsError findnext(==('a'), "abc", 5)
+    @test_throws BoundsError findnext(==('a'), "æøå", 8)
+    @test findnext(==('a'), "æøå", 7) === nothing
+
+    # Findprev errors when i > ncodeunits(s) + 1 or i < 0
+    @test findprev(==('a'), "abc", 0) === nothing
+    @test findprev(==('æ'), "æøå", 5) == 1
+    @test_throws BoundsError findprev(==('a'), "abc", -1)
+    @test_throws BoundsError findprev(==('æ'), "æøå", 8)
+
+    # Findprev returns nothing when i == ncodeunits(s) + 1
+    @test findprev(==('æ'), "æøå", 7) === nothing
+    @test findprev(==('a'), "abc", 4) === nothing
+    @test findprev(==('a'), "abc", 3) == 1
+end
+
 # issue 32568
 for T = (UInt, BigInt)
     for x = (4, 5)
