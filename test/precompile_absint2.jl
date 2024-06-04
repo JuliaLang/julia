@@ -22,11 +22,12 @@ precompile_test_harness() do load_path
                 inferred
                 CustomData(@nospecialize inferred) = new(inferred)
             end
-            function CC.transform_result_for_cache(interp::PrecompileInterpreter,
-                    mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
-                inferred_result = @invoke CC.transform_result_for_cache(interp::CC.AbstractInterpreter,
-                    mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
-                return CustomData(inferred_result)
+            function CC.transform_result_for_cache(
+                interp::PrecompileInterpreter, result::CC.InferenceResult,
+                can_discard_trees::Bool, may_compress_trees::Bool)
+                return CustomData(@invoke CC.transform_result_for_cache(
+                    interp::CC.AbstractInterpreter, result::CC.InferenceResult,
+                    can_discard_trees::Bool, may_compress_trees::Bool))
             end
             function CC.src_inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
                                             @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)

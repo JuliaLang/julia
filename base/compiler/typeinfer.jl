@@ -227,8 +227,11 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
     opt = result.src
     if opt isa OptimizationState
         result.src = opt = ir_to_codeinf!(opt)
+        optimized = true
+    else
+        optimized = false
     end
-    return nothing
+    return optimized
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
@@ -260,9 +263,9 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         end
     end
     for caller in frames
-        finish!(caller.interp, caller)
+        optimized = finish!(caller.interp, caller)
         if is_cached(caller)
-            cache_result!(caller.interp, caller.result)
+            cache_result!(caller.interp, caller.result, optimized)
         end
     end
     empty!(frames)
@@ -273,8 +276,9 @@ function is_result_constabi_eligible(result::InferenceResult)
     result_type = result.result
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
-function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
-                      can_discard_trees::Bool=may_discard_trees(interp))
+function make_code_instance(interp::AbstractInterpreter, result::InferenceResult;
+                            can_discard_trees::Bool=may_discard_trees(interp),
+                            may_compress_trees::Bool=may_compress(interp))
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type === nothing || result_type isa LimitedAccuracy)
@@ -308,20 +312,16 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
     end
     relocatability = 0x0
     owner = cache_owner(interp)
+    local di::DebugInfo
     if const_flags == 0x3 && can_discard_trees
         inferred_result = nothing
         relocatability = 0x1
     else
-        inferred_result = transform_result_for_cache(interp, result.linfo, result.valid_worlds, result, can_discard_trees)
-        if inferred_result isa CodeInfo
-            edges = inferred_result.debuginfo
-            uncompressed = inferred_result
-            inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, can_discard_trees)
-            result.is_src_volatile |= uncompressed !== inferred_result
-        elseif owner === nothing
-            # The global cache can only handle objects that codegen understands
-            inferred_result = nothing
+        src = result.src
+        if src isa CodeInfo
+            di = src.debuginfo
         end
+        inferred_result = transform_result_for_cache(interp, result, can_discard_trees, may_compress_trees)
         if isa(inferred_result, String)
             t = @_gc_preserve_begin inferred_result
             relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
@@ -331,46 +331,48 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
         end
     end
     # n.b. relocatability = (isa(inferred_result, String) && inferred_result[end]) || inferred_result === nothing
-    if !@isdefined edges
-        edges = DebugInfo(result.linfo)
+    if !@isdefined di
+        di = DebugInfo(result.linfo)
     end
-    return CodeInstance(result.linfo, owner,
-        widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
-        const_flags, first(result.valid_worlds), last(result.valid_worlds),
-        # TODO: Actually do something with non-IPO effects
-        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.analysis_results,
-        relocatability, edges)
+    rt, exct = widenconst(result_type), widenconst(result.exc_result)
+    min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
+    ipo_effects = effects = encode_effects(result.ipo_effects)
+    ci = CodeInstance(result.linfo, owner,
+        rt, exct, rettype_const, inferred_result, const_flags, min_world, max_world,
+        ipo_effects, effects, result.analysis_results, relocatability, di)
+    result.ci = ci
+    return ci
 end
 
-function transform_result_for_cache(interp::AbstractInterpreter,
-        ::MethodInstance, valid_worlds::WorldRange, result::InferenceResult,
-        can_discard_trees::Bool=may_discard_trees(interp))
-    return result.src
-end
-
-function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo,
-                                 can_discard_trees::Bool=may_discard_trees(interp))
+function transform_result_for_cache(interp::AbstractInterpreter, result::InferenceResult,
+                                    can_discard_trees::Bool, may_compress_trees::Bool)
+    src = result.src::Union{Nothing,CodeInfo}
+    src isa CodeInfo || return nothing
+    mi = result.linfo
     def = mi.def
-    isa(def, Method) || return ci # don't compress toplevel code
-    cache_the_tree = true
+    isa(def, Method) || return src # don't compress toplevel code
     if can_discard_trees
-        cache_the_tree = is_inlineable(ci) || isa_compileable_sig(mi.specTypes, mi.sparam_vals, def)
+        cache_the_tree = is_inlineable(src) || isa_compileable_sig(mi.specTypes, mi.sparam_vals, def)
+    else
+        cache_the_tree = true
     end
     if cache_the_tree
-        if may_compress(interp)
-            nslots = length(ci.slotflags)
-            resize!(ci.slottypes::Vector{Any}, nslots)
-            resize!(ci.slotnames, nslots)
-            return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
+        if may_compress_trees
+            nslots = length(src.slotflags)
+            resize!(src.slottypes::Vector{Any}, nslots)
+            resize!(src.slotnames, nslots)
+            compressed = ccall(:jl_compress_ir, String, (Any, Any), def, src)
+            result.is_src_volatile = true
+            return compressed
         else
-            return ci
+            return src
         end
     else
         return nothing
     end
 end
 
-function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
+function cache_result!(interp::AbstractInterpreter, result::InferenceResult, optimized::Bool)
     if last(result.valid_worlds) == get_world_counter()
         # if we've successfully recorded all of the backedges in the global reverse-cache,
         # we can now widen our applicability in the global cache too
@@ -393,8 +395,8 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        code_cache(interp)[mi] = ci = CodeInstance(interp, result)
-        result.ci = ci
+        may_compress_trees = optimized & may_compress(interp)
+        code_cache(interp)[mi] = ci = make_code_instance(interp, result; may_compress_trees)
         if track_newly_inferred[]
             m = mi.def
             if isa(m, Method) && m.module != Core
@@ -1097,9 +1099,6 @@ function ci_meets_requirement(code::CodeInstance, source_mode::UInt8, ci_is_cach
     return false
 end
 
-_uncompressed_ir(codeinst::CodeInstance, s::String) =
-    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
-
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
@@ -1149,7 +1148,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     can_discard_trees = source_mode ≠ SOURCE_MODE_FORCE_SOURCE &&
                         source_mode ≠ SOURCE_MODE_FORCE_SOURCE_UNCACHED &&
                         is_result_constabi_eligible(result)
-    code = CodeInstance(interp, result; can_discard_trees)
+    code = make_code_instance(interp, result; can_discard_trees)
 
     # If the caller cares about the code and this is constabi, still use our synthesis function
     # anyway, because we will have not finished inferring the code inside the CodeInstance once

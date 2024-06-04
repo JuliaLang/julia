@@ -158,12 +158,12 @@ struct FailedAnalysis
     get_escape_cache::GetEscapeCache
 end
 
-function CC.cache_result!(interp::EscapeAnalyzer, inf_result::InferenceResult)
+function CC.cache_result!(interp::EscapeAnalyzer, inf_result::InferenceResult, optimized::Bool)
     ecacheinfo = CC.traverse_analysis_results(inf_result) do @nospecialize result
         return result isa EscapeCacheInfo ? result : nothing
     end
     ecacheinfo isa EscapeCacheInfo && (interp.escape_cache.cache[inf_result.linfo] = ecacheinfo)
-    return @invoke CC.cache_result!(interp::AbstractInterpreter, inf_result::InferenceResult)
+    return @invoke CC.cache_result!(interp::AbstractInterpreter, inf_result::InferenceResult, optimized::Bool)
 end
 
 # printing

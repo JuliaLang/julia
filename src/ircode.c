@@ -966,7 +966,6 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->purity.bits = read_uint16(s.s);
     code->inlining_cost = read_uint16(s.s);
 
-
     size_t nslots = read_int32(s.s);
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
     ios_readall(s.s, jl_array_data(code->slotflags, char), nslots);

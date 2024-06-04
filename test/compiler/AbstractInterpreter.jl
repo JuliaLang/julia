@@ -15,7 +15,7 @@ CC.may_optimize(::AbsIntOnlyInterp1) = false
 # it should work even if the interpreter discards inferred source entirely
 @newinterp AbsIntOnlyInterp2
 CC.may_optimize(::AbsIntOnlyInterp2) = false
-CC.transform_result_for_cache(::AbsIntOnlyInterp2, ::Core.MethodInstance, ::CC.WorldRange, ::CC.InferenceResult) = nothing
+CC.transform_result_for_cache(::AbsIntOnlyInterp2, ::CC.InferenceResult, ::Bool, ::Bool) = nothing
 @test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
 # OverlayMethodTable
@@ -465,7 +465,7 @@ function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
     for inf_result in CONST_INVOKE_INTERP.inf_cache
         if inf_result.linfo === mi
             if CC.any(inf_result.overridden_by_const)
-                return CodeInstance(CONST_INVOKE_INTERP, inf_result)
+                return CC.make_code_instance(CONST_INVOKE_INTERP, inf_result)
             end
         end
     end
@@ -506,14 +506,15 @@ struct CustomData
     inferred
     CustomData(@nospecialize inferred) = new(inferred)
 end
-function CC.transform_result_for_cache(interp::CustomDataInterp,
-    mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
-    inferred_result = @invoke CC.transform_result_for_cache(interp::CC.AbstractInterpreter,
-        mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
-    return CustomData(inferred_result)
+function CC.transform_result_for_cache(
+    interp::CustomDataInterp, result::CC.InferenceResult,
+    can_discard_trees::Bool, may_compress_trees::Bool)
+    return CustomData(@invoke CC.transform_result_for_cache(
+        interp::CC.AbstractInterpreter, result::CC.InferenceResult,
+        can_discard_trees::Bool, may_compress_trees::Bool))
 end
 function CC.src_inlining_policy(interp::CustomDataInterp, @nospecialize(src),
-                            @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
+                                @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
     if src isa CustomData
         src = src.inferred
     end

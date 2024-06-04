@@ -565,6 +565,8 @@ CC.cache_owner(::REPLInterpreter) = REPLCacheToken()
 
 # REPLInterpreter is only used for type analysis, so it should disable optimization entirely
 CC.may_optimize(::REPLInterpreter) = false
+# REPLInterpreter doesn't need any sources to be cached, so discard them always
+CC.transform_result_for_cache(::REPLInterpreter, ::CC.InferenceResult, ::Bool, ::Bool) = nothing
 
 # REPLInterpreter doesn't need any sources to be cached, so discard them aggressively
 CC.transform_result_for_cache(::REPLInterpreter, ::Core.MethodInstance, ::CC.WorldRange, ::CC.InferenceResult) = nothing
