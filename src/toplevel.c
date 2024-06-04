@@ -329,7 +329,10 @@ void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
             if (set_type) {
                 jl_value_t *old_ty = NULL;
                 // maybe set the type too, perhaps
-                jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+                while (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type)) {
+                    if (old_ty && jl_is_binding_edges(old_ty))
+                        break;
+                }
             }
         }
     }

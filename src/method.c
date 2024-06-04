@@ -1113,6 +1113,13 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
     if (gf != NULL) {
         if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
             jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
+    } else if (bnd) {
+        jl_value_t *old_ty = NULL;
+        while (!jl_atomic_cmpswap_relaxed(&bnd->ty, &old_ty, (jl_value_t*)jl_any_type)) {
+            assert(!old_ty || jl_is_binding_edges(old_ty));
+        }
+        if (old_ty)
+            jl_binding_invalidate((jl_value_t *)jl_any_type, /* is_const */ 1, (jl_binding_edges_t *)old_ty);
     }
     if (bnd)
         bnd->constp = 1; // XXX: use jl_declare_constant and jl_checked_assignment

@@ -642,6 +642,11 @@ typedef struct _jl_binding_t {
     uint8_t padding:1;
 } jl_binding_t;
 
+typedef struct _jl_binding_edges_t {
+    JL_DATA_TYPE
+    jl_array_t *edges;
+} jl_binding_edges_t;
+
 typedef struct {
     uint64_t hi;
     uint64_t lo;
@@ -930,6 +935,7 @@ extern JL_DLLIMPORT jl_value_t *jl_memoryref_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memoryref_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_expr_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_binding_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_binding_edges_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_globalref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
@@ -1503,6 +1509,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_slotnumber(v)  jl_typetagis(v,jl_slotnumber_type)
 #define jl_is_expr(v)        jl_typetagis(v,jl_expr_type)
 #define jl_is_binding(v)     jl_typetagis(v,jl_binding_type)
+#define jl_is_binding_edges(v)  jl_typetagis(v,jl_binding_edges_type)
 #define jl_is_globalref(v)   jl_typetagis(v,jl_globalref_type)
 #define jl_is_gotonode(v)    jl_typetagis(v,jl_gotonode_type)
 #define jl_is_gotoifnot(v)   jl_typetagis(v,jl_gotoifnot_type)

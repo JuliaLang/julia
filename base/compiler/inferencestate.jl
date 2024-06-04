@@ -1038,6 +1038,14 @@ function add_mt_backedge!(irsv::IRInterpretationState, mt::MethodTable, @nospeci
     return push!(irsv.edges, mt, typ)
 end
 
+function add_binding_backedge!(caller::InferenceState, g::GlobalRef, kind::Symbol)
+    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
+    return push!(get_stmt_edges!(caller), g, kind)
+end
+function add_binding_backedge!(irsv::IRInterpretationState, g::GlobalRef)
+    return push!(irsv.edges, g, kind)
+end
+
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 

@@ -336,9 +336,9 @@ end
 const empty_backedge_iter = BackedgeIterator(Any[])
 
 struct BackedgePair
-    sig # ::Union{Nothing,Type}
-    caller::Union{MethodInstance,MethodTable}
-    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,MethodTable}) = new(sig, caller)
+    sig # ::Union{Nothing,Symbol,Type}
+    caller::Union{MethodInstance,MethodTable,GlobalRef}
+    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,MethodTable,GlobalRef}) = new(sig, caller)
 end
 
 function iterate(iter::BackedgeIterator, i::Int=1)
@@ -346,6 +346,7 @@ function iterate(iter::BackedgeIterator, i::Int=1)
     i > length(backedges) && return nothing
     item = backedges[i]
     isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1      # regular dispatch
+    isa(item, GlobalRef) && return BackedgePair(backedges[i+1], item), i+2    # (untyped) binding
     isa(item, MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
     return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end

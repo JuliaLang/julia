@@ -641,6 +641,8 @@ function store_backedges(caller::MethodInstance, edges::Vector{Any})
         callee = itr.caller
         if isa(callee, MethodInstance)
             ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, itr.sig, caller)
+        elseif isa(callee, GlobalRef)
+            ccall(:jl_globalref_add_backedge, Cvoid, (Any, Any, Any), callee, itr.sig, caller)
         else
             typeassert(callee, MethodTable)
             ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, itr.sig, caller)

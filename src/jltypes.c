@@ -3108,6 +3108,11 @@ void jl_init_types(void) JL_GC_DISABLED
     const static uint32_t binding_constfields[] = { 0x0002 }; // Set fields 2 as constant
     jl_binding_type->name->constfields = binding_constfields;
 
+    jl_binding_edges_type =
+        jl_new_datatype(jl_symbol("BindingBackedges"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(1, "edges"), jl_svec(1, jl_any_type),
+                        jl_emptysvec, 0, 0, 1);
+
     jl_globalref_type =
         jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(3, "mod", "name", "binding"),

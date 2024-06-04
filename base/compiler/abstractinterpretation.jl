@@ -2602,6 +2602,7 @@ function abstract_eval_isdefined(interp::AbstractInterpreter, e::Expr, vtypes::U
         elseif isdefinedconst_globalref(sym)
             rt = Const(true)
         else
+            add_binding_backedge!(sv, sym, :const)
             effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
         end
     elseif isexpr(sym, :static_parameter)
@@ -2822,18 +2823,21 @@ end
 isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
 isdefinedconst_globalref(g::GlobalRef) = isconst(g) && isdefined_globalref(g)
 
-function abstract_eval_globalref_type(g::GlobalRef)
+function abstract_eval_globalref_type(g::GlobalRef, sv::Union{AbsIntState,Nothing}=nothing)
     if isdefinedconst_globalref(g)
         return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
     end
     ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
-    ty === nothing && return Any
+    if ty === nothing
+        sv !== nothing && add_binding_backedge!(sv, g, :type)
+        return Any
+    end
     return ty
 end
-abstract_eval_global(M::Module, s::Symbol) = abstract_eval_globalref_type(GlobalRef(M, s))
+abstract_eval_global(M::Module, s::Symbol, sv::Union{AbsIntState,Nothing}=nothing) = abstract_eval_globalref_type(GlobalRef(M, s), sv)
 
 function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
-    rt = abstract_eval_globalref_type(g)
+    rt = abstract_eval_globalref_type(g, sv)
     consistent = inaccessiblememonly = ALWAYS_FALSE
     nothrow = false
     if isa(rt, Const)

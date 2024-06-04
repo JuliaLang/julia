@@ -1747,6 +1747,69 @@ static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_w
     }
 }
 
+/**
+ * Invalidate the edges accumulated in `be` - this should be called when a binding has just
+ * acquired a type or a const value.
+ *
+ * ty is the new type of the binding (optional if const), and `is_const` is whether the new
+ * binding ended up being const. These will be used to filter the edge invalidations, so that
+ * e.g. an `isdefined` edge is not invalidated by a non-const binding
+ **/
+JL_DLLEXPORT void jl_binding_invalidate(jl_value_t *ty, int is_const, jl_binding_edges_t *be)
+{
+    if (!is_const && ty == (jl_value_t *)jl_any_type)
+        return; // no improvement to inference information
+
+    jl_array_t *edges = be->edges;
+    jl_method_instance_t *mi = NULL;
+    JL_GC_PUSH2(&edges, mi);
+    JL_LOCK(&world_counter_lock);
+    // Narrow the world age on the methods to make them uncallable
+    size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+    for (int i = 0; i < jl_array_len(edges) / 2; i++) {
+        mi = (jl_method_instance_t *)jl_array_ptr_ref(edges, 2 * i);
+        jl_sym_t *kind = (jl_sym_t *)jl_array_ptr_ref(edges, 2 * i + 1);
+        if (!is_const && kind == jl_symbol("const"))
+            continue; // this is an `isdefined` edge, which has not improved
+
+        invalidate_method_instance(mi, world, /* depth */ 0);
+    }
+    jl_atomic_store_release(&jl_world_counter, world + 1);
+    JL_UNLOCK(&world_counter_lock);
+    JL_GC_POP();
+}
+
+JL_DLLEXPORT void jl_globalref_add_backedge(jl_globalref_t *callee, jl_sym_t *kind, jl_method_instance_t *caller)
+{
+    jl_binding_t *b = jl_get_module_binding(callee->mod, callee->name, /* alloc */ 0);
+    assert(b != NULL);
+    jl_binding_edges_t *edges = (jl_binding_edges_t *)jl_atomic_load_acquire(&b->ty);
+    if (edges && !jl_is_binding_edges(edges))
+        return; // TODO: Handle case where the invalidation happens before the edge arrives
+
+    jl_array_t *array = NULL;
+    JL_GC_PUSH2(&array, &edges);
+    if (edges == NULL) {
+        array = jl_alloc_vec_any(0);
+        edges = (jl_binding_edges_t *)jl_gc_alloc(
+            jl_current_task->ptls, sizeof(jl_binding_edges_t),
+            jl_binding_edges_type
+        );
+        edges->edges = array;
+        jl_value_t *old_ty = NULL;
+        if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t *)edges))
+            return; // TODO: Handle case where ty was swapped out from under us
+        jl_gc_wb(b, edges);
+    }
+    else {
+        array = edges->edges;
+    }
+    jl_array_ptr_1d_push(array, (jl_value_t *)caller);
+    jl_array_ptr_1d_push(array, (jl_value_t *)kind);
+    JL_GC_POP();
+    return;
+}
+
 // add a backedge from callee to caller
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_method_instance_t *caller)
 {

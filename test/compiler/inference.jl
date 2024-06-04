@@ -5757,3 +5757,12 @@ end
 bar54341(args...) = foo54341(4, args...)
 
 @test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int
+
+should_be_invalidated_by_binding_edge() = unknown_foo()
+# Trigger an inference result before all definitions are available
+@test Any === Core.Compiler.return_type(should_be_invalidated_by_binding_edge, Tuple{})
+
+# Binding backedges should guarantee that when `unknown_foo` is const-defined, this is invalidated
+unknown_foo() = rand(Int)
+# Inference in the new world should give a good result
+@test Int === Core.Compiler.return_type(should_be_invalidated_by_binding_edge, Tuple{})

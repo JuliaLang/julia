@@ -3201,7 +3201,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
             return mark_julia_const(ctx, v);
         ty = jl_atomic_load_relaxed(&bnd->ty);
     }
-    if (ty == nullptr)
+    if (ty == nullptr || jl_is_binding_edges(ty))
         ty = (jl_value_t*)jl_any_type;
     return update_julia_type(ctx, emit_checked_var(ctx, bp, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
 }
@@ -3217,7 +3217,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
         return jl_cgval_t();
     if (bnd && !bnd->constp) {
         jl_value_t *ty = jl_atomic_load_relaxed(&bnd->ty);
-        if (ty != nullptr) {
+        if (ty != nullptr && !jl_is_binding_edges(ty)) {
             const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
             if (!ismodifyglobal) {
                 // TODO: use typeassert in jl_check_binding_wr too

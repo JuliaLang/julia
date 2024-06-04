@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    190
+#define NUM_TAGS    191
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -122,6 +122,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_array_type);
         INSERT_TAG(jl_expr_type);
         INSERT_TAG(jl_binding_type);
+        INSERT_TAG(jl_binding_edges_type);
         INSERT_TAG(jl_globalref_type);
         INSERT_TAG(jl_string_type);
         INSERT_TAG(jl_module_type);
@@ -1351,7 +1352,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 // We don't want these accidentally managing to diverge later in different compilation units.
                 if (jl_atomic_load_relaxed(&b->owner) == b) {
                     jl_value_t *old_ty = NULL;
-                    jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+                    while (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type)) {
+                        if (old_ty && !jl_is_binding_edges(old_ty))
+                            break;
+                    }
+                    // TODO: This should be re-written to use the same open-closed semantics as value
+                    //    then we don't have to drop the edges (and they can still be defined in the non-pkgimage)
                 }
             }
         }

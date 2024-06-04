@@ -43,6 +43,7 @@
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_binding_resolved_p) \
+    XX(jl_binding_invalidate) \
     XX(jl_bitcast) \
     XX(jl_boundp) \
     XX(jl_bounds_error) \
@@ -237,6 +238,7 @@
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
     XX(jl_gf_invoke_lookup) \
+    XX(jl_globalref_add_backedge) \
     XX(jl_method_lookup_by_tt) \
     XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \

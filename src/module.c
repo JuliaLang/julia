@@ -407,6 +407,37 @@ static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *
             // concurrent import
             return owner;
         }
+        jl_value_t *old_ty = jl_atomic_exchange_relaxed(&b->ty, NULL);
+        if (old_ty) {
+            assert(jl_is_binding_edges(old_ty));
+
+            // Load the owner type, attempting to insert a new jl_binding_edges_t if it's NULL
+            jl_value_t *owner_ty = jl_atomic_load_relaxed(&b2->ty);
+            if (owner_ty == NULL) {
+                jl_array_t *array = jl_alloc_vec_any(0);
+                JL_GC_PUSH1(&array);
+                jl_binding_edges_t *edges = (jl_binding_edges_t *)jl_gc_alloc(
+                    jl_current_task->ptls, sizeof(jl_binding_edges_t),
+                    jl_binding_edges_type
+                );
+                edges->edges = array;
+                jl_atomic_cmpswap_relaxed(&b2->ty, &owner_ty, (jl_value_t *)edges);
+                if (owner_ty == NULL) {
+                    jl_gc_wb(b2, (jl_value_t *)edges);
+                    owner_ty = (jl_value_t *)edges;
+                }
+                JL_GC_POP();
+            }
+            if (jl_is_binding_edges(owner_ty)) {
+                // TODO: Add a lock to make sure we don't collide with this on invalidation
+                jl_array_ptr_1d_append(
+                    ((jl_binding_edges_t *)owner_ty)->edges,
+                    ((jl_binding_edges_t *)old_ty)->edges
+                );
+            } else if (owner_ty != (jl_value_t *)jl_any_type || b2->constp) {
+                jl_binding_invalidate(owner_ty, b2->constp, (jl_binding_edges_t *)old_ty);
+            }
+        }
         if (b2->deprecated) {
             b->deprecated = 1; // we will warn about this below, but we might want to warn at the use sites too
             if (m != jl_main_module && m != jl_base_module &&
@@ -448,7 +479,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var)
     if (b == NULL)
         return jl_nothing;
     jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
-    return ty ? ty : jl_nothing;
+    return (ty && !jl_is_binding_edges(ty)) ? ty : jl_nothing;
 }
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
@@ -805,14 +836,19 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
     if (!jl_atomic_cmpswap(&bp->owner, &b2, bp) && b2 != bp)
         jl_errorf("invalid redefinition of constant %s", jl_symbol_name(var));
     if (jl_atomic_load_relaxed(&bp->value) == NULL) {
-        jl_value_t *old_ty = NULL;
-        jl_atomic_cmpswap_relaxed(&bp->ty, &old_ty, (jl_value_t*)jl_any_type);
         uint8_t constp = 0;
         // if (jl_atomic_cmpswap(&bp->constp, &constp, 1)) {
         if (constp = bp->constp, bp->constp = 1, constp == 0) {
             jl_value_t *old = NULL;
             if (jl_atomic_cmpswap(&bp->value, &old, val)) {
                 jl_gc_wb(bp, val);
+                jl_value_t *old_ty = NULL;
+                while (!jl_atomic_cmpswap_relaxed(&bp->ty, &old_ty, (jl_value_t*)jl_any_type)) {
+                    if (old_ty && !jl_is_binding_edges(old_ty))
+                        break;
+                }
+                if (old_ty && jl_is_binding_edges(old_ty))
+                    jl_binding_invalidate((jl_value_t *)jl_any_type, /* is_const */ 1, (jl_binding_edges_t *)old_ty);
                 return;
             }
         }
@@ -889,17 +925,21 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_sym_t *s, jl_binding_t *b
 jl_value_t *jl_check_binding_wr(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED, int reassign)
 {
     jl_value_t *old_ty = NULL;
-    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type)) {
-        if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty) {
-            JL_GC_PUSH1(&rhs); // callee-rooted
-            if (!jl_isa(rhs, old_ty))
-                jl_errorf("cannot assign an incompatible value to the global %s.%s.",
-                          jl_symbol_name(mod->name), jl_symbol_name(var));
-            JL_GC_POP();
-        }
+    while (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type)) {
+        if (old_ty && !jl_is_binding_edges(old_ty))
+            break;
     }
-    else {
+    if (!old_ty || jl_is_binding_edges(old_ty)) {
+        // edges are intentionally dropped on the floor here, since the new `Any`
+        // type is not a refinement of any inference information
         old_ty = (jl_value_t*)jl_any_type;
+    }
+    else if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty) {
+        JL_GC_PUSH1(&rhs); // callee-rooted
+        if (!jl_isa(rhs, old_ty))
+            jl_errorf("cannot assign an incompatible value to the global %s.%s.",
+                      jl_symbol_name(mod->name), jl_symbol_name(var));
+        JL_GC_POP();
     }
     if (b->constp) {
         if (reassign) {
@@ -950,8 +990,15 @@ JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, j
 JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs)
 {
     jl_value_t *ty = NULL;
-    if (jl_atomic_cmpswap_relaxed(&b->ty, &ty, (jl_value_t*)jl_any_type))
+    while (!jl_atomic_cmpswap_relaxed(&b->ty, &ty, (jl_value_t*)jl_any_type)) {
+        if (ty && !jl_is_binding_edges(ty))
+            break;
+    }
+    if (!ty || jl_is_binding_edges(ty)) {
+        // edges are intentionally dropped on the floor here, since the new `Any`
+        // type is not a refinement of any inference information
         ty = (jl_value_t*)jl_any_type;
+    }
     if (b->constp)
         jl_errorf("invalid redefinition of constant %s.%s",
                   jl_symbol_name(mod->name), jl_symbol_name(var));

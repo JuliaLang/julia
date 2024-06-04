@@ -1378,7 +1378,10 @@ JL_CALLABLE(jl_f_get_binding_type)
         if (b2 != b)
             return (jl_value_t*)jl_any_type;
         jl_value_t *old_ty = NULL;
-        jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+        while (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type)) {
+            if (old_ty && !jl_is_binding_edges(old_ty))
+                break;
+        }
         return jl_atomic_load_relaxed(&b->ty);
     }
     return ty;
@@ -1395,8 +1398,15 @@ JL_CALLABLE(jl_f_set_binding_type)
     JL_TYPECHK(set_binding_type!, type, ty);
     jl_binding_t *b = jl_get_binding_wr(m, s);
     jl_value_t *old_ty = NULL;
-    if (jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty)) {
+    while (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty)) {
+        if (old_ty && !jl_is_binding_edges(old_ty))
+            break;
+    }
+    if (!old_ty)
         jl_gc_wb(b, ty);
+    else if (jl_is_binding_edges(old_ty)) {
+        jl_gc_wb(b, ty);
+        jl_binding_invalidate(ty, /* is_const */ 0, (jl_binding_edges_t *)old_ty);
     }
     else if (nargs != 2 && !jl_types_equal(ty, old_ty)) {
         jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
@@ -2525,6 +2535,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("Binding", (jl_value_t*)jl_binding_type);
+    add_builtin("BindingEdges", (jl_value_t*)jl_binding_edges_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
     add_builtin("NamedTuple", (jl_value_t*)jl_namedtuple_type);
 
