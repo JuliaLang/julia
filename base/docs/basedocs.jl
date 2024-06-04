@@ -2691,7 +2691,7 @@ resulting memory will point out-of-bounds if and only if the memory is empty.
 memoryref(::Memory)
 
 """
-    memorymef(::GenericMemory, index::Integer)
+    memoryref(::GenericMemory, index::Integer)
     memoryref(::GenericMemoryRef, index::Integer)
 
 Construct a `GenericMemoryRef` from a memory object and an offset index (1-based) which
