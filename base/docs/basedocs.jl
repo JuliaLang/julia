@@ -39,13 +39,13 @@ the name `foo`), whether they are `export`ed or not.
 See the [manual section about modules](@ref modules) for details.
 
 !!! note
-    Doing `using Foo` in packages or code that you want to keep working with
-    updated dependencies is not recommended. The reason for this is if another
-    dependency starts to export one of the same names as `Foo` the code will
-    error due to an ambiguity in which package the name should be taken from.
-    Instead, explicitly list what names you want to use from Foo, for example:
-    `using Foo: Foo, parsefile, readfile` to get access bring `Foo` and two
-    functions `parsefile` and `readfile` into scope.
+    Qualifying the names being used as in `using Foo: Foo, f` is
+    recommended over plain `using Foo` for released packages and other
+    code which is meant to be re-used in the future with updated dependencies
+    or future versions of julia. When two modules or packages export the same name
+    and both are loaded with `using` (without the explicit list), it is an error to use
+    that name without qualification. Using an explicit list ensures that new exports
+    in updated dependencies do not break the forward compatibility of the code.
 """
 kw"using"
 
