@@ -37,8 +37,14 @@ Memory
 """
     AtomicMemory{T} == GenericMemory{:atomic, T, Core.CPU}
 
-One-dimensional, fixed-size, dense array with elements of type `T`, where each element is
-independently atomic when accessed, and cannot be set non-atomically.
+!!! warning
+    One-dimensional, fixed-size, dense array with elements of type `T`, where each element is
+    independently atomic when accessed, and cannot be set non-atomically.
+    Currently the `@atomic` macro and higher level interface have not been completed,
+    but the implimentations for future implimentation is in the internal intrinsics
+    `Core.memoryrefget`, `Core.memoryrefset!`, `Core.memoryref_isassigned`, `Core.memoryrefswap!`,
+    `Core.memoryrefmodify!`, and `Core.memoryrefreplace!`.
+
 For details, see [Atomic Operations](@ref man-atomic-operations)
 
 !!! compat "Julia 1.11"
