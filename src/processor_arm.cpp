@@ -1903,7 +1903,7 @@ llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
     }
     auto ntargets = image_targets.size();
     if (image_targets.empty())
-        jl_error("No targets specifiec");
+        jl_error("No targets specified");
     llvm::SmallVector<jl_target_spec_t, 0> res;
     // Now decide the clone condition.
     for (size_t i = 1; i < ntargets; i++) {
