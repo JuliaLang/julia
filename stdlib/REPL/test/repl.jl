@@ -500,8 +500,9 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         repl_mode = repl.interface.modes[1]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
-        histp = repl.interface.modes[4]
-        prefix_mode = repl.interface.modes[5]
+        pkg_mode = repl.interface.modes[4]
+        histp = repl.interface.modes[5]
+        prefix_mode = repl.interface.modes[6]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
@@ -1588,8 +1589,9 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         repl_mode = repl.interface.modes[1]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
-        histp = repl.interface.modes[4]
-        prefix_mode = repl.interface.modes[5]
+        pkg_mode = repl.interface.modes[4]
+        histp = repl.interface.modes[5]
+        prefix_mode = repl.interface.modes[6]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
