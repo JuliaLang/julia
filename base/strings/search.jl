@@ -61,8 +61,6 @@ const DenseBytes = Union{
     CodeUnits{UInt8, <:Union{String, SubString{String}}},
 }
 
-const ByteArray = Union{DenseBytes, DenseArrayType{Int8}}
-
 function findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{UInt8, Int8}}, a::Union{DenseInt8, DenseUInt8})
     findnext(pred, a, firstindex(a))
 end
