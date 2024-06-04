@@ -2596,6 +2596,8 @@ typedef struct {
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
     // Cache access. Default: jl_rettype_inferred_native.
     jl_codeinstance_lookup_t lookup;
+    char * targettriple;
+    char * cpu;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
