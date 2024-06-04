@@ -1185,52 +1185,27 @@ end
 (f::Fix2)(y) = f.f(y, f.x)
 
 """
-    Fix{n}(f, x...; kws...)
-    Fix(f; kws...)
+    Fix{n}(f, x)
 
 A type representing a partially-applied version of a function `f`, with the argument or
 arguments "x" inserted at the `n`th position, and "kws" inserted as keyword arguments.
 In other words, `Fix{3}(f, x1)` behaves similarly to `(y...) -> f(y[1], y[2], x1, y[3:end]...)`.
-
-You may also specify keyword arguments to fix. For example, `Fix(sum; dims=1)`
-would be equivalent to `(a...; k...) -> sum(a...; dims=1, k...)`.
-
-You can also pass multiple arguments at once, which will be inserted after
-the first. You can also fix both arguments and keyword arguments in this way.
-For example, `Fix{2}(g, x1, x2; verbose=true)` would be equivalent to
-`(y...; k...) -> g(y[1], x1, x2, y[2:end]...; verbose=true, k...)`.
 """
-struct Fix{N,F,T<:Tuple,K<:NamedTuple} <: Function
+struct Fix{N,F,T} <: Function
     f::F
     x::T
-    kws::K
 
-    function Fix(f::F; kws...) where {F}
-        xt = ()
-        knt = NamedTuple(kws)
-        new{0,F,_stable_typeof(xt),typeof(knt)}(f, xt, knt)
-    end
-    function Fix{N}(f::F, x, xs...; kws...) where {F,N}
-        xt = (x, xs...)
-        knt = NamedTuple(kws)
-        new{N,F,_stable_typeof(xt),typeof(knt)}(f, xt, knt)
-    end
-    function Fix{N}(f::Type{F}, x, xs...; kws...) where {F,N}
-        xt = (x, xs...)
-        knt = NamedTuple(kws)
-        new{N,F,_stable_typeof(xt),typeof(knt)}(f, xt, knt)
-    end
+    Fix{N}(f::F, x) where {F,N} = new{N,F,_stable_typeof(x)}(f, x)
+    Fix{N}(f::Type{F}, x) where {F,N} = new{N,F,_stable_typeof(x)}(f, x)
 end
 
-function (f::Fix{N,F,T,K})(args::Vararg{Any,M}; kws...) where {N,F,T,K,M}
+function (f::Fix{N,F,T})(args::Vararg{Any,M}) where {N,F,T,M}
     @inline
     if N > 1
-        if M < N - 1
-            throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
-        end
-        return f.f(args[begin:begin+(N-2)]..., f.x..., args[begin+(N-1):end]...; f.kws..., kws...)
+        M >= N - 1 || throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
+        return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...)
     else
-        return f.f(f.x..., args...; f.kws..., kws...)
+        return f.f(f.x, args...)
     end
 end
 

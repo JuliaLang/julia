@@ -351,42 +351,5 @@ end
             h = Fix{1}(*, "1", "2", "3")
             @test h() == "123"
         end
-        @testset "with integer rather than Val" begin
-            function f(x, y)
-                g = Fix{1}(x, y) do x, y
-                    x = x^2
-                    y = y * 3.5
-                    x + y
-                end
-                g()
-            end
-            @inferred f(1, 2)
-        end
-        @testset "with fixed keywords and zero args" begin
-            sum_1 = Fix(sum; dims=1)
-            @test sum_1(ones(3, 2)) == [3.0 3.0]
-            @inferred sum_1(ones(3, 2))
-        end
-        @testset "with both args and kwargs" begin
-            f = Fix{1}(sum, ones(3, 2); dims=1)
-            @test f() == [3.0 3.0]
-            @inferred f()
-
-            g(a, b, c, d; e, f, g) = join((a, b, c, d, e, f, g), " ")
-            g_fix = Fix{3}(g, "c", "d"; e="e", f="f")
-
-            @test g_fix("a", "b"; g="g") == "a b c d e f g"
-            @inferred g_fix("a", "b"; g="g")
-        end
-        @testset "varargs inside Fix" begin
-            lazy_sum = Fix{1}(+, 1, 2, 3, 4, 5)
-            @test lazy_sum() == sum((1, 2, 3, 4, 5))
-
-            joiner(t...) = join(t, " ")
-            string_inside = Fix{3}(joiner, "third", "fourth", "fifth")
-            @test string_inside("first", "second", "sixth") == "first second third fourth fifth sixth"
-            # Still type stable:
-            @inferred string_inside("first", "second", "sixth")
-        end
     end
 end
