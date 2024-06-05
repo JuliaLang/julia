@@ -534,15 +534,12 @@ const undef = UndefInitializer()
 # empty vector constructor
 (self::Type{GenericMemory{kind,T,addrspace}})() where {T,kind,addrspace} = self(undef, 0)
 
+memoryref(mem::GenericMemory) = memoryrefnew(mem)
+memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
+memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
-GenericMemoryRef(ref::GenericMemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
-GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
-GenericMemoryRef{kind,<:Any,AS}(mem::GenericMemory{kind,<:Any,AS}) where {kind,AS} = memoryref(mem)
-GenericMemoryRef{kind,<:Any,AS}(ref::GenericMemoryRef{kind,<:Any,AS}, i::Integer) where {kind,AS} = memoryref(ref, Int(i), @_boundscheck)
-GenericMemoryRef{kind,<:Any,AS}(mem::GenericMemory{kind,<:Any,AS}, i::Integer) where {kind,AS}  = memoryref(memoryref(mem), Int(i), @_boundscheck)
-GenericMemoryRef{kind,T,AS}(mem::GenericMemory{kind,T,AS}) where {kind,T,AS}  = memoryref(mem)
-GenericMemoryRef{kind,T,AS}(ref::GenericMemoryRef{kind,T,AS}, i::Integer) where {kind,T,AS} = memoryref(ref, Int(i), @_boundscheck)
-GenericMemoryRef{kind,T,AS}(mem::GenericMemory{kind,T,AS}, i::Integer) where {kind,T,AS} = memoryref(memoryref(mem), Int(i), @_boundscheck)
+GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
+GenericMemoryRef(mem::GenericMemoryRef, i::Integer) = memoryref(mem, i)
 
 const Memory{T} = GenericMemory{:not_atomic, T, CPU}
 const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
@@ -650,12 +647,12 @@ module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode
+    Const, PartialStruct, InterConditional, EnterNode, memoryref
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode
+    Const, PartialStruct, InterConditional, EnterNode, memoryref
 
 end # module IR
 
