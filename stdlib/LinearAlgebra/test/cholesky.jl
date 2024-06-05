@@ -260,8 +260,8 @@ end
         @test_throws PosDefException cholesky!(copy(M))
         @test_throws PosDefException cholesky(M; check = true)
         @test_throws PosDefException cholesky!(copy(M); check = true)
-        @test !LinearAlgebra.issuccess(cholesky(M; check = false))
-        @test !LinearAlgebra.issuccess(cholesky!(copy(M); check = false))
+        @test !issuccess(cholesky(M; check = false))
+        @test !issuccess(cholesky!(copy(M); check = false))
     end
     for M in (A, Hermitian(A)) # hermitian, but not semi-positive definite
         @test_throws RankDeficientException cholesky(M, RowMaximum())
@@ -377,15 +377,28 @@ end
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
+    CD = cholesky(D, RowMaximum())
+    CM = cholesky(Matrix(D), RowMaximum())
+    @test CD isa CholeskyPivoted{Float64}
+    @test CD.U ≈ Diagonal(.√sort(d, rev=true)) ≈ CM.U
+    @test D ≈ Matrix(CD)
+    @test CD.info == 0
 
     F = cholesky(Hermitian(I(3)))
     @test F isa Cholesky{Float64,<:Diagonal}
     @test Matrix(F) ≈ I(3)
+    F = cholesky(I(3), RowMaximum())
+    @test F isa CholeskyPivoted{Float64,<:Diagonal}
+    @test Matrix(F) ≈ I(3)
 
     # real, failing
     @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
+    @test_throws RankDeficientException cholesky(Diagonal([1.0, -2.0]), RowMaximum())
     Dnpd = cholesky(Diagonal([1.0, -2.0]); check = false)
     @test Dnpd.info == 2
+    Dnpd = cholesky(Diagonal([1.0, -2.0]), RowMaximum(); check = false)
+    @test Dnpd.info == 1
+    @test Dnpd.rank == 1
 
     # complex
     D = complex(D)
@@ -395,15 +408,33 @@ end
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
+    CD = cholesky(D, RowMaximum())
+    CM = cholesky(Matrix(D), RowMaximum())
+    @test CD isa CholeskyPivoted{ComplexF64,<:Diagonal}
+    @test CD.U ≈ Diagonal(.√sort(d, by=real, rev=true)) ≈ CM.U
+    @test D ≈ Matrix(CD)
+    @test CD.info == 0
 
     # complex, failing
     D[2, 2] = 0.0 + 0im
     @test_throws PosDefException cholesky(D)
+    @test_throws RankDeficientException cholesky(D, RowMaximum())
     Dnpd = cholesky(D; check = false)
     @test Dnpd.info == 2
+    Dnpd = cholesky(D, RowMaximum(); check = false)
+    @test Dnpd.info == 1
+    @test Dnpd.rank == 2
 
     # InexactError for Int
     @test_throws InexactError cholesky!(Diagonal([2, 1]))
+
+    # tolerance
+    D = Diagonal([0.5, 1])
+    @test_throws RankDeficientException cholesky(D, RowMaximum(), tol=nextfloat(0.5))
+    CD = cholesky(D, RowMaximum(), tol=nextfloat(0.5), check=false)
+    @test rank(CD) == 1
+    @test !issuccess(CD)
+    @test Matrix(cholesky(D, RowMaximum(), tol=prevfloat(0.5))) ≈ D
 end
 
 @testset "Cholesky for AbstractMatrix" begin

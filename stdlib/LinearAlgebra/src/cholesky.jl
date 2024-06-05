@@ -255,7 +255,7 @@ function _chol!(x::Number, _)
     rx = real(x)
     iszero(rx) && return (rx, convert(BlasInt, 1))
     rxr = sqrt(abs(rx))
-    rval =  convert(promote_type(typeof(x), typeof(rxr)), rxr)
+    rval = convert(promote_type(typeof(x), typeof(rxr)), rxr)
     return (rval, convert(BlasInt, rx != abs(x)))
 end
 
@@ -400,6 +400,13 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
         return A, piv, convert(BlasInt, rank), convert(BlasInt, info)
     end
 end
+function _cholpivoted!(x::Number, tol)
+    rx = real(x)
+    iszero(rx) && return (rx, convert(BlasInt, 1))
+    rxr = sqrt(abs(rx))
+    rval = convert(promote_type(typeof(x), typeof(rxr)), rxr)
+    return (rval, convert(BlasInt, !(rx == abs(x) > tol)))
+end
 
 # cholesky!. Destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
@@ -465,12 +472,12 @@ e.g. for integer types.
 function cholesky!(A::AbstractMatrix, ::RowMaximum; tol = 0.0, check::Bool = true)
     checksquare(A)
     if !ishermitian(A)
-        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
+        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
                             tol, convert(BlasInt, -1))
-        check && checkpositivedefinite(-1)
+        check && checkpositivedefinite(convert(BlasInt, -1))
         return C
     else
-        return cholesky!(Hermitian(A), RowMaximum(); tol = tol, check = check)
+        return cholesky!(Hermitian(A), RowMaximum(); tol, check)
     end
 end
 @deprecate cholesky!(A::StridedMatrix, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
