@@ -887,3 +887,12 @@ end
 ex54166 = Union{Missing, Int64}[missing -2; missing -2];
 dims54166 = (1,2)
 @test (minimum(ex54166; dims=dims54166)[1] === missing)
+
+function foo54599()
+    pkgid = Base.identify_package("Test")
+    println(devnull,pkgid)
+    println(devnull, pkgid.uuid)
+    pkgid.uuid
+end
+
+@test foo54599() !== nothing
