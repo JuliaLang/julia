@@ -236,15 +236,21 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
     isempty(frames) && push!(frames, frame)
-    valid_worlds = WorldRange()
+    cycle_valid_worlds = WorldRange()
+    cycle_effects = EFFECTS_TOTAL
     for caller in frames
         @assert !(caller.dont_work_on_me)
         caller.dont_work_on_me = true
-        # might might not fully intersect these earlier, so do that now
-        valid_worlds = intersect(caller.valid_worlds, valid_worlds)
+        # converge the world age range and effects for this cycle here:
+        # all frames in the cycle should have the same bits of `valid_worlds` and `effects`
+        # that are simply the intersection of each partial computation, without having
+        # dependencies on each other (unlike rt and exct)
+        cycle_valid_worlds = intersect(cycle_valid_worlds, caller.valid_worlds)
+        cycle_effects = merge_effects(cycle_effects, caller.ipo_effects)
     end
     for caller in frames
-        caller.valid_worlds = valid_worlds
+        caller.valid_worlds = cycle_valid_worlds
+        caller.ipo_effects = cycle_effects
         finish(caller, caller.interp)
     end
     for caller in frames
@@ -864,7 +870,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         update_valid_age!(caller, frame.valid_worlds)
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
-        effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
+        effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
+            adjust_effects(effects_for_cycle(frame.ipo_effects), method)
         exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, so we can use this local result destructively
@@ -877,10 +884,15 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.valid_worlds)
-    effects = adjust_effects(Effects(), method)
+    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     return EdgeCallResult(frame.bestguess, exc_bestguess, nothing, effects)
 end
+
+# The `:terminates` effect bit must be conservatively tainted unless recursion cycle has
+# been fully resolved. As for other effects, there's no need to taint them at this moment
+# because they will be tainted as we try to resolve the cycle.
+effects_for_cycle(effects::Effects) = Effects(effects; terminates=false)
 
 function cached_return_type(code::CodeInstance)
     rettype = code.rettype
