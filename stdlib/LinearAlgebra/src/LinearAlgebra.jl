@@ -665,26 +665,6 @@ matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
 # Special handling for adj/trans vec
 matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
 
-# TODO: remove once not used anymore in SparseArrays.jl
-# some trait like this would be cool
-# onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
-# but we are actually asking for oneunit(T), that is, however, defined for generic T as
-# `T(one(T))`, so the question is equivalent for whether one(T) is defined
-onedefined(::Type) = false
-onedefined(::Type{<:Number}) = true
-
-# initialize return array for op(A, B)
-_init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    (onedefined(TA) && onedefined(TB)) ?
-        typeof(matprod(oneunit(TA), oneunit(TB))) :
-        promote_op(matprod, TA, TB)
-_init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    (onedefined(TA) && onedefined(TB)) ?
-        typeof(op(oneunit(TA), oneunit(TB))) :
-        promote_op(op, TA, TB)
-_initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
-    similar(C, _init_eltype(op, TA, TB), size(C))
-
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
 # which is required by LAPACK but not SuiteSparse which allows real-complex solves in some cases. Hence,
