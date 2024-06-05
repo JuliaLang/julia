@@ -4843,7 +4843,7 @@ isdefined_unknown_idx:
             *ret = jl_cgval_t(); // unreachable
             return true;
         }
-        else if (fieldidx < nf - stt->name->n_uninitialized) {
+        else if (!field_may_be_null(obj, stt, fieldidx)) {
             *ret = mark_julia_const(ctx, jl_true);
         }
         else if (jl_field_isptr(stt, fieldidx) || jl_type_hasptr(jl_field_type(stt, fieldidx))) {

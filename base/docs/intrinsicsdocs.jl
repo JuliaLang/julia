@@ -23,20 +23,20 @@ The `Core.Intrinsics` module holds the `Core.IntrinsicFunction` objects.
 Core.Intrinsics
 
 """
-    Core.memoryrefnew(::GenericMemory)
-    Core.memoryrefnew(::GenericMemoryRef, index::Int, [boundscheck::Bool])
+    Core.memoryref(::GenericMemory)
+    Core.memoryref(::GenericMemoryRef, index::Int, [boundscheck::Bool])
 
-Return a `GenericMemoryRef` for a `GenericMemory`. See [`memoryref`](@ref).
+Return a `GenericMemoryRef` for a `GenericMemory`. See [`MemoryRef`](@ref).
 
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 """
-Core.memoryrefnew
+Core.memoryref
 
 """
     Core..memoryrefoffset(::GenericMemoryRef)
 
-Return the offset index that was used to construct the `MemoryRef`. See [`memoryref`](@ref).
+Return the offset index that was used to construct the `MemoryRef`. See [`Core.memoryref`](@ref).
 
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.

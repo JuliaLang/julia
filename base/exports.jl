@@ -549,7 +549,6 @@ export
     mapfoldl,
     mapfoldr,
     mapreduce,
-    memoryref,
     merge!,
     mergewith!,
     merge,
