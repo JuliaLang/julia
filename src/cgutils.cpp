@@ -2806,7 +2806,8 @@ static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_da
         }
     }
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
-        return ctx.tbaa().tbaa_const;
+        return ctx.tbaa().tbaa_const; //TODO: it seems odd to have a field with a tbaa that doesn't alias it's containing struct's tbaa
+                                      //Does the fact that this is marked as constant make this fine?
     return tbaa;
 }
 
@@ -2903,7 +2904,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             else {
                 ptindex = emit_struct_gep(ctx, cast<StructType>(lt), staddr, byte_offset + fsz1);
             }
-            auto val = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, ctx.tbaa().tbaa_unionselbyte);
+            auto val = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, strct.tbaa);
             if (val.V && val.V != addr) {
                 setNameWithField(ctx.emission_context, val.V, get_objname, jt, idx, Twine());
             }
