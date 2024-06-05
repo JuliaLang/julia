@@ -4730,6 +4730,56 @@ JL_DLLEXPORT jl_value_t *jl_widen_diagonal(jl_value_t *t, jl_unionall_t *ua)
 }
 
 // specificity comparison
+static int count_missing_wrap(jl_value_t *x, jl_typeenv_t *env)
+{
+    if (!jl_has_free_typevars(x))
+        return 0;
+    jl_typeenv_t *wrapped = NULL;
+    int count = 0;
+    for (jl_typeenv_t *env2 = env; env2 != NULL; env2 = env2->prev) {
+        int need_wrap = 0;
+        for (jl_typeenv_t *env3 = wrapped; env3 != NULL && need_wrap == 0; env3 = env3->prev) {
+            if (env3->var == env2->var)
+                need_wrap = -1;
+            else if (jl_has_typevar(env3->var->lb, env2->var) || jl_has_typevar(env3->var->ub, env2->var))
+                need_wrap = 1;
+        }
+        need_wrap = need_wrap == 0 ? jl_has_typevar(x, env2->var) :
+                    need_wrap == -1 ? 0 : 1;
+        if (need_wrap) {
+            count++;
+            jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+            newenv->var = env2->var;
+            newenv->val = NULL;
+            newenv->prev = wrapped;
+            wrapped = newenv;
+        }
+    }
+    return count;
+}
+
+static int obvious_subtype_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *subtype, int wrapx, int wrapy)
+{
+    if (wrapx != 0 || wrapy != 0) {
+        int wrap_count = wrapx - wrapy;
+        while (wrap_count > 0 && jl_is_unionall(y))
+        {
+            y = ((jl_unionall_t*)y)->body;
+            wrap_count--;
+        }
+        while (wrap_count < 0 && jl_is_unionall(x))
+        {
+            x = ((jl_unionall_t*)x)->body;
+            wrap_count++;
+        }
+        if (wrap_count > 0) {
+            if (obvious_subtype(jl_unwrap_unionall(x), y, y0, subtype) && !*subtype)
+                return 1;
+            return 0;
+        }
+    }
+    return obvious_subtype(x, y, y0, subtype);
+}
 
 static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, jl_typeenv_t *env)
 {
@@ -4752,12 +4802,14 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
         a = b;
         b = temp;
     }
+    int wrapa = count_missing_wrap(a, env);
+    int wrapb = count_missing_wrap(b, env);
     // first check if a <: b has an obvious answer
     int subtype_ab = 2;
     if (b == (jl_value_t*)jl_any_type || a == jl_bottom_type) {
         subtype_ab = 1;
     }
-    else if (obvious_subtype(a, b, b0, &subtype_ab)) {
+    else if (obvious_subtype_msp(a, b, b0, &subtype_ab, wrapa, wrapb)) {
 #ifdef NDEBUG
         if (subtype_ab == 0)
             return 0;
@@ -4771,7 +4823,7 @@ static int eq_msp(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_value_t *b0, 
     if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type) {
         subtype_ba = 1;
     }
-    else if (obvious_subtype(b, a, a0, &subtype_ba)) {
+    else if (obvious_subtype_msp(b, a, a0, &subtype_ba, wrapb, wrapa)) {
 #ifdef NDEBUG
         if (subtype_ba == 0)
             return 0;
@@ -4836,7 +4888,9 @@ static int sub_msp(jl_value_t *x, jl_value_t *y, jl_value_t *y0, jl_typeenv_t *e
         return 1;
     }
     int obvious_sub = 2;
-    if (obvious_subtype(x, y, y0, &obvious_sub)) {
+    int wrapx = count_missing_wrap(x, env);
+    int wrapy = count_missing_wrap(y, env);
+    if (obvious_subtype_msp(x, y, y0, &obvious_sub, wrapx, wrapy)) {
 #ifdef NDEBUG
         return obvious_sub;
 #endif
