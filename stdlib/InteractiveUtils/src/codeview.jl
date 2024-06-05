@@ -353,7 +353,7 @@ const llvm_types =
 const llvm_cond = r"^(?:[ou]?eq|[ou]?ne|[uso][gl][te]|ord|uno)$" # true|false
 
 function print_llvm_tokens(io, tokens)
-    m = match(r"^((?:[^\s:]+:)?)(\s*)(.*)", tokens)
+    m = match(r"^((?:[^\"\s:]+:|\"[^\"]*\":)?)(\s*)(.*)", tokens)
     if m !== nothing
         label, spaces, tokens = m.captures
         printstyled_ll(io, label, :label, spaces)

@@ -115,7 +115,8 @@ static const char opts[]  =
     " --help-hidden                                 Print uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@.}]                        Set <dir> as the active project/environment.\n"
+    " --project[={<dir>|@temp|@.}]                  Set <dir> as the active project/environment.\n"
+    "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
     "                                               file is found.\n"

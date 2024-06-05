@@ -1080,9 +1080,6 @@ setup_interface(
     extra_repl_keymap::Any = repl.options.extra_keymap
 ) = setup_interface(repl, hascolor, extra_repl_keymap)
 
-# we have to grab this after Pkg is loaded so cache it
-pkg_mode::Union{Nothing,LineEdit.Prompt} = nothing
-
 # This non keyword method can be precompiled which is important
 function setup_interface(
     repl::LineEditREPL,
@@ -1228,11 +1225,17 @@ function setup_interface(
         end,
         ']' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                global pkg_mode
-                if pkg_mode === nothing
+                # print a dummy pkg prompt while Pkg loads
+                LineEdit.clear_line(LineEdit.terminal(s))
+                # use 6 .'s here because its the same width as the most likely `@v1.xx` env name
+                print(LineEdit.terminal(s), styled"{blue,bold:({gray:......}) pkg> }")
+                pkg_mode = nothing
+                transition_finished = false
+                iolock = Base.ReentrantLock() # to avoid race between tasks reading stdin & input buffer
+                # spawn Pkg load to avoid blocking typing during loading. Typing will block if only 1 thread
+                t_replswitch = Threads.@spawn begin
                     pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
                     REPLExt = Base.require_stdlib(pkgid, "REPLExt")
-                    pkg_mode = nothing
                     if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
                         for mode in repl.interface.modes
                             if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
@@ -1241,16 +1244,31 @@ function setup_interface(
                             end
                         end
                     end
-                end
-                if pkg_mode !== nothing
-                    buf = copy(LineEdit.buffer(s))
-                    transition(s, pkg_mode) do
-                        LineEdit.state(s, pkg_mode).input_buffer = buf
+                    if pkg_mode !== nothing
+                        @lock iolock begin
+                            buf = copy(LineEdit.buffer(s))
+                            transition(s, pkg_mode) do
+                                LineEdit.state(s, pkg_mode).input_buffer = buf
+                            end
+                            if !isempty(s)
+                                @invokelatest(LineEdit.check_for_hint(s)) && @invokelatest(LineEdit.refresh_line(s))
+                            end
+                            transition_finished = true
+                        end
                     end
-                    return
                 end
+                Base.errormonitor(t_replswitch)
+                # while loading just accept all keys, no keymap functionality
+                while !istaskdone(t_replswitch)
+                    # wait but only take if task is still running
+                    peek(stdin, Char)
+                    @lock iolock begin
+                        transition_finished || edit_insert(s, read(stdin, Char))
+                    end
+                end
+            else
+                edit_insert(s, ']')
             end
-            edit_insert(s, ']')
         end,
 
         # Bracketed Paste Mode

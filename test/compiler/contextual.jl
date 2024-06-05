@@ -223,8 +223,8 @@ function generator49715(world, source, self, f, tt)
 end
 
 @eval function doit49715(f, tt)
-  $(Expr(:meta, :generated, generator49715))
-  $(Expr(:meta, :generated_only))
+    $(Expr(:meta, :generated, generator49715))
+    $(Expr(:meta, :generated_only))
 end
 
 @test_throws "oh no" doit49715(sin, Tuple{Int})

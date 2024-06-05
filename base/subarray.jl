@@ -348,6 +348,24 @@ FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Var
 @inline _reindexlinear(V::FastContiguousSubArray, i::Int) = V.offset1 + i
 @inline _reindexlinear(V::FastContiguousSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ i
 
+"""
+An internal type representing arrays stored contiguously in memory.
+"""
+const DenseArrayType{T,N} = Union{
+    DenseArray{T,N},
+    <:FastContiguousSubArray{T,N,<:DenseArray},
+}
+
+"""
+An internal type representing mutable arrays stored contiguously in memory.
+"""
+const MutableDenseArrayType{T,N} = Union{
+    Array{T, N},
+    Memory{T},
+    FastContiguousSubArray{T,N,<:Array},
+    FastContiguousSubArray{T,N,<:Memory}
+}
+
 # parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
 # so we may just forward the indexing to the parent
 # This may only be done for non-offset ranges, as the result would otherwise have offset axes
