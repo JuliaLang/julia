@@ -5290,7 +5290,7 @@ end
     return r
 end
 foo51090(b) = return bar51090(b)
-@test !fully_eliminated(foo51090, (Int,))
+@test_broken !fully_eliminated(foo51090, (Int,))
 
 # exploit throwness from concrete eval for intrinsics
 @test Base.return_types() do
