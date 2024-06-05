@@ -38,8 +38,8 @@ Memory
     AtomicMemory{T} == GenericMemory{:atomic, T, Core.CPU}
 
 !!! warning
-    One-dimensional, fixed-size, dense array with elements of type `T`, where each element is
-    independently atomic when accessed, and cannot be set non-atomically.
+Fixed-size [`DenseVector{T}`](@ref DenseVector).
+Each element is independently atomic when accessed, and cannot be set non-atomically.
     Currently the `@atomic` macro and higher level interface have not been completed,
     but the building blocks for a future implementation are the internal intrinsics
     `Core.memoryrefget`, `Core.memoryrefset!`, `Core.memoryref_isassigned`, `Core.memoryrefswap!`,
