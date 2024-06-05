@@ -219,13 +219,16 @@ static void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 static jl_module_t *jl_binding_dbgmodule(jl_binding_t *b, jl_module_t *m, jl_sym_t *var) JL_GLOBALLY_ROOTED;
 
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var)
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
     jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
     if (b2 != b) {
-        if (b2 == NULL)
+        if (b2 == NULL) {
             check_safe_newbinding(m, var);
+            if (!alloc)
+                jl_errorf("Global %s.%s does not exist and cannot be assigned. Declare it using `global` before attempting assignment.", jl_symbol_name(m->name), jl_symbol_name(var));
+        }
         if (b2 != NULL || (!jl_atomic_cmpswap(&b->owner, &b2, b) && b2 != b)) {
             jl_module_t *from = jl_binding_dbgmodule(b, m, var);
             if (from == m)
@@ -793,7 +796,7 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
-    jl_binding_t *bp = jl_get_binding_wr(m, var);
+    jl_binding_t *bp = jl_get_binding_wr(m, var, 0);
     jl_checked_assignment(bp, m, var, val);
 }
 

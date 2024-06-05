@@ -946,7 +946,7 @@ static const auto jlgetbindingwrorerror_func = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(T_pjlvalue,
-                {T_pjlvalue, T_pjlvalue}, false);
+                {T_pjlvalue, T_pjlvalue, getInt32Ty(C)}, false);
     },
     nullptr,
 };
@@ -2100,7 +2100,7 @@ static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed
 static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg, BitVector *used_arguments=nullptr, size_t *args_begin=nullptr);
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
-                                     jl_binding_t **pbnd, bool assign);
+                                     jl_binding_t **pbnd, bool assign, bool alloc);
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa);
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const Twine &msg);
@@ -3190,7 +3190,7 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = NULL;
-    Value *bp = global_binding_pointer(ctx, mod, name, &bnd, false);
+    Value *bp = global_binding_pointer(ctx, mod, name, &bnd, false, false);
     if (bp == NULL)
         return jl_cgval_t();
     bp = julia_binding_pvalue(ctx, bp);
@@ -3209,10 +3209,10 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
                                 AtomicOrdering Order, AtomicOrdering FailOrder,
                                 bool issetglobal, bool isreplaceglobal, bool isswapglobal, bool ismodifyglobal, bool issetglobalonce,
-                                const jl_cgval_t *modifyop)
+                                const jl_cgval_t *modifyop, bool alloc)
 {
     jl_binding_t *bnd = NULL;
-    Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true);
+    Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, alloc);
     if (bp == NULL)
         return jl_cgval_t();
     if (bnd && !bnd->constp) {
@@ -3761,7 +3761,8 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                  isswapglobal,
                                  ismodifyglobal,
                                  issetglobalonce,
-                                 modifyop);
+                                 modifyop,
+                                 false);
             return true;
         }
     }
@@ -5448,7 +5449,7 @@ static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *
 // if the reference currently bound or assign == true,
 //   pbnd will also be assigned with the binding address
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
-                                     jl_binding_t **pbnd, bool assign)
+                                     jl_binding_t **pbnd, bool assign, bool alloc)
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 1);
     if (assign) {
@@ -5478,9 +5479,17 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         ctx.builder.CreateCondBr(iscached, have_val, not_found);
         not_found->insertInto(ctx.f);
         ctx.builder.SetInsertPoint(not_found);
-        Value *bval = ctx.builder.CreateCall(prepare_call(assign ? jlgetbindingwrorerror_func : jlgetbindingorerror_func),
-                { literal_pointer_val(ctx, (jl_value_t*)m),
-                  literal_pointer_val(ctx, (jl_value_t*)s) });
+        Value *bval = nullptr;
+        if (assign) {
+            bval = ctx.builder.CreateCall(prepare_call(jlgetbindingwrorerror_func),
+                    { literal_pointer_val(ctx, (jl_value_t*)m),
+                    literal_pointer_val(ctx, (jl_value_t*)s),
+                    ConstantInt::get(getInt32Ty(ctx.builder.getContext()), alloc)});
+        } else {
+            bval = ctx.builder.CreateCall(prepare_call(jlgetbindingorerror_func),
+                    { literal_pointer_val(ctx, (jl_value_t*)m),
+                    literal_pointer_val(ctx, (jl_value_t*)s)});
+        }
         setName(ctx.emission_context, bval, jl_symbol_name(m->name) + StringRef(".") + jl_symbol_name(s) + ".found");
         ctx.builder.CreateAlignedStore(bval, bindinggv, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
         ctx.builder.CreateBr(have_val);
@@ -5497,7 +5506,8 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
             // this will fail at runtime, so defer to the runtime to create the error
             ctx.builder.CreateCall(prepare_call(jlgetbindingwrorerror_func),
                     { literal_pointer_val(ctx, (jl_value_t*)m),
-                      literal_pointer_val(ctx, (jl_value_t*)s) });
+                      literal_pointer_val(ctx, (jl_value_t*)s),
+                      ConstantInt::get(getInt32Ty(ctx.builder.getContext()), alloc) });
             CreateTrap(ctx.builder);
             return NULL;
         }
@@ -5992,17 +6002,20 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
 
     jl_module_t *mod;
     jl_sym_t *sym;
+    bool toplevel = jl_is_module(ctx.linfo->def.value);
+    bool alloc = toplevel;
     if (jl_is_symbol(l)) {
         mod = ctx.module;
         sym = (jl_sym_t*)l;
     }
     else {
         assert(jl_is_globalref(l));
+        alloc &= jl_globalref_mod(l) == ctx.module;
         mod = jl_globalref_mod(l);
         sym = jl_globalref_name(l);
     }
     emit_globalop(ctx, mod, sym, rval_info, jl_cgval_t(), AtomicOrdering::Release, AtomicOrdering::NotAtomic,
-                  true, false, false, false, false, nullptr);
+                  true, false, false, false, false, nullptr, alloc);
     // Global variable. Does not need debug info because the debugger knows about
     // its memory location.
 }
@@ -6456,7 +6469,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         if (jl_is_symbol(sym)) {
             jl_binding_t *bnd = NULL;
-            Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true);
+            Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, true);
             if (bp)
                 ctx.builder.CreateCall(prepare_call(jldeclareconst_func),
                         { bp, literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym) });

@@ -4233,6 +4233,7 @@ f(x) = yt(x)
                            (put! globals ref #t)
                            `(block
                              (toplevel-only set_binding_type! ,(cadr e))
+                             (global ,ref)
                              (call (core set_binding_type!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
                          `(call (core typeassert) ,@(cdr e))))
                    fname lam namemap defined toplevel interp opaq globals locals))))
