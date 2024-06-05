@@ -277,6 +277,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@.` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
+        env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
         if startswith(env, "@script")
             if @isdefined(PROGRAM_FILE)

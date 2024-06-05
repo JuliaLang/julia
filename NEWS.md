@@ -42,6 +42,7 @@ Command-line option changes
 * Enabling or disabling color text in Julia can now be controlled with the
 [`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
 variables. ([#53742]).
+* `--project=@temp` starts Julia with a temporary environment.
 
 Multi-threading changes
 -----------------------
