@@ -5,7 +5,7 @@
 """
     GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: DenseVector{T}
 
-One-dimensional, fixed-size, dense array with elements of type `T`.
+Fixed-size [`DenseVector{T}`](@ref DenseVector).
 
 `kind` can currently be either `:not_atomic` or `:atomic`. For details on what `:atomic` implies, see [`AtomicMemory`](@ref)
 
