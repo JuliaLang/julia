@@ -3,7 +3,7 @@
 ## genericmemory.jl: Managed Memory
 
 """
-    GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: AbstractVector{T}
+    GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: DenseVector{T}
 
 One-dimensional, fixed-size, dense array with elements of type `T`.
 
