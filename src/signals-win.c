@@ -244,6 +244,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         case EXCEPTION_STACK_OVERFLOW:
             if (ct->eh != NULL) {
                 ptls->needs_resetstkoflw = 1;
+                stack_overflow_warning();
                 jl_throw_in_ctx(ct, jl_stackovf_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }

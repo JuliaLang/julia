@@ -248,7 +248,6 @@ JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
     eh->locks_len = ct->ptls->locks.len;
     eh->defer_signal = ct->ptls->defer_signal;
     eh->world_age = ct->world_age;
-    ct->eh = eh;
 #ifdef ENABLE_TIMINGS
     eh->timing_stack = ct->ptls->timing_stack;
 #endif
