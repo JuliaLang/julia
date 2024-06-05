@@ -950,7 +950,7 @@ end
 
 #this function used to crash allocopt due to a no predecessors bug
 barnopreds() = Base.inferencebarrier(true) ? (Base.PkgId(Test),1) : nothing
-function foonopred()
+function foonopreds()
     pkginfo = @noinline barnopreds()
     pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
     pkgid.uuid !== nothing ? pkgid.uuid : false
