@@ -1487,8 +1487,7 @@ static const auto except_enter_func = new JuliaFunction<>{
     "julia.except_enter",
     [](LLVMContext &C) {
          auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
-         auto RT = StructType::get(getInt32Ty(C), getInt8PtrTy(C));
-         return FunctionType::get(RT, {T_pjlvalue}, false); },
+         return FunctionType::get(getInt32Ty(C), {T_pjlvalue}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::ReturnsTwice}),
             AttributeSet(),
@@ -9378,12 +9377,10 @@ static jl_llvm_functions_t
                 ctx.SAvalues[cursor] = jl_cgval_t(excstack_state, (jl_value_t*)jl_ulong_type, NULL);
                 ctx.ssavalue_assigned[cursor] = true;
                 // Actually enter the exception frame
-                auto ct = get_current_task(ctx);
-                CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func), {ct});
+                CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func), {get_current_task(ctx)});
                 // We need to mark this on the call site as well. See issue #6757
                 sj->setCanReturnTwice();
-                Value *isz = ctx.builder.CreateICmpEQ(ctx.builder.CreateExtractValue(sj, 0), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-                Value *ehbuf = ctx.builder.CreateExtractValue(sj, 1);
+                Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
                 BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
                 BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_pop", f);
                 BasicBlock *handlr = NULL;
@@ -9401,12 +9398,6 @@ static jl_llvm_functions_t
                     ctx.builder.CreateBr(handlr);
                 }
                 ctx.builder.SetInsertPoint(tryblk);
-                auto ehptr = ctx.builder.CreateInBoundsGEP(
-                    ctx.types().T_ptr,
-                    emit_bitcast(ctx, ct, ctx.types().T_ppint8),
-                    ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, eh) / ctx.types().sizeof_ptr),
-                    "eh");
-                ctx.builder.CreateAlignedStore(ehbuf, ehptr, ctx.types().alignof_ptr);
             }
         }
         else {
