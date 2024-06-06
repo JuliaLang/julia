@@ -396,8 +396,8 @@ endif
 	mkdir -p $(DESTDIR)$(datarootdir)/applications/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
 	# Install appdata file
-	mkdir -p $(DESTDIR)$(datarootdir)/appdata/
-	$(INSTALL_F) $(JULIAHOME)/contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/appdata/
+	mkdir -p $(DESTDIR)$(datarootdir)/metainfo/
+	$(INSTALL_F) $(JULIAHOME)/contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/metainfo/
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
