@@ -1149,65 +1149,61 @@ julia> filter(!isletter, str)
 !(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
-    Fix1(f, x)
-
-A type representing a partially-applied version of the two-argument function
-`f`, with the first argument fixed to the value "x". In other words,
-`Fix1(f, x)` behaves similarly to `y->f(x, y)`.
-
-See also [`Fix2`](@ref Base.Fix2).
-"""
-struct Fix1{F,T} <: Function
-    f::F
-    x::T
-
-    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
-end
-
-(f::Fix1)(y) = f.f(f.x, y)
-
-"""
-    Fix2(f, x)
-
-A type representing a partially-applied version of the two-argument function
-`f`, with the second argument fixed to the value "x". In other words,
-`Fix2(f, x)` behaves similarly to `y->f(y, x)`.
-"""
-struct Fix2{F,T} <: Function
-    f::F
-    x::T
-
-    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
-end
-
-(f::Fix2)(y) = f.f(y, f.x)
-
-"""
-    Fix{n}(f, x)
+    Fix{n}(f, x; kws...)
 
 A type representing a partially-applied version of a function `f`, with the argument or
-arguments "x" inserted at the `n`th position. In other words, `Fix{3}(f, x)` behaves
-similarly to `(y...,) -> f(y[1], y[2], x, y[3:end]...)`.
+arguments "x" inserted at the `n`th position, and any additional keyword arguments inserted
+at the end. In other words, `Fix{3}(f, x)` behaves similarly to
+`(y1, y2, y3) -> f(y1, y2, x, y3)` for the 4-argument function `f`.
+
+You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behaves similarly
+to `x -> g(x; a=2)` for a function `g` with one arguments and one keyword argument.
 """
-struct Fix{N,F,T} <: Function
+struct Fix{N,F,T,K} <: Function
     f::F
     x::T
+    k::K
 
-    Fix{N}(f::F, x) where {F,N} = new{N,F,_stable_typeof(x)}(f, x)
-    Fix{N}(f::Type{F}, x) where {F,N} = new{N,F,_stable_typeof(x)}(f, x)
+    Fix(f::F; kws...) where {F} = (k = NamedTuple(kws); new{0,F,typeof(()),typeof(k)}(f, (), k))
+    Fix{N}(f::F, x; kws...) where {N,F} = (k = NamedTuple(kws); new{N,F,_stable_typeof(x),typeof(k)}(f, x, k))
+    Fix{N}(f::Type{F}, x; kws...) where {N,F} = (k = NamedTuple(kws); new{N,F,_stable_typeof(x),typeof(k)}(f, x, k))
 end
 
-function (f::Fix{N,F,T})(args::Vararg{Any,M}) where {N,F,T,M}
+function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     @inline
     if N > 1
         M >= N - 1 || throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
-        return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...)
+        return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; f.k..., kws...)
+    elseif N == 1
+        return f.f(f.x, args...; f.k..., kws...)
     else
-        return f.f(f.x, args...)
+        return f.f(args...; f.k..., kws...)
     end
 end
+
+
+"""
+    Fix1(f, x; kws...)
+
+A type representing a partially-applied version of the function
+`f`, with the first argument fixed to the value "x". In other words,
+`Fix1(f, x)` behaves similarly to `y->f(x, y)` for a 2-argument function `f`.
+
+See also [`Fix2`](@ref Base.Fix2) and [`Fix`](@ref Base.Fix).
+"""
+const Fix1{F,T} = Fix{1,F,T}
+
+"""
+    Fix2(f, x; kws...)
+
+A type representing a partially-applied version of the function
+`f`, with the second argument fixed to the value "x". In other words,
+`Fix2(f, x)` behaves similarly to `y->f(y, x)` for a 2-argument function `f`.
+
+See also [`Fix`](@ref Base.Fix).
+"""
+const Fix2{F,T} = Fix{2,F,T}
+
 
 """
     isequal(x)
