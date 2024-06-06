@@ -889,10 +889,17 @@ dims54166 = (1,2)
 @test (minimum(ex54166; dims=dims54166)[1] === missing)
 
 function foo54599()
-    pkgid = Base.identify_package("Test")
-    println(devnull,pkgid)
-    println(devnull, pkgid.uuid)
-    pkgid.uuid
+    pkginfo = @noinline bar54599()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    @noinline println(devnull, pkgid)
+    pkgid.uuid !== nothing ? pkgid.uuid : false
 end
 
-@test foo54599() !== nothing
+#this function used to crash allocopt due to a no predecessors bug
+barnopreds() = Base.inferencebarrier(true) ? (Base.PkgId(Test),1) : nothing
+function foonopreds()
+    pkginfo = @noinline barnopreds()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+@test foonopreds() !== nothing
