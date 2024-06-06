@@ -2312,8 +2312,14 @@ end
 # JuliaLang/julia#23374: completion for `import Mod.name`
 module Issue23374
 global v23374 = nothing
+global w23374 = missing
 end
 let s = "import .Issue23374.v"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "v23374" in c
+end
+let s = "import Base.sin, .Issue23374.v"
     c, r, res = test_complete_context(s)
     @test res
     @test "v23374" in c
@@ -2322,4 +2328,26 @@ let s = "using .Issue23374.v"
     c, r, res = test_complete_context(s)
     @test res
     @test isempty(c)
+end
+# JuliaLang/julia#23374: completion for `using Mod: name`
+let s = "using Base: @ass"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "@assume_effects" in c
+end
+let s = "using .Issue23374: v"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "v23374" in c
+end
+let s = "using .Issue23374: v23374, w"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "w23374" in c
+end
+# completes `using ` to `using [list of available modules]`
+let s = "using "
+    c, r, res = test_complete_context(s)
+    @test res
+    @test !isempty(c)
 end
