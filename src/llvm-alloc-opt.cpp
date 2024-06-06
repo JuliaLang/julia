@@ -400,6 +400,8 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
         auto bb = use->getParent();
         if (!bbs.insert(bb).second)
             continue;
+        if (pred_empty(bb))
+            continue; // No predecessors so the block is dead
         assert(lifetime_stack.empty());
         Lifetime::Frame cur{bb};
         while (true) {
