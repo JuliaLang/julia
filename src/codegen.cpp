@@ -3228,7 +3228,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                     return jl_cgval_t();
             }
             bool isboxed = true;
-            bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
+            bool maybe_null = (!bnd->isdefined && !bnd->constp) || (jl_atomic_load_relaxed(&bnd->value) == NULL);
             return typed_store(ctx,
                                julia_binding_pvalue(ctx, bp),
                                rval, cmp, ty,
