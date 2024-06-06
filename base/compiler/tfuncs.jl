@@ -398,7 +398,7 @@ end
         if a1 === Module
             hasintersect(widenconst(sym), Symbol) || return Bottom
             if isa(sym, Const) && isa(sym.val, Symbol) && isa(arg1, Const) &&
-               isdefinedconst_globalref(GlobalRef(arg1.val::Module, sym.val::Symbol))
+               permanently_isdefined_globalref(GlobalRef(arg1.val::Module, sym.val::Symbol))
                 return Const(true)
             end
         elseif isa(sym, Const)
@@ -3041,7 +3041,7 @@ end
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            return isdefinedconst_globalref(GlobalRef(M, s))
+            return permanently_isdefined_globalref(GlobalRef(M, s))
         end
     end
     return false

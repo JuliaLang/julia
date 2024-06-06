@@ -3216,7 +3216,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true);
     if (bp == NULL)
         return jl_cgval_t();
-    if (bnd && !bnd->constp) {
+    if (bnd && !bnd->constp && !ctx.is_toplevel) {
         jl_value_t *ty = jl_atomic_load_relaxed(&bnd->ty);
         if (ty != nullptr) {
             const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
@@ -5613,7 +5613,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
         }
         jl_binding_t *bnd = jl_get_binding(modu, name);
         if (bnd) {
-            if (jl_atomic_load_acquire(&bnd->value) != NULL && bnd->constp)
+            if (jl_atomic_load_acquire(&bnd->value) != NULL && (bnd->constp || bnd->isdefined))
                 return mark_julia_const(ctx, jl_true);
             Value *bp = julia_binding_gv(ctx, bnd);
             bp = julia_binding_pvalue(ctx, bp);

@@ -2599,7 +2599,7 @@ function abstract_eval_isdefined(interp::AbstractInterpreter, e::Expr, vtypes::U
     elseif isa(sym, GlobalRef)
         if InferenceParams(interp).assume_bindings_static
             rt = Const(isdefined_globalref(sym))
-        elseif isdefinedconst_globalref(sym)
+        elseif permanently_isdefined_globalref(sym)
             rt = Const(true)
         else
             effects = Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
@@ -2820,10 +2820,10 @@ function override_effects(effects::Effects, override::EffectsOverride)
 end
 
 isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
-isdefinedconst_globalref(g::GlobalRef) = isconst(g) && isdefined_globalref(g)
+permanently_isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_permboundp, Cint, (Any,), g))
 
 function abstract_eval_globalref_type(g::GlobalRef)
-    if isdefinedconst_globalref(g)
+    if isconst(g) && isdefined_globalref(g)
         return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
     end
     ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
@@ -2849,7 +2849,7 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, sv::
         else
             rt = Union{}
         end
-    elseif isdefinedconst_globalref(g)
+    elseif permanently_isdefined_globalref(g)
         nothrow = true
     end
     return RTEffects(rt, nothrow ? Union{} : UndefVarError, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))

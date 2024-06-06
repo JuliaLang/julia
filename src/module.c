@@ -182,7 +182,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->imported = 0;
     b->deprecated = 0;
     b->usingfailed = 0;
-    b->padding = 0;
+    b->isdefined = 0;
     JL_GC_PUSH1(&b);
     b->globalref = jl_new_globalref(mod, name, b);
     JL_GC_POP();
@@ -191,29 +191,65 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
 
 extern jl_mutex_t jl_modules_mutex;
 
+/**
+ * Return true if the provided module is "open".
+ *
+ * An open module is one that has not yet been serialized.
+ **/
+static int module_is_open(jl_module_t *m)
+{
+    JL_LOCK(&jl_modules_mutex);
+    int open = ptrhash_has(&jl_current_modules, (void*)m);
+    if (!open && jl_module_init_order != NULL) {
+        size_t i, l = jl_array_len(jl_module_init_order);
+        for (i = 0; i < l; i++) {
+            if (m == (jl_module_t*)jl_array_ptr_ref(jl_module_init_order, i)) {
+                open = 1;
+                break;
+            }
+        }
+    }
+    JL_UNLOCK(&jl_modules_mutex);
+    return open;
+}
+
+/**
+ * Return true if modifications of this module's bindings are guaranteed not to
+ * experience "mutation tearing".
+ *
+ * Mutation tearing happens when the modification of an object in a dependency's
+ * pkgimage ends up not recorded in the pkgimage being generated - instead the
+ * mutation is dropped.
+ *
+ * That behavior exists because there is no coherent way to resolve modifications
+ * across pkgimages. Objects must be serialized exactly once across all pkgimages,
+ * and once serialized, mutations to an object live only as long as the current
+ * Julia session.
+ **/
+static int module_mutation_is_persistent(jl_module_t *m)
+{
+    // No tearing if we're not generating a pkgimage - the semantic "timeline" dies
+    // with the current Julia session
+    if (!jl_generating_output())
+        return 1;
+
+    // No tearing if we're generating the sysimage - no objects have been serialized yet
+    if (!jl_options.incremental)
+        return 1;
+
+    // No tearing if the module/binding we're modifying have not been serialized yet
+    // (i.e. they are "open")
+    return module_is_open(m);
+}
+
 static void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("new globals cannot be created in a generated function");
-    if (jl_options.incremental && jl_generating_output()) {
-        JL_LOCK(&jl_modules_mutex);
-        int open = ptrhash_has(&jl_current_modules, (void*)m);
-        if (!open && jl_module_init_order != NULL) {
-            size_t i, l = jl_array_len(jl_module_init_order);
-            for (i = 0; i < l; i++) {
-                if (m == (jl_module_t*)jl_array_ptr_ref(jl_module_init_order, i)) {
-                    open = 1;
-                    break;
-                }
-            }
-        }
-        JL_UNLOCK(&jl_modules_mutex);
-        if (!open) {
-            jl_errorf("Creating a new global in closed module `%s` (`%s`) breaks incremental compilation "
-                      "because the side effects will not be permanent.",
-                      jl_symbol_name(m->name), jl_symbol_name(var));
-        }
-    }
+    if (!module_mutation_is_persistent(m))
+        jl_errorf("Creating a new global in closed module `%s` (`%s`) breaks incremental compilation "
+                  "because the side effects will not be permanent.",
+                  jl_symbol_name(m->name), jl_symbol_name(var));
 }
 
 static jl_module_t *jl_binding_dbgmodule(jl_binding_t *b, jl_module_t *m, jl_sym_t *var) JL_GLOBALLY_ROOTED;
@@ -684,6 +720,12 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var) // unlike most queries
     return b && (jl_atomic_load(&b->value) != NULL);
 }
 
+JL_DLLEXPORT int jl_permboundp(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = jl_get_binding(m, var);
+    return b && (b->isdefined || b->constp) && (jl_atomic_load(&b->value) != NULL);
+}
+
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 0);
@@ -834,6 +876,13 @@ JL_DLLEXPORT int jl_globalref_boundp(jl_globalref_t *gr)
     return b && jl_atomic_load_relaxed(&b->value) != NULL;
 }
 
+JL_DLLEXPORT int jl_globalref_permboundp(jl_globalref_t *gr)
+{
+    jl_binding_t *b = gr->binding;
+    b = jl_resolve_owner(b, gr->mod, gr->name, NULL);
+    return b && (b->isdefined || b->constp) && (jl_atomic_load_relaxed(&b->value) != NULL);
+}
+
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
@@ -925,8 +974,11 @@ jl_value_t *jl_check_binding_wr(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var
 
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
+    assert(rhs != NULL);
     if (jl_check_binding_wr(b, mod, var, rhs, 1) != NULL) {
-        jl_atomic_store_release(&b->value, rhs);
+        jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
+        if (__unlikely(old == NULL) && module_is_open(mod))
+            b->isdefined = 1;
         jl_gc_wb(b, rhs);
     }
 }
