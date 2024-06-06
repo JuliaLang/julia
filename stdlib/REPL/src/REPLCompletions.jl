@@ -1132,6 +1132,10 @@ function complete_identifiers!(suggestions::Vector{Completion},
             end
             isexpr(ex, :incomplete) && (ex = nothing)
         elseif isexpr(ex, (:using, :import))
+            if isexpr(ex, :import)
+                # allow completion for `import Mod.name` (where `name` is not a module)
+                complete_modules_only = false
+            end
             arglast = ex.args[end] # focus on completion to the last argument
             if isexpr(arglast, :.)
                 # We come here for cases like:
