@@ -1437,10 +1437,11 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         complete_modules_only = false
     end
 
-    startpos == 0 && (pos = -1)
-    dotpos < startpos && (dotpos = startpos - 1)
-    return complete_identifiers!(suggestions, context_module, string, name, pos,
-                                 dotpos, startpos;
+    if dotpos < startpos
+        dotpos = startpos - 1
+    end
+    return complete_identifiers!(suggestions, context_module, string, name,
+                                 pos, dotpos, startpos;
                                  comp_keywords, complete_modules_only)
 end
 
