@@ -1164,7 +1164,7 @@ struct Fix{N,F,T,K} <: Function
     x::T
     k::K
 
-    Fix(f::F; kws...) where {F} = (k = NamedTuple(kws); new{0,F,typeof(()),typeof(k)}(f, (), k))
+    Fix(f::F; kws...) where {F} = (k = NamedTuple(kws); new{0,F,Nothing,typeof(k)}(f, nothing, k))
     Fix{N}(f::F, x; kws...) where {N,F} = (k = NamedTuple(kws); new{N,F,_stable_typeof(x),typeof(k)}(f, x, k))
     Fix{N}(f::Type{F}, x; kws...) where {N,F} = (k = NamedTuple(kws); new{N,F,_stable_typeof(x),typeof(k)}(f, x, k))
 end
