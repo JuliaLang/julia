@@ -556,6 +556,9 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     me.result.result = bestguess
     ipo_effects = me.result.ipo_effects = me.ipo_effects = adjust_effects(me)
     me.result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
+    me.src.rettype = widenconst(ignorelimited(bestguess))
+    me.src.min_world = first(me.valid_worlds)
+    me.src.max_world = last(me.valid_worlds)
 
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
@@ -933,6 +936,7 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.ssavaluetypes = 1
     tree.debuginfo = DebugInfo(mi)
     tree.ssaflags = UInt32[0]
+    tree.rettype = Core.Typeof(val)
     set_inlineable!(tree, true)
     tree.parent = mi
     return tree
@@ -965,15 +969,13 @@ typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), 
     typeinf_code(interp, specialize_method(method, atype, sparams), run_optimizer)
 function typeinf_code(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     frame = typeinf_frame(interp, mi, run_optimizer)
-    frame === nothing && return nothing, Any
-    is_inferred(frame) || return nothing, Any
+    frame === nothing && return nothing
+    is_inferred(frame) || return nothing
     if result_is_constabi(interp, frame.result, run_optimizer)
         rt = frame.result.result::Const
-        return codeinfo_for_const(interp, frame.linfo, rt.val), widenconst(rt)
+        return codeinfo_for_const(interp, frame.linfo, rt.val)
     end
-    code = frame.src
-    rt = widenconst(ignorelimited(frame.result.result))
-    return code, rt
+    return frame.src
 end
 
 """
@@ -1063,15 +1065,6 @@ N.B.: The same caching considerations as SOURCE_MODE_ABI apply.
 """
 const SOURCE_MODE_FORCE_SOURCE = 0x2
 
-"""
-    SOURCE_MODE_FORCE_SOURCE_UNCACHED
-
-Like `SOURCE_MODE_FORCE_SOURCE`, but ensures that the resulting code instance is
-not part of the cache hierarchy, so the `->inferred` field may be safely used
-without the possibility of deletion by the compiler.
-"""
-const SOURCE_MODE_FORCE_SOURCE_UNCACHED = 0x3
-
 function ci_has_source(code::CodeInstance)
     inf = @atomic :monotonic code.inferred
     return isa(inf, CodeInfo) || isa(inf, String)
@@ -1093,7 +1086,6 @@ function ci_meets_requirement(code::CodeInstance, source_mode::UInt8, ci_is_cach
     source_mode == SOURCE_MODE_NOT_REQUIRED && return true
     source_mode == SOURCE_MODE_ABI && return ci_has_abi(code)
     source_mode == SOURCE_MODE_FORCE_SOURCE && return ci_has_source(code)
-    source_mode == SOURCE_MODE_FORCE_SOURCE_UNCACHED && return (!ci_is_cached && ci_has_source(code))
     return false
 end
 
@@ -1106,7 +1098,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance
         # see if this code already exists in the cache
-        if source_mode in (SOURCE_MODE_FORCE_SOURCE, SOURCE_MODE_FORCE_SOURCE_UNCACHED) && use_const_api(code)
+        if source_mode == SOURCE_MODE_FORCE_SOURCE && use_const_api(code)
             code = codeinstance_for_const_with_code(interp, code)
             ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
             return code
@@ -1128,7 +1120,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     end
     lock_mi_inference(interp, mi)
     result = InferenceResult(mi, typeinf_lattice(interp))
-    frame = InferenceState(result, #=cache_mode=#source_mode == SOURCE_MODE_FORCE_SOURCE_UNCACHED ? :volatile : :global, interp)
+    frame = InferenceState(result, #=cache_mode=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
@@ -1147,14 +1139,13 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     # store the source in the cache, but the caller wanted it anyway (e.g. for reflection).
     # We construct a new CodeInstance for it that is not part of the cache hierarchy.
     can_discard_trees = source_mode ≠ SOURCE_MODE_FORCE_SOURCE &&
-                        source_mode ≠ SOURCE_MODE_FORCE_SOURCE_UNCACHED &&
                         is_result_constabi_eligible(result)
     code = CodeInstance(interp, result; can_discard_trees)
 
     # If the caller cares about the code and this is constabi, still use our synthesis function
     # anyway, because we will have not finished inferring the code inside the CodeInstance once
     # we realized it was constabi, but we want reflection to pretend that we did.
-    if use_const_api(code) && source_mode in (SOURCE_MODE_FORCE_SOURCE, SOURCE_MODE_FORCE_SOURCE_UNCACHED)
+    if use_const_api(code) && source_mode == SOURCE_MODE_FORCE_SOURCE
         return codeinstance_for_const_with_code(interp, code)
     end
     @assert ci_meets_requirement(code, source_mode, false)
