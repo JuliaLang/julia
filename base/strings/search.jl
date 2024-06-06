@@ -237,7 +237,14 @@ function findall(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
     s::Union{String, SubString{String}},
 )
-    collect(FwCharPosIter(s, pred.x))
+    iter = FwCharPosIter(s, pred.x)
+    return if is_standalone_byte(iter.last_char_byte)
+        findall(==(iter.last_char_byte), codeunits(s))
+    else
+        # It is slightly wasteful that every iteration will check is_standalone_byte
+        # again, but this should only be minor overhead in the non-fast path.
+        collect(iter)
+    end
 end
 
 """
