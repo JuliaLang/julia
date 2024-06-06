@@ -543,7 +543,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     if ((const_flags & 2) == 0)
         inferred_const = NULL;
     codeinst->rettype_const = inferred_const;
-    jl_atomic_store_relaxed(&codeinst->debuginfo, edges);
+    jl_atomic_store_relaxed(&codeinst->debuginfo, (jl_value_t*)edges == jl_nothing ? NULL : edges);
     jl_atomic_store_relaxed(&codeinst->specptr.fptr, NULL);
     jl_atomic_store_relaxed(&codeinst->invoke, NULL);
     if ((const_flags & 1) != 0) {
@@ -558,6 +558,29 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     codeinst->analysis_results = analysis_results;
     codeinst->relocatability = relocatability;
     return codeinst;
+}
+
+JL_DLLEXPORT void jl_update_codeinst(
+        jl_code_instance_t *codeinst, jl_value_t *inferred,
+        int32_t const_flags, size_t min_world, size_t max_world,
+        uint32_t ipo_effects, uint32_t effects, jl_value_t *analysis_results,
+        uint8_t relocatability, jl_debuginfo_t *edges /* , int absolute_max*/)
+{
+    jl_atomic_store_relaxed(&codeinst->min_world, min_world);
+    jl_atomic_store_relaxed(&codeinst->max_world, max_world);
+    codeinst->relocatability = relocatability;
+    codeinst->analysis_results = analysis_results;
+    jl_gc_wb(codeinst, analysis_results);
+    codeinst->ipo_purity_bits = ipo_effects;
+    jl_atomic_store_relaxed(&codeinst->purity_bits, effects);
+    jl_atomic_store_relaxed(&codeinst->debuginfo, edges);
+    jl_gc_wb(codeinst, edges);
+    if ((const_flags & 1) != 0) {
+        assert(codeinst->rettype_const);
+        jl_atomic_store_release(&codeinst->invoke, jl_fptr_const_return);
+    }
+    jl_atomic_store_release(&codeinst->inferred, inferred);
+    jl_gc_wb(codeinst, inferred);
 }
 
 JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
