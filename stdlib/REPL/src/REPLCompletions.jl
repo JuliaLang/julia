@@ -242,7 +242,7 @@ function field_completion_eligible(@nospecialize t)
     return match.method === GENERIC_PROPERTYNAMES_METHOD
 end
 
-function complete_from_list!(suggestions::Vector{Completion}, T::Type, list::Vector{String}, s::Union{String,SubString{String}})
+function complete_from_list!(suggestions::Vector{Completion}, T::Type, list::Vector{String}, s::String)
     r = searchsorted(list, s)
     i = first(r)
     n = length(list)
@@ -264,12 +264,12 @@ const sorted_keywords = [
     "primitive type", "quote", "return", "struct",
     "try", "using", "while"]
 
-complete_keyword!(suggestions::Vector{Completion}, s::Union{String,SubString{String}}) =
+complete_keyword!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeywordCompletion, sorted_keywords, s)
 
 const sorted_keyvals = ["false", "true"]
 
-complete_keyval!(suggestions::Vector{Completion}, s::Union{String,SubString{String}}) =
+complete_keyval!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeyvalCompletion, sorted_keyvals, s)
 
 function do_raw_escape(s)
@@ -1186,7 +1186,7 @@ function complete_identifiers!(suggestions::Vector{Completion},
         end
     end
     complete_symbol!(suggestions, ex, name, context_module; complete_modules_only)
-    return sort!(unique(suggestions), by=completion_text), (dotpos+1):pos, true
+    return suggestions
 end
 
 function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true, hint::Bool=false)
@@ -1250,8 +1250,9 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         startpos = first(varrange) + 4
         dotpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
         name = string[startpos:pos]
-        return complete_identifiers!(Completion[], context_module, string, name, pos,
-                                     dotpos, startpos)
+        complete_identifiers!(suggestions, context_module, string, name,
+                              pos, dotpos, startpos)
+        return sort!(unique!(completion_text, suggestions), by=completion_text), (dotpos+1):pos, true
     elseif inc_tag === :cmd
         # TODO: should this call shell_completions instead of partially reimplementing it?
         let m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial)) # fuzzy shell_parse in reverse
@@ -1390,7 +1391,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         startpos += length(m.match)
     end
 
-    name = string[max(startpos, dotpos+1):pos]
+    namepos = max(startpos, dotpos+1)
+    name = string[namepos:pos]
     if afterusing(string, startpos)
         # We're right after using or import. Let's look only for packages
         # and modules we can reach from here
@@ -1437,12 +1439,10 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         complete_modules_only = false
     end
 
-    if dotpos < startpos
-        dotpos = startpos - 1
-    end
-    return complete_identifiers!(suggestions, context_module, string, name,
-                                 pos, dotpos, startpos;
-                                 comp_keywords, complete_modules_only)
+    complete_identifiers!(suggestions, context_module, string, name,
+                          pos, dotpos, startpos;
+                          comp_keywords, complete_modules_only)
+    return sort!(unique!(completion_text, suggestions), by=completion_text), namepos:pos, true
 end
 
 function shell_completions(string, pos, hint::Bool=false)
