@@ -563,13 +563,10 @@ end
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
-    s_edges = me.stmt_edges[1]
-    if s_edges === nothing
-        s_edges = me.stmt_edges[1] = []
-    end
-    for edges in me.stmt_edges
-        edges === nothing && continue
-        edges === s_edges && continue
+    s_edges = get_stmt_edges!(me, 1)
+    for i = 2:length(me.stmt_edges)
+        isassigned(me.stmt_edges, i) || continue
+        edges = me.stmt_edges[i]
         append!(s_edges, edges)
         empty!(edges)
     end
@@ -776,7 +773,7 @@ function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, 
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     while true
-        add_cycle_backedge!(parent, child, parent.currpc)
+        add_cycle_backedge!(parent, child)
         union_caller_cycle!(ancestor, child)
         child = parent
         child === ancestor && break
