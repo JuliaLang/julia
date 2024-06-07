@@ -1377,7 +1377,7 @@ end
 
 prepend!(a::AbstractVector, iter) = _prepend!(a, IteratorSize(iter), iter)
 pushfirst!(a::AbstractVector, iter...) = prepend!(a, iter)
-prepend!(a::AbstractVector, iter...) = (for v in iter; prepend!(a, v); end; return a)
+prepend!(a::AbstractVector, iter...) = (for i = length(iter):-1:1; prepend!(a, iter[i]); end; return a)
 
 function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
