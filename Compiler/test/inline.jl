@@ -2362,4 +2362,10 @@ let src = code_typed1(issue44428, (Any,))
     @test count(x->Meta.isexpr(x,:call), src.code) == 0
 end
 
+# inlining optimization for `and_int` and `or_int`
+@test fully_eliminated(x->x&true, (Bool,); retval=Argument(2))
+@test fully_eliminated(x->true&x, (Bool,); retval=Argument(2))
+@test fully_eliminated(x->x|false, (Bool,); retval=Argument(2))
+@test fully_eliminated(x->false|x, (Bool,); retval=Argument(2))
+
 end # module inline_tests
