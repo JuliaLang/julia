@@ -260,11 +260,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
         if !@isdefined edges
             edges = DebugInfo(result.linfo)
         end
-        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8, Any),
+        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any),
             ci, inferred_result, const_flag,
             first(result.valid_worlds), last(result.valid_worlds),
-            # TODO: Actually do something with non-IPO effects
-            encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.analysis_results,
+            encode_effects(result.ipo_effects), result.analysis_results,
             relocatability, edges)
     end
     return nothing
@@ -384,8 +383,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult)
     return CodeInstance(result.linfo, owner,
         widenconst(result_type), widenconst(result.exc_result), rettype_const, nothing,
         const_flags, first(result.valid_worlds), last(result.valid_worlds),
-        # TODO: Actually do something with non-IPO effects
-        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.analysis_results,
+        encode_effects(result.ipo_effects), result.analysis_results,
         relocatability, nothing)
 end
 
@@ -1006,7 +1004,7 @@ function codeinstance_for_const_with_code(interp::AbstractInterpreter, code::Cod
     src = codeinfo_for_const(interp, code.def, code.rettype_const)
     return CodeInstance(code.def, cache_owner(interp), code.rettype, code.exctype, code.rettype_const, src,
         Int32(0x3), code.min_world, code.max_world,
-        code.ipo_purity_bits, code.purity_bits, code.analysis_results,
+        code.ipo_purity_bits, code.analysis_results,
         code.relocatability, src.debuginfo)
 end
 
@@ -1168,7 +1166,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
             src isa CodeInfo || return nothing
             return CodeInstance(mi, cache_owner(interp), Any, Any, nothing, src, Int32(0),
                 get_inference_world(interp), get_inference_world(interp),
-                UInt32(0), UInt32(0), nothing, UInt8(0), src.debuginfo)
+                UInt32(0), nothing, UInt8(0), src.debuginfo)
         end
     end
     lock_mi_inference(interp, mi)

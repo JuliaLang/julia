@@ -457,16 +457,7 @@ typedef struct _jl_code_instance_t {
 
     // purity results
     // see also encode_effects() and decode_effects() in `base/compiler/effects.jl`,
-    uint32_t ipo_purity_bits;
-    // ipo_purity_flags:
-    //     uint8_t ipo_consistent          : 2;
-    //     uint8_t ipo_effect_free         : 2;
-    //     uint8_t ipo_nothrow             : 2;
-    //     uint8_t ipo_terminates          : 2;
-    //     uint8_t ipo_nonoverlayed        : 1;
-    //     uint8_t ipo_notaskstate         : 2;
-    //     uint8_t ipo_inaccessiblememonly : 2;
-    _Atomic(uint32_t) purity_bits;
+    _Atomic(uint32_t) ipo_purity_bits;
     // purity_flags:
     //     uint8_t consistent          : 2;
     //     uint8_t effect_free         : 2;
