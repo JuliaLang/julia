@@ -1550,6 +1550,19 @@ end
 
         file = joinpath(depot, "dev", "non-existent.jl")
         @test_throws ArgumentError("$(repr(file)): No such file or directory") include(file)
+        touch(file)
+        @test include_dependency(file) === nothing
+        chmod(file, 0x000)
+        @test_throws ArgumentError("$(repr(file)): Missing read permission") include_dependency(file)
+
+        # same for include_dependency: #52063
+        dir = mktempdir() do dir
+            @test include_dependency(dir) === nothing
+            chmod(dir, 0x000)
+            @test_throws ArgumentError("$(repr(dir)): Missing read permission") include_dependency(dir)
+            dir
+        end
+        @test_throws ArgumentError("$(repr(dir)): No such file or directory") include_dependency(dir)
     end
 end
 
