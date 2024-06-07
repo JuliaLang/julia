@@ -1316,7 +1316,7 @@ end
 
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
-append!(a::AbstractVector, iter...) = for v in iter; append!(a, v); end
+append!(a::AbstractVector, iter...) = (for v in iter; append!(a, v); end; return a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
@@ -1377,7 +1377,7 @@ end
 
 prepend!(a::AbstractVector, iter) = _prepend!(a, IteratorSize(iter), iter)
 pushfirst!(a::AbstractVector, iter...) = prepend!(a, iter)
-prepend!(a::AbstractVector, iter...) = for v in iter; prepend!(a, v); end
+prepend!(a::AbstractVector, iter...) = (for v in iter; prepend!(a, v); end; return a)
 
 function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
