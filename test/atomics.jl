@@ -424,6 +424,8 @@ let a = ARefxy(1, -1)
 end
 
 let a = AtomicMemory{Float64}(undef, 2)
+@testset "@atomic with AtomicMemory" begin
+    a = AtomicMemory{Float64}(undef, 2)
     @test_throws CanonicalIndexError a[1] = 3
 
     @test Base.setindex_atomic!(a, 1, 2) == 2.0
@@ -436,8 +438,8 @@ let a = AtomicMemory{Float64}(undef, 2)
 
     @test (@atomic a[1]) == a[1]
 
-    # atomic set, swap and modify
-    let a = a, (old::Float64, new::Int) = (a[1], 10)
+    @testset "atomic set, swap and modify" begin
+        (old::Float64, new::Int) = (a[1], 10)
         # old and new are intentionally of different types to test inner conversion
         @test (@atomic a[1] = new) == new
         @test a[1] == new
@@ -452,8 +454,8 @@ let a = AtomicMemory{Float64}(undef, 2)
         @atomic a[1] = old
     end
 
-    # atomicreplace
-    let a = a, (old::Float64, new::Int) = (a[1], 10)
+    @testset "@atomicreplace" begin
+        (old::Float64, new::Int) = (a[1], 10)
         # old and new are intentionally of different types to test inner conversion
         @test (@atomicreplace a[1] old => new) == (old=old, success=true)
         @test a[1] == new
@@ -472,8 +474,8 @@ let a = AtomicMemory{Float64}(undef, 2)
         @atomic a[1] = old
     end
 
-    # @atomiconce
-    let a = a, b = AtomicMemory{Vector{Int}}(undef, 1)
+    @testset "@atomiconce" begin
+        b = AtomicMemory{Vector{Int}}(undef, 1)
         @test (@atomiconce a[1] = 3) == false
 
         @test !isassigned(b, 1)
