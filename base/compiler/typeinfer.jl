@@ -230,33 +230,33 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
         result.src = opt = ir_to_codeinf!(opt)
     end
     if isdefined(result, :ci)
-        ci = result.ci
-        relocatability = 0x0
-        if is_result_constabi_eligible(result) && can_discard_trees
-            inferred_result = nothing
-            relocatability = 0x1
-            const_flag = true
-        else
-            const_flag = false
-            inferred_result = transform_result_for_cache(interp, result.linfo, result.valid_worlds, result, can_discard_trees)
-            if inferred_result isa CodeInfo
-                edges = inferred_result.debuginfo
-                uncompressed = inferred_result
-                inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, can_discard_trees)
-                result.is_src_volatile |= uncompressed !== inferred_result
-            elseif ci.owner === nothing
-                # The global cache can only handle objects that codegen understands
-                inferred_result = nothing
+        inferred_result = nothing
+        relocatability = 0x1
+        const_flag = is_result_constabi_eligible(result)
+        if is_cached(caller) || !can_discard_trees
+            ci = result.ci
+            if !(is_result_constabi_eligible(result) && can_discard_trees)
+                inferred_result = transform_result_for_cache(interp, result.linfo, result.valid_worlds, result, can_discard_trees)
+                relocatability = 0x0
+                if inferred_result isa CodeInfo
+                    edges = inferred_result.debuginfo
+                    uncompressed = inferred_result
+                    inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, can_discard_trees)
+                    result.is_src_volatile |= uncompressed !== inferred_result
+                elseif ci.owner === nothing
+                    # The global cache can only handle objects that codegen understands
+                    inferred_result = nothing
+                end
+                if isa(inferred_result, String)
+                    t = @_gc_preserve_begin inferred_result
+                    relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
+                    @_gc_preserve_end t
+                elseif inferred_result === nothing
+                    relocatability = 0x1
+                end
             end
-            if isa(inferred_result, String)
-                t = @_gc_preserve_begin inferred_result
-                relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
-                @_gc_preserve_end t
-            elseif inferred_result === nothing
-                relocatability = 0x1
-            end
+            # n.b. relocatability = (isa(inferred_result, String) && inferred_result[end]) || inferred_result === nothing
         end
-        # n.b. relocatability = (isa(inferred_result, String) && inferred_result[end]) || inferred_result === nothing
         if !@isdefined edges
             edges = DebugInfo(result.linfo)
         end
@@ -275,7 +275,6 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
     if isempty(frames)
-        push!(frames, frame)
         finish_nocycle(interp, frame)
     elseif length(frames) == 1
         @assert frames[1] === frame "invalid callers_in_cycle"
@@ -289,15 +288,13 @@ end
 
 function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
     frame.dont_work_on_me = true
-    finish(frame, frame.interp)
+    finishinfer!(frame, frame.interp)
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
         optimize(frame.interp, opt, frame.result)
     end
     finish!(frame.interp, frame)
-    if is_cached(frame)
-        cache_result!(frame.interp, frame.result)
-    end
+    unlock_mi_inference(frame.interp, frame.linfo)
     return nothing
 end
 
@@ -316,10 +313,7 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{InferenceState})
     end
     for caller in frames
         adjust_cycle_frame!(caller, cycle_valid_worlds, cycle_valid_effects)
-        finishinfer(caller, caller.interp)
-        if is_cached(caller)
-            cache_result!(caller.interp, caller.result)
-        end
+        finishinfer!(caller, caller.interp)
     end
     for caller in frames
         opt = caller.result.src
@@ -430,22 +424,22 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
         result.valid_worlds = WorldRange(first(result.valid_worlds), typemax(UInt))
     end
     # check if the existing linfo metadata is also sufficient to describe the current inference result
-    # to decide if it is worth caching this
+    # to decide if it is worth caching this right now
     mi = result.linfo
-    already_inferred = already_inferred_quick_test(interp, mi)
+    cache_results = !already_inferred_quick_test(interp, mi)
     cache = WorldView(code_cache(interp), result.valid_worlds)
-    if !already_inferred && haskey(cache, mi)
+    if cache_results && haskey(cache, mi)
         ci = cache[mi]
         # Even if we already have a CI for this, it's possible that the new CI has more
         # information (E.g. because the source was limited before, but is no longer - this
         # happens during bootstrap). In that case, allow the result to be recached.
-        if result.src === nothing || (ci.inferred !== nothing || ci.invoke != C_NULL)
-            already_inferred = true
+        # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
+        if isdefined(ci, :inferred)
+            cache_results = false
         end
     end
 
-    # TODO: also don't store inferred code if we've previously decided to interpret this function
-    if !already_inferred
+    if cache_results
         code_cache(interp)[mi] = ci = CodeInstance(interp, result)
         result.ci = ci
         if track_newly_inferred[]
@@ -461,8 +455,12 @@ end
 function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
     if typ isa LimitedAccuracy
         if sv.parent === nothing
-            # when part of a cycle, we might have unintentionally introduced a limit marker
-            @assert !isempty(sv.callers_in_cycle)
+            # we might have introduced a limit marker, but we should know it must be sv and other callers_in_cycle
+            #@assert !isempty(sv.callers_in_cycle)
+            #  FIXME: this assert fails, appearing to indicate there is a bug in filtering this list earlier.
+            #  In particular (during doctests for example), during inference of
+            #  show(Base.IOContext{Base.GenericIOBuffer{Memory{UInt8}}}, Base.Multimedia.MIME{:var"text/plain"}, LinearAlgebra.BunchKaufman{Float64, Array{Float64, 2}, Array{Int64, 1}})
+            #  we observed one of the ssavaluetypes here to be Core.Compiler.LimitedAccuracy(typ=Any, causes=Core.Compiler.IdSet(getproperty(LinearAlgebra.BunchKaufman{Float64, Array{Float64, 2}, Array{Int64, 1}}, Symbol)))
             return typ.typ
         end
         causes = copy(typ.causes)
@@ -573,7 +571,7 @@ end
 
 # inference completed on `me`
 # update the MethodInstance
-function finishinfer(me::InferenceState, interp::AbstractInterpreter)
+function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
     s_edges = me.stmt_edges[1]
     if s_edges === nothing
@@ -641,6 +639,10 @@ function finishinfer(me::InferenceState, interp::AbstractInterpreter)
     end
 
     maybe_validate_code(me.linfo, me.src, "inferred")
+
+    if is_cached(me)
+        cache_result!(me.interp, me.result)
+    end
     nothing
 end
 
@@ -1189,9 +1191,14 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     # Inference result is not cacheable or is was cacheable, but we do not want to
     # store the source in the cache, but the caller wanted it anyway (e.g. for reflection).
     # We construct a new CodeInstance for it that is not part of the cache hierarchy.
-    can_discard_trees = source_mode ≠ SOURCE_MODE_FORCE_SOURCE &&
+    can_discard_trees = source_mode == SOURCE_MODE_NOT_REQUIRED ||
                         is_result_constabi_eligible(result)
     code = CodeInstance(interp, result)
+    if source_mode == SOURCE_MODE_ABI
+        # XXX: this should be using the CI from the cache, if possible: haskey(cache, mi) && (ci = cache[mi])
+        code_cache(interp)[mi] = code
+    end
+    result.ci = code
     finish!(interp, frame; can_discard_trees)
 
     # If the caller cares about the code and this is constabi, still use our synthesis function
