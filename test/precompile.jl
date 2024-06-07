@@ -1996,4 +1996,14 @@ precompile_test_harness("Generated Opaque") do load_path
     end
 end
 
+precompile_test_harness("Issue #52063") do load_path
+    write(joinpath(load_path, "I52063.jl"),
+        """
+        module I52063
+        include_dependency("i_do_not_exist.jl")
+        end
+        """)
+    @test_throws ArgumentError Base.compilecache(Base.PkgId("I50538"))
+end
+
 finish_precompile_test!()
