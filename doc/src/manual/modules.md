@@ -168,16 +168,15 @@ Importantly, the module name `NiceStuff` will *not* be in the namespace. If you 
 julia> using .NiceStuff: nice, DOG, NiceStuff
 ```
 
-!!! note
-    Qualifying the names being used as in `using Foo: Foo, f` is
-    recommended over plain `using Foo` for released packages, and other
-    code which is meant to be re-used in the future with updated dependencies
-    or future versions of julia.
+Qualifying the names being used as in `using Foo: Foo, f` is
+recommended over plain `using Foo` for released packages, and other
+code which is meant to be re-used in the future with updated dependencies
+or future versions of julia.
 
-    The reason for this is if another dependency starts to export one of the
-    same names as `Foo` and you attempt to use that name, then previously working
-    code will error due to an ambiguity in which package the name should be
-    taken from.
+The reason for this is if another dependency starts to export one of the
+same names as `Foo` and you attempt to use that name, then previously working
+code will error due to an ambiguity in which package the name should be
+taken from.
 
 Julia has two forms for seemingly the same thing because only `import ModuleName: f` allows adding methods to `f`
 *without a module path*.
