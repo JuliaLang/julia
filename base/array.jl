@@ -2699,6 +2699,48 @@ findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
 findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 
+"""
+    findall!(A)
+
+In-place version of [`findall`](@ref). It supports only `AbstractArray` different from `Bool`, because it will update the array in place, putting the integer indices inside the array.
+
+It returns a view of the array.
+
+# Examples
+```jldoctest
+julia> A = [1, 0, 0, 1]
+4-element Vector{Int64}:
+ 1
+ 0
+ 0
+ 1
+
+julia> findall!(A)
+2-element view(::Vector{Int64}, 1:2) with eltype Int64:
+ 1
+ 4
+
+julia> A
+4-element Vector{Int64}:
+ 1
+ 4
+ 0
+ 1
+```
+"""
+function findall!(A::AbstractArray{T}) where {T<:Union{Integer, Real, Complex}}
+    n = count(!iszero, A)
+    I = @view(A[1:n])
+    cnt = 1
+    @inbounds for (i, a) in enumerate(A)
+        if !iszero(a)
+            I[cnt] = i
+            cnt += 1
+        end
+    end
+    return I
+end
+
 # similar to Matlab's ismember
 """
     indexin(a, b)
