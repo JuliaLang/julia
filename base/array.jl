@@ -1316,8 +1316,7 @@ end
 
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
-
-append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
+append!(a::AbstractVector, iter...) = (for v in iter; append!(a, v); end; return a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
@@ -1376,10 +1375,9 @@ function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     return a
 end
 
-prepend!(a::Vector, iter) = _prepend!(a, IteratorSize(iter), iter)
-pushfirst!(a::Vector, iter...) = prepend!(a, iter)
-
-prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, init=a)
+prepend!(a::AbstractVector, iter) = _prepend!(a, IteratorSize(iter), iter)
+pushfirst!(a::AbstractVector, iter...) = prepend!(a, iter)
+prepend!(a::AbstractVector, iter...) = (for v = reverse(iter); prepend!(a, v); end; return a)
 
 function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
