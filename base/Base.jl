@@ -152,7 +152,7 @@ end
 """
     time_ns() -> UInt64
 
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 585 years.
 """
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 

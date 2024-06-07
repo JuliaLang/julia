@@ -5291,6 +5291,15 @@ end
 foo51090(b) = return bar51090(b)
 @test !fully_eliminated(foo51090, (Int,))
 
+Base.@assume_effects :terminates_globally @noinline function bar51090_terminates(b)
+    b == 0 && return
+    r = foo51090_terminates(b - 1)
+    Base.donotdelete(b)
+    return r
+end
+foo51090_terminates(b) = return bar51090_terminates(b)
+@test !fully_eliminated(foo51090_terminates, (Int,))
+
 # exploit throwness from concrete eval for intrinsics
 @test Base.return_types() do
     Base.or_int(true, 1)
