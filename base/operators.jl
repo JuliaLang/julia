@@ -1149,6 +1149,7 @@ julia> filter(!isletter, str)
 !(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
+    Fix(f; kws...)
     Fix{n}(f, x; kws...)
 
 A type representing a partially-applied version of a function `f`, with the argument or
