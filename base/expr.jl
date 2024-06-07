@@ -1180,11 +1180,17 @@ function make_atomic(order, ex)
             return :(getproperty($l, $r, $order))
         elseif isexpr(ex, :call, 3)
             return make_atomic(order, ex.args[2], ex.args[1], ex.args[3])
+        elseif isexpr(ex, :ref, 2)
+            x, idx = esc(ex.args[1]), esc(ex.args[2])
+            return :(getindex_atomic($x, $idx, $order))
         elseif ex.head === :(=)
             l, r = ex.args[1], esc(ex.args[2])
             if is_expr(l, :., 2)
                 ll, lr = esc(l.args[1]), esc(l.args[2])
                 return :(setproperty!($ll, $lr, $r, $order))
+            elseif is_expr(l, :ref, 2)
+                x, idx = esc(l.args[1]), esc(l.args[2])
+                return :(setindex_atomic!($x, $idx, $r, $order))
             end
         end
         if length(ex.args) == 2
@@ -1207,9 +1213,14 @@ function make_atomic(order, ex)
 end
 function make_atomic(order, a1, op, a2)
     @nospecialize
-    is_expr(a1, :., 2) || error("@atomic modify expression missing field access")
-    a1l, a1r, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
-    return :(modifyproperty!($a1l, $a1r, $op, $a2, $order))
+    if is_expr(a1, :., 2)
+        a1l, a1r, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
+        return :(modifyproperty!($a1l, $a1r, $op, $a2, $order))
+    elseif is_expr(a1, :ref, 2)
+        x, idx, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
+        return :(modifyindex!($x, $idx, $op, $a2, $order))
+    end
+    error("@atomic modify expression missing field access or indexing")
 end
 
 
@@ -1251,9 +1262,14 @@ function make_atomicswap(order, ex)
     @nospecialize
     is_expr(ex, :(=), 2) || error("@atomicswap expression missing assignment")
     l, val = ex.args[1], esc(ex.args[2])
-    is_expr(l, :., 2) || error("@atomicswap expression missing field access")
-    ll, lr = esc(l.args[1]), esc(l.args[2])
-    return :(swapproperty!($ll, $lr, $val, $order))
+    if is_expr(l, :., 2)
+        ll, lr = esc(l.args[1]), esc(l.args[2])
+        return :(swapproperty!($ll, $lr, $val, $order))
+    elseif is_expr(l, :ref, 2)
+        x, idx = esc(l.args[1]), esc(l.args[2])
+        return :(swapindex!($x, $idx, $val, $order))
+    end
+    error("@atomicswap expression missing field access or indexing")
 end
 
 
@@ -1312,15 +1328,26 @@ macro atomicreplace(ex, old_new)
 end
 function make_atomicreplace(success_order, fail_order, ex, old_new)
     @nospecialize
-    is_expr(ex, :., 2) || error("@atomicreplace expression missing field access")
-    ll, lr = esc(ex.args[1]), esc(ex.args[2])
-    if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
-        exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
-        return :(replaceproperty!($ll, $lr, $exp, $rep, $success_order, $fail_order))
-    else
-        old_new = esc(old_new)
-        return :(replaceproperty!($ll, $lr, $old_new::Pair..., $success_order, $fail_order))
+    if is_expr(ex, :., 2)
+        ll, lr = esc(ex.args[1]), esc(ex.args[2])
+        if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
+            exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
+            return :(replaceproperty!($ll, $lr, $exp, $rep, $success_order, $fail_order))
+        else
+            old_new = esc(old_new)
+            return :(replaceproperty!($ll, $lr, $old_new::Pair..., $success_order, $fail_order))
+        end
+    elseif is_expr(ex, :ref, 2)
+        x, idx = esc(ex.args[1]), esc(ex.args[2])
+        if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
+            exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
+            return :(replaceindex!($x, $idx, $exp, $rep, $success_order, $fail_order))
+        else
+            old_new = esc(old_new)
+            return :(replaceindex!($x, $idx, $old_new::Pair..., $success_order, $fail_order))
+        end
     end
+    error("@atomicreplace expression missing field access or indexing")
 end
 
 """
@@ -1375,7 +1402,12 @@ function make_atomiconce(success_order, fail_order, ex)
     @nospecialize
     is_expr(ex, :(=), 2) || error("@atomiconce expression missing assignment")
     l, val = ex.args[1], esc(ex.args[2])
-    is_expr(l, :., 2) || error("@atomiconce expression missing field access")
-    ll, lr = esc(l.args[1]), esc(l.args[2])
-    return :(setpropertyonce!($ll, $lr, $val, $success_order, $fail_order))
+    if is_expr(l, :., 2)
+        ll, lr = esc(l.args[1]), esc(l.args[2])
+        return :(setpropertyonce!($ll, $lr, $val, $success_order, $fail_order))
+    elseif is_expr(l, :ref, 2)
+        x, idx = esc(l.args[1]), esc(l.args[2])
+        return :(setindexonce_atomic!($x, $idx, $val, $success_order, $fail_order))
+    end
+    error("@atomiconce expression missing field access or indexing")
 end
