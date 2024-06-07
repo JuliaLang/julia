@@ -283,7 +283,7 @@ end
     test_fix2((op, arg) -> Base.Fix{2}(op, arg))
 
     # Now, we do more complex tests of Fix:
-    let Fix=Fix
+    let Fix=Base.Fix
         @testset "Argument Fixation" begin
             let f = (x, y, z) -> x + y * z
                 fixed_f1 = Fix{1}(f, 10)
@@ -346,10 +346,15 @@ end
             g2 = Fix{2}(g1, "2")
             g3 = Fix{2}(g2, "3")
             @test g3("") == "123"
+        end
+        @testset "With kwargs" begin
+            sum1 = Base.Fix(sum; dims=1)
+            x = ones(3, 2)
+            sum1(x) == [3.0 3.0]
 
-            # Equivalent to:
-            h = Fix{1}(*, "1", "2", "3")
-            @test h() == "123"
+            # Now, with arg and kwargs
+            cat1 = Base.Fix{1}(cat, ones(2); dims=1)
+            cat1(ones(3)) == ones(5)
         end
     end
 end
