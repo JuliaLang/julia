@@ -1092,7 +1092,7 @@ end
 
 Experimental.register_error_hint(methods_on_iterable, MethodError)
 
-# Display a hint in case the use tries to access non-member fields of container type datastructures
+# Display a hint in case the user tries to access non-member fields of container type datastructures
 function fielderror_hint_handler(io, exc)
     @nospecialize
     field = exc.field
