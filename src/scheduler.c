@@ -465,15 +465,13 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     if (set_not_sleeping(ptls)) {
                         JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
                     }
-                    if (task)
-                        return task;
-                    continue;
+                    continue; // jump to JL_CATCH
                 }
                 if (task) {
                     if (set_not_sleeping(ptls)) {
                         JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
                     }
-                    return task;
+                    continue; // jump to JL_CATCH
                 }
 
                 // IO is always permitted, but outside a threaded region, only
@@ -533,7 +531,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                             JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls);
                         }
                         start_cycles = 0;
-                        continue;
+                        continue; // jump to JL_CATCH
                     }
                     if (!enter_eventloop && !jl_atomic_load_relaxed(&_threadedregion) && ptls->tid == jl_atomic_load_relaxed(&io_loop_tid)) {
                         // thread 0 is the only thread permitted to run the event loop
@@ -542,7 +540,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                             JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls);
                         }
                         start_cycles = 0;
-                        continue;
+                        continue; // jump to JL_CATCH
                     }
                 }
 
@@ -596,16 +594,18 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 if (task) {
                     assert(task == wait_empty);
                     wait_empty = NULL;
-                    return task;
+                    continue;
                 }
             }
-            JL_CATCH { // probably SIGINT, but possibly a user mistake in trypoptask
+            JL_CATCH {
+                // probably SIGINT, but possibly a user mistake in trypoptask
                 if (!isrunning)
                     jl_atomic_fetch_add_relaxed(&nrunning, 1);
                 set_not_sleeping(ptls);
-                // TODO: if (task != NULL) instead attach this exception there, so that we don't forgot to ever reschedule it
                 jl_rethrow();
             }
+            if (task)
+                return task;
         }
         else {
             // maybe check the kernel for new messages too
