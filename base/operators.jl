@@ -1183,7 +1183,7 @@ end
 
 
 """
-    Fix1(f, x; kws...)
+    Fix1(f, x)
 
 A type representing a partially-applied version of the function
 `f`, with the first argument fixed to the value "x". In other words,
@@ -1195,7 +1195,7 @@ const Fix1{F,T} = Fix{1,F,T,@NamedTuple{}}
 Fix1(f, x) = Fix{1}(f, x)
 
 """
-    Fix2(f, x; kws...)
+    Fix2(f, x)
 
 A type representing a partially-applied version of the function
 `f`, with the second argument fixed to the value "x". In other words,
