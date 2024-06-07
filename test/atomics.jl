@@ -91,6 +91,7 @@ primitive type Int24 <: Signed 24 end # integral padding
 Int24(x::Int) = Core.Intrinsics.trunc_int(Int24, x)
 Base.Int(x::PadIntB) = x.a + (Int(x.b) << 8) + (Int(x.c) << 16)
 Base.:(+)(x::PadIntA, b::Int) = PadIntA(x.b + b)
+Base.:(==)(x::PadIntA, b::Int) = x == PadIntA(b)
 Base.:(+)(x::PadIntB, b::Int) = PadIntB(Int(x) + b)
 Base.:(+)(x::Int24, b::Int) = Core.Intrinsics.add_int(x, Int24(b))
 Base.show(io::IO, x::PadIntA) = print(io, "PadIntA(", x.b, ")")
@@ -423,69 +424,86 @@ let a = ARefxy(1, -1)
     @test_throws ConcurrencyViolationError @atomicreplace :monotonic :acquire a.x xchg
 end
 
-let a = AtomicMemory{Float64}(undef, 2)
+function _test_atomic_get_set_swap_modify(T, x, y, z)
+    @testset "atomic get,set,swap,modify" begin
+        mem = AtomicMemory{T}(undef, 2)
+        @test_throws CanonicalIndexError mem[1] = 3
+
+        @test Base.setindex_atomic!(mem, 1, x) == x
+        @test mem[1] == x
+        @test Base.setindex_atomic!(mem, 2, y) == y
+        @test mem[2] == y
+
+        @test (@atomic mem[1]) == x
+        @test (@atomic mem[2]) == y
+
+        (old, new) = (mem[2], z)
+        # old and new are intentionally of different types to test inner conversion
+        @test (@atomic mem[2] = new) == new
+        @test mem[2] == new
+        @atomic mem[2] = old
+
+        @test (@atomicswap mem[2] = new) == old
+        @test mem[2] == new
+        @atomic mem[2] = old
+
+        try
+            old + new
+            @test (@atomic mem[2] += new) == old + new
+            @test mem[2] == old + new
+            @atomic mem[2] = old
+        catch err
+            if !(err isa MethodError)
+                rethrow(err)
+            end
+        end
+    end
+end
+
+function _test_atomic_setonce_replace(T, initial, desired)
+    @testset "atomic setonce,replace" begin
+        mem = AtomicMemory{T}(undef, 2)
+        if isassigned(mem, 2)
+            @test (@atomiconce mem[2] = initial) == false
+            @atomic mem[2] = initial
+        else
+            @test (@atomiconce mem[2] = initial) == true
+            @test mem[2] == initial
+            @test (@atomiconce mem[2] = desired) == false
+            @test mem[2] == initial
+            @test !isassigned(mem, 1)
+        end
+
+        expected = @atomic mem[2]
+        @test (@atomicreplace mem[2] expected => desired) == (old=expected, success=true)
+        @test mem[2] == desired
+
+        @atomic mem[2] = expected
+        @test (@atomicreplace mem[2] desired => desired) == (old=expected, success=false)
+        @test mem[2] == expected
+
+        @atomic mem[2] = expected
+        @test (@atomicreplace mem[2] Pair(expected, desired)) == (old=expected, success=true)
+        @test mem[2] == desired
+
+        @atomic mem[2] = expected
+        @test (@atomicreplace mem[2] Pair(desired, desired)) == (old=initial, success=false)
+        @test mem[2] == expected
+    end
+end
 @testset "@atomic with AtomicMemory" begin
-    a = AtomicMemory{Float64}(undef, 2)
-    @test_throws CanonicalIndexError a[1] = 3
 
-    @test Base.setindex_atomic!(a, 1, 2) == 2.0
-    @test Base.setindex_atomic!(a, 2, 3) == 3.0
+    _test_atomic_get_set_swap_modify(Float64, rand(), rand(), 10)
+    _test_atomic_get_set_swap_modify(PadIntA, 123_1, 123_2, 10)
+    _test_atomic_get_set_swap_modify(Union{Nothing,Int}, 123_1, nothing, 10)
+    _test_atomic_get_set_swap_modify(Union{Nothing,Int}, 123_1, 234_5, 10)
+    _test_atomic_get_set_swap_modify(Vector{BigInt}, BigInt[1, 2, 3], BigInt[1, 2], [2, 4])
 
-    # normal and atomic get
-
-    @test a[1] == 2.0
-    @test a[2] == 3.0
-
-    @test (@atomic a[1]) == a[1]
-
-    @testset "atomic set, swap and modify" begin
-        (old::Float64, new::Int) = (a[1], 10)
-        # old and new are intentionally of different types to test inner conversion
-        @test (@atomic a[1] = new) == new
-        @test a[1] == new
-        @atomic a[1] = old
-
-        @test (@atomicswap a[1] = new) == old
-        @test a[1] == new
-        @atomic a[1] = old
-
-        @test (@atomic a[1] += new) == new + old
-        @test a[1] == new + old
-        @atomic a[1] = old
-    end
-
-    @testset "@atomicreplace" begin
-        (old::Float64, new::Int) = (a[1], 10)
-        # old and new are intentionally of different types to test inner conversion
-        @test (@atomicreplace a[1] old => new) == (old=old, success=true)
-        @test a[1] == new
-        @atomic a[1] = old
-
-        @test (@atomicreplace a[1] new => old) == (old=old, success=false)
-        @test a[1] == old
-        @atomic a[1] = old
-
-        @test (@atomicreplace a[1] Pair(old, new)) == (old=old, success=true)
-        @test a[1] == new
-        @atomic a[1] = old
-
-        @test (@atomicreplace a[1] Pair(new, old)) == (old=old, success=false)
-        @test a[1] == old
-        @atomic a[1] = old
-    end
-
-    @testset "@atomiconce" begin
-        b = AtomicMemory{Vector{Int}}(undef, 1)
-        @test (@atomiconce a[1] = 3) == false
-
-        @test !isassigned(b, 1)
-        val = [1, 2, 3]
-        @test (@atomiconce b[1] = val) == true
-        @test b[1] == val
-
-        @test !(@atomiconce b[1] = [1, 2])
-        @test b[1] == val
-    end
+    _test_atomic_setonce_replace(Float64, rand(), 42)
+    _test_atomic_setonce_replace(PadIntA, 123_1, 123_2)
+    _test_atomic_setonce_replace(Union{Nothing,Int}, 123_1, nothing)
+    _test_atomic_setonce_replace(Vector{BigInt}, BigInt[1, 2], [3, 4])
+    _test_atomic_setonce_replace(String, "abc", "cab")
 end
 
 let a = ARefxy{Union{Nothing,Integer}}()
