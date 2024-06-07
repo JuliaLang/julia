@@ -394,6 +394,14 @@ end
 
     @test findall(isodd, 1) == [1]
     @test findall(isodd, 2) == Int[]
+
+    # in-place findall!
+    A = rand(0:3, 30)
+    B = copy(A)
+    idxsA = findall!(==(2), A)
+    idxsB = findall(==(2), B)
+    @test idxsA == idxsB
+    @test A[1:length(idxsA)] == idxsA
 end
 @testset "setindex! return type" begin
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, Vector{UInt8}, Vector{Int}, Int16, UnitRange{Int}})

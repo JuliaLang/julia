@@ -2700,11 +2700,14 @@ findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
 findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 
 """
-    findall!(A)
+    findall!(f::Function, A::AbstractArray)
 
 In-place version of [`findall`](@ref). It supports only `AbstractArray` different from `Bool`, because it will update the array in place, putting the integer indices inside the array.
 
 It returns a view of the array.
+
+!!! compat "Julia 1.11"
+    This method was added in Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -2715,7 +2718,7 @@ julia> A = [1, 0, 0, 1]
  0
  1
 
-julia> findall!(A)
+julia> findall!(!iszero, A)
 2-element view(::Vector{Int64}, 1:2) with eltype Int64:
  1
  4
@@ -2728,12 +2731,12 @@ julia> A
  1
 ```
 """
-function findall!(A::AbstractArray{T}) where {T<:Union{Integer, Real, Complex}}
-    n = count(!iszero, A)
+function findall!(f::Function, A::AbstractArray{T}) where {T<:Union{Integer, Real, Complex}}
+    n = count(f, A)
     I = @view(A[1:n])
     cnt = 1
     @inbounds for (i, a) in enumerate(A)
-        if !iszero(a)
+        if f(a)
             I[cnt] = i
             cnt += 1
         end
