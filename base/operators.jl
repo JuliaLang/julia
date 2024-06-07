@@ -1159,14 +1159,14 @@ at the end. In other words, `Fix{3}(f, x)` behaves similarly to
 You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behaves similarly
 to `x -> g(x; a=2)` for a function `g` with one arguments and one keyword argument.
 """
-struct Fix{N,F,T,K} <: Function
+struct Fix{N,F,T,K<:NamedTuple} <: Function
     f::F
     x::T
     k::K
 
     Fix(f::F; kws...) where {F} = (k = NamedTuple(kws); new{0,F,Nothing,typeof(k)}(f, nothing, k))
     Fix{N}(f::F, x; kws...) where {N,F} = (k = NamedTuple(kws); new{N,F,_stable_typeof(x),typeof(k)}(f, x, k))
-    Fix{N}(f::Type{F}, x; kws...) where {N,F} = (k = NamedTuple(kws); new{N,F,_stable_typeof(x),typeof(k)}(f, x, k))
+    Fix{N}(f::Type{F}, x; kws...) where {N,F} = (k = NamedTuple(kws); new{N,Type{F},_stable_typeof(x),typeof(k)}(f, x, k))
 end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
