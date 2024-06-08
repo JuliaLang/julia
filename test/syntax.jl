@@ -3637,3 +3637,19 @@ end
     @test array == [7]
     @test execs == 4
 end
+
+# Issue #54701 - Macro hygiene of argument destructuring
+macro makef54701()
+    quote
+        call(f) = f((1, 2))
+        function $(esc(:f54701))()
+            call() do (a54701, b54701)
+                return a54701+b54701
+            end
+        end
+    end
+end
+@makef54701
+@test f54701() == 3
+@test !@isdefined(a54701)
+@test !@isdefined(b54701)
