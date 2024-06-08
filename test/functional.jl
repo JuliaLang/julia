@@ -296,6 +296,12 @@ end
                 @test fixed_f3(1, 2) == 1 + 2 * 3
             end
         end
+        @testset "allowed empty function" begin
+            let f = () -> 1
+                fixed_f = Fix(f)
+                @test fixed_f() == 1
+            end
+        end
         @testset "Helpful errors" begin
             let g = (x, y) -> x - y
                 # Test minimum N
@@ -358,10 +364,10 @@ end
         end
         @testset "Dummy-proofing" begin
             @test_throws ArgumentError Base.Fix{0}(>, 1)
-            @test_throws "expected `N` to be greater than or equal to 1 in `Fix{N}`" Base.Fix{0}(>, 1)
+            @test_throws "expected `N` in `Fix{N}` to be integer greater than 0" Base.Fix{0}(>, 1)
 
             @test_throws ArgumentError Base.Fix{0.5}(>, 1)
-            @test_throws "expected integer `N` parameter in `Fix{N}`" Base.Fix{0.5}(>, 1)
+            @test_throws "expected `N` in `Fix{N}` to be integer greater than 0" Base.Fix{0.5}(>, 1)
 
             _get_fix_n(::Fix{N}) where {N} = N
             f = Fix{UInt64(1)}(>, 1)
