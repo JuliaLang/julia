@@ -382,12 +382,12 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
                 temp[k] = real(A[k,k]) - dots[k]
             end
             ajj, q = findmax(i -> temp[i], j:n)
-            q += j - 1
             if ajj ≤ stop
                 rank = j - 1
                 info = 1
                 break
-            end
+                end
+            q += j - 1
             # swap
             _swap_rowcols!(A, LowerTriangular, n, j, q)
             dots[j], dots[q] = dots[q], dots[j]
