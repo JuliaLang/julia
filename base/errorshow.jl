@@ -1104,7 +1104,7 @@ function fielderror_hint_handler(io, exc)
             Consider using `indexing` operation.
             Example:
                 ```julia
-                dict = Dict($(field)=>someValue)
+                dict = Dict(:$(field)=>someValue)
                 dict[$(field)]
                 ```
             """
