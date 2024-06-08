@@ -386,7 +386,7 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
                 rank = j - 1
                 info = 1
                 break
-                end
+            end
             q += j - 1
             # swap
             _swap_rowcols!(A, LowerTriangular, n, j, q)
