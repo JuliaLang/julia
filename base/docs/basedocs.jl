@@ -2510,12 +2510,17 @@ cases.
 See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
-```jldoctest
-julia> module M end;
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> module M; global a; end;
 
 julia> M.a  # same as `getglobal(M, :a)`
 ERROR: UndefVarError: `a` not defined in `M`
-Suggestion: check for spelling errors or missing imports.
+Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
+Stacktrace:
+ [1] getproperty(x::Module, f::Symbol)
+   @ Base ./Base.jl:42
+ [2] top-level scope
+   @ none:1
 
 julia> setglobal!(M, :a, 1)
 1
