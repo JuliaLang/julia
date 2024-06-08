@@ -301,12 +301,13 @@ _cholpivoted!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular}, tol::Real,
     LAPACK.pstrf!('L', A, tol)
 ## Non BLAS/LAPACK element types (generic)
 function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, check::Bool)
+    rTA = real(eltype(A))
     # checks
     Base.require_one_based_indexing(A)
     n = LinearAlgebra.checksquare(A)
     # initialization
     piv = collect(1:n)
-    dots = zeros(real(eltype(A)), n)
+    dots = zeros(rTA, n)
     temp = similar(dots)
     info = 0
     rank = n
@@ -314,7 +315,7 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
     @inbounds begin
         # first step
         ajj, q = findmax(i -> real(A[i,i]), 1:n)
-        stop = tol < 0 ? eps(eltype(A))*n*abs(ajj) : tol
+        stop = tol < 0 ? eps(rTA)*n*abs(ajj) : tol
         if ajj ≤ stop
             return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
         end
@@ -351,12 +352,13 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
     end
 end
 function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, check::Bool)
+    rTA = real(eltype(A))
     # checks
     Base.require_one_based_indexing(A)
     n = LinearAlgebra.checksquare(A)
     # initialization
     piv = collect(1:n)
-    dots = zeros(real(eltype(A)), n)
+    dots = zeros(rTA, n)
     temp = similar(dots)
     info = 0
     rank = n
@@ -364,7 +366,7 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
     @inbounds begin
         # first step
         ajj, q = findmax(i -> real(A[i,i]), 1:n)
-        stop = tol < 0 ? eps(eltype(A))*n*abs(ajj) : tol
+        stop = tol < 0 ? eps(rTA)*n*abs(ajj) : tol
         if ajj ≤ stop
             return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
         end

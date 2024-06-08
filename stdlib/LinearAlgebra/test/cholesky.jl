@@ -53,7 +53,7 @@ end
     breal = randn(n,2)/2
     bimg  = randn(n,2)/2
 
-    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
+    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Complex{BigFloat}, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
 
@@ -143,12 +143,14 @@ end
         end
 
         #pivoted upper Cholesky
-        cpapd = cholesky(apdh, RowMaximum())
-        unary_ops_tests(apdh, cpapd, ε*κ*n)
-        @test rank(cpapd) == n
-        @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
+        for tol in (0.0, -1.0), APD in (apdh, apdhL)
+            cpapd = cholesky(APD, RowMaximum(), tol=tol)
+            unary_ops_tests(APD, cpapd, ε*κ*n)
+            @test rank(cpapd) == n
+            @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
 
-        @test cpapd.P*cpapd.L*cpapd.U*cpapd.P' ≈ apd
+            @test cpapd.P*cpapd.L*cpapd.U*cpapd.P' ≈ apd
+        end
 
         for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
