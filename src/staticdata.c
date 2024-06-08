@@ -710,7 +710,8 @@ static int needs_uniquing(jl_value_t *v) JL_NOTSAFEPOINT
 
 static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAFEPOINT
 {
-    ptrhash_put(&field_replace, (void*)addr, newval);
+    if (*addr != newval)
+        ptrhash_put(&field_replace, (void*)addr, newval);
 }
 
 static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DISABLED
@@ -852,6 +853,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
         }
+        if (!ci->relocatability && ci->inferred)
+            record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
     }
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
