@@ -557,54 +557,13 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     jl_code_instance_t *codeinst = jl_compile_method_internal(mi, world);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_acquire(&codeinst->invoke);
-        if (getwrapper)
-            return jl_dump_fptr_asm(fptr, emit_mc, asm_variant, debuginfo, binary);
         uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
-        if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
-            // normally we prevent native code from being generated for these functions,
-            // (using sentinel value `1` instead)
-            // so create an exception here so we can print pretty our lies
-            auto ct = jl_current_task;
-            bool timed = (ct->reentrant_timing & 1) == 0;
-            if (timed)
-                ct->reentrant_timing |= 1;
-            uint64_t compiler_start_time = 0;
-            uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
-            if (measure_compile_time_enabled)
-                compiler_start_time = jl_hrtime();
-            JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-            specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
-            if (specfptr == 0) {
-                // Doesn't need SOURCE_MODE_FORCE_SOURCE_UNCACHED, because the codegen lock is held,
-                // so there's no concern that the ->inferred field will be deleted.
-                jl_code_instance_t *forced_ci = jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE);
-                JL_GC_PUSH1(&forced_ci);
-                if (forced_ci) {
-                    // Force compile of this codeinst even though it already has an ->invoke
-                    _jl_compile_codeinst(forced_ci, NULL, *jl_ExecutionEngine->getContext());
-                    specfptr = (uintptr_t)jl_atomic_load_relaxed(&forced_ci->specptr.fptr);
-                }
-                JL_GC_POP();
-            }
-            JL_UNLOCK(&jl_codegen_lock);
-            if (timed) {
-                if (measure_compile_time_enabled) {
-                    auto end = jl_hrtime();
-                    jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
-                }
-                ct->reentrant_timing &= ~1ull;
-            }
-        }
+        if (getwrapper || specfptr == 0)
+            specfptr = fptr;
         if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, emit_mc, asm_variant, debuginfo, binary);
     }
-
-    // whatever, that didn't work - use the assembler output instead
-    jl_llvmf_dump_t llvmf_dump;
-    jl_get_llvmf_defn(&llvmf_dump, mi, world, getwrapper, true, jl_default_cgparams);
-    if (!llvmf_dump.F)
-        return jl_an_empty_string;
-    return jl_dump_function_asm(&llvmf_dump, emit_mc, asm_variant, debuginfo, binary, false);
+    return jl_an_empty_string;
 }
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)

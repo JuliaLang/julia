@@ -2437,6 +2437,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             }
             if (should_strip_ir) {
                 record_field_change(&m->source, jl_nothing);
+                record_field_change((jl_value_t**)&m->roots, NULL);
                 stripped_ir = 1;
             }
         }
@@ -3070,10 +3071,10 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 // Allow passing in a module handle directly, rather than a path
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 {
-    void* *jl_RTLD_DEFAULT_handle_pointer;
+    void** (*get_jl_RTLD_DEFAULT_handle_addr)(void) = NULL;
     if (handle != jl_RTLD_DEFAULT_handle) {
-        int symbol_found = jl_dlsym(handle, "jl_RTLD_DEFAULT_handle_pointer", (void **)&jl_RTLD_DEFAULT_handle_pointer, 0);
-        if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
+        int symbol_found = jl_dlsym(handle, "get_jl_RTLD_DEFAULT_handle_addr", (void **)&get_jl_RTLD_DEFAULT_handle_addr, 0);
+        if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != (get_jl_RTLD_DEFAULT_handle_addr()))
             jl_error("System image file failed consistency check: maybe opened the wrong version?");
     }
     if (jl_options.cpu_target == NULL)

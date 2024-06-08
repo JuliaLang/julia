@@ -29,6 +29,16 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
 end
 
+# Note: Currently, CodeUnits <: DenseVector, which makes this union redundant w.r.t
+# DenseArrayType{UInt8}, but this is a bug, and may be removed in future versions
+# of Julia. See #54002
+const DenseBytes = Union{
+    <:DenseArrayType{UInt8},
+    CodeUnits{UInt8, <:Union{String, SubString{String}}},
+}
+
+const ByteArray = Union{DenseBytes, DenseArrayType{Int8}}
+
 findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
     nothing_sentinel(_search(a, pred.x))
 
@@ -38,7 +48,7 @@ findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a:
 findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
 findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
 
-function _search(a::Union{String,SubString{String},ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
+function _search(a::Union{String,SubString{String},<:ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
         throw(BoundsError(a, i))
     end

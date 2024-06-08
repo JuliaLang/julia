@@ -1222,7 +1222,7 @@ function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
 end
 Base.strides(S::Strider) = S.strides
 Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
-Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = MemoryRef(S.data.ref, S.offset)
+Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = memoryref(S.data.ref, S.offset)
 
 @testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
     A = collect(reshape(1:prod(sz), sz))

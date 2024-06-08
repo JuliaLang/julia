@@ -416,7 +416,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `new`
 
     Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
-    to this, and the type is always inserted by the compiler.  This is very much an internal-only
+    to this, and the type is always inserted by the compiler. This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 
   * `splatnew`
@@ -436,7 +436,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
-    error.  Yields a token which is consumed by `pop_exception`.
+    error. Yields a token which is consumed by `pop_exception`.
 
   * `leave`
 
@@ -660,7 +660,7 @@ for important details on how to modify these fields safely.
 
 ### CodeInfo
 
-A (usually temporary) container for holding lowered source code.
+A (usually temporary) container for holding lowered (and possibly inferred) source code.
 
   * `code`
 
@@ -691,25 +691,18 @@ A (usually temporary) container for holding lowered source code.
     Statement-level 32 bits flags for each expression in the function.
     See the definition of `jl_code_info_t` in julia.h for more details.
 
+These are only populated after inference (or by generated functions in some cases):
+
   * `debuginfo`
 
     An object to retrieve source information for each statements, see
     [How to interpret line numbers in a `CodeInfo` object](@ref).
 
-Optional Fields:
-
-  * `slottypes`
-
-    An array of types for the slots.
-
   * `rettype`
 
-    The inferred return type of the lowered form (IR). Default value is `Any`.
-
-  * `method_for_inference_limit_heuristics`
-
-    The `method_for_inference_heuristics` will expand the given method's generator if
-    necessary during inference.
+    The inferred return type of the lowered form (IR). Default value is `Any`. This is
+    mostly present for convenience, as (due to the way OpaqueClosures work) it is not
+    necessarily the rettype used by codegen.
 
   * `parent`
 
@@ -723,16 +716,19 @@ Optional Fields:
 
     The range of world ages for which this code was valid at the time when it had been inferred.
 
+Optional Fields:
+
+  * `slottypes`
+
+    An array of types for the slots.
+
+  * `method_for_inference_limit_heuristics`
+
+    The `method_for_inference_heuristics` will expand the given method's generator if
+    necessary during inference.
+
 
 Boolean properties:
-
-  * `inferred`
-
-    Whether this has been produced by type inference.
-
-  * `inlineable`
-
-    Whether this should be eligible for inlining.
 
   * `propagate_inbounds`
 
@@ -742,7 +738,7 @@ Boolean properties:
 
 `UInt8` settings:
 
-  * `constprop`
+  * `constprop`, `inlineable`
 
     * 0 = use heuristic
     * 1 = aggressive

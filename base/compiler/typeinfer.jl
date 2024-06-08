@@ -235,16 +235,48 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
-    isempty(frames) && push!(frames, frame)
-    valid_worlds = WorldRange()
+    if isempty(frames)
+        push!(frames, frame)
+        finish_nocycle(interp, frame)
+    elseif length(frames) == 1
+        @assert frames[1] === frame "invalid callers_in_cycle"
+        finish_nocycle(interp, frame)
+    else
+        finish_cycle(interp, frames)
+    end
+    empty!(frames)
+    return true
+end
+
+function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
+    frame.dont_work_on_me = true
+    finish(frame, frame.interp)
+    opt = frame.result.src
+    if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
+        optimize(frame.interp, opt, frame.result)
+    end
+    finish!(frame.interp, frame)
+    if is_cached(frame)
+        cache_result!(frame.interp, frame.result)
+    end
+    return nothing
+end
+
+function finish_cycle(::AbstractInterpreter, frames::Vector{InferenceState})
+    cycle_valid_worlds = WorldRange()
+    cycle_valid_effects = EFFECTS_TOTAL
     for caller in frames
         @assert !(caller.dont_work_on_me)
         caller.dont_work_on_me = true
-        # might might not fully intersect these earlier, so do that now
-        valid_worlds = intersect(caller.valid_worlds, valid_worlds)
+        # converge the world age range and effects for this cycle here:
+        # all frames in the cycle should have the same bits of `valid_worlds` and `effects`
+        # that are simply the intersection of each partial computation, without having
+        # dependencies on each other (unlike rt and exct)
+        cycle_valid_worlds = intersect(cycle_valid_worlds, caller.valid_worlds)
+        cycle_valid_effects = merge_effects(cycle_valid_effects, caller.ipo_effects)
     end
     for caller in frames
-        caller.valid_worlds = valid_worlds
+        adjust_cycle_frame!(caller, cycle_valid_worlds, cycle_valid_effects)
         finish(caller, caller.interp)
     end
     for caller in frames
@@ -259,8 +291,22 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
             cache_result!(caller.interp, caller.result)
         end
     end
-    empty!(frames)
-    return true
+    return nothing
+end
+
+function adjust_cycle_frame!(sv::InferenceState, cycle_valid_worlds::WorldRange, cycle_valid_effects::Effects)
+    sv.valid_worlds = cycle_valid_worlds
+    sv.ipo_effects = cycle_valid_effects
+    # traverse the callees of this cycle that are tracked within `sv.cycle_backedges`
+    # and adjust their statements so that they are consistent with the new `cycle_valid_effects`
+    new_flags = flags_for_effects(cycle_valid_effects)
+    for (callee, pc) in sv.cycle_backedges
+        old_currpc = callee.currpc
+        callee.currpc = pc
+        set_curr_ssaflag!(callee, new_flags, IR_FLAGS_EFFECTS)
+        callee.currpc = old_currpc
+    end
+    return nothing
 end
 
 function is_result_constabi_eligible(result::InferenceResult)
@@ -517,13 +563,10 @@ end
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
-    s_edges = me.stmt_edges[1]
-    if s_edges === nothing
-        s_edges = me.stmt_edges[1] = []
-    end
-    for edges in me.stmt_edges
-        edges === nothing && continue
-        edges === s_edges && continue
+    s_edges = get_stmt_edges!(me, 1)
+    for i = 2:length(me.stmt_edges)
+        isassigned(me.stmt_edges, i) || continue
+        edges = me.stmt_edges[i]
         append!(s_edges, edges)
         empty!(edges)
     end
@@ -550,6 +593,9 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     me.result.result = bestguess
     ipo_effects = me.result.ipo_effects = me.ipo_effects = adjust_effects(me)
     me.result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
+    me.src.rettype = widenconst(ignorelimited(bestguess))
+    me.src.min_world = first(me.valid_worlds)
+    me.src.max_world = last(me.valid_worlds)
 
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
@@ -727,7 +773,7 @@ function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, 
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     while true
-        add_cycle_backedge!(parent, child, parent.currpc)
+        add_cycle_backedge!(parent, child)
         union_caller_cycle!(ancestor, child)
         child = parent
         child === ancestor && break
@@ -864,7 +910,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         update_valid_age!(caller, frame.valid_worlds)
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
-        effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
+        effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
+            adjust_effects(effects_for_cycle(frame.ipo_effects), method)
         exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, so we can use this local result destructively
@@ -877,10 +924,15 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.valid_worlds)
-    effects = adjust_effects(Effects(), method)
+    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     return EdgeCallResult(frame.bestguess, exc_bestguess, nothing, effects)
 end
+
+# The `:terminates` effect bit must be conservatively tainted unless recursion cycle has
+# been fully resolved. As for other effects, there's no need to taint them at this moment
+# because they will be tainted as we try to resolve the cycle.
+effects_for_cycle(effects::Effects) = Effects(effects; terminates=false)
 
 function cached_return_type(code::CodeInstance)
     rettype = code.rettype
@@ -921,6 +973,7 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.ssavaluetypes = 1
     tree.debuginfo = DebugInfo(mi)
     tree.ssaflags = UInt32[0]
+    tree.rettype = Core.Typeof(val)
     set_inlineable!(tree, true)
     tree.parent = mi
     return tree
@@ -953,15 +1006,13 @@ typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), 
     typeinf_code(interp, specialize_method(method, atype, sparams), run_optimizer)
 function typeinf_code(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     frame = typeinf_frame(interp, mi, run_optimizer)
-    frame === nothing && return nothing, Any
-    is_inferred(frame) || return nothing, Any
+    frame === nothing && return nothing
+    is_inferred(frame) || return nothing
     if result_is_constabi(interp, frame.result, run_optimizer)
         rt = frame.result.result::Const
-        return codeinfo_for_const(interp, frame.linfo, rt.val), widenconst(rt)
+        return codeinfo_for_const(interp, frame.linfo, rt.val)
     end
-    code = frame.src
-    rt = widenconst(ignorelimited(frame.result.result))
-    return code, rt
+    return frame.src
 end
 
 """
@@ -1051,15 +1102,6 @@ N.B.: The same caching considerations as SOURCE_MODE_ABI apply.
 """
 const SOURCE_MODE_FORCE_SOURCE = 0x2
 
-"""
-    SOURCE_MODE_FORCE_SOURCE_UNCACHED
-
-Like `SOURCE_MODE_FORCE_SOURCE`, but ensures that the resulting code instance is
-not part of the cache hierarchy, so the `->inferred` field may be safely used
-without the possibility of deletion by the compiler.
-"""
-const SOURCE_MODE_FORCE_SOURCE_UNCACHED = 0x3
-
 function ci_has_source(code::CodeInstance)
     inf = @atomic :monotonic code.inferred
     return isa(inf, CodeInfo) || isa(inf, String)
@@ -1081,7 +1123,6 @@ function ci_meets_requirement(code::CodeInstance, source_mode::UInt8, ci_is_cach
     source_mode == SOURCE_MODE_NOT_REQUIRED && return true
     source_mode == SOURCE_MODE_ABI && return ci_has_abi(code)
     source_mode == SOURCE_MODE_FORCE_SOURCE && return ci_has_source(code)
-    source_mode == SOURCE_MODE_FORCE_SOURCE_UNCACHED && return (!ci_is_cached && ci_has_source(code))
     return false
 end
 
@@ -1094,7 +1135,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance
         # see if this code already exists in the cache
-        if source_mode in (SOURCE_MODE_FORCE_SOURCE, SOURCE_MODE_FORCE_SOURCE_UNCACHED) && use_const_api(code)
+        if source_mode == SOURCE_MODE_FORCE_SOURCE && use_const_api(code)
             code = codeinstance_for_const_with_code(interp, code)
             ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
             return code
@@ -1116,7 +1157,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     end
     lock_mi_inference(interp, mi)
     result = InferenceResult(mi, typeinf_lattice(interp))
-    frame = InferenceState(result, #=cache_mode=#source_mode == SOURCE_MODE_FORCE_SOURCE_UNCACHED ? :volatile : :global, interp)
+    frame = InferenceState(result, #=cache_mode=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
@@ -1135,14 +1176,13 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     # store the source in the cache, but the caller wanted it anyway (e.g. for reflection).
     # We construct a new CodeInstance for it that is not part of the cache hierarchy.
     can_discard_trees = source_mode ≠ SOURCE_MODE_FORCE_SOURCE &&
-                        source_mode ≠ SOURCE_MODE_FORCE_SOURCE_UNCACHED &&
                         is_result_constabi_eligible(result)
     code = CodeInstance(interp, result; can_discard_trees)
 
     # If the caller cares about the code and this is constabi, still use our synthesis function
     # anyway, because we will have not finished inferring the code inside the CodeInstance once
     # we realized it was constabi, but we want reflection to pretend that we did.
-    if use_const_api(code) && source_mode in (SOURCE_MODE_FORCE_SOURCE, SOURCE_MODE_FORCE_SOURCE_UNCACHED)
+    if use_const_api(code) && source_mode == SOURCE_MODE_FORCE_SOURCE
         return codeinstance_for_const_with_code(interp, code)
     end
     @assert ci_meets_requirement(code, source_mode, false)

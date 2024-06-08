@@ -4298,13 +4298,13 @@ end
 abstract type abstest_14825 end
 
 mutable struct t1_14825{A <: abstest_14825, B}
-  x::A
-  y::B
+    x::A
+    y::B
 end
 
 mutable struct t2_14825{C, B} <: abstest_14825
-  x::C
-  y::t1_14825{t2_14825{C, B}, B}
+    x::C
+    y::t1_14825{t2_14825{C, B}, B}
 end
 
 @test t2_14825{Int,Int}.types[2] <: t1_14825
@@ -6789,14 +6789,14 @@ primitive type TypeWith24Bits 24 end
 TypeWith24Bits(x::UInt32) = Core.Intrinsics.trunc_int(TypeWith24Bits, x)
 let x = TypeWith24Bits(0x112233), y = TypeWith24Bits(0x445566), z = TypeWith24Bits(0x778899)
     a = [x, x]
-    Core.memoryrefset!(Core.memoryref(a.ref, 2, true), y, :not_atomic, true)
+    Core.memoryrefset!(Core.memoryrefnew(a.ref, 2, true), y, :not_atomic, true)
     @test a == [x, y]
     a[2] = z
     @test a == [x, z]
     @test pointer(a, 2) - pointer(a, 1) == 4
 
     b = [(x, x), (x, x)]
-    Core.memoryrefset!(Core.memoryref(b.ref, 2, true), (x, y), :not_atomic, true)
+    Core.memoryrefset!(Core.memoryrefnew(b.ref, 2, true), (x, y), :not_atomic, true)
     @test b == [(x, x), (x, y)]
     b[2] = (y, z)
     @test b == [(x, x), (y, z)]
@@ -8145,6 +8145,7 @@ end
 @test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
 
 let M = @__MODULE__
+    Core.eval(M, :(global a_typed_global))
     @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing

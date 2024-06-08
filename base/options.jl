@@ -67,6 +67,18 @@ end
 
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
 
+function colored_text(opts::JLOptions)
+    return if opts.color != 0
+        opts.color == 1
+    elseif !isempty(get(ENV, "FORCE_COLOR", ""))
+        true
+    elseif !isempty(get(ENV, "NO_COLOR", ""))
+        false
+    else
+        nothing
+    end
+end
+
 function show(io::IO, opt::JLOptions)
     print(io, "JLOptions(")
     fields = fieldnames(JLOptions)

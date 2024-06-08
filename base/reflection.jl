@@ -77,28 +77,33 @@ function fullname(m::Module)
 end
 
 """
-    names(x::Module; all::Bool = false, imported::Bool = false)
+    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) -> Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
-are also included. Names are returned in sorted order.
+are also included.
+If `usings` is true, then names explicitly imported via `using` are also included.
+Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
 
 !!! note
     `sym ∈ names(SomeModule)` does *not* imply `isdefined(SomeModule, sym)`.
-    `names` will return symbols marked with `public` or `export`, even if
+    `names` may return symbols marked with `public` or `export`, even if
     they are not defined in the module.
+
+!!! warning
+    `names` may return duplicate names. The duplication happens, e.g. if an `import`ed name
+    conflicts with an already existing identifier.
 
 See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
-names(m::Module; all::Bool = false, imported::Bool = false) =
-    sort!(unsorted_names(m; all, imported))
-unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
-    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
+names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
+unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, usings)
 
 """
     isexported(m::Module, s::Symbol) -> Bool
@@ -1655,12 +1660,12 @@ function code_typed_by_type(@nospecialize(tt::Type);
     asts = []
     for match in matches.matches
         match = match::Core.MethodMatch
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, optimize)
+        code = Core.Compiler.typeinf_code(interp, match, optimize)
         if code === nothing
             push!(asts, match.method => Any)
         else
             debuginfo === :none && remove_linenums!(code)
-            push!(asts, code => ty)
+            push!(asts, code => code.rettype)
         end
     end
     return asts
@@ -1677,14 +1682,19 @@ function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
                 tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
                 mi = Core.Compiler.specialize_method(m, tt, Core.svec())
                 interp = Core.Compiler.NativeInterpreter(m.primary_world)
-                return Core.Compiler.typeinf_code(interp, mi, optimize)
+                code = Core.Compiler.typeinf_code(interp, mi, optimize)
+                if code isa CodeInfo
+                    return Pair{CodeInfo, Any}(code, code.rettype)
+                end
+                error("inference not successful")
             else
                 code = _uncompressed_ir(m)
-                return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+                return Pair{CodeInfo, Any}(code, typeof(oc).parameters[2])
             end
         else
             # OC constructed from optimized IR
             codeinst = m.specializations.cache
+            # XXX: the inferred field is not normally a CodeInfo, but this assumes it is guaranteed to be always
             return Pair{CodeInfo, Any}(codeinst.inferred, codeinst.rettype)
         end
     else
@@ -2204,7 +2214,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     for match in matches.matches
         match = match::Core.MethodMatch
         println(io, match.method)
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, true)
+        code = Core.Compiler.typeinf_code(interp, match, true)
         if code === nothing
             println(io, "  inference not successful")
         else

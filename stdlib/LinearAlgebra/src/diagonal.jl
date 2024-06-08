@@ -925,6 +925,36 @@ end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
 
+function cholesky!(A::Diagonal, ::RowMaximum; tol=0.0, check=true)
+    if !ishermitian(A)
+        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
+                            tol, convert(BlasInt, -1))
+        check && checkpositivedefinite(convert(BlasInt, -1))
+    else
+        d = A.diag
+        n = length(d)
+        info = 0
+        rank = n
+        p = sortperm(d, rev = true, by = real)
+        tol = tol < 0 ? n*eps(eltype(A))*real(d[p[1]]) : tol # LAPACK behavior
+        permute!(d, p)
+        @inbounds for i in eachindex(d)
+            di = d[i]
+            rootdi, j = _cholpivoted!(di, tol)
+            if j == 0
+                d[i] = rootdi
+            else
+                rank = i - 1
+                info = 1
+                break
+            end
+        end
+        C = CholeskyPivoted(A, 'U', p, convert(BlasInt, rank), tol, convert(BlasInt, info))
+        check && chkfullrank(C)
+    end
+    return C
+end
+
 inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
 
 cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))

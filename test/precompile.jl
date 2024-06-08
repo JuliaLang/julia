@@ -1023,7 +1023,6 @@ precompile_test_harness("code caching") do dir
         @test mi.specTypes.parameters[end] === Integer ? !hv : hv
     end
 
-    setglobal!(Main, :inval, invalidations)
     idxs = findall(==("verify_methods"), invalidations)
     idxsbits = filter(idxs) do i
         mi = invalidations[i-1]
@@ -1953,6 +1952,21 @@ precompile_test_harness("Test flags") do load_path
     id = Base.identify_package("TestFlags")
     @test Base.isprecompiled(id, ;flags=modified_flags)
     @test !Base.isprecompiled(id, ;flags=current_flags)
+end
+
+precompile_test_harness("No backedge precompile") do load_path
+    # Test that the system doesn't accidentally forget to revalidate a method without backedges
+    write(joinpath(load_path, "NoBackEdges.jl"),
+          """
+          module NoBackEdges
+          using Core.Intrinsics: add_int
+          f(a::Int, b::Int) = add_int(a, b)
+          precompile(f, (Int, Int))
+          end
+          """)
+    ji, ofile = Base.compilecache(Base.PkgId("NoBackEdges"))
+    @eval using NoBackEdges
+    @test first(methods(NoBackEdges.f)).specializations.cache.max_world === typemax(UInt)
 end
 
 finish_precompile_test!()

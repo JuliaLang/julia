@@ -1097,7 +1097,7 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 
 # PR #28284, check that constants propagate through calls to new
 struct t28284
-  x::Int
+    x::Int
 end
 f28284() = Val(t28284(1))
 @inferred f28284()
@@ -5290,6 +5290,15 @@ end
 end
 foo51090(b) = return bar51090(b)
 @test !fully_eliminated(foo51090, (Int,))
+
+Base.@assume_effects :terminates_globally @noinline function bar51090_terminates(b)
+    b == 0 && return
+    r = foo51090_terminates(b - 1)
+    Base.donotdelete(b)
+    return r
+end
+foo51090_terminates(b) = return bar51090_terminates(b)
+@test !fully_eliminated(foo51090_terminates, (Int,))
 
 # exploit throwness from concrete eval for intrinsics
 @test Base.return_types() do
