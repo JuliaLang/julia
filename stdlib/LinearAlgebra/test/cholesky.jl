@@ -147,7 +147,7 @@ end
             cpapd = cholesky(APD, RowMaximum(), tol=tol)
             unary_ops_tests(APD, cpapd, ε*κ*n)
             @test rank(cpapd) == n
-            @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
+            @test all(diff(real(diag(cpapd.factors))).<=0.) # diagonal should be non-increasing
 
             @test cpapd.P*cpapd.L*cpapd.U*cpapd.P' ≈ apd
         end

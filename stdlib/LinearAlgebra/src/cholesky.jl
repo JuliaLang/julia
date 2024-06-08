@@ -345,7 +345,7 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
             A[j,j] = ajj = sqrt(ajj)
             @views if j < n
                 conj!(A[1:(j-1), j])
-                mul!(A[j, (j+1):n], A[1:(j-1), (j+1):n]', A[1:(j-1), j], -1, true)
+                mul!(A[j, (j+1):n], transpose(A[1:(j-1), (j+1):n]), A[1:(j-1), j], -1, true)
                 conj!(A[1:(j-1), j])
                 A[j, j+1:n] ./= ajj
             end
