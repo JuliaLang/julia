@@ -1179,11 +1179,8 @@ struct Fix{N,F,T,K<:NamedTuple} <: Function
 end
 
 function _validate_fix_args(::Val{N}) where {N}
-    if !(N isa Integer)
-        throw(ArgumentError("expected integer `N` parameter in `Fix{N}`"))
-    elseif N < 1
-        throw(ArgumentError("expected `N` to be greater than or equal to 1 in `Fix{N}`"))
-    end
+    N isa Integer || throw(ArgumentError("expected integer `N` parameter in `Fix{N}`"))
+    N >= 1 || throw(ArgumentError("expected `N` to be greater than or equal to 1 in `Fix{N}`"))
     return nothing
 end
 
