@@ -1167,12 +1167,12 @@ struct Fix{N,F,T,K<:NamedTuple} <: Function
 
     function Fix(f::Union{F,Type{F}}; kws...) where {F}
         k = NamedTuple(kws)
-        new{0,(f isa Type ? Type{F} : F),Nothing,typeof(k)}(f, nothing, k)
+        new{0,_stable_typeof(f),Nothing,typeof(k)}(f, nothing, k)
     end
     function Fix{N}(f::Union{F,Type{F}}, x; kws...) where {N,F}
         _validate_fix_param(Val(N))
         k = NamedTuple(kws)
-        new{Int64(N),(f isa Type ? Type{F} : F),_stable_typeof(x),typeof(k)}(f, x, k)
+        new{Int64(N),_stable_typeof(f),_stable_typeof(x),typeof(k)}(f, x, k)
     end
 end
 
