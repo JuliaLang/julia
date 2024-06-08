@@ -15,7 +15,7 @@ using .Base:
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
+    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString
 using Core: @doc
 
 if Base !== Core.Compiler
