@@ -143,10 +143,10 @@ ifeq ($(USE_SYSTEM_MPFR), 0)
 DEP_LIBS += mpfr
 endif
 
-ifeq ($(USE_GPL_LIBS), 1)
+# Only some of the modules in SuiteSparse are GPL.
+# xref: `remove-libsuitesparse-gpl-lib` in libsuitesparse.mk
 ifeq ($(USE_SYSTEM_LIBSUITESPARSE), 0)
 DEP_LIBS += libsuitesparse
-endif
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 0)
