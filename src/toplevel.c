@@ -155,7 +155,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
     else {
-        jl_binding_t *b = jl_get_binding_wr(parent_module, name);
+        jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
         jl_declare_constant(b, parent_module, name);
         jl_value_t *old = NULL;
         if (!jl_atomic_cmpswap(&b->value, &old, (jl_value_t*)newm)) {
@@ -325,7 +325,7 @@ void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
             gs = (jl_sym_t*)arg;
         }
         if (!jl_binding_resolved_p(gm, gs)) {
-            jl_binding_t *b = jl_get_binding_wr(gm, gs);
+            jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
             if (set_type) {
                 jl_value_t *old_ty = NULL;
                 // maybe set the type too, perhaps
@@ -622,7 +622,7 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
                       jl_symbol_name(name), jl_symbol_name(m->name));
     }
     else {
-        b = jl_get_binding_wr(m, name);
+        b = jl_get_binding_wr(m, name, 1);
     }
     jl_declare_constant(b, m, name);
     jl_checked_assignment(b, m, name, (jl_value_t*)import);
@@ -874,7 +874,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             gm = m;
             gs = (jl_sym_t*)arg;
         }
-        jl_binding_t *b = jl_get_binding_wr(gm, gs);
+        jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
         jl_declare_constant(b, gm, gs);
         JL_GC_POP();
         return jl_nothing;
