@@ -131,7 +131,7 @@ struct InliningState{Interp<:AbstractInterpreter}
     interp::Interp
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    edges = sv.stmt_edges[1]::Vector{Any}
+    edges = sv.stmt_edges[1]
     return InliningState(edges, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
