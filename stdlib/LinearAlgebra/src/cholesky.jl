@@ -344,7 +344,9 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
             # update
             A[j,j] = ajj = sqrt(ajj)
             @views if j < n
+                conj!(A[1:(j-1), j])
                 mul!(A[j, (j+1):n], A[1:(j-1), (j+1):n]', A[1:(j-1), j], -1, true)
+                conj!(A[1:(j-1), j])
                 A[j, j+1:n] ./= ajj
             end
         end
@@ -395,7 +397,9 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
             # update
             A[j,j] = ajj = sqrt(ajj)
             @views if j < n
+                conj!(A[j, 1:(j-1)])
                 mul!(A[(j+1):n, j], A[(j+1):n, 1:(j-1)], A[j, 1:(j-1)], -1, true)
+                conj!(A[j, 1:(j-1)])
                 A[j+1:n, j] ./= ajj
             end
         end
