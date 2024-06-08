@@ -2339,8 +2339,8 @@ extern int had_exception;
     __eh_ct = jl_current_task;                                      \
     size_t __excstack_state = jl_excstack_state(__eh_ct);           \
     jl_enter_handler(__eh_ct, &__eh);                               \
-    if (1)
-    /* TRY BLOCK; */
+    for (i__try=1; i__try; i__try=0)
+
 #define JL_CATCH                                                    \
     if (!had_exception)                                             \
         jl_eh_restore_state_noexcept(__eh_ct, &__eh);               \
