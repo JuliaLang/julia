@@ -1170,25 +1170,17 @@ struct Fix{N,F,T,K<:NamedTuple} <: Function
         new{0,(f isa Type ? Type{F} : F),Nothing,typeof(k)}(f, nothing, k)
     end
     function Fix{N}(f::Union{F,Type{F}}, x; kws...) where {N,F}
-        _validate_fix_args(Val(N))
+        _validate_fix_param(Val(N))
         k = NamedTuple(kws)
         new{Int64(N),(f isa Type ? Type{F} : F),_stable_typeof(x),typeof(k)}(f, x, k)
     end
 end
 
-function _validate_fix_args(::Val{N}) where {N}
-    N isa Integer || throw(ArgumentError("expected integer `N` parameter in `Fix{N}`"))
-    N >= 1 || throw(ArgumentError("expected `N` to be greater than or equal to 1 in `Fix{N}`"))
-    return nothing
-end
-
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
-    if !isempty(kws) && !isempty(f.k) && !isdisjoint(keys(kws), keys(f.k))
-        throw(ArgumentError("found duplicate keyword argument(s) passed to `Fix{N}`"))
-    end
     @inline
+    _validate_fix_args(Val(N), Val(M))
+    _validate_fix_kwargs(f.k, kws)
     if N > 1
-        M >= N - 1 || throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
         return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; f.k..., kws...)
     elseif N == 1
         return f.f(f.x, args...; f.k..., kws...)
@@ -1197,6 +1189,16 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     end
 end
 
+function _validate_fix_param(::Val{N}) where {N}
+    (N isa Integer && N >= 1) || throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
+end
+function _validate_fix_args(::Val{N}, ::Val{M}) where {N,M}
+    N <= 1 || M >= N - 1 || throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
+end
+function _validate_fix_kwargs(f_k, kws)
+    isempty(kws) || isempty(f_k) || isdisjoint(keys(kws), keys(f_k)) ||
+        throw(ArgumentError("found duplicate keyword argument(s) passed to `Fix{N}`"))
+end
 
 """
     Fix1(f, x)
