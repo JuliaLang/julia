@@ -795,6 +795,12 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
             }
         }
 
+        if (func->edges == jl_nothing && func->max_world == ~(size_t)0) {
+            if (func->min_world != 1) {
+                jl_error("Generated function result with `edges == nothing` and `max_world == typemax(UInt)` must have `min_world == 1`");
+            }
+        }
+
         if (cache || needs_cache_for_correctness) {
             uninferred = (jl_code_info_t*)jl_copy_ast((jl_value_t*)func);
             ci = jl_new_codeinst_for_uninferred(mi, uninferred);
