@@ -356,5 +356,24 @@ end
             cat1 = Base.Fix{1}(cat, ones(2); dims=1)
             cat1(ones(3)) == ones(5)
         end
+        @testset "Dummy-proofing" begin
+            @test_throws ArgumentError Base.Fix{0}(>, 1)
+            @test_throws "expected `N` to be greater than or equal to 1 in `Fix{N}`" Base.Fix{0}(>, 1)
+
+            @test_throws ArgumentError Base.Fix{0.5}(>, 1)
+            @test_throws "expected integer `N` parameter in `Fix{N}`" Base.Fix{0.5}(>, 1)
+
+            _get_fix_n(::Fix{N}) where {N} = N
+            f = Fix{UInt64(1)}(>, 1)
+            # Will automatically convert
+            @test _get_fix_n(f) isa Int64
+
+            # duplicate keywords
+            sum1 = Base.Fix(sum; dims=1)
+            x = ones(3, 2)
+            @test sum1(x) == [3.0 3.0]
+            @test_throws ArgumentError sum1(x; dims=2)
+            @test_throws "found duplicate keyword argument(s) passed to `Fix{N}`" sum1(x; dims=2)
+        end
     end
 end
