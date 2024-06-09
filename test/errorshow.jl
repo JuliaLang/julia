@@ -817,15 +817,11 @@ end
 
     s = FieldFoo(1, 2)
 
-    @test s.a == 1.0f0
-    @test s.b == 2
-    @test_throws FieldError s.c
+    @test s.a === 1.0f0
+    @test s.b === 2
+    test = @test_throws FieldError s.c
 
-    ex = try
-        s.c
-    catch e
-        e
-    end::FieldError
+    ex = test.value::FieldError
 
     # Check error message first
     errorMsg = sprint(Base.showerror, ex)
@@ -841,13 +837,9 @@ end
         end
         @test !(ex isa Type) || ex <: FieldError
     end
-    @test_throws FieldError d.a
+    test = @test_throws FieldError d.c
 
-    ex = try
-        d.c
-    catch e
-        e
-    end::FieldError
+    ex = test.value::FieldError
 
     errorMsg = sprint(Base.showerror, ex)
     @test occursin("FieldError: type Dict has no field c", errorMsg)
