@@ -4138,9 +4138,13 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     save_env(e, &se, 1);
     int niter = 0, total_iter = 0;
     is[0] = intersect(x, y, e, 0); // root
-    if (is[0] != jl_bottom_type)
+    if (is[0] == jl_bottom_type) {
+        restore_env(e, &se, 1);
+    }
+    else if (!e->emptiness_only && has_next_union_state(e, 1)) {
         niter = merge_env(e, &me, &se, niter);
-    restore_env(e, &se, 1);
+        restore_env(e, &se, 1);
+    }
     while (next_union_state(e, 1)) {
         if (e->emptiness_only && is[0] != jl_bottom_type)
             break;
@@ -4148,9 +4152,16 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         e->Runions.more = 0;
 
         is[1] = intersect(x, y, e, 0);
-        if (is[1] != jl_bottom_type)
+        if (is[1] == jl_bottom_type) {
+            restore_env(e, &se, 1);
+        }
+        else if (niter > 0 || (!e->emptiness_only && has_next_union_state(e, 1))) {
             niter = merge_env(e, &me, &se, niter);
-        restore_env(e, &se, 1);
+            restore_env(e, &se, 1);
+        }
+        else {
+            assert(is[0] == jl_bottom_type);
+        }
         if (is[0] == jl_bottom_type)
             is[0] = is[1];
         else if (is[1] != jl_bottom_type) {
