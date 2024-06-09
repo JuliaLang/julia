@@ -2423,24 +2423,47 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
     if (obviously_egal(x, y))
         return x;
 
+    jl_varbinding_t *vars = NULL;
+    jl_varbinding_t *bbprev = NULL;
+    jl_varbinding_t *xb = jl_is_typevar(x) ? lookup(e, (jl_tvar_t *)x) : NULL;
+    jl_varbinding_t *yb = jl_is_typevar(y) ? lookup(e, (jl_tvar_t *)y) : NULL;
+    int simple_x = !jl_has_free_typevars(!jl_is_typevar(x) ? x : xb ? xb->ub : ((jl_tvar_t *)x)->ub);
+    int simple_y = !jl_has_free_typevars(!jl_is_typevar(y) ? y : yb ? yb->ub : ((jl_tvar_t *)y)->ub);
+    if (simple_x && simple_y && !(xb && yb)) {
+        vars = e->vars;
+        e->vars = xb ? xb : yb;
+        if (e->vars != NULL) {
+            bbprev = e->vars->prev;
+            e->vars->prev = NULL;
+        }
+    }
     jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
     int savedepth = e->invdepth;
     e->invdepth = depth;
     jl_value_t *res = intersect_all(x, y, e);
     e->invdepth = savedepth;
     pop_unionstate(&e->Runions, &oldRunions);
+    if (bbprev) e->vars->prev = bbprev;
+    if (vars) e->vars = vars;
     return res;
 }
 
 static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
 {
-    if (param == 2 || (!jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u))) {
+    int no_free = !jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u);
+    if (param == 2 || no_free) {
         jl_value_t *a=NULL, *b=NULL;
         JL_GC_PUSH2(&a, &b);
+        jl_varbinding_t *vars = NULL;
+        if (no_free) {
+            vars = e->vars;
+            e->vars = NULL;
+        }
         jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
         a = R ? intersect_all(x, u->a, e) : intersect_all(u->a, x, e);
         b = R ? intersect_all(x, u->b, e) : intersect_all(u->b, x, e);
         pop_unionstate(&e->Runions, &oldRunions);
+        if (vars) e->vars = vars;
         jl_value_t *i = simple_join(a,b);
         JL_GC_POP();
         return i;
