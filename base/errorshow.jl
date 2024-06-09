@@ -1100,13 +1100,15 @@ function fielderror_hint_handler(io, exc)
     if type <: Dict
         println(io,
             """
-            \nDid you mean to access dict values using key: `$field` ?
+            \nDid you mean to access dict values using key: `:$field` ?
             Consider using `indexing` operation.
-            Example:
-                ```julia
-                dict = Dict(:$(field)=>someValue)
-                dict[$(field)]
-                ```
+
+            # Example
+            julia> dict = Dict(:$(field)=>5)
+            Dict{Symbol, Int64} with 1 entry:
+              :$(field) => 5
+            julia> dict[:$(field)]
+            5
             """
         )
     end

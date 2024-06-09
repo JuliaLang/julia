@@ -853,13 +853,15 @@ end
     @test occursin("FieldError: type Dict has no field c", errorMsg)
     # Check hint message
     hintExpected = """
-        Did you mean to access dict values using key: `c` ?
+        Did you mean to access dict values using key: `:c` ?
         Consider using `indexing` operation.
-        Example:
-            ```julia
-            dict = Dict(c=>someValue)
-            dict[c]
-            ```
+
+        # Example
+        julia> dict = Dict(:c=>5)
+        Dict{Symbol, Int64} with 1 entry:
+          :c => 5
+        julia> dict[:c]
+        5
         """
     @test occursin(hintExpected, errorMsg)
 end
