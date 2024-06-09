@@ -10,7 +10,7 @@ const lno = LineNumberNode(1, :none)
 
 let ci = @code_lowered const_int()
     @eval function oc_trivial()
-        $(Expr(:new_opaque_closure, Tuple{}, Any, Any,
+        $(Expr(:new_opaque_closure, Tuple{}, Any, Any, true,
             Expr(:opaque_closure_method, nothing, 0, false, lno, ci)))
     end
 end
@@ -19,7 +19,7 @@ end
 
 let ci = @code_lowered const_int()
     @eval function oc_simple_inf()
-        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any, true,
             Expr(:opaque_closure_method, nothing, 0, false, lno, ci)))
     end
 end
@@ -33,7 +33,7 @@ end
 (a::OcClos2Int)() = getfield(a, 1) + getfield(a, 2)
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_trivial_clos()
-        $(Expr(:new_opaque_closure, Tuple{}, Int, Int,
+        $(Expr(:new_opaque_closure, Tuple{}, Int, Int, true,
             Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             1, 2))
     end
@@ -42,7 +42,7 @@ end
 
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_self_call_clos()
-        $(Expr(:new_opaque_closure, Tuple{}, Int, Int,
+        $(Expr(:new_opaque_closure, Tuple{}, Int, Int, true,
             Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             1, 2))()
     end
@@ -59,7 +59,7 @@ end
 (a::OcClos1Any)() = getfield(a, 1)
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_pass_clos(x)
-        $(Expr(:new_opaque_closure, Tuple{}, Any, Any,
+        $(Expr(:new_opaque_closure, Tuple{}, Any, Any, true,
             Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             :x))
     end
@@ -69,7 +69,7 @@ end
 
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_infer_pass_clos(x)
-        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any, true,
             Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             :x))
     end
@@ -81,7 +81,7 @@ end
 
 let ci = @code_lowered identity(1)
     @eval function oc_infer_pass_id()
-        $(Expr(:new_opaque_closure, Tuple{Any}, Any, Any,
+        $(Expr(:new_opaque_closure, Tuple{Any}, Any, Any, true,
             Expr(:opaque_closure_method, nothing, 1, false, lno, ci)))
     end
 end
@@ -103,7 +103,7 @@ end
 
 let ci = @code_lowered OcOpt([1 2])()
     @eval function oc_opt_ndims(A)
-        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any, true,
             Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             :A))
     end
@@ -184,7 +184,7 @@ mk_va_opaque() = @opaque (x...)->x
 let ci = @code_lowered const_int()
     global function mk_ocg(world::UInt, source, args...)
         @nospecialize
-        cig = Meta.lower(@__MODULE__, Expr(:new_opaque_closure, Tuple{}, Any, Any,
+        cig = Meta.lower(@__MODULE__, Expr(:new_opaque_closure, Tuple{}, Any, Any, true,
             Expr(:opaque_closure_method, nothing, 0, false, lno, ci))).args[1]
         cig.slotnames = Symbol[Symbol("#self#")]
         cig.slottypes = Any[Any]
@@ -298,7 +298,7 @@ eval_oc_spec(oc) = oc()
 for f in (const_int, const_int_barrier)
     ci = code_lowered(f, Tuple{})[1]
     for compiled in (true, false)
-        oc_expr = Expr(:new_opaque_closure, Tuple{}, Union{}, Float64,
+        oc_expr = Expr(:new_opaque_closure, Tuple{}, Union{}, Float64, true,
             Expr(:opaque_closure_method, nothing, 0, false, lno, ci))
         oc_mismatch = let ci = code_lowered(f, Tuple{})[1]
             if compiled

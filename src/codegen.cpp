@@ -6513,15 +6513,16 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         return mark_julia_type(ctx, val, true, (jl_value_t*)jl_any_type);
     }
     else if (head == jl_new_opaque_closure_sym) {
-        assert(nargs >= 4 && "Not enough arguments in new_opaque_closure");
-        SmallVector<jl_cgval_t, 4> argv(nargs, jl_cgval_t());
+        assert(nargs >= 5 && "Not enough arguments in new_opaque_closure");
+        SmallVector<jl_cgval_t, 5> argv(nargs, jl_cgval_t());
         for (size_t i = 0; i < nargs; ++i) {
             argv[i] = emit_expr(ctx, args[i]);
         }
         const jl_cgval_t &argt = argv[0];
         const jl_cgval_t &lb = argv[1];
         const jl_cgval_t &ub = argv[2];
-        const jl_cgval_t &source = argv[3];
+        // argv[3] - constprop marker not used here
+        const jl_cgval_t &source = argv[4];
         if (source.constant == NULL) {
             // For now, we require non-constant source to be handled by using
             // eval. This should probably be a verifier error and an abort here.
@@ -6539,9 +6540,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             jl_value_t *env_t = NULL;
             JL_GC_PUSH2(&closure_t, &env_t);
 
-            SmallVector<jl_value_t *, 0> env_component_ts(nargs-4);
-            for (size_t i = 0; i < nargs - 4; ++i) {
-                jl_value_t *typ = argv[4+i].typ;
+            size_t ncapture_args = nargs-5;
+            SmallVector<jl_value_t *, 0> env_component_ts(ncapture_args);
+            for (size_t i = 0; i < ncapture_args; ++i) {
+                jl_value_t *typ = argv[nargs-ncapture_args+i].typ;
                 if (typ == jl_bottom_type) {
                     JL_GC_POP();
                     return jl_cgval_t();
@@ -6549,7 +6551,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 env_component_ts[i] = typ;
             }
 
-            env_t = jl_apply_tuple_type_v(env_component_ts.data(), nargs-4);
+            env_t = jl_apply_tuple_type_v(env_component_ts.data(), ncapture_args);
             // we need to know the full env type to look up the right specialization
             if (jl_is_concrete_type(env_t)) {
                 jl_tupletype_t *argt_typ = (jl_tupletype_t*)argt.constant;
@@ -6567,7 +6569,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                         fptr = mark_julia_type(ctx, Constant::getNullValue(ctx.types().T_size), false, jl_voidpointer_type);
 
                     // TODO: Inline the env at the end of the opaque closure and generate a descriptor for GC
-                    jl_cgval_t env = emit_new_struct(ctx, env_t, nargs-4, ArrayRef<jl_cgval_t>(argv).drop_front(4));
+                    jl_cgval_t env = emit_new_struct(ctx, env_t, ncapture_args, ArrayRef<jl_cgval_t>(argv).drop_front(nargs-ncapture_args));
 
                     jl_cgval_t closure_fields[5] = {
                         env,

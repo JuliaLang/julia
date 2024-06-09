@@ -3998,7 +3998,7 @@ f(x) = yt(x)
                                            v)))
                                    cvs)))
                `(new_opaque_closure
-                 ,(cadr e) (call (core apply_type) (core Union)) (core Any)
+                 ,(cadr e) (call (core apply_type) (core Union)) (core Any) (true)
                  (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs)))
                  ,@var-exprs))))
           ((method)
@@ -4564,13 +4564,13 @@ f(x) = yt(x)
                               (cons (cadr e) (cons fptr (cdddr e)))))
                            ;; Leave a literal lambda in place for later global expansion
                            ((eq? (car e) 'new_opaque_closure)
-                            (let* ((oc_method (car (list-tail (cdr e) 3))) ;; opaque_closure_method
+                            (let* ((oc_method (car (list-tail (cdr e) 4))) ;; opaque_closure_method
                                    (lambda (list-ref oc_method 5))
                                    (lambda (linearize lambda)))
                               (append
-                               (compile-args (list-head (cdr e) 3) break-labels)
+                               (compile-args (list-head (cdr e) 4) break-labels)
                                (list (append (butlast oc_method) (list lambda)))
-                               (compile-args (list-tail (cdr e) 4) break-labels))))
+                               (compile-args (list-tail (cdr e) 5) break-labels))))
                            ;; NOTE: 1st argument to cglobal treated same as for ccall
                            ((and (length> e 2)
                                  (or (eq? (cadr e) 'cglobal)

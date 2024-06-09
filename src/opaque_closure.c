@@ -170,10 +170,10 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
 
 JL_CALLABLE(jl_new_opaque_closure_jlcall)
 {
-    if (nargs < 4)
+    if (nargs < 5)
         jl_error("new_opaque_closure: Not enough arguments");
     return (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)args[0],
-        args[1], args[2], args[3], &args[4], nargs-4, 1);
+        args[1], args[2], args[4], &args[5], nargs-5, 1);
 }
 
 // check whether the specified number of arguments is compatible with the

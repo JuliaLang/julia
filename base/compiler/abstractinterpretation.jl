@@ -2547,7 +2547,7 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
     𝕃ᵢ = typeinf_lattice(interp)
     rt = Union{}
     effects = Effects() # TODO
-    if length(e.args) >= 4
+    if length(e.args) >= 5
         ea = e.args
         argtypes = collect_argtypes(interp, ea, vtypes, sv)
         if argtypes === nothing
@@ -2556,7 +2556,11 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
         else
             mi = frame_instance(sv)
             rt = opaque_closure_tfunc(𝕃ᵢ, argtypes[1], argtypes[2], argtypes[3],
-                argtypes[4], argtypes[5:end], mi)
+                argtypes[5], argtypes[6:end], mi)
+            if ea[4] !== true && isa(rt, PartialOpaque)
+                rt = widenconst(rt)
+                # Propagation of PartialOpaque disabled
+            end
             if isa(rt, PartialOpaque) && isa(sv, InferenceState) && !call_result_unused(sv, sv.currpc)
                 # Infer this now so that the specialization is available to
                 # optimization.
