@@ -1106,8 +1106,8 @@ function fielderror_hint_handler(io, exc)
             # Example
             julia> dict = Dict(:$(field)=>5)
             Dict{Symbol, Int64} with 1 entry:
-
               :$(field) => 5
+
             julia> dict[:$(field)]
             5
             """
