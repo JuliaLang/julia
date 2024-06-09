@@ -323,7 +323,7 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
         _swap_rowcols!(A, UpperTriangular, n, 1, q)
         piv[1], piv[q] = piv[q], piv[1]
         A[1,1] = ajj = sqrt(ajj)
-        @views A[1, 2:n] .= A[1, 2:n] ./ ajj
+        @views A[1, 2:n] ./= ajj
 
         for j in 2:n
             for k in j:n
@@ -376,7 +376,7 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
         _swap_rowcols!(A, LowerTriangular, n, 1, q)
         piv[1], piv[q] = piv[q], piv[1]
         A[1,1] = ajj = sqrt(ajj)
-        @views A[2:n, 1] .= A[2:n, 1] ./ ajj
+        @views A[2:n, 1] ./= ajj
 
         for j in 2:n
             for k in j:n
