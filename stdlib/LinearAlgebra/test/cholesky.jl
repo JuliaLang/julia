@@ -207,7 +207,7 @@ end
             elseif eltya <: Complex || eltyb <: Complex
                 complex.(Breal, Bimg)
             else
-                Breal                
+                Breal
             end
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
@@ -236,7 +236,7 @@ end
             elseif eltya <: Complex
                 complex.(Breal, Bimg)
             else
-                Breal                
+                Breal
             end
             εb = eps(abs(float(one(eltype(B)))))
             ε = max(εa,εb)
