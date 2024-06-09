@@ -385,10 +385,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     hascolor = get(io, :color, false)::Bool
     color_string(cstr::String, col::Union{Int64, Symbol}) = _color_string(cstr, col, hascolor)
 
-    direct_deps = [
-        Base.PkgId(uuid, name)
-        for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
-    ]
     stale_cache = Dict{StaleCacheKey, Bool}()
     exts = Dict{Base.PkgId, String}() # ext -> parent
     # make a flat map of each dep and its direct deps
@@ -427,6 +423,14 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             pkg_exts_map[pkg] = collect(keys(pkg_exts))
         end
     end
+
+    direct_deps = [
+        Base.PkgId(uuid, name)
+        for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
+    ]
+
+    # consider exts of direct deps to be direct deps so that errors are reported
+    append!(direct_deps, keys(filter(d->last(d) in keys(env.project_deps), exts)))
 
     # An extension effectively depends on another extension if it has all the the
     # dependencies of that other extension
