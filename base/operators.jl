@@ -1153,7 +1153,7 @@ julia> filter(!isletter, str)
     Fix{n}(f, x; kws...)
 
 A type representing a partially-applied version of a function `f`, with the argument or
-arguments "x" inserted at the `n`th position, and any additional keyword arguments inserted
+"x" inserted at the `n`th position, and any additional keyword arguments inserted
 at the end. In other words, `Fix{3}(f, x)` behaves similarly to
 `(y1, y2, y3) -> f(y1, y2, x, y3)` for the 4-argument function `f`.
 
