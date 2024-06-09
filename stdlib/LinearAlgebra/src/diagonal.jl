@@ -940,7 +940,7 @@ function cholesky!(A::Diagonal, ::RowMaximum; tol=0.0, check=true)
         permute!(d, p)
         @inbounds for i in eachindex(d)
             di = d[i]
-            rootdi, j = _cholpivoted!(di, tol)
+            rootdi, j = _cholpivoted!(di, UpperTriangular, tol, false)
             if j == 0
                 d[i] = rootdi
             else
