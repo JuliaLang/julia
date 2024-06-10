@@ -159,7 +159,7 @@ static const char opts[]  =
     "                                               process affinity is not configured, and sets M to 1.\n"
     " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M (0 or 1)\n"
     "                                               threads for the concurrent sweeping phase of GC.\n"
-    "                                               N is set to half of the number of compute threads and\n"
+    "                                               N is set to the number of compute threads and\n"
     "                                               M is set to 0 if unspecified.\n"
     " -p, --procs {N|auto}                          Integer value N launches N additional local worker\n"
     "                                               processes `auto` launches as many workers as the\n"
