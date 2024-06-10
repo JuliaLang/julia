@@ -13,6 +13,7 @@ Base.istaskfailed
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
 Base.task_local_storage(::Function, ::Any, ::Any)
+Core.ConcurrencyViolationError
 ```
 
 ## Scheduling
