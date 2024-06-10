@@ -1471,6 +1471,7 @@ end
 loading_extension::Bool = false
 precompiling_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
+    @info "running extension callback for $extid"
     assert_havelock(require_lock)
     succeeded = try
         # Used by Distributed to now load extensions in the package callback
@@ -1889,13 +1890,14 @@ end
     assert_havelock(require_lock)
     paths = find_all_in_cache_path(pkg, DEPOT_PATH)
     newdeps = PkgId[]
+    required_modules = PkgId[]
     for path_to_try in paths::Vector{String}
         staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try; reasons, stalecheck)
         if staledeps === true
             continue
         end
         try
-            staledeps, ocachefile = staledeps::Tuple{Vector{Any}, Union{Nothing, String}}
+            staledeps, ocachefile, required_modules = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, Vector{PkgId}}
             # finish checking staledeps module graph
             for i in 1:length(staledeps)
                 dep = staledeps[i]
@@ -1907,7 +1909,7 @@ end
                     if modstaledeps === true
                         continue
                     end
-                    modstaledeps, modocachepath = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}}
+                    modstaledeps, modocachepath = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}, Vector{PkgId}}
                     staledeps[i] = (modpath, modkey, modbuild_id, modpath_to_try, modstaledeps, modocachepath)
                     @goto check_next_dep
                 end
@@ -1969,6 +1971,10 @@ end
                 insert_extension_triggers(modkey)
                 run_package_callbacks(modkey)
             end
+            for modkey in required_modules
+                push!(get!(Set{PkgId}, require_map, pkg), modkey)
+            end
+            update_explicit_loaded_modules(pkg)
             empty!(newdeps)
         end
     end
@@ -2320,21 +2326,22 @@ root_module_key(m::Module) = @lock require_lock module_keys[m]
     end
     push!(loaded_modules_order, m)
     loaded_modules[key] = m
-    update_explicit_loaded_modules(key)
+    push!(explicit_loaded_modules, key)
     module_keys[m] = key
     end
     nothing
 end
 
-
 function update_explicit_loaded_modules(key::PkgId)
     if !in(key, explicit_loaded_modules)
         push!(explicit_loaded_modules, key)
-        run_package_callbacks(key)
         deps = get(require_map, key, nothing)
         if deps !== nothing
             for dep in deps
-                update_explicit_loaded_modules(dep)
+                if in_sysimage(dep)
+                    run_package_callbacks(dep)
+                    update_explicit_loaded_modules(dep)
+                end
             end
         end
     end
@@ -3859,7 +3866,7 @@ end
             return true
         end
 
-        return depmods, ocachefile # fresh cachefile
+        return depmods, ocachefile, first.(required_modules) # fresh cachefile
     finally
         close(io)
     end

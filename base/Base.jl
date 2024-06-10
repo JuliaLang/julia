@@ -523,6 +523,10 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
+
+const _sysimage_modules = PkgId[]
+in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
+
 include("loading.jl")
 
 # misc useful functions & macros
@@ -566,8 +570,6 @@ include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSy
 
 end_base_include = time_ns()
 
-const _sysimage_modules = PkgId[]
-in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
 if is_primary_base_module
 
