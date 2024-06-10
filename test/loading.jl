@@ -1115,7 +1115,7 @@ end
             cmd_proj_ext = `$(Base.julia_cmd()) $compile --startup-file=no -e $test_ext_proj`
             proj = joinpath(@__DIR__, "project", "Extensions")
             cmd_proj_ext = addenv(cmd_proj_ext, "JULIA_LOAD_PATH" => join([joinpath(proj, "HasExtensions.jl"), joinpath(proj, "EnvWithDeps")], sep))
-            run(cmd_proj_ext)
+            @test success(cmd_proj_ext)
         end
 
         # Sysimage extensions
@@ -1134,8 +1134,26 @@ end
         """
         cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
-        run(cmd)
+        @test success(cmd)
 
+        # Failure of loading some extensions when trigger is in the sysimage
+        # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet
+        # and that it depends on Libdl.
+        # If it gets moved out, this test will need to be updated.
+        # We run this test in a new process so we are not vulnerable to a previous test having loaded LinearAlgebra
+        proj_libdlext = joinpath(@__DIR__, "project", "Extensions", "GotLibdlExt")
+        sysimg_ext_test_code = """
+            #uuid_key_la = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
+           # Base.in_sysimage(uuid_key_la) || error("LinearAlgebra not in sysimage")
+            #uuid_key_libdl = Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl")
+           # Base.in_sysimage(uuid_key_libdl) || error("Libdl not in sysimage")
+            using GotLibdlExt
+            using LinearAlgebra
+            Base.get_extension(GotLibdlExt, :LibdlExt) isa Module || error("expected extension to load")
+        """
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj_libdlext, "@stdlib"], sep))
+        @test_broken success(cmd)
 
         # Extensions in implicit environments
         old_load_path = copy(LOAD_PATH)
