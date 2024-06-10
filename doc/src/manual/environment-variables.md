@@ -348,8 +348,7 @@ nanoseconds, the amount of time after which spinning threads should sleep.
 
 ### [`JULIA_NUM_GC_THREADS`](@id JULIA_NUM_GC_THREADS)
 
-Sets the number of threads used by Garbage Collection. If unspecified is set to
-half of the number of worker threads.
+Sets the number of threads used by Garbage Collection. If unspecified is set to the number of worker threads.
 
 !!! compat "Julia 1.10"
     The environment variable was added in 1.10

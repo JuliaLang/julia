@@ -179,7 +179,7 @@ The following is a complete list of command-line switches available when launchi
 |`-m`, `--module <Package> [args]`      |Run entry point of `Package` (`@main` function) with `args'|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
 |`-t`, `--threads {auto\|N[,auto\|M]}`  |Enable N[+M] threads; N threads are assigned to the `default` threadpool, and if M is specified, M threads are assigned to the `interactive` threadpool; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future. Currently sets N to the number of CPUs assigned to this Julia process based on the OS-specific affinity assignment interface if supported (Linux and Windows) or to the number of CPU threads if not supported (MacOS) or if process affinity is not configured, and sets M to 1.|
-| `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to half of the number of compute threads and M is set to 0 if unspecified.|
+| `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to the number of compute threads and M is set to 0 if unspecified.|
 |`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`, `--interactive`                  |Interactive mode; REPL runs and `isinteractive()` is true|
