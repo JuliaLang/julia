@@ -1384,27 +1384,6 @@ JL_CALLABLE(jl_f_get_binding_type)
     return ty;
 }
 
-JL_CALLABLE(jl_f_set_binding_type)
-{
-    JL_NARGS(set_binding_type!, 2, 3);
-    jl_module_t *m = (jl_module_t*)args[0];
-    jl_sym_t *s = (jl_sym_t*)args[1];
-    JL_TYPECHK(set_binding_type!, module, (jl_value_t*)m);
-    JL_TYPECHK(set_binding_type!, symbol, (jl_value_t*)s);
-    jl_value_t *ty = nargs == 2 ? (jl_value_t*)jl_any_type : args[2];
-    JL_TYPECHK(set_binding_type!, type, ty);
-    jl_binding_t *b = jl_get_binding_wr(m, s, 0);
-    jl_value_t *old_ty = NULL;
-    if (jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty)) {
-        jl_gc_wb(b, ty);
-    }
-    else if (nargs != 2 && !jl_types_equal(ty, old_ty)) {
-        jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
-                  jl_symbol_name(m->name), jl_symbol_name(s));
-    }
-    return jl_nothing;
-}
-
 JL_CALLABLE(jl_f_swapglobal)
 {
     enum jl_memory_order order = jl_memory_order_release;
@@ -2416,7 +2395,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_getglobal = add_builtin_func("getglobal", jl_f_getglobal);
     jl_builtin_setglobal = add_builtin_func("setglobal!", jl_f_setglobal);
     add_builtin_func("get_binding_type", jl_f_get_binding_type);
-    add_builtin_func("set_binding_type!", jl_f_set_binding_type);
     jl_builtin_swapglobal = add_builtin_func("swapglobal!", jl_f_swapglobal);
     jl_builtin_replaceglobal = add_builtin_func("replaceglobal!", jl_f_replaceglobal);
     jl_builtin_modifyglobal = add_builtin_func("modifyglobal!", jl_f_modifyglobal);
