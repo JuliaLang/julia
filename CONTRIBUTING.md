@@ -264,8 +264,8 @@ version overrides the version you are developing.
 To test stdlib packages, you can do the following steps:
 
 1. Open the `Project.toml` in the stdlib package you are devoloping and check whether
-   your Julia version matches to the package one.
-2. Edit the UUID field of the `Project.toml` of the stdlib package.
+   your Julia version matches the package version.
+2. Edit the UUID field of the `Project.toml` in the stdlib package.
 3. Change the current directory to the directory of the stdlib you are developing.
 4. Start Julia with `julia --project=.`.
 5. You can now test the package by running `pkg> test` in Pkg mode.
