@@ -459,7 +459,7 @@ _totuple(::Type{Tuple{}}, itr, s...) = ()
 
 function _totuple_err(@nospecialize T)
     @noinline
-    throw(ArgumentError("too few elements for tuple type $T"))
+    throw(ArgumentError(LazyString("too few elements for tuple type ", T)))
 end
 
 function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
