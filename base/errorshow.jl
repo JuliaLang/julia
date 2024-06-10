@@ -762,7 +762,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
     if n > 1
-        printstyled(io, " (repeats $n times)"; color=:yellow, bold=true)
+        printstyled(io, " (repeats $n times)"; color=Base.warn_color(), bold=true)
     end
     println(io)
 
