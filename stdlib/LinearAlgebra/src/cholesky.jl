@@ -236,14 +236,14 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
                 return LowerTriangular(A), convert(BlasInt, k)
             end
             A[k,k] = Akk
-            AkkInv = inv(Akk)
+            AkkInv = inv(copy(Akk'))
             for j = 1:k - 1
                 @simd for i = k + 1:n
                     A[i,k] -= A[i,j]*A[k,j]'
                 end
             end
-            for i = k + 1:n
-                A[i,k] *= AkkInv'
+            @simd for i = k + 1:n
+                A[i,k] *= AkkInv
             end
         end
      end
@@ -309,33 +309,28 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
     piv = collect(1:n)
     dots = zeros(rTA, n)
     temp = similar(dots)
-    info = 0
-    rank = n
 
     @inbounds begin
         # first step
         ajj, q = findmax(i -> real(A[i,i]), 1:n)
         stop = tol < 0 ? eps(rTA)*n*abs(ajj) : tol
-        if ajj ≤ stop
-            return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
-        end
+        ajj ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
         # swap
         _swap_rowcols!(A, UpperTriangular, n, 1, q)
         piv[1], piv[q] = piv[q], piv[1]
         A[1,1] = ajj = sqrt(ajj)
-        @views A[1, 2:n] ./= ajj
+        ajjinv = inv(copy(ajj'))
+        @simd for k in 2:n
+            A[1, k] *= ajjinv
+        end
 
         for j in 2:n
-            for k in j:n
+            @simd for k in j:n
                 dots[k] += abs2(A[j-1, k])
                 temp[k] = real(A[k,k]) - dots[k]
             end
             ajj, q = findmax(i -> temp[i], j:n)
-            if ajj ≤ stop
-                rank = j - 1
-                info = 1
-                break
-            end
+            ajj ≤ stop && return A, piv, convert(BlasInt, j - 1), convert(BlasInt, 1)
             q += j - 1
             # swap
             _swap_rowcols!(A, UpperTriangular, n, j, q)
@@ -343,14 +338,17 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
             piv[j], piv[q] = piv[q], piv[j]
             # update
             A[j,j] = ajj = sqrt(ajj)
-            @views if j < n
-                conj!(A[1:(j-1), j])
-                mul!(A[j, (j+1):n], transpose(A[1:(j-1), (j+1):n]), A[1:(j-1), j], -1, true)
-                conj!(A[1:(j-1), j])
-                A[j, j+1:n] ./= ajj
+            ajjinv = inv(copy(ajj'))
+            if j < n
+                for k in (j+1):n
+                    @simd for m in 1:(j-1)
+                        A[j,k] -= A[m,k] * A[m,j]'
+                    end
+                    A[j,k] = ajjinv * A[j,k]
+                end
             end
         end
-        return A, piv, convert(BlasInt, rank), convert(BlasInt, info)
+        return A, piv, convert(BlasInt, n), convert(BlasInt, 0)
     end
 end
 function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, check::Bool)
@@ -362,33 +360,28 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
     piv = collect(1:n)
     dots = zeros(rTA, n)
     temp = similar(dots)
-    info = 0
-    rank = n
 
     @inbounds begin
         # first step
         ajj, q = findmax(i -> real(A[i,i]), 1:n)
         stop = tol < 0 ? eps(rTA)*n*abs(ajj) : tol
-        if ajj ≤ stop
-            return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
-        end
+        ajj ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
         # swap
         _swap_rowcols!(A, LowerTriangular, n, 1, q)
         piv[1], piv[q] = piv[q], piv[1]
         A[1,1] = ajj = sqrt(ajj)
-        @views A[2:n, 1] ./= ajj
+        ajjinv = inv(ajj)
+        @simd for k in 2:n
+            A[k,1] *= ajjinv
+        end
 
         for j in 2:n
-            for k in j:n
+            @simd for k in j:n
                 dots[k] += abs2(A[k, j-1])
                 temp[k] = real(A[k,k]) - dots[k]
             end
             ajj, q = findmax(i -> temp[i], j:n)
-            if ajj ≤ stop
-                rank = j - 1
-                info = 1
-                break
-            end
+            ajj ≤ stop && return A, piv, convert(BlasInt, j-1), convert(BlasInt, 1)
             q += j - 1
             # swap
             _swap_rowcols!(A, LowerTriangular, n, j, q)
@@ -396,14 +389,19 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
             piv[j], piv[q] = piv[q], piv[j]
             # update
             A[j,j] = ajj = sqrt(ajj)
-            @views if j < n
-                conj!(A[j, 1:(j-1)])
-                mul!(A[(j+1):n, j], A[(j+1):n, 1:(j-1)], A[j, 1:(j-1)], -1, true)
-                conj!(A[j, 1:(j-1)])
-                A[j+1:n, j] ./= ajj
+            ajjinv = inv(copy(ajj'))
+            if j < n
+                for k in 1:(j-1)
+                    @simd for m in (j+1):n
+                        A[m,j] -= A[m,k]*A[j,k]'
+                    end
+                end
+                @simd for m in (j+1):n
+                    A[m, j] *= ajjinv
+                end
             end
         end
-        return A, piv, convert(BlasInt, rank), convert(BlasInt, info)
+        return A, piv, convert(BlasInt, n), convert(BlasInt, 0)
     end
 end
 function _cholpivoted!(x::Number, tol)
