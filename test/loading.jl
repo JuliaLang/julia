@@ -1143,10 +1143,10 @@ end
         # We run this test in a new process so we are not vulnerable to a previous test having loaded LinearAlgebra
         proj_libdlext = joinpath(@__DIR__, "project", "Extensions", "GotLibdlExt")
         sysimg_ext_test_code = """
-            #uuid_key_la = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
-           # Base.in_sysimage(uuid_key_la) || error("LinearAlgebra not in sysimage")
-            #uuid_key_libdl = Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl")
-           # Base.in_sysimage(uuid_key_libdl) || error("Libdl not in sysimage")
+            uuid_key_la = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
+            Base.in_sysimage(uuid_key_la) || error("LinearAlgebra not in sysimage")
+            uuid_key_libdl = Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl")
+            Base.in_sysimage(uuid_key_libdl) || error("Libdl not in sysimage")
             using GotLibdlExt
             using LinearAlgebra
             Base.get_extension(GotLibdlExt, :LibdlExt) isa Module || error("expected extension to load")
