@@ -27,7 +27,7 @@ end
 checked_den(num::T, den::T) where T<:Integer = checked_den(T, num, den)
 checked_den(num::Integer, den::Integer) = checked_den(promote(num, den)...)
 
-@noinline __throw_rational_argerror_zero(T) = throw(ArgumentError("invalid rational: zero($T)//zero($T)"))
+@noinline __throw_rational_argerror_zero(T) = throw(ArgumentError(LazyString("invalid rational: zero(", T, ")//zero(", T, ")")))
 function Rational{T}(num::Integer, den::Integer) where T<:Integer
     iszero(den) && iszero(num) && __throw_rational_argerror_zero(T)
     if T <: Union{Unsigned, Bool}
