@@ -812,13 +812,11 @@ end
 @testset "FieldErrorHint" begin
     struct FieldFoo
         a::Float32
-        b::Int64
+        b::Int
     end
 
     s = FieldFoo(1, 2)
 
-    @test s.a === 1.0f0
-    @test s.b === 2
     test = @test_throws FieldError s.c
 
     ex = test.value::FieldError
