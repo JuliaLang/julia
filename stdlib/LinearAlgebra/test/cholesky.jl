@@ -6,11 +6,6 @@ using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted,
     PosDefException, RankDeficientException, chkfullrank
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-
-isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
-using .Main.Quaternions
-
 function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test inv(ca)*a ≈ Matrix(I, n, n)
     @test a*inv(ca) ≈ Matrix(I, n, n)
@@ -58,16 +53,9 @@ end
     breal = randn(n,2)/2
     bimg  = randn(n,2)/2
 
-    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Complex{BigFloat}, Quaternion{Float64}, Int)
-        a = if eltya == Int
-            rand(1:7, n, n)
-        elseif eltya <: Real
-            convert(Matrix{eltya}, areal)
-        elseif eltya <: Complex
-            convert(Matrix{eltya}, complex.(areal, aimg))
-        else
-            convert(Matrix{eltya}, Quaternion.(areal, aimg, a2real, a2img))
-        end
+    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Complex{BigFloat}, Int)
+        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+        a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
 
         ε = εa = eps(abs(float(one(eltya))))
 
@@ -165,15 +153,7 @@ end
         end
 
         for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-            b = if eltya <: Quaternion
-                convert(Matrix{eltya}, Quaternion.(breal, bimg, bimg, bimg))
-            elseif eltyb == Int
-                rand(1:5, n, 2)
-            elseif eltyb <: Complex
-                convert(Matrix{eltyb}, complex.(breal, bimg))
-            elseif eltyb <: Real
-                convert(Matrix{eltyb}, breal)
-            end
+            b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
 
@@ -204,13 +184,7 @@ end
         for eltyb in (Float64, ComplexF64)
             Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
             Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
-            B = if eltya <: Quaternion
-                Quaternion.(Float64.(Breal), Float64.(Bimg), Float64.(Bimg), Float64.(Bimg))
-            elseif eltya <: Complex || eltyb <: Complex
-                complex.(Breal, Bimg)
-            else
-                Breal
-            end
+            B = (eltya <: Complex || eltyb <: Complex) ? complex.(Breal, Bimg) : Breal
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
 
@@ -233,13 +207,7 @@ end
         @testset "solve with generic Cholesky" begin
             Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
             Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
-            B = if eltya <: Quaternion
-                eltya.(Breal, Bimg, Bimg, Bimg)
-            elseif eltya <: Complex
-                complex.(Breal, Bimg)
-            else
-                Breal
-            end
+            B = eltya <: Complex ? complex.(Breal, Bimg) : Breal
             εb = eps(abs(float(one(eltype(B)))))
             ε = max(εa,εb)
 
@@ -247,22 +215,22 @@ end
 
                 # Test error bound on linear solver: LAWNS 14, Theorem 2.1
                 # This is a surprisingly loose bound
-                cpapd = cholesky(eltya <: Real ? apds : apdh)
+                cpapd = cholesky(eltya <: Complex ? apdh : apds)
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Real ? apdsL : apdhL)
+                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL)
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Real ? apds : apdh, RowMaximum())
+                cpapd = cholesky(eltya <: Complex ? apdh : apds, RowMaximum())
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Real ? apdsL : apdhL, RowMaximum())
+                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL, RowMaximum())
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
