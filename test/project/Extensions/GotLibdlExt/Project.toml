@@ -1,0 +1,9 @@
+name = "GotLibdlExt"
+uuid = "a549ab1b-9b57-4c18-8a82-af63d7789335"
+version = "0.1.0"
+
+[weakdeps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
+[extensions]
+LibdlExt = "Libdl"
