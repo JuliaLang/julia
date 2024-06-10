@@ -1918,9 +1918,7 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     // We need to ensure that objects are in the remset at
     // most once, since the mark phase may update page metadata,
     // which is not idempotent. See comments in https://github.com/JuliaLang/julia/issues/50419
-    uintptr_t header = jl_atomic_load_relaxed((_Atomic(uintptr_t) *)&o->header);
-    header &= ~GC_OLD; // clear the age bit
-    header = jl_atomic_exchange_relaxed((_Atomic(uintptr_t) *)&o->header, header);
+    uintptr_t header = jl_atomic_fetch_and_relaxed((_Atomic(uintptr_t) *)&o->header, ~GC_OLD);
     if (header & GC_OLD) { // write barrier has not been triggered in this object yet
         arraylist_push(ptls->heap.remset, (jl_value_t*)ptr);
         ptls->heap.remset_nptr++; // conservative
