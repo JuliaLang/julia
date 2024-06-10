@@ -1097,21 +1097,10 @@ function fielderror_hint_handler(io, exc)
     @nospecialize
     field = exc.field
     type = exc.type
-    if type <: Dict
-        println(io,
-            """
-            \nDid you mean to access dict values using key: `:$field` ?
-            Consider using indexing syntax.
-
-            # Example
-            julia> dict = Dict(:$(field)=>5)
-            Dict{Symbol, Int64} with 1 entry:
-              :$(field) => 5
-
-            julia> dict[:$(field)]
-            5
-            """
-        )
+    if type <: AbstractDict
+        print(io, "\nDid you mean to access dict values using key: `:$field` ? Consider using indexing syntax ")
+        printstyled(io, "dict[:$(field)]", color=:cyan)
+        println(io, "")
     end
 end
 
