@@ -1458,7 +1458,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
-            if !haskey(explicit_loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            if !in(trigger_id, explicit_loaded_modules) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -2148,6 +2148,8 @@ function require(into::Module, mod::Symbol)
     end
 end
 
+const require_map = Dict{PkgId, Set{PkgId}}()
+
 function __require(into::Module, mod::Symbol)
     @lock require_lock begin
     LOADING_CACHE[] = LoadingCache()
@@ -2192,7 +2194,13 @@ function __require(into::Module, mod::Symbol)
             path = binpack(uuidkey)
             push!(_require_dependencies, (into, path, UInt64(0), UInt32(0), 0.0))
         end
-        return _require_prelocked(uuidkey, env)
+        push!(get!(Set{PkgId}, require_map, PkgId(into)), uuidkey)
+        try
+            return _require_prelocked(uuidkey, env)
+        catch
+            delete!(require_map, PkgId(into))
+            rethrow()
+        end
     finally
         LOADING_CACHE[] = nothing
     end
@@ -2268,12 +2276,11 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         end
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
-        run_package_callbacks(uuidkey)
+        update_explicit_loaded_modules(uuidkey)
     else
         m = get(loaded_modules, uuidkey, nothing)
-        if m !== nothing && !haskey(explicit_loaded_modules, uuidkey)
-            explicit_loaded_modules[uuidkey] = m
-            run_package_callbacks(uuidkey)
+        if m !== nothing && !in(uuidkey, explicit_loaded_modules)
+            update_explicit_loaded_modules(uuidkey)
         end
         newm = root_module(uuidkey)
     end
@@ -2290,7 +2297,7 @@ const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 const loaded_modules = Dict{PkgId,Module}()
 # Emptied on Julia start
-const explicit_loaded_modules = Dict{PkgId,Module}()
+const explicit_loaded_modules = Set{PkgId}()
 const loaded_modules_order = Vector{Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse
 
@@ -2313,10 +2320,24 @@ root_module_key(m::Module) = @lock require_lock module_keys[m]
     end
     push!(loaded_modules_order, m)
     loaded_modules[key] = m
-    explicit_loaded_modules[key] = m
+    update_explicit_loaded_modules(key)
     module_keys[m] = key
     end
     nothing
+end
+
+
+function update_explicit_loaded_modules(key::PkgId)
+    if !in(key, explicit_loaded_modules)
+        push!(explicit_loaded_modules, key)
+        run_package_callbacks(key)
+        deps = get(require_map, key, nothing)
+        if deps !== nothing
+            for dep in deps
+                update_explicit_loaded_modules(dep)
+            end
+        end
+    end
 end
 
 register_root_module(Core)
