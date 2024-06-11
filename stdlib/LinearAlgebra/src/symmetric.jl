@@ -221,6 +221,7 @@ const HermOrSym{T,        S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
+const SelfAdjoint = Union{Symmetric{<:Real}, Hermitian{<:Number}}
 
 size(A::HermOrSym) = size(A.data)
 axes(A::HermOrSym) = axes(A.data)

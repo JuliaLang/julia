@@ -6,12 +6,17 @@ using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted,
     PosDefException, RankDeficientException, chkfullrank
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test inv(ca)*a ≈ Matrix(I, n, n)
     @test a*inv(ca) ≈ Matrix(I, n, n)
     @test abs((det(ca) - det(a))/det(ca)) <= tol # Ad hoc, but statistically verified, revisit
-    @test logdet(ca) ≈ logdet(a)
-    @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow
+    @test logdet(ca) ≈ logdet(a) broken = eltype(a) <: Quaternion
+    @test logdet(ca) ≈ log(det(ca)) # logdet is less likely to overflow
     logabsdet_ca = logabsdet(ca)
     logabsdet_a = logabsdet(a)
     @test logabsdet_ca[1] ≈ logabsdet_a[1]
@@ -53,16 +58,23 @@ end
     breal = randn(n,2)/2
     bimg  = randn(n,2)/2
 
-    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Complex{BigFloat}, Int)
-        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-        a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
+    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Complex{BigFloat}, Quaternion{Float64}, Int)
+        a = if eltya == Int
+            rand(1:7, n, n)
+        elseif eltya <: Real
+            convert(Matrix{eltya}, areal)
+        elseif eltya <: Complex
+            convert(Matrix{eltya}, complex.(areal, aimg))
+        else
+            convert(Matrix{eltya}, Quaternion.(areal, aimg, a2real, a2img))
+        end
 
         ε = εa = eps(abs(float(one(eltya))))
 
         # Test of symmetric pos. def. strided matrix
-        apd  = a'*a
-        @inferred cholesky(apd)
-        capd  = factorize(apd)
+        apd  = Matrix(Hermitian(a'*a))
+        @test ishermitian(apd)
+        capd  = @inferred cholesky(apd)
         r     = capd.U
         κ     = cond(apd, 1) #condition number
 
@@ -87,16 +99,16 @@ end
         #but only with Random.seed!(1234321) set before the loops.
         E = abs.(apd - r'*r)
         for i=1:n, j=1:n
-            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
+            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*sqrt(real(apd[i,i]*apd[j,j]))
         end
         E = abs.(apd - Matrix(capd))
         for i=1:n, j=1:n
-            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
+            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*sqrt(real(apd[i,i]*apd[j,j]))
         end
         @test LinearAlgebra.issuccess(capd)
         @inferred(logdet(capd))
 
-        apos = apd[1,1]
+        apos = real(apd[1,1])
         @test all(x -> x ≈ √apos, cholesky(apos).factors)
 
         # Test cholesky with Symmetric/Hermitian upper/lower
@@ -132,7 +144,7 @@ end
                 @test Matrix(@inferred cholesky(Symmetric(S, uplo))) ≈ S
             end
         end
-        @test Matrix(cholesky(S).U) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
+        @test Matrix(cholesky(S).U) ≈ [2 -1; 0 float(eltya)(sqrt(real(eltya)(3)))] / float(eltya)(sqrt(real(eltya)(2)))
         @test Matrix(cholesky(S)) ≈ S
 
         # test extraction of factor and re-creating original matrix
@@ -153,7 +165,15 @@ end
         end
 
         for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-            b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+            b = if eltya <: Quaternion
+                convert(Matrix{eltya}, Quaternion.(breal, bimg, bimg, bimg))
+            elseif eltyb == Int
+                rand(1:5, n, 2)
+            elseif eltyb <: Complex
+                convert(Matrix{eltyb}, complex.(breal, bimg))
+            elseif eltyb <: Real
+                convert(Matrix{eltyb}, breal)
+            end
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
 
@@ -184,7 +204,13 @@ end
         for eltyb in (Float64, ComplexF64)
             Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
             Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
-            B = (eltya <: Complex || eltyb <: Complex) ? complex.(Breal, Bimg) : Breal
+            B = if eltya <: Quaternion
+                Quaternion.(Float64.(Breal), Float64.(Bimg), Float64.(Bimg), Float64.(Bimg))
+            elseif eltya <: Complex || eltyb <: Complex
+                complex.(Breal, Bimg)
+            else
+                Breal
+            end
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
 
@@ -207,7 +233,13 @@ end
         @testset "solve with generic Cholesky" begin
             Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
             Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
-            B = eltya <: Complex ? complex.(Breal, Bimg) : Breal
+            B = if eltya <: Quaternion
+                eltya.(Breal, Bimg, Bimg, Bimg)
+            elseif eltya <: Complex
+                complex.(Breal, Bimg)
+            else
+                Breal
+            end
             εb = eps(abs(float(one(eltype(B)))))
             ε = max(εa,εb)
 
@@ -215,22 +247,22 @@ end
 
                 # Test error bound on linear solver: LAWNS 14, Theorem 2.1
                 # This is a surprisingly loose bound
-                cpapd = cholesky(eltya <: Complex ? apdh : apds)
+                cpapd = cholesky(eltya <: Real ? apds : apdh)
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL)
+                cpapd = cholesky(eltya <: Real ? apdsL : apdhL)
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Complex ? apdh : apds, RowMaximum())
+                cpapd = cholesky(eltya <: Real ? apds : apdh, RowMaximum())
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL, RowMaximum())
+                cpapd = cholesky(eltya <: Real ? apdsL : apdhL, RowMaximum())
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
