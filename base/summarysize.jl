@@ -8,6 +8,9 @@ struct SummarySize
     chargeall::Any
 end
 
+nth_pointer_isdefined(obj, i::Int) = ccall(:jl_nth_pointer_isdefined, Cint, (Any, Csize_t), obj, i-1) != 0
+get_nth_pointer(obj, i::Int) = ccall(:jl_get_nth_pointer, Any, (Any, Csize_t), obj, i-1)
+
 """
     Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int
 
@@ -26,7 +29,7 @@ julia> Base.summarysize(1.0)
 8
 
 julia> Base.summarysize(Ref(rand(100)))
-864
+848
 
 julia> sizeof(Ref(rand(100)))
 8
@@ -50,15 +53,28 @@ function summarysize(obj;
                 val = x[i]
             end
         elseif isa(x, GenericMemory)
-            nf = length(x)
-            if @inbounds @inline isassigned(x, i)
-                val = x[i]
+            T = eltype(x)
+            if Base.allocatedinline(T)
+                np = datatype_npointers(T)
+                nf = length(x) * np
+                idx = (i-1) ÷ np + 1
+                if @inbounds @inline isassigned(x, idx)
+                    elt = x[idx]
+                    p = (i-1) % np + 1
+                    if nth_pointer_isdefined(elt, p)
+                        val = get_nth_pointer(elt, p)
+                    end
+                end
+            else
+                nf = length(x)
+                if @inbounds @inline isassigned(x, i)
+                    val = x[i]
+                end
             end
         else
-            nf = nfields(x)
-            ft = typeof(x).types
-            if !isbitstype(ft[i]) && isdefined(x, i)
-                val = getfield(x, i)
+            nf = datatype_npointers(typeof(x))
+            if nth_pointer_isdefined(x, i)
+                val = get_nth_pointer(x, i)
             end
         end
         if nf > i
@@ -82,7 +98,7 @@ end
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    if nfields(obj) > 0
+    if datatype_npointers(typeof(obj)) > 0
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
     end

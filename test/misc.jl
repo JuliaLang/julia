@@ -573,6 +573,23 @@ end
 # issue #44780
 @test summarysize(BigInt(2)^1000) > summarysize(BigInt(2))
 
+# issue #53061
+mutable struct S53061
+    x::Union{Float64, Tuple{Float64, Float64}}
+    y::Union{Float64, Tuple{Float64, Float64}}
+end
+let s = S53061[S53061(rand(), (rand(),rand())) for _ in 1:10^4]
+    @test allequal(summarysize(s) for i in 1:10)
+end
+struct Z53061
+    x::S53061
+    y::Int64
+end
+let z = Z53061[Z53061(S53061(rand(), (rand(),rand())), 0) for _ in 1:10^4]
+    @test allequal(summarysize(z) for i in 1:10)
+    @test abs(summarysize(z) - 640000)/640000 <= 0.01
+end
+
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
 # empty arrays
