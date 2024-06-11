@@ -1848,8 +1848,8 @@ end
         @test length(str) > 1100
         # For a raw string, we correctly get the standard abbreviated output
         output = sprint(REPL.show_limited, MIME"text/plain"(), str; context=:limit => true)
-        @test !endswith(output, "…")
-        @test contains(output, "⋯")
+        @test !endswith(output, "[printing stopped after displaying 1000 bytes]")
+        @test contains(output, "bytes ⋯")
         # For a struct without a custom `show` method, we don't hit the abbreviated
         # 3-arg show on the inner string, so here we check that the REPL print-limiting
         # feature is correctly kicking in.
@@ -1857,6 +1857,15 @@ end
         output = sprint(REPL.show_limited, MIME"text/plain"(), a; context=:limit => true)
         @test endswith(output, "…[printing stopped after displaying 1000 bytes]")
         @test length(output) < 1100
+        # We also check some extreme cases
+        REPL.SHOW_MAXIMUM_BYTES = 1
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
+        @test output == "1"
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 12)
+        @test output == "1…[printing stopped after displaying 1 bytes]"
+        REPL.SHOW_MAXIMUM_BYTES = 0
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
+        @test output == "…[printing stopped after displaying 0 bytes]"
     finally
         REPL.SHOW_MAXIMUM_BYTES = previous
     end

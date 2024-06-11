@@ -386,15 +386,45 @@ function Base.write(io::LimitIO, v::UInt8)
     io.n += write(io.io, v)
 end
 
+# Semantically, we only need to override `Base.write`, but we also
+# override `unsafe_write` for performance.
+function Base.unsafe_write(io::Base.IOContext{<:LimitIO}, p::Ptr{UInt8}, nb::UInt)
+    limiter = io.io
+    # already exceeded? throw
+    limiter.n > limiter.maxbytes && throw(LimitIOException(limiter.maxbytes))
+    remaining = limiter.maxbytes - limiter.n # >= 0
+
+    # Not enough bytes left; we will print up to the limit, then throw
+    if remaining < nb
+        if remaining > 0
+            # note we pass on the `ioproperties` with the inner `limiter.io` object
+            Base.unsafe_write(IOContext(limiter.io, Base.ioproperties(io)), p, remaining)
+        end
+        throw(LimitIOException(limiter.maxbytes))
+    end
+
+    # We won't hit the limit so we'll write the full `nb` bytes, again passing along the `ioproperties`.
+    bytes_written = Base.unsafe_write(IOContext(limiter.io, Base.ioproperties(io)), p, nb)
+    limiter.n += bytes_written
+    return bytes_written
+end
+
+# wrap to hit optimized method
+function Base.unsafe_write(limiter::LimitIO, p::Ptr{UInt8}, nb::UInt)
+    return unsafe_write(IOContext(limiter), p, nb)
+end
+
 struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
 end
 
 function show_limited(io::IO, mime::MIME, x)
     try
-        # We wrap in a LimitIO to limit the amount of printing, and in an
-        # IOContext to support downstream `get` queries properly.
-        show(IOContext(LimitIO(io, SHOW_MAXIMUM_BYTES)), mime, x)
+        # We wrap in a LimitIO to limit the amount of printing.
+        # We unpack `IOContext`s, since we will pass the properties on the outside.
+        inner = io isa IOContext ? io.io : io
+        wrapped_limiter = IOContext(LimitIO(inner, SHOW_MAXIMUM_BYTES), Base.ioproperties(io))
+        show(wrapped_limiter, mime, x)
     catch e
         e isa LimitIOException || rethrow()
         printstyled(io, "…[printing stopped after displaying $(e.maxbytes) bytes]"; color=:light_yellow, bold=true)
