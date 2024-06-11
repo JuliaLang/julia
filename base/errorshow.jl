@@ -1100,7 +1100,7 @@ function fielderror_hint_handler(io, exc)
     if type <: AbstractDict
         print(io, "\nDid you mean to access dict values using key: `:$field` ? Consider using indexing syntax ")
         printstyled(io, "dict[:$(field)]", color=:cyan)
-        println(io, "")
+        println(io)
     end
 end
 
