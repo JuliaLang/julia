@@ -2501,51 +2501,52 @@ function _require_from_serialized(uuidkey::PkgId, path::String, ocachepath::Unio
 end
 
 # load a serialized file directly from append_bundled_depot_path for uuidkey without stalechecks
-function require_stdlib(uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
+function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
     @lock require_lock begin
-    if root_module_exists(uuidkey)
-        return loaded_modules[uuidkey]
+    # the PkgId of the ext, or package if not an ext
+    this_uuidkey = ext isa String ? PkgId(uuid5(package_uuidkey.uuid, ext), ext) : package_uuidkey
+    if root_module_exists(this_uuidkey)
+        return loaded_modules[this_uuidkey]
     end
     # first since this is a stdlib, try to look there directly first
     env = Sys.STDLIB
     #sourcepath = ""
     if ext === nothing
-        sourcepath = normpath(env, uuidkey.name, "src", uuidkey.name * ".jl")
+        sourcepath = normpath(env, this_uuidkey.name, "src", this_uuidkey.name * ".jl")
     else
-        sourcepath = find_ext_path(normpath(joinpath(env, uuidkey.name)), ext)
-        uuidkey = PkgId(uuid5(uuidkey.uuid, ext), ext)
+        sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
     end
-    #mbypath = manifest_uuid_path(env, uuidkey)
+    #mbypath = manifest_uuid_path(env, this_uuidkey)
     #if mbypath isa String && isfile_casesensitive(mbypath)
     #    sourcepath = mbypath
     #else
     #    # if the user deleted the stdlib folder, we next try using their environment
-    #    sourcepath = locate_package_env(uuidkey)
+    #    sourcepath = locate_package_env(this_uuidkey)
     #    if sourcepath !== nothing
     #        sourcepath, env = sourcepath
     #    end
     #end
     #if sourcepath === nothing
     #    throw(ArgumentError("""
-    #        Package $(repr("text/plain", uuidkey)) is required but does not seem to be installed.
+    #        Package $(repr("text/plain", this_uuidkey)) is required but does not seem to be installed.
     #        """))
     #end
-    set_pkgorigin_version_path(uuidkey, sourcepath)
+    set_pkgorigin_version_path(this_uuidkey, sourcepath)
     depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
-    newm = start_loading(uuidkey)
+    newm = start_loading(this_uuidkey)
     newm === nothing || return newm
     try
-        newm = _require_search_from_serialized(uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
+        newm = _require_search_from_serialized(this_uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
     finally
-        end_loading(uuidkey, newm)
+        end_loading(this_uuidkey, newm)
     end
     if newm isa Module
         # After successfully loading, notify downstream consumers
-        insert_extension_triggers(env, uuidkey)
-        run_package_callbacks(uuidkey)
+        insert_extension_triggers(env, this_uuidkey)
+        run_package_callbacks(this_uuidkey)
     else
         # if the user deleted their bundled depot, next try to load it completely normally
-        newm = _require_prelocked(uuidkey)
+        newm = _require_prelocked(this_uuidkey)
     end
     return newm
     end

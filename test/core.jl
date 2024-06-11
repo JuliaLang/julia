@@ -8145,6 +8145,7 @@ end
 @test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
 
 let M = @__MODULE__
+    Core.eval(M, :(global a_typed_global))
     @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing

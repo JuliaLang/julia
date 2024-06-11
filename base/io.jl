@@ -1426,7 +1426,7 @@ previously marked position. Throw an error if the stream is not marked.
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
 function reset(io::T) where T<:IO
-    ismarked(io) || throw(ArgumentError("$T not marked"))
+    ismarked(io) || throw(ArgumentError(LazyString(T, " not marked")))
     m = io.mark
     seek(io, m)
     io.mark = -1 # must be after seek, or seek may fail

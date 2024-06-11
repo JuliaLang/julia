@@ -430,6 +430,44 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int fo
     return ci;
 }
 
+// Attempt to run `Core.Compiler.code_typed` on the lambda "mi"
+JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_code_info_t *ci = NULL;
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    int last_pure = ct->ptls->in_pure_callback;
+    ct->ptls->in_pure_callback = 0;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_typeinf_world;
+    jl_value_t **fargs;
+    JL_GC_PUSHARGS(fargs, 4);
+    jl_module_t *CC = (jl_module_t*)jl_get_global(jl_core_module, jl_symbol("Compiler"));
+    if (CC != NULL && jl_is_module(CC)) {
+        fargs[0] = jl_get_global(CC, jl_symbol("NativeInterpreter"));;
+        fargs[1] = jl_box_ulong(world);
+        fargs[1] = jl_apply(fargs, 2);
+        fargs[0] = jl_get_global(CC, jl_symbol("typeinf_code"));
+        fargs[2] = (jl_value_t*)mi;
+        fargs[3] = jl_true;
+        ci = (jl_code_info_t*)jl_apply(fargs, 4);
+    }
+    ct->world_age = last_age;
+    ct->ptls->in_pure_callback = last_pure;
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    if (ci && !jl_is_code_info(ci)) {
+        ci = NULL;
+    }
+    JL_GC_POP();
+    return ci;
+}
+
 JL_DLLEXPORT jl_value_t *jl_call_in_typeinf_world(jl_value_t **args, int nargs)
 {
     jl_task_t *ct = jl_current_task;

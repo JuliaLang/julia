@@ -3683,3 +3683,56 @@ end
 # Issue #53729 - Lowering recursion into Expr(:toplevel)
 @test eval(Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(f53729(x) = x)), :(x=1)))) == 1
 @test f53729(2) == 2
+
+# Issue #54701 - Macro hygiene of argument destructuring
+macro makef54701()
+    quote
+        call(f) = f((1, 2))
+        function $(esc(:f54701))()
+            call() do (a54701, b54701)
+                return a54701+b54701
+            end
+        end
+    end
+end
+@makef54701
+@test f54701() == 3
+@test !@isdefined(a54701)
+@test !@isdefined(b54701)
+
+# Issue #54607 - binding creation in foreign modules should not be permitted
+module Foreign54607
+    # Syntactic, not dynamic
+    try_to_create_binding1() = (Foreign54607.foo = 2)
+    @eval try_to_create_binding2() = ($(GlobalRef(Foreign54607, :foo)) = 2)
+    function global_create_binding()
+        global bar
+        bar = 3
+    end
+    baz = 4
+    begin;
+        @Base.Experimental.force_compile
+        compiled_assign = 5
+    end
+    @eval $(GlobalRef(Foreign54607, :gr_assign)) = 6
+end
+@test_throws ErrorException (Foreign54607.foo = 1)
+@test_throws ErrorException Foreign54607.try_to_create_binding1()
+@test_throws ErrorException Foreign54607.try_to_create_binding2()
+@test_throws ErrorException begin
+    @Base.Experimental.force_compile
+    (Foreign54607.foo = 1)
+end
+@test_throws ErrorException @eval (GlobalRef(Foreign54607, :gr_assign2)) = 7
+Foreign54607.global_create_binding()
+@test isdefined(Foreign54607, :bar)
+@test isdefined(Foreign54607, :baz)
+@test isdefined(Foreign54607, :compiled_assign)
+@test isdefined(Foreign54607, :gr_assign)
+Foreign54607.bar = 8
+@test Foreign54607.bar == 8
+begin
+    @Base.Experimental.force_compile
+    Foreign54607.bar = 9
+end
+@test Foreign54607.bar == 9

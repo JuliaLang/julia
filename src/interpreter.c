@@ -298,7 +298,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             argv[i] = eval_value(args[i], s);
         JL_NARGSV(new_opaque_closure, 4);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], argv+4, nargs-4, 1);
+            argv[4], argv+5, nargs-5, 1);
         JL_GC_POP();
         return ret;
     }
@@ -529,6 +529,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
                 ct->scope = new_scope;
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                    ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
@@ -537,6 +538,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else {
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                    ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
@@ -569,9 +571,13 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 else {
                     jl_module_t *modu;
                     jl_sym_t *sym;
+                    // Plain assignment is allowed to create bindings at
+                    // toplevel and only for the current module
+                    int alloc = toplevel;
                     if (jl_is_globalref(lhs)) {
                         modu = jl_globalref_mod(lhs);
                         sym = jl_globalref_name(lhs);
+                        alloc &= modu == s->module;
                     }
                     else {
                         assert(jl_is_symbol(lhs));
@@ -579,7 +585,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                         sym = (jl_sym_t*)lhs;
                     }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, sym);
+                    jl_binding_t *b = jl_get_binding_wr(modu, sym, alloc);
                     jl_checked_assignment(b, modu, sym, rhs);
                     JL_GC_POP();
                 }

@@ -3,9 +3,21 @@
 ## genericmemory.jl: Managed Memory
 
 """
-    GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: AbstractVector{T}
+    GenericMemory{kind::Symbol, T, addrspace=Core.CPU} <: DenseVector{T}
 
-One-dimensional dense array with elements of type `T`.
+Fixed-size [`DenseVector{T}`](@ref DenseVector).
+
+`kind` can currently be either `:not_atomic` or `:atomic`. For details on what `:atomic` implies, see [`AtomicMemory`](@ref)
+
+`addrspace` can currently only be set to Core.CPU. It is designed to  to permit extension by other systems
+such as GPUs, which might define values such as:
+```
+module CUDA
+const Generic = bitcast(Core.AddrSpace{CUDA}, 0)
+const Global = bitcast(Core.AddrSpace{CUDA}, 1)
+end
+```
+The exact semantics of these other addrspaces is defined by the specific backend, but will error if the user is attempting to access these on the CPU.
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
@@ -15,7 +27,7 @@ GenericMemory
 """
     Memory{T} == GenericMemory{:not_atomic, T, Core.CPU}
 
-One-dimensional dense array with elements of type `T`.
+Fixed-size [`DenseVector{T}`](@ref DenseVector).
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
@@ -25,8 +37,18 @@ Memory
 """
     AtomicMemory{T} == GenericMemory{:atomic, T, Core.CPU}
 
-One-dimensional dense array with elements of type `T`, where each element is
-independently atomic when accessed, and cannot be set non-atomically.
+Fixed-size [`DenseVector{T}`](@ref DenseVector).
+Access to its any of its elements is performed atomically (with `:monotonic` ordering).
+Setting any of the elements must be accomplished using the `@atomic` macro and explicitly specifying ordering.
+
+!!! warning
+    Each element is independently atomic when accessed, and cannot be set non-atomically.
+    Currently the `@atomic` macro and higher level interface have not been completed,
+    but the building blocks for a future implementation are the internal intrinsics
+    `Core.memoryrefget`, `Core.memoryrefset!`, `Core.memoryref_isassigned`, `Core.memoryrefswap!`,
+    `Core.memoryrefmodify!`, and `Core.memoryrefreplace!`.
+
+For details, see [Atomic Operations](@ref man-atomic-operations)
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.

@@ -3313,7 +3313,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(21,
+                        jl_perm_symsvec(22,
                             "code",
                             "debuginfo",
                             "ssavaluetypes",
@@ -3321,11 +3321,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             "slotnames",
                             "slotflags",
                             "slottypes",
+                            "rettype",
                             "parent",
-                            "method_for_inference_limit_heuristics",
                             "edges",
                             "min_world",
                             "max_world",
+                            "method_for_inference_limit_heuristics",
                             "nargs",
                             "propagate_inbounds",
                             "has_fcall",
@@ -3335,7 +3336,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "constprop",
                             "purity",
                             "inlining_cost"),
-                        jl_svec(21,
+                        jl_svec(22,
                             jl_array_any_type,
                             jl_debuginfo_type,
                             jl_any_type,
@@ -3345,9 +3346,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
+                            jl_any_type, // prefers svec, but tolerates Vector{Any}
+                            jl_ulong_type,
+                            jl_ulong_type,
                             jl_any_type,
-                            jl_ulong_type,
-                            jl_ulong_type,
                             jl_ulong_type,
                             jl_bool_type,
                             jl_bool_type,
@@ -3358,7 +3360,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type,
                             jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 21);
+                        0, 1, 22);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,

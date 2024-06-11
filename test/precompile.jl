@@ -1023,7 +1023,6 @@ precompile_test_harness("code caching") do dir
         @test mi.specTypes.parameters[end] === Integer ? !hv : hv
     end
 
-    setglobal!(Main, :inval, invalidations)
     idxs = findall(==("verify_methods"), invalidations)
     idxsbits = filter(idxs) do i
         mi = invalidations[i-1]
@@ -1953,6 +1952,48 @@ precompile_test_harness("Test flags") do load_path
     id = Base.identify_package("TestFlags")
     @test Base.isprecompiled(id, ;flags=modified_flags)
     @test !Base.isprecompiled(id, ;flags=current_flags)
+end
+
+precompile_test_harness("No backedge precompile") do load_path
+    # Test that the system doesn't accidentally forget to revalidate a method without backedges
+    write(joinpath(load_path, "NoBackEdges.jl"),
+          """
+          module NoBackEdges
+          using Core.Intrinsics: add_int
+          f(a::Int, b::Int) = add_int(a, b)
+          precompile(f, (Int, Int))
+          end
+          """)
+    ji, ofile = Base.compilecache(Base.PkgId("NoBackEdges"))
+    @eval using NoBackEdges
+    @test first(methods(NoBackEdges.f)).specializations.cache.max_world === typemax(UInt)
+end
+
+# Test precompilation of generated functions that return opaque closures
+# (with constprop marker set to false).
+precompile_test_harness("Generated Opaque") do load_path
+    write(joinpath(load_path, "GeneratedOpaque.jl"),
+        """
+        module GeneratedOpaque
+        using Base.Experimental: @opaque
+        using InteractiveUtils
+        const_int_barrier() = Base.inferencebarrier(1)::typeof(1)
+        const lno = LineNumberNode(1, :none)
+
+        const ci = @code_lowered const_int_barrier()
+        @generated function oc_re_generated_no_partial()
+            Expr(:new_opaque_closure, Tuple{}, Any, Any, false,
+                Expr(:opaque_closure_method, nothing, 0, false, lno, ci))
+        end
+        @assert oc_re_generated_no_partial()() === 1
+        end
+        """)
+    Base.compilecache(Base.PkgId("GeneratedOpaque"))
+    @eval using GeneratedOpaque
+    let oc = invokelatest(GeneratedOpaque.oc_re_generated_no_partial)
+        @test oc.source.specializations.cache.max_world === typemax(UInt)
+        @test oc() === 1
+    end
 end
 
 finish_precompile_test!()

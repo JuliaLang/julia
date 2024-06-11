@@ -261,9 +261,7 @@ jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &M,
         jl_method_instance_t *mi,
         jl_code_info_t *src,
-        jl_value_t *jlrettype,
-        jl_codegen_params_t &params,
-        size_t min_world, size_t max_world);
+        jl_codegen_params_t &params);
 
 jl_llvm_functions_t jl_emit_codeinst(
         orc::ThreadSafeModule &M,

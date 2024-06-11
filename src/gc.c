@@ -1432,7 +1432,8 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
 
 int64_t buffered_pages = 0;
 
-// Returns pointer to terminal pointer of list rooted at *pfl.
+// Walks over a page, reconstruting the free lists if the page contains at least one live object. If not,
+// queues up the page for later decommit (i.e. through `madvise` on Unix).
 static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
                           jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
 {
@@ -1917,9 +1918,7 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     // We need to ensure that objects are in the remset at
     // most once, since the mark phase may update page metadata,
     // which is not idempotent. See comments in https://github.com/JuliaLang/julia/issues/50419
-    uintptr_t header = jl_atomic_load_relaxed((_Atomic(uintptr_t) *)&o->header);
-    header &= ~GC_OLD; // clear the age bit
-    header = jl_atomic_exchange_relaxed((_Atomic(uintptr_t) *)&o->header, header);
+    uintptr_t header = jl_atomic_fetch_and_relaxed((_Atomic(uintptr_t) *)&o->header, ~GC_OLD);
     if (header & GC_OLD) { // write barrier has not been triggered in this object yet
         arraylist_push(ptls->heap.remset, (jl_value_t*)ptr);
         ptls->heap.remset_nptr++; // conservative

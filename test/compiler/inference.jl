@@ -4262,10 +4262,10 @@ let # Test the presence of PhiNodes in lowered IR by taking the above function,
     Core.Compiler.replace_code_newstyle!(ci, ir)
     ci.ssavaluetypes = length(ci.ssavaluetypes)
     @test any(x->isa(x, Core.PhiNode), ci.code)
-    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(b, 1.0)
     @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
-    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
 end
@@ -5290,6 +5290,15 @@ end
 end
 foo51090(b) = return bar51090(b)
 @test !fully_eliminated(foo51090, (Int,))
+
+Base.@assume_effects :terminates_globally @noinline function bar51090_terminates(b)
+    b == 0 && return
+    r = foo51090_terminates(b - 1)
+    Base.donotdelete(b)
+    return r
+end
+foo51090_terminates(b) = return bar51090_terminates(b)
+@test !fully_eliminated(foo51090_terminates, (Int,))
 
 # exploit throwness from concrete eval for intrinsics
 @test Base.return_types() do

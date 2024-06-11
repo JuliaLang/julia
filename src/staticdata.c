@@ -2437,6 +2437,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             }
             if (should_strip_ir) {
                 record_field_change(&m->source, jl_nothing);
+                record_field_change((jl_value_t**)&m->roots, NULL);
                 stripped_ir = 1;
             }
         }

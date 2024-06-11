@@ -51,16 +51,6 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
     end
 end
 
-similar(A::UpperTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}) where {T,Ti} =
-    UpperTriangular(similar(parent(parent(A)), T))
-similar(A::UnitUpperTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}) where {T,Ti} =
-    UnitUpperTriangular(similar(parent(parent(A)), T))
-similar(A::LowerTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}) where {T,Ti} =
-    LowerTriangular(similar(parent(parent(A)), T))
-similar(A::UnitLowerTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}) where {T,Ti} =
-    UnitLowerTriangular(similar(parent(parent(A)), T))
-
-
 """
     LowerTriangular(A::AbstractMatrix)
 
