@@ -229,8 +229,7 @@
   (let ((name (cadr m)))
      (let ((name (if (or (length= m 2) (not (pair? name)) (not (quoted? name))) name (cadr name))))
        (cond ((not (pair? name)) name)
-             ((eq? (car name) 'outerref) (cadr name))
-             ;((eq? (car name) 'globalref) (caddr name))
+             ((eq? (car name) 'globalref) (caddr name))
              (else name)))))
 
 ;; extract static parameter names from a (method ...) expression
@@ -248,8 +247,7 @@
 
 (define (nodot-sym-ref? e)
   (or (symbol? e)
-      (and (length= e 3) (eq? (car e) 'globalref))
-      (and (length= e 2) (eq? (car e) 'outerref))))
+      (and (length= e 3) (eq? (car e) 'globalref))))
 
 ;; expressions of the form a.b.c... where everything is a symbol
 (define (sym-ref? e)
@@ -764,7 +762,7 @@
                           ,@(map make-decl field-names field-types))
                     (block
                      ,@locs
-                     (new (outerref ,name) ,@field-names)))
+                     (new (globalref (thismodule) ,name) ,@field-names)))
           #f))
          (any-ctor (if (or (not all-ctor) (any (lambda (t) (not (equal? t '(core Any))))
                                  field-types))
@@ -816,10 +814,10 @@
     (if (> nnv (length params))
         (error "too many type parameters specified in \"new{...}\"")))
   (let* ((Texpr (if (null? type-params)
-                    `(outerref ,Tname)
+                    `(globalref (thismodule) ,Tname)
                     (if selftype?
                         '|#ctor-self#|
-                        `(curly (outerref ,Tname)
+                        `(curly (globalref (thismodule) ,Tname)
                                 ,@type-params))))
          (tn (if (symbol? Texpr) Texpr (make-ssavalue)))
          (field-convert (lambda (fld fty val)
@@ -994,15 +992,15 @@
          (local-def ,name)
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
-         (toplevel-only struct (outerref ,name))
+         (toplevel-only struct (globalref (thismodule) ,name))
          (= ,name (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@params)
                         (call (core svec) ,@(map quotify field-names))
                         (call (core svec) ,@attrs)
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
-         (if (isdefined (outerref ,name))
+         (if (isdefined (globalref (thismodule) ,name))
              (block
-              (= ,prev (outerref ,name))
+              (= ,prev (globalref (thismodule) ,name))
               (if (call (core _equiv_typedef) ,prev ,name)
                   ;; if this is compatible with an old definition, use the existing type object
                   ;; and its parameters
@@ -1015,8 +1013,8 @@
                                                       (quote parameters))))
                                '()))
                   ;; otherwise do an assignment to trigger an error
-                  (= (outerref ,name) ,name)))
-             (= (outerref ,name) ,name))
+                  (= (globalref (thismodule) ,name) ,name)))
+             (= (globalref (thismodule) ,name) ,name))
          (call (core _typebody!) ,name (call (core svec) ,@field-types))
          (null)))
        ;; "inner" constructors
@@ -1063,10 +1061,10 @@
        (= ,name (call (core _abstracttype) (thismodule) (inert ,name) (call (core svec) ,@params)))
        (call (core _setsuper!) ,name ,super)
        (call (core _typebody!) ,name)
-       (if (&& (isdefined (outerref ,name))
-               (call (core _equiv_typedef) (outerref ,name) ,name))
+       (if (&& (isdefined (globalref (thismodule) ,name))
+               (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
-           (= (outerref ,name) ,name))
+           (= (globalref (thismodule) ,name) ,name))
        (null))))))
 
 (define (primitive-type-def-expr n name params super)
@@ -1083,10 +1081,10 @@
        (= ,name (call (core _primitivetype) (thismodule) (inert ,name) (call (core svec) ,@params) ,n))
        (call (core _setsuper!) ,name ,super)
        (call (core _typebody!) ,name)
-       (if (&& (isdefined (outerref ,name))
-               (call (core _equiv_typedef) (outerref ,name) ,name))
+       (if (&& (isdefined (globalref (thismodule) ,name))
+               (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
-           (= (outerref ,name) ,name))
+           (= (globalref (thismodule) ,name) ,name))
        (null))))))
 
 ;; take apart a type signature, e.g. T{X} <: S{Y}
@@ -2371,7 +2369,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -2502,7 +2500,7 @@
                                lhss)
                         (unnecessary ,rr)))))))
       ((or (and (symbol-like? lhs) (valid-name? lhs))
-           (globalref? lhs) (outerref? lhs))
+           (globalref? lhs))
        (sink-assignment lhs (expand-forms (caddr e))))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
@@ -2968,7 +2966,7 @@
           ((=)
            (let ((v (decl-var (cadr e))))
              (find-assigned-vars- (caddr e))
-             (if (or (ssavalue? v) (globalref? v) (outerref? v) (underscore-symbol? v))
+             (if (or (ssavalue? v) (globalref? v) (underscore-symbol? v))
                  '()
                  (set! vars (cons v vars)))))
           (else
@@ -3016,7 +3014,7 @@
     (for-each (lambda (v) (push-var! tab v v)) sp)
     (for-each (lambda (v) (push-var! tab v v)) locals)
     (for-each (lambda (pair) (push-var! tab (car pair) (cdr pair))) renames)
-    (for-each (lambda (v) (push-var! tab v `(outerref ,v))) globals)
+    (for-each (lambda (v) (push-var! tab v `(globalref (thismodule) ,v))) globals)
     (for-each (lambda (v) (push-var! tab v v)) args)
     (vector lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars tab)))
 
@@ -3080,7 +3078,7 @@
          (let ((val (and scope (get (scope:table scope) e #f))))
            (cond (val (car val))
                  ((underscore-symbol? e) e)
-                 (else `(outerref ,e)))))
+                 (else `(globalref (thismodule) ,e)))))
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel symbolicgoto symboliclabel toplevel-only)))
          e)
         ((eq? (car e) 'global)
@@ -3090,6 +3088,9 @@
          (check-valid-name (cadr e))
          ;; remove local decls
          '(null))
+        ((memq (car e) '(using import export public))
+          ;; no scope resolution - identifiers remain raw symbols
+          e)
         ((eq? (car e) 'require-existing-local)
          (if (not (in-scope? (cadr e) scope))
              (error "no outer local variable declaration exists for \"for outer\""))
@@ -3268,7 +3269,7 @@
 (define (free-vars- e tab)
   (cond ((or (eq? e UNUSED) (underscore-symbol? e)) tab)
         ((symbol? e) (put! tab e #t))
-        ((and (pair? e) (eq? (car e) 'outerref)) tab)
+        ((and (pair? e) (eq? (car e) 'globalref)) tab)
         ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
@@ -3440,7 +3441,7 @@ f(x) = yt(x)
                             (call (core svec))
                             (false) ,(length fields)))
                 (call (core _setsuper!) ,s ,super)
-                (= (outerref ,name) ,s)
+                (= (globalref (thismodule) ,name) ,s)
                 (call (core _typebody!) ,s (call (core svec) ,@types))
                 (return (null)))))))))
 
@@ -3454,7 +3455,7 @@ f(x) = yt(x)
                           (call (core svec))
                           (false) ,(length fields)))
               (call (core _setsuper!) ,s ,super)
-              (= (outerref ,name) ,s)
+              (= (globalref (thismodule) ,name) ,s)
               (call (core _typebody!) ,s
                     (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
               (return (null)))))))))
@@ -3599,7 +3600,7 @@ f(x) = yt(x)
                  `(block (= ,rhs1 ,rhs0)
                          ,ex
                          ,rhs1))))))
-     ((or (outerref? var) (globalref? var))
+     ((globalref? var)
       (convert-global-assignment var rhs0 globals lam))
      ((ssavalue? var)
       `(= ,var ,rhs0))
@@ -3710,7 +3711,7 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref outerref const-if-global thismodule
+         global globalref const-if-global thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
 
@@ -3935,7 +3936,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref outerref thismodule lineinfo line break inert module toplevel null true false meta) e)
+          ((quote top core globalref thismodule lineinfo line break inert module toplevel null true false meta) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -4008,7 +4009,7 @@ f(x) = yt(x)
                   (vis   (if short '(() () ()) (lam:vinfo lam2)))
                   (cvs   (map car (cadr vis)))
                   (local? (lambda (s) (and lam (symbol? s) (local-in? s lam locals))))
-                  (local (and (not (outerref? (cadr e))) (local? name)))
+                  (local (and (not (globalref? (cadr e))) (local? name)))
                   (sig      (and (not short) (caddr e)))
                   (sp-inits (if (or short (not (eq? (car sig) 'block)))
                                 '()
@@ -4257,11 +4258,8 @@ f(x) = yt(x)
         (else (for-each linearize (cdr e))))
   e)
 
-;; N.B.: This assumes that resolve-scopes has run, so outerref is equivalent to
-;; a global in the current scope.
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
-      (and (outerref? e) (nothrow-julia-global (cadr e)))
       (and (globalref? e) (nothrow-julia-global (cadr e) (caddr e)))
       (and (pair? e)
            (memq (car e) '(quote inert top core
@@ -4271,7 +4269,7 @@ f(x) = yt(x)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref)))))
+           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure globalref)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -4458,7 +4456,7 @@ f(x) = yt(x)
         ;; left-to-right evaluation semantics.
         (let ((simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
                                               (and (pair? x)
-                                                   (memq (car x) '(quote inert top core globalref outerref)))))
+                                                   (memq (car x) '(quote inert top core globalref)))))
                               lst)))
           (let loop ((lst  lst)
                      (vals '()))
@@ -4528,19 +4526,17 @@ f(x) = yt(x)
     ;; from the current function.
     (define (compile e break-labels value tail)
       (if (or (not (pair? e)) (memq (car e) '(null true false ssavalue quote inert top core copyast the_exception $
-                                                   globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall)))
+                                                   globalref thismodule cdecl stdcall fastcall thiscall llvmcall)))
           (let ((e1 (if (and arg-map (symbol? e))
                         (get arg-map e e)
                         e)))
             (if (and value (or (underscore-symbol? e)
-                               (and (pair? e) (or (eq? (car e) 'outerref)
-                                                  (eq? (car e) 'globalref))
+                               (and (pair? e) (eq? (car e) 'globalref)
                                     (underscore-symbol? (cadr e)))))
                 (error (string "all-underscore identifiers are write-only and their values cannot be used in expressions" (format-loc current-loc))))
             (cond (tail  (emit-return tail e1))
                   (value e1)
                   ((symbol? e1) (emit e1) #f)  ;; keep symbols for undefined-var checking
-                  ((and (pair? e1) (eq? (car e1) 'outerref)) (emit e1) #f)  ;; keep globals for undefined-var checking
                   ((and (pair? e1) (eq? (car e1) 'globalref)) (emit e1) #f) ;; keep globals for undefined-var checking
                   (else #f)))
           (case (car e)
@@ -4574,7 +4570,7 @@ f(x) = yt(x)
                            ;; NOTE: 1st argument to cglobal treated same as for ccall
                            ((and (length> e 2)
                                  (or (eq? (cadr e) 'cglobal)
-                                     (equal? (cadr e) '(outerref cglobal))))
+                                     (equal? (cadr e) '(globalref (thismodule) cglobal))))
                             (append (list (cadr e))
                                     (if (atom-or-not-tuple-call? (caddr e))
                                         (compile-args (list (caddr e)) break-labels)
@@ -5125,8 +5121,6 @@ f(x) = yt(x)
                      (if idx
                          `(static_parameter ,idx)
                          e)))))
-            ((and (pair? e) (eq? (car e) 'outerref))
-             (cadr e))
             ((nospecialize-meta? e)
              ;; convert nospecialize vars to slot numbers
              `(meta ,(cadr e) ,@(map renumber-stuff (cddr e))))
