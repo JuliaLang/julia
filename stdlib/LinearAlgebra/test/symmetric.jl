@@ -1097,6 +1097,16 @@ end
     end
 end
 
+@testset "copyto with incompatible sizes" begin
+    A = zeros(3,3); B = zeros(2,2)
+    @testset "copyto with incompatible sizes" begin
+        for T in (Symmetric, Hermitian)
+            @test_throws BoundsError copyto!(T(B), T(A))
+            @test_throws "Cannot set a non-diagonal index" copyto!(T(A), T(B))
+        end
+    end
+end
+
 @testset "getindex with Integers" begin
     M = reshape(1:4,2,2)
     for ST in (Symmetric, Hermitian)
