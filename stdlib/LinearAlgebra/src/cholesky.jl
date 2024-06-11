@@ -312,39 +312,39 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
 
     @inbounds begin
         # first step
-        ajj, q = findmax(i -> real(A[i,i]), 1:n)
-        stop = tol < 0 ? eps(rTA)*n*abs(ajj) : tol
-        ajj ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
+        Akk, q = findmax(i -> real(A[i,i]), 1:n)
+        stop = tol < 0 ? eps(rTA)*n*abs(Akk) : tol
+        Akk ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
         # swap
         _swap_rowcols!(A, UpperTriangular, n, 1, q)
         piv[1], piv[q] = piv[q], piv[1]
-        A[1,1] = ajj = sqrt(ajj)
-        ajjinv = inv(copy(ajj'))
-        @simd for k in 2:n
-            A[1, k] *= ajjinv
+        A[1,1] = Akk = sqrt(Akk)
+        AkkInv = inv(copy(Akk'))
+        @simd for j in 2:n
+            A[1, j] *= AkkInv
         end
 
-        for j in 2:n
-            @simd for k in j:n
-                dots[k] += abs2(A[j-1, k])
-                temp[k] = real(A[k,k]) - dots[k]
+        for k in 2:n
+            @simd for j in k:n
+                dots[j] += abs2(A[k-1, j])
+                temp[j] = real(A[j,j]) - dots[j]
             end
-            ajj, q = findmax(i -> temp[i], j:n)
-            ajj ≤ stop && return A, piv, convert(BlasInt, j - 1), convert(BlasInt, 1)
-            q += j - 1
+            Akk, q = findmax(j -> temp[j], k:n)
+            Akk ≤ stop && return A, piv, convert(BlasInt, k - 1), convert(BlasInt, 1)
+            q += k - 1
             # swap
-            _swap_rowcols!(A, UpperTriangular, n, j, q)
-            dots[j], dots[q] = dots[q], dots[j]
-            piv[j], piv[q] = piv[q], piv[j]
+            _swap_rowcols!(A, UpperTriangular, n, k, q)
+            dots[k], dots[q] = dots[q], dots[k]
+            piv[k], piv[q] = piv[q], piv[k]
             # update
-            A[j,j] = ajj = sqrt(ajj)
-            ajjinv = inv(copy(ajj'))
-            if j < n
-                for k in (j+1):n
-                    @simd for m in 1:(j-1)
-                        A[j,k] -= A[m,j]'A[m,k]
+            A[k,k] = Akk = sqrt(Akk)
+            AkkInv = inv(copy(Akk'))
+            if k < n
+                for j in (k+1):n
+                    @simd for i in 1:(k-1)
+                        A[k,j] -= A[i,k]'A[i,j]
                     end
-                    A[j,k] = ajjinv * A[j,k]
+                    A[k,j] = AkkInv * A[k,j]
                 end
             end
         end
@@ -363,41 +363,41 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
 
     @inbounds begin
         # first step
-        ajj, q = findmax(i -> real(A[i,i]), 1:n)
-        stop = tol < 0 ? eps(rTA)*n*abs(ajj) : tol
-        ajj ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
+        Akk, q = findmax(i -> real(A[i,i]), 1:n)
+        stop = tol < 0 ? eps(rTA)*n*abs(Akk) : tol
+        Akk ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
         # swap
         _swap_rowcols!(A, LowerTriangular, n, 1, q)
         piv[1], piv[q] = piv[q], piv[1]
-        A[1,1] = ajj = sqrt(ajj)
-        ajjinv = inv(ajj)
-        @simd for k in 2:n
-            A[k,1] *= ajjinv
+        A[1,1] = Akk = sqrt(Akk)
+        AkkInv = inv(copy(Akk'))
+        @simd for i in 2:n
+            A[i,1] *= AkkInv
         end
 
-        for j in 2:n
-            @simd for k in j:n
-                dots[k] += abs2(A[k, j-1])
-                temp[k] = real(A[k,k]) - dots[k]
+        for k in 2:n
+            @simd for j in k:n
+                dots[j] += abs2(A[j, k-1])
+                temp[j] = real(A[j,j]) - dots[j]
             end
-            ajj, q = findmax(i -> temp[i], j:n)
-            ajj ≤ stop && return A, piv, convert(BlasInt, j-1), convert(BlasInt, 1)
-            q += j - 1
+            Akk, q = findmax(i -> temp[i], k:n)
+            Akk ≤ stop && return A, piv, convert(BlasInt, k-1), convert(BlasInt, 1)
+            q += k - 1
             # swap
-            _swap_rowcols!(A, LowerTriangular, n, j, q)
-            dots[j], dots[q] = dots[q], dots[j]
-            piv[j], piv[q] = piv[q], piv[j]
+            _swap_rowcols!(A, LowerTriangular, n, k, q)
+            dots[k], dots[q] = dots[q], dots[k]
+            piv[k], piv[q] = piv[q], piv[k]
             # update
-            A[j,j] = ajj = sqrt(ajj)
-            ajjinv = inv(copy(ajj'))
-            if j < n
-                for k in 1:(j-1)
-                    @simd for m in (j+1):n
-                        A[m,j] -= A[m,k]*A[j,k]'
+            A[k,k] = Akk = sqrt(Akk)
+            AkkInv = inv(copy(Akk'))
+            if k < n
+                for j in 1:(k-1)
+                    @simd for i in (k+1):n
+                        A[i,k] -= A[i,j]*A[k,j]'
                     end
                 end
-                @simd for m in (j+1):n
-                    A[m, j] *= ajjinv
+                @simd for i in (k+1):n
+                    A[i, k] *= AkkInv
                 end
             end
         end
