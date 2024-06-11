@@ -58,6 +58,9 @@ struct JLOptions
     permalloc_pkgimg::Int8
     heap_size_hint::UInt64
     trace_compile_timing::Int8
+    no_dispatch_precompile::Int8
+    verbose_compilation::Int8
+    small_image::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

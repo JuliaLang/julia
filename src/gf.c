@@ -1709,7 +1709,7 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
         jl_printf(s, ".\n");
         jl_uv_flush(s);
     }
-    if (jl_generating_output()) {
+    if (jl_generating_output() && jl_options.incremental) {
         jl_printf(JL_STDERR, "ERROR: Method overwriting is not permitted during Module precompilation. Use `__precompile__(false)` to opt-out of precompilation.\n");
         jl_throw(jl_precompilable_error);
     }
@@ -3100,6 +3100,27 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
         return 0;
     JL_GC_PROMISE_ROOTED(mi);
     jl_compile_method_instance(mi, types, world);
+    return 1;
+}
+
+JL_DLLEXPORT int jl_add_entrypoint(jl_tupletype_t *types)
+{
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
+    size_t min_valid = 0;
+    size_t max_valid = ~(size_t)0;
+    jl_method_instance_t *mi = jl_get_compile_hint_specialization(types, world, &min_valid, &max_valid, 1);
+    if (mi == NULL)
+        return 0;
+    JL_GC_PROMISE_ROOTED(mi);
+    if (jl_generating_output() && jl_options.small_image) {
+        if (jl_options.verbose_compilation > 0) {
+            jl_safe_printf("adding code root from jl_compile_method_instance\n for:");
+            jl_(mi);
+            jl_safe_printf("from module: ");
+            jl_(mi->def.method->module);
+        }
+        arraylist_push(jl_entrypoint_mis, mi);
+    }
     return 1;
 }
 

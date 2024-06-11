@@ -101,6 +101,9 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
                         0, // trace_compile_timing
+                        0, // no_dispatch_precompile
+                        0, // verbose_compilation
+                        0, // small_image
     };
     jl_options_initialized = 1;
 }
@@ -263,6 +266,9 @@ static const char opts_hidden[]  =
     "                                               compile in ms\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
+    " --no_dispatch_precompile={yes|no*} Disable precompilation of dispatch functions\n"
+    " --verbose-compilation={yes|no*} Print verbose output during compilation\n"
+    " --small-image            Build a sysimage with only reachable methods from precompilation\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -309,7 +315,10 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_ir,
            opt_heap_size_hint,
            opt_gc_threads,
-           opt_permalloc_pkgimg
+           opt_permalloc_pkgimg,
+           opt_no_dispatch_precompile,
+           opt_verbose_compilation,
+           opt_small_image,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -373,6 +382,9 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "no-dispatch-precompile",  required_argument, 0, opt_no_dispatch_precompile },
+        { "verbose-compilation",  required_argument, 0, opt_verbose_compilation },
+        { "small-image",  required_argument, 0, opt_small_image },
         { 0, 0, 0, 0 }
     };
 
@@ -931,6 +943,30 @@ restart_switch:
                 jl_options.permalloc_pkgimg = 0;
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
+            break;
+                    case opt_no_dispatch_precompile:
+            if (!strcmp(optarg,"yes"))
+                jl_options.no_dispatch_precompile = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.no_dispatch_precompile = 0;
+            else
+                jl_errorf("julia: invalid argument to --no-dispatch-precompile={yes|no} (%s)", optarg);
+            break;
+        case opt_verbose_compilation:
+            if (!strcmp(optarg,"yes"))
+                jl_options.verbose_compilation = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.verbose_compilation = 0;
+            else
+                jl_errorf("julia: invalid argument to --verbose-compilation={yes|no} (%s)", optarg);
+            break;
+        case opt_small_image:
+            if (!strcmp(optarg,"yes"))
+                jl_options.small_image = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.small_image = 0;
+            else
+                jl_errorf("julia: invalid argument to --small-image={yes|no} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

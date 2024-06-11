@@ -683,6 +683,7 @@ JL_DLLEXPORT const char *jl_debuginfo_name(jl_value_t *func) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
+JL_DLLEXPORT int jl_add_entrypoint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world);
 jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world);
 int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile);
@@ -852,6 +853,7 @@ extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
 extern jl_genericmemory_t *jl_global_roots_list JL_GLOBALLY_ROOTED;
 extern jl_genericmemory_t *jl_global_roots_keyset JL_GLOBALLY_ROOTED;
+extern arraylist_t *jl_entrypoint_mis;
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert) JL_GLOBALLY_ROOTED;
 
@@ -1781,7 +1783,7 @@ JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncod
         int32_t *func_idx, int32_t *specfunc_idx);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                                     jl_method_instance_t **linfos, size_t n);
-
+JL_DLLIMPORT void jl_get_llvm_mis(void *native_code, arraylist_t* MIs);
 JL_DLLIMPORT void jl_init_codegen(void);
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;

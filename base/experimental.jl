@@ -457,4 +457,13 @@ without adding them to the global method table.
 """
 :@MethodTable
 
+function entrypoint(@nospecialize(f), @nospecialize(argtypes::Tuple))
+    entrypoint(Tuple{Core.Typeof(f), argtypes...})
+end
+
+function entrypoint(@nospecialize(argt::Type))
+    ccall(:jl_add_entrypoint, Int32, (Any,), argt)
+    nothing
+end
+
 end

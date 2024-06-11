@@ -1467,6 +1467,14 @@ struct CodegenParams
     use_jlplt::Cint
 
     """
+    If enabled, any attempt to emit a dynamic call will cause codegen to throw an
+    error describing the source location and MethodInstance containing the dispatch,
+    as well as a stack of static dispatches that led to the dispatch (if available).
+    The option is disabled by default.
+    """
+    no_dynamic_dispatch::Cint
+
+    """
     A pointer of type
 
     typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT,
@@ -1481,14 +1489,14 @@ struct CodegenParams
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true,
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, no_dynamic_dispatch::Bool=false,
                    lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})))
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt),
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(no_dynamic_dispatch),
             lookup)
     end
 end
