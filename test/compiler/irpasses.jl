@@ -1355,3 +1355,24 @@ let src = code_typed1(mut50285, Tuple{Bool, Int, Float64})
     @test count(isnew, src.code) == 0
     @test count(iscall((src, typeassert)), src.code) == 0
 end
+
+# https://github.com/JuliaLang/julia/issues/54596
+# finalized object's uses have no postdominator
+let f = (x)->nothing, mi = only(Base.method_instances(f, (Base.RefValue{Nothing},), Base.get_world_counter())), code = Any[
+   # Basic Block 1
+   Expr(:new, Base.RefValue{Nothing}, nothing)
+   Expr(:call, Core.finalizer, f, SSAValue(1), true, mi)
+   GotoIfNot(false, 6)
+   # Basic Block 2
+   Expr(:call, Base.getfield, SSAValue(1), :x)
+   ReturnNode(SSAValue(4))
+   # Basic Block 3
+   Expr(:call, Base.getfield, SSAValue(1), :x)
+   ReturnNode(SSAValue(6))
+]
+   ir = make_ircode(code; ssavaluetypes=Any[Base.RefValue{Nothing}, Nothing, Any, Nothing, Any, Nothing, Any])
+   inlining = Core.Compiler.InliningState(Core.Compiler.NativeInterpreter())
+   Core.Compiler.verify_ir(ir)
+   ir = Core.Compiler.sroa_pass!(ir, inlining)
+   Core.Compiler.verify_ir(ir)
+end
