@@ -116,14 +116,16 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
             int setting = jl_get_module_compile((jl_module_t*)m);
-            if (setting != JL_OPTIONS_COMPILE_OFF &&
-                setting != JL_OPTIONS_COMPILE_MIN) {
+            if ((setting != JL_OPTIONS_COMPILE_OFF && (jl_options.small_image ||
+                (setting != JL_OPTIONS_COMPILE_MIN)))) {
                 // TODO: this would be better handled if moved entirely to jl_precompile
                 // since it's a slightly duplication of effort
                 jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
                 JL_GC_PUSH1(&tt);
                 tt = jl_apply_tuple_type_v(&tt, 1);
                 jl_compile_hint((jl_tupletype_t*)tt);
+                if (jl_options.small_image)
+                    jl_add_entrypoint((jl_tupletype_t*)tt);
                 JL_GC_POP();
             }
         }
@@ -187,6 +189,10 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
             jl_static_show(JL_STDERR, (jl_value_t*)jl_current_modules.table[i]);
             jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
         }
+    }
+    if (jl_options.small_image){
+        exit(0); // Some finalizers need to run and we've blown up the bindings table
+        // TODO: Is this still needed
     }
     JL_GC_POP();
     jl_gc_enable_finalizers(ct, 1);
