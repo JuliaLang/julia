@@ -1862,10 +1862,12 @@ end
         output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
         @test output == "1"
         output = sprint(REPL.show_limited, MIME"text/plain"(), 12)
-        @test output == "1…[printing stopped after displaying 1 bytes]"
+        @test output == "1…[printing stopped after displaying 1 byte]"
         REPL.SHOW_MAXIMUM_BYTES = 0
         output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
         @test output == "…[printing stopped after displaying 0 bytes]"
+        @test sprint(io -> show(REPL.LimitIO(io, 5), "abc")) == "\"abc\""
+        @test_throws REPL.LimitIOException(1) sprint(io -> show(REPL.LimitIO(io, 1), "abc"))
     finally
         REPL.SHOW_MAXIMUM_BYTES = previous
     end

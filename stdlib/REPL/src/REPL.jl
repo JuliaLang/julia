@@ -360,7 +360,7 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
-SHOW_MAXIMUM_BYTES::Int = 100_000
+SHOW_MAXIMUM_BYTES::Int = 20480
 
 # Limit printing during REPL display
 mutable struct LimitIO{IO_t <: IO} <: IO
@@ -378,7 +378,7 @@ struct LimitIOException <: Exception
 end
 
 function Base.showerror(io::IO, e::LimitIOException)
-    print(io, "$LimitIOException: aborted printing after attempting to `show` more than $(e.maxbytes) bytes of data in the REPL.")
+    print(io, "$LimitIOException: aborted printing after attempting to print more than $(Base.format_bytes(e.maxbytes)) within a `LimitIO`.")
 end
 
 function Base.write(io::LimitIO, v::UInt8)
@@ -427,7 +427,7 @@ function show_limited(io::IO, mime::MIME, x)
         show(wrapped_limiter, mime, x)
     catch e
         e isa LimitIOException || rethrow()
-        printstyled(io, "…[printing stopped after displaying $(e.maxbytes) bytes]"; color=:light_yellow, bold=true)
+        printstyled(io, "…[printing stopped after displaying $(Base.format_bytes(e.maxbytes))]"; color=:light_yellow, bold=true)
     end
 end
 
