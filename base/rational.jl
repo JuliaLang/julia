@@ -332,7 +332,7 @@ function -(x::Rational{T}) where T<:BitSigned
     x.num == typemin(T) && __throw_rational_numerator_typemin(T)
     unsafe_rational(-x.num, x.den)
 end
-@noinline __throw_rational_numerator_typemin(T) = throw(OverflowError("rational numerator is typemin($T)"))
+@noinline __throw_rational_numerator_typemin(T) = throw(OverflowError(LazyString("rational numerator is typemin(", T, ")")))
 
 function -(x::Rational{T}) where T<:Unsigned
     x.num != zero(T) && __throw_negate_unsigned()
