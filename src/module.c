@@ -711,7 +711,7 @@ JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
     return b && jl_atomic_load_relaxed(&b->owner) != NULL;
 }
 
-static uint_t bindingkey_hash(size_t idx, jl_value_t *data)
+uint_t bindingkey_hash(size_t idx, jl_value_t *data)
 {
     jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx); // This must always happen inside the lock
     jl_sym_t *var = b->globalref->name;

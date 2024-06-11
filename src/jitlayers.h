@@ -28,7 +28,7 @@
 #include "llvm-codegen-shared.h"
 #include <stack>
 #include <queue>
-
+#include <tuple>
 
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
 // RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
@@ -64,6 +64,7 @@
 using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
+extern arraylist_t new_invokes;
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
@@ -210,7 +211,7 @@ struct jl_codegen_call_target_t {
 typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>, 0> jl_workqueue_t;
 // TODO DenseMap?
 typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_compiled_functions_t;
-
+typedef std::list<std::tuple<std::string, std::string, unsigned int>> CallFrames;
 struct jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
@@ -229,6 +230,7 @@ struct jl_codegen_params_t {
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
+    llvm::MapVector<jl_method_instance_t*, std::tuple<jl_method_instance_t*, CallFrames>> enqueuers;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
