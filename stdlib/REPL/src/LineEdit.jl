@@ -75,10 +75,10 @@ mutable struct MIState
     key_repeats::Int
     last_action::Symbol
     current_action::Symbol
-    async_channel::Channel
+    async_channel::Channel{Function}
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel())
+MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
