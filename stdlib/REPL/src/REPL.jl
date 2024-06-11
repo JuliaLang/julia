@@ -1281,7 +1281,7 @@ function setup_interface(
                     REPLExt = load_pkg()
                     if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
                         put!(s.async_channel,
-                            function (s::MIState, _)
+                            function (s::MIState)
                                 LineEdit.mode(s) === dummy_pkg_mode || return :ok
                                 for mode in repl.interface.modes
                                     if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
