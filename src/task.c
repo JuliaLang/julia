@@ -272,7 +272,7 @@ JL_NO_ASAN static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *l
         return;
     if (r != 0 || returns != 1)
         abort();
-#elif defined(JL_HAVE_ASM) || defined(JL_HAVE_SIGALTSTACK) || defined(_OS_WINDOWS_)
+#elif defined(JL_HAVE_ASM) || defined(_OS_WINDOWS_)
     if (jl_setjmp(lastt->ctx.copy_ctx.uc_mcontext, 0))
         return;
 #else
@@ -1507,98 +1507,6 @@ JL_NO_ASAN static void jl_start_fiber_set(jl_ucontext_t *t)
 #error JL_HAVE_ASM defined but not implemented for this CPU type
 #endif
     __builtin_unreachable();
-}
-#endif
-
-#if defined(JL_HAVE_SIGALTSTACK)
-#if defined(_COMPILER_TSAN_ENABLED_)
-#error TSAN support not currently implemented for this tasking model
-#endif
-
-static void start_basefiber(int sig)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
-        start_task(); // sanitizer_finish_switch_fiber is part of start_task
-}
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
-{
-    stack_t uc_stack, osigstk;
-    struct sigaction sa, osa;
-    sigset_t set, oset;
-    void *stk = jl_malloc_stack(ssize, owner);
-    if (stk == NULL)
-        return NULL;
-    // setup
-    jl_ptls_t ptls = jl_current_task->ptls;
-    _jl_ucontext_t base_ctx;
-    memcpy(&base_ctx, &ptls->base_ctx, sizeof(base_ctx));
-    sigfillset(&set);
-    if (pthread_sigmask(SIG_BLOCK, &set, &oset) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("pthread_sigmask failed");
-    }
-    uc_stack.ss_sp = stk;
-    uc_stack.ss_size = *ssize;
-    uc_stack.ss_flags = 0;
-    if (sigaltstack(&uc_stack, &osigstk) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaltstack failed");
-    }
-    memset(&sa, 0, sizeof(sa));
-    sigemptyset(&sa.sa_mask);
-    sa.sa_handler = start_basefiber;
-    sa.sa_flags = SA_ONSTACK;
-    if (sigaction(SIGUSR2, &sa, &osa) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaction failed");
-    }
-    // emit signal
-    pthread_kill(pthread_self(), SIGUSR2); // initializes jl_basectx
-    sigdelset(&set, SIGUSR2);
-    sigsuspend(&set);
-    // cleanup
-    if (sigaction(SIGUSR2, &osa, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaction failed");
-    }
-    if (osigstk.ss_size < MINSTKSZ && (osigstk.ss_flags | SS_DISABLE))
-       osigstk.ss_size = MINSTKSZ;
-    if (sigaltstack(&osigstk, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaltstack failed");
-    }
-    if (pthread_sigmask(SIG_SETMASK, &oset, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("pthread_sigmask failed");
-    }
-    if (&ptls->base_ctx != t) {
-        memcpy(&t, &ptls->base_ctx, sizeof(base_ctx));
-        memcpy(&ptls->base_ctx, &base_ctx, sizeof(base_ctx)); // restore COPY_STACKS context
-    }
-    return (char*)stk;
-}
-static void jl_start_fiber_set(jl_ucontext_t *t) {
-    jl_longjmp(t->ctx.uc_mcontext, 1); // (doesn't return)
-}
-static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
-{
-    assert(lastt);
-    if (lastt && jl_setjmp(lastt->ctx.uc_mcontext, 0))
-        return;
-    tsan_switch_to_ctx(t);
-    jl_start_fiber_set(t);
-}
-static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
-{
-    if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
-        return;
-    tsan_switch_to_ctx(t);
-    jl_start_fiber_set(t); // doesn't return
-}
-static void jl_set_fiber(jl_ucontext_t *t)
-{
-    jl_longjmp(t->ctx.uc_mcontext, 1);
 }
 #endif
 

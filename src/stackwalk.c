@@ -1151,8 +1151,6 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
       (void)c;
      #endif
-#elif defined(JL_HAVE_SIGALTSTACK)
-     #pragma message("jl_rec_backtrace not defined for SIGALTSTACK")
 #else
      #pragma message("jl_rec_backtrace not defined for unknown task system")
 #endif
