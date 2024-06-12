@@ -1978,6 +1978,7 @@ public:
 
     Value *pgcstack = NULL;
     Instruction *topalloca = NULL;
+    Value *world_age_at_entry = NULL; // Not valid to use in toplevel code
 
     bool use_cache = false;
     bool external_linkage = false;
@@ -2106,7 +2107,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const Twine &msg);
 static Value *get_current_task(jl_codectx_t &ctx);
 static Value *get_current_ptls(jl_codectx_t &ctx);
-static Value *get_last_age_field(jl_codectx_t &ctx);
+static Value *get_tls_world_age_field(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, FunctionCallee theFptr, Value *theF,
                              ArrayRef<jl_cgval_t> args, size_t nargs, JuliaFunction<> *trampoline);
@@ -6560,7 +6561,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 if (F) {
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-                    Instruction *I = ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_last_age_field(ctx), ctx.types().alignof_ptr);
+                    bool not_toplevel = (ctx.linfo && jl_is_method(ctx.linfo->def.method));
+                    Instruction *I = not_toplevel ? cast<Instruction>(ctx.world_age_at_entry) :
+                                     ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_tls_world_age_field(ctx), ctx.types().alignof_ptr);
                     jl_cgval_t world_age = mark_julia_type(ctx, ai.decorateInst(I), false, jl_long_type);
                     jl_cgval_t fptr;
                     if (specF)
@@ -6715,7 +6718,7 @@ static Value *get_current_ptls(jl_codectx_t &ctx)
 }
 
 // Get the address of the world age of the current task
-static Value *get_last_age_field(jl_codectx_t &ctx)
+static Value *get_tls_world_age_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx, ctx.types().T_size->getPointerTo());
     return ctx.builder.CreateInBoundsGEP(
@@ -7041,11 +7044,11 @@ static Function* gen_cfun_wrapper(
     ctx.builder.SetCurrentDebugLocation(noDbg);
     allocate_gc_frame(ctx, b0, true);
 
-    Value *world_age_field = get_last_age_field(ctx);
+    auto world_age_field = get_tls_world_age_field(ctx);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
     Value *last_age = ai.decorateInst(
             ctx.builder.CreateAlignedLoad(ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
-
+    ctx.world_age_at_entry = last_age;
     Value *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
         prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
     cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Acquire);
@@ -8494,12 +8497,11 @@ static jl_llvm_functions_t
     // step 6. set up GC frame
     allocate_gc_frame(ctx, b0);
     Value *last_age = NULL;
-    Value *world_age_field = get_last_age_field(ctx);
-    if (toplevel || ctx.is_opaque_closure) {
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-        last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
-            ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
-    }
+    auto world_age_field = get_tls_world_age_field(ctx);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+    last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
+               ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
+    ctx.world_age_at_entry = last_age; // Load world age for use in get_tls_world_age
 
     // step 7. allocate local variables slots
     // must be in the first basic block for the llvm mem2reg pass to work
@@ -8746,6 +8748,7 @@ static jl_llvm_functions_t
 
                 jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
                     nullptr, nullptr, false, AtomicOrdering::NotAtomic, false, ctx.types().alignof_ptr.value());
+                ctx.world_age_at_entry = closure_world.V; // The tls world in a OC is the world of the closure
                 emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, ctx.types().alignof_ptr.value());
 
                 // Load closure env
@@ -8808,7 +8811,6 @@ static jl_llvm_functions_t
             }
         }
     }
-
     // step 9. allocate rest argument
     CallInst *restTuple = NULL;
     if (va && ctx.vaSlot != -1) {

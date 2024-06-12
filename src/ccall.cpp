@@ -22,6 +22,7 @@ TRANSFORMED_CCALL_STAT(jl_cpu_wake);
 TRANSFORMED_CCALL_STAT(jl_gc_safepoint);
 TRANSFORMED_CCALL_STAT(jl_get_ptls_states);
 TRANSFORMED_CCALL_STAT(jl_threadid);
+TRANSFORMED_CCALL_STAT(jl_get_tls_world_age);
 TRANSFORMED_CCALL_STAT(jl_gc_enable_disable_finalizers_internal);
 TRANSFORMED_CCALL_STAT(jl_get_current_task);
 TRANSFORMED_CCALL_STAT(jl_set_next_task);
@@ -1689,6 +1690,20 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         ai.decorateInst(tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_get_tls_world_age)) {
+        bool toplevel = !(ctx.linfo && jl_is_method(ctx.linfo->def.method));
+        if (!toplevel) { // top level code does not see a stable world age during execution
+            ++CCALL_STAT(jl_get_tls_world_age);
+            assert(lrt == ctx.types().T_size);
+            assert(!isVa && !llvmcall && nccallargs == 0);
+            JL_GC_POP();
+            Instruction *world_age = cast<Instruction>(ctx.world_age_at_entry);
+            setName(ctx.emission_context, world_age, "task_world_age");
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+            ai.decorateInst(world_age);
+            return mark_or_box_ccall_result(ctx, world_age, retboxed, rt, unionall, static_rt);
+        }
     }
     else if (is_libjulia_func(jl_gc_disable_finalizers_internal)
 #ifdef NDEBUG
