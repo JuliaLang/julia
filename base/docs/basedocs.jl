@@ -2663,23 +2663,21 @@ julia> Memory{Float64}(undef, 3)
 Memory{T}(::UndefInitializer, n)
 
 """
-    MemoryRef(memory)
-
-Construct a MemoryRef from a memory object. This does not fail, but the
-resulting memory may point out-of-bounds if the memory is empty.
+    `memoryref(::GenericMemory)`
+Construct a `GenericMemoryRef` from a memory object. This does not fail, but the
+resulting memory will point out-of-bounds if and only if the memory is empty.
 """
-MemoryRef(::Memory)
+memoryref(::GenericMemory)
 
 """
-    MemoryRef(::Memory, index::Integer)
-    MemoryRef(::MemoryRef, index::Integer)
-
-Construct a MemoryRef from a memory object and an offset index (1-based) which
+    memoryref(::GenericMemory, index::Integer)
+    memoryref(::GenericMemoryRef, index::Integer)
+Construct a `GenericMemoryRef` from a memory object and an offset index (1-based) which
 can also be negative. This always returns an inbounds object, and will throw an
 error if that is not possible (because the index would result in a shift
 out-of-bounds of the underlying memory).
 """
-MemoryRef(::Union{Memory,MemoryRef}, ::Integer)
+memoryref(::Union{GenericMemory,GenericMemoryRef}, ::Integer)
 
 """
     Vector{T}(undef, n)

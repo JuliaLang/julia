@@ -2423,7 +2423,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_setglobalonce = add_builtin_func("setglobalonce!", jl_f_setglobalonce);
 
     // memory primitives
-    jl_builtin_memoryref = add_builtin_func("memoryref", jl_f_memoryref);
+    jl_builtin_memoryref = add_builtin_func("memoryrefnew", jl_f_memoryref);
     jl_builtin_memoryrefoffset = add_builtin_func("memoryrefoffset", jl_f_memoryrefoffset);
     jl_builtin_memoryrefget = add_builtin_func("memoryrefget", jl_f_memoryrefget);
     jl_builtin_memoryrefset = add_builtin_func("memoryrefset!", jl_f_memoryrefset);
