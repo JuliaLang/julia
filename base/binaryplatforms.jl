@@ -100,11 +100,14 @@ struct Platform <: AbstractPlatform
 
         # By default, we compare julia_version only against major and minor versions:
         if haskey(tags, "julia_version") && !haskey(compare_strategies, "julia_version")
-            compare_strategies["julia_version"] = (a::String, b::String, a_comparator, b_comparator) -> begin
+            default_comparator = (a::String, b::String, a_comparator::Bool, b_comparator::Bool) -> begin
                 a = VersionNumber(a)
                 b = VersionNumber(b)
                 return a.major == b.major && a.minor == b.minor
             end
+            # precompile(default_comparator, (String, String, Bool, Bool))
+            Core._precompile(Tuple{typeof(default_comparator), String, String, Bool, Bool})
+            compare_strategies["julia_version"] = default_comparator
         end
 
         return new(tags, compare_strategies)
@@ -259,6 +262,8 @@ function set_compare_strategy!(p::Platform, key::String, f::Function)
     if !haskey(p.tags, key)
         throw(ArgumentError("Cannot set comparison strategy for nonexistent tag $(key)!"))
     end
+    # precompile(f, (String, String, Bool, Bool))
+    Core._precompile(Tuple{typeof(f), String, String, Bool, Bool})
     p.compare_strategies[key] = f
 end
 
@@ -1041,7 +1046,7 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !(comparator(ak, bk, a_comp === comparator, b_comp === comparator)::Bool)
+        if !(Base.Experimental.@assert_precompiled comparator(ak, bk, a_comp === comparator, b_comp === comparator)::Bool)
             return false
         end
     end

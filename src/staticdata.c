@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    190
+#define NUM_TAGS    193
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -280,6 +280,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_nfields);
         INSERT_TAG(jl_builtin_tuple);
         INSERT_TAG(jl_builtin_svec);
+        INSERT_TAG(jl_builtin_finalizer);
         INSERT_TAG(jl_builtin_getfield);
         INSERT_TAG(jl_builtin_setfield);
         INSERT_TAG(jl_builtin_swapfield);
@@ -296,6 +297,8 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_memoryrefmodify);
         INSERT_TAG(jl_builtin_memoryrefreplace);
         INSERT_TAG(jl_builtin_memoryrefsetonce);
+        INSERT_TAG(jl_builtin__precompile);
+        INSERT_TAG(jl_builtin__precompile_method_instance);
         INSERT_TAG(jl_builtin_apply_type);
         INSERT_TAG(jl_builtin_applicable);
         INSERT_TAG(jl_builtin_invoke);
@@ -488,7 +491,7 @@ static htable_t field_replace;
 static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_throw, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
     &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
-    &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
+    &jl_f__call_assert_precompiled, &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield, &jl_f_setfieldonce,
     &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type,
@@ -499,7 +502,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete, &jl_f_compilerbarrier,
     &jl_f_getglobal, &jl_f_setglobal, &jl_f_swapglobal, &jl_f_modifyglobal, &jl_f_replaceglobal, &jl_f_setglobalonce,
-    &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
+    &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref, &jl_f__precompile, &jl_f__precompile_method_instance,
     &jl_f_current_scope,
     NULL };
 

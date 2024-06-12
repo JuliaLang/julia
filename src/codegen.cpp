@@ -1605,6 +1605,7 @@ static const auto &builtin_func_map() {
           { jl_f_ifelse_addr,             new JuliaFunction<>{XSTR(jl_f_ifelse), get_func_sig, get_func_attrs} },
           { jl_f__apply_iterate_addr,     new JuliaFunction<>{XSTR(jl_f__apply_iterate), get_func_sig, get_func_attrs} },
           { jl_f__apply_pure_addr,        new JuliaFunction<>{XSTR(jl_f__apply_pure), get_func_sig, get_func_attrs} },
+          { jl_f__call_assert_precompiled_addr, new JuliaFunction<>{XSTR(jl_f__call_assert_precompiled), get_func_sig, get_func_attrs} },
           { jl_f__call_latest_addr,       new JuliaFunction<>{XSTR(jl_f__call_latest), get_func_sig, get_func_attrs} },
           { jl_f__call_in_world_addr,     new JuliaFunction<>{XSTR(jl_f__call_in_world), get_func_sig, get_func_attrs} },
           { jl_f__call_in_world_total_addr, new JuliaFunction<>{XSTR(jl_f__call_in_world_total), get_func_sig, get_func_attrs} },
@@ -1620,6 +1621,8 @@ static const auto &builtin_func_map() {
           { jl_f_modifyfield_addr,        new JuliaFunction<>{XSTR(jl_f_modifyfield), get_func_sig, get_func_attrs} },
           { jl_f_fieldtype_addr,          new JuliaFunction<>{XSTR(jl_f_fieldtype), get_func_sig, get_func_attrs} },
           { jl_f_nfields_addr,            new JuliaFunction<>{XSTR(jl_f_nfields), get_func_sig, get_func_attrs} },
+          { jl_f__precompile_addr,             new JuliaFunction<>{XSTR(jl_f__precompile), get_func_sig, get_func_attrs} },
+          { jl_f__precompile_method_instance_addr, new JuliaFunction<>{XSTR(jl_f__precompile_method_instance), get_func_sig, get_func_attrs} },
           { jl_f__expr_addr,              new JuliaFunction<>{XSTR(jl_f__expr), get_func_sig, get_func_attrs} },
           { jl_f__typevar_addr,           new JuliaFunction<>{XSTR(jl_f__typevar), get_func_sig, get_func_attrs} },
           { jl_f_memoryref_addr,          new JuliaFunction<>{XSTR(jl_f_memoryref), get_func_sig, get_func_attrs} },
@@ -5066,6 +5069,76 @@ isdefined_unknown_idx:
         return true;
     }
 
+    else if (f == jl_builtin_finalizer) {
+        if (ctx.params->no_dynamic_dispatch && nargs == 2) {
+            // TODO: It would probably be preferable to add a `Core.finalizer_invoke()` intrinsic
+            //       that asks for a specific invoke of the finalizer, rather than a call.
+            //
+            //       That would allow `inlining` to inform us that we have a specific method target
+            //       even though the static object type here is not concrete.
+            int resolved = 0;
+            if (jl_is_concrete_type(argv[1].typ) && jl_is_concrete_type(argv[2].typ)) {
+                // TODO: This method lookup is pretty sloppy and probably uses the wrong world.
+                jl_value_t *types[2] = { argv[1].typ, argv[2].typ };
+                jl_tupletype_t *tt = (jl_tupletype_t *)jl_apply_tuple_type_v(types, 2);
+                size_t world = jl_atomic_load_acquire(&jl_world_counter);
+                jl_value_t *mi = jl_method_lookup_by_tt(tt, world, jl_nothing);
+                if (mi != jl_nothing) {
+                    arraylist_push(&new_invokes, mi);
+                    resolved = 1;
+                }
+            }
+            if (!resolved) {
+                errs() << "Dynamic call to finalizer ";
+                if (argv[1].constant) {
+                    jl_(argv[1].constant);
+                } else {
+                    errs() << "(unknown function)";
+                }
+                errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+
+                print_stacktrace(ctx);
+            }
+            // return false, since we didn't actually implement the call - we just lifted the dispatch
+            return false;
+        }
+    }
+
+    else if (f == jl_builtin__precompile) {
+        if (ctx.params->no_dynamic_dispatch && nargs == 1) {
+            int resolved = 0;
+            if (argv[1].constant && jl_is_tuple_type(argv[1].constant)) {
+                // TODO: This method lookup is pretty sloppy and probably uses the wrong world.
+                size_t world = jl_atomic_load_acquire(&jl_world_counter);
+                jl_value_t *mi = jl_method_lookup_by_tt((jl_tupletype_t*)argv[1].constant, world, jl_nothing);
+                if (mi != jl_nothing) {
+                    arraylist_push(&new_invokes, mi);
+                    resolved = 1;
+                }
+            }
+            if (!resolved) {
+                errs() << "Dynamic call to Core._precompile ";
+                // TODO: show type too
+                errs() << " in " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+
+                print_stacktrace(ctx);
+            }
+        }
+    }
+
+    else if (f == jl_builtin__precompile_method_instance) {
+        if (ctx.params->no_dynamic_dispatch && nargs == 2) {
+            if (argv[1].constant && argv[2].constant) {
+                // TODO: treat this as an `invoke_in_world` that we encountered
+                arraylist_push(&new_invokes, argv[1].constant);
+            } else {
+                errs() << "Dynamic call to Core._precompile_method_instance in " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+
+                print_stacktrace(ctx);
+            }
+        }
+    }
+    
     return false;
 }
 

@@ -409,6 +409,9 @@ include("meta.jl")
 include("logging/logging.jl")
 using .CoreLogging
 
+# experimental API's
+include("experimental.jl")
+
 include("env.jl")
 
 # functions defined in Random
@@ -502,8 +505,6 @@ using .MathConstants: ℯ, π, pi
 include("stacktraces.jl")
 using .StackTraces
 
-# experimental API's
-include("experimental.jl")
 
 # utilities
 include("deepcopy.jl")

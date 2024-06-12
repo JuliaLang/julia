@@ -3903,7 +3903,7 @@ end
 
 const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
 function precompile(@nospecialize(argt::Type))
-    ret = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
+    ret = Core._precompile(argt)::Bool
     if !ret && ENABLE_PRECOMPILE_WARNINGS[]
         @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
     end
@@ -3911,8 +3911,10 @@ function precompile(@nospecialize(argt::Type))
 end
 
 # Variants that work for `invoke`d calls for which the signature may not be sufficient
-precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
-    (ccall(:jl_compile_method_instance, Cvoid, (Any, Any, UInt), mi, C_NULL, world); return true)
+function precompile(mi::Core.MethodInstance, world::UInt=get_world_counter())
+    Core._precompile_method_instance(mi, world)
+    return true
+end
 
 """
     precompile(f, argtypes::Tuple{Vararg{Any}}, m::Method)

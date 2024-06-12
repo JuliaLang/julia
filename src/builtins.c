@@ -865,6 +865,13 @@ JL_CALLABLE(jl_f__apply_pure)
     return ret;
 }
 
+JL_CALLABLE(jl_f__call_assert_precompiled)
+{
+    // TODO: Actually assert that this call was covered by a `precompile()` statement
+    JL_NARGSV(_call_assert_precompiled, 1);
+    return jl_apply(args, nargs);
+}
+
 // this is like a regular call, but always runs in the newest world
 JL_CALLABLE(jl_f__call_latest)
 {
@@ -1607,6 +1614,20 @@ JL_CALLABLE(jl_f_invoke)
     jl_value_t *res = jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
     JL_GC_POP();
     return res;
+}
+
+JL_CALLABLE(jl_f__precompile)
+{
+    JL_NARGS(_precompile, 1, 1);
+    return jl_compile_hint((jl_tupletype_t *)args[0]) ? jl_true : jl_false;
+}
+
+JL_CALLABLE(jl_f__precompile_method_instance)
+{
+    JL_NARGS(_precompile, 1, 2);
+    unsigned int world = (nargs == 2) ? jl_unbox_long(args[1]) : jl_get_world_counter();
+    jl_compile_method_instance((jl_method_instance_t *)args[0], NULL, world);
+    return jl_nothing;
 }
 
 // Expr constructor for internal use ------------------------------------------
@@ -2455,9 +2476,11 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
     jl_builtin_compilerbarrier = add_builtin_func("compilerbarrier", jl_f_compilerbarrier);
-    add_builtin_func("finalizer", jl_f_finalizer);
+    jl_builtin_finalizer = add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
+    jl_builtin__precompile = add_builtin_func("_precompile", jl_f__precompile);
+    jl_builtin__precompile_method_instance = add_builtin_func("_precompile_method_instance", jl_f__precompile_method_instance);
     add_builtin_func("current_scope", jl_f_current_scope);
 
     // builtin types

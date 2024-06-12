@@ -97,11 +97,11 @@ function print(io::IO, v::VersionNumber)
     print(io, v.patch)
     if !isempty(v.prerelease)
         print(io, '-')
-        join(io, v.prerelease,'.')
+        @inline join(io, v.prerelease,'.')
     end
     if !isempty(v.build)
         print(io, '+')
-        join(io, v.build,'.')
+        @inline join(io, v.build,'.')
     end
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
@@ -139,7 +139,7 @@ function tryparse(::Type{VersionNumber}, v::AbstractString)
     end
     prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
-    return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
+    return @inline(VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple))
 end
 
 function parse(::Type{VersionNumber}, v::AbstractString)

@@ -496,8 +496,10 @@ function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, 
         d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
-        if d isa Vector
+        if d isa Vector{Any}
             d = d[end]
+        elseif d isa Vector
+            return ParserError(ErrKeyAlreadyHasValue)
         end
         check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
     end
@@ -539,7 +541,7 @@ function parse_array_table(l)::Union{Nothing, ParserError}
     d = @try recurse_dict!(l, l.root, @view(table_key[1:end-1]), false)
     k = table_key[end]
     old = get!(() -> [], d, k)
-    if old isa Vector
+    if old isa Vector{Any}
         if old in l.static_arrays
             return ParserError(ErrAddArrayToStaticArray)
         end
@@ -669,41 +671,21 @@ end
 # Array #
 #########
 
-function push!!(v::Vector, el)
-    # Since these types are typically non-inferable, they are a big invalidation risk,
-    # and since it's used by the package-loading infrastructure the cost of invalidation
-    # is high. Therefore, this is written to reduce the "exposed surface area": e.g., rather
-    # than writing `T[el]` we write it as `push!(Vector{T}(undef, 1), el)` so that there
-    # is no ambiguity about what types of objects will be created.
-    T = eltype(v)
-    t = typeof(el)
-    if el isa T || t === T
-        push!(v, el::T)
-        return v
-    elseif T === Union{}
-        out = Vector{t}(undef, 1)
-        out[1] = el
-        return out
-    else
-        if T isa Union
-            newT = Any
-        else
-            newT = Union{T, typeof(el)}
-        end
-        new = Array{newT}(undef, length(v))
-        copy!(new, v)
-        return push!(new, el)
+function copyto_typed!(a::Vector{T}, b::Vector) where T
+    for i in 1:length(b)
+        a[i] = b[i]::T
     end
+    return nothing
 end
 
 function parse_array(l::Parser)::Err{Vector}
     skip_ws_nl(l)
-    array = Vector{Union{}}()
+    array = Vector{Any}()
     empty_array = accept(l, ']')
     while !empty_array
         v = @try parse_value(l)
         # TODO: Worth to function barrier this?
-        array = push!!(array, v)
+        array = push!(array, v)
         # There can be an arbitrary number of newlines and comments before a value and before the closing bracket.
         skip_ws_nl(l)
         comma = accept(l, ',')
@@ -713,8 +695,38 @@ function parse_array(l::Parser)::Err{Vector}
             return ParserError(ErrExpectedCommaBetweenItemsArray)
         end
     end
-    push!(l.static_arrays, array)
-    return array
+    # check for static type throughout array
+    T = !isempty(array) ? typeof(array[1]) : Union{}
+    for el in array
+        if typeof(el) != T
+            T = Any
+            break
+        end
+    end
+    if T === String
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === Bool
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === Int64
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === UInt64
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === Float64
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === Union{}
+        new = Union{}[]
+    elseif (T === TOMLDict) || (T == BigInt) || (T === UInt128) || (T === Int128) || (T <: Vector) ||
+        (T === Date) || (T === Time) || (T === DateTime)
+        # do nothing, leave as Vector{Any}
+        new = array
+    else @assert false end
+    push!(l.static_arrays, new)
+    return new
 end
 
 

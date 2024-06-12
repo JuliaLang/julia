@@ -384,4 +384,45 @@ function entrypoint(@nospecialize(argt::Type))
     nothing
 end
 
+
+"""
+    Experimental._call_assert_precompiled(f, args...; kwargs...)
+Calls `f(args...; kwargs...)`, but checks that compilation for the target of this call
+has already been covered by a `precompile()` call (currently unimplemented), rather
+than performing just-in-time (JIT) compilation.
+"""
+function _call_assert_precompiled(@nospecialize(f), @nospecialize args...; kwargs...)
+    kwargs = merge(NamedTuple(), kwargs)
+    if isempty(kwargs)
+        return Core._call_assert_precompiled(f, args...)
+    end
+    return Core._call_assert_precompiled(Core.kwcall, kwargs, f, args...)
+end
+
+macro assert_precompiled(ex_)
+    # Peel off type assertion, if present
+    has_type_assertion = isexpr(ex_, :(::))
+    ex = has_type_assertion ? ex_.args[1] : ex_
+
+    if isexpr(ex, :call)
+        # Re-write call to delegate to _call_assert_precompiled
+        if length(ex.args) == 1 || !isexpr(ex.args[2], :parameters)
+            ex = Expr(:call, _call_assert_precompiled, ex.args...)
+        else # kwargs case
+            ex = Expr(:call, _call_assert_precompiled,
+                      ex.args[2], ex.args[1], ex.args[3:end]...)
+        end
+        if has_type_assertion
+            # Re-wrap type assertion
+            ex_.args[1] = ex
+            return esc(ex_)
+        else
+            return esc(ex)
+        end
+        return esc(ex)
+    else
+        error("@assert_precompiled used on a non-call expression: $(ex)")
+    end
+end
+
 end
