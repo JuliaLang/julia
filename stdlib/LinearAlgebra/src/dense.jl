@@ -1490,12 +1490,7 @@ function factorize(A::AbstractMatrix{T}) where T
             return UpperTriangular(A)
         end
         if herm
-            cf = cholesky(A; check = false)
-            if cf.info == 0
-                return cf
-            else
-                return factorize(Hermitian(A))
-            end
+            return factorize(Hermitian(A))
         end
         if sym
             return factorize(Symmetric(A))

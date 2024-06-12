@@ -61,8 +61,7 @@ end
 
         # Test of symmetric pos. def. strided matrix
         apd  = a'*a
-        @inferred cholesky(apd)
-        capd  = factorize(apd)
+        capd  = @inferred cholesky(apd)
         r     = capd.U
         κ     = cond(apd, 1) #condition number
 
@@ -70,7 +69,7 @@ end
         if eltya != Int
             @test Factorization{eltya}(capd) === capd
             if eltya <: Real
-                @test Array(Factorization{complex(eltya)}(capd)) ≈ Array(factorize(complex(apd)))
+                @test Array(Factorization{complex(eltya)}(capd)) ≈ Array(cholesky(complex(apd)))
                 @test eltype(Factorization{complex(eltya)}(capd)) == complex(eltya)
             end
         end
@@ -358,7 +357,7 @@ end
         0.11192755545114 - 0.1603741874112385im 0.8439562576196216 + 1.0850814110398734im
         -1.0568488936791578 - 0.06025820467086475im 0.12696236014017806 - 0.09853584666755086im]
     cholesky(Hermitian(apd, :L), RowMaximum()) \ b
-    r = factorize(apd).U
+    r = cholesky(apd).U
     E = abs.(apd - r'*r)
     ε = eps(abs(float(one(ComplexF32))))
     n = 10
