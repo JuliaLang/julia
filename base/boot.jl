@@ -546,8 +546,6 @@ GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
 GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
 GenericMemoryRef(mem::GenericMemoryRef, i::Integer) = memoryref(mem, i)
 
-const Memory{T} = GenericMemory{:not_atomic, T, CPU}
-const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
 const AtomicMemory{T} = GenericMemory{:atomic, T, CPU}
 const AtomicMemoryRef{T} = GenericMemoryRef{:atomic, T, CPU}
 
