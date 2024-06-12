@@ -211,7 +211,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
             A[k,k] = Akk
             AkkInv = inv(copy(Akk'))
             for j = k + 1:n
-                for i = 1:k - 1
+                @simd for i = 1:k - 1
                     A[k,j] -= A[i,k]'A[i,j]
                 end
                 A[k,j] = AkkInv*A[k,j]
@@ -238,8 +238,9 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
             A[k,k] = Akk
             AkkInv = inv(copy(Akk'))
             for j = 1:k - 1
+                Akjc = A[k,j]'
                 @simd for i = k + 1:n
-                    A[i,k] -= A[i,j]*A[k,j]'
+                    A[i,k] -= A[i,j]*Akjc
                 end
             end
             @simd for i = k + 1:n
@@ -339,13 +340,11 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, ch
             # update
             A[k,k] = Akk = sqrt(Akk)
             AkkInv = inv(copy(Akk'))
-            if k < n
-                for j in (k+1):n
-                    @simd for i in 1:(k-1)
-                        A[k,j] -= A[i,k]'A[i,j]
-                    end
-                    A[k,j] = AkkInv * A[k,j]
+            for j in (k+1):n
+                @simd for i in 1:(k-1)
+                    A[k,j] -= A[i,k]'A[i,j]
                 end
+                A[k,j] = AkkInv * A[k,j]
             end
         end
         return A, piv, convert(BlasInt, n), convert(BlasInt, 0)
@@ -389,16 +388,15 @@ function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, ch
             piv[k], piv[q] = piv[q], piv[k]
             # update
             A[k,k] = Akk = sqrt(Akk)
-            AkkInv = inv(copy(Akk'))
-            if k < n
-                for j in 1:(k-1)
-                    @simd for i in (k+1):n
-                        A[i,k] -= A[i,j]*A[k,j]'
-                    end
-                end
+            for j in 1:(k-1)
+                Akjc = A[k,j]'
                 @simd for i in (k+1):n
-                    A[i, k] *= AkkInv
+                    A[i,k] -= A[i,j]*Akjc
                 end
+            end
+            AkkInv = inv(copy(Akk'))
+            @simd for i in (k+1):n
+                A[i, k] *= AkkInv
             end
         end
         return A, piv, convert(BlasInt, n), convert(BlasInt, 0)
