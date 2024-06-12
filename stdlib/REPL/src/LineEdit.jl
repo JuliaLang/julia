@@ -2830,15 +2830,19 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         old_state = mode(s)
         l = Base.ReentrantLock()
         t = @async while true
-            fcn = take!(s.async_channel)
-            status = @lock l fcn(s)
+            wait(s.async_channel)
+            status = @lock l begin
+                fcn = take!(s.async_channel)
+                fcn(s)
+            end
             status ∈ (:ok, :ignore) || break
         end
         Base.errormonitor(t)
         while true
-            kmap = keymap(s, prompt)
-            fcn = match_input(kmap, s)
+            eof(term) || peek(term, Char) # wait before locking but don't consume
             @lock l begin
+                kmap = keymap(s, prompt)
+                fcn = match_input(kmap, s)
                 kdata = keymap_data(s, prompt)
                 s.current_action = :unknown # if the to-be-run action doesn't update this field,
                                             # :unknown will be recorded in the last_action field
