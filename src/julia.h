@@ -2470,6 +2470,8 @@ JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list a
     _JL_FORMAT_ATTR(2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
     _JL_FORMAT_ATTR(1, 2);
+JL_DLLEXPORT void jl_safe_fprintf(ios_t *s, const char *str, ...) JL_NOTSAFEPOINT
+    _JL_FORMAT_ATTR(2, 3);
 
 extern JL_DLLEXPORT JL_STREAM *JL_STDIN;
 extern JL_DLLEXPORT JL_STREAM *JL_STDOUT;
