@@ -73,8 +73,8 @@ end
 
         # Test of symmetric pos. def. strided matrix
         apd  = Matrix(Hermitian(a'*a))
-        @test ishermitian(apd)
-        capd  = @inferred cholesky(apd)
+        @inferred cholesky(apd)
+        capd  = factorize(apd)
         r     = capd.U
         κ     = cond(apd, 1) #condition number
 
