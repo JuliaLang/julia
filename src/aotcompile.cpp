@@ -115,17 +115,9 @@ void jl_get_llvm_mis_impl(void *native_code, arraylist_t* MIs)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     auto map = data->jl_fvar_map;
-    if (jl_options.verbose_compilation) {
-        jl_safe_printf("Codegen found and compiled the following %ld methods\n", (long)map.size());
-    }
     for (auto &ci : map) {
         jl_method_instance_t *mi = ci.first->def;
-
         arraylist_push(MIs, mi);
-        if (jl_options.verbose_compilation) {
-            jl_(mi);
-        }
-
     }
 }
 
@@ -417,7 +409,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= this_world && this_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
-                if (jl_options.small_image && !codeinst) {
+                if (jl_options.static_call_graph && !codeinst) {
                     // If we're building a small image, we need to compile everything
                     // to ensure that we have all the information we need.
                     jl_safe_printf("Codegen decided not to compile code root");

@@ -809,13 +809,13 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 {
     jl_queue_for_serialization(s, m->name, m);
     jl_queue_for_serialization(s, m->parent, m);
-    if (jl_options.small_image) {
+    if (jl_options.static_call_graph) {
         jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), (jl_value_t*)m, 0, 1);
     } else {
         jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindings), m);
     }
     jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindingkeyset), m);
-    if (jl_options.strip_metadata || jl_options.small_image) {
+    if (jl_options.strip_metadata || jl_options.static_call_graph) {
         jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
         for (size_t i = 0; i < jl_svec_len(table); i++) {
             if (jl_options.strip_metadata) {
@@ -826,13 +826,11 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
                 if (name == jl_docmeta_sym && jl_atomic_load_relaxed(&b->value))
                     record_field_change((jl_value_t**)&b->value, jl_nothing);
             }
-            if (jl_options.small_image) {
+            if (jl_options.static_call_graph) {
                 jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
-                if ((b != NULL) && (b->value != NULL) && (jl_is_module(jl_atomic_load_relaxed(&b->value)) || (strcmp(jl_symbol_name(b->globalref->name), "__init__") == 0))) {
-                    if (jl_options.verbose_compilation)
-                        jl_(jl_atomic_load_relaxed(&b->value));
+                if ((b != NULL) && (b->value != NULL) && (jl_is_module(jl_atomic_load_relaxed(&b->value))
+                        || (strcmp(jl_symbol_name(b->globalref->name), "__init__") == 0)))
                     jl_queue_for_serialization(s, b, m);
-                }
             }
         }
     }
@@ -987,7 +985,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
     }
     else if (layout->nfields > 0) {
-        if (jl_options.small_image) {
+        if (jl_options.static_call_graph) {
             if (jl_is_method(v)) {
                 jl_method_t *m = (jl_method_t *)v;
                 if (jl_is_svec(m->specializations))
@@ -2573,7 +2571,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     if (m->source) {
         int stripped_ir = 0;
         if (jl_options.strip_ir) {
-            int should_strip_ir = jl_options.small_image;
+            int should_strip_ir = jl_options.static_call_graph;
             if (!should_strip_ir) {
                 if (jl_atomic_load_relaxed(&m->unspecialized)) {
                     jl_code_instance_t *unspec = jl_atomic_load_relaxed(&jl_atomic_load_relaxed(&m->unspecialized)->cache);
@@ -2788,10 +2786,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     if (native_functions) {
         jl_get_llvm_gvs(native_functions, &gvars);
         jl_get_llvm_external_fns(native_functions, &external_fns);
-        if (jl_options.small_image)
+        if (jl_options.static_call_graph)
             jl_get_llvm_mis(native_functions, &MIs);
     }
-    if (jl_options.small_image) {
+    if (jl_options.static_call_graph) {
         jl_rebuild_methtables(&MIs, &new_methtables);
         jl_methtable_t *mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_type_type_mt);
         if (mt != HT_NOTFOUND)
@@ -2916,7 +2914,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         // step 1.2: ensure all gvars are part of the sysimage too
         record_gvars(&s, &gvars);
         record_external_fns(&s, &external_fns);
-        if (jl_options.small_image)
+        if (jl_options.static_call_graph)
             record_gvars(&s, &MIs);
         jl_serialize_reachable(&s);
         // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_list
@@ -2939,7 +2937,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         // built-in type caches too
         for (i = 0; i < serialization_queue.len; i++) {
             jl_value_t *v = (jl_value_t*)serialization_queue.items[i];
-            if (jl_options.small_image) {
+            if (jl_options.static_call_graph) {
                 if (jl_is_method(v)){
                     jl_method_t *m = (jl_method_t*)v;
                     jl_value_t *specializations_ = jl_atomic_load_relaxed(&m->specializations);
@@ -3156,7 +3154,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
                                          ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos)
 {
-    if (jl_options.strip_ir || jl_options.small_image) {
+    if (jl_options.strip_ir || jl_options.static_call_graph) {
         // make sure this is precompiled for jl_foreach_reachable_mtable
         jl_get_loaded_modules();
     }
@@ -3210,8 +3208,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
     else if (_native_data != NULL) {
         precompilation_world = jl_atomic_load_acquire(&jl_world_counter);
-        if (jl_options.small_image)
-            *_native_data = jl_precompile_small_image(precompilation_world);
+        if (jl_options.static_call_graph)
+            *_native_data = jl_precompile_static_call_graph(precompilation_world);
         else
             *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
     }
