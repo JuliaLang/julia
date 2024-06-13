@@ -31,16 +31,6 @@ const DenseUInt8 = Union{
 
 const DenseUInt8OrInt8 = Union{DenseUInt8, DenseInt8}
 
-function last_utf8_byte(c::Char)
-    u = reinterpret(UInt32, c)
-    shift = ((4 - ncodeunits(c)) * 8) & 31
-    (u >> shift) % UInt8
-end
-
-# Whether the given byte is guaranteed to be the only byte in a Char
-# This holds even in the presence of invalid UTF8
-is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
-
 last_byteindex(x::Union{String, SubString{String}}) = ncodeunits(x)
 last_byteindex(x::DenseUInt8OrInt8) = lastindex(x)
 
@@ -144,9 +134,8 @@ function _rsearch(a::Union{String,SubString{String},DenseUInt8OrInt8}, b::Union{
     fst = firstindex(a)
     lst = last_byteindex(a)
     if i < fst
-        return i == 0 ? nothing : throw(BoundsError(a, i))
+        return i == fst - 1 ? nothing : throw(BoundsError(a, i))
     end
-    n_bytes = lst - i + 1
     if i > lst
         return i == lst+1 ? nothing : throw(BoundsError(a, i))
     end
