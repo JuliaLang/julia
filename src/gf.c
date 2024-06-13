@@ -3112,13 +3112,7 @@ JL_DLLEXPORT int jl_add_entrypoint(jl_tupletype_t *types)
     if (mi == NULL)
         return 0;
     JL_GC_PROMISE_ROOTED(mi);
-    if (jl_generating_output() && jl_options.small_image) {
-        if (jl_options.verbose_compilation > 0) {
-            jl_safe_printf("adding code root from jl_compile_method_instance\n for:");
-            jl_(mi);
-            jl_safe_printf("from module: ");
-            jl_(mi->def.method->module);
-        }
+    if (jl_generating_output() && jl_options.static_call_graph) {
         arraylist_push(jl_entrypoint_mis, mi);
     }
     return 1;
