@@ -243,7 +243,7 @@ JL_DLLEXPORT void __stack_chk_fail(void)
 {
     /* put your panic function or similar in here */
     fprintf(stderr, "fatal error: stack corruption detected\n");
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort(); // end with abort, since the compiler destroyed the stack upon entry to this function, there's no going back now
 }
 #endif

@@ -2456,7 +2456,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         default:
             assert(0 && "unexpected number of arguments to an intrinsic function");
     }
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 
