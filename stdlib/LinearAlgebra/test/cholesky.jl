@@ -72,14 +72,8 @@ end
         ε = εa = eps(abs(float(one(eltya))))
 
         # Test of symmetric pos. def. strided matrix
-<<<<<<< dk/cholfix
         apd  = Matrix(Hermitian(a'*a))
-        @inferred cholesky(apd)
-        capd  = factorize(apd)
-=======
-        apd  = a'*a
         capd  = @inferred cholesky(apd)
->>>>>>> master
         r     = capd.U
         κ     = cond(apd, 1) #condition number
 
