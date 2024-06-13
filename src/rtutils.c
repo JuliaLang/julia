@@ -1567,6 +1567,23 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
     return n;
 }
 
+JL_DLLEXPORT size_t jl_safe_static_show(JL_STREAM *s, jl_value_t *v) JL_NOTSAFEPOINT
+{
+    jl_jmp_buf *old_buf = jl_get_safe_restore();
+    jl_jmp_buf buf;
+    jl_set_safe_restore(&buf);
+    volatile size_t sz = 0;
+    if (!jl_setjmp(buf, 0)) {
+        sz += jl_static_show(s, (jl_value_t*)v);
+        sz += jl_printf(s, "\n");
+    }
+    else {
+        sz += jl_printf(s, "\n!!! ERROR in jl_ -- ABORTING !!!\n");
+    }
+    jl_set_safe_restore(old_buf);
+    return sz;
+}
+
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
