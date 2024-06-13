@@ -552,8 +552,8 @@ endif
 
 # Conditional setting of RELRO flag for enhanced security on Linux builds.
 # RELRO (Read-Only Relocations) is a security feature that marks certain sections
-# of the binary as read-only to prevent exploitation techniques like  GOT (Global Offset Table)
-# overwriting.
+# of the binary as read-only to prevent exploitation techniques like
+# GOT (Global Offset Table) overwriting attacks.
 ifeq ($(OS),Linux)
     RELRO_FLAG := -Wl,-z,relro
 else
