@@ -342,7 +342,7 @@ JL_DLLEXPORT void jl_add_ccallable_entrypoints(void)
     jl_foreach_reachable_mtable(enq_ccallable_entrypoints, NULL);
 }
 
-static void *jl_precompile_small_image(size_t world)
+static void *jl_precompile_static_call_graph(size_t world)
 {
     // array of MethodInstances and ccallable aliases to include in the output
     jl_array_t *m = jl_alloc_vec_any(0);
@@ -360,13 +360,9 @@ static void *jl_precompile_small_image(size_t world)
         if (ccallable)
             jl_array_ptr_1d_push(m, ccallable);
     }
-    if (jl_options.verbose_compilation) {
-        jl_safe_printf("Precompiling %zu methods\n", jl_array_nrows(m));
-        jl_(m);
-    }
 
     jl_cgparams_t params = jl_default_cgparams;
-    params.no_dynamic_dispatch = jl_options.no_dispatch_precompile;
+    params.static_call_graph = jl_options.static_call_graph;
     void *native_code = jl_create_native(m, NULL, &params, 0, /* imaging */ 1, 0,
                                          world);
     JL_GC_POP();
