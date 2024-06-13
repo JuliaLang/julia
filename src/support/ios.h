@@ -152,6 +152,10 @@ int ios_ungetc(int c, ios_t *s);
 //wint_t ios_ungetwc(ios_t *s, wint_t wc);
 #define ios_puts(str, s) ios_write(s, str, strlen(str))
 
+#ifdef _OS_WINDOWS_
+const wchar_t *ios_utf8_to_wchar(const char *str);
+#endif
+
 /*
   With memory streams, mixed reads and writes are equivalent to performing
   sequences of *p++, as either an lvalue or rvalue. File streams behave

@@ -10,6 +10,7 @@
 #include <stdio.h> // for printf
 
 #include "dtypes.h"
+#include "uv.h"
 
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
@@ -987,6 +988,15 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     s->fd = -1;
     return NULL;
 }
+
+#ifdef _OS_WINDOWS_
+const wchar_t *ios_utf8_to_wchar(const char *str) {
+    ssize_t wlen = uv_wtf8_length_as_utf16(str);
+    wchar_t *wstr = (wchar_t *)malloc_s(sizeof(wchar_t) * wlen);
+    uv_wtf8_to_utf16(str, wstr, wlen);
+    return wstr;
+}
+#endif // _OS_WINDOWS_
 
 // Portable ios analogue of mkstemp: modifies fname to replace
 // trailing XXXX's with unique ID and returns the file handle s
