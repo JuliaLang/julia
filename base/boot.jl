@@ -206,7 +206,7 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError, ConcurrencyViolationError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
@@ -404,6 +404,11 @@ struct AssertionError <: Exception
 end
 AssertionError() = AssertionError("")
 
+struct FieldError <: Exception
+    type::DataType
+    field::Symbol
+end
+
 abstract type WrappedException <: Exception end
 
 struct LoadError <: WrappedException
@@ -541,8 +546,6 @@ GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
 GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
 GenericMemoryRef(mem::GenericMemoryRef, i::Integer) = memoryref(mem, i)
 
-const Memory{T} = GenericMemory{:not_atomic, T, CPU}
-const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
 const AtomicMemory{T} = GenericMemory{:atomic, T, CPU}
 const AtomicMemoryRef{T} = GenericMemoryRef{:atomic, T, CPU}
 

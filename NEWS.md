@@ -113,6 +113,8 @@ Standard library changes
 
 - Using the new `usings=true` feature of the `names()` function, REPL completions can now
   complete names that have been explicitly `using`-ed. ([#54610])
+- REPL completions can now complete input lines like `[import|using] Mod: xxx|` e.g.
+  complete `using Base.Experimental: @op` to `using Base.Experimental: @opaque`. ([#54719])
 
 #### SuiteSparse
 

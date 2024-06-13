@@ -783,11 +783,20 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         }
 
         // If this generated function has an opaque closure, cache it for
-        // correctness of method identity
+        // correctness of method identity. In particular, other methods that call
+        // this method may end up referencing it in a PartialOpaque lattice element
+        // type. If the method identity were to change (for the same world age)
+        // in between invocations of this method, that return type inference would
+        // no longer be correct.
         int needs_cache_for_correctness = 0;
         for (int i = 0; i < jl_array_nrows(func->code); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_new_opaque_closure_sym) {
+                if (jl_expr_nargs(stmt) >= 4 && jl_is_bool(jl_exprarg(stmt, 3)) && !jl_unbox_bool(jl_exprarg(stmt, 3))) {
+                    // If this new_opaque_closure is prohibited from sourcing PartialOpaque,
+                    // there is no problem
+                    continue;
+                }
                 if (jl_options.incremental && jl_generating_output())
                     jl_error("Impossible to correctly handle OpaqueClosure inside @generated returned during precompile process.");
                 needs_cache_for_correctness = 1;

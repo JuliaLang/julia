@@ -75,9 +75,10 @@ mutable struct MIState
     key_repeats::Int
     last_action::Symbol
     current_action::Symbol
+    async_channel::Channel{Function}
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none)
+MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -2309,7 +2310,7 @@ keymap_data(state, ::Union{HistoryPrompt, PrefixHistoryPrompt}) = state
 
 Base.isempty(s::PromptState) = s.input_buffer.size == 0
 
-on_enter(s::PromptState) = s.p.on_enter(s)
+on_enter(s::MIState) = state(s).p.on_enter(s)
 
 move_input_start(s::BufferLike) = (seek(buffer(s), 0); nothing)
 move_input_end(buf::IOBuffer) = (seekend(buf); nothing)
@@ -2827,36 +2828,45 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
     try
         activate(prompt, s, term, term)
         old_state = mode(s)
+        l = Base.ReentrantLock()
+        t = @async while true
+            fcn = take!(s.async_channel)
+            status = @lock l fcn(s)
+            status ∈ (:ok, :ignore) || break
+        end
+        Base.errormonitor(t)
         while true
             kmap = keymap(s, prompt)
             fcn = match_input(kmap, s)
-            kdata = keymap_data(s, prompt)
-            s.current_action = :unknown # if the to-be-run action doesn't update this field,
-                                        # :unknown will be recorded in the last_action field
-            local status
-            # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
-            # try/catch block
-            try
-                status = fcn(s, kdata)
-            catch e
-                @error "Error in the keymap" exception=e,catch_backtrace()
-                # try to cleanup and get `s` back to its original state before returning
-                transition(s, :reset)
-                transition(s, old_state)
-                status = :done
-            end
-            status !== :ignore && (s.last_action = s.current_action)
-            if status === :abort
-                s.aborted = true
-                return buffer(s), false, false
-            elseif status === :done
-                return buffer(s), true, false
-            elseif status === :suspend
-                if Sys.isunix()
-                    return buffer(s), true, true
+            @lock l begin
+                kdata = keymap_data(s, prompt)
+                s.current_action = :unknown # if the to-be-run action doesn't update this field,
+                                            # :unknown will be recorded in the last_action field
+                local status
+                # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
+                # try/catch block
+                try
+                    status = fcn(s, kdata)
+                catch e
+                    @error "Error in the keymap" exception=e,catch_backtrace()
+                    # try to cleanup and get `s` back to its original state before returning
+                    transition(s, :reset)
+                    transition(s, old_state)
+                    status = :done
                 end
-            else
-                @assert status ∈ (:ok, :ignore)
+                status !== :ignore && (s.last_action = s.current_action)
+                if status === :abort
+                    s.aborted = true
+                    return buffer(s), false, false
+                elseif status === :done
+                    return buffer(s), true, false
+                elseif status === :suspend
+                    if Sys.isunix()
+                        return buffer(s), true, true
+                    end
+                else
+                    @assert status ∈ (:ok, :ignore)
+                end
             end
         end
     finally

@@ -347,7 +347,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             ⊑(𝕃ₒ, typ, Tuple) || return (false, false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
-            source = argextype(args[4], src)
+            source = argextype(args[5], src)
             if !(⊑(𝕃ₒ, rt_lb, Type) && ⊑(𝕃ₒ, rt_ub, Type) && ⊑(𝕃ₒ, source, Method))
                 return (false, false, false)
             end

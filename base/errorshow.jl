@@ -367,6 +367,12 @@ function showerror(io::IO, ex::MethodError)
     nothing
 end
 
+function showerror(io::IO, exc::FieldError)
+    @nospecialize
+    print(io, "FieldError: type $(exc.type |> nameof) has no field $(exc.field)")
+    Base.Experimental.show_error_hints(io, exc)
+end
+
 striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
@@ -1085,6 +1091,20 @@ function methods_on_iterable(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(methods_on_iterable, MethodError)
+
+# Display a hint in case the user tries to access non-member fields of container type datastructures
+function fielderror_hint_handler(io, exc)
+    @nospecialize
+    field = exc.field
+    type = exc.type
+    if type <: AbstractDict
+        print(io, "\nDid you mean to access dict values using key: `:$field` ? Consider using indexing syntax ")
+        printstyled(io, "dict[:$(field)]", color=:cyan)
+        println(io)
+    end
+end
+
+Experimental.register_error_hint(fielderror_hint_handler, FieldError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

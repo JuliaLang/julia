@@ -71,21 +71,17 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        *stack_lo = (void*)stackaddr;
-#pragma GCC diagnostic push
-#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
-#pragma GCC diagnostic ignored "-Wdangling-pointer"
-#endif
-        *stack_hi = (void*)__builtin_frame_address(0);
-#pragma GCC diagnostic pop
+        *stack_hi = stackaddr;
+        *stack_lo = (char*)stackaddr - stacksize;
         return;
 #  elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
         extern size_t pthread_get_stacksize_np(pthread_t thread);
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
-        *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)__builtin_frame_address(0);
+        size_t stacksize = pthread_get_stacksize_np(thread);
+        *stack_hi = stackaddr;
+        *stack_lo = (char*)stackaddr - stacksize;
         return;
 #  elif defined(_OS_FREEBSD_)
         pthread_attr_t attr;
@@ -95,8 +91,8 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)__builtin_frame_address(0);
+        *stack_hi = stackaddr;
+        *stack_lo = (char*)stackaddr - stacksize;
         return;
 #  else
 #      warning "Getting precise stack size for thread is not supported."

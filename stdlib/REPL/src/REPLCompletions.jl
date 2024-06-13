@@ -165,7 +165,6 @@ function complete_symbol!(suggestions::Vector{Completion},
             val = res.val
             if isa(val, Module)
                 mod = val
-                lookup_module = true
             else
                 lookup_module = false
                 t = typeof(val)
@@ -242,7 +241,7 @@ function field_completion_eligible(@nospecialize t)
     return match.method === GENERIC_PROPERTYNAMES_METHOD
 end
 
-function complete_from_list!(suggestions::Vector{Completion}, T::Type, list::Vector{String}, s::Union{String,SubString{String}})
+function complete_from_list!(suggestions::Vector{Completion}, T::Type, list::Vector{String}, s::String)
     r = searchsorted(list, s)
     i = first(r)
     n = length(list)
@@ -264,12 +263,12 @@ const sorted_keywords = [
     "primitive type", "quote", "return", "struct",
     "try", "using", "while"]
 
-complete_keyword!(suggestions::Vector{Completion}, s::Union{String,SubString{String}}) =
+complete_keyword!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeywordCompletion, sorted_keywords, s)
 
 const sorted_keyvals = ["false", "true"]
 
-complete_keyval!(suggestions::Vector{Completion}, s::Union{String,SubString{String}}) =
+complete_keyval!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeyvalCompletion, sorted_keyvals, s)
 
 function do_raw_escape(s)
@@ -892,17 +891,36 @@ const subscript_regex = Regex("^\\\\_[" * join(isdigit(k) || isletter(k) ? "$k" 
 const superscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k, "\\^") && length(k)==3)
 const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(superscripts)) * "]+\\z")
 
-# Aux function to detect whether we're right after a
-# using or import keyword
-function afterusing(string::String, startpos::Int)
-    (isempty(string) || startpos == 0) && return false
-    str = string[1:prevind(string,startpos)]
-    isempty(str) && return false
-    rstr = reverse(str)
-    r = findfirst(r"\s(gnisu|tropmi)\b", rstr)
-    r === nothing && return false
-    fr = reverseind(str, last(r))
-    return occursin(r"^\b(using|import)\s*((\w+[.])*\w+\s*,\s*)*$", str[fr:end])
+# Aux function to detect whether we're right after a using or import keyword
+function get_import_mode(s::String)
+    # match simple cases like `using |` and `import  |`
+    mod_import_match_simple = match(r"^\b(using|import)\s*$", s)
+    if mod_import_match_simple !== nothing
+        if mod_import_match_simple[1] == "using"
+            return :using_module
+        else
+            return :import_module
+        end
+    end
+    # match module import statements like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`
+    mod_import_match = match(r"^\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
+    if mod_import_match !== nothing
+        if mod_import_match.captures[1] == "using"
+            return :using_module
+        else
+            return :import_module
+        end
+    end
+    # now match explicit name import statements like `using Foo: |` and `import Foo: bar, baz|`
+    name_import_match = match(r"^\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
+    if name_import_match !== nothing
+        if name_import_match[1] == "using"
+            return :using_name
+        else
+            return :import_name
+        end
+    end
+    return nothing
 end
 
 function close_path_completion(dir, paths, str, pos)
@@ -1084,7 +1102,7 @@ end
 
 function complete_identifiers!(suggestions::Vector{Completion},
                                context_module::Module, string::String, name::String,
-                               pos::Int, dotpos::Int, startpos::Int;
+                               pos::Int, separatorpos::Int, startpos::Int;
                                comp_keywords::Bool=false,
                                complete_modules_only::Bool=false)
     ex = nothing
@@ -1092,8 +1110,8 @@ function complete_identifiers!(suggestions::Vector{Completion},
         complete_keyword!(suggestions, name)
         complete_keyval!(suggestions, name)
     end
-    if dotpos > 1 && string[dotpos] == '.'
-        s = string[1:prevind(string, dotpos)]
+    if separatorpos > 1 && (string[separatorpos] == '.' || string[separatorpos] == ':')
+        s = string[1:prevind(string, separatorpos)]
         # First see if the whole string up to `pos` is a valid expression. If so, use it.
         ex = Meta.parse(s, raise=false, depwarn=false)
         if isexpr(ex, :incomplete)
@@ -1132,10 +1150,6 @@ function complete_identifiers!(suggestions::Vector{Completion},
             end
             isexpr(ex, :incomplete) && (ex = nothing)
         elseif isexpr(ex, (:using, :import))
-            if isexpr(ex, :import)
-                # allow completion for `import Mod.name` (where `name` is not a module)
-                complete_modules_only = false
-            end
             arglast = ex.args[end] # focus on completion to the last argument
             if isexpr(arglast, :.)
                 # We come here for cases like:
@@ -1186,7 +1200,7 @@ function complete_identifiers!(suggestions::Vector{Completion},
         end
     end
     complete_symbol!(suggestions, ex, name, context_module; complete_modules_only)
-    return sort!(unique(suggestions), by=completion_text), (dotpos+1):pos, true
+    return suggestions
 end
 
 function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true, hint::Bool=false)
@@ -1248,10 +1262,11 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         ok, ret = bslash_completions(string, pos)
         ok && return ret
         startpos = first(varrange) + 4
-        dotpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
+        separatorpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
         name = string[startpos:pos]
-        return complete_identifiers!(Completion[], context_module, string, name, pos,
-                                     dotpos, startpos)
+        complete_identifiers!(suggestions, context_module, string, name,
+                              pos, separatorpos, startpos)
+        return sort!(unique!(completion_text, suggestions), by=completion_text), (separatorpos+1):pos, true
     elseif inc_tag === :cmd
         # TODO: should this call shell_completions instead of partially reimplementing it?
         let m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial)) # fuzzy shell_parse in reverse
@@ -1383,22 +1398,24 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     kwarg_completion, wordrange = complete_keyword_argument(partial, pos, context_module)
     isempty(wordrange) || return kwarg_completion, wordrange, !isempty(kwarg_completion)
 
-    dotpos = something(findprev(isequal('.'), string, pos), 0)
     startpos = nextind(string, something(findprev(in(non_identifier_chars), string, pos), 0))
     # strip preceding ! operator
     if (m = match(r"\G\!+", partial, startpos)) isa RegexMatch
         startpos += length(m.match)
     end
 
-    name = string[max(startpos, dotpos+1):pos]
-    if afterusing(string, startpos)
-        # We're right after using or import. Let's look only for packages
-        # and modules we can reach from here
+    separatorpos = something(findprev(isequal('.'), string, pos), 0)
+    namepos = max(startpos, separatorpos+1)
+    name = string[namepos:pos]
+    import_mode = get_import_mode(string)
+    if import_mode === :using_module || import_mode === :import_module
+        # Given input lines like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`:
+        # Let's look only for packages and modules we can reach from here
 
         # If there's no dot, we're in toplevel, so we should
         # also search for packages
         s = string[startpos:pos]
-        if dotpos <= startpos
+        if separatorpos <= startpos
             for dir in Base.load_path()
                 if basename(dir) in Base.project_names && isfile(dir)
                     complete_loading_candidates!(suggestions, s, dir)
@@ -1431,17 +1448,21 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
             end
         end
         comp_keywords = false
-        complete_modules_only = true
+        complete_modules_only = import_mode === :using_module # allow completion for `import Mod.name` (where `name` is not a module)
+    elseif import_mode === :using_name || import_mode === :import_name
+        # `using Foo: |` and `import Foo: bar, baz|`
+        separatorpos = findprev(isequal(':'), string, pos)::Int
+        comp_keywords = false
+        complete_modules_only = false
     else
-        comp_keywords = !isempty(name) && startpos > dotpos
+        comp_keywords = !isempty(name) && startpos > separatorpos
         complete_modules_only = false
     end
 
-    startpos == 0 && (pos = -1)
-    dotpos < startpos && (dotpos = startpos - 1)
-    return complete_identifiers!(suggestions, context_module, string, name, pos,
-                                 dotpos, startpos;
-                                 comp_keywords, complete_modules_only)
+    complete_identifiers!(suggestions, context_module, string, name,
+                          pos, separatorpos, startpos;
+                          comp_keywords, complete_modules_only)
+    return sort!(unique!(completion_text, suggestions), by=completion_text), namepos:pos, true
 end
 
 function shell_completions(string, pos, hint::Bool=false)

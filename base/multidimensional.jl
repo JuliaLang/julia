@@ -592,7 +592,7 @@ module IteratorsMD
         else
             # Given the fact that StepRange 1:2:4 === 1:2:3, we lost the original size information
             # and thus cannot calculate the correct linear indices when the steps are not 1.
-            throw(ArgumentError("LinearIndices for $(typeof(inds)) with non-1 step size is not yet supported."))
+            throw(ArgumentError(LazyString("LinearIndices for ", typeof(inds), " with non-1 step size is not yet supported.")))
         end
     end
 

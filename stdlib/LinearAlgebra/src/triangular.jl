@@ -499,41 +499,58 @@ tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
 tr(A::UpperTriangular) = tr(A.data)
 tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
-@propagate_inbounds function copyto!(dest::UpperOrLowerTriangular, U::UpperOrLowerTriangular)
-    if axes(dest) != axes(U)
-        @invoke copyto!(dest::AbstractArray, U::AbstractArray)
-    else
-        _copyto!(dest, U)
+for T in (:UpperOrUnitUpperTriangular, :LowerOrUnitLowerTriangular)
+    @eval @propagate_inbounds function copyto!(dest::$T, U::$T)
+        if axes(dest) != axes(U)
+            @invoke copyto!(dest::AbstractArray, U::AbstractArray)
+        else
+            _copyto!(dest, U)
+        end
+        return dest
     end
-    return dest
 end
 
 # copy and scale
-for T in (:UpperTriangular, :LowerTriangular)
+for (T, UT) in ((:UpperTriangular, :UnitUpperTriangular), (:LowerTriangular, :UnitLowerTriangular))
     @eval @inline function _copyto!(A::$T, B::$T)
         @boundscheck checkbounds(A, axes(B)...)
         copytrito!(parent(A), parent(B), uplo_char(A))
         return A
     end
+    @eval @inline function _copyto!(A::$UT, B::$T)
+        for dind in diagind(A, IndexStyle(A))
+            if A[dind] != B[dind]
+                throw_nononeerror(typeof(A), B[dind], Tuple(dind)...)
+            end
+        end
+        _copyto!($T(parent(A)), B)
+        return A
+    end
 end
-@inline function _copyto!(A::UnitUpperTriangular, B::UnitUpperTriangular)
+@inline function _copyto!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular)
     @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
     B2 = Base.unalias(A, B)
     for j = 1:n
         for i = 1:j-1
-            @inbounds A[i,j] = B2[i,j]
+            @inbounds parent(A)[i,j] = parent(B2)[i,j]
+        end
+        if A isa UpperTriangular # copy diagonal
+            @inbounds parent(A)[j,j] = B2[j,j]
         end
     end
     return A
 end
-@inline function _copyto!(A::UnitLowerTriangular, B::UnitLowerTriangular)
+@inline function _copyto!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular)
     @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
     B2 = Base.unalias(A, B)
     for j = 1:n
+        if A isa LowerTriangular # copy diagonal
+            @inbounds parent(A)[j,j] = B2[j,j]
+        end
         for i = j+1:n
-            @inbounds A[i,j] = B2[i,j]
+            @inbounds parent(A)[i,j] = parent(B2)[i,j]
         end
     end
     return A

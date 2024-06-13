@@ -443,8 +443,8 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
                     ocleaf = simple_walk(compact, ocleaf)
                 end
                 ocdef, _ = walk_to_def(compact, ocleaf)
-                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-4
-                    lift_arg!(compact, leaf, cache_key, ocdef, 4+field, lifted_leaves)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-5
+                    lift_arg!(compact, leaf, cache_key, ocdef, 5+field, lifted_leaves)
                     continue
                 end
                 return nothing
@@ -1614,6 +1614,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     end
     all(check_defuse, defuse.uses) || return nothing
     all(check_defuse, defuse.defs) || return nothing
+    bb_insert_block != 0 || return nothing # verify post-dominator of all uses exists
 
     # Check #3
     dominates(domtree, finalizer_bb, bb_insert_block) || return nothing
