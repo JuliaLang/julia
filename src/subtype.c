@@ -760,6 +760,8 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
         return e->ignore_free || subtype_left_var(a, b->lb, e, param);
+    if (a == jl_bottom_type && param == 1)
+        return 1;
     record_var_occurrence(bb, e, param);
     assert(!jl_is_long(a) || e->Loffset == 0);
     if (e->Loffset != 0 && !jl_is_typevar(a) &&
@@ -3253,11 +3255,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     e->vars = vb->prev;
 
     if (res != jl_bottom_type) {
-        if (vb->ub == jl_bottom_type && vb->occurs_cov) {
-            // T=Bottom in covariant position
-            res = jl_bottom_type;
-        }
-        else if (jl_has_typevar(vb->lb, u->var)) {
+        if (jl_has_typevar(vb->lb, u->var)) {
             // fail on circular constraints
             res = jl_bottom_type;
         }
@@ -3566,11 +3564,8 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
                     np = len;
                     p = NULL;
                 }
+                break;
             }
-            else {
-                res = jl_bottom_type;
-            }
-            break;
         }
         isx = isx && ii == xi;
         isy = isy && ii == yi;
@@ -4386,6 +4381,24 @@ static int might_intersect_concrete(jl_value_t *a)
     return 0;
 }
 
+static int is_uninhabited_tuple_type(jl_value_t *t)
+{
+    if (jl_is_unionall(t))
+        t = jl_unwrap_unionall(t);
+    if (jl_is_tuple_type(t)) {
+        size_t n = jl_nparams(t);
+        size_t i;
+        for(i=0; i < n; i++) {
+            jl_value_t *pi = jl_tparam(t, i);
+            while (jl_is_typevar(pi))
+                pi = ((jl_tvar_t*)pi)->ub;
+            if (pi == jl_bottom_type || is_uninhabited_tuple_type(pi))
+                return 1;
+        }
+    }
+    return 0;
+}
+
 // sets *issubty to 1 iff `a` is a subtype of `b`
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty)
 {
@@ -4426,6 +4439,8 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             memset(env, 0, szb*sizeof(void*));
         e.envsz = szb;
         *ans = intersect_all(a, b, &e);
+        if (is_uninhabited_tuple_type(*ans))
+            *ans = jl_bottom_type;
         if (*ans == jl_bottom_type) goto bot;
         // TODO: code dealing with method signatures is not able to handle unions, so if
         // `a` and `b` are both tuples, we need to be careful and may not return a union,
