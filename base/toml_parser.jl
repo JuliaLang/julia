@@ -9,8 +9,8 @@ module TOML
 
 using Base: IdSet
 
-# In case we do not have the Dates stdlib available
 # we parse DateTime into these internal structs,
+# unless a different DateTime library is passed to the Parser constructor
 # note that these do not do any argument checking
 struct Date
     year::Int
@@ -85,11 +85,9 @@ mutable struct Parser
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
 
-    # Gets populated with the Dates stdlib if it exists
+    # Optionally populate with the Dates stdlib to change the type of Date types returned
     Dates::Union{Module, Nothing}
 end
-
-const DATES_PKGID = Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates")
 
 function Parser(str::String; filepath=nothing)
     root = TOMLDict()
@@ -109,7 +107,7 @@ function Parser(str::String; filepath=nothing)
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
-            isdefined(Base, :maybe_root_module) ? Base.maybe_root_module(DATES_PKGID) : nothing,
+            nothing
         )
     startup(l)
     return l
@@ -150,8 +148,6 @@ end
 ##########
 # Errors #
 ##########
-
-throw_internal_error(msg) = error("internal TOML parser error: $msg")
 
 # Many functions return a ParserError. We want this to bubble up
 # all the way and have this error be returned to the user
@@ -900,7 +896,7 @@ end
 function parse_float(l::Parser, contains_underscore)::Err{Float64}
     s = take_string_or_substring(l, contains_underscore)
     v = Base.tryparse(Float64, s)
-    v === nothing && return(ParserError(ErrGenericValueError))
+    v === nothing && return ParserError(ErrGenericValueError)
     return v
 end
 
@@ -909,8 +905,8 @@ function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
     v = try
         Base.parse(Int64, s; base=base)
     catch e
-        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+        e isa Base.OverflowError && return ParserError(ErrOverflowError)
+        rethrow()
     end
     return v
 end
@@ -932,8 +928,8 @@ for (name, T1, T2, n1, n2) in (("integer", Int64,  Int128,  17,  33),
                 Base.parse(BigInt, s; base)
             end
         catch e
-            e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-            error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+            e isa Base.OverflowError && return ParserError(ErrOverflowError)
+            rethrow()
         end
         return v
     end
@@ -1030,8 +1026,9 @@ function try_return_datetime(p, year, month, day, h, m, s, ms)
     if Dates !== nothing
         try
             return Dates.DateTime(year, month, day, h, m, s, ms)
-        catch
-            return ParserError(ErrParsingDateTime)
+        catch ex
+            ex isa ArgumentError && return ParserError(ErrParsingDateTime)
+            rethrow()
         end
     else
         return DateTime(year, month, day, h, m, s, ms)
@@ -1043,8 +1040,9 @@ function try_return_date(p, year, month, day)
     if Dates !== nothing
         try
             return Dates.Date(year, month, day)
-        catch
-            return ParserError(ErrParsingDateTime)
+        catch ex
+            ex isa ArgumentError && return ParserError(ErrParsingDateTime)
+            rethrow()
         end
     else
         return Date(year, month, day)
@@ -1065,8 +1063,9 @@ function try_return_time(p, h, m, s, ms)
     if Dates !== nothing
         try
             return Dates.Time(h, m, s, ms)
-        catch
-            return ParserError(ErrParsingDateTime)
+        catch ex
+            ex isa ArgumentError && return ParserError(ErrParsingDateTime)
+            rethrow()
         end
     else
         return Time(h, m, s, ms)
