@@ -1614,6 +1614,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     end
     all(check_defuse, defuse.uses) || return nothing
     all(check_defuse, defuse.defs) || return nothing
+    bb_insert_block != 0 || return nothing # verify post-dominator of all uses exists
 
     # Check #3
     dominates(domtree, finalizer_bb, bb_insert_block) || return nothing
