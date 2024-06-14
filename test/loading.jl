@@ -1125,18 +1125,17 @@ end
         sysimg_ext_test_code = """
             uuid_key = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
             Base.in_sysimage(uuid_key) || error("LinearAlgebra not in sysimage")
-            haskey(Base.explicit_loaded_modules, uuid_key) && error("LinearAlgebra already loaded")
+            (uuid_key in Base.explicit_loaded_modules) && error("LinearAlgebra already loaded")
             using HasExtensions
             Base.get_extension(HasExtensions, :LinearAlgebraExt) === nothing || error("unexpectedly got an extension")
             using LinearAlgebra
-            haskey(Base.explicit_loaded_modules, uuid_key) || error("LinearAlgebra not loaded")
+            (uuid_key in Base.explicit_loaded_modules) || error("LinearAlgebra not loaded")
             Base.get_extension(HasExtensions, :LinearAlgebraExt) isa Module || error("expected extension to load")
         """
         cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
         @test success(cmd)
 
-        # Failure of loading some extensions when trigger is in the sysimage
         # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet
         # and that it depends on Libdl.
         # If it gets moved out, this test will need to be updated.
@@ -1150,6 +1149,18 @@ end
             using GotLibdlExt
             using LinearAlgebra
             Base.get_extension(GotLibdlExt, :LibdlExt) isa Module || error("expected extension to load")
+        """
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj_libdlext, "@stdlib"], sep))
+        @test success(cmd)
+
+        # Failure of loading some extensions when loading a precompiled package with a trigger in the sysimage
+        sysimg_ext_test_code = """
+        uuid_key_la = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
+        using GotLibdlExt
+        using SparseArrays # loads LinearAlgebra
+        haskey(Base.loaded_modules, uuid_key_la) || error("LinearAlgebra not loaded")
+        Base.get_extension(GotLibdlExt, :LibdlExt) isa Module || error("expected extension to load")
         """
         cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj_libdlext, "@stdlib"], sep))
