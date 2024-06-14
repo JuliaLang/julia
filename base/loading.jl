@@ -2240,7 +2240,7 @@ function collect_manifest_warnings()
     end
     if !isempty(dev_manifests)
         msg *= """
-        - Note that the following manifests in the load path were resolved a potentially
+        - Note that the following manifests in the load path were resolved with a potentially
           different DEV version of the current version, which may be the cause of the error.
           Try to re-resolve them in the current version, or consider deleting them if that fails:
             $(join(dev_manifests, "\n    "))
