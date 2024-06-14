@@ -953,7 +953,7 @@ function cholesky(S::SymTridiagonal, ::NoPivot = NoPivot(); check::Bool = true)
         check && checkpositivedefinite(-1)
         return Cholesky(S, 'U', convert(BlasInt, -1))
     end
-    T = choltype(eltype(S))
+    T = choltype(S)
     cholesky!(Hermitian(Bidiagonal{T}(diag(S, 0), diag(S, 1), :U)), NoPivot(); check = check)
 end
 
