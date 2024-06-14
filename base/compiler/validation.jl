@@ -13,7 +13,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :new => 1:typemax(Int),
     :splatnew => 2:2,
     :the_exception => 0:0,
-    :enter => 1:2,
     :leave => 1:typemax(Int),
     :pop_exception => 1:1,
     :inbounds => 1:1,
@@ -38,6 +37,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :import => 1:typemax(Int),
     :using => 1:typemax(Int),
     :export => 1:typemax(Int),
+    :public => 1:typemax(Int),
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
@@ -147,7 +147,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
             elseif head === :call || head === :invoke || x.head === :invoke_modify ||
                 head === :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
-                head === :const || head === :enter || head === :leave || head === :pop_exception ||
+                head === :const || head === :leave || head === :pop_exception ||
                 head === :method || head === :global || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
                 head === :throw_undef_if_not || head === :code_coverage_effect || head === :inline || head === :noinline
