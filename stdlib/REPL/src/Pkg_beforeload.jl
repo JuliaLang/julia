@@ -70,10 +70,14 @@ end
 
 function projname(project_file::String)
     if isfile(project_file)
-        p = Base.TOML.Parser()
-        Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
-        proj = Base.TOML.parse(p)
-        name = get(proj, "name", nothing)
+        name = try
+            p = Base.TOML.Parser()
+            Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
+            proj = Base.TOML.parse(p)
+            get(proj, "name", nothing)
+        catch
+            nothing
+        end
     else
         name = nothing
     end
