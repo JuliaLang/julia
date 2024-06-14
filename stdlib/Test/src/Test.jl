@@ -797,7 +797,7 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             orig_expr isa Expr &&
             orig_expr.head in (:call, :macrocall) &&
             orig_expr.args[1] in MACROEXPAND_LIKE
-        if isa(extype, Type)
+        if isa(extype, Type) && extype != ErrorException
             success =
                 if from_macroexpand && extype == LoadError && exc isa Exception
                     Base.depwarn("macroexpand no longer throws a LoadError so `@test_throws LoadError ...` is deprecated and passed without checking the error type!", :do_test_throws)
@@ -805,6 +805,8 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
                 else
                     isa(exc, extype)
                 end
+        elseif isa(extype, Type) && extype == ErrorException
+            success = isa(exc, ErrorException) || isa(exc, FieldError)
         elseif isa(extype, Exception) || !isa(exc, Exception)
             if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
                 extype = extype.error # deprecated
