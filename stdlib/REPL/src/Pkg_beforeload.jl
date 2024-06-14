@@ -69,10 +69,18 @@ function relative_project_path(project_file::String, path::String)
 end
 
 function projname(project_file::String)
-    p = Base.TOML.Parser()
-    Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
-    proj = Base.TOML.parse(p)
-    name = get(proj, "name", nothing)
+    if isfile(project_file)
+        name = try
+            p = Base.TOML.Parser()
+            Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
+            proj = Base.TOML.parse(p)
+            get(proj, "name", nothing)
+        catch
+            nothing
+        end
+    else
+        name = nothing
+    end
     if name === nothing
         name = basename(dirname(project_file))
     end
