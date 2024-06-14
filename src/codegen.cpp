@@ -9892,7 +9892,7 @@ jl_llvm_functions_t jl_emit_codeinst(
             else if (jl_is_method(def) && // don't delete toplevel code
                         def->source != NULL && // don't delete code from optimized opaque closures that can't be reconstructed
                         inferred != jl_nothing && // and there is something to delete (test this before calling jl_ir_inlining_cost)
-                        !effects_foldable(codeinst->ipo_purity_bits) && // don't delete code we may want for irinterp
+                        !effects_foldable(jl_atomic_load_relaxed(&codeinst->ipo_purity_bits)) && // don't delete code we may want for irinterp
                         ((jl_ir_inlining_cost(inferred) == UINT16_MAX) || // don't delete inlineable code
                         jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) && // unless it is constant
                         !(params.imaging_mode || jl_options.incremental)) { // don't delete code when generating a precompile file

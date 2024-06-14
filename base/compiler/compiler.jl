@@ -14,6 +14,7 @@ const setproperty! = Core.setfield!
 const swapproperty! = Core.swapfield!
 const modifyproperty! = Core.modifyfield!
 const replaceproperty! = Core.replacefield!
+const _DOCS_ALIASING_WARNING = ""
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
