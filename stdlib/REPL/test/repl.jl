@@ -1836,3 +1836,25 @@ end
     @test_broken isempty(undoc)
     @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
 end
+
+@testset "Dummy Pkg prompt" begin
+    # do this in an empty depot to test default for new users
+    withenv("JULIA_DEPOT_PATH" => mktempdir(), "JULIA_LOAD_PATH" => nothing) do
+        prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.Pkg_promptf())"`)
+        @test prompt == "(@v$(VERSION.major).$(VERSION.minor)) pkg> "
+    end
+
+    get_prompt(proj::String) = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no $(proj) -e "using REPL; print(REPL.Pkg_promptf())"`)
+
+    @test get_prompt("--project=$(pkgdir(REPL))") == "(REPL) pkg> "
+
+    tdir = mkpath(joinpath(mktempdir(), "foo"))
+    @test get_prompt("--project=$tdir") == "(foo) pkg> "
+
+    proj_file = joinpath(tdir, "Project.toml")
+    touch(proj_file) # make a bad Project.toml
+    @test get_prompt("--project=$proj_file") == "(foo) pkg> "
+
+    write(proj_file, "name = \"Bar\"\n")
+    @test get_prompt("--project=$proj_file") == "(Bar) pkg> "
+end
