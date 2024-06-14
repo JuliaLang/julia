@@ -6,6 +6,11 @@ function lower(mod::Module, ex)
     ex4
 end
 
+function macroexpand(mod::Module, ex)
+    ctx1, ex1 = expand_forms_1(mod, ex)
+    ex1
+end
+
 _CodeInfo_need_ver = v"1.12.0-DEV.512"
 if VERSION < _CodeInfo_need_ver
     function _CodeInfo(args...)
@@ -37,29 +42,58 @@ else
     end
 end
 
+function _compress_debuginfo(info)
+    filename, edges, codelocs = info
+    edges = Core.svec(map(_compress_debuginfo, edges)...)
+    codelocs = @ccall jl_compress_codelocs((-1)::Int32, codelocs::Any,
+                                           div(length(codelocs),3)::Csize_t)::String
+    Core.DebugInfo(Symbol(filename), nothing, edges, codelocs)
+end
+
 function ir_debug_info(ex)
     code = children(ex)
-    # Record low resolution locations in debug info
-    num_stmts = length(code)
-    codelocs = zeros(Int32, 3*num_stmts)
 
-    topfile = Symbol(filename(ex))
-    topline,_ = source_location(ex)
+    e1 = first(flattened_provenance(ex))
+    topfile = filename(e1)
 
-    edges = Core.DebugInfo[]
-
-    for i in 1:num_stmts
-        line,_ = source_location(code[i])
-        # TODO: Macro inlining stack filename(code[i])
-        codelocs[3*i-2]   = line
-        codelocs[3*i-1] = 0 # Index into edges
-        codelocs[3*i  ] = 0 # Index into edges[linetable]
+    current_codelocs_stack = [(topfile, [], Vector{Int32}())]
+    for i in 1:length(code)
+        locstk = [(filename(e), source_location(e)[1]) for e in flattened_provenance(code[i])]
+        for j in 1:max(length(locstk), length(current_codelocs_stack))
+            if j > length(locstk) || (length(current_codelocs_stack) >= j &&
+                                      current_codelocs_stack[j][1] != locstk[j][1])
+                while length(current_codelocs_stack) >= j
+                    info = pop!(current_codelocs_stack)
+                    push!(last(current_codelocs_stack)[2], info)
+                end
+            end
+            if j > length(locstk)
+                break
+            elseif j > length(current_codelocs_stack)
+                push!(current_codelocs_stack, (locstk[j][1], [], Vector{Int32}()))
+            end
+        end
+        for (j, (file,line)) in enumerate(locstk)
+            fn, edges, codelocs = current_codelocs_stack[j]
+            @assert fn == file
+            if j < length(locstk)
+                edge_index = length(edges) + 1
+                edge_codeloc_index = fld1(length(current_codelocs_stack[j+1][3]) + 1, 3)
+            else
+                edge_index = 0
+                edge_codeloc_index = 0
+            end
+            push!(codelocs, line)
+            push!(codelocs, edge_index)
+            push!(codelocs, edge_codeloc_index)
+        end
+    end
+    while length(current_codelocs_stack) > 1
+        info = pop!(current_codelocs_stack)
+        push!(last(current_codelocs_stack)[2], info)
     end
 
-    codelocs = @ccall jl_compress_codelocs(topline::Int32, codelocs::Any,
-                                            num_stmts::Csize_t)::String
-    edges = Core.svec(edges...)
-    Core.DebugInfo(topfile, nothing, edges, codelocs)
+    _compress_debuginfo(only(current_codelocs_stack))
 end
 
 # Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the

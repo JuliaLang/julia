@@ -27,6 +27,10 @@ function _show_attrs(io, attributes::NamedTuple)
     show(io, MIME("text/plain"), Dict(pairs(attributes)...))
 end
 
+function attrnames(graph::SyntaxGraph)
+    keys(graph.attributes)
+end
+
 function Base.show(io::IO, ::MIME"text/plain", graph::SyntaxGraph)
     print(io, typeof(graph),
           " with $(length(graph.edge_ranges)) vertices, $(length(graph.edges)) edges, and attributes:\n")
@@ -113,7 +117,7 @@ function hasattr(graph::SyntaxGraph, name::Symbol)
     getattr(graph, name, nothing) !== nothing
 end
 
-# FIXME: Probably terribly non-inferrable?
+# TODO: Probably terribly non-inferrable?
 function setattr!(graph::SyntaxGraph, id; attrs...)
     for (k,v) in pairs(attrs)
         getattr(graph, k)[id] = v
@@ -121,7 +125,7 @@ function setattr!(graph::SyntaxGraph, id; attrs...)
 end
 
 function Base.getproperty(graph::SyntaxGraph, name::Symbol)
-    # FIXME: Remove access to internals
+    # TODO: Remove access to internals?
     name === :edge_ranges && return getfield(graph, :edge_ranges)
     name === :edges       && return getfield(graph, :edges)
     name === :attributes  && return getfield(graph, :attributes)
@@ -171,7 +175,6 @@ syntax_graph(graph::SyntaxGraph) = graph
 
 function check_same_graph(x, y)
     if syntax_graph(x) !== syntax_graph(y)
-        @info "" syntax_graph(x) syntax_graph(y) x y
         error("Mismatching syntax graphs")
     end
 end
@@ -187,7 +190,7 @@ struct SyntaxTree{GraphType}
 end
 
 function Base.getproperty(tree::SyntaxTree, name::Symbol)
-    # FIXME: Remove access to internals
+    # TODO: Remove access to internals?
     name === :graph && return getfield(tree, :graph)
     name === :id  && return getfield(tree, :id)
     id = getfield(tree, :id)
@@ -302,15 +305,28 @@ function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
     highlight(io, src; note="these are the bytes you're looking for 😊", context_lines_inner=20)
 end
 
+
+function provenance(ex::SyntaxTree)
+    s = ex.source
+    if s isa NodeId
+        return (SyntaxTree(ex.graph, s),)
+    elseif s isa Tuple
+        return SyntaxTree.((ex.graph,), s)
+    else
+        return (s,)
+    end
+end
+
+
 function _sourceref(sources, id)
     i = 1
     while true
         i += 1
-        s = get(sources, id, nothing)
+        s = sources[id]
         if s isa NodeId
             id = s
         else
-            return s
+            return s, id
         end
     end
 end
@@ -319,7 +335,7 @@ function sourceref(tree::SyntaxTree)
     sources = tree.graph.source
     id::NodeId = tree.id
     while true
-        s = _sourceref(sources, id)
+        s, _ = _sourceref(sources, id)
         if s isa Tuple
             s = s[1]
         end
@@ -331,39 +347,24 @@ function sourceref(tree::SyntaxTree)
     end
 end
 
-function show_expansion_stack(io::IO, exs)
-    for (i,ex) in enumerate(exs)
-        sr = sourceref(ex)
-        if i > 1
-            JuliaSyntax._printstyled(io, "\n\n", fgcolor=:light_black)
-            first = false
+function _flattened_provenance(refs, graph, sources, id)
+    # TODO: Implement in terms of `provenance()`?
+    s, id2 = _sourceref(sources, id)
+    if s isa Tuple
+        for i in s
+            _flattened_provenance(refs, graph, sources, i)
         end
-        note = length(exs) == 1 ? "in source here" :
-               i > 1            ? "expanded from here" : "in macro expansion"
-        highlight(io, sr, note=note)
+    else
+        push!(refs, SyntaxTree(graph, id2))
     end
 end
 
-function expansion_stack(tree::SyntaxTree)
-    sources = tree.graph.source
-    id::NodeId = tree.id
-    while true
-        s = get(sources, id, nothing)
-        if s isa NodeId
-            id = s
-        else
-            refs = SyntaxList(tree)
-            if s isa Tuple
-                for i in s
-                    push!(refs, SyntaxTree(tree.graph, i))
-                end
-            else
-                push!(refs, SyntaxTree(tree.graph, id))
-            end
-            return refs
-        end
-    end
+function flattened_provenance(ex::SyntaxTree)
+    refs = SyntaxList(ex)
+    _flattened_provenance(refs, ex.graph, ex.graph.source, ex.id)
+    return reverse(refs)
 end
+
 
 function is_ancestor(ex, ancestor)
     if !is_compatible_graph(ex, ancestor)
@@ -433,51 +434,30 @@ function _value_string(ex)
     return str
 end
 
-function _show_syntax_tree(io, current_filename, node, indent, show_byte_offsets)
-    sr = sourceref(node)
-    if !isnothing(sr)
-        fname = filename(sr)
-        line, col = source_location(sr)
-        posstr = "$(lpad(line, 4)):$(rpad(col,3))"
-        if show_byte_offsets
-            posstr *= "│$(lpad(first_byte(sr),6)):$(rpad(last_byte(sr),6))"
-        end
-    else
-        fname = nothing
-        posstr = "        "
-        if show_byte_offsets
-            posstr *= "│             "
-        end
-    end
-    val = get(node, :value, nothing)
-    nodestr = haschildren(node) ? "[$(untokenize(head(node)))]" : _value_string(node)
+function _show_syntax_tree(io, ex, indent)
+    val = get(ex, :value, nothing)
+    nodestr = haschildren(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
 
     treestr = string(indent, nodestr)
 
     std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:source,:var_id])
-    attrstr = join([attrsummary(n, getproperty(node, n)) for n in attrnames(node) if n ∉ std_attrs], ",")
-    if !isempty(attrstr)
-        treestr = string(rpad(treestr, 40), "│ $attrstr")
-    end
+    attrstr = join([attrsummary(n, getproperty(ex, n))
+                    for n in attrnames(ex) if n ∉ std_attrs], ",")
+    treestr = string(rpad(treestr, 40), "│ $attrstr")
 
-    # Add filename if it's changed from the previous node
-    if fname != current_filename[] && !isnothing(fname)
-        #println(io, "# ", fname)
-        treestr = string(rpad(treestr, 80), "│$fname")
-        current_filename[] = fname
-    end
-    println(io, posstr, "│", treestr)
-    if haschildren(node)
+    println(io, treestr)
+    if haschildren(ex)
         new_indent = indent*"  "
-        for n in children(node)
-            _show_syntax_tree(io, current_filename, n, new_indent, show_byte_offsets)
+        for n in children(ex)
+            _show_syntax_tree(io, n, new_indent)
         end
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", tree::SyntaxTree; show_byte_offsets=false)
-    println(io, "line:col│ tree                                   │ attributes                            | file_name")
-    _show_syntax_tree(io, Ref{Union{Nothing,String}}(nothing), tree, "", show_byte_offsets)
+function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree)
+    anames = join(string.(attrnames(syntax_graph(ex))), ",")
+    println(io, "SyntaxTree with attributes $anames")
+    _show_syntax_tree(io, ex, "")
 end
 
 function _show_syntax_tree_sexpr(io, ex)

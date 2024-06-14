@@ -23,11 +23,14 @@ function _contains_active_interp(ex, depth)
 end
 
 # Produce interpolated node for `$x` syntax
-function _interpolated_value(ctx, srcref, x)
-    if x isa SyntaxTree
-        x.graph === ctx.graph ? x : copy_ast(ctx, x)
+function _interpolated_value(ctx, srcref, ex)
+    if ex isa SyntaxTree
+        if !is_compatible_graph(ctx, ex)
+            ex = copy_ast(ctx, ex)
+        end
+        append_sourceref(ctx, ex, srcref)
     else
-        makeleaf(ctx, srcref, K"Value", x)
+        makeleaf(ctx, srcref, K"Value", ex)
     end
 end
 
@@ -47,7 +50,7 @@ function _interpolate_ast(ctx::InterpolationContext, ex, depth)
             vals = ctx.values[ctx.current_index[]]::Tuple
             ctx.current_index[] += 1
             for (i,v) in enumerate(vals)
-                srcref = numchildren(e) == 1 ? e[1] : e[i]
+                srcref = numchildren(e) == 1 ? e : e[i]
                 push!(expanded_children, _interpolated_value(ctx, srcref, v))
             end
         else
@@ -78,22 +81,14 @@ function interpolate_ast(ex, values...)
         end
     end
     if isnothing(graph)
-        graph = SyntaxGraph()
-        ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-                           value=Any, name_val=String, scope_layer=LayerId)
+        graph = ensure_attributes(SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
+                                  value=Any, name_val=String, scope_layer=LayerId)
     end
     ctx = InterpolationContext(graph, values, Ref(1))
     # We must copy the AST into our context to use it as the source reference
     # of generated expressions.
     ex1 = copy_ast(ctx, ex)
     _interpolate_ast(ctx, ex1, 0)
-end
-
-
-# Produce node corresponding to `srcref` when there was an interpolation among
-# `children`
-function interpolate_node(ctx::InterpolationContext, srcref, children...)
-    makenode(ctx, sourceref(srcref), head(srcref), children...)
 end
 
 # Construct new bare module including only the "default names"

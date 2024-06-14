@@ -34,22 +34,24 @@ function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
     cs.ids
 end
 
+_unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
+_unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
+_unpack_srcref(graph, srcref)             = srcref
+
 function makeleaf(graph::SyntaxGraph, srcref, proto; attrs...)
     id = newnode!(graph)
-    source = srcref isa SyntaxTree ? _node_id(graph, srcref) : srcref
     ex = SyntaxTree(graph, id)
     copy_attrs!(ex, proto, true)
-    setattr!(graph, id; source=source, attrs...)
+    setattr!(graph, id; source=_unpack_srcref(graph, srcref), attrs...)
     return ex
 end
 
 function makenode(graph::SyntaxGraph, srcref, proto, children...; attrs...)
     id = newnode!(graph)
     setchildren!(graph, id, _node_ids(graph, children...))
-    source = srcref isa SyntaxTree ? _node_id(graph, srcref) : srcref
     ex = SyntaxTree(graph, id)
     copy_attrs!(ex, proto, true)
-    setattr!(graph, id; source=source, attrs...)
+    setattr!(graph, id; source=_unpack_srcref(graph, srcref), attrs...)
     return SyntaxTree(graph, id)
 end
 
@@ -251,9 +253,13 @@ end
 # Mapping and copying of AST nodes
 function copy_attrs!(dest, src, all=false)
     # TODO: Make this faster?
-    for (k,v) in pairs(dest.graph.attributes)
-        if (all || (k !== :source && k !== :kind && k !== :syntax_flags)) && haskey(v, src.id)
-            v[dest.id] = v[src.id]
+    for (name, attr) in pairs(src.graph.attributes)
+        if (all || (name !== :source && name !== :kind && name !== :syntax_flags)) &&
+                haskey(attr, src.id)
+            dest_attr = getattr(dest.graph, name, nothing)
+            if !isnothing(dest_attr)
+                dest_attr[dest.id] = attr[src.id]
+            end
         end
     end
 end
@@ -298,27 +304,22 @@ end
 Copy AST `ex` into `ctx`
 """
 function copy_ast(ctx, ex)
-    srcref = ex.source
-    if srcref isa NodeId
-        srcref = copy_ast(ctx, SyntaxTree(syntax_graph(ex), srcref))
-    end
+    # TODO: Do we need to keep a mapping of node IDs to ensure we don't
+    # double-copy here in the case when some tree nodes are pointed to by
+    # multiple parents? (How much does this actually happen in practice?)
+    s = ex.source
+    # TODO: Figure out how to use provenance() here?
+    srcref = s isa NodeId ? copy_ast(ctx, SyntaxTree(ex.graph, s))            :
+             s isa Tuple  ? map(i->copy_ast(ctx, SyntaxTree(ex.graph, i)), s) :
+             s
     if haschildren(ex)
         cs = SyntaxList(ctx)
         for e in children(ex)
             push!(cs, copy_ast(ctx, e))
         end
-        ex2 = makenode(ctx, srcref, head(ex), cs)
+        ex2 = makenode(ctx, srcref, ex, cs)
     else
-        ex2 = makeleaf(ctx, srcref, head(ex))
-    end
-    for (name,attr) in pairs(ex.graph.attributes)
-        if (name !== :source && name !== :kind && name !== :syntax_flags) &&
-                haskey(attr, ex.id)
-            attr2 = getattr(ex2.graph, name, nothing)
-            if !isnothing(attr2)
-                attr2[ex2.id] = attr[ex.id]
-            end
-        end
+        ex2 = makeleaf(ctx, srcref, ex)
     end
     return ex2
 end
@@ -329,9 +330,7 @@ end
 Copy `ex`, adopting the scope layer of `ref`.
 """
 function adopt_scope(ex, scope_layer::LayerId)
-    ex1 = copy_ast(ex, ex)
-    set_scope_layer_recursive!(ex1, scope_layer, true)
-    ex1
+    set_scope_layer(ex, ex, scope_layer, true)
 end
 
 function adopt_scope(ex, ref::SyntaxTree)

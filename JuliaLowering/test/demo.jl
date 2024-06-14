@@ -3,7 +3,7 @@
 using JuliaSyntax
 using JuliaLowering
 
-using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode, sourcetext
+using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode, sourcetext, showprov
 
 using JuliaSyntaxFormatter
 
@@ -48,17 +48,6 @@ end
 # """
 
 src = """
-let
-    y = 0
-    x = 1
-    let x = x + 1
-        y = x
-    end
-    (x, y)
-end
-"""
-
-src = """
 begin
     function f(x)
         nothing
@@ -98,16 +87,16 @@ end
 #     z = 1 + 1
 # end
 # """
-#
-# src = """
-# begin
-#     x = 10
-#     y = :(g(z))
-#     quote
-#         f(\$(x+1), \$y)
-#     end
-# end
-# """
+
+src = raw"""
+begin
+    x = 10
+    y = :(g(z))
+    quote
+        f($(x+1), $y)
+    end
+end
+"""
 
 JuliaLowering.include(Main, "demo_include.jl")
 
@@ -186,13 +175,6 @@ end
 
 # src = """@foo z"""
 
-src = """
-begin
-    x = 42
-    M.@foo x
-end
-"""
-
 # src = """
 # M.@recursive 3
 # """
@@ -235,13 +217,34 @@ end
 # src = """
 #     _ = -1
 # """
-src = """
-M.@make_module
-"""
 
-src = """
-M.@nested_return_a_value
-"""
+# src = """
+# M.@make_module
+# """
+
+# src = """
+# M.@nested_return_a_value
+# """
+
+# src = """
+# function f(y)
+#     x = 42 + y
+#     M.@foo error(x)
+# end
+# """
+
+# src = """
+# let
+#     y = 0
+#     x = 1
+#     let x = x + 1
+#         y = x
+#     end
+#     (x, y)
+# end
+# """
+
+#src = """M.@outer"""
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
@@ -250,17 +253,17 @@ ex = ensure_attributes(ex, var_id=Int)
 
 in_mod = Main
 ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
-# @info "Macro expanded" formatsrc(ex_macroexpand, color_by=:scope_layer)
-@info "Macro expanded" formatsrc(ex_macroexpand, color_by=e->JuliaLowering.expansion_stack(e)[2:end])
+@info "Macro expanded" ex_macroexpand formatsrc(ex_macroexpand, color_by=:scope_layer)
+#@info "Macro expanded" formatsrc(ex_macroexpand, color_by=e->JuliaLowering.flattened_provenance(e)[1:end-1])
 
 ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
-@info "Desugared" formatsrc(ex_desugar, color_by=:scope_layer)
+@info "Desugared" ex_desugar formatsrc(ex_desugar, color_by=:scope_layer)
 
 ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
-@info "Resolved scopes" formatsrc(ex_scoped, color_by=:var_id)
+@info "Resolved scopes" ex_scoped formatsrc(ex_scoped, color_by=:var_id)
 
 ctx4, ex_compiled = JuliaLowering.linearize_ir(ctx3, ex_scoped)
-@info "Linear IR" formatsrc(ex_compiled, color_by=:var_id)
+@info "Linear IR" ex_compiled formatsrc(ex_compiled, color_by=:var_id)
 
 ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.var_info, ex_compiled)
 @info "CodeInfo" ex_expr

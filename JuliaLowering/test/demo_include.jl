@@ -15,16 +15,8 @@ module M
         JuliaLowering.source_location(__context__.macroname)[1]
     end
 
-    module A
-        another_global = "global in A"
-
-        macro bar(ex)
-            quote
-                x = "`x` in @bar"
-                (x, another_global, $ex)
-            end
-        end
-    end
+    # Macro with local variables
+    JuliaLowering.include(M, "demo_include_2.jl")
 
     someglobal = "global in module M"
 
@@ -33,6 +25,7 @@ module M
         quote
             x = "`x` from @foo"
             (x, someglobal, A.@bar $ex)
+            #(x, someglobal, $ex, A.@bar($ex), A.@bar(x))
         end
     end
 
@@ -71,5 +64,13 @@ module M
         :(
             @return_a_value
         )
+    end
+
+    macro inner()
+        :(2)
+    end
+
+    macro outer()
+        :((1, @inner))
     end
 end

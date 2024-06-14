@@ -3,7 +3,7 @@ using Test
 using JuliaLowering
 using JuliaSyntax
 using JuliaSyntax: sourcetext
-using JuliaLowering: @ast
+using JuliaLowering: @ast, flattened_provenance, showprov
 
 include("utils.jl")
 
@@ -173,8 +173,32 @@ end
     ]
 ]
 @test sourcetext(ex[1]) == "f(\$(x+1), \$y)"
-@test sourcetext(ex[1][2]) == "x+1"
-@test sourcetext(ex[1][3]) == "g(z)"
+@test sourcetext(ex[1][2]) == "\$(x+1)"
+@test sourcetext.(flattened_provenance(ex[1][3])) == ["\$y", "g(z)"]
+@test sprint(io->showprov(io, ex[1][3], tree=true)) == raw"""
+    (call g z)
+    ├─ (call g z)
+    │  └─ @ string:3
+    └─ ($ y)
+       └─ @ string:5
+    """
+@test sprint(io->showprov(io, ex[1][3])) == raw"""
+    begin
+        x = 10
+        y = :(g(z))
+    #         └──┘ ── in source
+        quote
+            f($(x+1), $y)
+    # @ string:3
+
+        y = :(g(z))
+        quote
+            f($(x+1), $y)
+    #                 └┘ ── interpolated here
+        end
+    end
+    # @ string:5"""
+
 
 # Test expression flags are preserved during interpolation
 @test JuliaSyntax.is_infix_op_call(JuliaLowering.include_string(test_mod, """
@@ -278,6 +302,14 @@ module M
         end
     end
 
+    macro inner()
+        :(2)
+    end
+
+    macro outer()
+        :((1, @inner))
+    end
+
     # # Recursive macro call
     # # TODO: Need branching!
     # macro recursive(N)
@@ -350,6 +382,17 @@ end
 @test JuliaLowering.include_string(test_mod, """
 M.@recursive 3
 """) == (3, (2, (1, 0)))
+
+@test let
+    ex = parsestmt(SyntaxTree, "M.@outer()", filename="foo.jl")
+    expanded = JuliaLowering.macroexpand(test_mod, ex)
+    sourcetext.(flattened_provenance(expanded[2]))
+end == [
+    "M.@outer()"
+    "@inner"
+    "2"
+]
+
 
 @test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
 macro mmm(a; b=2)
