@@ -940,6 +940,14 @@ BINARY:=64
 MARCH=
 endif
 
+ifneq (,$(findstring aarch64,$(ARCH)))
+ifeq ($(USECLANG),1)
+ifeq (,$(MARCH))
+JCFLAGS += -mcrc
+endif
+endif
+endif
+
 # If we are running on powerpc64 or ppc64, fail out dramatically
 ifneq (,$(filter $(ARCH), powerpc64 ppc64))
 $(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
@@ -1384,9 +1392,11 @@ OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 # make it loaded first to
 # prevent from linking to outdated system libs.
 # See #21788
+ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
+endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
+OSLIBS += -Wl,--export-dynamic -Wl,--undefined-version -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE)
 endif
 
