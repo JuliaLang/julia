@@ -3736,3 +3736,14 @@ begin
     Foreign54607.bar = 9
 end
 @test Foreign54607.bar == 9
+
+# Issue #54805 - export mislowering
+module Export54805
+let
+    local b54805=1
+    export b54805
+end
+b54805 = 2
+end
+using .Export54805
+@test b54805 == 2
