@@ -1111,19 +1111,22 @@ function show(io::IO, r::StepRangeLen)
 end
 
 function ==(r::T, s::T) where {T<:AbstractRange}
+    firstindex(r) == firstindex(s) || return false
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
 function ==(r::OrdinalRange, s::OrdinalRange)
+    firstindex(r) == firstindex(s) || return false
     isempty(r) && return isempty(s)
     _has_length_one(r) && return _has_length_one(s) & (first(r) == first(s))
     (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 end
 
 ==(r::AbstractUnitRange, s::AbstractUnitRange) =
-    (isempty(r) & isempty(s)) | ((first(r) == first(s)) & (last(r) == last(s)))
+    (firstindex(r) == firstindex(s)) &
+    ((isempty(r) & isempty(s)) | ((first(r) == first(s)) & (last(r) == last(s))))
 
 ==(r::OneTo, s::OneTo) = last(r) == last(s)
 
