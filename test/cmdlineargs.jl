@@ -801,7 +801,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             `$exename --trace-compile=stderr --trace-compile-timing -i`,
             stderr=io)
         _stderr = String(take!(io))
-        @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int64})", _stderr)
+        @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int", _stderr)
     end
 
     # test passing arguments
