@@ -797,17 +797,12 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             orig_expr isa Expr &&
             orig_expr.head in (:call, :macrocall) &&
             orig_expr.args[1] in MACROEXPAND_LIKE
-        if isa(extype, Type) && extype != ErrorException
+        if isa(extype, Type)
             success =
                 if from_macroexpand && extype == LoadError && exc isa Exception
                     Base.depwarn("macroexpand no longer throws a LoadError so `@test_throws LoadError ...` is deprecated and passed without checking the error type!", :do_test_throws)
                     true
-                else
-                    isa(exc, extype)
-                end
-        elseif isa(extype, Type) && extype == ErrorException
-            success =
-                if isa(exc, FieldError)
+                elseif extype == ErrorException && isa(exc, FieldError)
                     Base.depwarn(lazy"ErrorException should no longer be used to test field access; FieldError should be used instead!", :do_test_throws)
                     true
                 else
