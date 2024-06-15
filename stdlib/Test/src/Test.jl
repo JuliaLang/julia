@@ -806,7 +806,13 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
                     isa(exc, extype)
                 end
         elseif isa(extype, Type) && extype == ErrorException
-            success = isa(exc, ErrorException) || isa(exc, FieldError)
+            success =
+                if isa(exc, FieldError)
+                    Base.depwarn(lazy"ErrorException should no longer be used to test field access; FieldError should be used instead!", :do_test_throws)
+                    true
+                else
+                    isa(exc, extype)
+                end
         elseif isa(extype, Exception) || !isa(exc, Exception)
             if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
                 extype = extype.error # deprecated
