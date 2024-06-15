@@ -43,6 +43,8 @@ Command-line option changes
 [`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
 variables. ([#53742]).
 * `--project=@temp` starts Julia with a temporary environment.
+* New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
+  to compile, in ms. ([#54662])
 
 Multi-threading changes
 -----------------------
