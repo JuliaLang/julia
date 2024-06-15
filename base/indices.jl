@@ -385,18 +385,17 @@ end
 Slice(S::Slice) = S
 Slice{T}(S::Slice) where {T<:AbstractUnitRange} = Slice{T}(T(S.indices))
 
-axes(S::Slice) = (IdentityUnitRange(S.indices),)
-axes1(S::Slice) = IdentityUnitRange(S.indices)
-axes(S::Slice{<:OneTo}) = (S.indices,)
-axes1(S::Slice{<:OneTo}) = S.indices
+for f in (:axes, :first, :last, :length)
+    @eval $f(S::Slice) = $f(S.indices)
+end
 
-first(S::Slice) = first(S.indices)
-last(S::Slice) = last(S.indices)
-size(S::Slice) = (length(S.indices),)
-length(S::Slice) = length(S.indices)
-getindex(S::Slice, i::Int) = (@inline; @boundscheck checkbounds(S, i); i)
-getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
-getindex(S::Slice, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
+for T in (Integer, AbstractUnitRange{<:Integer}, StepRange{<:Integer})
+    @eval function getindex(S::Slice, i::$T)
+        @_propagate_inbounds_meta
+        getindex(S.indices, i)
+    end
+end
+
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 iterate(S::Slice, s...) = iterate(S.indices, s...)
 
