@@ -1534,6 +1534,27 @@ end
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
 end
 
+# Issue 54807
+struct FEexc
+    a::Nothing
+    b::Nothing
+end
+
+@testset "FieldError Shim tests and Softdeprecation of @test_throws ErrorException" begin
+    feexc = FEexc(nothing, nothing)
+    # This is redundant regular test for FieldError
+    exc_result1 = @test_throws FieldError feexc.c
+    @test  exc_result1.value isa FieldError
+    # This is test for FieldError shim
+    exc_result2 = @test_throws ErrorException feexc.c
+    @test exc_result2.value isa FieldError
+    # This should raise ErrorException
+    exc_result3 = @test_throws ErrorException feexc.a = 1
+    @test exc_result3.value isa ErrorException
+    # checks for deprecation
+    @test_deprecated @test_throws ErrorException feexc.c
+end
+
 # Issue 25483
 mutable struct PassInformationTestSet <: Test.AbstractTestSet
     results::Vector
