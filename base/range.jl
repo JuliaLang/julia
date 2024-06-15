@@ -1142,21 +1142,6 @@ end
 _has_length_one(r::OrdinalRange) = first(r) == last(r)
 _has_length_one(r::AbstractRange) = isone(length(r))
 
-function ==(r::AbstractRange, s::AbstractRange)
-    lr = length(r)
-    if lr != length(s)
-        return false
-    elseif iszero(lr)
-        return true
-    end
-    yr, ys = iterate(r), iterate(s)
-    while yr !== nothing
-        yr[1] == ys[1] || return false
-        yr, ys = iterate(r, yr[2]), iterate(s, ys[2])
-    end
-    return true
-end
-
 intersect(r::OneTo, s::OneTo) = OneTo(min(r.stop,s.stop))
 union(r::OneTo, s::OneTo) = OneTo(max(r.stop,s.stop))
 
