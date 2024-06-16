@@ -419,6 +419,7 @@ axes1(S::IdentityUnitRange) = S
 axes(S::IdentityUnitRange{<:OneTo}) = (S.indices,)
 axes1(S::IdentityUnitRange{<:OneTo}) = S.indices
 
+values(S::IdentityUnitRange) = values(S.indices)
 first(S::IdentityUnitRange) = first(S.indices)
 last(S::IdentityUnitRange) = last(S.indices)
 size(S::IdentityUnitRange) = (length(S.indices),)
