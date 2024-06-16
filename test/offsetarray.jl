@@ -8,6 +8,9 @@ using LinearAlgebra
 using Base: IdentityUnitRange
 using Test
 
+Base.values(r::IdOffsetRange) = first(r):last(r)
+axes1based(a) = map(values, axes(a))
+
 if !isdefined(@__MODULE__, :T24Linear)
     include("testhelpers/arrayindexingtypes.jl")
 end
@@ -484,7 +487,7 @@ I = findall(!iszero, z)
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/92
 A92 = OffsetArray(reshape(1:27, 3, 3, 3), -2, -2, -2)
 B92 = view(A92, :, :, -1:0)
-@test axes(B92) == (-1:1, -1:1, 1:2)
+@test axes1based(B92) == (-1:1, -1:1, 1:2)
 @test sum(B92, dims=(2,3)) == OffsetArray(reshape([51,57,63], Val(3)), -2, -2, 0)
 B92 = view(A92, :, :, Base.IdentityUnitRange(-1:0))
 @test sum(B92, dims=(2,3)) == OffsetArray(reshape([51,57,63], Val(3)), -2, -2, -2)
@@ -718,19 +721,19 @@ end
     @test S[0,4] == S[3] == 3
     @test S[1,4] == S[4] == 4
     @test_throws BoundsError S[1,1]
-    @test axes(S) == OffsetArrays.IdOffsetRange.((0:1, 3:4))
+    @test axes1based(S) == (0:1, 3:4)
     S = view(A, axes(A, 1), 3)
     @test S == A[:, 3]
     @test S[0] == 1
     @test S[1] == 2
     @test_throws BoundsError S[length(S)]
-    @test axes(S) == (OffsetArrays.IdOffsetRange(0:1), )
+    @test axes1based(S) == (0:1,)
     S = view(A, 1, axes(A, 2))
     @test S == A[1, :]
     @test S[3] == 2
     @test S[4] == 4
     @test_throws BoundsError S[1]
-    @test axes(S) == (OffsetArrays.IdOffsetRange(3:4), )
+    @test axes1based(S) == (3:4,)
 
     A0 = collect(reshape(1:24, 2, 3, 4))
     A = OffsetArray(A0, (-1,2,1))
@@ -739,7 +742,7 @@ end
     @test S[0, 1, 2] == A[0, 3, 2]
     @test S[0, 2, 2] == A[0, 4, 2]
     @test S[1, 1, 2] == A[1, 3, 2]
-    @test axes(S) == (OffsetArrays.IdOffsetRange(0:1), Base.OneTo(2), OffsetArrays.IdOffsetRange(2:5))
+    @test axes1based(S) == (0:1, Base.OneTo(2), 2:5)
 end
 
 @testset "Zero-index indexing" begin
@@ -759,7 +762,7 @@ end
     s = -2:2:4
     r = 5:8
     y = OffsetArray(s, r)
-    @test axes(y) == (r,)
+    @test axes1based(y) == (r,)
     @test step(y) == step(s)
 
     a = OffsetVector(3:4, 10:11)
@@ -827,12 +830,12 @@ end
     @test stack(ten .+ nought') == ten .+ nought'
     @test stack(x^2 for x in ten) == ten.^2
 
-    @test axes(stack(nought for _ in ten)) == (0:2, 10:13)
-    @test axes(stack([nought for _ in ten])) == (0:2, 10:13)
-    @test axes(stack(nought for _ in ten; dims=1)) == (10:13, 0:2)
-    @test axes(stack((x, x^2) for x in nought)) == (1:2, 0:2)
-    @test axes(stack(x -> x[end-1:end], ten for _ in nought, _ in nought)) == (1:2, 0:2, 0:2)
-    @test axes(stack([ten[end-1:end] for _ in nought, _ in nought])) == (1:2, 0:2, 0:2)
+    @test axes1based(stack(nought for _ in ten)) == (0:2, 10:13)
+    @test axes1based(stack([nought for _ in ten])) == (0:2, 10:13)
+    @test axes1based(stack(nought for _ in ten; dims=1)) == (10:13, 0:2)
+    @test axes1based(stack((x, x^2) for x in nought)) == (1:2, 0:2)
+    @test axes1based(stack(x -> x[end-1:end], ten for _ in nought, _ in nought)) == (1:2, 0:2, 0:2)
+    @test axes1based(stack([ten[end-1:end] for _ in nought, _ in nought])) == (1:2, 0:2, 0:2)
 end
 
 @testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin
