@@ -650,10 +650,11 @@ test18695(r) = sum( t^2 for t in r )
 end
 
 # offset axes
-i = Base.Slice(-3:3)
+Slice(r) = Base.Slice(Base.IdentityUnitRange(r))
+i = Slice(-3:3)
 x = [j^2 for j in i]
 @test sum(x) == sum(x.parent) == 28
-i = Base.Slice(0:0)
+i = Slice(0:0)
 x = [j+7 for j in i]
 @test sum(x) == 7
 

@@ -141,13 +141,13 @@ S = view(A, :, 3)
 @test S[0] == 1
 @test S[1] == 2
 @test_throws BoundsError S[2]
-@test axes(S) === (Base.IdentityUnitRange(OffsetArrays.IdOffsetRange(Base.OneTo(2), -1)),)
+@test axes(S) == (Base.IdentityUnitRange(OffsetArrays.IdOffsetRange(Base.OneTo(2), -1)),)
 S = view(A, 0, :)
 @test S == OffsetArray([1,3], (A.offsets[2],))
 @test S[3] == 1
 @test S[4] == 3
 @test_throws BoundsError S[1]
-@test axes(S) === (Base.IdentityUnitRange(OffsetArrays.IdOffsetRange(Base.OneTo(2), 2)),)
+@test axes(S) == (Base.IdentityUnitRange(OffsetArrays.IdOffsetRange(Base.OneTo(2), 2)),)
 S = view(A, 0:0, 4)
 @test S == [3]
 @test S[1] == 3
@@ -166,7 +166,7 @@ S = view(A, :, :)
 @test S[0,4] == S[3] == 3
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
-@test axes(S) === Base.IdentityUnitRange.((OffsetArrays.IdOffsetRange(Base.OneTo(2), -1), OffsetArrays.IdOffsetRange(Base.OneTo(2), 2)))
+@test axes(S) == Base.IdentityUnitRange.((OffsetArrays.IdOffsetRange(Base.OneTo(2), -1), OffsetArrays.IdOffsetRange(Base.OneTo(2), 2)))
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
 g = OffsetArray(Vector(-2:3), (-3,))
 gv = view(g, -1:2)
