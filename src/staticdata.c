@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    188
+#define NUM_TAGS    191
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -213,6 +213,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_addrspace_type);
         INSERT_TAG(jl_addrspace_typename);
         INSERT_TAG(jl_addrspacecore_type);
+        INSERT_TAG(jl_debuginfo_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -234,6 +235,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_loaderror_type);
         INSERT_TAG(jl_initerror_type);
         INSERT_TAG(jl_undefvarerror_type);
+        INSERT_TAG(jl_fielderror_type);
         INSERT_TAG(jl_stackovf_exception);
         INSERT_TAG(jl_diverror_exception);
         INSERT_TAG(jl_interrupt_exception);
@@ -264,6 +266,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_kwcall_mt);
         INSERT_TAG(jl_kwcall_func);
         INSERT_TAG(jl_opaque_closure_method);
+        INSERT_TAG(jl_nulldebuginfo);
 
         // some Core.Builtin Functions that we want to be able to reference:
         INSERT_TAG(jl_builtin_throw);
@@ -336,6 +339,8 @@ static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_
 // jl_linkage_blobs.items[2i:2i+1] correspond to build_ids[i]   (0-offset indexing)
 arraylist_t jl_linkage_blobs;
 arraylist_t jl_image_relocs;
+// Keep track of which image corresponds to which top module.
+arraylist_t jl_top_mods;
 
 // Eytzinger tree of images. Used for very fast jl_object_in_image queries
 // See https://algorithmica.org/en/eytzinger
@@ -450,9 +455,21 @@ size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
     return idx;
 }
 
-uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
+JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
 {
     return eyt_obj_in_img(obj);
+}
+
+// Map an object to it's "owning" top module
+JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT
+{
+    size_t idx = external_blob_index(v);
+    size_t lbids = n_linkage_blobs();
+    if (idx < lbids) {
+        return (jl_value_t*)jl_top_mods.items[idx];
+    }
+    // The object is runtime allocated
+    return (jl_value_t*)jl_nothing;
 }
 
 // hash of definitions for predefined function pointers
@@ -794,7 +811,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // we only need 3 specific fields of this (the rest are restored afterward, if valid)
             // in particular, cache is repopulated by jl_mi_cache_insert for all foreign function,
             // so must not be present here
-            record_field_change((jl_value_t**)&mi->uninferred, NULL);
             record_field_change((jl_value_t**)&mi->backedges, NULL);
             record_field_change((jl_value_t**)&mi->cache, NULL);
         }
@@ -2337,35 +2353,33 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
         jl_svecset(cache, ins++, jl_nothing);
 }
 
-static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
+static void strip_slotnames(jl_array_t *slotnames)
+{
+    // replace slot names with `?`, except unused_sym since the compiler looks at it
+    jl_sym_t *questionsym = jl_symbol("?");
+    int i, l = jl_array_len(slotnames);
+    for (i = 0; i < l; i++) {
+        jl_value_t *s = jl_array_ptr_ref(slotnames, i);
+        if (s != (jl_value_t*)jl_unused_sym)
+            jl_array_ptr_set(slotnames, i, questionsym);
+    }
+}
+
+static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_instance_t *codeinst)
 {
     jl_code_info_t *ci = NULL;
     JL_GC_PUSH1(&ci);
     int compressed = 0;
     if (!jl_is_code_info(ci_)) {
         compressed = 1;
-        ci = jl_uncompress_ir(m, NULL, (jl_value_t*)ci_);
+        ci = jl_uncompress_ir(m, codeinst, (jl_value_t*)ci_);
     }
     else {
         ci = (jl_code_info_t*)ci_;
     }
-    // leave codelocs length the same so the compiler can assume that; just zero it
-    memset(jl_array_data(ci->codelocs, int32_t), 0, jl_array_len(ci->codelocs)*sizeof(int32_t));
-    // empty linetable
-    if (jl_is_array(ci->linetable))
-        jl_array_del_end((jl_array_t*)ci->linetable, jl_array_len(ci->linetable));
-    // replace slot names with `?`, except unused_sym since the compiler looks at it
-    jl_sym_t *questionsym = jl_symbol("?");
-    int i, l = jl_array_len(ci->slotnames);
-    for (i = 0; i < l; i++) {
-        jl_value_t *s = jl_array_ptr_ref(ci->slotnames, i);
-        if (s != (jl_value_t*)jl_unused_sym)
-            jl_array_ptr_set(ci->slotnames, i, questionsym);
-    }
-    if (orig) {
-        m->slot_syms = jl_compress_argnames(ci->slotnames);
-        jl_gc_wb(m, m->slot_syms);
-    }
+    strip_slotnames(ci->slotnames);
+    ci->debuginfo = jl_nulldebuginfo;
+    jl_gc_wb(ci, ci->debuginfo);
     jl_value_t *ret = (jl_value_t*)ci;
     if (compressed)
         ret = (jl_value_t*)jl_compress_ir(m, ci);
@@ -2384,16 +2398,17 @@ static void strip_specializations_(jl_method_instance_t *mi)
                 record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
-                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, 0);
+                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
                 if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
                     jl_gc_wb(codeinst, stripped);
                 }
             }
         }
+        if (jl_options.strip_metadata)
+            record_field_change((jl_value_t**)&codeinst->debuginfo, (jl_value_t*)jl_nulldebuginfo);
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     if (jl_options.strip_ir) {
-        record_field_change((jl_value_t**)&mi->uninferred, NULL);
         record_field_change((jl_value_t**)&mi->backedges, NULL);
     }
 }
@@ -2404,31 +2419,46 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     if (m->source) {
         int stripped_ir = 0;
         if (jl_options.strip_ir) {
-            if (jl_atomic_load_relaxed(&m->unspecialized)) {
-                jl_code_instance_t *unspec = jl_atomic_load_relaxed(&jl_atomic_load_relaxed(&m->unspecialized)->cache);
-                if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
-                    // we have a generic compiled version, so can remove the IR
-                    record_field_change(&m->source, jl_nothing);
-                    stripped_ir = 1;
+            int should_strip_ir = 0;
+            if (!should_strip_ir) {
+                if (jl_atomic_load_relaxed(&m->unspecialized)) {
+                    jl_code_instance_t *unspec = jl_atomic_load_relaxed(&jl_atomic_load_relaxed(&m->unspecialized)->cache);
+                    if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
+                        // we have a generic compiled version, so can remove the IR
+                        should_strip_ir = 1;
+                    }
                 }
             }
-            if (!stripped_ir) {
+            if (!should_strip_ir) {
                 int mod_setting = jl_get_module_compile(m->module);
-                // if the method is declared not to be compiled, keep IR for interpreter
                 if (!(mod_setting == JL_OPTIONS_COMPILE_OFF || mod_setting == JL_OPTIONS_COMPILE_MIN)) {
-                    record_field_change(&m->source, jl_nothing);
-                    stripped_ir = 1;
+                    // if the method is declared not to be compiled, keep IR for interpreter
+                    should_strip_ir = 1;
                 }
+            }
+            if (should_strip_ir) {
+                record_field_change(&m->source, jl_nothing);
+                record_field_change((jl_value_t**)&m->roots, NULL);
+                stripped_ir = 1;
             }
         }
-        if (jl_options.strip_metadata && !stripped_ir) {
-            m->source = strip_codeinfo_meta(m, m->source, 1);
-            jl_gc_wb(m, m->source);
+        if (jl_options.strip_metadata) {
+            if (!stripped_ir) {
+                m->source = strip_codeinfo_meta(m, m->source, NULL);
+                jl_gc_wb(m, m->source);
+            }
+            jl_array_t *slotnames = jl_uncompress_argnames(m->slot_syms);
+            JL_GC_PUSH1(&slotnames);
+            strip_slotnames(slotnames);
+            m->slot_syms = jl_compress_argnames(slotnames);
+            jl_gc_wb(m, m->slot_syms);
+            JL_GC_POP();
         }
     }
     if (jl_options.strip_metadata) {
         record_field_change((jl_value_t**)&m->file, (jl_value_t*)jl_empty_sym);
         m->line = 0;
+        record_field_change((jl_value_t**)&m->debuginfo, (jl_value_t*)jl_nulldebuginfo);
     }
     jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
     if (!jl_is_svec(specializations)) {
@@ -3042,10 +3072,10 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 // Allow passing in a module handle directly, rather than a path
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 {
-    void* *jl_RTLD_DEFAULT_handle_pointer;
+    void** (*get_jl_RTLD_DEFAULT_handle_addr)(void) = NULL;
     if (handle != jl_RTLD_DEFAULT_handle) {
-        int symbol_found = jl_dlsym(handle, "jl_RTLD_DEFAULT_handle_pointer", (void **)&jl_RTLD_DEFAULT_handle_pointer, 0);
-        if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
+        int symbol_found = jl_dlsym(handle, "get_jl_RTLD_DEFAULT_handle_addr", (void **)&get_jl_RTLD_DEFAULT_handle_addr, 0);
+        if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != (get_jl_RTLD_DEFAULT_handle_addr()))
             jl_error("System image file failed consistency check: maybe opened the wrong version?");
     }
     if (jl_options.cpu_target == NULL)
@@ -3554,6 +3584,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     arraylist_push(&jl_linkage_blobs, (void*)image_base);
     arraylist_push(&jl_linkage_blobs, (void*)(image_base + sizeof_sysimg));
     arraylist_push(&jl_image_relocs, (void*)relocs_base);
+    if (restored == NULL) {
+        arraylist_push(&jl_top_mods, (void*)jl_top_module);
+    } else {
+        size_t len = jl_array_nrows(*restored);
+        assert(len > 0);
+        jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(*restored, len-1);
+        assert(jl_is_module(topmod));
+        arraylist_push(&jl_top_mods, (void*)topmod);
+    }
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
     rebuild_image_blob_tree();
 

@@ -10,7 +10,8 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
+             clamp
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -358,6 +359,8 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
+clamp(x, ::Type{BigInt}) = convert(BigInt, x)
+
 isodd(x::BigInt) = MPZ.tstbit(x, 0)
 iseven(x::BigInt) = !isodd(x)
 
@@ -658,11 +661,6 @@ end
 powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function gcdx(a::BigInt, b::BigInt)
-    if iszero(b) # shortcut this to ensure consistent results with gcdx(a,b)
-        return a < 0 ? (-a,-ONE,b) : (a,one(BigInt),b)
-        # we don't return the globals ONE and ZERO in case the user wants to
-        # mutate the result
-    end
     g, s, t = MPZ.gcdext(a, b)
     if t == 0
         # work around a difference in some versions of GMP
@@ -754,7 +752,7 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     iszero(n) && pad < 1 && return ""
     nd1 = ndigits(n, base=base)
     nd  = max(nd1, pad)
-    sv  = Base.StringVector(nd + isneg(n))
+    sv  = Base.StringMemory(nd + isneg(n))
     GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
     @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
@@ -834,7 +832,12 @@ Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
 Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
 Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
-Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)
+# checked_pow doesn't follow the same promotion rules as the others, above.
+Base.checked_pow(x::BigInt, p::Integer) = x^p
+Base.checked_pow(x::Integer, p::BigInt) = x^p
+Base.checked_pow(x::BigInt, p::BigInt) = x^p
+
+Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)::BigInt
 
 ## streamlined hashing for BigInt, by avoiding allocation from shifts ##
 

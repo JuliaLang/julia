@@ -55,9 +55,7 @@ $(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracy
 
 $(LIBTRACYCLIENT_BUILDDIR)/build-compiled: $(LIBTRACYCLIENT_BUILDDIR)/build-configured
 	cd $(LIBTRACYCLIENT_BUILDDIR) && \
-		$(if $(filter $(CMAKE_GENERATOR),make), \
-		  $(MAKE), \
-		  $(CMAKE) --build .)
+		$(CMAKE) --build .
 	echo 1 > $@
 
 $(eval $(call staged-install, \

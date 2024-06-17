@@ -193,7 +193,11 @@ static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder,
     if (isa<PointerType>(jl_value) &&
         v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
         // Cast to the proper address space
+        #if JL_LLVM_VERSION >= 170000
+        Type *jl_value_addr = PointerType::get(jl_value, v->getType()->getPointerAddressSpace());
+        #else
         Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
+        #endif
         return builder.CreateBitCast(v, jl_value_addr);
     }
     else {
@@ -222,7 +226,7 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
     auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
     const int ptls_offset = offsetof(jl_task_t, ptls);
     llvm::Value *pptls = builder.CreateInBoundsGEP(
-            T_pjlvalue, current_task,
+            T_pjlvalue, emit_bitcast_with_builder(builder, current_task, T_ppjlvalue),
             ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
             "ptls_field");
     LoadInst *ptls_load = builder.CreateAlignedLoad(T_pjlvalue,

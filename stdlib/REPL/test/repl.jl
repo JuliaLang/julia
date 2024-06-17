@@ -114,7 +114,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-# These are integration tests. If you want to unit test test e.g. completion, or
+# These are integration tests. If you want to unit test e.g. completion, or
 # exact LineEdit behavior, put them in the appropriate test files.
 # Furthermore since we are emulating an entire terminal, there may be control characters
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
@@ -500,8 +500,9 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         repl_mode = repl.interface.modes[1]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
-        histp = repl.interface.modes[4]
-        prefix_mode = repl.interface.modes[5]
+        pkg_mode = repl.interface.modes[4]
+        histp = repl.interface.modes[5]
+        prefix_mode = repl.interface.modes[6]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
@@ -1480,6 +1481,35 @@ end
     end
 end
 
+# Test that the REPL can find `using` statements inside macro expansions
+global packages_requested = Any[]
+old_hooks = copy(REPL.install_packages_hooks)
+empty!(REPL.install_packages_hooks)
+push!(REPL.install_packages_hooks, function(pkgs)
+    append!(packages_requested, pkgs)
+end)
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+
+    # Just consume all the output - we only test that the callback ran
+    read_resp_task = @async while !eof(stdout_read)
+        readavailable(stdout_read)
+    end
+
+    write(stdin_write, "macro usingfoo(); :(using FooNotFound); end\n")
+    write(stdin_write, "@usingfoo\n")
+    write(stdin_write, "\x4")
+    Base.wait(repltask)
+    close(stdin_write)
+    close(stdout_read)
+    Base.wait(read_resp_task)
+end
+@test packages_requested == Any[:FooNotFound]
+empty!(REPL.install_packages_hooks); append!(REPL.install_packages_hooks, old_hooks)
+
 # err should reprint error if deeper than top-level
 fake_repl() do stdin_write, stdout_read, repl
     repltask = @async begin
@@ -1559,8 +1589,9 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         repl_mode = repl.interface.modes[1]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
-        histp = repl.interface.modes[4]
-        prefix_mode = repl.interface.modes[5]
+        pkg_mode = repl.interface.modes[4]
+        histp = repl.interface.modes[5]
+        prefix_mode = repl.interface.modes[6]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
@@ -1804,4 +1835,26 @@ end
     undoc = Docs.undocumented_names(REPL)
     @test_broken isempty(undoc)
     @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
+end
+
+@testset "Dummy Pkg prompt" begin
+    # do this in an empty depot to test default for new users
+    withenv("JULIA_DEPOT_PATH" => mktempdir(), "JULIA_LOAD_PATH" => nothing) do
+        prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.Pkg_promptf())"`)
+        @test prompt == "(@v$(VERSION.major).$(VERSION.minor)) pkg> "
+    end
+
+    get_prompt(proj::String) = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no $(proj) -e "using REPL; print(REPL.Pkg_promptf())"`)
+
+    @test get_prompt("--project=$(pkgdir(REPL))") == "(REPL) pkg> "
+
+    tdir = mkpath(joinpath(mktempdir(), "foo"))
+    @test get_prompt("--project=$tdir") == "(foo) pkg> "
+
+    proj_file = joinpath(tdir, "Project.toml")
+    touch(proj_file) # make a bad Project.toml
+    @test get_prompt("--project=$proj_file") == "(foo) pkg> "
+
+    write(proj_file, "name = \"Bar\"\n")
+    @test get_prompt("--project=$proj_file") == "(Bar) pkg> "
 end

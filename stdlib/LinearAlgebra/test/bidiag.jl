@@ -166,6 +166,9 @@ Random.seed!(1)
 
         @testset for func in (conj, transpose, adjoint)
             @test func(func(T)) == T
+            if func ∈ (transpose, adjoint)
+                @test func(func(T)) === T
+            end
         end
 
         @testset "permutedims(::Bidiagonal)" begin
@@ -834,6 +837,26 @@ end
     end
 end
 
+@testset "copyto!" begin
+    ev, dv = [1:4;], [1:5;]
+    B = Bidiagonal(dv, ev, :U)
+    B2 = copyto!(zero(B), B)
+    @test B2 == B
+    for (ul1, ul2) in ((:U, :L), (:L, :U))
+        B3 = Bidiagonal(dv, zero(ev), ul1)
+        B2 = Bidiagonal(zero(dv), zero(ev), ul2)
+        @test copyto!(B2, B3) == B3
+    end
+
+    @testset "mismatched sizes" begin
+        dv2 = [4; @view dv[2:end]]
+        @test copyto!(B, Bidiagonal([4], Int[], :U)) == Bidiagonal(dv2, ev, :U)
+        @test copyto!(B, Bidiagonal([4], Int[], :L)) == Bidiagonal(dv2, ev, :U)
+        @test copyto!(B, Bidiagonal(Int[], Int[], :U)) == Bidiagonal(dv, ev, :U)
+        @test copyto!(B, Bidiagonal(Int[], Int[], :L)) == Bidiagonal(dv, ev, :U)
+    end
+end
+
 @testset "copyto! with UniformScaling" begin
     @testset "Fill" begin
         for len in (4, InfiniteArrays.Infinity())
@@ -882,6 +905,32 @@ end
     C1, C2 = zeros(2), zeros(2)
     @test mul!(C1, B, sv) == mul!(C2, B, v)
     @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
+end
+
+@testset "Reverse operation on Bidiagonal" begin
+    n = 5
+    d = randn(n)
+    e = randn(n - 1)
+    for uplo in (:U, :L)
+        B = Bidiagonal(d, e, uplo)
+        @test reverse(B, dims=1) == reverse(Matrix(B), dims=1)
+        @test reverse(B, dims=2) == reverse(Matrix(B), dims=2)
+        @test reverse(B)::Bidiagonal == reverse(Matrix(B))
+    end
+end
+
+@testset "Matrix conversion for non-numeric" begin
+    B = Bidiagonal(fill(Diagonal([1,3]), 3), fill(Diagonal([1,3]), 2), :U)
+    M = Matrix{eltype(B)}(B)
+    @test M isa Matrix{eltype(B)}
+    @test M == B
+end
+
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    B = Bidiagonal(dv, ev, :U)
+    @test_throws "invalid index" B[3, true]
+    @test B[1,2] == B[Int8(1),UInt16(2)] == B[big(1), Int16(2)]
 end
 
 end # module TestBidiagonal

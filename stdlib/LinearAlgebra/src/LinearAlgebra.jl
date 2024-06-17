@@ -18,7 +18,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     typed_hcat, vec, view, zero
 using Base: IndexLinear, promote_eltype, promote_op, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
-    splat
+    splat, BitInteger
 using Base.Broadcast: Broadcasted, broadcasted
 using Base.PermutedDimsArrays: CommutativeOps
 using OpenBLAS_jll
@@ -190,6 +190,7 @@ end
 abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
+struct RobustRepresentations <: Algorithm end
 
 # Pivoting strategies for matrix factorization algorithms.
 abstract type PivotingStrategy end
@@ -241,6 +242,8 @@ Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref
 """
 struct ColumnNorm <: PivotingStrategy end
 
+using Base: DimOrInd
+
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
 # see PR 16416
@@ -279,6 +282,28 @@ stride1(x::DenseArray) = stride(x, 1)::Int
 @noinline _chkstride1(ok::Bool) = ok || error("matrix does not have contiguous columns")
 @inline _chkstride1(ok::Bool, A, B...) = _chkstride1(ok & (stride1(A) == 1), B...)
 
+# Subtypes of StridedArrays that satisfy certain properties on their strides
+# Similar to Base.RangeIndex, but only include range types where the step is statically known to be non-zero
+const IncreasingRangeIndex = Union{BitInteger, AbstractUnitRange{<:BitInteger}}
+const NonConstRangeIndex = Union{IncreasingRangeIndex, StepRange{<:BitInteger, <:BitInteger}}
+# StridedArray subtypes for which _fullstride2(::T) === true is known from the type
+DenseOrStridedReshapedReinterpreted{T,N} =
+    Union{DenseArray{T,N}, Base.StridedReshapedArray{T,N}, Base.StridedReinterpretArray{T,N}}
+# Similar to Base.StridedSubArray, except with a NonConstRangeIndex instead of a RangeIndex
+StridedSubArrayStandard{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{Vararg{Union{NonConstRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
+StridedArrayStdSubArray{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayStandard{T,N}}
+# Similar to Base.StridedSubArray, except with a IncreasingRangeIndex instead of a RangeIndex
+StridedSubArrayIncr{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{Vararg{Union{IncreasingRangeIndex, Base.ReshapedUnitRange, Base.AbstractCartesianIndex}}}} = Base.StridedSubArray{T,N,A,I}
+StridedArrayStdSubArrayIncr{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayIncr{T,N}}
+# These subarrays have a stride of 1 along the first dimension
+StridedSubArrayAUR{T,N,A<:DenseOrStridedReshapedReinterpreted,
+    I<:Tuple{AbstractUnitRange{<:BitInteger}}} = Base.StridedSubArray{T,N,A,I}
+StridedArrayStride1{T,N} = Union{DenseOrStridedReshapedReinterpreted{T,N},StridedSubArrayIncr{T,N}}
+# StridedMatrixStride1 may typically be forwarded to LAPACK methods
+StridedMatrixStride1{T} = StridedArrayStride1{T,2}
+
 """
     LinearAlgebra.checksquare(A)
 
@@ -297,14 +322,14 @@ julia> LinearAlgebra.checksquare(A, B)
 """
 function checksquare(A)
     m,n = size(A)
-    m == n || throw(DimensionMismatch("matrix is not square: dimensions are $(size(A))"))
+    m == n || throw(DimensionMismatch(lazy"matrix is not square: dimensions are $(size(A))"))
     m
 end
 
 function checksquare(A...)
     sizes = Int[]
     for a in A
-        size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
+        size(a,1)==size(a,2) || throw(DimensionMismatch(lazy"matrix is not square: dimensions are $(size(a))"))
         push!(sizes, size(a,1))
     end
     return sizes
@@ -474,6 +499,33 @@ See also: `copymutable_oftype`.
 """
 copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
 
+"""
+    BandIndex(band, index)
+
+Represent a Cartesian index as a linear index along a band.
+This type is primarily meant to index into a specific band without branches,
+so, for best performance, `band` should be a compile-time constant.
+"""
+struct BandIndex
+    band :: Int
+    index :: Int
+end
+function _cartinds(b::BandIndex)
+    (; band, index) = b
+    bandg0 = max(band,0)
+    row = index - band + bandg0
+    col = index + bandg0
+    CartesianIndex(row, col)
+end
+function Base.to_indices(A, inds, t::Tuple{BandIndex, Vararg{Any}})
+    to_indices(A, inds, (_cartinds(first(t)), Base.tail(t)...))
+end
+function Base.checkbounds(::Type{Bool}, A::AbstractMatrix, b::BandIndex)
+    checkbounds(Bool, A, _cartinds(b))
+end
+function Base.checkbounds(A::Broadcasted, b::BandIndex)
+    checkbounds(A, _cartinds(b))
+end
 
 include("adjtrans.jl")
 include("transpose.jl")
@@ -516,32 +568,60 @@ const ⋅ = dot
 const × = cross
 export ⋅, ×
 
+# Separate the char corresponding to the wrapper from that corresponding to the uplo
+# In most cases, the former may be constant-propagated, while the latter usually can't be.
+# This improves type-inference in wrap for Symmetric/Hermitian matrices
+# A WrapperChar is equivalent to `isuppertri ? uppercase(wrapperchar) : lowercase(wrapperchar)`
+struct WrapperChar <: AbstractChar
+    wrapperchar :: Char
+    isuppertri :: Bool
+end
+function Base.Char(w::WrapperChar)
+    T = w.wrapperchar
+    if T ∈ ('N', 'T', 'C') # known cases where isuppertri is true
+        T
+    else
+        _isuppertri(w) ? uppercase(T) : lowercase(T)
+    end
+end
+Base.codepoint(w::WrapperChar) = codepoint(Char(w))
+WrapperChar(n::UInt32) = WrapperChar(Char(n))
+WrapperChar(c::Char) = WrapperChar(c, isuppercase(c))
+# We extract the wrapperchar so that the result may be constant-propagated
+# This doesn't return a value of the same type on purpose
+Base.uppercase(w::WrapperChar) = uppercase(w.wrapperchar)
+Base.lowercase(w::WrapperChar) = lowercase(w.wrapperchar)
+_isuppertri(w::WrapperChar) = w.isuppertri
+_isuppertri(x::AbstractChar) = isuppercase(x) # compatibility with earlier Char-based implementation
+_uplosym(x) = _isuppertri(x) ? (:U) : (:L)
+
 wrapper_char(::AbstractArray) = 'N'
 wrapper_char(::Adjoint) = 'C'
 wrapper_char(::Adjoint{<:Real}) = 'T'
 wrapper_char(::Transpose) = 'T'
-wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
-wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
-wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
+wrapper_char(A::Hermitian) =  WrapperChar('H', A.uplo == 'U')
+wrapper_char(A::Hermitian{<:Real}) = WrapperChar('S', A.uplo == 'U')
+wrapper_char(A::Symmetric) = WrapperChar('S', A.uplo == 'U')
+
+wrapper_char_NTC(A::AbstractArray) = uppercase(wrapper_char(A)) == 'N'
+wrapper_char_NTC(A::Union{StridedArray, Adjoint, Transpose}) = true
+wrapper_char_NTC(A::Union{Symmetric, Hermitian}) = false
 
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     # merge the result of this before return, so that we can type-assert the return such
     # that even if the tmerge is inaccurate, inference can still identify that the
     # `_generic_matmatmul` signature still matches and doesn't require missing backedges
-    B = if tA == 'N'
+    tA_uc = uppercase(tA)
+    B = if tA_uc == 'N'
         A
-    elseif tA == 'T'
+    elseif tA_uc == 'T'
         transpose(A)
-    elseif tA == 'C'
+    elseif tA_uc == 'C'
         adjoint(A)
-    elseif tA == 'H'
-        Hermitian(A, :U)
-    elseif tA == 'h'
-        Hermitian(A, :L)
-    elseif tA == 'S'
-        Symmetric(A, :U)
-    else # tA == 's'
-        Symmetric(A, :L)
+    elseif tA_uc == 'H'
+        Hermitian(A, _uplosym(tA))
+    elseif tA_uc == 'S'
+        Symmetric(A, _uplosym(tA))
     end
     return B::AbstractVecOrMat
 end
@@ -576,31 +656,14 @@ _droplast!(A) = deleteat!(A, lastindex(A))
 matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
 matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
 matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+# diagonal is special, as it does not change the structure of the other matrix
+# we call similar without a size to preserve the type of the matrix wherever possible
 matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
 matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
 matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
-matprod_dest(A::HermOrSym, B::Diagonal, TS) = similar(A, TS, size(A))
-matprod_dest(A::Diagonal, B::HermOrSym, TS) = similar(B, TS, size(B))
 
-# TODO: remove once not used anymore in SparseArrays.jl
-# some trait like this would be cool
-# onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
-# but we are actually asking for oneunit(T), that is, however, defined for generic T as
-# `T(one(T))`, so the question is equivalent for whether one(T) is defined
-onedefined(::Type) = false
-onedefined(::Type{<:Number}) = true
-
-# initialize return array for op(A, B)
-_init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    (onedefined(TA) && onedefined(TB)) ?
-        typeof(matprod(oneunit(TA), oneunit(TB))) :
-        promote_op(matprod, TA, TB)
-_init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    (onedefined(TA) && onedefined(TB)) ?
-        typeof(op(oneunit(TA), oneunit(TB))) :
-        promote_op(op, TA, TB)
-_initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
-    similar(C, _init_eltype(op, TA, TB), size(C))
+# Special handling for adj/trans vec
+matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
@@ -691,7 +754,7 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     end
 
     if parallel
-        let Distributed = Base.require_stdlib(Base.PkgId(
+        let Distributed = Base.require(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             nworkers = @invokelatest Distributed.nworkers()
             results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))

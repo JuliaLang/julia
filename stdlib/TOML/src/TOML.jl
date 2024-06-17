@@ -7,6 +7,8 @@ and to serialize Julia data structures to TOML format.
 """
 module TOML
 
+using Dates
+
 module Internals
     # The parser is defined in Base
     using Base.TOML: Parser, parse, tryparse, ParserError, isvalid_barekey_char, reinit!
@@ -37,6 +39,17 @@ performance if a larger number of small files are parsed.
 const Parser = Internals.Parser
 
 """
+    DTParser()
+
+Constructor for a TOML `Parser` which returns date and time objects from Dates.
+"""
+function DTParser(args...; kwargs...)
+    parser = Parser(args...; kwargs...)
+    parser.Dates = Dates
+    return parser
+end
+
+"""
     parsefile(f::AbstractString)
     parsefile(p::Parser, f::AbstractString)
 
@@ -46,7 +59,7 @@ Parse file `f` and return the resulting table (dictionary). Throw a
 See also [`TOML.tryparsefile`](@ref).
 """
 parsefile(f::AbstractString) =
-    Internals.parse(Parser(readstring(f); filepath=abspath(f)))
+    Internals.parse(DTParser(readstring(f); filepath=abspath(f)))
 parsefile(p::Parser, f::AbstractString) =
     Internals.parse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
 
@@ -60,7 +73,7 @@ Parse file `f` and return the resulting table (dictionary). Return a
 See also [`TOML.parsefile`](@ref).
 """
 tryparsefile(f::AbstractString) =
-    Internals.tryparse(Parser(readstring(f); filepath=abspath(f)))
+    Internals.tryparse(DTParser(readstring(f); filepath=abspath(f)))
 tryparsefile(p::Parser, f::AbstractString) =
     Internals.tryparse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
 
@@ -74,7 +87,7 @@ Throw a [`ParserError`](@ref) upon failure.
 See also [`TOML.tryparse`](@ref).
 """
 parse(str::AbstractString) =
-    Internals.parse(Parser(String(str)))
+    Internals.parse(DTParser(String(str)))
 parse(p::Parser, str::AbstractString) =
     Internals.parse(Internals.reinit!(p, String(str)))
 parse(io::IO) = parse(read(io, String))
@@ -90,7 +103,7 @@ Return a [`ParserError`](@ref) upon failure.
 See also [`TOML.parse`](@ref).
 """
 tryparse(str::AbstractString) =
-    Internals.tryparse(Parser(String(str)))
+    Internals.tryparse(DTParser(String(str)))
 tryparse(p::Parser, str::AbstractString) =
     Internals.tryparse(Internals.reinit!(p, String(str)))
 tryparse(io::IO) = tryparse(read(io, String))

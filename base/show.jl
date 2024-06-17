@@ -1056,7 +1056,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
         # IOContext If :module is not set, default to Main (or current active module).
         # nothing can be used to force printing prefix
         from = get(io, :module, active_module())
-        if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from))
+        if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from::Module))
             show(io, tn.module)
             print(io, ".")
             if globfunc && !is_id_start_char(first(string(sym)))
@@ -1192,7 +1192,7 @@ function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
         if !first
             print(io, ", ")
         end
-        print(io, syms[i])
+        show_sym(io, syms[i])
         typ = types.parameters[i]
         if typ !== Any
             print(io, "::")
@@ -1252,8 +1252,6 @@ show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
 print(io::IO, n::Unsigned) = print(io, string(n))
-
-show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(string(UInt(p), base = 16, pad = Sys.WORD_SIZE>>2))")
 
 has_tight_type(p::Pair) =
     typeof(p.first)  == typeof(p).parameters[1] &&
@@ -1336,15 +1334,15 @@ end
 
 show(io::IO, l::Core.MethodInstance) = show_mi(io, l)
 
-function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
-    def = l.def
+function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
+    def = mi.def
     if isa(def, Method)
-        if isdefined(def, :generator) && l === def.generator
+        if isdefined(def, :generator) && mi === def.generator
             print(io, "MethodInstance generator for ")
             show(io, def)
         else
             print(io, "MethodInstance for ")
-            show_tuple_as_call(io, def.name, l.specTypes; qualified=true)
+            show_tuple_as_call(io, def.name, mi.specTypes; qualified=true)
         end
     else
         print(io, "Toplevel MethodInstance thunk")
@@ -1352,10 +1350,15 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
         # MethodInstance is part of a stacktrace, it gets location info
         # added by other means.  But if it isn't, then we should try
         # to print a little more identifying information.
-        if !from_stackframe
-            linetable = l.uninferred.linetable
-            line = isempty(linetable) ? "unknown" : (lt = linetable[1]::Union{LineNumberNode,Core.LineInfoNode}; string(lt.file, ':', lt.line))
-            print(io, " from ", def, " starting at ", line)
+        if !from_stackframe && isdefined(mi, :cache)
+            ci = mi.cache
+            if ci.owner === :uninferred
+                di = ci.inferred.debuginfo
+                file, line = IRShow.debuginfo_firstline(di)
+                file = string(file)
+                line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
+                print(io, " from ", def, " starting at ", line)
+            end
         end
     end
 end
@@ -1377,8 +1380,10 @@ function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
             show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
         end
     else
-        linetable = mi.uninferred.linetable
-        line = isempty(linetable) ? "" : (lt = linetable[1]; string(lt.file, ':', lt.line))
+        di = mi.cache.inferred.debuginfo
+        file, line = IRShow.debuginfo_firstline(di)
+        file = string(file)
+        line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
         print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
     end
 end
@@ -2500,6 +2505,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :meta && nargs == 2 && args[1] === :pop_loc
         print(io, "# meta: pop locations ($(args[2]::Int))")
     # print anything else as "Expr(head, args...)"
+    elseif head === :toplevel
+        # Reset SOURCE_SLOTNAMES. Raw SlotNumbers are not valid in Expr(:toplevel), but
+        # we want to show bad ASTs reasonably to make errors understandable.
+        lambda_io = IOContext(io, :SOURCE_SLOTNAMES => false)
+        show_unquoted_expr_fallback(lambda_io, ex, indent, quote_level)
     else
         unhandled = true
     end
@@ -2820,7 +2830,7 @@ module IRShow
     import ..Base
     import .Compiler: IRCode, CFG, scan_ssa_use!,
         isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
-        Effects, ALWAYS_TRUE, ALWAYS_FALSE
+        Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx
     Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)
@@ -2833,9 +2843,9 @@ module IRShow
     include("compiler/ssair/show.jl")
 
     const __debuginfo = Dict{Symbol, Any}(
-        # :full => src -> Base.IRShow.statementidx_lineinfo_printer(src), # and add variable slot information
-        :source => src -> Base.IRShow.statementidx_lineinfo_printer(src),
-        # :oneliner => src -> Base.IRShow.statementidx_lineinfo_printer(Base.IRShow.PartialLineInfoPrinter, src),
+        # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
+        :source => src -> statementidx_lineinfo_printer(src),
+        # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
         :none => src -> Base.IRShow.lineinfo_disabled,
         )
     const default_debuginfo = Ref{Symbol}(:none)
@@ -2849,18 +2859,11 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     if src.slotnames !== nothing
         lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
     end
-    if isempty(src.linetable) || src.linetable[1] isa LineInfoNode
-        println(io)
-        # TODO: static parameter values?
-        # only accepts :source or :none, we can't have a fallback for default since
-        # that would break code_typed(, debuginfo=:source) iff IRShow.default_debuginfo[] = :none
-        IRShow.show_ir(lambda_io, src, IRShow.IRShowConfig(IRShow.__debuginfo[debuginfo](src)))
-    else
-        # this is a CodeInfo that has not been used as a method yet, so its locations are still LineNumberNodes
-        body = Expr(:block)
-        body.args = src.code
-        show(lambda_io, body)
-    end
+    println(io)
+    # TODO: static parameter values?
+    # only accepts :source or :none, we can't have a fallback for default since
+    # that would break code_typed(, debuginfo=:source) iff IRShow.default_debuginfo[] = :none
+    IRShow.show_ir(lambda_io, src, IRShow.IRShowConfig(IRShow.__debuginfo[debuginfo](src)))
     print(io, ")")
 end
 

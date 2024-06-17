@@ -248,6 +248,22 @@ end
     @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
 end
 
+@testset "deepcopy_internal inference" begin
+    @inferred Base.deepcopy_internal(1, IdDict())
+    @inferred Base.deepcopy_internal(1.0, IdDict())
+    @inferred Base.deepcopy_internal(big(1), IdDict())
+    @inferred Base.deepcopy_internal(big(1.0), IdDict())
+    @inferred Base.deepcopy_internal('a', IdDict())
+    @inferred Base.deepcopy_internal("abc", IdDict())
+    @inferred Base.deepcopy_internal([1,2,3], IdDict())
+
+    # structs without custom deepcopy_internal method
+    struct Immutable2; x::Int; end
+    mutable struct Mutable2; x::Int; end
+    @inferred Base.deepcopy_internal(Immutable2(1), IdDict())
+    @inferred Base.deepcopy_internal(Mutable2(1), IdDict())
+end
+
 @testset "`copyto!`'s unaliasing" begin
     a = view([1:3;], :)
     @test copyto!(a, 2, a, 1, 2) == [1;1:2;]
@@ -269,4 +285,6 @@ end
     @test a.lock !== b.lock
     @test islocked(a.lock)
     @test !islocked(b.lock)
+    @inferred deepcopy(a)
+    @inferred deepcopy(a.lock)
 end

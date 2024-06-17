@@ -42,8 +42,10 @@ function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
     return nothing
 end
 
+struct StrangeSinError end
 strangesin(x) = sin(x)
-@overlay OverlayedMT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
+@overlay OverlayedMT strangesin(x::Float64) =
+    iszero(x) ? throw(StrangeSinError()) : x < 0 ? nothing : cos(x)
 
 # inference should use the overlayed method table
 @test Base.return_types((Float64,); interp=MTOverlayInterp()) do x
@@ -52,6 +54,11 @@ end |> only === Union{Float64,Nothing}
 @test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     @invoke strangesin(x::Float64)
 end |> only === Union{Float64,Nothing}
+@test only(Base.return_types(strangesin, (Float64,); interp=MTOverlayInterp())) === Union{Float64,Nothing}
+@test Base.infer_exception_type(strangesin, (Float64,); interp=MTOverlayInterp()) === Union{StrangeSinError,DomainError}
+@test only(Base.infer_exception_types(strangesin, (Float64,); interp=MTOverlayInterp())) === Union{StrangeSinError,DomainError}
+@test last(only(code_typed(strangesin, (Float64,); interp=MTOverlayInterp()))) === Union{Float64,Nothing}
+@test last(only(Base.code_ircode(strangesin, (Float64,); interp=MTOverlayInterp()))) === Union{Float64,Nothing}
 
 # effect analysis should figure out that the overlayed method is used
 @test Base.infer_effects((Float64,); interp=MTOverlayInterp()) do x
@@ -145,9 +152,17 @@ function CC.concrete_eval_eligible(interp::Issue48097Interp,
 end
 @overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
 issue48097(; kwargs...) = return 42
-@test_broken fully_eliminated(; interp=Issue48097Interp(), retval=42) do
+@test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
     issue48097(; a=1f0, b=1.0)
 end
+
+# https://github.com/JuliaLang/julia/issues/52938
+@newinterp Issue52938Interp
+@MethodTable ISSUE_52938_MT
+CC.method_table(interp::Issue52938Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), ISSUE_52938_MT)
+inner52938(x, types::Type, args...; kwargs...) = x
+outer52938(x) = @inline inner52938(x, Tuple{}; foo=Ref(42), bar=1)
+@test fully_eliminated(outer52938, (Any,); interp=Issue52938Interp(), retval=Argument(2))
 
 # Should not concrete-eval overlayed methods in semi-concrete interpretation
 @newinterp OverlaySinInterp
@@ -156,24 +171,30 @@ CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_inferen
 overlay_sin1(x) = error("Not supposed to be called.")
 @overlay OverlaySinMT overlay_sin1(x) = cos(x)
 @overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
-let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
-    end |> only |> first |> Core.OpaqueClosure
+    end |> only |> first
+    ir.argtypes[1] = Tuple{}
+    oc = Core.OpaqueClosure(ir)
     @test oc() == cos(0.)
 end
 @overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin1(x)
-let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
-    end |> only |> first |> Core.OpaqueClosure
+    end |> only |> first
+    ir.argtypes[1] = Tuple{}
+    oc = Core.OpaqueClosure(ir)
     @test oc() == cos(0.)
 end
 _overlay_sin2(x) = error("Not supposed to be called.")
 @overlay OverlaySinMT _overlay_sin2(x) = cos(x)
 overlay_sin2(x) = _overlay_sin2(x)
 @overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin2(x)
-let oc = Base.code_ircode(; interp=OverlaySinInterp()) do
+let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
-    end |> only |> first |> Core.OpaqueClosure
+    end |> only |> first
+    ir.argtypes[1] = Tuple{}
+    oc = Core.OpaqueClosure(ir)
     @test oc() == cos(0.)
 end
 
@@ -366,12 +387,15 @@ let src = code_typed1((Float64,Float64,Float64)) do x, y, z
     @test count(iscall((src, inlined_usually)), src.code) == 0
 end
 let NoinlineModule = Module()
+    OtherModule = Module()
+    main_func(x, y, z) = inlined_usually(x, y, z)
+    @eval NoinlineModule noinline_func(x, y, z) = $inlined_usually(x, y, z)
+    @eval OtherModule other_func(x, y, z) = $inlined_usually(x, y, z)
+
     interp = NoinlineInterpreter(Set((NoinlineModule,)))
 
     # this anonymous function's context is Main -- it should be inlined as usual
-    let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
-            inlined_usually(x, y, z)
-        end
+    let src = code_typed1(main_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 0
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
@@ -380,26 +404,19 @@ let NoinlineModule = Module()
     method = only(methods(inlined_usually, (Float64,Float64,Float64,)))
     mi = CC.specialize_method(method, Tuple{typeof(inlined_usually),Float64,Float64,Float64}, Core.svec())
     @test CC.haskey(CC.code_cache(interp), mi)
-    let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
-            inlined_usually(x, y, z)
-        end
+    let src = code_typed1(main_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 0
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
 
     # now the context module is `NoinlineModule` -- it should not be inlined
-    let src = @eval NoinlineModule $code_typed1((Float64,Float64,Float64); interp=$interp) do x, y, z
-            $inlined_usually(x, y, z)
-        end
+    let src = code_typed1(NoinlineModule.noinline_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 1
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
 
     # the context module is totally irrelevant -- it should be inlined as usual
-    OtherModule = Module()
-    let src = @eval OtherModule $code_typed1((Float64,Float64,Float64); interp=$interp) do x, y, z
-            $inlined_usually(x, y, z)
-        end
+    let src = code_typed1(OtherModule.other_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 0
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
@@ -409,76 +426,6 @@ end
 # to properly give error messages for basic kwargs...
 Core.eval(Core.Compiler, quote f(;a=1) = a end)
 @test_throws MethodError Core.Compiler.f(;b=2)
-
-# Custom lookup function
-# ======================
-
-# In the following test with `ConstInvokeInterp`, we use a custom lookup function that
-# uses const-prop'ed source if available, and check if LLVM emits code using it.
-
-using Core: MethodInstance, CodeInstance
-using Base: CodegenParams
-using InteractiveUtils
-
-@newinterp ConstInvokeInterp
-function CC.concrete_eval_eligible(interp::ConstInvokeInterp,
-    @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
-    ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter,
-        f::Any, result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
-    if ret === :semi_concrete_eval
-        return :none # disable semi-concrete interpretation
-    end
-    return ret
-end
-Base.@constprop :aggressive @noinline function custom_lookup_target(c::Bool, x::Int)
-    if c
-        y = sin(x)
-        z = nothing
-    else
-        y = cos(x)
-        z = missing
-    end
-    return y, z
-end
-custom_lookup_context(x::Int) = custom_lookup_target(true, x)
-
-const CONST_INVOKE_INTERP_WORLD = Base.get_world_counter()
-const CONST_INVOKE_INTERP = ConstInvokeInterp(; world=CONST_INVOKE_INTERP_WORLD)
-function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
-    for inf_result in CONST_INVOKE_INTERP.inf_cache
-        if inf_result.linfo === mi
-            if CC.any(inf_result.overridden_by_const)
-                return CodeInstance(CONST_INVOKE_INTERP, inf_result)
-            end
-        end
-    end
-    # XXX: This seems buggy, custom_lookup should probably construct the absint on demand.
-    return CC.getindex(CC.code_cache(CONST_INVOKE_INTERP), mi)
-end
-
-let # generate cache
-    code_typed(custom_lookup_context; world=CONST_INVOKE_INTERP_WORLD, interp=CONST_INVOKE_INTERP)
-
-    # check if the lookup function works as expected
-    target_mi = CC.specialize_method(only(methods(custom_lookup_target)), Tuple{typeof(custom_lookup_target),Bool,Int}, Core.svec())
-    target_ci = custom_lookup(target_mi, CONST_INVOKE_INTERP_WORLD, CONST_INVOKE_INTERP_WORLD)
-    @test target_ci.rettype == Tuple{Float64,Nothing} # constprop'ed source
-    # display(@ccall jl_uncompress_ir(target_ci.def.def::Any, C_NULL::Ptr{Cvoid}, target_ci.inferred::Any)::Any)
-
-    raw = false
-    lookup = @cfunction(custom_lookup, Any, (Any,Csize_t,Csize_t))
-    params = CodegenParams(;
-        debug_info_kind=Cint(0),
-        debug_info_level=Cint(2),
-        safepoint_on_entry=raw,
-        gcstack_arg=raw,
-        lookup)
-    io = IOBuffer()
-    code_llvm(io, custom_lookup_target, (Bool,Int,); params)
-    s = String(take!(io))
-    @test  occursin("j_sin_", s)
-    @test !occursin("j_cos_", s)
-end
 
 # custom inferred data
 # ====================
@@ -514,4 +461,21 @@ let src = code_typed((Int,); interp=CustomDataInterp()) do x
     @test count(isinvoke(:sin), src.code) == 1
     @test count(isinvoke(:cos), src.code) == 1
     @test count(isinvoke(:+), src.code) == 0
+end
+
+# ephemeral cache mode
+@newinterp DebugInterp #=ephemeral_cache=#true
+func_ext_cache1(a) = func_ext_cache2(a) * cos(a)
+func_ext_cache2(a) = sin(a)
+let interp = DebugInterp()
+    @test Base.infer_return_type(func_ext_cache1, (Float64,); interp) === Float64
+    @test isdefined(interp, :code_cache)
+    found = false
+    for (mi, codeinst) in interp.code_cache.dict
+        if mi.def.name === :func_ext_cache2
+            found = true
+            break
+        end
+    end
+    @test found
 end

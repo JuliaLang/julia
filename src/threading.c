@@ -708,14 +708,9 @@ void jl_init_threading(void)
         }
         else {
             // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
-            // set the number of mark threads to half of compute threads
+            // set the number of mark threads to the number of compute threads
             // and number of sweep threads to 0
-            if (nthreads <= 1) {
-                jl_n_markthreads = 0;
-            }
-            else {
-                jl_n_markthreads = (nthreads / 2) - 1;
-            }
+            jl_n_markthreads = nthreads - 1; // -1 for the master (mutator) thread which may also do marking
             // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
             // cap the number of threads that may run the mark phase to
             // the number of CPU cores
@@ -740,7 +735,7 @@ void jl_init_threading(void)
     jl_atomic_store_release(&jl_all_tls_states, (jl_ptls_t*)calloc(jl_all_tls_states_size, sizeof(jl_ptls_t)));
     jl_atomic_store_release(&jl_n_threads, jl_all_tls_states_size);
     jl_n_gcthreads = ngcthreads;
-    gc_first_tid = nthreads;
+    gc_first_tid = nthreads + nthreadsi;
 }
 
 static uv_barrier_t thread_init_done;
@@ -987,6 +982,52 @@ void _jl_mutex_unlock(jl_task_t *self, jl_mutex_t *lock)
 JL_DLLEXPORT int jl_alignment(size_t sz)
 {
     return jl_gc_alignment(sz);
+}
+
+// Return values:
+//     0  == success
+//     1  == invalid thread id provided
+//     2  == ptls2 was NULL
+//     <0 == uv_thread_getaffinity exit code
+JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    if (tid < 0 || tid >= nthreads)
+        return 1;
+
+    // TODO: use correct lock. system_id is only legal if the thread is alive.
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return 2;
+    uv_thread_t uvtid = ptls2->system_id;
+
+    int ret_uv = uv_thread_getaffinity(&uvtid, mask, cpumasksize);
+    if (ret_uv != 0)
+        return ret_uv;
+
+    return 0; // success
+}
+
+// Return values:
+//     0  == success
+//     1  == invalid thread id provided
+//     2  == ptls2 was NULL
+//     <0 == uv_thread_getaffinity exit code
+JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    if (tid < 0 || tid >= nthreads)
+        return 1;
+
+    // TODO: use correct lock. system_id is only legal if the thread is alive.
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return 2;
+    uv_thread_t uvtid = ptls2->system_id;
+
+    int ret_uv = uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+    if (ret_uv != 0)
+        return ret_uv;
+
+    return 0; // success
 }
 
 #ifdef __cplusplus

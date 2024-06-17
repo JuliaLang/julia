@@ -50,7 +50,15 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     JL_GC_PUSH2(&sigtype, &selected_rt);
     sigtype = jl_argtype_with_function(captures, (jl_value_t*)argt);
 
-    jl_method_instance_t *mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
+    jl_method_instance_t *mi = NULL;
+    if (source->source) {
+        mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
+    } else {
+        mi = (jl_method_instance_t *)jl_atomic_load_relaxed(&source->specializations);
+        if (!jl_subtype(sigtype, mi->specTypes)) {
+            jl_error("sigtype mismatch in optimized opaque closure");
+        }
+    }
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
     jl_code_instance_t *ci = NULL;
@@ -105,7 +113,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         jl_method_instance_t *mi_generic = jl_specializations_get_linfo(jl_opaque_closure_method, sigtype, jl_emptysvec);
 
         // OC wrapper methods are not world dependent
-        ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0);
+        ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL);
         if (!jl_atomic_load_acquire(&ci->invoke))
             jl_compile_codeinst(ci);
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
@@ -139,7 +147,7 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     JL_GC_PUSH3(&root, &sigtype, &inst);
     root = jl_box_long(lineno);
     root = jl_new_struct(jl_linenumbernode_type, root, file);
-    jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, isinferred ? jl_nothing : (jl_value_t*)ci, isva);
+    jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, ci, isva, isinferred);
     root = (jl_value_t*)meth;
     size_t world = jl_current_task->world_age;
     // these are only legal in the current world since they are not in any tables
@@ -147,10 +155,11 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     jl_atomic_store_release(&meth->deleted_world, world);
 
     if (isinferred) {
-        sigtype = jl_argtype_with_function(env, (jl_value_t*)argt);
+        jl_value_t *argslotty = jl_array_ptr_ref(ci->slottypes, 0);
+        sigtype = jl_argtype_with_function_type(argslotty, (jl_value_t*)argt);
         jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)root, sigtype, jl_emptysvec);
         inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
-            0, world, world, 0, 0, jl_nothing, 0);
+            0, world, world, 0, jl_nothing, 0, ci->debuginfo);
         jl_mi_cache_insert(mi, inst);
     }
 
@@ -161,10 +170,10 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
 
 JL_CALLABLE(jl_new_opaque_closure_jlcall)
 {
-    if (nargs < 4)
+    if (nargs < 5)
         jl_error("new_opaque_closure: Not enough arguments");
     return (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)args[0],
-        args[1], args[2], args[3], &args[4], nargs-4, 1);
+        args[1], args[2], args[4], &args[5], nargs-5, 1);
 }
 
 // check whether the specified number of arguments is compatible with the

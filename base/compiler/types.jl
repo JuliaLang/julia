@@ -57,8 +57,6 @@ struct VarState
     VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
 end
 
-abstract type ForwardableArgtypes end
-
 struct AnalysisResults
     result
     next::AnalysisResults
@@ -70,16 +68,19 @@ end
 const NULL_ANALYSIS_RESULTS = AnalysisResults(nothing)
 
 """
-    InferenceResult(linfo::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
+    result::InferenceResult
 
 A type that represents the result of running type inference on a chunk of code.
-
-See also [`matching_cache_argtypes`](@ref).
+There are two constructor available:
+- `InferenceResult(mi::MethodInstance, [𝕃::AbstractLattice])` for regular inference,
+  without extended lattice information included in `result.argtypes`.
+- `InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::BitVector)`
+  for constant inference, with extended lattice information included in `result.argtypes`.
 """
 mutable struct InferenceResult
     const linfo::MethodInstance
     const argtypes::Vector{Any}
-    const overridden_by_const::BitVector
+    const overridden_by_const::Union{Nothing,BitVector}
     result                   # extended lattice element if inferred, nothing otherwise
     exc_result               # like `result`, but for the thrown value
     src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
@@ -89,18 +90,15 @@ mutable struct InferenceResult
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
     ci::CodeInstance         # CodeInstance if this result has been added to the cache
-    function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
-        # def = linfo.def
-        # nargs = def isa Method ? Int(def.nargs) : 0
-        # @assert length(cache_argtypes) == nargs
-        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing, nothing,
+    function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::Union{Nothing,BitVector})
+        return new(mi, argtypes, overridden_by_const, nothing, nothing, nothing,
             WorldRange(), Effects(), Effects(), NULL_ANALYSIS_RESULTS, false)
     end
 end
-InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
-InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
+function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
+    argtypes = matching_cache_argtypes(𝕃, mi)
+    return InferenceResult(mi, argtypes, #=overridden_by_const=#nothing)
+end
 
 function stack_analysis_result!(inf_result::InferenceResult, @nospecialize(result))
     return inf_result.analysis_results = AnalysisResults(result, inf_result.analysis_results)

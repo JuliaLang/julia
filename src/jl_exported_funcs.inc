@@ -109,6 +109,7 @@
     XX(jl_egal__bits) \
     XX(jl_egal__bitstag) \
     XX(jl_eh_restore_state) \
+    XX(jl_eh_restore_state_noexcept) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
     XX(jl_environ) \
@@ -193,6 +194,7 @@
     XX(jl_generating_output) \
     XX(jl_generic_function_def) \
     XX(jl_gensym) \
+    XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
@@ -366,6 +368,7 @@
     XX(jl_pointerref) \
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
+    XX(jl_pop_handler_noexcept) \
     XX(jl_preload_sysimg_so) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \
@@ -404,6 +407,7 @@
     XX(jl_safepoint_suspend_thread) \
     XX(jl_safepoint_resume_thread) \
     XX(jl_SC_CLK_TCK) \
+    XX(jl_setaffinity) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
     XX(jl_set_errno) \

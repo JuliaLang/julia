@@ -152,7 +152,8 @@ end
 """
     time_ns() -> UInt64
 
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
+between two moments in time.
 """
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
@@ -402,8 +403,11 @@ include("weakkeydict.jl")
 include("scopedvalues.jl")
 using .ScopedValues
 
+# metaprogramming
+include("meta.jl")
+
 # Logging
-include("logging.jl")
+include("logging/logging.jl")
 using .CoreLogging
 
 include("env.jl")
@@ -495,9 +499,6 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# metaprogramming
-include("meta.jl")
-
 # Stack frames and traces
 include("stacktraces.jl")
 using .StackTraces
@@ -568,61 +569,6 @@ end_base_include = time_ns()
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
-# Precompiles for Revise and other packages
-# TODO: move these to contrib/generate_precompile.jl
-# The problem is they don't work there
-for match = _methods(+, (Int, Int), -1, get_world_counter())
-    m = match.method
-    delete!(push!(Set{Method}(), m), m)
-    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
-
-    empty!(Set())
-    push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
-    (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
-    (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
-    (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
-    (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
-    (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
-    Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
-    Dict(Base => [:(1+1)])[Base]
-    Dict(:one => [1])[:one]
-    Dict("abc" => Set())["abc"]
-    pushfirst!([], sum)
-    get(Base.pkgorigins, Base.PkgId(Base), nothing)
-    sort!([1,2,3])
-    unique!([1,2,3])
-    cumsum([1,2,3])
-    append!(Int[], BitSet())
-    isempty(BitSet())
-    delete!(BitSet([1,2]), 3)
-    deleteat!(Int32[1,2,3], [1,3])
-    deleteat!(Any[1,2,3], [1,3])
-    Core.svec(1, 2) == Core.svec(3, 4)
-    any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
-
-    # Code loading uses this
-    sortperm(mtime.(readdir(".")), rev=true)
-    # JLLWrappers uses these
-    Dict{UUID,Set{String}}()[UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
-    get!(Set{String}, Dict{UUID,Set{String}}(), UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
-    eachindex(IndexLinear(), Expr[])
-    push!(Expr[], Expr(:return, false))
-    vcat(String[], String[])
-    k, v = (:hello => nothing)
-    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
-    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
-    # Preferences uses these
-    precompile(get_preferences, (UUID,))
-    precompile(record_compiletime_preference, (UUID, String))
-    get(Dict{String,Any}(), "missing", nothing)
-    delete!(Dict{String,Any}(), "missing")
-    for (k, v) in Dict{String,Any}()
-        println(k)
-    end
-
-    break   # only actually need to do this once
-end
-
 if is_primary_base_module
 
 # Profiling helper
@@ -689,6 +635,8 @@ function __init__()
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
     end
+
+    CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end
 
