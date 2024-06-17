@@ -38,7 +38,7 @@ export
     CholeskyPivoted,
     ColumnNorm,
     Diagonal,
-    DiagonalPivoting,
+    DiagonalMaximum,
     Eigen,
     Factorization,
     GeneralizedEigen,
@@ -244,7 +244,7 @@ Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref
 struct ColumnNorm <: PivotingStrategy end
 
 """
-    DiagonalPivoting
+    DiagonalMaximum
 
 The maximal element along the remaining diagonal elements is chosen as the pivot element.
 This pivoting strategy is used in the pivoted Cholesky decomposition, and yields a
@@ -252,7 +252,7 @@ complete pivoting.
 
 Note that the [element type](@ref eltype) of the matrix must admit a [`<`](@ref) method.
 """
-struct DiagonalPivoting <: PivotingStrategy end
+struct DiagonalMaximum <: PivotingStrategy end
 
 using Base: DimOrInd
 

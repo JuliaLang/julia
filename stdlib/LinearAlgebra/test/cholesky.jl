@@ -155,7 +155,7 @@ end
 
         #pivoted upper Cholesky
         for tol in (0.0, -1.0), APD in (apdh, apdhL)
-            cpapd = cholesky(APD, DiagonalPivoting(), tol=tol)
+            cpapd = cholesky(APD, DiagonalMaximum(), tol=tol)
             unary_ops_tests(APD, cpapd, ε*κ*n)
             @test rank(cpapd) == n
             @test all(diff(real(diag(cpapd.factors))).<=0.) # diagonal should be non-increasing
@@ -190,11 +190,11 @@ end
                 @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
                 @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
-                cpapd = cholesky(apdh, DiagonalPivoting())
+                cpapd = cholesky(apdh, DiagonalMaximum())
                 @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                 @test norm(apd * (cpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
-                lpapd = cholesky(apdhL, DiagonalPivoting())
+                lpapd = cholesky(apdhL, DiagonalMaximum())
                 @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                 @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
             end
@@ -221,7 +221,7 @@ end
                 ldiv!(capd, BB)
                 @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(apd * BB - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(apdh, DiagonalPivoting())
+                cpapd = cholesky(apdh, DiagonalMaximum())
                 BB = copy(B)
                 ldiv!(cpapd, BB)
                 @test norm(apd \ B - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
@@ -256,12 +256,12 @@ end
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Real ? apds : apdh, DiagonalPivoting())
+                cpapd = cholesky(eltya <: Real ? apds : apdh, DiagonalMaximum())
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Real ? apdsL : apdhL, DiagonalPivoting())
+                cpapd = cholesky(eltya <: Real ? apdsL : apdhL, DiagonalMaximum())
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
@@ -297,27 +297,27 @@ end
         @test !issuccess(cholesky!(copy(M); check = false))
     end
     for M in (A, Hermitian(A)) # hermitian, but not semi-positive definite
-        @test_throws RankDeficientException cholesky(M, DiagonalPivoting())
-        @test_throws RankDeficientException cholesky!(copy(M), DiagonalPivoting())
-        @test_throws RankDeficientException cholesky(M, DiagonalPivoting(); check = true)
-        @test_throws RankDeficientException cholesky!(copy(M), DiagonalPivoting(); check = true)
-        @test !issuccess(cholesky(M, DiagonalPivoting(); check = false))
-        @test !issuccess(cholesky!(copy(M), DiagonalPivoting(); check = false))
-        C = cholesky(M, DiagonalPivoting(); check = false)
+        @test_throws RankDeficientException cholesky(M, DiagonalMaximum())
+        @test_throws RankDeficientException cholesky!(copy(M), DiagonalMaximum())
+        @test_throws RankDeficientException cholesky(M, DiagonalMaximum(); check = true)
+        @test_throws RankDeficientException cholesky!(copy(M), DiagonalMaximum(); check = true)
+        @test !issuccess(cholesky(M, DiagonalMaximum(); check = false))
+        @test !issuccess(cholesky!(copy(M), DiagonalMaximum(); check = false))
+        C = cholesky(M, DiagonalMaximum(); check = false)
         @test_throws RankDeficientException chkfullrank(C)
-        C = cholesky!(copy(M), DiagonalPivoting(); check = false)
+        C = cholesky!(copy(M), DiagonalMaximum(); check = false)
         @test_throws RankDeficientException chkfullrank(C)
     end
     for M in (B,) # not hermitian
-        @test_throws PosDefException(-1) cholesky(M, DiagonalPivoting())
-        @test_throws PosDefException(-1) cholesky!(copy(M), DiagonalPivoting())
-        @test_throws PosDefException(-1) cholesky(M, DiagonalPivoting(); check = true)
-        @test_throws PosDefException(-1) cholesky!(copy(M), DiagonalPivoting(); check = true)
-        @test !issuccess(cholesky(M, DiagonalPivoting(); check = false))
-        @test !issuccess(cholesky!(copy(M), DiagonalPivoting(); check = false))
-        C = cholesky(M, DiagonalPivoting(); check = false)
+        @test_throws PosDefException(-1) cholesky(M, DiagonalMaximum())
+        @test_throws PosDefException(-1) cholesky!(copy(M), DiagonalMaximum())
+        @test_throws PosDefException(-1) cholesky(M, DiagonalMaximum(); check = true)
+        @test_throws PosDefException(-1) cholesky!(copy(M), DiagonalMaximum(); check = true)
+        @test !issuccess(cholesky(M, DiagonalMaximum(); check = false))
+        @test !issuccess(cholesky!(copy(M), DiagonalMaximum(); check = false))
+        C = cholesky(M, DiagonalMaximum(); check = false)
         @test_throws RankDeficientException chkfullrank(C)
-        C = cholesky!(copy(M), DiagonalPivoting(); check = false)
+        C = cholesky!(copy(M), DiagonalMaximum(); check = false)
         @test_throws RankDeficientException chkfullrank(C)
     end
     @test !isposdef(A)
@@ -390,7 +390,7 @@ end
         0.25336108035924787 + 0.975317836492159im 0.0628393808469436 - 0.1253397353973715im
         0.11192755545114 - 0.1603741874112385im 0.8439562576196216 + 1.0850814110398734im
         -1.0568488936791578 - 0.06025820467086475im 0.12696236014017806 - 0.09853584666755086im]
-    cholesky(Hermitian(apd, :L), DiagonalPivoting()) \ b
+    cholesky(Hermitian(apd, :L), DiagonalMaximum()) \ b
     r = cholesky(apd).U
     E = abs.(apd - r'*r)
     ε = eps(abs(float(one(ComplexF32))))
@@ -410,8 +410,8 @@ end
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
-    CD = cholesky(D, DiagonalPivoting())
-    CM = cholesky(Matrix(D), DiagonalPivoting())
+    CD = cholesky(D, DiagonalMaximum())
+    CM = cholesky(Matrix(D), DiagonalMaximum())
     @test CD isa CholeskyPivoted{Float64}
     @test CD.U ≈ Diagonal(.√sort(d, rev=true)) ≈ CM.U
     @test D ≈ Matrix(CD)
@@ -420,16 +420,16 @@ end
     F = cholesky(Hermitian(I(3)))
     @test F isa Cholesky{Float64,<:Diagonal}
     @test Matrix(F) ≈ I(3)
-    F = cholesky(I(3), DiagonalPivoting())
+    F = cholesky(I(3), DiagonalMaximum())
     @test F isa CholeskyPivoted{Float64,<:Diagonal}
     @test Matrix(F) ≈ I(3)
 
     # real, failing
     @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
-    @test_throws RankDeficientException cholesky(Diagonal([1.0, -2.0]), DiagonalPivoting())
+    @test_throws RankDeficientException cholesky(Diagonal([1.0, -2.0]), DiagonalMaximum())
     Dnpd = cholesky(Diagonal([1.0, -2.0]); check = false)
     @test Dnpd.info == 2
-    Dnpd = cholesky(Diagonal([1.0, -2.0]), DiagonalPivoting(); check = false)
+    Dnpd = cholesky(Diagonal([1.0, -2.0]), DiagonalMaximum(); check = false)
     @test Dnpd.info == 1
     @test Dnpd.rank == 1
 
@@ -441,8 +441,8 @@ end
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
-    CD = cholesky(D, DiagonalPivoting())
-    CM = cholesky(Matrix(D), DiagonalPivoting())
+    CD = cholesky(D, DiagonalMaximum())
+    CM = cholesky(Matrix(D), DiagonalMaximum())
     @test CD isa CholeskyPivoted{ComplexF64,<:Diagonal}
     @test CD.U ≈ Diagonal(.√sort(d, by=real, rev=true)) ≈ CM.U
     @test D ≈ Matrix(CD)
@@ -451,10 +451,10 @@ end
     # complex, failing
     D[2, 2] = 0.0 + 0im
     @test_throws PosDefException cholesky(D)
-    @test_throws RankDeficientException cholesky(D, DiagonalPivoting())
+    @test_throws RankDeficientException cholesky(D, DiagonalMaximum())
     Dnpd = cholesky(D; check = false)
     @test Dnpd.info == 2
-    Dnpd = cholesky(D, DiagonalPivoting(); check = false)
+    Dnpd = cholesky(D, DiagonalMaximum(); check = false)
     @test Dnpd.info == 1
     @test Dnpd.rank == 2
 
@@ -463,11 +463,11 @@ end
 
     # tolerance
     D = Diagonal([0.5, 1])
-    @test_throws RankDeficientException cholesky(D, DiagonalPivoting(), tol=nextfloat(0.5))
-    CD = cholesky(D, DiagonalPivoting(), tol=nextfloat(0.5), check=false)
+    @test_throws RankDeficientException cholesky(D, DiagonalMaximum(), tol=nextfloat(0.5))
+    CD = cholesky(D, DiagonalMaximum(), tol=nextfloat(0.5), check=false)
     @test rank(CD) == 1
     @test !issuccess(CD)
-    @test Matrix(cholesky(D, DiagonalPivoting(), tol=prevfloat(0.5))) ≈ D
+    @test Matrix(cholesky(D, DiagonalMaximum(), tol=prevfloat(0.5))) ≈ D
 end
 
 @testset "Cholesky for AbstractMatrix" begin
@@ -486,7 +486,7 @@ end
     @test Cholesky(factors, uplo, Int32(info)) == chol
     @test Cholesky(factors, uplo, Int64(info)) == chol
 
-    cholp = cholesky(x'x, DiagonalPivoting())
+    cholp = cholesky(x'x, DiagonalMaximum())
 
     factors, uplo, piv, rank, tol, info =
         cholp.factors, cholp.uplo, cholp.piv, cholp.rank, cholp.tol, cholp.info
@@ -502,25 +502,25 @@ end
 @testset "issue #33704, casting low-rank CholeskyPivoted to Matrix" begin
     A = randn(1,8)
     B = A'A
-    C = cholesky(B, DiagonalPivoting(), check=false)
+    C = cholesky(B, DiagonalMaximum(), check=false)
     @test B ≈ Matrix(C)
 end
 
 @testset "CholeskyPivoted and Factorization" begin
     A = randn(8,8)
     B = A'A
-    C = cholesky(B, DiagonalPivoting(), check=false)
+    C = cholesky(B, DiagonalMaximum(), check=false)
     @test CholeskyPivoted{eltype(C)}(C) === C
     @test Factorization{eltype(C)}(C) === C
-    @test Array(CholeskyPivoted{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), DiagonalPivoting(), check=false))
-    @test Array(Factorization{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), DiagonalPivoting(), check=false))
+    @test Array(CholeskyPivoted{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), DiagonalMaximum(), check=false))
+    @test Array(Factorization{complex(eltype(C))}(C)) ≈ Array(cholesky(complex(B), DiagonalMaximum(), check=false))
     @test eltype(Factorization{complex(eltype(C))}(C)) == complex(eltype(C))
 end
 
 @testset "REPL printing of CholeskyPivoted" begin
     A = randn(8,8)
     B = A'A
-    C = cholesky(B, DiagonalPivoting(), check=false)
+    C = cholesky(B, DiagonalMaximum(), check=false)
     cholstring = sprint((t, s) -> show(t, "text/plain", s), C)
     rankstring = "$(C.uplo) factor with rank $(rank(C)):"
     factorstring = sprint((t, s) -> show(t, "text/plain", s), C.uplo == 'U' ? C.U : C.L)
@@ -529,7 +529,7 @@ end
 end
 
 @testset "destructuring for Cholesky[Pivoted]" begin
-    for val in (NoPivot(), DiagonalPivoting())
+    for val in (NoPivot(), DiagonalMaximum())
         A = rand(8, 8)
         B = A'A
         C = cholesky(B, val, check=false)
@@ -584,8 +584,8 @@ end
     @test B.L ≈ B32.L
     @test B.UL ≈ B32.UL
     @test Matrix(B) ≈ A
-    B = cholesky(A, DiagonalPivoting())
-    B32 = cholesky(Float32.(A), DiagonalPivoting())
+    B = cholesky(A, DiagonalMaximum())
+    B32 = cholesky(Float32.(A), DiagonalMaximum())
     @test B isa CholeskyPivoted{Float16,Matrix{Float16}}
     @test B.U isa UpperTriangular{Float16, Matrix{Float16}}
     @test B.L isa LowerTriangular{Float16, Matrix{Float16}}
@@ -601,7 +601,7 @@ end
          2048 1920 2940 1008 2240 2740;
          4470 4200 6410 2240 4875 6015;
          5490 5140 7903 2740 6015 7370]
-    B = cholesky(A, DiagonalPivoting(), check=false)
+    B = cholesky(A, DiagonalMaximum(), check=false)
     @test det(B)  ==  0.0
     @test det(B)  ≈  det(A) atol=eps()
     @test logdet(B)  ==  -Inf

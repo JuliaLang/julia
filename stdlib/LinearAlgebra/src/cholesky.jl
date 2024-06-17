@@ -10,7 +10,7 @@
 # In the methods below, LAPACK is called when possible, i.e. StridedMatrices with Float32,
 # Float64, ComplexF32, and ComplexF64 element types. For other element or
 # matrix types, the unblocked Julia implementation in _chol! is used. For cholesky
-# and cholesky! pivoting is supported through a DiagonalPivoting() argument. A type argument is
+# and cholesky! pivoting is supported through a DiagonalMaximum() argument. A type argument is
 # necessary for type stability since the output of cholesky and cholesky! is either
 # Cholesky or CholeskyPivoted. It is required that the input is Hermitian (including real symmetric) either
 # through the Hermitian and Symmetric views or exact symmetric or Hermitian elements which
@@ -104,7 +104,7 @@ Base.iterate(C::Cholesky, ::Val{:done}) = nothing
     CholeskyPivoted
 
 Matrix factorization type of the pivoted Cholesky factorization of a dense symmetric/Hermitian
-positive semi-definite matrix `A`. This is the return type of [`cholesky(_, ::DiagonalPivoting)`](@ref),
+positive semi-definite matrix `A`. This is the return type of [`cholesky(_, ::DiagonalMaximum)`](@ref),
 the corresponding matrix factorization function.
 
 The triangular Cholesky factor can be obtained from the factorization `F::CholeskyPivoted`
@@ -124,7 +124,7 @@ julia> X = [1.0, 2.0, 3.0, 4.0];
 
 julia> A = X * X';
 
-julia> C = cholesky(A, DiagonalPivoting(), check = false)
+julia> C = cholesky(A, DiagonalMaximum(), check = false)
 CholeskyPivoted{Float64, Matrix{Float64}, Vector{Int64}}
 U factor with rank 1:
 4×4 UpperTriangular{Float64, Matrix{Float64}}:
@@ -453,23 +453,23 @@ end
 
 ## With pivoting
 ### Non BLAS/LAPACK element types (generic).
-function cholesky!(A::SelfAdjoint, ::DiagonalPivoting; tol = 0.0, check::Bool = true)
+function cholesky!(A::SelfAdjoint, ::DiagonalMaximum; tol = 0.0, check::Bool = true)
     AA, piv, rank, info = _cholpivoted!(A.data, A.uplo == 'U' ? UpperTriangular : LowerTriangular, tol, check)
     C = CholeskyPivoted(AA, A.uplo, piv, rank, tol, info)
     check && chkfullrank(C)
     return C
 end
-@deprecate cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; kwargs...) cholesky!(A, DiagonalPivoting(); kwargs...) false
+@deprecate cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; kwargs...) cholesky!(A, DiagonalMaximum(); kwargs...) false
 
 """
-    cholesky!(A::AbstractMatrix, DiagonalPivoting(); tol = 0.0, check = true) -> CholeskyPivoted
+    cholesky!(A::AbstractMatrix, DiagonalMaximum(); tol = 0.0, check = true) -> CholeskyPivoted
 
 The same as [`cholesky`](@ref), but saves space by overwriting the input `A`,
 instead of creating a copy. An [`InexactError`](@ref) exception is thrown if the
 factorization produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
-function cholesky!(A::AbstractMatrix, ::DiagonalPivoting; tol = 0.0, check::Bool = true)
+function cholesky!(A::AbstractMatrix, ::DiagonalMaximum; tol = 0.0, check::Bool = true)
     checksquare(A)
     if !ishermitian(A)
         C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
@@ -477,11 +477,11 @@ function cholesky!(A::AbstractMatrix, ::DiagonalPivoting; tol = 0.0, check::Bool
         check && checkpositivedefinite(convert(BlasInt, -1))
         return C
     else
-        return cholesky!(Hermitian(A), DiagonalPivoting(); tol, check)
+        return cholesky!(Hermitian(A), DiagonalMaximum(); tol, check)
     end
 end
-@deprecate cholesky!(A::StridedMatrix, ::Val{true}; kwargs...) cholesky!(A, DiagonalPivoting(); kwargs...) false
-@deprecate cholesky!(A::AbstractMatrix, ::RowMaximum; kwargs...) cholesky!(A, DiagonalPivoting(); kwargs...)
+@deprecate cholesky!(A::StridedMatrix, ::Val{true}; kwargs...) cholesky!(A, DiagonalMaximum(); kwargs...) false
+@deprecate cholesky!(A::AbstractMatrix, ::RowMaximum; kwargs...) cholesky!(A, DiagonalMaximum(); kwargs...)
 
 # cholesky. Non-destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
@@ -552,7 +552,7 @@ _cholesky(A::AbstractMatrix, args...; kwargs...) = cholesky!(A, args...; kwargs.
 
 ## With pivoting
 """
-    cholesky(A, DiagonalPivoting(); tol = 0.0, check = true) -> CholeskyPivoted
+    cholesky(A, DiagonalMaximum(); tol = 0.0, check = true) -> CholeskyPivoted
 
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
 and return a [`CholeskyPivoted`](@ref) factorization. The matrix `A` can either be a [`Symmetric`](@ref)
@@ -582,7 +582,7 @@ julia> X = [1.0, 2.0, 3.0, 4.0];
 
 julia> A = X * X';
 
-julia> C = cholesky(A, DiagonalPivoting(), check = false)
+julia> C = cholesky(A, DiagonalMaximum(), check = false)
 CholeskyPivoted{Float64, Matrix{Float64}, Vector{Int64}}
 U factor with rank 1:
 4×4 UpperTriangular{Float64, Matrix{Float64}}:
@@ -606,13 +606,13 @@ julia> l == C.L && u == C.U
 true
 ```
 """
-cholesky(A::AbstractMatrix, ::DiagonalPivoting; tol = 0.0, check::Bool = true) =
-    _cholesky(cholcopy(A), DiagonalPivoting(); tol, check)
-@deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, DiagonalPivoting(); tol, check) false
-@deprecate cholesky(A::AbstractMatrix, ::RowMaximum; kwargs...) cholesky(A, DiagonalPivoting(); kwargs...)
+cholesky(A::AbstractMatrix, ::DiagonalMaximum; tol = 0.0, check::Bool = true) =
+    _cholesky(cholcopy(A), DiagonalMaximum(); tol, check)
+@deprecate cholesky(A::Union{StridedMatrix,RealHermSymComplexHerm{<:Real,<:StridedMatrix}}, ::Val{true}; tol = 0.0, check::Bool = true) cholesky(A, DiagonalMaximum(); tol, check) false
+@deprecate cholesky(A::AbstractMatrix, ::RowMaximum; kwargs...) cholesky(A, DiagonalMaximum(); kwargs...)
 
-function cholesky(A::AbstractMatrix{Float16}, ::DiagonalPivoting; tol = 0.0, check::Bool = true)
-    X = _cholesky(cholcopy(A), DiagonalPivoting(); tol, check)
+function cholesky(A::AbstractMatrix{Float16}, ::DiagonalMaximum; tol = 0.0, check::Bool = true)
+    X = _cholesky(cholcopy(A), DiagonalMaximum(); tol, check)
     return CholeskyPivoted{Float16}(X)
 end
 
