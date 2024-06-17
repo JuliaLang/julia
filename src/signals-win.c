@@ -97,7 +97,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
         if (sig == SIGILL)
-            jl_show_sigill(&Context);
+            jl_fprint_sigill(ios_safe_stderr, &Context);
         jl_critical_error(sig, 0, &Context, jl_get_current_task());
         raise(sig);
     }
@@ -285,7 +285,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     }
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
         jl_safe_printf("\n");
-        jl_show_sigill(ExceptionInfo->ContextRecord);
+        jl_fprint_sigill(ios_safe_stderr, ExceptionInfo->ContextRecord);
     }
     jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
     switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {

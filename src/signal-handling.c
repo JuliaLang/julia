@@ -381,7 +381,7 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 }
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
-void jl_show_sigill(void *_ctx);
+void jl_fprint_sigill(ios_t *s, void *_ctx);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
     || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
     || (defined(_OS_LINUX_) && defined(_CPU_ARM_)) \
@@ -484,7 +484,7 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
 #endif
 }
 
-void jl_show_sigill(void *_ctx)
+void jl_fprint_sigill(ios_t *s, void *_ctx)
 {
     char *pc = (char*)jl_get_pc_from_ctx(_ctx);
     // unsupported platform
@@ -495,31 +495,31 @@ void jl_show_sigill(void *_ctx)
     size_t len = jl_safe_read_mem(pc, (char*)inst, sizeof(inst));
     // ud2
     if (len >= 2 && inst[0] == 0x0f && inst[1] == 0x0b) {
-        jl_safe_printf("Unreachable reached at %p\n", (void*)pc);
+        jl_safe_fprintf(s, "Unreachable reached at %p\n", (void*)pc);
     }
     else {
-        jl_safe_printf("Invalid instruction at %p: ", (void*)pc);
+        jl_safe_fprintf(s, "Invalid instruction at %p: ", (void*)pc);
         for (int i = 0;i < len;i++) {
             if (i == 0) {
-                jl_safe_printf("0x%02" PRIx8, inst[i]);
+                jl_safe_fprintf(s, "0x%02" PRIx8, inst[i]);
             }
             else {
-                jl_safe_printf(", 0x%02" PRIx8, inst[i]);
+                jl_safe_fprintf(s, ", 0x%02" PRIx8, inst[i]);
             }
         }
-        jl_safe_printf("\n");
+        jl_safe_fprintf(s, "\n");
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     uint32_t inst = 0;
     size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
     if (len < 4)
-        jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
+        jl_safe_fprintf(s, "Fault when reading instruction: %d bytes read\n", (int)len);
     if (inst == 0xd4200020) { // brk #0x1
         // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
-        jl_safe_printf("Unreachable reached at %p\n", pc);
+        jl_safe_fprintf(s, "Unreachable reached at %p\n", pc);
     }
     else {
-        jl_safe_printf("Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
+        jl_safe_fprintf(s, "Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
@@ -528,31 +528,31 @@ void jl_show_sigill(void *_ctx)
         uint16_t inst[2] = {0, 0};
         size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
         if (len < 2)
-            jl_safe_printf("Fault when reading Thumb instruction: %d bytes read\n", (int)len);
+            jl_safe_fprintf(s, "Fault when reading Thumb instruction: %d bytes read\n", (int)len);
         // LLVM and GCC uses different code for the trap...
         if (inst[0] == 0xdefe || inst[0] == 0xdeff) {
             // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
-            jl_safe_printf("Unreachable reached in Thumb mode at %p: 0x%04" PRIx16 "\n",
-                           (void*)pc, inst[0]);
+            jl_safe_fprintf(s, "Unreachable reached in Thumb mode at %p: 0x%04" PRIx16 "\n",
+                            (void*)pc, inst[0]);
         }
         else {
-            jl_safe_printf("Invalid Thumb instruction at %p: 0x%04" PRIx16 ", 0x%04" PRIx16 "\n",
-                           (void*)pc, inst[0], inst[1]);
+            jl_safe_fprintf(s, "Invalid Thumb instruction at %p: 0x%04" PRIx16 ", 0x%04" PRIx16 "\n",
+                            (void*)pc, inst[0], inst[1]);
         }
     }
     else {
         uint32_t inst = 0;
         size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
         if (len < 4)
-            jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
+            jl_safe_fprintf(s, "Fault when reading instruction: %d bytes read\n", (int)len);
         // LLVM and GCC uses different code for the trap...
         if (inst == 0xe7ffdefe || inst == 0xe7f000f0) {
             // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
-            jl_safe_printf("Unreachable reached in ARM mode at %p: 0x%08" PRIx32 "\n",
-                           (void*)pc, inst);
+            jl_safe_fprintf(s, "Unreachable reached in ARM mode at %p: 0x%08" PRIx32 "\n",
+                            (void*)pc, inst);
         }
         else {
-            jl_safe_printf("Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
+            jl_safe_fprintf(s, "Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
         }
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)

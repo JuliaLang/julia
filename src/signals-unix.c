@@ -236,7 +236,7 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
     signal(sig, SIG_DFL);
     uv_tty_reset_mode();
     if (sig == SIGILL)
-        jl_show_sigill(context);
+        jl_fprint_sigill(ios_safe_stderr, context);
     jl_task_t *ct = jl_get_current_task();
     jl_critical_error(sig, info->si_code, jl_to_bt_context(context), ct);
     if (ct)
