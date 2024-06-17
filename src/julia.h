@@ -2424,19 +2424,24 @@ typedef struct {
 } jl_uv_file_t;
 
 #ifdef __GNUC__
-#define _JL_FORMAT_ATTR(type, str, arg) \
-    __attribute__((format(type, str, arg)))
+#  ifdef __MINGW32__
+#define _JL_FORMAT_ATTR(str, arg) \
+    __attribute__((format(__MINGW_PRINTF_FORMAT, str, arg)))
+#  else
+#define _JL_FORMAT_ATTR(str, arg) \
+    __attribute__((format(printf, str, arg)))
+#  endif
 #else
-#define _JL_FORMAT_ATTR(type, str, arg)
+#define _JL_FORMAT_ATTR(str, arg)
 #endif
 
 JL_DLLEXPORT void jl_uv_puts(struct uv_stream_s *stream, const char *str, size_t n);
 JL_DLLEXPORT int jl_printf(struct uv_stream_s *s, const char *format, ...)
-    _JL_FORMAT_ATTR(printf, 2, 3);
+    _JL_FORMAT_ATTR(2, 3);
 JL_DLLEXPORT int jl_vprintf(struct uv_stream_s *s, const char *format, va_list args)
-    _JL_FORMAT_ATTR(printf, 2, 0);
+    _JL_FORMAT_ATTR(2, 0);
 JL_DLLEXPORT void jl_safe_printf(const char *str, ...) JL_NOTSAFEPOINT
-    _JL_FORMAT_ATTR(printf, 1, 2);
+    _JL_FORMAT_ATTR(1, 2);
 
 extern JL_DLLEXPORT JL_STREAM *JL_STDIN;
 extern JL_DLLEXPORT JL_STREAM *JL_STDOUT;
