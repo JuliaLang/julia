@@ -925,7 +925,7 @@ end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
 
-function cholesky!(A::Diagonal, ::RowMaximum; tol=0.0, check=true)
+function cholesky!(A::Diagonal, ::DiagonalPivoting; tol=0.0, check=true)
     if !ishermitian(A)
         C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
                             tol, convert(BlasInt, -1))
@@ -954,6 +954,8 @@ function cholesky!(A::Diagonal, ::RowMaximum; tol=0.0, check=true)
     end
     return C
 end
+
+@deprecate cholesky!(A::Diagonal, ::RowMaximum; kwargs...) cholesky!(A, DiagonalPivoting(); kwargs...)
 
 inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
 

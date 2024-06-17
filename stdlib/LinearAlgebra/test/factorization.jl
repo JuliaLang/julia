@@ -6,7 +6,7 @@ using Test, LinearAlgebra
 @testset "equality for factorizations - $f" for f in Any[
     bunchkaufman,
     cholesky,
-    x -> cholesky(x, RowMaximum()),
+    x -> cholesky(x, DiagonalPivoting()),
     eigen,
     hessenberg,
     lq,
@@ -45,7 +45,7 @@ end
 @testset "size for factorizations - $f" for f in Any[
     bunchkaufman,
     cholesky,
-    x -> cholesky(x, RowMaximum()),
+    x -> cholesky(x, DiagonalPivoting()),
     hessenberg,
     lq,
     lu,
@@ -63,7 +63,7 @@ end
 @testset "size for transpose factorizations - $f" for f in Any[
     bunchkaufman,
     cholesky,
-    x -> cholesky(x, RowMaximum()),
+    x -> cholesky(x, DiagonalPivoting()),
     hessenberg,
     lq,
     lu,

@@ -431,6 +431,7 @@ LinearAlgebra.NoPivot
 LinearAlgebra.RowNonZero
 LinearAlgebra.RowMaximum
 LinearAlgebra.ColumnNorm
+LinearAlgebra.DiagonalPivoting
 ```
 
 ## Standard functions
