@@ -739,15 +739,15 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     jl_static_show((JL_STREAM*)&s, e);
     jl_safe_fprintf(&s, "\n");
     jl_fprint_backtrace(&s);
-    ios_putc('\0', &s);
 
     // Then to STDERR
-    fputs(s.buf, stderr);
+    ios_write_direct(ios_stderr, &s);
 
     // Finally write to system log (if supported)
 #ifdef _OS_WINDOWS_
     HANDLE event_source = RegisterEventSourceW(NULL, L"julia");
     if (event_source != INVALID_HANDLE_VALUE) {
+        ios_putc('\0', &s);
         const wchar_t *strings[] = { ios_utf8_to_wchar(s.buf) };
         ReportEventW(
             event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
