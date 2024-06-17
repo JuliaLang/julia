@@ -238,7 +238,7 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
     if (sig == SIGILL)
         jl_fprint_sigill(ios_safe_stderr, context);
     jl_task_t *ct = jl_get_current_task();
-    jl_critical_error(sig, info->si_code, jl_to_bt_context(context), ct);
+    jl_fprint_critical_error(ios_safe_stderr, sig, info->si_code, jl_to_bt_context(context), ct);
     if (ct)
         jl_atomic_store_relaxed(&ct->ptls->safepoint, (size_t*)NULL + 1);
     if (info->si_code == 0 ||
@@ -560,7 +560,7 @@ static void JL_NORETURN jl_exit_thread0_cb(void)
 {
 CFI_NORETURN
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
-    jl_critical_error(thread0_exit_signo, 0, NULL, jl_current_task);
+    jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(thread0_exit_signo);
 }

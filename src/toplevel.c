@@ -26,9 +26,9 @@ extern "C" {
 #endif
 
 // current line number in a file
-JL_DLLEXPORT _Atomic(int) jl_lineno = 0; // need to update jl_critical_error if this is TLS
+JL_DLLEXPORT _Atomic(int) jl_lineno = 0; // need to update jl_fprint_critical_error if this is TLS
 // current file name
-JL_DLLEXPORT _Atomic(const char *) jl_filename = "none"; // need to update jl_critical_error if this is TLS
+JL_DLLEXPORT _Atomic(const char *) jl_filename = "none"; // need to update jl_fprint_critical_error if this is TLS
 
 htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
@@ -617,7 +617,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 assert(jl_is_symbol(file));
                 *toplevel_filename = jl_symbol_name((jl_sym_t*)file);
             }
-            // Not thread safe. For debugging and last resort error messages (jl_critical_error) only.
+            // Not thread safe. For debugging and last resort error messages (jl_fprint_critical_error) only.
             jl_atomic_store_relaxed(&jl_filename, *toplevel_filename);
             jl_atomic_store_relaxed(&jl_lineno, *toplevel_lineno);
             return jl_nothing;

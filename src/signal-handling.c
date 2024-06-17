@@ -606,7 +606,7 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
 }
 
 // what to do on a critical error on a thread
-void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct)
+void jl_fprint_critical_error(ios_t *s, int sig, int si_code, bt_context_t *context, jl_task_t *ct)
 {
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
@@ -636,21 +636,21 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
         if (si_code)
-            jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
         else
-            jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
+            jl_safe_fprintf(s, "\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
     }
-    jl_safe_printf("in expression starting at %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
+    jl_safe_fprintf(s, "in expression starting at %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
     if (context && ct) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
         // is properly rooted.
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context, NULL);
     }
     for (i = 0; i < n; i += jl_bt_entry_size(bt_data + i)) {
-        jl_fprint_bt_entry_codeloc(ios_safe_stderr, bt_data + i);
+        jl_fprint_bt_entry_codeloc(s, bt_data + i);
     }
-    jl_gc_debug_fprint_status(ios_safe_stderr);
-    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
+    jl_gc_debug_fprint_status(s);
+    jl_gc_debug_fprint_critical_error(s);
 }
 
 #ifdef __cplusplus

@@ -98,7 +98,7 @@ void __cdecl crt_sig_handler(int sig, int num)
         RtlCaptureContext(&Context);
         if (sig == SIGILL)
             jl_fprint_sigill(ios_safe_stderr, &Context);
-        jl_critical_error(sig, 0, &Context, jl_get_current_task());
+        jl_fprint_critical_error(ios_safe_stderr, sig, 0, &Context, jl_get_current_task());
         raise(sig);
     }
 }
@@ -335,7 +335,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     jl_safe_printf(" at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
     jl_fprint_native_codeloc(ios_safe_stderr, (uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
-    jl_critical_error(0, 0, ExceptionInfo->ContextRecord, ct);
+    jl_fprint_critical_error(ios_safe_stderr, 0, 0, ExceptionInfo->ContextRecord, ct);
     static int recursion = 0;
     if (recursion++)
         exit(1);
