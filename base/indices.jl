@@ -368,20 +368,31 @@ to_indices(A, inds, I::Tuple{Any, Vararg}) =
     (@inline; (to_index(A, I[1]), to_indices(A, safe_tail(inds), tail(I))...))
 
 """
-    Slice(indices)
+    Slice{T}(range) where T <: AbstractUnitRange
+    Slice(range::AbstractUnitRange)
 
-Represent an AbstractUnitRange of indices as a vector of the indices themselves,
-with special handling to signal they represent a complete slice of a dimension (:).
+Represent an AbstractUnitRange with special handling to signal that it covers
+a complete slice of a dimension (:).
+
+The first constructor does not change `range` (apart from converting it to the
+type `T` if necessary).
+
+The second version ensures that the resulting range is an identity mapping.
+If `range` is not known to maps indices to themselves, then it is replaced by
+`IdentityUnitRange(range)`. Hence indexing into such a Slice object with an integer
+always returns that integer.
 
 Upon calling `to_indices`, Colons are converted to Slice objects to represent
-the indices over which the Colon spans. Slice objects are themselves unit
-ranges with the same indices as those they wrap. This means that indexing into
-Slice objects with an integer always returns that exact integer, and they
-iterate over all the wrapped indices, even supporting offset indices.
+the indices over which the Colon spans.
 """
 struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
+    Slice{T}(r::AbstractUnitRange) where T = new{T}(r)
 end
+
+Slice(r::T) where T <: AbstractUnitRange = Slice{IdentityUnitRange{T}}(IdentityUnitRange(r))
+Slice(r::OneTo{T}) where T = Slice{OneTo{T}}(r)
+
 Slice(S::Slice) = S
 Slice{T}(S::Slice) where {T<:AbstractUnitRange} = Slice{T}(T(S.indices))
 
