@@ -119,13 +119,6 @@ function Platform(arch::String, os::String;
     tags = Dict{String,Any}(String(tag)::String=>tagvalue(value) for (tag, value) in kwargs)
     return Platform(arch, os, tags; validate_strict, compare_strategies)
 end
-function Platform(p::AbstractPlatform; kwargs...)
-    _tags = copy(tags(p))
-    delete!(_tags, "arch")
-    delete!(_tags, "os")
-    return Platform(String(arch(p)), String(os(p)), _tags; kwargs...)
-end
-Base.convert(::Type{Platform}, p::AbstractPlatform) = Platform(p)
 
 tagvalue(v::Union{String,VersionNumber,Nothing}) = v
 tagvalue(v::Symbol) = String(v)
@@ -441,7 +434,7 @@ const platform_names = Dict(
 Get the "platform name" of the given platform, returning e.g. "Linux" or "Windows".
 """
 function platform_name(p::AbstractPlatform)
-    return get(platform_names, os(p), os(p))
+    return platform_names[os(p)]
 end
 
 function VNorNothing(d::Dict, key)
