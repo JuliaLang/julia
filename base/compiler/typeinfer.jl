@@ -502,6 +502,9 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     elseif is_effect_overridden(override, :noub_if_noinbounds) && ipo_effects.noub !== ALWAYS_TRUE
         ipo_effects = Effects(ipo_effects; noub=NOUB_IF_NOINBOUNDS)
     end
+    if is_effect_overridden(override, :consistent_overlay)
+        ipo_effects = Effects(ipo_effects; nonoverlayed=CONSISTENT_OVERLAY)
+    end
     return ipo_effects
 end
 

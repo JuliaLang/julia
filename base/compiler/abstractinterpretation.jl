@@ -501,7 +501,7 @@ function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype)
         # ignore the `:nonoverlayed` property if `interp` doesn't use overlayed method table
         # since it will never be tainted anyway
         if !isoverlayed(method_table(interp))
-            all_effects = Effects(all_effects; nonoverlayed=false)
+            all_effects = Effects(all_effects; nonoverlayed=ALWAYS_FALSE)
         end
         all_effects === Effects() && return nothing
     end
@@ -903,7 +903,15 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
     mi = result.edge
     if mi !== nothing && is_foldable(effects)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
-            if is_nonoverlayed(interp) || is_nonoverlayed(effects)
+            if (is_nonoverlayed(interp) || is_nonoverlayed(effects) ||
+                # Even if overlay methods are involved, when `:consistent_overlay` is
+                # explicitly applied, we can still perform concrete evaluation using the
+                # original methods for executing them.
+                # While there's a chance that the non-overlayed counterparts may raise
+                # non-egal exceptions, it will not impact the compilation validity, since:
+                # - the results of the concrete evaluation will not be inlined
+                # - the exception types from the concrete evaluation will not be propagated
+                is_consistent_overlay(effects))
                 return :concrete_eval
             end
             # disable concrete-evaluation if this function call is tainted by some overlayed
@@ -2819,7 +2827,7 @@ function override_effects(effects::Effects, override::EffectsOverride)
         notaskstate = override.notaskstate ? true : effects.notaskstate,
         inaccessiblememonly = override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
         noub = override.noub ? ALWAYS_TRUE :
-               override.noub_if_noinbounds && effects.noub !== ALWAYS_TRUE ? NOUB_IF_NOINBOUNDS :
+               (override.noub_if_noinbounds && effects.noub !== ALWAYS_TRUE) ? NOUB_IF_NOINBOUNDS :
                effects.noub)
 end
 
