@@ -261,11 +261,12 @@ typedef union __jl_purity_overrides_t {
         uint16_t ipo_inaccessiblememonly : 1;
         uint16_t ipo_noub                : 1;
         uint16_t ipo_noub_if_noinbounds  : 1;
+        uint16_t ipo_consistent_overlay  : 1;
     } overrides;
     uint16_t bits;
 } _jl_purity_overrides_t;
 
-#define NUM_EFFECTS_OVERRIDES 9
+#define NUM_EFFECTS_OVERRIDES 10
 #define NUM_IR_FLAGS 12
 
 // This type describes a single function body
@@ -439,13 +440,14 @@ typedef struct _jl_code_instance_t {
     //     uint8_t ipo_inaccessiblememonly : 2;
     _Atomic(uint32_t) purity_bits;
     // purity_flags:
-    //     uint8_t consistent          : 2;
+    //     uint8_t consistent          : 3;
     //     uint8_t effect_free         : 2;
-    //     uint8_t nothrow             : 2;
-    //     uint8_t terminates          : 2;
-    //     uint8_t nonoverlayed        : 1;
-    //     uint8_t notaskstate         : 2;
+    //     uint8_t nothrow             : 1;
+    //     uint8_t terminates          : 1;
+    //     uint8_t notaskstate         : 1;
     //     uint8_t inaccessiblememonly : 2;
+    //     uint8_t noub                : 2;
+    //     uint8_t nonoverlayed        : 2;
     jl_value_t *analysis_results; // Analysis results about this code (IPO-safe)
 
     // compilation state cache
