@@ -34,6 +34,8 @@ Compiler/Runtime improvements
   `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
   IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
 
+- A new exception `FieldError` is now introduced to raise/handle `getfield` exceptions. Previously `getfield` exception was captured by fallback generic exception `ErrorException`. Now that `FieldError` is more specific `getfield` related exceptions that can occur should use `FieldError` exception instead. ([#54504])
+
 Command-line option changes
 ---------------------------
 
