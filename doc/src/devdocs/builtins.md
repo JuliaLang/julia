@@ -7,7 +7,7 @@ definitions for what defines the abilities and behaviors of a Julia program. The
 typically accessed through a higher level generic API.
 
 ```@docs
-Core.memoryrefnew
+Core.memoryref
 Core.memoryrefoffset
 Core.memoryrefget
 Core.memoryrefset!
