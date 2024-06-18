@@ -330,7 +330,7 @@ end
 include("opaque_closure.jl")
 
 """
-    Base.Experimental.@overlay mt [function def]
+    Base.Experimental.@overlay mt def
 
 Define a method and add it to the method table `mt` instead of to the global method table.
 This can be used to implement a method override mechanism. Regular compilation will not
@@ -366,7 +366,7 @@ macro overlay(mt, def)
 end
 
 """
-    Base.Experimental.@consistent_overlay mt [function def]
+    Base.Experimental.@consistent_overlay mt def
 
 This macro operates almost identically to [`Base.Experimental.@overlay`](@ref), defining a
 new overlay method. The key difference with this macro is that it informs the compiler that
@@ -375,18 +375,20 @@ non-overlayed method call.
 
 More formally, when evaluating a generic function call ``f(x)`` at a specific world age
 ``i``, if a regular method call ``fᵢ(x)`` is redirected to an overlay method call ``fᵢ′(x)``
-defined by this macro, it must be ensured that ``fᵢ(x) ≡ fᵢ′(x)``.
+defined by this macro, ``fᵢ(x)`` and ``fᵢ′(x)`` are considered `:consistent` if the following
+conditions are met:
+- If ``fᵢ(x)`` returns a value ``y``, then ``fᵢ′(x)`` also returns some value ``yᵢ``, and ``y ≡ yᵢ`` holds.
+- If ``fᵢ(x)`` throws an exception, then ``fᵢ′(x)`` also throws some exception.
 
 For a detailed definition of `:consistent`-cy, consult the corresponding section in
 [`Base.@assume_effects`](@ref).
 
 !!! note
     Note that the requirements for `:consistent`-cy include not only that the return values
-    are egal, but also that the manner of termination is the same.
-    However, it's important to aware that when they throw exceptions, the exceptions
-    themselves don't necessarily have to be egal as explained in the note of `:consistent`.
-    In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is required to also throw
-    one, but the exact exceptions may differ.
+    are egal, but also that the manner of termination is the same. However, it's important
+    to aware that when they throw exceptions, the exceptions themselves don't necessarily
+    have to be egal. In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is
+    required to also throw one, but the exact exceptions may differ.
 
 !!! note
     Please note that the `:consistent`-cy requirement applies not to method itself but to
@@ -447,11 +449,11 @@ let new_mt(name::Symbol, mod::Module) = begin
 end
 
 """
-    Experimental.@MethodTable(name)
+    Base.Experimental.@MethodTable name
 
 Create a new MethodTable in the current module, bound to `name`. This method table can be
-used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
-adding them to the global method table.
+used with the [`Base.Experimental.@overlay`](@ref) macro to define methods for a function
+without adding them to the global method table.
 """
 :@MethodTable
 
