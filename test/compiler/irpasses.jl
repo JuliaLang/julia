@@ -1535,6 +1535,28 @@ end
     @test Core.Compiler.perform_symbolic_evaluation!(Any[], stmt, ssa_to_ssa, 3, lazydomtree, ir) == SSAValue(1)
 end
 
+# Test gvn treats phinodes depending on other phinodes in the same block correctly
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # block 1
+        nothing,
+        # block 2
+        PhiNode(Int32[1, 4], Any[false, true]),
+        PhiNode(Int32[4], Any[SSAValue(2)]),
+        GotoIfNot(SSAValue(2), 2),
+        # block 3
+        ReturnNode(SSAValue(3)),
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
+    m.args[1] = copy(src)
+    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
+    @test false === @eval $m
+end
 
 # Issue #51144 - UndefRefError during compaction
 let code = Any[
