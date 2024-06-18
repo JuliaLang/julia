@@ -463,6 +463,8 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
 
+
+// Size does NOT include the type tag!!
 STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
 {
     jl_value_t *v;
