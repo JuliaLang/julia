@@ -470,15 +470,27 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
                     if (jl_expr_nargs(ma) == NUM_EFFECTS_OVERRIDES) {
-                        li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
-                        li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
-                        li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
-                        li->purity.overrides.ipo_terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
-                        li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
-                        li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
-                        li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
-                        li->purity.overrides.ipo_noub = jl_unbox_bool(jl_exprarg(ma, 7));
-                        li->purity.overrides.ipo_noub_if_noinbounds = jl_unbox_bool(jl_exprarg(ma, 8));
+                        // N.B. this code allows multiple :purity expressions to be present in a single `:meta` node
+                        int8_t consistent = jl_unbox_bool(jl_exprarg(ma, 0));
+                        if (consistent) li->purity.overrides.ipo_consistent = consistent;
+                        int8_t effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
+                        if (effect_free) li->purity.overrides.ipo_effect_free = effect_free;
+                        int8_t nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
+                        if (nothrow) li->purity.overrides.ipo_nothrow = nothrow;
+                        int8_t terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
+                        if (terminates_globally) li->purity.overrides.ipo_terminates_globally = terminates_globally;
+                        int8_t terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
+                        if (terminates_locally) li->purity.overrides.ipo_terminates_locally = terminates_locally;
+                        int8_t notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
+                        if (notaskstate) li->purity.overrides.ipo_notaskstate = notaskstate;
+                        int8_t inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
+                        if (inaccessiblememonly) li->purity.overrides.ipo_inaccessiblememonly = inaccessiblememonly;
+                        int8_t noub = jl_unbox_bool(jl_exprarg(ma, 7));
+                        if (noub) li->purity.overrides.ipo_noub = noub;
+                        int8_t noub_if_noinbounds = jl_unbox_bool(jl_exprarg(ma, 8));
+                        if (noub_if_noinbounds) li->purity.overrides.ipo_noub_if_noinbounds = noub_if_noinbounds;
+                        int8_t consistent_overlay = jl_unbox_bool(jl_exprarg(ma, 9));
+                        if (consistent_overlay) li->purity.overrides.ipo_consistent_overlay = consistent_overlay;
                     }
                 }
                 else
