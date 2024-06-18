@@ -2823,22 +2823,27 @@ keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
 function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
     Base.reseteof(term)
+    l = Base.ReentrantLock()
+    t1 = Threads.@spawn :interactive while true
+        wait(s.async_channel)
+        status = @lock l begin
+            fcn = take!(s.async_channel)
+            fcn(s)
+        end
+        status ∈ (:ok, :ignore) || break
+    end
     raw!(term, true)
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
         old_state = mode(s)
-        l = Base.ReentrantLock()
-        t = @async while true
-            fcn = take!(s.async_channel)
-            status = @lock l fcn(s)
-            status ∈ (:ok, :ignore) || break
-        end
-        Base.errormonitor(t)
-        while true
-            kmap = keymap(s, prompt)
-            fcn = match_input(kmap, s)
+        # spawn this because the main repl task is sticky (due to use of @async and _wait2)
+        # and we want to not block typing when the repl task thread is busy
+        t2 = Threads.@spawn :interactive while true
+            eof(term) || peek(term, Char) # wait before locking but don't consume
             @lock l begin
+                kmap = keymap(s, prompt)
+                fcn = match_input(kmap, s)
                 kdata = keymap_data(s, prompt)
                 s.current_action = :unknown # if the to-be-run action doesn't update this field,
                                             # :unknown will be recorded in the last_action field
@@ -2869,7 +2874,10 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
                 end
             end
         end
+        return fetch(t2)
     finally
+        put!(s.async_channel, Returns(:done))
+        wait(t1)
         raw!(term, false) && disable_bracketed_paste(term)
     end
     # unreachable
