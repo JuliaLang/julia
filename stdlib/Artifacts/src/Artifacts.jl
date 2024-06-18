@@ -299,7 +299,6 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
 end
 
 function pack_platform!(meta::Dict, p::AbstractPlatform)
-    p = convert(Platform, p)::Platform
     for (k, v) in tags(p)
         if v !== nothing
             meta[k] = v
@@ -385,7 +384,6 @@ most appropriate mapping.  If none is found, return `nothing`.
 function artifact_meta(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
                        pkg_uuid::Union{Base.UUID,Nothing}=nothing)
-    platform = convert(Platform, platform)::Platform
     if !isfile(artifacts_toml)
         return nothing
     end
@@ -397,7 +395,6 @@ end
 
 function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform())
-    platform = convert(Platform, platform)::Platform
     if !haskey(artifact_dict, name)
         return nothing
     end
@@ -443,7 +440,6 @@ collapsed artifact.  Returns `nothing` if no mapping can be found.
 function artifact_hash(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
                        pkg_uuid::Union{Base.UUID,Nothing}=nothing)::Union{Nothing, SHA1}
-    platform = convert(Platform, platform)::Platform
     meta = artifact_meta(name, artifacts_toml; platform=platform)
     if meta === nothing
         return nothing
@@ -456,7 +452,6 @@ function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::Stri
                                        platform::AbstractPlatform = HostPlatform(),
                                        pkg_uuid::Union{Nothing,Base.UUID} = nothing,
                                        include_lazy::Bool = false)
-    platform = convert(Platform, platform)::Platform
     artifacts = Dict{String,Any}()
     for name in keys(artifact_dict)
         # Get the metadata about this name for the requested platform
@@ -489,7 +484,6 @@ function select_downloadable_artifacts(artifacts_toml::String;
                                        platform::AbstractPlatform = HostPlatform(),
                                        include_lazy::Bool = false,
                                        pkg_uuid::Union{Nothing,Base.UUID} = nothing)
-    platform = convert(Platform, platform)::Platform
     if !isfile(artifacts_toml)
         return Dict{String,Any}()
     end
