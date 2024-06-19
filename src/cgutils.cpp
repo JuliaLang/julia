@@ -589,6 +589,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
 static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
 {
     if (isa<PointerType>(jl_value)) {
+        assert(false); //Do not merge with this assertion! This is just to make sure we have removed all the pointer bitcasts
         return v;
     }
     else {
