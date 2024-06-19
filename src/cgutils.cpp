@@ -3062,8 +3062,6 @@ static Value *emit_genericmemorylen(jl_codectx_t &ctx, Value *addr, jl_value_t *
 static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_datatype_layout_t *layout, unsigned AS)
 {
     ++EmittedArrayptr;
-    PointerType *PT = cast<PointerType>(mem->getType());
-    assert(PT == ctx.types().T_prjlvalue);
     Value *addr = mem;
     addr = decay_derived(ctx, addr);
     addr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, addr, 1);

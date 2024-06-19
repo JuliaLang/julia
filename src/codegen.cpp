@@ -4988,9 +4988,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             if (type_is_ghost(et))
                 continue;
             assert(idx < nfargs);
-            Type *at = cft->getParamType(idx);
             if (isboxed) {
-                assert(at == ctx.types().T_prjlvalue && et == ctx.types().T_prjlvalue);
                 argvals[idx] = boxed(ctx, arg);
             }
             else if (et->isAggregateType()) {
