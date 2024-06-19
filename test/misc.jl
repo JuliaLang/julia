@@ -1381,6 +1381,20 @@ module KwdefWithEsc_TestModule
 end
 @test isdefined(KwdefWithEsc_TestModule, :Struct)
 
+@kwdef struct TestParametricType{T<:Number}
+    a::Bool = true
+    b::T = 2.0
+end
+
+@testset "@kwdef with parametric type" begin
+    tpt1 = @test_nowarn TestParametricType(; a = 1)
+    tpt2 = @test_nowarn TestParametricType(; a = 1, b = 2)
+    @testset for tpt in (tpt1, tpt2)
+        @test tpt.a # == true
+        @test tpt.b == 2
+    end
+end
+
 @testset "exports of modules" begin
     @testset "$mod" for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything
