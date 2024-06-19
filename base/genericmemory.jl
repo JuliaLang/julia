@@ -38,20 +38,23 @@ Memory
     AtomicMemory{T} == GenericMemory{:atomic, T, Core.CPU}
 
 Fixed-size [`DenseVector{T}`](@ref DenseVector).
-Access to its any of its elements is performed atomically (with `:monotonic` ordering).
-Setting any of the elements must be accomplished using the `@atomic` macro and explicitly specifying ordering.
+Fetching of any of its individual elements is performed atomically
+(with `:monotonic` ordering by default).
 
 !!! warning
-    Each element is independently atomic when accessed, and cannot be set non-atomically.
-    Currently the `@atomic` macro and higher level interface have not been completed,
-    but the building blocks for a future implementation are the internal intrinsics
-    `Core.memoryrefget`, `Core.memoryrefset!`, `Core.memoryref_isassigned`, `Core.memoryrefswap!`,
-    `Core.memoryrefmodify!`, and `Core.memoryrefreplace!`.
+    The access to `AtomicMemory` must be done by either using the [`@atomic`](@ref)
+    macro or the lower level interface functions: `Base.getindex_atomic`,
+    `Base.setindex_atomic!`, `Base.setindexonce_atomic!`,
+    `Base.swapindex!`, `Base.modifyindex!`, and `Base.replaceindex!`.
 
-For details, see [Atomic Operations](@ref man-atomic-operations)
+For details, see [Atomic Operations](@ref man-atomic-operations) as well as macros
+[`@atomic`](@ref), [`@atomiconce`](@ref), [`@atomicswap`](@ref), and [`@atomicreplace`](@ref).
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
+
+!!! compat "Julia 1.12"
+    Lower level interface functions or `@atomic` macro requires Julia 1.12 or later.
 """
 AtomicMemory
 
