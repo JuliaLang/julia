@@ -729,7 +729,8 @@ for f in (:exp, :cis, :log, :sqrt,
           :cosh, :sinh, :tanh, :csch, :sech, :coth,
           :acos, :asin, :atan, :acsc, :asec, :acot,
           :acosh, :asinh, :atanh, :acsch, :asech, :acoth)
-    @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
+    # we use map instead of broadcast to avoid recursive broadcasting calls
+    @eval $f(D::Diagonal) = Diagonal(map($f, D.diag))
 end
 
 # Cube root of a real-valued diagonal matrix
