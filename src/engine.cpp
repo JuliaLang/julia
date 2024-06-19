@@ -63,6 +63,7 @@ jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner
     ct->ptls->engine_nqueued++; // disables finalizers until inference is finished on this method graph
     jl_code_instance_t *ci = jl_new_codeinst_uninit(m, owner); // allocate a placeholder
     JL_GC_PUSH1(&ci);
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
     InferKey key = {m, owner};
     std::unique_lock<std::mutex> lock(engine_lock);
     auto tid = jl_atomic_load_relaxed(&ct->tid);
@@ -72,6 +73,8 @@ jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner
         auto record = Reservations.find(key);
         if (record == Reservations.end()) {
             Reservations[key] = ReservationInfo{tid, ci};
+            lock.unlock();
+            jl_gc_safe_leave(ct->ptls, gc_state); // contains jl_gc_safepoint
             JL_GC_POP();
             return ci;
         }
@@ -81,6 +84,8 @@ jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner
         auto wait_tid = record->second.tid;
         while (1) {
             if (wait_tid == tid) {
+                lock.unlock();
+                jl_gc_safe_leave(ct->ptls, gc_state); // contains jl_gc_safepoint
                 JL_GC_POP();
                 ct->ptls->engine_nqueued--;
                 return ci; // break the cycle
@@ -96,11 +101,9 @@ jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner
             assert(wait_tid != record2->second.tid);
             wait_tid = record2->second.tid;
         }
-        int8_t gc_state = jl_gc_safe_enter(ct->ptls);
         Awaiting[tid] = key;
         engine_wait.wait(lock);
         Awaiting[tid] = InferKey{};
-        jl_gc_safe_leave(ct->ptls, gc_state); // contains jl_gc_safepoint
     }
 }
 
@@ -134,10 +137,6 @@ void jl_engine_sweep(jl_ptls_t *gc_all_tls_states)
     }
     if (any)
         engine_wait.notify_all();
-}
-
-void jl_engine_inhibit_finalizers(void)
-{
 }
 
 void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src)
