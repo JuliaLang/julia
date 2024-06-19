@@ -88,16 +88,15 @@ namespace {
  */
 static void ensure_enter_function(Module &M, Type *T_pjlvalue, const Triple &TT)
 {
-    auto T_int8  = Type::getInt8Ty(M.getContext());
-    auto T_pint8 = PointerType::get(T_int8, 0);
+    auto T_ptr = PointerType::get(M.getContext(), 0);
     auto T_void = Type::getVoidTy(M.getContext());
     auto T_int32 = Type::getInt32Ty(M.getContext());
     if (!M.getNamedValue(XSTR(jl_enter_handler))) {
-        Function::Create(FunctionType::get(T_void, {T_pjlvalue, T_pint8}, false),
+        Function::Create(FunctionType::get(T_void, {T_pjlvalue, T_ptr}, false),
                          Function::ExternalLinkage, XSTR(jl_enter_handler), &M);
     }
     if (!M.getNamedValue(jl_setjmp_name)) {
-        Type *args2[] = {T_pint8, T_int32};
+        Type *args2[] = {T_ptr, T_int32};
         Function::Create(FunctionType::get(T_int32, ArrayRef(args2, TT.isOSWindows() ? 1 : 2), false),
                          Function::ExternalLinkage, jl_setjmp_name, &M)
             ->addFnAttr(Attribute::ReturnsTwice);
@@ -115,10 +114,9 @@ static bool lowerExcHandlers(Function &F) {
     Function *leave_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
     Function *jlenter_func = M.getFunction(XSTR(jl_enter_handler));
     Function *setjmp_func = M.getFunction(jl_setjmp_name);
-
-    auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0);
-    Function *lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
-    Function *lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
+    auto T_ptr = PointerType::get(M.getContext(), 0);
+    Function *lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_ptr });
+    Function *lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_ptr });
 
     /* Step 1: EH Depth Numbering */
     std::map<llvm::CallInst *, int> EnterDepth;
@@ -179,7 +177,7 @@ static bool lowerExcHandlers(Function &F) {
         auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), allocaAddressSpace,
                 handler_sz, Align(16), "", firstInst);
         if (allocaAddressSpace) {
-            AddrSpaceCastInst *buff_casted = new AddrSpaceCastInst(buff, Type::getInt8PtrTy(F.getContext(), AddressSpace::Generic));
+            AddrSpaceCastInst *buff_casted = new AddrSpaceCastInst(buff, PointerType::get(F.getContext(), AddressSpace::Generic));
             buff_casted->insertAfter(buff);
             buffs.push_back(buff_casted);
         } else {
