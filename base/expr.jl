@@ -1097,16 +1097,22 @@ Mark `var` or `ex` as being performed atomically, if `ex` is a supported express
 If no `order` is specified it defaults to :sequentially_consistent.
 
     @atomic a.b.x = new
-    @atomic a.b.x += addend
+    @atomic a.b.x += added
     @atomic :release a.b.x = new
-    @atomic :acquire_release a.b.x += addend
+    @atomic :acquire_release a.b.x += added
+    @atomic m[idx] = new
+    @atomic m[idx] += added
+    @atomic :release m[idx] = new
+    @atomic :acquire_release m[idx] += added
 
 Perform the store operation expressed on the right atomically and return the
 new value.
 
-With `=`, this operation translates to a `setproperty!(a.b, :x, new)` call.
-With any operator also, this operation translates to a `modifyproperty!(a.b,
-:x, +, addend)[2]` call.
+With assignment (`=`), this operation translates to a `setproperty!(a.b, :x, new)`
+or, in case of reference, to a `setindex_atomic!(m, idx, new)` call.
+With any modifying operator this operation translates to a
+`modifyproperty!(a.b, :x, op, added)[2]` or, in case of reference, to a
+`modifyindex!(m, idx, op, added)[2]` call.
 
     @atomic a.b.x max arg2
     @atomic a.b.x + arg2
@@ -1114,12 +1120,19 @@ With any operator also, this operation translates to a `modifyproperty!(a.b,
     @atomic :acquire_release max(a.b.x, arg2)
     @atomic :acquire_release a.b.x + arg2
     @atomic :acquire_release a.b.x max arg2
+    @atomic m[idx] max arg2
+    @atomic m[idx] + arg2
+    @atomic max(m[idx], arg2)
+    @atomic :acquire_release max(m[idx], arg2)
+    @atomic :acquire_release m[idx] + arg2
+    @atomic :acquire_release m[idx] max arg2
 
 Perform the binary operation expressed on the right atomically. Store the
-result into the field in the first argument and return the values `(old, new)`.
+result into the field or the reference in the first argument, and return the values
+`(old, new)`.
 
-This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
-
+This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` or,
+in case of reference to a `modifyindex!(m, idx, func, arg2)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1152,8 +1165,36 @@ julia> @atomic a.x max 5 # again change field x of a to the max value, with sequ
 10 => 10
 ```
 
+```jldoctest
+julia> mem = AtomicMemory{Int}(undef, 2);
+
+julia> @atomic mem[1] = 2 # set mem[1] to value 2 with sequential consistency
+2
+
+julia> @atomic :monotonic mem[1] # fetch the first value of mem, with monotonic consistency
+2
+
+julia> @atomic mem[1] += 1 # increment the first value of mem, with sequential consistency
+3
+
+julia> @atomic mem[1] + 1 # increment the first value of mem, with sequential consistency
+3 => 4
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+4
+
+julia> @atomic max(mem[1], 10) # change the first value of mem to the max value, with sequential consistency
+4 => 10
+
+julia> @atomic mem[1] max 5 # again change the first value of mem to the max value, with sequential consistency
+10 => 5
+```
+
 !!! compat "Julia 1.7"
-    This functionality requires at least Julia 1.7.
+    Atomic fields functionality requires at least Julia 1.7.
+
+!!! compat "Julia 1.12"
+    Atomic reference functionality requires at least Julia 1.12.
 """
 macro atomic(ex)
     if !isa(ex, Symbol) && !is_expr(ex, :(::))
@@ -1227,10 +1268,14 @@ end
 """
     @atomicswap a.b.x = new
     @atomicswap :sequentially_consistent a.b.x = new
+    @atomicswap m[idx] = new
+    @atomicswap :sequentially_consistent m[idx] = new
 
-Stores `new` into `a.b.x` and returns the old value of `a.b.x`.
+Stores `new` into `a.b.x` (`m[idx]` in case of reference) and returns the old
+value of `a.b.x` (the old value stored at `m[idx]`, respectively).
 
-This operation translates to a `swapproperty!(a.b, :x, new)` call.
+This operation translates to a `swapproperty!(a.b, :x, new)` or,
+in case of reference, `swapindex!(mem, idx, new)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1248,8 +1293,23 @@ julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 ```
 
+```jldoctest
+julia> mem = AtomicMemory{Int}(undef, 2);
+
+julia> @atomic mem[1] = 1;
+
+julia> @atomicswap mem[1] = 4 # replace the first value of `mem` with 4, with sequential consistency
+1
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+4
+```
+
 !!! compat "Julia 1.7"
-    This functionality requires at least Julia 1.7.
+    Atomic fields functionality requires at least Julia 1.7.
+
+!!! compat "Julia 1.12"
+    Atomic reference functionality requires at least Julia 1.12.
 """
 macro atomicswap(order, ex)
     order isa QuoteNode || (order = esc(order))
@@ -1277,12 +1337,16 @@ end
     @atomicreplace a.b.x expected => desired
     @atomicreplace :sequentially_consistent a.b.x expected => desired
     @atomicreplace :sequentially_consistent :monotonic a.b.x expected => desired
+    @atomicreplace m[idx] expected => desired
+    @atomicreplace :sequentially_consistent m[idx] expected => desired
+    @atomicreplace :sequentially_consistent :monotonic m[idx] expected => desired
 
 Perform the conditional replacement expressed by the pair atomically, returning
 the values `(old, success::Bool)`. Where `success` indicates whether the
 replacement was completed.
 
-This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` call.
+This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` or,
+in case of reference, to a `replaceindex!(mem, idx, expected, desired)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1299,7 +1363,7 @@ julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 2
 
-julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
+julia> @atomicreplace a.x 1 => 3 # replace field x of a with 2 if it was 1, with sequential consistency
 (old = 2, success = false)
 
 julia> xchg = 2 => 0; # replace field x of a with 0 if it was 2, with sequential consistency
@@ -1311,8 +1375,34 @@ julia> @atomic a.x # fetch field x of a, with sequential consistency
 0
 ```
 
+```jldoctest
+julia> mem = AtomicMemory{Int}(undef, 2);
+
+julia> @atomic mem[1] = 1;
+
+julia> @atomicreplace mem[1] 1 => 2 # replace the first value of mem with 2 if it was 1, with sequential consistency
+(old = 1, success = true)
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+2
+
+julia> @atomicreplace mem[1] 1 => 3 # replace field x of a with 2 if it was 1, with sequential consistency
+(old = 2, success = false)
+
+julia> xchg = 2 => 0; # replace field x of a with 0 if it was 2, with sequential consistency
+
+julia> @atomicreplace mem[1] xchg
+(old = 2, success = true)
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+0
+```
+
 !!! compat "Julia 1.7"
-    This functionality requires at least Julia 1.7.
+    Atomic fields functionality requires at least Julia 1.7.
+
+!!! compat "Julia 1.12"
+    Atomic reference functionality requires at least Julia 1.12.
 """
 macro atomicreplace(success_order, fail_order, ex, old_new)
     fail_order isa QuoteNode || (fail_order = esc(fail_order))
@@ -1354,12 +1444,15 @@ end
     @atomiconce a.b.x = value
     @atomiconce :sequentially_consistent a.b.x = value
     @atomiconce :sequentially_consistent :monotonic a.b.x = value
+    @atomiconce m[idx] = value
+    @atomiconce :sequentially_consistent m[idx] = value
+    @atomiconce :sequentially_consistent :monotonic m[idx] = value
 
 Perform the conditional assignment of value atomically if it was previously
-unset, returning the value `success::Bool`. Where `success` indicates whether
-the assignment was completed.
+unset. Returned value `success::Bool` indicates whether the assignment was completed.
 
-This operation translates to a `setpropertyonce!(a.b, :x, value)` call.
+This operation translates to a `setpropertyonce!(a.b, :x, value)` or,
+in case of reference, to a `setindexonce_atomic!(m, idx, value)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1379,12 +1472,39 @@ true
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 1
 
-julia> @atomiconce a.x = 1 # set field x of a to 1, if unset, with sequential consistency
+julia> @atomiconce :monotonic a.x = 2 # set field x of a to 1, if unset, with monotonic consistence
 false
 ```
 
+```jldoctest
+julia> mem = AtomicMemory{Vector{Int}}(undef, 1);
+
+julia> isassigned(mem, 1)
+false
+
+julia> @atomiconce mem[1] = [1] # set the first value of mem to [1], if unset, with sequential consistency
+true
+
+julia> isassigned(mem, 1)
+true
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+1-element Vector{Int64}:
+ 1
+
+julia> @atomiconce :monotonic mem[1] = [2] # set the first value of mem to [2], if unset, with monotonic
+false
+
+julia> @atomic mem[1]
+1-element Vector{Int64}:
+ 1
+```
+
 !!! compat "Julia 1.11"
-    This functionality requires at least Julia 1.11.
+    Atomic fields functionality requires at least Julia 1.11.
+
+!!! compat "Julia 1.12"
+    Atomic reference functionality requires at least Julia 1.12.
 """
 macro atomiconce(success_order, fail_order, ex)
     fail_order isa QuoteNode || (fail_order = esc(fail_order))
