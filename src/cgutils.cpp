@@ -589,7 +589,6 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
 static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
 {
     if (isa<PointerType>(jl_value)) {
-        assert(false); //Do not merge with this assertion! This is just to make sure we have removed all the pointer bitcasts
         return v;
     }
     else {
@@ -599,7 +598,6 @@ static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
 
 // static Value *maybe_bitcast(jl_codectx_t &ctx, Value *V, Type *to) {
 //     if (isa<PointerType>(to)) {
-//         assert(false); // Bitcasts between pointers are no longer necessary
 //         return V;
 //     }
 //     if (to != V->getType())
@@ -1987,12 +1985,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         if (nb != nb2)
             elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb2);
     }
-    Type *ptrty = PointerType::get(elty, ptr->getType()->getPointerAddressSpace());
-    Value *data;
-    if (ptr->getType() != ptrty)
-        data = emit_bitcast(ctx, ptr, ptrty);
-    else
-        data = ptr;
+    Value *data = ptr;
     if (idx_0based)
         data = ctx.builder.CreateInBoundsGEP(elty, data, idx_0based);
     Value *instr = nullptr;

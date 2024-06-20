@@ -5724,9 +5724,6 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
                     if (vi.pTIndex) // TODO: use lifetime-end here instead
                         ctx.builder.CreateStore(UndefValue::get(cast<AllocaInst>(vi.value.V)->getAllocatedType()), vi.value.V);
                     Type *store_ty = julia_type_to_llvm(ctx, rval_info.constant ? jl_typeof(rval_info.constant) : rval_info.typ);
-                    Type *dest_ty = store_ty->getPointerTo();
-                    if (dest_ty != dest->getType())
-                        dest = emit_bitcast(ctx, dest, dest_ty);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
                     ai.decorateInst(ctx.builder.CreateStore(
                                       emit_unbox(ctx, store_ty, rval_info, rval_info.typ),
@@ -7083,7 +7080,6 @@ static Function* gen_cfun_wrapper(
                     inputarg = ghostValue(ctx, jargty);
                 }
                 else {
-                    val = emit_bitcast(ctx, val, T->getPointerTo());
                     val = ctx.builder.CreateAlignedLoad(T, val, Align(1)); // make no alignment assumption about pointer from C
                     inputarg = mark_julia_type(ctx, val, false, jargty);
                 }
@@ -7974,8 +7970,6 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
     else {
         if (fval->getType()->isIntegerTy())
             fval = emit_inttoptr(ctx, fval, ftype->getPointerTo());
-        else
-            fval = emit_bitcast(ctx, fval, ftype->getPointerTo());
     }
     if (auto F = dyn_cast<Function>(fval)) {
         if (gcstack_arg)
@@ -9253,14 +9247,11 @@ static jl_llvm_functions_t
                 }
                 else {
                     Type *store_ty = retvalinfo.V->getType();
-                    Type *dest_ty = store_ty->getPointerTo();
                     Value *Val = retvalinfo.V;
                     if (returninfo.return_roots) {
                         assert(julia_type_to_llvm(ctx, retvalinfo.typ) == store_ty);
                         emit_sret_roots(ctx, false, Val, store_ty, f->arg_begin() + 1, get_returnroots_type(ctx, returninfo.return_roots), returninfo.return_roots);
                     }
-                    if (dest_ty != sret->getType())
-                        sret = emit_bitcast(ctx, sret, dest_ty);
                     ctx.builder.CreateAlignedStore(Val, sret, Align(julia_alignment(retvalinfo.typ)));
                     assert(retvalinfo.TIndex == NULL && "unreachable"); // unimplemented representation
                 }
