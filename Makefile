@@ -261,6 +261,8 @@ JL_PRIVATE_LIBS-1 += libasan
 endif
 endif
 
+JL_PRIVATE_LIBS-1 += libffi
+
 ifeq ($(WITH_TRACY),1)
 JL_PRIVATE_LIBS-0 += libTracyClient
 endif
