@@ -206,29 +206,33 @@ end
 # Temporary alias until Documenter updates
 const softscope! = softscope
 
-function print_nonpublic_access_warning(mod, name)
-    @warn string(name, " is not public in ", mod) maxlog = 1 _id = string("repl_warning", mod, name) _line = nothing _file = nothing _module = nothing
+function print_qualified_access_warning(mod, owner, name)
+    @warn string(name, " is defined in ", owner, " and is not public in ", mod) maxlog = 1 _id = string("repl_warning", mod, name) _line = nothing _file = nothing _module = nothing
 end
 
-function maybe_print_nonpublic_access_warning(mod, name)
+function maybe_print_qualified_access_warning(mod, owner, name)
     mod isa Module || return
     Base.ispublic(mod, name) && return
     mod === Base && Base.ispublic(Core, name) && return
-    # `mod` must have at least 1 name declared public (which is not exported)
-    # to be eligible for warnings, otherwise it may have a public API which has
-    # not yet been updated to use the `public` keyword.
-    any(n -> !Base.isexported(mod, n) && Base.ispublic(mod, n), names(mod)) || return
-    print_nonpublic_access_warning(mod, name)
+    print_qualified_access_warning(mod, owner, name)
     return
 end
 
-# if `ast` contains accesses to names which aren't public in the module
-# they are being accessed from, then issue a warning
-function add_nonpublic_access_warning(ast)
+function has_ancestor(query, target)
+    query == target && return true
+    while true
+        next = parentmodule(query)
+        next == target && return true
+        next == query && return false
+        query = next
+    end
+end
+
+function add_qualified_access_warning(ast)
     ast isa Expr || return ast
 
     # don't recurse through module definitions
-    ast.head === :module  && return ast
+    ast.head === :module && return ast
 
     if ast.head == Symbol(".") && length(ast.args) == 2
         mod_name = ast.args[1]
@@ -242,16 +246,22 @@ function add_nonpublic_access_warning(ast)
         catch
             return ast
         end
-        maybe_print_nonpublic_access_warning(mod, name_being_accessed)
+        owner = try
+            which(mod, name_being_accessed)
+        catch
+            return ast
+        end
+        has_ancestor(owner, mod) && return ast
+        maybe_print_qualified_access_warning(mod, owner, name_being_accessed)
         return ast
     else
         ast2 = Expr(ast.head)
-        map!(add_nonpublic_access_warning, resize!(ast2.args, length(ast.args)), ast.args)
+        map!(add_qualified_access_warning, resize!(ast2.args, length(ast.args)), ast.args)
         return ast2
     end
 end
 
-const repl_ast_transforms = Any[softscope, add_nonpublic_access_warning] # defaults for new REPL backends
+const repl_ast_transforms = Any[softscope, add_qualified_access_warning] # defaults for new REPL backends
 
 # Allows an external package to add hooks into the code loading.
 # The hook should take a Vector{Symbol} of package names and
