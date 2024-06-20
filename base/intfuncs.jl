@@ -1,3 +1,4 @@
+using Base: MultiplicativeInverses
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## number-theoretic functions ##
@@ -438,17 +439,21 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     end
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
-
+    mi = if T <: BitInteger
+        MultiplicativeInverses.multiplicativeinverse(m)
+    else
+        m
+    end
     t = prevpow(2, p)
     r = 1
     while true
         if p >= t
-            r = mod(widemul(r,b),m)
+            r = mod(widemul(r,b),mi)
             p -= t
         end
         t >>>= 1
         t <= 0 && break
-        r = mod(widemul(r,r),m)
+        r = mod(widemul(r,r),mi)
     end
     return r
 end
