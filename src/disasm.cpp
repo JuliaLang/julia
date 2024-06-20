@@ -1227,7 +1227,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
 #if JL_LLVM_VERSION >= 180000
             if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CodeGenFileType::ObjectFile, false, nullptr))
 #else
-            if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CodeGenFileType::ObjectFile, false, nullptr))
+            if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false, nullptr))
 #endif
                 return jl_an_empty_string;
             TSM->withModuleDo([&](Module &m) { PM.run(m); });
