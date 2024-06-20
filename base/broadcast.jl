@@ -1184,6 +1184,10 @@ function broadcasted(::typeof(-), j::CartesianIndex{N}, I::CartesianIndices{N}) 
     Iterators.reverse(CartesianIndices(map(diffrange, Tuple(j), I.indices)))
 end
 
+## Performance improvement. Specializes `broadcasted` on `in`, so that
+#  `in.(a, Ref(b))` will create a hash table for `b`.
+broadcasted(::typeof(in), lhs::AbstractArray, rhs::Base.RefValue{<:AbstractArray}) = broadcasted(in, lhs, Ref(Set(rhs[])))
+
 ## In specific instances, we can broadcast masked BitArrays whole chunks at a time
 # Very intentionally do not support much functionality here: scalar indexing would be O(n)
 struct BitMaskedBitArray{N,M}
