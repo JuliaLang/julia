@@ -906,7 +906,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         JL_GC_POP();
     }
 
-    if (jl_options.static_call_graph){
+    if (jl_options.static_call_graph) {
         jl_entrypoint_mis = (arraylist_t *)malloc_s(sizeof(arraylist_t));
         arraylist_new(jl_entrypoint_mis, 0);
     }

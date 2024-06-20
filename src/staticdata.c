@@ -990,13 +990,10 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 jl_method_t *m = (jl_method_t *)v;
                 if (jl_is_svec(m->specializations))
                     jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->specializations), (jl_value_t*)m, 0, 1);
-            } else if (jl_typetagis(v, jl_typename_type)) {
+            }
+            else if (jl_typetagis(v, jl_typename_type)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
-                if (tn->mt != NULL && !(tn->mt->frozen)){
-                // if (strcmp(jl_symbol_name(tn->name), "#main") == 0  || (strcmp(jl_symbol_name(tn->name), "#__init__") == 0 ) ||
-                //     (strcmp(jl_symbol_name(tn->name), "#_str_sizehint") == 0 ) || (strcmp(jl_symbol_name(tn->name), "#print") == 0 )
-                //     || (strcmp(jl_symbol_name(tn->name), "#join") == 0 ) || (strcmp(jl_symbol_name(tn->name), "#showerror_nostdio") == 0 ) || (strcmp(jl_symbol_name(tn->name), "#!") == 0 )
-                //     || (strcmp(jl_symbol_name(tn->name), "#get_binding_type") == 0 ))
+                if (tn->mt != NULL && !tn->mt->frozen) {
                     jl_methtable_t * new_methtable = (jl_methtable_t *)ptrhash_get(&new_methtables, tn->mt);
                     if (new_methtable != HT_NOTFOUND)
                         record_field_change((jl_value_t **)&tn->mt, (jl_value_t*)new_methtable);
@@ -2457,7 +2454,6 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
         jl_svecset(cache, ins++, jl_nothing);
 }
 
-
 uint_t bindingkey_hash(size_t idx, jl_value_t *data);
 
 static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
@@ -2773,7 +2769,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
-            // collect needed methods and replace method tables that are in the tags array
+    // collect needed methods and replace method tables that are in the tags array
     htable_new(&new_methtables, 0);
     arraylist_t MIs;
     arraylist_new(&MIs, 0);
