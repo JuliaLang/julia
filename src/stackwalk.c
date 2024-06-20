@@ -969,10 +969,12 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         c.R15 = mctx->R15;
         c.Rip = mctx->Rip;
         memcpy(&c.Xmm6, &mctx->Xmm6, 10 * sizeof(mctx->Xmm6)); // Xmm6-Xmm15
-#else
+#elif defined(_CPU_X86_)
         c.Eip = mctx->Eip;
         c.Esp = mctx->Esp;
         c.Ebp = mctx->Ebp;
+#else
+        #error Windows is currently only supported on x86 and x86_64
 #endif
         context = &c;
 #elif defined(JL_HAVE_UNW_CONTEXT)

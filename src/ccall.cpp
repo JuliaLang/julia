@@ -373,18 +373,18 @@ static bool is_native_simd_type(jl_datatype_t *dt) {
 
 #if defined ABI_LLVM
   typedef ABI_LLVMLayout DefaultAbiState;
-#elif defined _CPU_X86_64_
-#  if defined _OS_WINDOWS_
+#elif defined _OS_WINDOWS_
+#  if defined _CPU_X86_64_
      typedef ABI_Win64Layout DefaultAbiState;
-#  else
-     typedef ABI_x86_64Layout DefaultAbiState;
-#  endif
-#elif defined _CPU_X86_
-#  if defined _OS_WINDOWS_
+#  elif defined _CPU_X86_
      typedef ABI_Win32Layout DefaultAbiState;
 #  else
-     typedef ABI_x86Layout DefaultAbiState;
+#    error Windows is currently only supported on x86 and x86_64
 #  endif
+#elif defined _CPU_X86_64_
+  typedef ABI_x86_64Layout DefaultAbiState;
+#elif defined _CPU_X86_
+  typedef ABI_x86Layout DefaultAbiState;
 #elif defined _CPU_ARM_
   typedef ABI_ARMLayout DefaultAbiState;
 #elif defined _CPU_AARCH64_
