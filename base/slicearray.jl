@@ -243,3 +243,31 @@ end
 end
 
 parent(s::Slices) = s.parent
+
+# Instead of stacking slices, it's faster to call permutedims
+function _stack(dims::Colon, s::Slices)
+    nodrop = ndims(s) + ndims(eltype(s)) > ndims(parent(s))
+    if nodrop
+        return _stack(dims, IteratorSize(s), s)  # can this cause type-instability?
+    end
+    NI = ndims(eltype(s))
+    tmp = accumulate(s.slicemap; init=(0, 1)) do (_, d), c
+        c isa Integer ? (c+NI, d) : (d, d+1)
+    end
+    perm = invperm(map(first, tmp))
+    return permutedims(parent(s), perm)
+end
+
+function _stack(dims::Integer, s::Slices)
+    nodrop = ndims(s) + ndims(eltype(s)) > ndims(parent(s))
+    if nodrop || ndims(s) != 1
+        return _stack(dims, IteratorSize(s), s)
+    end
+    din = findfirst(==(1), s.slicemap)::Int
+    perm = ntuple(ndims(parent(s))) do d
+        d == dims && return din::Int
+        e = d - (d>dims)
+        e + (e>=din)
+    end
+    return permutedims(parent(s), perm)
+end
