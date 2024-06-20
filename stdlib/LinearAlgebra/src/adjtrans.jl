@@ -373,6 +373,20 @@ parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec{<:Number}) = parent(v)
 vec(v::AdjointAbsVec{<:Real}) = parent(v)
 
+Base.reshape(v::TransposeAbsVec{<:Number}, ::Val{1}) = parent(v)
+Base.reshape(v::AdjointAbsVec{<:Real}, ::Val{1}) = parent(v)
+
+ # these make eachrow(A') produce simpler views
+@inline Base.unsafe_view(A::Transpose{<:Number, <:AbstractMatrix}, i::Integer, j::AbstractArray) =
+    Base.unsafe_view(parent(A), j, i)
+@inline Base.unsafe_view(A::Transpose{<:Number, <:AbstractMatrix}, i::AbstractArray, j::Integer) =
+    Base.unsafe_view(parent(A), j, i)
+
+@inline Base.unsafe_view(A::Adjoint{<:Real, <:AbstractMatrix}, i::Integer, j::AbstractArray) =
+    Base.unsafe_view(parent(A), j, i)
+@inline Base.unsafe_view(A::Adjoint{<:Real, <:AbstractMatrix}, i::AbstractArray, j::Integer) =
+    Base.unsafe_view(parent(A), j, i)
+
 ### concatenation
 # preserve Adjoint/Transpose wrapper around vectors
 # to retain the associated semantics post-concatenation
