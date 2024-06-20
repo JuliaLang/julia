@@ -3845,3 +3845,16 @@ struct SingletonMaker; end
 const no_really_this_is_a_function_i_promise = Val{SingletonMaker()}()
 no_really_this_is_a_function_i_promise(a) = 2 + a
 @test Val{SingletonMaker()}()(2) == 4
+
+# Test that lowering doesn't accidentally put a `Module` in the Method name slot
+let src = @Meta.lower let capture=1
+    global foo_lower_block
+    foo_lower_block() = capture
+end
+    code = src.args[1].code
+    for i = length(code):-1:1
+        expr = code[i]
+        Meta.isexpr(expr, :method) || continue
+        @test isa(expr.args[1], Union{GlobalRef, Symbol})
+    end
+end
