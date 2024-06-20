@@ -442,8 +442,7 @@ end
                 for pth in ("afile",
                             joinpath("afile", "not_file"),
                             SubString(joinpath(dir, "afile")),
-                            Base.RawFD(-1),
-                            -1)
+                            Base.RawFD(-1))
                     test_stat_error(stat, pth)
                     test_stat_error(lstat, pth)
                 end
@@ -459,6 +458,8 @@ end
         end
     end
 end
+
+@test_throws MethodError stat(7)
 
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
