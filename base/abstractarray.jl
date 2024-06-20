@@ -3384,14 +3384,6 @@ concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
 ## 1 argument
 
-function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
-    for (i,j) in zip(eachindex(dest),eachindex(A))
-        val = f(@inbounds A[j])
-        @inbounds dest[i] = val
-    end
-    return dest
-end
-
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
@@ -3426,30 +3418,17 @@ map(f, A) = collect(Generator(f,A)) # default to returning an Array for `map` on
 map(f, ::AbstractDict) = error("map is not defined on dictionaries")
 map(f, ::AbstractSet) = error("map is not defined on sets")
 
-## 2 argument
-function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
-    for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
-        @inbounds a, b = A[j], B[k]
-        val = f(a, b)
-        @inbounds dest[i] = val
-    end
-    return dest
-end
-
 ## N argument
 
-@inline ith_all(i, ::Tuple{}) = ()
-function ith_all(i, as)
-    @_propagate_inbounds_meta
-    return (as[1][i], ith_all(i, tail(as))...)
-end
+@noinline throw_map_mismatch(ndest, nvals) =
+    throw(DimensionMismatch("map! over $nvals values, but destination only has length $ndest"))
 
-function map_n!(f::F, dest::AbstractArray, As) where F
-    idxs1 = LinearIndices(As[1])
-    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(x) == idxs1, As)
-    for i = idxs1
-        @inbounds I = ith_all(i, As)
-        val = f(I...)
+@inline function map_n!(f::F, dest::AbstractArray, As) where F
+    Is = zip(map(eachindex, As)...)
+    @boundscheck length(Is) <= length(dest) || throw_map_mismatch(length(dest), length(Is))
+    for (i, js...) in zip(eachindex(dest), map(eachindex, As)...)
+        J = ntuple(d -> @inbounds(As[d][js[d]]), Val(length(As)))
+        val = f(J...)
         @inbounds dest[i] = val
     end
     return dest
@@ -3487,6 +3466,7 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
+    @_propagate_inbounds_meta
     isempty(As) && throw(ArgumentError(
         """map! requires at least one "source" argument"""))
     map_n!(f, dest, As)
