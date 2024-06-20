@@ -357,10 +357,6 @@ end
             sum1 = Base.Fix(sum; dims=1)
             x = ones(3, 2)
             sum1(x) == [3.0 3.0]
-
-            # Now, with arg and kwargs
-            cat1 = Base.Fix{1}(cat, ones(2); dims=1)
-            cat1(ones(3)) == ones(5)
         end
         @testset "Dummy-proofing" begin
             @test_throws ArgumentError Base.Fix{0}(>, 1)
