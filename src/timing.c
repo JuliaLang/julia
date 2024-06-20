@@ -6,7 +6,7 @@
 #include "options.h"
 #include "stdio.h"
 
-#if defined(USE_TRACY) || defined(USE_ITTAPI)
+#if defined(USE_TRACY) || defined(USE_ITTAPI) || defined(USE_NVTX)
 #define DISABLE_FREQUENT_EVENTS
 #endif
 
@@ -48,6 +48,10 @@ static jl_mutex_t jl_timing_counts_events_lock;
 static arraylist_t jl_timing_ittapi_events;
 static jl_mutex_t jl_timing_ittapi_events_lock;
 #endif //USE_ITTAPI
+
+#ifdef USE_NVTX
+static nvtxDomainHandle_t jl_timing_nvtx_domain;
+#endif
 
 #ifdef USE_TIMING_COUNTS
 static int cmp_counts_events(const void *a, const void *b) {
@@ -133,6 +137,10 @@ void jl_init_timing(void)
     // Create events list for ITTAPI backend
     JL_MUTEX_INIT(&jl_timing_ittapi_events_lock, "jl_timing_ittapi_events_lock");
     arraylist_new(&jl_timing_ittapi_events, 0);
+#endif
+
+#ifdef USE_NVTX
+    jl_timing_nvtx_domain = nvtxDomainCreateA("julia");
 #endif
 
     // Sort the subsystem names for quick enable/disable lookups
@@ -347,6 +355,7 @@ JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *block) {
     uint64_t t = cycleclock(); (void)t;
     _COUNTS_START(&block->counts_ctx, t);
     _ITTAPI_START(block);
+    _NVTX_START(block);
     _TRACY_START(block);
 
     jl_timing_block_t **prevp = &jl_current_task->ptls->timing_stack;
@@ -362,6 +371,7 @@ JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *block) {
     if (block->is_running) {
         uint64_t t = cycleclock(); (void)t;
         _ITTAPI_STOP(block);
+        _NVTX_STOP(block);
         _TRACY_STOP(block->tracy_ctx);
         _COUNTS_STOP(block, t);
 
