@@ -230,6 +230,8 @@ julia> mkpath("intermediate_dir/actually_a_directory.txt") # creates two directo
 julia> isdir("intermediate_dir/actually_a_directory.txt")
 true
 
+julia> mkpath("my/test/dir/") # returns the original `path`
+"my/test/dir/"
 ```
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
