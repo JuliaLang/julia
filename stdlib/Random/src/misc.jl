@@ -58,6 +58,12 @@ julia> randstring(Xoshiro(3), 'a':'z', 6)
 
 julia> randstring("ACGT")
 "TGCTCCTC"
+
+julia> randstring(12)
+"SHXK1CKamNtK"
+
+julia> randstring(['A':'Z'; '0':'9'], 8)
+"V4X39GKG"
 ```
 
 !!! note
