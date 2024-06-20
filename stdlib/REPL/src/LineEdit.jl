@@ -621,11 +621,11 @@ function highlight_region(lwrite::Union{String,SubString{String}}, regstart::Int
 end
 
 function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
-    outbuf = IOBuffer()
+    outbuf = Base.BufferStream()
     termbuf = TerminalBuffer(outbuf)
     ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
     # Output the entire refresh at once
-    write(terminal, take!(outbuf))
+    write(terminal, readavailable(outbuf))
     flush(terminal)
     return ret
 end
@@ -2658,7 +2658,7 @@ end
 activate(m::ModalInterface, s::MIState, termbuf::AbstractTerminal, term::TextTerminal) =
     activate(mode(s), s, termbuf, term)
 
-commit_changes(t::UnixTerminal, termbuf::TerminalBuffer) = (write(t, take!(termbuf.out_stream)); nothing)
+commit_changes(t::UnixTerminal, termbuf::TerminalBuffer) = (write(t, readavailable(termbuf.out_stream)); nothing)
 
 function transition(f::Function, s::MIState, newmode::Union{TextInterface,Symbol})
     cancel_beep(s)
@@ -2673,7 +2673,7 @@ function transition(f::Function, s::MIState, newmode::Union{TextInterface,Symbol
     if !haskey(s.mode_state, newmode)
         s.mode_state[newmode] = init_state(terminal(s), newmode)
     end
-    termbuf = TerminalBuffer(IOBuffer())
+    termbuf = TerminalBuffer(Base.BufferStream())
     t = terminal(s)
     s.mode_state[mode(s)] = deactivate(mode(s), state(s), termbuf, t)
     s.current_mode = newmode
