@@ -5,7 +5,21 @@ import Base.Checked: add_with_overflow, mul_with_overflow
 ## string to integer functions ##
 
 """
-    parse(type, str; base)
+    parse(::Type{T}, str::AbstractString) -> T
+
+Parse `str` as type `T`, throwing an error on failure.
+By default `parse` falls back on `tryparse`. Users rarely need to extend `parse`
+and should instead implement `tryparse` for parsing custom types.
+
+See also: [`tryparse`](@ref)
+"""
+function parse(::Type{T}, str::AbstractString; kwargs...) where T
+    y = tryparse(T, str; kwargs...)
+    isa(y, T) ? y : throw(ArgumentError("Cannot parse as $T: \"$str\""))
+end
+
+"""
+    parse(::Type{T <: Number}, str; base)
 
 Parse a string as a number. For `Integer` types, a base can be specified
 (the default is 10). For floating-point types, the string is parsed as a decimal
@@ -240,7 +254,16 @@ end
 end
 
 """
-    tryparse(type, str; base)
+    tryparse(::Type{T}, str::AbstractString)::Union{T, Nothing}
+
+Attempt to parse `str` as `T`, or return `nothing` if the parsing failed.
+Users are encouraged to extend `tryparse` for custom types instead of `parse`,
+as this method allows the caller to gracefully handle malformed input.
+"""
+function tryparse end
+
+"""
+    tryparse(::Type{T <: Number}, str; base)
 
 Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
