@@ -268,9 +268,7 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-e
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured
 	cd $(LLVM_BUILDDIR_withtype) && \
-		$(if $(filter $(CMAKE_GENERATOR),make), \
-		  $(MAKE), \
-		  $(CMAKE) --build .)
+		$(CMAKE) --build .
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled

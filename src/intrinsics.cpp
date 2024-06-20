@@ -4,6 +4,10 @@ namespace JL_I {
 #include "intrinsics.h"
 }
 
+#include <array>
+#include <bitset>
+#include <string>
+
 #include "ccall.cpp"
 
 //Mark our stats as being from intrinsics irgen
@@ -634,9 +638,21 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
             if (isa<Instruction>(vx) && !vx->hasName())
                 // emit_inttoptr may undo an PtrToInt
                 setName(ctx.emission_context, vx, "bitcast_coercion");
+        } else if (vxt->isPointerTy() && llvmt->isPointerTy()) {
+            // emit_bitcast preserves the origin address space, which we can't have here
+            #if JL_LLVM_VERSION >= 170000
+            vx = ctx.builder.CreateAddrSpaceCast(vx, llvmt);
+            #else
+            vx = ctx.builder.CreatePointerBitCastOrAddrSpaceCast(vx, llvmt);
+            #endif
+            if (isa<Instruction>(vx) && !vx->hasName())
+                // cast may have been folded
+                setName(ctx.emission_context, vx, "bitcast_coercion");
         } else {
             vx = emit_bitcast(ctx, vx, llvmt);
-            setName(ctx.emission_context, vx, "bitcast_coercion");
+            if (isa<Instruction>(vx) && !vx->hasName())
+                // emit_bitcast may undo another bitcast
+                setName(ctx.emission_context, vx, "bitcast_coercion");
         }
     }
 

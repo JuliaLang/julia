@@ -222,6 +222,11 @@ mutable struct TryCatchFrame
     TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
 end
 
+struct HandlerInfo
+    handlers::Vector{TryCatchFrame}
+    handler_at::Vector{Tuple{Int,Int}} # tuple of current (handler, exception stack) value at the pc
+end
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -237,13 +242,12 @@ mutable struct InferenceState
     currbb::Int
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
-    handlers::Vector{TryCatchFrame}
-    handler_at::Vector{Tuple{Int, Int}} # tuple of current (handler, exception stack) value at the pc
+    handler_info::Union{Nothing,HandlerInfo}
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     ssavaluetypes::Vector{Any}
-    stmt_edges::Vector{Union{Nothing,Vector{Any}}}
+    stmt_edges::Vector{Vector{Any}}
     stmt_info::Vector{CallInfo}
 
     #= intermediate states for interprocedural abstract interpretation =#
@@ -290,11 +294,11 @@ mutable struct InferenceState
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
-        handler_at, handlers = compute_trycatch(code, BitSet())
+        handler_info = compute_trycatch(code)
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
-        stmt_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
+        stmt_edges = Vector{Vector{Any}}(undef, nstmts)
         stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
@@ -302,6 +306,9 @@ mutable struct InferenceState
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
         argtypes = result.argtypes
+
+        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
+
         nargtypes = length(argtypes)
         for i = 1:nslots
             argtyp = (i > nargtypes) ? Bottom : argtypes[i]
@@ -329,18 +336,21 @@ mutable struct InferenceState
         end
 
         if def isa Method
-            ipo_effects = Effects(ipo_effects; nonoverlayed=is_nonoverlayed(def))
+            nonoverlayed = is_nonoverlayed(def) ? ALWAYS_TRUE :
+                is_effect_overridden(def, :consistent_overlay) ? CONSISTENT_OVERLAY :
+                ALWAYS_FALSE
+            ipo_effects = Effects(ipo_effects; nonoverlayed)
         end
 
         restrict_abstract_call_sites = isa(def, Module)
 
         # some more setups
-        InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
+        InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_info)
         !iszero(cache_mode & CACHE_MODE_LOCAL) && push!(get_inference_cache(interp), result)
 
         this = new(
             mi, world, mod, sptypes, slottypes, src, cfg, method_info,
-            currbb, currpc, ip, handlers, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
@@ -356,6 +366,14 @@ mutable struct InferenceState
     end
 end
 
+gethandler(frame::InferenceState, pc::Int=frame.currpc) = gethandler(frame.handler_info, pc)
+gethandler(::Nothing, ::Int) = nothing
+function gethandler(handler_info::HandlerInfo, pc::Int)
+    handler_idx = handler_info.handler_at[pc][1]
+    handler_idx == 0 && return nothing
+    return handler_info.handlers[handler_idx]
+end
+
 is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
 is_nonoverlayed(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
 isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")
@@ -368,21 +386,21 @@ is_inferred(result::InferenceResult) = result.result !== nothing
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
 
-compute_trycatch(ir::IRCode, ip::BitSet) = compute_trycatch(ir.stmts.stmt, ip, ir.cfg.blocks)
+compute_trycatch(ir::IRCode) = compute_trycatch(ir.stmts.stmt, ir.cfg.blocks)
 
 """
-    compute_trycatch(code, ip [, bbs]) -> (handler_at, handlers)
+    compute_trycatch(code, [, bbs]) -> handler_info::Union{Nothing,HandlerInfo}
 
 Given the code of a function, compute, at every statement, the current
 try/catch handler, and the current exception stack top. This function returns
 a tuple of:
 
-    1. `handler_at`: A statement length vector of tuples `(catch_handler, exception_stack)`,
-       which are indices into `handlers`
+    1. `handler_info.handler_at`: A statement length vector of tuples
+       `(catch_handler, exception_stack)`, which are indices into `handlers`
 
-    2. `handlers`: A `TryCatchFrame` vector of handlers
+    2. `handler_info.handlers`: A `TryCatchFrame` vector of handlers
 """
-function compute_trycatch(code::Vector{Any}, ip::BitSet, bbs::Union{Vector{BasicBlock}, Nothing}=nothing)
+function compute_trycatch(code::Vector{Any}, bbs::Union{Vector{BasicBlock},Nothing}=nothing)
     # The goal initially is to record the frame like this for the state at exit:
     # 1: (enter 3) # == 0
     # 3: (expr)    # == 1
@@ -391,16 +409,17 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet, bbs::Union{Vector{Basic
     # then we can find all `try`s by walking backwards from :enter statements,
     # and all `catch`es by looking at the statement after the :enter
     n = length(code)
-    empty!(ip)
+    ip = BitSet()
     ip.offset = 0 # for _bits_findnext
     push!(ip, n + 1)
-    handler_at = fill((0, 0), n)
-    handlers = TryCatchFrame[]
+    handler_info = nothing
 
     # start from all :enter statements and record the location of the try
     for pc = 1:n
         stmt = code[pc]
         if isa(stmt, EnterNode)
+            (;handlers, handler_at) = handler_info =
+                (handler_info === nothing ? HandlerInfo(TryCatchFrame[], fill((0, 0), n)) : handler_info)
             l = stmt.catch_dest
             (bbs !== nothing) && (l = first(bbs[l].stmts))
             push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
@@ -414,7 +433,12 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet, bbs::Union{Vector{Basic
         end
     end
 
+    if handler_info === nothing
+        return nothing
+    end
+
     # now forward those marks to all :leave statements
+    (;handlers, handler_at) = handler_info
     while true
         # make progress on the active ip set
         pc = _bits_findnext(ip.bits, 0)::Int
@@ -488,7 +512,73 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet, bbs::Union{Vector{Basic
     end
 
     @assert first(ip) == n + 1
-    return handler_at, handlers
+    return handler_info
+end
+
+function is_throw_call(e::Expr, code::Vector{Any})
+    if e.head === :call
+        f = e.args[1]
+        if isa(f, SSAValue)
+            f = code[f.id]
+        end
+        if isa(f, GlobalRef)
+            ff = abstract_eval_globalref_type(f)
+            if isa(ff, Const) && ff.val === Core.throw
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function mark_throw_blocks!(src::CodeInfo, handler_info::Union{Nothing,HandlerInfo})
+    for stmt in find_throw_blocks(src.code, handler_info)
+        src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
+    end
+    return nothing
+end
+
+# this utility function is incomplete and won't catch every block that always throws, since:
+# - it only recognizes direct calls to `throw` within the target code, so it can't mark
+#   blocks that deterministically call `throw` internally, like those containing `error`.
+# - it just does a reverse linear traverse of statements, there's a chance it might miss
+#   blocks, particularly when there are reverse control edges.
+function find_throw_blocks(code::Vector{Any}, handler_info::Union{Nothing,HandlerInfo})
+    stmts = BitSet()
+    n = length(code)
+    for i in n:-1:1
+        s = code[i]
+        if isa(s, Expr)
+            if s.head === :gotoifnot
+                if i+1 in stmts && s.args[2]::Int in stmts
+                    push!(stmts, i)
+                end
+            elseif s.head === :return
+                # see `ReturnNode` handling
+            elseif is_throw_call(s, code)
+                if handler_info === nothing || handler_info.handler_at[i][1] == 0
+                    push!(stmts, i)
+                end
+            elseif i+1 in stmts
+                push!(stmts, i)
+            end
+        elseif isa(s, ReturnNode)
+            # NOTE: it potentially makes sense to treat unreachable nodes
+            # (where !isdefined(s, :val)) as `throw` points, but that can cause
+            # worse codegen around the call site (issue #37558)
+        elseif isa(s, GotoNode)
+            if s.label in stmts
+                push!(stmts, i)
+            end
+        elseif isa(s, GotoIfNot)
+            if i+1 in stmts && s.dest in stmts
+                push!(stmts, i)
+            end
+        elseif i+1 in stmts
+            push!(stmts, i)
+        end
+    end
+    return stmts
 end
 
 # check if coverage mode is enabled
@@ -718,9 +808,9 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
     return nothing
 end
 
-function add_cycle_backedge!(caller::InferenceState, frame::InferenceState, currpc::Int)
+function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
     update_valid_age!(caller, frame.valid_worlds)
-    backedge = (caller, currpc)
+    backedge = (caller, caller.currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
     add_backedge!(caller, frame.linfo)
     return frame
@@ -728,16 +818,17 @@ end
 
 function get_stmt_edges!(caller::InferenceState, currpc::Int=caller.currpc)
     stmt_edges = caller.stmt_edges
-    edges = stmt_edges[currpc]
-    if edges === nothing
-        edges = stmt_edges[currpc] = []
+    if !isassigned(stmt_edges, currpc)
+        return stmt_edges[currpc] = Any[]
+    else
+        return stmt_edges[currpc]
     end
-    return edges
 end
 
 function empty_backedges!(frame::InferenceState, currpc::Int=frame.currpc)
-    edges = frame.stmt_edges[currpc]
-    edges === nothing || empty!(edges)
+    if isassigned(frame.stmt_edges, currpc)
+        empty!(frame.stmt_edges[currpc])
+    end
     return nothing
 end
 
@@ -766,10 +857,9 @@ function print_callstack(sv::InferenceState)
 end
 
 function narguments(sv::InferenceState, include_va::Bool=true)
-    def = sv.linfo.def
-    nargs = length(sv.result.argtypes)
+    nargs = Int(sv.src.nargs)
     if !include_va
-        nargs -= isa(def, Method) && def.isva
+        nargs -= sv.src.isva
     end
     return nargs
 end
@@ -802,7 +892,6 @@ mutable struct IRInterpretationState
             given_argtypes[i] = widenslotwrapper(argtypes[i])
         end
         if isa(mi.def, Method)
-            given_argtypes = va_process_argtypes(optimizer_lattice(interp), given_argtypes, mi)
             argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
                 for i = 1:length(given_argtypes)]
         else
@@ -832,6 +921,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     end
     method_info = MethodInfo(src)
     ir = inflate_ir(src, mi)
+    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva)
     return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
                                  codeinst.min_world, codeinst.max_world)
 end

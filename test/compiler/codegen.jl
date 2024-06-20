@@ -621,10 +621,10 @@ g40612(a, b) = a[]|a[] === b[]|b[]
 
 # issue #41438
 struct A41438{T}
-  x::Ptr{T}
+    x::Ptr{T}
 end
 struct B41438{T}
-  x::T
+    x::T
 end
 f41438(y) = y[].x
 @test A41438.body.layout != C_NULL
@@ -722,14 +722,14 @@ mutable struct A42645{T}
     end
 end
 mutable struct B42645{T}
-  y::A42645{T}
+    y::A42645{T}
 end
 x42645 = 1
 function f42645()
-  res = B42645(A42645([x42645]))
-  res.y = A42645([x42645])
-  res.y.x = true
-  res
+    res = B42645(A42645([x42645]))
+    res.y = A42645([x42645])
+    res.y.x = true
+    res
 end
 @test ((f42645()::B42645).y::A42645{Int}).x
 
@@ -859,17 +859,100 @@ foo50964(1) # Shouldn't assert!
 
 # https://github.com/JuliaLang/julia/issues/51233
 obj51233 = (1,)
-@test_throws ErrorException obj51233.x
+@test_throws FieldError obj51233.x
 
 # Very specific test for multiversioning
 if Sys.ARCH === :x86_64
     foo52079() = Core.Intrinsics.have_fma(Float64)
     if foo52079() == true
         let io = IOBuffer()
-            code_native(io,^,(Float64,Float64), dump_module=false)
+            code_native(io,Base.Math.exp_impl,(Float64,Float64,Val{:ℯ}), dump_module=false)
             str = String(take!(io))
             @test !occursin("fma_emulated", str)
             @test occursin("vfmadd", str)
         end
     end
 end
+
+#Check if we aren't emitting the store with the wrong TBAA metadata
+
+foo54166(x,i,y) = x[i] = y
+let io = IOBuffer()
+    code_llvm(io,foo54166, (Vector{Union{Missing,Int}}, Int, Int), dump_module=true, raw=true)
+    str = String(take!(io))
+    @test !occursin("jtbaa_unionselbyte", str)
+    @test occursin("jtbaa_arrayselbyte", str)
+end
+
+ex54166 = Union{Missing, Int64}[missing -2; missing -2];
+dims54166 = (1,2)
+@test (minimum(ex54166; dims=dims54166)[1] === missing)
+
+# #54109 - Excessive LLVM time for egal
+struct DefaultOr54109{T}
+    x::T
+    default::Bool
+end
+
+@eval struct Torture1_54109
+    $((Expr(:(::), Symbol("x$i"), DefaultOr54109{Float64}) for i = 1:897)...)
+end
+Torture1_54109() = Torture1_54109((DefaultOr54109(1.0, false) for i = 1:897)...)
+
+@eval struct Torture2_54109
+    $((Expr(:(::), Symbol("x$i"), DefaultOr54109{Float64}) for i = 1:400)...)
+    $((Expr(:(::), Symbol("x$(i+400)"), DefaultOr54109{Int16}) for i = 1:400)...)
+end
+Torture2_54109() = Torture2_54109((DefaultOr54109(1.0, false) for i = 1:400)..., (DefaultOr54109(Int16(1), false) for i = 1:400)...)
+
+@noinline egal_any54109(x, @nospecialize(y::Any)) = x === Base.compilerbarrier(:type, y)
+
+let ir1 = get_llvm(egal_any54109, Tuple{Torture1_54109, Any}),
+    ir2 = get_llvm(egal_any54109, Tuple{Torture2_54109, Any})
+
+    # We can't really do timing on CI, so instead, let's look at the length of
+    # the optimized IR. The original version had tens of thousands of lines and
+    # was slower, so just check here that we only have < 500 lines. If somebody,
+    # implements a better comparison that's larger than that, just re-benchmark
+    # this and adjust the threshold.
+
+    @test count(==('\n'), ir1) < 500
+    @test count(==('\n'), ir2) < 500
+end
+
+## Regression test for egal of a struct of this size without padding, but with
+## non-bitsegal, to make sure that it doesn't accidentally go down the accelerated
+## path.
+@eval struct BigStructAnyInt
+    $((Expr(:(::), Symbol("x$i"), Pair{Any, Int}) for i = 1:33)...)
+end
+BigStructAnyInt() = BigStructAnyInt((Union{Base.inferencebarrier(Float64), Int}=>i for i = 1:33)...)
+@test egal_any54109(BigStructAnyInt(), BigStructAnyInt())
+
+## For completeness, also test correctness, since we don't have a lot of
+## large-struct tests.
+
+# The two allocations of the same struct will likely have different padding,
+# we want to make sure we find them egal anyway - a naive memcmp would
+# accidentally look at it.
+@test egal_any54109(Torture1_54109(), Torture1_54109())
+@test egal_any54109(Torture2_54109(), Torture2_54109())
+@test !egal_any54109(Torture1_54109(), Torture1_54109((DefaultOr54109(2.0, false) for i = 1:897)...))
+
+bar54599() = Base.inferencebarrier(true) ? (Base.PkgId(Main),1) : nothing
+
+function foo54599()
+    pkginfo = @noinline bar54599()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    @noinline println(devnull, pkgid)
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+
+#this function used to crash allocopt due to a no predecessors bug
+barnopreds() = Base.inferencebarrier(true) ? (Base.PkgId(Test),1) : nothing
+function foonopreds()
+    pkginfo = @noinline barnopreds()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+@test foonopreds() !== nothing

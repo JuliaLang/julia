@@ -61,6 +61,10 @@ $(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$$(bu
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
+# Build the HTML docs (skipped if already exists, notably in tarballs)
+$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
+	@$(MAKE) docs
+
 julia-symlink: julia-cli-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
 	echo '@"%~dp0/'"$$(echo '$(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE))')"'" %*' | tr / '\\' > $(BUILDROOT)/julia.bat
@@ -202,8 +206,13 @@ JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
 else ifeq ($(JULIA_BUILD_MODE),debug)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
 endif
+# BSD-3-Clause
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libcamd libccolamd libcolamd libsuitesparseconfig
+# LGPL-2.1+
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libbtf libklu libldl
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libbtf libcamd libccolamd libcholmod libcolamd libklu libldl librbio libspqr libsuitesparseconfig libumfpack
+# GPL-2.0+
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libcholmod librbio libspqr libumfpack
 endif
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBBLASTRAMPOLINE) += libblastrampoline
 JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
@@ -272,7 +281,7 @@ define stringreplace
 endef
 
 
-install: $(build_depsbindir)/stringreplace docs
+install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) $(JULIA_BUILD_MODE)
 	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir) $(private_libexecdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
@@ -392,8 +401,8 @@ endif
 	mkdir -p $(DESTDIR)$(datarootdir)/applications/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.desktop $(DESTDIR)$(datarootdir)/applications/
 	# Install appdata file
-	mkdir -p $(DESTDIR)$(datarootdir)/appdata/
-	$(INSTALL_F) $(JULIAHOME)/contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/appdata/
+	mkdir -p $(DESTDIR)$(datarootdir)/metainfo/
+	$(INSTALL_F) $(JULIAHOME)/contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/metainfo/
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
@@ -450,7 +459,6 @@ endif
 ifeq ($(OS), Linux)
 	-$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
 endif
-
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
 ifeq ($(JULIA_BUILD_MODE),release)
@@ -530,7 +538,7 @@ app:
 darwinframework:
 	$(MAKE) -C $(JULIAHOME)/contrib/mac/framework
 
-light-source-dist.tmp: docs
+light-source-dist.tmp: $(BUILDROOT)/doc/_build/html/en/index.html
 ifneq ($(BUILDROOT),$(JULIAHOME))
 	$(error make light-source-dist does not work in out-of-tree builds)
 endif
@@ -599,7 +607,7 @@ clean: | $(CLEAN_TARGETS)
 	-rm -fr $(build_datarootdir)/julia/extras
 
 cleanall: clean
-	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
+	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support clean-gc
 	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv
 	-rm -fr $(build_prefix) $(build_staging)
 

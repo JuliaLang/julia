@@ -694,7 +694,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file, pkg.name)
         end
-        mby_ext = project_file_ext_path(project_file, pkg.name)
+        mby_ext = project_file_ext_path(project_file, pkg)
         mby_ext === nothing || return mby_ext
         # look for manifest file and `where` stanza
         return explicit_manifest_uuid_path(project_file, pkg)
@@ -709,7 +709,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             if parent_project_file !== nothing
                 parentproj = project_file_name_uuid(parent_project_file, parentid.name)
                 if parentproj == parentid
-                    mby_ext = project_file_ext_path(parent_project_file, pkg.name)
+                    mby_ext = project_file_ext_path(parent_project_file, pkg)
                     mby_ext === nothing || return mby_ext
                 end
             end
@@ -725,13 +725,13 @@ function find_ext_path(project_path::String, extname::String)
     return joinpath(project_path, "ext", extname * ".jl")
 end
 
-function project_file_ext_path(project_file::String, name::String)
+function project_file_ext_path(project_file::String, ext::PkgId)
     d = parsed_toml(project_file)
     p = dirname(project_file)
     exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
     if exts !== nothing
-        if name in keys(exts)
-            return find_ext_path(p, name)
+        if ext.name in keys(exts) && ext.uuid == uuid5(UUID(d["uuid"]::String), ext.name)
+            return find_ext_path(p, ext.name)
         end
     end
     return nothing
@@ -834,9 +834,7 @@ function implicit_env_project_file_extension(dir::String, ext::PkgId)
     for pkg in readdir(dir; join=true)
         project_file = env_project_file(pkg)
         project_file isa String || continue
-        proj = project_file_name_uuid(project_file, "")
-        uuid5(proj.uuid, ext.name) == ext.uuid || continue
-        path = project_file_ext_path(project_file, ext.name)
+        path = project_file_ext_path(project_file, ext)
         if path !== nothing
             return path, project_file
         end
@@ -2235,15 +2233,16 @@ function collect_manifest_warnings()
     if !isempty(unsuitable_manifests)
         msg *= """
         - Note that the following manifests in the load path were resolved with a different
-          julia version, which may be the cause of the error:
+          julia version, which may be the cause of the error. Try to re-resolve them in the
+          current version, or consider deleting them if that fails:
             $(join(unsuitable_manifests, "\n    "))
         """
     end
     if !isempty(dev_manifests)
         msg *= """
-        - Note that the following manifests in the load path were resolved a potentially
-          different DEV version of the current version, which may be the cause
-          of the error:
+        - Note that the following manifests in the load path were resolved with a potentially
+          different DEV version of the current version, which may be the cause of the error.
+          Try to re-resolve them in the current version, or consider deleting them if that fails:
             $(join(dev_manifests, "\n    "))
         """
     end
@@ -2273,7 +2272,7 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         run_package_callbacks(uuidkey)
     else
         m = get(loaded_modules, uuidkey, nothing)
-        if m !== nothing
+        if m !== nothing && !haskey(explicit_loaded_modules, uuidkey)
             explicit_loaded_modules[uuidkey] = m
             run_package_callbacks(uuidkey)
         end
@@ -2503,51 +2502,52 @@ function _require_from_serialized(uuidkey::PkgId, path::String, ocachepath::Unio
 end
 
 # load a serialized file directly from append_bundled_depot_path for uuidkey without stalechecks
-function require_stdlib(uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
+function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
     @lock require_lock begin
-    if root_module_exists(uuidkey)
-        return loaded_modules[uuidkey]
+    # the PkgId of the ext, or package if not an ext
+    this_uuidkey = ext isa String ? PkgId(uuid5(package_uuidkey.uuid, ext), ext) : package_uuidkey
+    if root_module_exists(this_uuidkey)
+        return loaded_modules[this_uuidkey]
     end
     # first since this is a stdlib, try to look there directly first
     env = Sys.STDLIB
     #sourcepath = ""
     if ext === nothing
-        sourcepath = normpath(env, uuidkey.name, "src", uuidkey.name * ".jl")
+        sourcepath = normpath(env, this_uuidkey.name, "src", this_uuidkey.name * ".jl")
     else
-        sourcepath = find_ext_path(normpath(joinpath(env, uuidkey.name)), ext)
-        uuidkey = PkgId(uuid5(uuidkey.uuid, ext), ext)
+        sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
     end
-    #mbypath = manifest_uuid_path(env, uuidkey)
+    #mbypath = manifest_uuid_path(env, this_uuidkey)
     #if mbypath isa String && isfile_casesensitive(mbypath)
     #    sourcepath = mbypath
     #else
     #    # if the user deleted the stdlib folder, we next try using their environment
-    #    sourcepath = locate_package_env(uuidkey)
+    #    sourcepath = locate_package_env(this_uuidkey)
     #    if sourcepath !== nothing
     #        sourcepath, env = sourcepath
     #    end
     #end
     #if sourcepath === nothing
     #    throw(ArgumentError("""
-    #        Package $(repr("text/plain", uuidkey)) is required but does not seem to be installed.
+    #        Package $(repr("text/plain", this_uuidkey)) is required but does not seem to be installed.
     #        """))
     #end
-    set_pkgorigin_version_path(uuidkey, sourcepath)
+    set_pkgorigin_version_path(this_uuidkey, sourcepath)
     depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
-    newm = start_loading(uuidkey)
+    newm = start_loading(this_uuidkey)
     newm === nothing || return newm
     try
-        newm = _require_search_from_serialized(uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
+        newm = _require_search_from_serialized(this_uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
     finally
-        end_loading(uuidkey, newm)
+        end_loading(this_uuidkey, newm)
     end
     if newm isa Module
         # After successfully loading, notify downstream consumers
-        insert_extension_triggers(env, uuidkey)
-        run_package_callbacks(uuidkey)
+        insert_extension_triggers(env, this_uuidkey)
+        run_package_callbacks(this_uuidkey)
     else
         # if the user deleted their bundled depot, next try to load it completely normally
-        newm = _require(uuidkey)
+        newm = _require_prelocked(this_uuidkey)
     end
     return newm
     end
@@ -3059,6 +3059,14 @@ end
 function module_build_id(m::Module)
     hi, lo = ccall(:jl_module_build_id, NTuple{2,UInt64}, (Any,), m)
     return (UInt128(hi) << 64) | lo
+end
+
+function object_build_id(obj)
+    mod = ccall(:jl_object_top_module, Any, (Any,), obj)
+    if mod === nothing
+        return nothing
+    end
+    return module_build_id(mod::Module)
 end
 
 function isvalid_cache_header(f::IOStream)

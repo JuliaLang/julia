@@ -156,7 +156,7 @@ end
     end
 end
 
-@inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
+@inline function getindex(A::Bidiagonal{T}, i::Int, j::Int) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.dv[i]
@@ -166,6 +166,19 @@ end
         return @inbounds A.ev[j]
     else
         return bidiagzero(A, i, j)
+    end
+end
+
+@inline function getindex(A::Bidiagonal{T}, b::BandIndex) where T
+    @boundscheck checkbounds(A, _cartinds(b))
+    if b.band == 0
+        return @inbounds A.dv[b.index]
+    elseif A.uplo == 'U' && b.band == 1
+        return @inbounds A.ev[b.index]
+    elseif A.uplo == 'L' && b.band == -1
+        return @inbounds A.ev[b.index]
+    else
+        return bidiagzero(A, Tuple(_cartinds(b))...)
     end
 end
 
@@ -183,6 +196,9 @@ end
     end
     return x
 end
+
+Base._reverse(A::Bidiagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::Bidiagonal, ::Colon) = Bidiagonal(reverse(A.dv), reverse(A.ev), A.uplo == 'U' ? :L : :U)
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::AbstractString)
@@ -275,7 +291,9 @@ for func in (:conj, :copy, :real, :imag)
     @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.uplo)
 end
 
-adjoint(B::Bidiagonal{<:Number}) = Bidiagonal(conj(B.dv), conj(B.ev), B.uplo == 'U' ? :L : :U)
+adjoint(B::Bidiagonal{<:Number}) = Bidiagonal(vec(adjoint(B.dv)), vec(adjoint(B.ev)), B.uplo == 'U' ? :L : :U)
+adjoint(B::Bidiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}}) =
+    Bidiagonal(adjoint(parent(B.dv)), adjoint(parent(B.ev)), B.uplo == 'U' ? :L : :U)
 transpose(B::Bidiagonal{<:Number}) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? :L : :U)
 permutedims(B::Bidiagonal) = Bidiagonal(B.dv, B.ev, B.uplo == 'U' ? 'L' : 'U')
 function permutedims(B::Bidiagonal, perm)
@@ -291,9 +309,25 @@ function Base.copy(tB::Transpose{<:Any,<:Bidiagonal})
     return Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
 end
 
+# copyto! for matching axes
+function _copyto_banded!(A::Bidiagonal, B::Bidiagonal)
+    A.dv .= B.dv
+    if A.uplo == B.uplo
+        A.ev .= B.ev
+    elseif iszero(B.ev) # diagonal source
+        A.ev .= zero.(A.ev)
+    else
+        zeroband = istriu(A) ? "lower" : "upper"
+        uplo = A.uplo
+        throw(ArgumentError(string("cannot set the ",
+            zeroband, " bidiagonal band to a nonzero value for uplo=:", uplo)))
+    end
+    return A
+end
+
 iszero(M::Bidiagonal) = iszero(M.dv) && iszero(M.ev)
 isone(M::Bidiagonal) = all(isone, M.dv) && iszero(M.ev)
-function istriu(M::Bidiagonal, k::Integer=0)
+Base.@constprop :aggressive function istriu(M::Bidiagonal, k::Integer=0)
     if M.uplo == 'U'
         if k <= 0
             return true
@@ -312,7 +346,7 @@ function istriu(M::Bidiagonal, k::Integer=0)
         end
     end
 end
-function istril(M::Bidiagonal, k::Integer=0)
+Base.@constprop :aggressive function istril(M::Bidiagonal, k::Integer=0)
     if M.uplo == 'U'
         if k >= 1
             return true
@@ -332,6 +366,8 @@ function istril(M::Bidiagonal, k::Integer=0)
     end
 end
 isdiag(M::Bidiagonal) = iszero(M.ev)
+issymmetric(M::Bidiagonal) = isdiag(M) && all(issymmetric, M.dv)
+ishermitian(M::Bidiagonal) = isdiag(M) && all(ishermitian, M.dv)
 
 function tril!(M::Bidiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
@@ -422,11 +458,16 @@ const BandedMatrix = Union{Bidiagonal,Diagonal,Tridiagonal,SymTridiagonal} # or 
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const TriSym = Union{Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-@inline _mul!(C::AbstractVector, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::AbstractMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractVector, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractMatrix, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractMatrix, A::AbstractMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
 lmul!(A::Bidiagonal, B::AbstractVecOrMat) = @inline _mul!(B, A, B, MulAddMul())
 rmul!(B::AbstractMatrix, A::Bidiagonal) = @inline _mul!(B, B, A, MulAddMul())

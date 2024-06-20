@@ -1049,13 +1049,28 @@ exception object to the given variable within the `catch` block.
 
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
+
+A `try` or `try`/`catch` block can also have a [`finally`](@ref) clause that executes
+at the end, regardless of whether an exception occurred.  For example, this can be
+used to guarantee that an opened file is closed:
+```julia
+f = open("file")
+try
+    operate_on_file(f)
+catch
+    @warn "An error occurred!"
+finally
+    close(f)
+end
+```
+(`finally` can also be used without a `catch` block.)
 """
 kw"try", kw"catch"
 
 """
     finally
 
-Run some code when a given block of code exits, regardless
+Run some code when a given `try` block of code exits, regardless
 of how it exits. For example, here is how we can guarantee that an opened file is
 closed:
 
@@ -1626,6 +1641,34 @@ julia> ex.msg
 ErrorException
 
 """
+    FieldError(type::DataType, field::Symbol)
+
+An operation tried to access invalid `field` of `type`.
+
+!!! compat "Julia 1.12"
+    Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
+
+See [`getfield`](@ref)
+
+# Examples
+```jldoctest
+julia> struct AB
+          a::Float32
+          b::Float64
+       end
+
+julia> ab = AB(1, 3)
+AB(1.0f0, 3.0)
+
+julia> ab.c # field `c` doesn't exist
+ERROR: FieldError: type AB has no field c
+Stacktrace:
+[...]
+```
+"""
+FieldError
+
+"""
     WrappedException(msg)
 
 Generic type for `Exception`s wrapping another `Exception`, such as `LoadError` and
@@ -1771,7 +1814,8 @@ The task will run in the "world age" from the parent at construction when [`sche
 !!! warning
     By default tasks will have the sticky bit set to true `t.sticky`. This models the
     historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
-    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
     bit manually to `false`.
 
 # Examples
@@ -2495,12 +2539,17 @@ cases.
 See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
-```jldoctest
-julia> module M end;
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> module M; global a; end;
 
 julia> M.a  # same as `getglobal(M, :a)`
 ERROR: UndefVarError: `a` not defined in `M`
-Suggestion: check for spelling errors or missing imports.
+Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
+Stacktrace:
+ [1] getproperty(x::Module, f::Symbol)
+   @ Base ./Base.jl:42
+ [2] top-level scope
+   @ none:1
 
 julia> setglobal!(M, :a, 1)
 1
@@ -2668,23 +2717,23 @@ julia> Memory{Float64}(undef, 3)
 Memory{T}(::UndefInitializer, n)
 
 """
-    MemoryRef(memory)
+    memoryref(::GenericMemory)
 
-Construct a MemoryRef from a memory object. This does not fail, but the
-resulting memory may point out-of-bounds if the memory is empty.
+Construct a `GenericMemoryRef` from a memory object. This does not fail, but the
+resulting memory will point out-of-bounds if and only if the memory is empty.
 """
-MemoryRef(::Memory)
+memoryref(::GenericMemory)
 
 """
-    MemoryRef(::Memory, index::Integer)
-    MemoryRef(::MemoryRef, index::Integer)
+    memoryref(::GenericMemory, index::Integer)
+    memoryref(::GenericMemoryRef, index::Integer)
 
-Construct a MemoryRef from a memory object and an offset index (1-based) which
+Construct a `GenericMemoryRef` from a memory object and an offset index (1-based) which
 can also be negative. This always returns an inbounds object, and will throw an
 error if that is not possible (because the index would result in a shift
 out-of-bounds of the underlying memory).
 """
-MemoryRef(::Union{Memory,MemoryRef}, ::Integer)
+memoryref(::Union{GenericMemory,GenericMemoryRef}, ::Integer)
 
 """
     Vector{T}(undef, n)
@@ -3715,6 +3764,20 @@ The current differences are:
 - `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
+
+"""
+    ConcurrencyViolationError(msg) <: Exception
+
+An error thrown when a detectable violation of concurrent semantics has occurred.
+
+A non-exhaustive list of examples of when this is used include:
+
+ * Throwing when a deadlock has been detected (e.g. `wait(current_task())`)
+ * Known-unsafe behavior is attempted (e.g. `yield(current_task)`)
+ * A known non-threadsafe datastructure is attempted to be modified from multiple concurrent tasks
+ * A lock is being unlocked that wasn't locked by this task
+"""
+ConcurrencyViolationError
 
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 

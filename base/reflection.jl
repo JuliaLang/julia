@@ -18,7 +18,7 @@ julia> parentmodule(Base.Broadcast)
 Base
 ```
 """
-parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (Any,), m))
 
 is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
 
@@ -30,6 +30,7 @@ parent modules of `m` which is either a registered root module or which is its
 own parent module.
 """
 function moduleroot(m::Module)
+    @_total_meta
     while true
         is_root_module(m) && return m
         p = parentmodule(m)
@@ -63,6 +64,7 @@ julia> fullname(Main)
 ```
 """
 function fullname(m::Module)
+    @_total_meta
     mn = nameof(m)
     if m === Main || m === Base || m === Core
         return (mn,)
@@ -75,28 +77,33 @@ function fullname(m::Module)
 end
 
 """
-    names(x::Module; all::Bool = false, imported::Bool = false)
+    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) -> Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
-are also included. Names are returned in sorted order.
+are also included.
+If `usings` is true, then names explicitly imported via `using` are also included.
+Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
 
 !!! note
     `sym ∈ names(SomeModule)` does *not* imply `isdefined(SomeModule, sym)`.
-    `names` will return symbols marked with `public` or `export`, even if
+    `names` may return symbols marked with `public` or `export`, even if
     they are not defined in the module.
+
+!!! warning
+    `names` may return duplicate names. The duplication happens, e.g. if an `import`ed name
+    conflicts with an already existing identifier.
 
 See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
-names(m::Module; all::Bool = false, imported::Bool = false) =
-    sort!(unsorted_names(m; all, imported))
-unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
-    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
+names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
+unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, usings)
 
 """
     isexported(m::Module, s::Symbol) -> Bool
@@ -488,8 +495,8 @@ gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
     Base.datatype_haspadding(dt::DataType) -> Bool
 
 Return whether the fields of instances of this type are packed in memory,
-with no intervening padding bits (defined as bits whose value does not uniquely
-impact the egal test when applied to the struct fields).
+with no intervening padding bits (defined as bits whose value does not impact
+the semantic value of the instance itself).
 Can be called on any `isconcretetype`.
 """
 function datatype_haspadding(dt::DataType)
@@ -497,6 +504,21 @@ function datatype_haspadding(dt::DataType)
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return flags & 1 == 1
+end
+
+"""
+    Base.datatype_isbitsegal(dt::DataType) -> Bool
+
+Return whether egality of the (non-padding bits of the) in-memory representation
+of an instance of this type implies semantic egality of the instance itself.
+This may not be the case if the type contains to other values whose egality is
+independent of their identity (e.g. immutable structs, some types, etc.).
+"""
+function datatype_isbitsegal(dt::DataType)
+    @_foldable_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
+    return (flags & (1<<5)) != 0
 end
 
 """
@@ -513,6 +535,17 @@ function datatype_nfields(dt::DataType)
 end
 
 """
+    Base.datatype_npointers(dt::DataType) -> Int
+
+Return the number of pointers in the layout of a datatype.
+"""
+function datatype_npointers(dt::DataType)
+    @_foldable_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+end
+
+"""
     Base.datatype_pointerfree(dt::DataType) -> Bool
 
 Return whether instances of this type can contain references to gc-managed memory.
@@ -520,9 +553,7 @@ Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
-    return npointers == 0
+    return datatype_npointers(dt) == 0
 end
 
 """
@@ -954,7 +985,7 @@ julia> struct Foo
        end
 
 julia> Base.fieldindex(Foo, :z)
-ERROR: type Foo has no field z
+ERROR: FieldError: type Foo has no field z
 Stacktrace:
 [...]
 
@@ -1003,12 +1034,15 @@ function datatype_fieldcount(t::DataType)
             return fieldcount(types)
         end
         return nothing
-    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+    elseif isabstracttype(t)
         return nothing
     end
-    if isdefined(t, :types)
+    if t.name === Tuple.name
+        isvatuple(t) && return nothing
         return length(t.types)
     end
+    # Equivalent to length(t.types), but `t.types` is lazy and we do not want
+    # to be forced to compute it.
     return length(t.name.names)
 end
 
@@ -1134,7 +1168,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     for m in method_instances(f, t, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
-                code = ccall(:jl_code_for_staged, Any, (Any, UInt), m, world)::CodeInfo
+                code = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)::CodeInfo
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
@@ -1602,6 +1636,12 @@ function default_tt(@nospecialize(f))
     end
 end
 
+function raise_match_failure(name::Symbol, @nospecialize(tt))
+    @noinline
+    sig_str = sprint(Base.show_tuple_as_call, Symbol(""), tt)
+    error("$name: unanalyzable call given $sig_str")
+end
+
 """
     code_typed_by_type(types::Type{<:Tuple}; ...)
 
@@ -1624,16 +1664,17 @@ function code_typed_by_type(@nospecialize(tt::Type);
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     tt = to_tuple_type(tt)
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:code_typed, tt)
     asts = []
-    for match in matches
+    for match in matches.matches
         match = match::Core.MethodMatch
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, optimize)
+        code = Core.Compiler.typeinf_code(interp, match, optimize)
         if code === nothing
             push!(asts, match.method => Any)
         else
             debuginfo === :none && remove_linenums!(code)
-            push!(asts, code => ty)
+            push!(asts, code => code.rettype)
         end
     end
     return asts
@@ -1650,14 +1691,19 @@ function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
                 tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
                 mi = Core.Compiler.specialize_method(m, tt, Core.svec())
                 interp = Core.Compiler.NativeInterpreter(m.primary_world)
-                return Core.Compiler.typeinf_code(interp, mi, optimize)
+                code = Core.Compiler.typeinf_code(interp, mi, optimize)
+                if code isa CodeInfo
+                    return Pair{CodeInfo, Any}(code, code.rettype)
+                end
+                error("inference not successful")
             else
                 code = _uncompressed_ir(m)
-                return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+                return Pair{CodeInfo, Any}(code, typeof(oc).parameters[2])
             end
         else
             # OC constructed from optimized IR
             codeinst = m.specializations.cache
+            # XXX: the inferred field is not normally a CodeInfo, but this assumes it is guaranteed to be always
             return Pair{CodeInfo, Any}(codeinst.inferred, codeinst.rettype)
         end
     else
@@ -1741,9 +1787,10 @@ function code_ircode_by_type(
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     tt = to_tuple_type(tt)
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:code_ircode, tt)
     asts = []
-    for match in matches
+    for match in matches.matches
         match = match::Core.MethodMatch
         (code, ty) = Core.Compiler.typeinf_ircode(interp, match, optimize_until)
         if code === nothing
@@ -1767,6 +1814,12 @@ function _builtin_effects(interp::Core.Compiler.AbstractInterpreter,
     argtypes = Any[to_tuple_type(types).parameters...]
     rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
     return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
+end
+
+function _builtin_exception_type(interp::Core.Compiler.AbstractInterpreter,
+                                 @nospecialize(f::Core.Builtin), @nospecialize(types))
+    effects = _builtin_effects(interp, f, types)
+    return Core.Compiler.is_nothrow(effects) ? Union{} : Any
 end
 
 check_generated_context(world::UInt) =
@@ -1827,15 +1880,14 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     if isa(f, Core.OpaqueClosure)
         _, rt = only(code_typed_opaque_closure(f, types))
         return Any[rt]
+    elseif isa(f, Core.Builtin)
+        return Any[_builtin_return_type(interp, f, types)]
     end
-    if isa(f, Core.Builtin)
-        rt = _builtin_return_type(interp, f, types)
-        return Any[rt]
-    end
-    rts = Any[]
     tt = signature_type(f, types)
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
-    for match in matches
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:return_types, tt)
+    rts = Any[]
+    for match in matches.matches
         ty = Core.Compiler.typeinf_type(interp, match::Core.MethodMatch)
         push!(rts, something(ty, Any))
     end
@@ -1895,17 +1947,12 @@ function infer_return_type(@nospecialize(f), @nospecialize(types=default_tt(f));
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         return last(only(code_typed_opaque_closure(f, types)))
-    end
-    if isa(f, Core.Builtin)
+    elseif isa(f, Core.Builtin)
         return _builtin_return_type(interp, f, types)
     end
     tt = signature_type(f, types)
     matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
-    if matches === nothing
-        # unanalyzable call, i.e. the interpreter world might be newer than the world where
-        # the `f` is defined, return the unknown return type
-        return Any
-    end
+    matches === nothing && raise_match_failure(:infer_return_type, tt)
     rt = Union{}
     for match in matches.matches
         ty = Core.Compiler.typeinf_type(interp, match::Core.MethodMatch)
@@ -1970,18 +2017,15 @@ function infer_exception_types(@nospecialize(f), @nospecialize(types=default_tt(
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         return Any[Any] # TODO
+    elseif isa(f, Core.Builtin)
+        return Any[_builtin_exception_type(interp, f, types)]
     end
-    if isa(f, Core.Builtin)
-        effects = _builtin_effects(interp, f, types)
-        exct = Core.Compiler.is_nothrow(effects) ? Union{} : Any
-        return Any[exct]
-    end
-    excts = Any[]
     tt = signature_type(f, types)
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
-    for match in matches
-        match = match::Core.MethodMatch
-        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#false)
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:infer_exception_types, tt)
+    excts = Any[]
+    for match in matches.matches
+        frame = Core.Compiler.typeinf_frame(interp, match::Core.MethodMatch, #=run_optimizer=#false)
         if frame === nothing
             exct = Any
         else
@@ -2052,18 +2096,12 @@ function infer_exception_type(@nospecialize(f), @nospecialize(types=default_tt(f
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
         return Any # TODO
-    end
-    if isa(f, Core.Builtin)
-        effects = _builtin_effects(interp, f, types)
-        return Core.Compiler.is_nothrow(effects) ? Union{} : Any
+    elseif isa(f, Core.Builtin)
+        return _builtin_exception_type(interp, f, types)
     end
     tt = signature_type(f, types)
     matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
-    if matches === nothing
-        # unanalyzable call, i.e. the interpreter world might be newer than the world where
-        # the `f` is defined, return the unknown exception type
-        return Any
-    end
+    matches === nothing && raise_match_failure(:infer_exception_type, tt)
     exct = Union{}
     if _may_throw_methoderror(matches)
         # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -2081,6 +2119,7 @@ end
 """
     Base.infer_effects(
         f, types=default_tt(f);
+        optimize::Bool=true,
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> effects::Effects
 
@@ -2089,6 +2128,7 @@ Returns the possible computation effects of the function call specified by `f` a
 # Arguments
 - `f`: The function to analyze.
 - `types` (optional): The argument types of the function. Defaults to the default tuple type of `f`.
+- `optimize` (optional): Whether to run additional effects refinements based on post-optimization analysis.
 - `world` (optional): The world counter to use for the analysis. Defaults to the current world counter.
 - `interp` (optional): The abstract interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
 
@@ -2136,6 +2176,7 @@ signature, the `:nothrow` bit gets tainted.
 - [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
 """
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
+                       optimize::Bool=true,
                        world::UInt=get_world_counter(),
                        interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     check_generated_context(world)
@@ -2144,11 +2185,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     end
     tt = signature_type(f, types)
     matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
-    if matches === nothing
-        # unanalyzable call, i.e. the interpreter world might be newer than the world where
-        # the `f` is defined, return the unknown effects
-        return Core.Compiler.Effects()
-    end
+    matches === nothing && raise_match_failure(:infer_effects, tt)
     effects = Core.Compiler.EFFECTS_TOTAL
     if _may_throw_methoderror(matches)
         # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -2156,7 +2193,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     end
     for match in matches.matches
         match = match::Core.MethodMatch
-        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#true)
+        frame = Core.Compiler.typeinf_frame(interp, match, #=run_optimizer=#optimize)
         frame === nothing && return Core.Compiler.Effects()
         effects = Core.Compiler.merge_effects(effects, frame.result.ipo_effects)
     end
@@ -2179,13 +2216,14 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
                                interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     tt = to_tuple_type(tt)
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
+    matches = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    matches === nothing && raise_match_failure(:print_statement_costs, tt)
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
-    for match in matches
+    for match in matches.matches
         match = match::Core.MethodMatch
         println(io, match.method)
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, true)
+        code = Core.Compiler.typeinf_code(interp, match, true)
         if code === nothing
             println(io, "  inference not successful")
         else

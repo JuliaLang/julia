@@ -31,7 +31,6 @@ JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT;
 // JL_HAVE_ASM && JL_HAVE_UNW_CONTEXT -- libunwind-based
 // JL_HAVE_UNW_CONTEXT -- libunwind-based
 // JL_HAVE_UCONTEXT -- posix standard API, requires syscall for resume
-// JL_HAVE_SIGALTSTACK -- requires several syscall for start, setjmp for resume
 
 #ifdef _OS_WINDOWS_
 #define JL_HAVE_UCONTEXT
@@ -53,8 +52,7 @@ typedef struct {
 } jl_stack_context_t;
 #if !defined(JL_HAVE_UCONTEXT) && \
     !defined(JL_HAVE_ASM) && \
-    !defined(JL_HAVE_UNW_CONTEXT) && \
-    !defined(JL_HAVE_SIGALTSTACK)
+    !defined(JL_HAVE_UNW_CONTEXT)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
      defined(_CPU_ARM_) || defined(_CPU_PPC64_))
 #define JL_HAVE_ASM
@@ -70,7 +68,7 @@ typedef struct {
 #endif
 #endif
 
-#if (!defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)) || defined(JL_HAVE_SIGALTSTACK)
+#if !defined(JL_HAVE_UNW_CONTEXT) && defined(JL_HAVE_ASM)
 typedef jl_stack_context_t _jl_ucontext_t;
 #endif
 #pragma GCC visibility push(default)
@@ -372,6 +370,9 @@ extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
+
+JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize);
+JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize);
 
 #ifdef __cplusplus
 }

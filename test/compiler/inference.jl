@@ -479,7 +479,7 @@ end
 @test f15259(1,2) == (1,2,1,2)
 # check that error cases are still correct
 @eval g15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); a.z)
-@test_throws ErrorException g15259(1,1)
+@test_throws FieldError g15259(1,1)
 @eval h15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); getfield(a, 3))
 @test_throws BoundsError h15259(1,1)
 
@@ -1097,7 +1097,7 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 
 # PR #28284, check that constants propagate through calls to new
 struct t28284
-  x::Int
+    x::Int
 end
 f28284() = Val(t28284(1))
 @inferred f28284()
@@ -1937,6 +1937,8 @@ function f24852_kernel_cinfo(world::UInt, source, fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
+    code_info.nargs = 4
+    code_info.isva = false
     # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
     # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
     return match.method, code_info
@@ -4260,10 +4262,10 @@ let # Test the presence of PhiNodes in lowered IR by taking the above function,
     Core.Compiler.replace_code_newstyle!(ci, ir)
     ci.ssavaluetypes = length(ci.ssavaluetypes)
     @test any(x->isa(x, Core.PhiNode), ci.code)
-    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(b, 1.0)
     @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
-    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
 end
@@ -4435,7 +4437,7 @@ let x = Tuple{Int,Any}[
         #=19=# (0, Expr(:pop_exception, Core.SSAValue(2)))
         #=20=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
-    handler_at, handlers = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    (;handler_at, handlers) = Core.Compiler.compute_trycatch(last.(x))
     @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
 end
 
@@ -4487,6 +4489,8 @@ let
         } where Bound<:Integer
     argtypes = Core.Compiler.most_general_argtypes(method, specTypes)
     popfirst!(argtypes)
+    # N.B.: `argtypes` do not have va processing applied yet
+    @test length(argtypes) == 12
     @test argtypes[1] == Integer
     @test argtypes[2] == Integer
     @test argtypes[3] == Type{Bound} where Bound<:Integer
@@ -4497,7 +4501,8 @@ let
     @test argtypes[8] == Any
     @test argtypes[9] == Union{Nothing,Bound} where Bound<:Integer
     @test argtypes[10] == Any
-    @test argtypes[11] == Tuple{Integer,Integer}
+    @test argtypes[11] == Integer
+    @test argtypes[12] == Integer
 end
 
 # make sure not to call `widenconst` on `TypeofVararg` objects
@@ -5286,6 +5291,15 @@ end
 foo51090(b) = return bar51090(b)
 @test !fully_eliminated(foo51090, (Int,))
 
+Base.@assume_effects :terminates_globally @noinline function bar51090_terminates(b)
+    b == 0 && return
+    r = foo51090_terminates(b - 1)
+    Base.donotdelete(b)
+    return r
+end
+foo51090_terminates(b) = return bar51090_terminates(b)
+@test !fully_eliminated(foo51090_terminates, (Int,))
+
 # exploit throwness from concrete eval for intrinsics
 @test Base.return_types() do
     Base.or_int(true, 1)
@@ -5600,6 +5614,13 @@ end |> only === Float64
 @test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
 @test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError
 
+# exception type inference for `:new`
+struct NewExctInference
+    a::Int
+    @eval NewExctInference(a) = $(Expr(:new, :NewExctInference, :a))
+end
+@test Base.infer_exception_type(NewExctInference, (Float64,)) == TypeError
+
 # semi-concrete interpretation accuracy
 # https://github.com/JuliaLang/julia/issues/50037
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
@@ -5653,6 +5674,8 @@ function gen_tuin_from_arg(world::UInt, source, _, _)
         ReturnNode(true),
     ]; slottypes=Any[Any, Bool])
     ci.slotnames = Symbol[:var"#self#", :def]
+    ci.nargs = 2
+    ci.isva = false
     ci
 end
 
@@ -5684,6 +5707,8 @@ function gen_infinite_loop_ssa_generator(world::UInt, source, _)
         ReturnNode(SSAValue(2))
     ]; slottypes=Any[Any])
     ci.slotnames = Symbol[:var"#self#"]
+    ci.nargs = 1
+    ci.isva = false
     ci
 end
 
@@ -5718,3 +5743,17 @@ let interp = CachedConditionalInterp();
         result.linfo.def.name === :func_cached_conditional
     end == 1
 end
+
+# fieldcount on `Tuple` should constant fold, even though `.fields` not const
+@test fully_eliminated(Base.fieldcount, Tuple{Type{Tuple{Nothing, Int, Int}}})
+
+# Vararg-constprop regression from MutableArithmetics (#54341)
+global SIDE_EFFECT54341::Int
+function foo54341(a, b, c, d, args...)
+    # Side effect to force constprop rather than semi-concrete
+    global SIDE_EFFECT54341 = a + b + c + d
+    return SIDE_EFFECT54341
+end
+bar54341(args...) = foo54341(4, args...)
+
+@test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int

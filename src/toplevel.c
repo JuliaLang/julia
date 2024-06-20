@@ -155,7 +155,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
     else {
-        jl_binding_t *b = jl_get_binding_wr(parent_module, name);
+        jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
         jl_declare_constant(b, parent_module, name);
         jl_value_t *old = NULL;
         if (!jl_atomic_cmpswap(&b->value, &old, (jl_value_t*)newm)) {
@@ -325,7 +325,7 @@ void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
             gs = (jl_sym_t*)arg;
         }
         if (!jl_binding_resolved_p(gm, gs)) {
-            jl_binding_t *b = jl_get_binding_wr(gm, gs);
+            jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
             if (set_type) {
                 jl_value_t *old_ty = NULL;
                 // maybe set the type too, perhaps
@@ -598,13 +598,29 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     return 1;
 }
 
-static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
+JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src)
 {
-    jl_method_instance_t *li = jl_new_method_instance_uninit();
-    jl_atomic_store_relaxed(&li->uninferred, (jl_value_t*)src);
-    li->specTypes = (jl_value_t*)jl_emptytuple_type;
-    li->def.module = module;
-    return li;
+    // Do not compress this, we expect it to be shortlived.
+    jl_code_instance_t *ci = jl_new_codeinst(mi, (jl_value_t*)jl_uninferred_sym,
+        (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, jl_nothing,
+        (jl_value_t*)src, 0, src->min_world, src->max_world,
+        0, NULL, 1, NULL);
+    return ci;
+}
+
+JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
+{
+    jl_method_instance_t *mi = jl_new_method_instance_uninit();
+    mi->specTypes = (jl_value_t*)jl_emptytuple_type;
+    mi->def.module = module;
+    JL_GC_PUSH1(&mi);
+
+    jl_code_instance_t *ci = jl_new_codeinst_for_uninferred(mi, src);
+    jl_atomic_store_relaxed(&mi->cache, ci);
+    jl_gc_wb(mi, ci);
+
+    JL_GC_POP();
+    return mi;
 }
 
 static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym_t *asname)
@@ -622,7 +638,7 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
                       jl_symbol_name(name), jl_symbol_name(m->name));
     }
     else {
-        b = jl_get_binding_wr(m, name);
+        b = jl_get_binding_wr(m, name, 1);
     }
     jl_declare_constant(b, m, name);
     jl_checked_assignment(b, m, name, (jl_value_t*)import);
@@ -881,7 +897,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             gm = m;
             gs = (jl_sym_t*)arg;
         }
-        jl_binding_t *b = jl_get_binding_wr(gm, gs);
+        jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
         jl_declare_constant(b, gm, gs);
         JL_GC_POP();
         return jl_nothing;
@@ -930,7 +946,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_OFF &&
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
-        mfunc = method_instance_for_thunk(thk, m);
+        mfunc = jl_method_instance_for_thunk(thk, m);
         jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
         // Don't infer blocks containing e.g. method definitions, since it's probably not
         // worthwhile and also unsound (see #24316).
@@ -1018,7 +1034,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 
 JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
 {
-    jl_method_instance_t *li = method_instance_for_thunk(thk, m);
+    jl_method_instance_t *li = jl_method_instance_for_thunk(thk, m);
     JL_GC_PUSH1(&li);
     jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
     jl_task_t *ct = jl_current_task;

@@ -114,6 +114,7 @@ Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
 AbstractMatrix{T}(D::Diagonal{T}) where {T} = copy(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
+Matrix(D::Diagonal{Any}) = Matrix{Any}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 function Matrix{T}(D::Diagonal) where {T}
     B = Matrix{T}(undef, size(D))
@@ -136,7 +137,8 @@ Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, 
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
 similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(D.diag, T, dims)
 
-copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
+# copyto! for matching axes
+_copyto_banded!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (n = length(D.diag); (n,n))
 
@@ -186,6 +188,16 @@ end
 diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
 diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
+@inline function getindex(D::Diagonal, b::BandIndex)
+    @boundscheck checkbounds(D, b)
+    if b.band == 0
+        @inbounds r = D.diag[b.index]
+    else
+        r = diagzero(D, Tuple(_cartinds(b))...)
+    end
+    r
+end
+
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
@@ -206,6 +218,10 @@ parent(D::Diagonal) = D.diag
 
 copy(D::Diagonal) = Diagonal(copy(D.diag))
 
+Base._reverse(A::Diagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::Diagonal, ::Colon) = Diagonal(reverse(A.diag))
+Base._reverse!(A::Diagonal, ::Colon) = (reverse!(A.diag); A)
+
 ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
 ishermitian(D::Diagonal) = all(ishermitian, D.diag)
@@ -222,8 +238,8 @@ iszero(D::Diagonal) = all(iszero, D.diag)
 isone(D::Diagonal) = all(isone, D.diag)
 isdiag(D::Diagonal) = all(isdiag, D.diag)
 isdiag(D::Diagonal{<:Number}) = true
-istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
-istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
+Base.@constprop :aggressive istriu(D::Diagonal, k::Integer=0) = k <= 0 || iszero(D.diag) ? true : false
+Base.@constprop :aggressive istril(D::Diagonal, k::Integer=0) = k >= 0 || iszero(D.diag) ? true : false
 function triu!(D::Diagonal{T}, k::Integer=0) where T
     n = size(D,1)
     if !(-n + 1 <= k <= n + 1)
@@ -909,6 +925,36 @@ end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
 
+function cholesky!(A::Diagonal, ::RowMaximum; tol=0.0, check=true)
+    if !ishermitian(A)
+        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
+                            tol, convert(BlasInt, -1))
+        check && checkpositivedefinite(convert(BlasInt, -1))
+    else
+        d = A.diag
+        n = length(d)
+        info = 0
+        rank = n
+        p = sortperm(d, rev = true, by = real)
+        tol = tol < 0 ? n*eps(eltype(A))*real(d[p[1]]) : tol # LAPACK behavior
+        permute!(d, p)
+        @inbounds for i in eachindex(d)
+            di = d[i]
+            rootdi, j = _cholpivoted!(di, tol)
+            if j == 0
+                d[i] = rootdi
+            else
+                rank = i - 1
+                info = 1
+                break
+            end
+        end
+        C = CholeskyPivoted(A, 'U', p, convert(BlasInt, rank), tol, convert(BlasInt, info))
+        check && chkfullrank(C)
+    end
+    return C
+end
+
 inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
 
 cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))
@@ -946,3 +992,6 @@ end
 function Base.muladd(A::Diagonal, B::Diagonal, z::Diagonal)
     Diagonal(A.diag .* B.diag .+ z.diag)
 end
+
+uppertriangular(D::Diagonal) = D
+lowertriangular(D::Diagonal) = D

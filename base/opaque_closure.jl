@@ -77,7 +77,10 @@ function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
     end
     src.slotflags = fill(zero(UInt8), nargtypes)
     src.slottypes = copy(ir.argtypes)
+    src.isva = isva
+    src.nargs = nargtypes
     src = Core.Compiler.ir_to_codeinf!(src, ir)
+    src.rettype = rt
     return generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; kwargs...)
 end
 

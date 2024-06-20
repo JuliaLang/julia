@@ -354,3 +354,15 @@ end
         @test istaskfailed(t)
     end
 end
+
+@testset "jl_*affinity" begin
+    cpumasksize = @ccall uv_cpumask_size()::Cint
+    if !Sys.iswindows() && cpumasksize > 0 # otherwise affinities are not supported on the platform (UV_ENOTSUP)
+        mask = zeros(Cchar, cpumasksize);
+        jl_getaffinity = (tid, mask, cpumasksize) -> ccall(:jl_getaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        jl_setaffinity = (tid, mask, cpumasksize) -> ccall(:jl_setaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        @test jl_getaffinity(1, mask, cpumasksize) == 0
+        fill!(mask, 1)
+        @test jl_setaffinity(1, mask, cpumasksize) == 0
+    end
+end

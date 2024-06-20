@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :ipo_purity_bits, :analysis_results]),
+        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
@@ -32,9 +32,9 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
         (Core.Method, [:primary_world, :deleted_world]),
-        (Core.MethodInstance, [:uninferred, :cache, :precompiled]),
+        (Core.MethodInstance, [:cache, :precompiled]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
@@ -1924,9 +1924,9 @@ end
 
 # issue #4526
 f4526(x) = isa(x.a, Nothing)
-@test_throws ErrorException f4526(1)
-@test_throws ErrorException f4526(im)
-@test_throws ErrorException f4526(1+2im)
+@test_throws FieldError f4526(1)
+@test_throws FieldError f4526(im)
+@test_throws FieldError f4526(1+2im)
 
 # issue #4528
 function f4528(A, B)
@@ -4298,13 +4298,13 @@ end
 abstract type abstest_14825 end
 
 mutable struct t1_14825{A <: abstest_14825, B}
-  x::A
-  y::B
+    x::A
+    y::B
 end
 
 mutable struct t2_14825{C, B} <: abstest_14825
-  x::C
-  y::t1_14825{t2_14825{C, B}, B}
+    x::C
+    y::t1_14825{t2_14825{C, B}, B}
 end
 
 @test t2_14825{Int,Int}.types[2] <: t1_14825
@@ -6251,6 +6251,16 @@ let
     @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A5)), 6)
 end
 
+# More unsafe_wrap
+let
+    a = [1, 2, 3]
+    GC.@preserve a begin
+        m = unsafe_wrap(Memory{Int}, pointer(a), (3,))
+        @test m == a
+        @test m isa Memory{Int}
+    end
+end
+
 # copyto!
 A23567 = Vector{Union{Float64, Nothing}}(undef, 5)
 B23567 = collect(Union{Float64, Nothing}, 1.0:3.0)
@@ -6779,14 +6789,14 @@ primitive type TypeWith24Bits 24 end
 TypeWith24Bits(x::UInt32) = Core.Intrinsics.trunc_int(TypeWith24Bits, x)
 let x = TypeWith24Bits(0x112233), y = TypeWith24Bits(0x445566), z = TypeWith24Bits(0x778899)
     a = [x, x]
-    Core.memoryrefset!(Core.memoryref(a.ref, 2, true), y, :not_atomic, true)
+    Core.memoryrefset!(Core.memoryrefnew(a.ref, 2, true), y, :not_atomic, true)
     @test a == [x, y]
     a[2] = z
     @test a == [x, z]
     @test pointer(a, 2) - pointer(a, 1) == 4
 
     b = [(x, x), (x, x)]
-    Core.memoryrefset!(Core.memoryref(b.ref, 2, true), (x, y), :not_atomic, true)
+    Core.memoryrefset!(Core.memoryrefnew(b.ref, 2, true), (x, y), :not_atomic, true)
     @test b == [(x, x), (x, y)]
     b[2] = (y, z)
     @test b == [(x, x), (y, z)]
@@ -7212,6 +7222,20 @@ end
 @test_throws ArgumentError Array{Int, 2}(undef, 0, -10)
 @test_throws ArgumentError Array{Int, 2}(undef, -10, 0)
 @test_throws ArgumentError Array{Int, 2}(undef, -1, -1)
+
+# issue #54244
+# test that zero sized array doesn't throw even with large axes
+bignum = Int==Int64 ? 2^32 : 2^16
+Array{Int}(undef, 0, bignum, bignum)
+Array{Int}(undef, bignum, bignum, 0)
+Array{Int}(undef, bignum, bignum, 0, bignum, bignum)
+# but also test that it does throw if the axes multiply to a multiple of typemax(UInt)
+@test_throws ArgumentError Array{Int}(undef, bignum, bignum)
+@test_throws ArgumentError Array{Int}(undef, 1, bignum, bignum)
+# also test that we always throw erros for negative dims even if other dims are 0 or the product is positive
+@test_throws ArgumentError Array{Int}(undef, 0, -4, -4)
+@test_throws ArgumentError Array{Int}(undef, -4, 1, 0)
+@test_throws ArgumentError Array{Int}(undef, -4, -4, 1)
 
 # issue #28812
 @test Tuple{Vararg{Array{T} where T,3}} === Tuple{Array,Array,Array}
@@ -7729,13 +7753,17 @@ struct ContainsPointerNopadding{T}
 end
 
 @test !Base.datatype_haspadding(PointerNopadding{Symbol})
+@test Base.datatype_isbitsegal(PointerNopadding{Int})
 @test !Base.datatype_haspadding(PointerNopadding{Int})
+@test Base.datatype_isbitsegal(PointerNopadding{Int})
 # Sanity check to make sure the meaning of haspadding didn't change.
-@test Base.datatype_haspadding(PointerNopadding{Any})
+@test !Base.datatype_haspadding(PointerNopadding{Any})
+@test !Base.datatype_isbitsegal(PointerNopadding{Any})
 @test !Base.datatype_haspadding(Tuple{PointerNopadding{Symbol}})
 @test !Base.datatype_haspadding(Tuple{PointerNopadding{Int}})
 @test !Base.datatype_haspadding(ContainsPointerNopadding{Symbol})
-@test Base.datatype_haspadding(ContainsPointerNopadding{Int})
+@test !Base.datatype_haspadding(ContainsPointerNopadding{Int})
+@test !Base.datatype_isbitsegal(ContainsPointerNopadding{Int})
 
 # Test the codegen optimized version as well as the unoptimized version of `jl_egal`
 @noinline unopt_jl_egal(@nospecialize(a), @nospecialize(b)) =
@@ -8117,6 +8145,7 @@ end
 @test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
 
 let M = @__MODULE__
+    Core.eval(M, :(global a_typed_global))
     @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing

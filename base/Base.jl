@@ -152,7 +152,8 @@ end
 """
     time_ns() -> UInt64
 
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
+between two moments in time.
 """
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
@@ -402,8 +403,11 @@ include("weakkeydict.jl")
 include("scopedvalues.jl")
 using .ScopedValues
 
+# metaprogramming
+include("meta.jl")
+
 # Logging
-include("logging.jl")
+include("logging/logging.jl")
 using .CoreLogging
 
 include("env.jl")
@@ -494,9 +498,6 @@ include("combinatorics.jl")
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
-
-# metaprogramming
-include("meta.jl")
 
 # Stack frames and traces
 include("stacktraces.jl")
@@ -634,6 +635,8 @@ function __init__()
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
     end
+
+    CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end
 

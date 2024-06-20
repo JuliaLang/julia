@@ -3701,7 +3701,7 @@ for (trcon, trevc, trrfs, elty) in
         # LOGICAL            SELECT( * )
         # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
-        function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
+        Base.@constprop :aggressive function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
                         VL::AbstractMatrix{$elty} = similar(T),
                         VR::AbstractMatrix{$elty} = similar(T))
             require_one_based_indexing(select, T, VL, VR)
@@ -5762,11 +5762,6 @@ syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractM
 Finds the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
 (`jobz = V`) of a symmetric matrix `A`. If `uplo = U`, the upper triangle
 of `A` is used. If `uplo = L`, the lower triangle of `A` is used.
-
-Use the divide-and-conquer method, instead of the QR iteration used by
-`syev!` or multiple relatively robust representations used by `syevr!`.
-See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
-a comparison of the accuracy and performatce of different methods.
 """
 syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix)
 
@@ -6274,8 +6269,7 @@ for (hetrd, elty) in
             require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
-            chkuplo(uplo)
-            chkfinite(A) # balancing routines don't support NaNs and Infs
+            chkuplofinite(A, uplo) # balancing routines don't support NaNs and Infs
             tau = similar(A, $elty, max(0,n - 1))
             d = Vector{$relty}(undef, n)
             e = Vector{$relty}(undef, max(0,n - 1))
@@ -7163,9 +7157,23 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         function lacpy!(B::AbstractMatrix{$elty}, A::AbstractMatrix{$elty}, uplo::AbstractChar)
             require_one_based_indexing(A, B)
             chkstride1(A, B)
-            m,n = size(A)
-            m1,n1 = size(B)
-            (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+            m, n = size(A)
+            m1, n1 = size(B)
+            if uplo == 'U'
+                if n < m
+                    (m1 < n || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($n,$n)"))
+                else
+                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+                end
+            elseif uplo == 'L'
+                if m < n
+                    (m1 < m || n1 < m) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$m)"))
+                else
+                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+                end
+            else
+                (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+            end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             ccall((@blasfunc($fn), libblastrampoline), Cvoid,

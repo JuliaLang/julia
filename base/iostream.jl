@@ -449,8 +449,8 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
-    delim ≤ '\x7f' ? readuntil_string(s, delim % UInt8, keep) :
-    String(unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
+    isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
+    String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
@@ -486,9 +486,7 @@ function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
     return out
 end
 
-function readbytes_all!(s::IOStream,
-                        b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                        nb::Integer)
+function readbytes_all!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = lb = length(b)
     nr = 0
     let l = s._dolock, slock = s.lock
@@ -516,9 +514,7 @@ function readbytes_all!(s::IOStream,
     return nr
 end
 
-function readbytes_some!(s::IOStream,
-                         b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                         nb::Integer)
+function readbytes_some!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = length(b)
     if nb > olb
         resize!(b, nb)
@@ -547,10 +543,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 `read` call is performed, and the amount of data returned is device-dependent. Note that not
 all stream types support the `all` option.
 """
-function readbytes!(s::IOStream,
-                    b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                    nb=length(b);
-                    all::Bool=true)
+function readbytes!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 

@@ -22,6 +22,7 @@ TRANSFORMED_CCALL_STAT(jl_cpu_wake);
 TRANSFORMED_CCALL_STAT(jl_gc_safepoint);
 TRANSFORMED_CCALL_STAT(jl_get_ptls_states);
 TRANSFORMED_CCALL_STAT(jl_threadid);
+TRANSFORMED_CCALL_STAT(jl_get_tls_world_age);
 TRANSFORMED_CCALL_STAT(jl_gc_enable_disable_finalizers_internal);
 TRANSFORMED_CCALL_STAT(jl_get_current_task);
 TRANSFORMED_CCALL_STAT(jl_set_next_task);
@@ -260,7 +261,9 @@ static GlobalVariable *emit_plt_thunk(
     SmallVector<Value*, 16> args;
     for (auto &arg : plt->args())
         args.push_back(&arg);
+    #if JL_LLVM_VERSION < 170000
     assert(cast<PointerType>(ptr->getType())->isOpaqueOrPointeeTypeMatches(functype));
+    #endif
     CallInst *ret = irbuilder.CreateCall(
         functype,
         ptr, ArrayRef<Value*>(args));
@@ -370,18 +373,18 @@ static bool is_native_simd_type(jl_datatype_t *dt) {
 
 #if defined ABI_LLVM
   typedef ABI_LLVMLayout DefaultAbiState;
-#elif defined _CPU_X86_64_
-#  if defined _OS_WINDOWS_
+#elif defined _OS_WINDOWS_
+#  if defined _CPU_X86_64_
      typedef ABI_Win64Layout DefaultAbiState;
-#  else
-     typedef ABI_x86_64Layout DefaultAbiState;
-#  endif
-#elif defined _CPU_X86_
-#  if defined _OS_WINDOWS_
+#  elif defined _CPU_X86_
      typedef ABI_Win32Layout DefaultAbiState;
 #  else
-     typedef ABI_x86Layout DefaultAbiState;
+#    error Windows is currently only supported on x86 and x86_64
 #  endif
+#elif defined _CPU_X86_64_
+  typedef ABI_x86_64Layout DefaultAbiState;
+#elif defined _CPU_X86_
+  typedef ABI_x86Layout DefaultAbiState;
 #elif defined _CPU_ARM_
   typedef ABI_ARMLayout DefaultAbiState;
 #elif defined _CPU_AARCH64_
@@ -1687,6 +1690,20 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         ai.decorateInst(tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_get_tls_world_age)) {
+        bool toplevel = !(ctx.linfo && jl_is_method(ctx.linfo->def.method));
+        if (!toplevel) { // top level code does not see a stable world age during execution
+            ++CCALL_STAT(jl_get_tls_world_age);
+            assert(lrt == ctx.types().T_size);
+            assert(!isVa && !llvmcall && nccallargs == 0);
+            JL_GC_POP();
+            Instruction *world_age = cast<Instruction>(ctx.world_age_at_entry);
+            setName(ctx.emission_context, world_age, "task_world_age");
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+            ai.decorateInst(world_age);
+            return mark_or_box_ccall_result(ctx, world_age, retboxed, rt, unionall, static_rt);
+        }
     }
     else if (is_libjulia_func(jl_gc_disable_finalizers_internal)
 #ifdef NDEBUG

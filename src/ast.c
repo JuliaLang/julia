@@ -116,7 +116,7 @@ JL_DLLEXPORT jl_sym_t *jl_acquire_sym;
 JL_DLLEXPORT jl_sym_t *jl_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
-
+JL_DLLEXPORT jl_sym_t *jl_uninferred_sym;
 
 static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -195,8 +195,7 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
             mod = *(jl_module_t**)cv_data((cvalue_t*)ptr(argmod));
             JL_GC_PROMISE_ROOTED(mod);
         } else {
-            (void)tosymbol(fl_ctx, argmod, "nothrow-julia-global");
-            if (scmsym_to_julia(fl_ctx, argmod) != jl_thismodule_sym) {
+            if (!iscons(argmod) || !issymbol(car_(argmod)) || scmsym_to_julia(fl_ctx, car_(argmod)) != jl_thismodule_sym) {
                 lerrorf(fl_ctx, fl_ctx->ArgError, "nothrow-julia-global: Unknown globalref module kind");
             }
         }
@@ -416,6 +415,7 @@ void jl_init_common_symbols(void)
     jl_release_sym = jl_symbol("release");
     jl_acquire_release_sym = jl_symbol("acquire_release");
     jl_sequentially_consistent_sym = jl_symbol("sequentially_consistent");
+    jl_uninferred_sym = jl_symbol("uninferred");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -463,7 +463,7 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
     }
     JL_CATCH {
         // if expression cannot be converted, replace with error expr
-        //jl_(jl_current_exception(ct));
+        //jl_(jl_current_exception(jl_current_task));
         //jlbacktrace();
         jl_expr_t *ex = jl_exprn(jl_error_sym, 1);
         v = (jl_value_t*)ex;
