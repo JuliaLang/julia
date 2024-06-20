@@ -2103,7 +2103,8 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static unsigned julia_alignment(jl_value_t *jt);
 
-static void print_stack_crumbs(jl_codectx_t &ctx) {
+static void print_stack_crumbs(jl_codectx_t &ctx)
+{
     errs() << "\n";
     errs() << "Stacktrace:\n";
     jl_method_instance_t *caller = ctx.linfo;
@@ -2141,8 +2142,8 @@ static jl_value_t *StackFrame(
         std::string fn_name,
         std::string filepath,
         int32_t lineno,
-        jl_value_t *inlined) {
-
+        jl_value_t *inlined)
+{
     jl_value_t *StackFrame = jl_get_global(jl_base_module, jl_symbol("StackFrame"));
     assert(StackFrame != nullptr);
 
@@ -2165,7 +2166,8 @@ static jl_value_t *StackFrame(
     return frame;
 }
 
-static void push_frames(jl_codectx_t &ctx, jl_method_instance_t *caller, jl_method_instance_t *callee, int no_debug=false) {
+static void push_frames(jl_codectx_t &ctx, jl_method_instance_t *caller, jl_method_instance_t *callee, int no_debug=false)
+{
     CallFrames frames;
     auto it = ctx.emission_context.enqueuers.find(callee);
     if (it != ctx.emission_context.enqueuers.end())
@@ -2191,7 +2193,8 @@ static void push_frames(jl_codectx_t &ctx, jl_method_instance_t *caller, jl_meth
     ctx.emission_context.enqueuers.insert({callee, {caller, std::move(frames)}});
 }
 
-static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT {
+static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT
+{
     jl_method_instance_t *caller = (jl_method_instance_t*)jl_nothing; //nothing serves as a sentinel for the bottom for the stack
     push_frames(ctx, ctx.linfo, (jl_method_instance_t*)jl_nothing);
     jl_array_t *out = jl_alloc_array_1d(jl_array_any_type, 0);
@@ -2229,7 +2232,8 @@ static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT {
     return out;
 }
 
-static void print_stacktrace(jl_codectx_t &ctx, int static_call_graph) {
+static void print_stacktrace(jl_codectx_t &ctx, int static_call_graph)
+{
     jl_task_t *ct = jl_get_current_task();
     assert(ct);
 
@@ -2266,7 +2270,8 @@ static void print_stacktrace(jl_codectx_t &ctx, int static_call_graph) {
     return;
 }
 
-static int static_call_graph_may_error(int static_call_graph) {
+static int static_call_graph_may_error(int static_call_graph)
+{
     return (static_call_graph == JL_STATIC_CALL_GRAPH_SAFE) ||
             (static_call_graph == JL_STATIC_CALL_GRAPH_UNSAFE_WARN);
 }
