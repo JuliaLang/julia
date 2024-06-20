@@ -233,12 +233,14 @@ true
 ```
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
-    isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
+    # stop recursion for `""`, `"/"`, or existed dir
     (path == dir || isdir(path)) && return path
     mkpath(dir, mode = checkmode(mode))
     try
-        mkdir(path, mode = mode)
+        # cases like `mkpath("x/")` will cause an error if `isdir(path)` is skipped
+        # the error will not be rethrowed, but it may be slower, and thus we avoid it in advance
+        isdir(path) || mkdir(path, mode = mode)
     catch err
         # If there is a problem with making the directory, but the directory
         # does in fact exist, then ignore the error. Else re-throw it.
@@ -246,7 +248,7 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
             rethrow()
         end
     end
-    path
+    return path
 end
 
 # Files that were requested to be deleted but can't be by the current process
