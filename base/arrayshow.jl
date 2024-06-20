@@ -520,14 +520,14 @@ function show_vector(io::IO, v, opn='[', cls=']')
     end
     limited = get(io, :limit, false)::Bool
 
+    axs1 = axes1(v)
+    f, l = first(axs1), last(axs1)
     if limited && length(v) > 20
-        axs1 = axes1(v)
-        f, l = first(axs1), last(axs1)
         show_delim_array(io, v, opn, ",", "", false, f, f+9)
         print(io, "  …  ")
         show_delim_array(io, v, "", ",", cls, false, l-9, l)
     else
-        show_delim_array(io, v, opn, ",", cls, false)
+        show_delim_array(io, v, opn, ",", cls, false, f, l)
     end
 end
 
