@@ -2770,10 +2770,14 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     catch ex
         precompilableerror(ex) || rethrow()
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
-        exit(125) # we define status = 125 means PrecompileableError
+        exit(125) # we define status = 125 means PrecompilableError
     finally
         Core.Compiler.track_newly_inferred.x = false
     end
+
+    # restore to initial state to make precompilation result relocatable
+    append!(empty!(Base.DEPOT_PATH), depot_path)
+
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
