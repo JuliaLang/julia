@@ -198,9 +198,11 @@ abstract type PivotingStrategy end
 """
     NoPivot
 
-Pivoting is not performed. Matrix factorizations such as the LU factorization
-may fail without pivoting, and may also be numerically unstable for floating-point matrices in the face of roundoff error.
-This pivot strategy is mainly useful for pedagogical purposes.
+Pivoting is not performed. This is the default strategy for [`cholesky`](@ref) and
+[`qr`](@ref) factorizations. Note, however, that other matrix factorizations such as the LU
+factorization may fail without pivoting, and may also be numerically unstable for
+floating-point matrices in the face of roundoff error. In such cases, this pivot strategy
+is mainly useful for pedagogical purposes.
 """
 struct NoPivot <: PivotingStrategy end
 
@@ -209,10 +211,11 @@ struct NoPivot <: PivotingStrategy end
 
 First non-zero element in the remaining rows is chosen as the pivot element.
 
-Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable — this strategy
-is mainly useful for comparison to hand calculations (which typically use this strategy) or for other
-algebraic types (e.g. rational numbers) not susceptible to roundoff errors.   Otherwise, the default
-`RowMaximum` pivoting strategy should be generally preferred in Gaussian elimination.
+Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable
+— this strategy is mainly useful for comparison to hand calculations (which typically use
+this strategy) or for other algebraic types (e.g. rational numbers) not susceptible to
+roundoff errors. Otherwise, the default `RowMaximum` pivoting strategy should be generally
+preferred in Gaussian elimination.
 
 Note that the [element type](@ref eltype) of the matrix must admit an [`iszero`](@ref)
 method.
@@ -222,20 +225,28 @@ struct RowNonZero <: PivotingStrategy end
 """
     RowMaximum
 
-The maximum-magnitude element in the remaining rows is chosen as the pivot element.
-This is the default strategy for LU factorization of floating-point matrices, and is sometimes
-referred to as the "partial pivoting" algorithm.
+A row (and potentially also column) pivot is chosen based on a maximum property.
+This is the default strategy for LU factorization and for pivoted Cholesky factorization
+(though [`NoPivot`] is the default for [`cholesky`](@ref)).
 
-Note that the [element type](@ref eltype) of the matrix must admit an [`abs`](@ref) method,
-whose result type must admit a [`<`](@ref) method.
+In the LU case, the maximum-magnitude element within the current column in the remaining
+rows is chosen as the pivot element. This is sometimes referred to as the "partial
+pivoting" algorithm. In this case, the [element type](@ref eltype) of the matrix must admit
+an [`abs`](@ref) method, whose result type must admit a [`<`](@ref) method.
+
+In the Cholesky case, the maximal element among the remaining diagonal elements is
+chosen as the pivot element. This is sometimes referred to as the "diagonal pivoting"
+algorithm, and leads to _complete pivoting_ (i.e., of both rows and columns by the same
+permutation). In this case, the (real part of the) [element type](@ref eltype) of the
+matrix must admit a [`<`](@ref) method.
 """
 struct RowMaximum <: PivotingStrategy end
 
 """
     ColumnNorm
 
-The column with the maximum norm is used for subsequent computation.  This
-is used for pivoted QR factorization.
+The column with the maximum norm is used for subsequent computation. This is used for
+pivoted QR factorization.
 
 Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref) and
 [`abs`](@ref) methods, whose respective result types must admit a [`<`](@ref) method.
