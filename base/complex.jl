@@ -201,16 +201,16 @@ function show(io::IO, z::Complex)
     r, i = reim(z)
     compact = get(io, :compact, false)::Bool
     show(io, r)
-    if signbit(i) && !isnan(i)
+    bufio = IOBuffer()
+    show(IOContext(bufio, io), i)
+    seekstart(bufio)
+    if peek(bufio) === UInt8('-')
+        seek(bufio, 1)
         print(io, compact ? "-" : " - ")
-        if isa(i,Signed) && !isa(i,BigInt) && i == typemin(typeof(i))
-            show(io, -widen(i))
-        else
-            show(io, -i)
-        end
+        write(io, bufio)
     else
         print(io, compact ? "+" : " + ")
-        show(io, i)
+        write(io, bufio)
     end
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
