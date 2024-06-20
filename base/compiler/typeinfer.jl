@@ -229,34 +229,32 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
     if opt isa OptimizationState
         result.src = opt = ir_to_codeinf!(opt)
     end
-    if isdefined(result, :ci)
+    if isdefined(result, :ci) # implies `is_cached(caller)`
         inferred_result = nothing
         relocatability = 0x1
         const_flag = is_result_constabi_eligible(result)
-        if is_cached(caller) || !can_discard_trees
-            ci = result.ci
-            if !(is_result_constabi_eligible(result) && can_discard_trees)
-                inferred_result = transform_result_for_cache(interp, result.linfo, result.valid_worlds, result, can_discard_trees)
-                relocatability = 0x0
-                if inferred_result isa CodeInfo
-                    edges = inferred_result.debuginfo
-                    uncompressed = inferred_result
-                    inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, can_discard_trees)
-                    result.is_src_volatile |= uncompressed !== inferred_result
-                elseif ci.owner === nothing
-                    # The global cache can only handle objects that codegen understands
-                    inferred_result = nothing
-                end
-                if isa(inferred_result, String)
-                    t = @_gc_preserve_begin inferred_result
-                    relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
-                    @_gc_preserve_end t
-                elseif inferred_result === nothing
-                    relocatability = 0x1
-                end
+        ci = result.ci
+        if !(const_flag && can_discard_trees)
+            inferred_result = transform_result_for_cache(interp, result.linfo, result.valid_worlds, result, can_discard_trees)
+            relocatability = 0x0
+            if inferred_result isa CodeInfo
+                edges = inferred_result.debuginfo
+                uncompressed = inferred_result
+                inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, can_discard_trees)
+                result.is_src_volatile |= uncompressed !== inferred_result
+            elseif ci.owner === nothing
+                # The global cache can only handle objects that codegen understands
+                inferred_result = nothing
             end
-            # n.b. relocatability = (isa(inferred_result, String) && inferred_result[end]) || inferred_result === nothing
+            if isa(inferred_result, String)
+                t = @_gc_preserve_begin inferred_result
+                relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
+                @_gc_preserve_end t
+            elseif inferred_result === nothing
+                relocatability = 0x1
+            end
         end
+        # n.b. relocatability = (isa(inferred_result, String) && inferred_result[end]) || inferred_result === nothing
         if !@isdefined edges
             edges = DebugInfo(result.linfo)
         end
@@ -381,7 +379,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult)
     relocatability = 0x0
     owner = cache_owner(interp)
     return CodeInstance(result.linfo, owner,
-        widenconst(result_type), widenconst(result.exc_result), rettype_const, nothing,
+        widenconst(result_type), widenconst(result.exc_result), rettype_const, #=inferred=#nothing,
         const_flags, first(result.valid_worlds), last(result.valid_worlds),
         encode_effects(result.ipo_effects), result.analysis_results,
         relocatability, nothing)
