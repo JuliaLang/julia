@@ -2,6 +2,7 @@
 
 module TestDense
 
+using InteractiveUtils
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasComplex, BlasFloat, BlasReal
 
@@ -389,6 +390,21 @@ end
 
                     # norm
                     for p in (-Inf, Inf, (-2:3)...)
+                        if norm(A, p) != norm(vec(A), p)
+                            @show A
+                            @show typeof(A)
+                            @show size(A)
+                            @show p
+                            @show InteractiveUtils.@which norm(A,p)
+                            @show InteractiveUtils.@which norm(vec(A),p)
+                            @show InteractiveUtils.@which LinearAlgebra.norm2(A)
+                            @show InteractiveUtils.@which LinearAlgebra.norm2(vec(A))
+                            @show norm(A, p)
+                            @show norm(vec(A), p)
+                            @show LinearAlgebra.norm2(A)
+                            @show LinearAlgebra.norm2(vec(A))
+                            error()
+                        end
                         @test norm(A, p) == norm(vec(A), p)
                     end
                 end

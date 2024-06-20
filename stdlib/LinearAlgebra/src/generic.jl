@@ -597,12 +597,65 @@ function generic_normp(x, p)
     end
 end
 
+
 normMinusInf(x) = generic_normMinusInf(x)
 normInf(x) = generic_normInf(x)
 norm1(x) = generic_norm1(x)
 norm2(x) = generic_norm2(x)
 normp(x, p) = generic_normp(x, p)
+function norm0(itr)
+    T = typeofnorm(itr)
+    return T(count(!iszero, itr))
+end
 
+@inline strip_val(p) = p
+@inline strip_val(::Val{p}) where {p} = p
+@inline abspow(x, p) = norm(x)^p
+@inline abspow(x, ::Val) = abspow(x, strip_val(p))
+@inline abspow(x, ::Val{2}) = norm_sqr(x)
+invpow(x, p) = x^(1/strip_val(p))
+
+_issubnormal(x) = false
+_issubnormal(x::Union{Float16, Float32, Float64}) = issubnormal(x)
+function typeofnorm(arr)
+    return typeof(float(norm(first(arr))))
+end
+function abstract_array_normp(arr, p)
+    T = typeofnorm(arr)
+    psum = zero(T)/oneunit(T) # accumulates Σ(x/normcrude)^p
+    # normcrude is a crude approximation of norm(arr, p) used to
+    # scale down to prevent overflows
+    normcrude = if strip_val(p) < 0
+        normMinusInf(arr)
+    else
+        normInf(arr)
+    end
+    if isinf(normcrude) || iszero(normcrude)
+        return T(normcrude)::T
+    end
+    if _issubnormal(normcrude)
+        @simd for x in arr
+            # oneunit(T)/normcrude will overflow
+            # so we need to do the division in every iteration
+            # for subnormal normcrude
+            xp = abspow(x/normcrude, p)
+            psum += xp
+        end
+    else
+        invnormcrude = one(T)/normcrude
+        @simd for x in arr
+            xp = abspow(x*invnormcrude, p)
+            psum += xp
+        end
+    end
+    return T(invpow(psum, p) * normcrude)::T
+end
+
+norm1(  arr::AbstractArray) = typeofnorm(arr)(sum(norm, arr))
+norm2(  arr::AbstractArray) = abstract_array_normp(arr, Val(2))
+normp(  arr::AbstractArray) = abstract_array_normp(arr, p)
+normInf(arr::AbstractArray) = typeofnorm(arr)(maximum(norm, arr))
+normMinusInf(arr::AbstractArray) = typeofnorm(arr)(generic_normMinusInf(arr))
 
 """
     norm(A, p::Real=2)
@@ -647,22 +700,28 @@ julia> norm(v, 1)
 julia> norm(v, Inf)
 6.0
 
-julia> norm([1 2 3; 4 5 6; 7 8 9])
-16.881943016134134
-
-julia> norm([1 2 3 4 5 6 7 8 9])
-16.881943016134134
-
-julia> norm(1:9)
-16.881943016134134
-
-julia> norm(hcat(v,v), 1) == norm(vcat(v,v), 1) != norm([v,v], 1)
+julia> norm([1 2 3; 4 5 6; 7 8 9]) ≈ sqrt(sum(abs2, 1:9))
 true
 
-julia> norm(hcat(v,v), 2) == norm(vcat(v,v), 2) == norm([v,v], 2)
+julia> norm([1 2 3 4 5 6 7 8 9]) ≈ sqrt(sum(abs2, 1:9))
 true
 
-julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf) != norm([v,v], Inf)
+julia> norm(1:9) ≈ sqrt(sum(abs2, 1:9))
+true
+
+julia> norm(hcat(v,v), 1) == norm(vcat(v,v), 1)
+true
+
+julia> !(norm(vcat(v,v), 1) ≈ norm([v,v], 1))
+true
+
+julia> norm(hcat(v,v), 2) ≈ norm(vcat(v,v), 2) ≈ norm([v,v], 2)
+true
+
+julia> norm(hcat(v,v), Inf) == norm(vcat(v,v), Inf)
+true
+
+julia> !(norm(vcat(v,v), Inf) ≈ norm([v,v], Inf))
 true
 ```
 """
@@ -678,13 +737,14 @@ Base.@constprop :aggressive function norm(itr, p::Real=2)
     elseif p == Inf
         return normInf(itr)
     elseif p == 0
-        return typeof(float(norm(first(itr))))(count(!iszero, itr))
+        return norm0(itr)
     elseif p == -Inf
         return normMinusInf(itr)
     else
         normp(itr, p)
     end
 end
+
 
 """
     norm(x::Number, p::Real=2)
