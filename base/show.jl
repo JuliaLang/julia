@@ -2852,7 +2852,7 @@ module IRShow
     debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
 end
 
-function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:none)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io

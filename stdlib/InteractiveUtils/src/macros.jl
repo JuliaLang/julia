@@ -344,7 +344,7 @@ by putting them and their value before the function call, like this:
 
 `optimize` controls whether additional optimizations, such as inlining, are also applied.
 `raw` makes all metadata and dbg.* calls visible.
-`debuginfo` may be one of `:source` (default) or `:none`,  to specify the verbosity of code comments.
+`debuginfo` may be one of `:none` (default) or `:source`,  to specify the verbosity of code comments.
 `dump_module` prints the entire module that encapsulates the function.
 
 See also: [`code_llvm`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_native`](@ref).
@@ -363,7 +363,7 @@ by putting it before the function call, like this:
     @code_native syntax=:intel debuginfo=:default binary=true dump_module=false f(x)
 
 * Set assembly syntax by setting `syntax` to `:intel` (default) for Intel syntax or `:att` for AT&T syntax.
-* Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
+* Specify verbosity of code comments by setting `debuginfo` to `:none` (default) or `:source`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 
