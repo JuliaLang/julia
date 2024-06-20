@@ -1227,7 +1227,6 @@ A type representing a partially-applied version of the function
 See also [`Fix2`](@ref Base.Fix2) and [`Fix`](@ref Base.Fix).
 """
 const Fix1{F,T} = Fix{1,F,T}
-Fix1(f, x) = Fix{1}(f, x)
 
 """
     Fix2(f, x)
@@ -1239,7 +1238,6 @@ A type representing a partially-applied version of the function
 See also [`Fix`](@ref Base.Fix).
 """
 const Fix2{F,T} = Fix{2,F,T}
-Fix2(f, x) = Fix{2}(f, x)
 
 
 """
