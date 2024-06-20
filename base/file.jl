@@ -235,10 +235,10 @@ julia> mkpath("my/test/dir/") # returns the original `path`
 ```
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
-    dir = dirname(path)
+    parent = dirname(path)
     # stop recursion for `""`, `"/"`, or existing dir
-    (path == dir || isdir(path)) && return path
-    mkpath(dir, mode = checkmode(mode))
+    (path == parent || isdir(path)) && return path
+    mkpath(parent, mode = checkmode(mode))
     try
         # The `isdir` check could be omitted, then `mkdir` will throw an error in cases like `x/`.
         # Although the error will not be rethrown, we avoid it in advance for performance reasons.
