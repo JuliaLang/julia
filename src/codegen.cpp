@@ -4994,11 +4994,9 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
             else if (et->isAggregateType()) {
                 arg = value_to_pointer(ctx, arg);
                 // can lazy load on demand, no copy needed
-                assert(at == PointerType::get(et, AddressSpace::Derived));
                 argvals[idx] = decay_derived(ctx, data_pointer(ctx, arg));
             }
             else {
-                assert(at == et);
                 Value *val = emit_unbox(ctx, et, arg, jt);
                 if (!val) {
                     // There was a type mismatch of some sort - exit early
