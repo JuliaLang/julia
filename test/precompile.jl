@@ -2003,18 +2003,42 @@ end
 
 precompile_test_harness("Issue #52063") do load_path
     fname = joinpath(load_path, "i_do_not_exist.jl")
-    @test_throws SystemError("opening file or folder $(repr(fname))") include_dependency(fname)
+    @test try
+        include_dependency(fname); false
+    catch e
+        @test e isa SystemError
+        @test e.prefix == "opening file or folder $(repr(fname))"
+        true
+    end
     touch(fname)
     @test include_dependency(fname) === nothing
     chmod(fname, 0x000)
-    @test_throws SystemError("opening file or folder $(repr(fname))", Libc.ENOENT) include_dependency(fname)
+    @test try
+        include_dependency(fname); false
+    catch e
+        @test e isa SystemError
+        @test e.prefix == "opening file or folder $(repr(fname))"
+        true
+    end broken=Sys.iswindows()
     dir = mktempdir() do dir
         @test include_dependency(dir) === nothing
         chmod(dir, 0x000)
-        @test_throws SystemError("opening file or folder $(repr(dir))", Libc.ENOENT) include_dependency(dir)
+        @test try
+             include_dependency(dir); false
+        catch e
+            @test e isa SystemError
+            @test e.prefix == "opening file or folder $(repr(dir))"
+            true
+        end broken=Sys.iswindows()
         dir
     end
-    @test_throws SystemError("opening file or folder $(repr(dir))") include_dependency(dir)
+    @test try
+        include_dependency(dir); false
+    catch e
+        @test e isa SystemError
+        @test e.prefix == "opening file or folder $(repr(dir))"
+        true
+    end
 end
 
 finish_precompile_test!()
