@@ -245,6 +245,8 @@ Note that this is not a specific feature of the `≈` but rather a general featu
 ```@docs
 Test.@inferred
 Test.@test_deprecated
+Test.@test_stream
+Test.@test_out
 Test.@test_warn
 Test.@test_nowarn
 ```
