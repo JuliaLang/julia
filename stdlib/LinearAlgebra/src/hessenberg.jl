@@ -373,6 +373,16 @@ function dot(x::AbstractVector, H::UpperHessenberg, y::AbstractVector)
     return r
 end
 
+function eigvals!(H::UpperHessenberg{<:BlasComplex, <:StridedMatrix{<:BlasComplex}}; sortby::Union{Function,Nothing}=eigsortby)
+    ilo, ihi, _ = LAPACK.gebal!('S', triu!(H.data, -1))
+    return sorteig!(LAPACK.hseqr!('E', H.data)[2], sortby)
+end
+function eigvals!(H::UpperHessenberg{<:BlasReal, <:StridedMatrix{<:BlasReal}}; sortby::Union{Function,Nothing}=eigsortby)
+    ilo, ihi, _ = LAPACK.gebal!('S', triu!(H.data, -1))
+    _, valsre, valsim = LAPACK.hseqr!('E', H.data)
+    return sorteig!(iszero(valsim) ? valsre : complex.(valsre, valsim), sortby)
+end
+
 ######################################################################################
 # Hessenberg factorizations Q(H+μI)Q' of A+μI:
 
