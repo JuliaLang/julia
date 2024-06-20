@@ -236,12 +236,12 @@ julia> mkpath("my/test/dir/") # returns the original `path`
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
     dir = dirname(path)
-    # stop recursion for `""`, `"/"`, or existed dir
+    # stop recursion for `""`, `"/"`, or existing dir
     (path == dir || isdir(path)) && return path
     mkpath(dir, mode = checkmode(mode))
     try
-        # cases like `mkpath("x/")` will cause an error if `isdir(path)` is skipped
-        # the error will not be rethrowed, but it may be slower, and thus we avoid it in advance
+        # The `isdir` check could be omitted, then `mkdir` will throw an error in cases like `x/`.
+        # Although the error will not be rethrown, we avoid it in advance for performance reasons.
         isdir(path) || mkdir(path, mode = mode)
     catch err
         # If there is a problem with making the directory, but the directory
