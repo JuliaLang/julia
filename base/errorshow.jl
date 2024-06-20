@@ -100,10 +100,39 @@ function showerror(io::IO, ex, bt; backtrace=true)
     end
 end
 
+function stacktrace_path(file::Union{Nothing, String}, line::Union{Nothing, Int})
+    realfile = if !isnothing(file) && file != "" && !startswith(String(file), "REPL")
+        String(file) |> fixup_stdlib_path |> find_source_file
+    end
+    pathstr = file
+    if !isnothing(pathstr)
+        stacktrace_expand_basepaths() && (pathstr = something(find_source_file(file), file))
+        stacktrace_contract_userdir() && (pathstr = contractuser(pathstr))
+    end
+    linestr, llen = if !isnothing(line) && line > 0
+        string(something(pathstr, ""), ':', line), ncodeunits(string(line))
+    else
+        something(pathstr, ""), 0
+    end
+    if !isnothing(realfile)
+        flen = ncodeunits(basename(realfile))
+        AnnotatedString(linestr,
+                        [(1:ncodeunits(linestr), :link => Filesystem.uripath(realfile)),
+                         (1:ncodeunits(linestr)-flen-llen-1, :face => :julia_stacktrace_location),
+                         (ncodeunits(linestr)-flen-llen:ncodeunits(linestr)-llen-1, :face => :julia_stacktrace_filename),
+                         (ncodeunits(linestr)-llen:ncodeunits(linestr), :face => :julia_stacktrace_fileline)])
+    else
+        AnnotatedString(linestr, [(1:ncodeunits(linestr), :face => :julia_stacktrace_location)])
+    end
+end
+
+stacktrace_path(location::LineNumberNode) =
+    stacktrace_path(if !isnothing(location.file) String(location.file) end, location.line)
+
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
     !isa(ex.error, LoadError) && print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
-    print(io, "\nin expression starting at $(ex.file):$(ex.line)")
+    print(io, "\nin expression starting at ", stacktrace_path(ex.file, ex.line))
 end
 showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
@@ -623,7 +652,7 @@ end
 const update_stackframes_callback = Ref{Function}(identity)
 
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
-const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+const STACKTRACE_FIXEDCOLORS = IdDict(Base => :julia_stacktrace_basemodule, Core => :julia_stacktrace_basemodule)
 
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     num_frames = length(trace)
@@ -708,9 +737,9 @@ function show_reduced_backtrace(io::IO, t::Vector)
             cycle_length = repeated_cycle[1][2]
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
-            printstyled(io,
-                "--- the above ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
+            repmsg = string("--- the above ", cycle_length, " lines are repeated ",
+                            repetitions, " more time", repetitions>1 ? "s" : "", " ---")
+            print(io, AnnotatedString(repmsg, [(1:ncodeunits(repmsg), :face => :julia_stacktrace_repetition)]))
             if i < length(displayed_stackframes)
                 println(io)
                 stacktrace_linebreaks() && println(io)
@@ -763,12 +792,13 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     digit_align_width = ndigits_max + 2
 
     # frame number
-    print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
-    print(io, " ")
+    frameindex = lpad('[' * string(i) * ']', digit_align_width)
+    print(io, ' ', AnnotatedString(frameindex, [(1:ncodeunits(frameindex), :face => :julia_stacktrace_frameindex)]), ' ')
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
     if n > 1
-        printstyled(io, " (repeats $n times)"; color=:light_black)
+        repmsg = " (repeats $n times)"
+        print(io, AnnotatedString(repmsg, [(2:ncodeunits(repmsg), :face => :julia_stacktrace_repetition)]))
     end
     println(io)
 
@@ -776,28 +806,17 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
 
     # inlined
-    printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+    print(io, if inlined AnnotatedString("[inlined]", [(1:9, :face => :julia_stacktrace_inlined)]) else "" end)
 end
 
-function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
-    printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
-
-    # module
+function print_module_path_file(io::IO, modul::Module, file::Union{Nothing, String}, line::Union{Nothing, Int};
+                                modulecolor = :bright_black, digit_align_width = 0)
+    print(io, ' ' ^ digit_align_width, AnnotatedString("@", [(1:1, :face => :julia_stacktrace_location)]))
     if modul !== nothing && modulecolor !== nothing
-        print(io, " ")
-        printstyled(io, modul, color = modulecolor)
+        mstr = string(modul)
+        print(io, " ", AnnotatedString(mstr, [(1:ncodeunits(mstr), :face => modulecolor)]))
     end
-
-    # filepath
-    file = fixup_stdlib_path(file)
-    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
-    stacktrace_contract_userdir() && (file = contractuser(file))
-    print(io, " ")
-    dir = dirname(file)
-    !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
-
-    # filename, separator, line
-    printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+    print(io, ' ', stacktrace_path(file, line))
 end
 
 function show_backtrace(io::IO, t::Vector)
