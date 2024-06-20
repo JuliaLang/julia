@@ -1938,7 +1938,7 @@ function _find_params_log_quasitriu!(A)
     d = complex.(@view(A[diagind(A)]))
     dm1 = d .- 1
     s = 0
-    while norm(dm1, Inf) > theta[tmax] && s < maxsqrt
+    while s<1 || norm(dm1, Inf) > theta[tmax] && s < maxsqrt
         d .= sqrt.(d)
         dm1 .= d .- 1
         s = s + 1
