@@ -7,6 +7,8 @@ Base.@async
 Base.asyncmap
 Base.asyncmap!
 Base.current_task
+Base.root_task
+Base.isroottask
 Base.istaskdone
 Base.istaskstarted
 Base.istaskfailed
