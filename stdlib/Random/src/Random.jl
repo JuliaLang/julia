@@ -301,6 +301,7 @@ include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
+include("ppmisc.jl")
 include("XoshiroSimd.jl")
 
 ## rand & rand! & seed! docstrings
