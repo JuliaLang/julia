@@ -502,6 +502,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     jl_set_pgcstack(&t->gcstack);
     jl_signal_fence();
     lastt->ptls = NULL;
+    fegetenv(&lastt->fenv);
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
 #endif
@@ -666,6 +667,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
     jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
+    fesetenv(&ct->fenv);
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -1111,6 +1113,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->excstack = NULL;
     t->started = 0;
     t->priority = 0;
+    fegetenv(&t->fenv);
     jl_atomic_store_relaxed(&t->tid, t->copy_stack ? jl_atomic_load_relaxed(&ct->tid) : -1); // copy_stacks are always pinned since they can't be moved
     t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
@@ -1220,6 +1223,7 @@ CFI_NORETURN
     if (!pt->sticky && !pt->copy_stack)
         jl_atomic_store_release(&pt->tid, -1);
 #endif
+    fesetenv(&ct->fenv);
 
     ct->started = 1;
     JL_PROBE_RT_START_TASK(ct);
