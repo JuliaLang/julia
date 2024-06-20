@@ -178,7 +178,7 @@ julia> using .NiceStuff: nice
 julia> struct Cat end
 
 julia> nice(::Cat) = "nice 😸"
-ERROR: invalid method definition in Main: function NiceStuff.nice must be explicitly imported to be extended
+ERROR: invalid method definition in Main: function NiceStuff.nice must be explicitly imported or prefixed with a module path to be extended
 Stacktrace:
  [1] top-level scope
    @ none:0
