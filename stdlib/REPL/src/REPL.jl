@@ -206,7 +206,52 @@ end
 # Temporary alias until Documenter updates
 const softscope! = softscope
 
-const repl_ast_transforms = Any[softscope] # defaults for new REPL backends
+function print_nonpublic_access_warning(mod, name)
+    @warn string(name, " is not public in ", mod) maxlog = 1 _id = string("repl_warning", mod, name) _line = nothing _file = nothing _module = nothing
+end
+
+function maybe_print_nonpublic_access_warning(mod, name)
+    mod isa Module || return
+    Base.ispublic(mod, name) && return
+    mod === Base && Base.ispublic(Core, name) && return
+    # `mod` must have at least 1 name declared public (which is not exported)
+    # to be eligible for warnings, otherwise it may have a public API which has
+    # not yet been updated to use the `public` keyword.
+    any(n -> !Base.isexported(mod, n) && Base.ispublic(mod, n), names(mod)) || return
+    print_nonpublic_access_warning(mod, name)
+    return
+end
+
+# if `ast` contains accesses to names which aren't public in the module
+# they are being accessed from, then issue a warning
+function add_nonpublic_access_warning(ast)
+    ast isa Expr || return ast
+
+    # don't recurse through module definitions
+    ast.head === :module  && return ast
+
+    if ast.head == Symbol(".") && length(ast.args) == 2
+        mod_name = ast.args[1]
+        name_being_accessed = ast.args[2]
+        if name_being_accessed isa QuoteNode
+            name_being_accessed = name_being_accessed.value
+        end
+        name_being_accessed isa Symbol || return ast
+        mod = try
+            getproperty(REPL.active_module(), mod_name)
+        catch
+            return ast
+        end
+        maybe_print_nonpublic_access_warning(mod, name_being_accessed)
+        return ast
+    else
+        ast2 = Expr(ast.head)
+        map!(add_nonpublic_access_warning, resize!(ast2.args, length(ast.args)), ast.args)
+        return ast2
+    end
+end
+
+const repl_ast_transforms = Any[softscope, add_nonpublic_access_warning] # defaults for new REPL backends
 
 # Allows an external package to add hooks into the code loading.
 # The hook should take a Vector{Symbol} of package names and
