@@ -697,6 +697,28 @@ collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(
 
 collect(A::AbstractArray) = _collect_indices(axes(A), A)
 
+# fast collection of NTuples
+function Base._collect(::Type{T}, @nospecialize(t::Tuple)) where T
+    res = Vector{T}(undef, length(t))
+    i = 1
+    for x in t
+        res[i] = x
+        i += 1
+    end
+    res
+end
+
+function Base.collect(@nospecialize t::Tuple)
+    if isempty(t)
+        []
+    elseif t isa NTuple
+        T = typeof(t)
+        Base._collect(T.parameters[1], t)
+    else
+        Base._collect(1:1 #= Array =#, t, Base.HasEltype(), Base.HasLength())
+    end
+end
+
 collect_similar(cont, itr) = _collect(cont, itr, IteratorEltype(itr), IteratorSize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
