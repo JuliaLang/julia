@@ -341,7 +341,7 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 // with the top of the stack and returning up to `max_entries`. If requested by
 // setting the `include_bt` flag, backtrace data in bt,bt2 format is
 // interleaved.
-JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
+JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries, int time)
 {
     JL_TYPECHK(current_exceptions, task, (jl_value_t*)task);
     JL_TIMING(STACKWALK, STACKWALK_Excstack);
@@ -366,6 +366,9 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
                              &bt, &bt2);
             jl_array_ptr_1d_push(stack, (jl_value_t*)bt);
             jl_array_ptr_1d_push(stack, (jl_value_t*)bt2);
+        }
+        if (time) {
+            jl_array_ptr_1d_push(stack, (jl_value_t*)jl_hrtime());
         }
         itr = jl_excstack_next(excstack, itr);
         i++;
