@@ -2697,6 +2697,71 @@ findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
 findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 
+"""
+    findsubseq(B,A)
+
+Return the indices of one or many existing subsequences B in A.
+A and B may be of type AbstractString or AbstractArray.
+If there are none in A, return an empty array.
+
+See also: [`occursin`](@ref).
+
+# Examples
+```jldoctest
+julia> findsubseq([7, 8], [7, 2, 7, 8, 5, 9, 7, 8])
+2-element Vector{Int64}:
+ 3
+ 7
+
+julia> findsubseq([4, 6], [7, 2, 7, 8, 5, 9, 7, 8])
+Int64[]
+
+julia> findsubseq("el", "Hello")
+1-element Vector{Int64}:
+ 2
+```
+
+"""
+function findsubseq(B::AbstractArray, A::AbstractArray)
+    BinA = findall(isequal(@view B[1]), A)
+    matchFirstIndex = eltype(eachindex(A))[]
+    for i in BinA
+        if lastindex(A)-i+1 < length(B) continue end
+        if (@view A[i:i + length(B) - 1]) == B push!(matchFirstIndex, i) end
+    end
+    return matchFirstIndex
+end
+findsubseq(B::AbstractString,A::AbstractString) = findsubseq(collect(B),collect(A))
+
+"""
+    occursin(B,A)
+
+Return true if one or many subsequences B exist in A.
+A and B may be of type AbstractArray.
+If there are none in A, return false.
+
+One can also use [`occursin`](@ref) for AbstractString inputs.
+
+See also: [`findsubseq`](@ref).
+
+# Examples
+```jldoctest
+julia> occursin([7, 8], [7, 2, 7, 8, 5, 9, 7, 8])
+true
+
+julia> occursin([4, 6], [7, 2, 7, 8, 5, 9, 7, 8])
+false
+```
+"""
+function occursin(B::AbstractArray, A::AbstractArray)
+    BinA = findall(isequal(@view B[1]), A)
+    for i in BinA
+        if lastindex(A)-i+1 < length(B) continue end
+        if (@view A[i:i + length(B) - 1]) == B return true end
+    end
+    return false
+end
+
 # similar to Matlab's ismember
 """
     indexin(a, b)
