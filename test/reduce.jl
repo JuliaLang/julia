@@ -634,14 +634,16 @@ test18695(r) = sum( t^2 for t in r )
 
 @testset "optimized reduce(vcat/hcat, A) for arrays" begin
     for args in ([1:2], [[1, 2]], [1:2, 3:4], AbstractVector{Int}[[3, 4, 5], 1:2], AbstractVector[1:2, [3.5, 4.5]],
-                 [[1 2], [3 4; 5 6]], [reshape([1, 2], 2, 1), 3:4])
+                 [[1 2], [3 4; 5 6]], [reshape([1, 2], 2, 1), 3:4],
+                 (1:2, 3:5), (1:2, [3.0, 5.0, 7.0]), (1:2, [3; 4; 5;;]))
         X = reduce(vcat, args)
         Y = vcat(args...)
         @test X == Y
         @test typeof(X) === typeof(Y)
     end
     for args in ([1:2], [[1, 2]], [1:2, 3:4], AbstractVector{Int}[[3, 4, 5], 1:3], AbstractVector[1:2, [3.5, 4.5]],
-                 [[1 2; 3 4], [5 6; 7 8]], [1:2, [5 6; 7 8]], [[5 6; 7 8], [1, 2]])
+                 [[1 2; 3 4], [5 6; 7 8]], [1:2, [5 6; 7 8]], [[5 6; 7 8], [1, 2]],
+                 (1:2, 3:4), (1:2, [3.0, 5.0]), (1:2, [6 7; 8 9]))
         X = reduce(hcat, args)
         Y = hcat(args...)
         @test X == Y
