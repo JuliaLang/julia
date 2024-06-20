@@ -427,7 +427,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                         params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
                 }
             }
-                        //TODO: is goto the best way to do this?
+            // TODO: is goto the best way to do this?
             jl_compile_workqueue(params, policy);
             mi = (jl_method_instance_t*)arraylist_pop(&new_invokes);
             if (mi != NULL) {

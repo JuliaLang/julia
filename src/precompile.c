@@ -190,7 +190,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
             jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
         }
     }
-    if (jl_options.static_call_graph){
+    if (jl_options.static_call_graph) {
         exit(0); // Some finalizers need to run and we've blown up the bindings table
         // TODO: Is this still needed
     }
