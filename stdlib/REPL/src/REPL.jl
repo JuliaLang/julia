@@ -253,12 +253,12 @@ function add_qualified_access_warning(ast)
         end
         has_ancestor(owner, mod) && return ast
         maybe_print_qualified_access_warning(mod, owner, name_being_accessed)
-        return ast
     else
-        ast2 = Expr(ast.head)
-        map!(add_qualified_access_warning, resize!(ast2.args, length(ast.args)), ast.args)
-        return ast2
+        for arg in ast.args
+            add_qualified_access_warning(arg)
+        end
     end
+    return ast
 end
 
 const repl_ast_transforms = Any[softscope, add_qualified_access_warning] # defaults for new REPL backends
