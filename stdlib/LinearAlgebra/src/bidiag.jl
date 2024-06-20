@@ -566,32 +566,34 @@ function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     n = size(A,1)
     iszero(n) && return C
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
-    _rmul_or_fill!(C, _add.beta)  # see the same use above
-    iszero(_add.alpha) && return C
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    if !isbanded(C, -1, 1) # C has more bands than those that are updated in the loop
+        _rmul_or_fill!(C, _add.beta)
+    end
     Al = _diag(A, -1)
     Ad = _diag(A, 0)
     Au = _diag(A, 1)
     Bd = B.diag
     @inbounds begin
         # first row of C
-        C[1,1] += _add(A[1,1]*B[1,1])
-        C[1,2] += _add(A[1,2]*B[2,2])
+        _modify!(_add, A[1,1]*B[1,1], C, (1,1))
+        _modify!(_add, A[1,2]*B[2,2], C, (1,2))
         # second row of C
-        C[2,1] += _add(A[2,1]*B[1,1])
-        C[2,2] += _add(A[2,2]*B[2,2])
-        C[2,3] += _add(A[2,3]*B[3,3])
+        _modify!(_add, A[2,1]*B[1,1], C, (2,1))
+        _modify!(_add, A[2,2]*B[2,2], C, (2,2))
+        _modify!(_add, A[2,3]*B[3,3], C, (2,3))
         for j in 3:n-2
-            C[j, j-1] += _add(Al[j-1]*Bd[j-1])
-            C[j, j  ] += _add(Ad[j  ]*Bd[j  ])
-            C[j, j+1] += _add(Au[j  ]*Bd[j+1])
+            _modify!(_add, Al[j-1]*Bd[j-1], C, (j, j-1))
+            _modify!(_add, Ad[j  ]*Bd[j  ], C, (j, j  ))
+            _modify!(_add, Au[j  ]*Bd[j+1], C, (j, j+1))
         end
         # row before last of C
-        C[n-1,n-2] += _add(A[n-1,n-2]*B[n-2,n-2])
-        C[n-1,n-1] += _add(A[n-1,n-1]*B[n-1,n-1])
-        C[n-1,n  ] += _add(A[n-1,  n]*B[n  ,n  ])
+        _modify!(_add, A[n-1,n-2]*B[n-2,n-2], C, (n-1,n-2))
+        _modify!(_add, A[n-1,n-1]*B[n-1,n-1], C, (n-1,n-1))
+        _modify!(_add, A[n-1,  n]*B[n  ,n  ], C, (n-1,n  ))
         # last row of C
-        C[n,n-1] += _add(A[n,n-1]*B[n-1,n-1])
-        C[n,n  ] += _add(A[n,n  ]*B[n,  n  ])
+        _modify!(_add, A[n,n-1]*B[n-1,n-1], C, (n,n-1))
+        _modify!(_add, A[n,n  ]*B[n,  n  ], C, (n,n  ))
     end # inbounds
     C
 end
@@ -696,33 +698,35 @@ function _dibimul!(C, A, B, _add)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
-    _rmul_or_fill!(C, _add.beta)  # see the same use above
-    iszero(_add.alpha) && return C
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    if !isbanded(C, -1, 1) # C has more bands than those that are updated in the loop
+        _rmul_or_fill!(C, _add.beta)
+    end
     Ad = A.diag
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
     Bu = _diag(B, 1)
     @inbounds begin
         # first row of C
-        C[1,1] += _add(A[1,1]*B[1,1])
-        C[1,2] += _add(A[1,1]*B[1,2])
+        _modify!(_add, A[1,1]*B[1,1], C, (1,1))
+        _modify!(_add, A[1,1]*B[1,2], C, (1,2))
         # second row of C
-        C[2,1] += _add(A[2,2]*B[2,1])
-        C[2,2] += _add(A[2,2]*B[2,2])
-        C[2,3] += _add(A[2,2]*B[2,3])
+        _modify!(_add, A[2,2]*B[2,1], C, (2,1))
+        _modify!(_add, A[2,2]*B[2,2], C, (2,2))
+        _modify!(_add, A[2,2]*B[2,3], C, (2,3))
         for j in 3:n-2
             Ajj       = Ad[j]
-            C[j, j-1] += _add(Ajj*Bl[j-1])
-            C[j, j  ] += _add(Ajj*Bd[j])
-            C[j, j+1] += _add(Ajj*Bu[j])
+            _modify!(_add, Ajj*Bl[j-1], C, (j, j-1))
+            _modify!(_add, Ajj*Bd[j], C, (j, j  ))
+            _modify!(_add, Ajj*Bu[j], C, (j, j+1))
         end
         # row before last of C
-        C[n-1,n-2] += _add(A[n-1,n-1]*B[n-1,n-2])
-        C[n-1,n-1] += _add(A[n-1,n-1]*B[n-1,n-1])
-        C[n-1,n  ] += _add(A[n-1,n-1]*B[n-1,n  ])
+        _modify!(_add, A[n-1,n-1]*B[n-1,n-2], C, (n-1,n-2))
+        _modify!(_add, A[n-1,n-1]*B[n-1,n-1], C, (n-1,n-1))
+        _modify!(_add, A[n-1,n-1]*B[n-1,n  ], C, (n-1,n  ))
         # last row of C
-        C[n,n-1] += _add(A[n,n]*B[n,n-1])
-        C[n,n  ] += _add(A[n,n]*B[n,n  ])
+        _modify!(_add, A[n,n]*B[n,n-1], C, (n,n-1))
+        _modify!(_add, A[n,n]*B[n,n  ], C, (n,n  ))
     end # inbounds
     C
 end
