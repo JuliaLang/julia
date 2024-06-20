@@ -542,8 +542,8 @@ function _hashed_allunique(C)
 end
 
 allunique(::Union{AbstractSet,AbstractDict}) = true
-
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+allunique(::Number) = true
 
 function allunique(A::StridedArray)
     if length(A) < 32
