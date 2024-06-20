@@ -79,6 +79,7 @@ to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 Base.broadcast
 Base.Broadcast.broadcast!
 Base.@__dot__
+Base.Broadcast.BroadcastFunction
 ```
 
 For specializing broadcast on custom types, see
