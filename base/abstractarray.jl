@@ -1082,7 +1082,7 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             # Single-index implementation
-            @inbounds for i in srcinds
+            @inbounds @simd for i in srcinds
                 dest[i + Δi] = src[i]
             end
         else
@@ -1096,8 +1096,8 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         iterdest, itersrc = eachindex(dest), eachindex(src)
         if iterdest == itersrc
             # Shared-iterator implementation
-            for I in iterdest
-                @inbounds dest[I] = src[I]
+            @inbounds @simd for I in iterdest
+                dest[I] = src[I]
             end
         else
             # Dual-iterator implementation
