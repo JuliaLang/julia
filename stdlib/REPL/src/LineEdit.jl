@@ -2840,7 +2840,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         # spawn this because the main repl task is sticky (due to use of @async and _wait2)
         # and we want to not block typing when the repl task thread is busy
         t2 = Threads.@spawn :interactive while true
-            eof(term) || Base.wait_readnb(Base.pipe_reader(term), 1) # wait before locking but don't consume
+            Base.wait_readnb(Base.pipe_reader(term), 1) # wait before locking but don't consume
             @lock l begin
                 kmap = keymap(s, prompt)
                 fcn = match_input(kmap, s)
