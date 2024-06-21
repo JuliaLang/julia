@@ -236,12 +236,6 @@ end
     f(x) = (1, 1, x...)
     g = (f ∘ (f ∘ f)) ∘ (f ∘ f ∘ f)
     @test (@inferred (g∘g)(1)) == ntuple(Returns(1), 25)
-end
-
-@testset "Nested ComposedFunction's stability" begin
-    f(x) = (1, 1, x...)
-    g = (f ∘ (f ∘ f)) ∘ (f ∘ f ∘ f)
-    @test (@inferred (g∘g)(1)) == ntuple(Returns(1), 25)
     @test (@inferred g(1)) == ntuple(Returns(1), 13)
     h = (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ sum
     @test (@inferred h((1, 2, 3); init = 0.0)) == 6.0
