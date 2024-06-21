@@ -502,7 +502,7 @@ function compile_lambda(outer_ctx, ex)
     compile_body(ctx, ex[1])
     slot_rewrites = Dict{VarId,Int}()
     _add_slots!(slot_rewrites, ctx.var_info, (arg.var_id for arg in lambda_info.args))
-    _add_slots!(slot_rewrites, ctx.var_info, ex.lambda_locals)
+    _add_slots!(slot_rewrites, ctx.var_info, sort(collect(ex.lambda_locals)))
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     makenode(ctx, ex, K"lambda",
              makenode(ctx, ex[1], K"block", code),

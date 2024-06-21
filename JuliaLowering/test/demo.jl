@@ -207,24 +207,26 @@ M.@recursive 3
 # end
 # """
 
-# src = """
-# let
-#     y = 0
-#     x = 1
-#     let x = x + 1
-#         y = x
-#     end
-#     (x, y)
-# end
-# """
+src = """
+let
+    y = 0
+    x = 1
+    let x = x + 1
+        y = x
+    end
+    (x, y)
+end
+"""
 
 #src = """M.@outer"""
 
 src = """
 begin
-    local a, b
+    local a, b, c
     if a
         b
+    else
+        c
     end
 end
 """

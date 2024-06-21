@@ -209,4 +209,92 @@ let a = false, b = false
 end
 """) === 3
 
+#-------------------------------------------------------------------------------
+# Detailed lowering
+
+@test ir_as_text(test_mod, """
+begin
+    local a, b
+    if a
+        b
+    end
+end
+""") == """
+slot.₁/a
+(gotoifnot ssa.₁ label.₅)
+slot.₂/b
+(return ssa.₃)
+core.nothing
+(return ssa.₅)"""
+
+@test ir_as_text(test_mod, """
+begin
+    local a, b, c
+    if a
+        b
+    end
+    c
+end
+""") == """
+slot.₁/a
+(gotoifnot ssa.₁ label.₄)
+slot.₂/b
+slot.₃/c
+(return ssa.₄)"""
+
+@test ir_as_text(test_mod, """
+begin
+    local a, b, c
+    if a
+        b
+    else
+        c
+    end
+end
+""") == """
+slot.₁/a
+(gotoifnot ssa.₁ label.₅)
+slot.₂/b
+(return ssa.₃)
+slot.₃/c
+(return ssa.₅)"""
+
+@test ir_as_text(test_mod, """
+begin
+    local a, b, c, d
+    if a
+        b
+    else
+        c
+    end
+    d
+end
+""") == """
+slot.₁/a
+(gotoifnot ssa.₁ label.₅)
+slot.₂/b
+(goto label.₆)
+slot.₃/c
+slot.₄/d
+(return ssa.₆)"""
+
+# Blocks compile directly to branches
+@test ir_as_text(test_mod, """
+begin
+   local a, b, c, d
+   if (a; b && c)
+       d
+   end
+end
+""") == """
+slot.₁/a
+slot.₂/b
+(gotoifnot ssa.₂ label.₈)
+slot.₃/c
+(gotoifnot ssa.₄ label.₈)
+slot.₄/d
+(return ssa.₆)
+core.nothing
+(return ssa.₈)"""
+
 end

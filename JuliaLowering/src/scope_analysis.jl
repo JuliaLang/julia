@@ -87,6 +87,13 @@ function find_scope_vars(ex)
     for e in children(ex)
         _find_scope_vars!(assignments, locals, globals, used_names, e)
     end
+
+    # Sort by key so that id generation is deterministic
+    assignments = sort(collect(pairs(assignments)), by=first)
+    locals = sort(collect(pairs(locals)), by=first)
+    globals = sort(collect(pairs(globals)), by=first)
+    used_names = sort(collect(used_names))
+
     return assignments, locals, globals, used_names
 end
 
@@ -96,6 +103,10 @@ Key to use when looking up variables, composed of the name and scope layer.
 struct VarKey
     name::String
     layer::LayerId
+end
+
+function Base.isless(a::VarKey, b::VarKey)
+    (a.name, a.layer) < (b.name, b.layer)
 end
 
 # Identifiers produced by lowering will have the following layer by default.
@@ -227,9 +238,10 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
         end
     end
 
+    global_keys = Set(first(g) for g in globals)
     # Add explicit locals
-    for (varkey,e) in pairs(locals)
-        if haskey(globals, varkey)
+    for (varkey,e) in locals
+        if varkey in global_keys
             throw(LoweringError(e, "Variable `$(varkey.name)` declared both local and global"))
         elseif haskey(var_ids, varkey)
             vk = ctx.var_info[var_ids[varkey]].kind
@@ -245,7 +257,7 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     end
 
     # Add explicit globals
-    for (varkey,e) in pairs(globals)
+    for (varkey,e) in globals
         if haskey(var_ids, varkey)
             vk = ctx.var_info[var_ids[varkey]].kind
             if vk === :argument && is_outer_lambda_scope
