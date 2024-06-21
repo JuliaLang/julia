@@ -7,6 +7,8 @@ using Test, Distributed, Random, Logging
 using REPL # doc lookup function
 
 Foo_module = :Foo4b3a94a1a081a8cb
+foo_incl_dep = :foo4b3a94a1a081a8cb
+bar_incl_dep = :bar4b3a94a1a081a8cb
 Foo2_module = :F2oo4b3a94a1a081a8cb
 FooBase_module = :FooBase4b3a94a1a081a8cb
 @eval module ConflictingBindings
@@ -102,6 +104,8 @@ precompile_test_harness(false) do dir
     Foo_file = joinpath(dir, "$Foo_module.jl")
     Foo2_file = joinpath(dir, "$Foo2_module.jl")
     FooBase_file = joinpath(dir, "$FooBase_module.jl")
+    foo_file = joinpath(dir, "$foo_incl_dep.jl")
+    bar_file = joinpath(dir, "$bar_incl_dep.jl")
 
     write(FooBase_file,
           """
@@ -150,11 +154,11 @@ precompile_test_harness(false) do dir
 
               # test that docs get reconnected
               @doc "foo function" foo(x) = x + 1
-              include_dependency("foo.jl")
-              include_dependency("foo.jl")
+              include_dependency("$foo_incl_dep.jl")
+              include_dependency("$foo_incl_dep.jl")
               module Bar
                   public bar
-                  include_dependency("bar.jl")
+                  include_dependency("$bar_incl_dep.jl")
               end
               @doc "Bar module" Bar # this needs to define the META dictionary via eval
               @eval Bar @doc "bar function" bar(x) = x + 2
@@ -297,6 +301,8 @@ precompile_test_harness(false) do dir
               oid_mat_int = objectid(a_mat_int)
           end
           """)
+    # Issue #52063
+    touch(foo_file); touch(bar_file)
     # Issue #12623
     @test __precompile__(false) === nothing
 
@@ -436,8 +442,7 @@ precompile_test_harness(false) do dir
         modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> mod_fl_mt.filename
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
-        # foo.jl and bar.jl are never written to disk, so they are not relocatable
-        @test map(x -> x.filename, deps) == [ Foo_file, joinpath("@depot", "foo.jl"), joinpath("@depot", "bar.jl") ]
+        @test map(x -> x.filename, deps) == [ Foo_file, joinpath("@depot", foo_file), joinpath("@depot", bar_file) ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
                             Base.PkgId(Foo) => Base.PkgId(Test),
@@ -446,7 +451,7 @@ precompile_test_harness(false) do dir
         @test !isempty(srctxt) && srctxt == read(Foo_file, String)
         @test_throws ErrorException Base.read_dependency_src(cachefile, "/tmp/nonexistent.txt")
         # dependencies declared with `include_dependency` should not be stored
-        @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, "foo.jl"))
+        @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, foo_file))
 
         modules, deps1 = Base.cache_dependencies(cachefile)
         modules_ok = merge(
@@ -2109,6 +2114,46 @@ precompile_test_harness("Test flags") do load_path
     id = Base.identify_package("TestFlags")
     @test Base.isprecompiled(id, ;flags=modified_flags)
     @test !Base.isprecompiled(id, ;flags=current_flags)
+end
+
+precompile_test_harness("Issue #52063") do load_path
+    fname = joinpath(load_path, "i_do_not_exist.jl")
+    @test try
+        include_dependency(fname); false
+    catch e
+        @test e isa SystemError
+        @test e.prefix == "opening file or folder $(repr(fname))"
+        true
+    end
+    touch(fname)
+    @test include_dependency(fname) === nothing
+    chmod(fname, 0x000)
+    @test try
+        include_dependency(fname); false
+    catch e
+        @test e isa SystemError
+        @test e.prefix == "opening file or folder $(repr(fname))"
+        true
+    end broken=Sys.iswindows()
+    dir = mktempdir() do dir
+        @test include_dependency(dir) === nothing
+        chmod(dir, 0x000)
+        @test try
+             include_dependency(dir); false
+        catch e
+            @test e isa SystemError
+            @test e.prefix == "opening file or folder $(repr(dir))"
+            true
+        end broken=Sys.iswindows()
+        dir
+    end
+    @test try
+        include_dependency(dir); false
+    catch e
+        @test e isa SystemError
+        @test e.prefix == "opening file or folder $(repr(dir))"
+        true
+    end
 end
 
 empty!(Base.DEPOT_PATH)
