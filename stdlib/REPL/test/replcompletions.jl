@@ -164,7 +164,8 @@ end
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
 test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
 test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
-test_complete_context(s, m=@__MODULE__) =  map_completion_text(@inferred(completions(s,lastindex(s), m)))
+test_complete_context(s, m=@__MODULE__; shift::Bool=true) =
+    map_completion_text(@inferred(completions(s,lastindex(s), m, shift)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
@@ -2350,4 +2351,38 @@ let s = "using "
     c, r, res = test_complete_context(s)
     @test res
     @test !isempty(c)
+end
+
+baremodule _TestInternalBindingOnly
+export binding1, binding2
+global binding1 = global binding2 = nothing
+end
+baremodule TestInternalBindingOnly
+using .._TestInternalBindingOnly
+global binding = nothing
+export binding
+end
+for s = ("TestInternalBindingOnly.bind", "using .TestInternalBindingOnly: bind")
+    # when module is explicitly accessed, completion should show internal names only
+    let (c, r, res) = test_complete_context(s; shift=false)
+        @test res
+        @test "binding" ∈ c
+        @test "binding1" ∉ c && "binding2" ∉ c
+    end
+    # unless completion is forced via shift key
+    let (c, r, res) = test_complete_context(s, TestInternalBindingOnly)
+        @test res
+        @test "binding" ∈ c
+        @test "binding1" ∈ c && "binding2" ∈ c
+    end
+end
+# without explicit module access, completion should show all available names
+let (c, r, res) = test_complete_context("bind", TestInternalBindingOnly; shift=false)
+    @test res
+    @test "binding" ∈ c
+    @test "binding1" ∈ c && "binding2" ∈ c
+end
+let (c, r, res) = test_complete_context("si", Main; shift=false)
+    @test res
+    @test "sin" ∈ c
 end
