@@ -116,7 +116,9 @@ typedef struct ___tracy_source_location_data TracySrcLocData;
 #endif
 
 #ifdef USE_NVTX
+#pragma GCC visibility push(default)
 #include <nvtx3/nvToolsExt.h>
+#pragma GCC visibility pop
 #endif
 
 #ifdef __cplusplus
