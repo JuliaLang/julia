@@ -213,6 +213,26 @@ end
     end
 end
 
+@testset "native bitshifts" failfast=true begin
+    for T1 in Base.BitInteger_types
+        nbits = 8*sizeof(T1)
+        val = 0x1234567890abcdef1234567890abcdef % T1
+        for T2 in Base.BitInteger_types
+            for shift in 0:nbits-1
+                s = T2(shift)
+                @test unsafe_lshr(val, s) === val >>> s
+                @test unsafe_ashr(val, s) === val >> s
+                @test unsafe_shl(val, s) === val << s
+            end
+
+            invalid = nbits + T2(10)
+            @test typeof(unsafe_lshr(val, invalid)) == typeof(val >>> T2(1))
+            @test typeof(unsafe_ashr(val, invalid)) == typeof(val >> T2(1))
+            @test typeof(unsafe_shl(val, invalid)) == typeof(val << T2(1))
+        end
+    end
+end
+
 @testset "bit rotations" begin
     val1 = 0b01100011
     @test 0b00011011 === bitrotate(val1, 3)
