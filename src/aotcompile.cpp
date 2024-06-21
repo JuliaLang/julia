@@ -19,26 +19,9 @@
 
 // analysis passes
 #include <llvm/Analysis/Passes.h>
-#include <llvm/Analysis/BasicAliasAnalysis.h>
-#include <llvm/Analysis/TypeBasedAliasAnalysis.h>
-#include <llvm/Analysis/ScopedNoAliasAA.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/Transforms/IPO.h>
-#include <llvm/Transforms/Scalar.h>
-#if JL_LLVM_VERSION < 180000
-#include <llvm/Transforms/Vectorize.h>
-#endif
-#include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
-#include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
-#include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
-#include <llvm/Transforms/Scalar/GVN.h>
-#include <llvm/Transforms/IPO/AlwaysInliner.h>
-#include <llvm/Transforms/InstCombine/InstCombine.h>
-#include <llvm/Transforms/Scalar/InstSimplifyPass.h>
-#include <llvm/Transforms/Scalar/SimpleLoopUnswitch.h>
-#include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
@@ -1181,7 +1164,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
         raw_svector_ostream OS(out.asm_);
         legacy::PassManager emitter;
         addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+#if JL_LLVM_VERSION >= 180000
         if (TM->addPassesToEmitFile(emitter, OS, nullptr, CodeGenFileType::AssemblyFile, false))
+#else
+        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_AssemblyFile, false))
+#endif
             jl_safe_printf("ERROR: target does not support generation of assembly files\n");
         emitter.run(M);
         timers.asm_.stopTimer();
@@ -1903,27 +1890,10 @@ void jl_dump_native_impl(void *native_code,
 
         object::Archive::Kind Kind = getDefaultForHost(TheTriple);
 #if JL_LLVM_VERSION >= 180000
-#define WRITE_ARCHIVE(fname, field, prefix, suffix) \
-        if (fname) {\
-            SmallVector<NewArchiveMember, 0> archive; \
-            SmallVector<std::string, 16> filenames; \
-            SmallVector<StringRef, 16> buffers; \
-            for (size_t i = 0; i < threads; i++) { \
-                filenames.push_back((StringRef("text") + prefix + "#" + Twine(i) + suffix).str()); \
-                buffers.push_back(StringRef(data_outputs[i].field.data(), data_outputs[i].field.size())); \
-            } \
-            filenames.push_back("metadata" prefix suffix); \
-            buffers.push_back(StringRef(metadata_outputs[0].field.data(), metadata_outputs[0].field.size())); \
-            if (z) { \
-                filenames.push_back("sysimg" prefix suffix); \
-                buffers.push_back(StringRef(sysimg_outputs[0].field.data(), sysimg_outputs[0].field.size())); \
-            } \
-            for (size_t i = 0; i < filenames.size(); i++) { \
-                archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
-            } \
-            handleAllErrors(writeArchive(fname, archive, SymtabWritingMode::NormalSymtab, Kind, true, false), reportWriterError); \
-        }
+#define WritingMode SymtabWritingMode::NormalSymtab
 #else
+#define WritingMode true
+#endif
 #define WRITE_ARCHIVE(fname, field, prefix, suffix) \
     if (fname) {\
         SmallVector<NewArchiveMember, 0> archive; \
@@ -1942,9 +1912,8 @@ void jl_dump_native_impl(void *native_code,
         for (size_t i = 0; i < filenames.size(); i++) { \
             archive.push_back(NewArchiveMember(MemoryBufferRef(buffers[i], filenames[i]))); \
         } \
-        handleAllErrors(writeArchive(fname, archive, true, Kind, true, false), reportWriterError); \
+        handleAllErrors(writeArchive(fname, archive, WritingMode, Kind, true, false), reportWriterError); \
     }
-#endif
 
         WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");
         WRITE_ARCHIVE(bc_fname, opt, "_opt", ".bc");
