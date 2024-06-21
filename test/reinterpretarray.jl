@@ -464,6 +464,10 @@ end
     @test as isa TSlow{Int,3}
     @test size(as) == (3, 5, 1)
 
+    as = similar(typeof(a),(3, 5, 1))
+    @test as isa TSlow{Int,3}
+    @test size(as) == (3, 5, 1)
+    
     a = reinterpret(reshape, NTuple{4,Float64}, TSlow(rand(Float64, 4, 4)))
 
     as = similar(a)
