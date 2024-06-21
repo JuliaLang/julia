@@ -405,7 +405,7 @@ static const int jl_gc_sizeclasses[] = {
 #ifdef GC_SMALL_PAGE
 #ifdef _P64
 #  define JL_GC_N_POOLS 39
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
 #  define JL_GC_N_POOLS 40
 #else
 #  define JL_GC_N_POOLS 41
@@ -413,7 +413,7 @@ static const int jl_gc_sizeclasses[] = {
 #else
 #ifdef _P64
 #  define JL_GC_N_POOLS 49
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
 #  define JL_GC_N_POOLS 50
 #else
 #  define JL_GC_N_POOLS 51
@@ -428,7 +428,7 @@ STATIC_INLINE int jl_gc_alignment(size_t sz) JL_NOTSAFEPOINT
 #ifdef _P64
     (void)sz;
     return 16;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
     return sz <= 4 ? 8 : 16;
 #else
     // szclass 8
@@ -460,7 +460,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz) JL_NOTSAFEPOINT
     if (sz <= 8)
         return 0;
     const int N = 0;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
     if (sz <= 8)
         return (sz >= 4 ? 1 : 0);
     const int N = 1;
@@ -478,7 +478,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
     if (sz >= 16 && sz <= 152) {
 #ifdef _P64
         const int N = 0;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
         const int N = 1;
 #else
         const int N = 2;
