@@ -325,6 +325,18 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     event->ittapi_event = _jl_timing_ittapi_event_create(name);
 #endif // USE_ITTAPI
 
+#ifdef USE_NVTX
+    nvtxEventAttributes_t nvtx_attrs = {0};
+    nvtx_attrs.version = NVTX_VERSION;
+    nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, name);
+    nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+    nvtx_attrs.message.registered = nvtx_message;
+
+    event->nvtx_attrs = nvtx_attrs;
+#endif // USE_NVTX
+
 #ifdef USE_TRACY
     event->tracy_srcloc.name = name;
     event->tracy_srcloc.function = function;

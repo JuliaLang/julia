@@ -286,8 +286,8 @@ typedef struct _jl_timing_counts_t {
 #ifdef USE_NVTX
 #define _NVTX_EVENT_MEMBER              nvtxEventAttributes_t nvtx_attrs;
 #define _NVTX_BLOCK_MEMBER              nvtxRangeId_t nvtx_rangeid;
-#define _NVTX_START(block)              (block)->nvtx_rangeid = nvtxRangeStartA("woohoo")
-#define _NVTX_STOP(block)               nvtxRangeEnd((block)->nvtx_rangeid)
+#define _NVTX_START(block)              (block)->nvtx_rangeid = nvtxDomainRangeStartEx(jl_timing_nvtx_domain, &(block)->event->nvtx_attrs)
+#define _NVTX_STOP(block)               nvtxDomainRangeEnd(jl_timing_nvtx_domain, (block)->nvtx_rangeid)
 #else
 #define _NVTX_EVENT_MEMBER
 #define _NVTX_BLOCK_MEMBER
