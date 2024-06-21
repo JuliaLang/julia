@@ -139,13 +139,16 @@ void jl_init_timing(void)
     arraylist_new(&jl_timing_ittapi_events, 0);
 #endif
 
-#ifdef USE_NVTX
-    jl_timing_nvtx_domain = nvtxDomainCreateA("julia");
-#endif
-
     // Sort the subsystem names for quick enable/disable lookups
     qsort(jl_timing_subsystems, JL_TIMING_SUBSYSTEM_LAST,
           sizeof(const char *), indirect_strcmp);
+
+#ifdef USE_NVTX
+    jl_timing_nvtx_domain = nvtxDomainCreateA("julia");
+    for (int i = 0; i < JL_TIMING_SUBSYSTEM_LAST; i++) {
+        nvtxDomainNameCategoryA(jl_timing_nvtx_domain, i + 1, jl_timing_subsystems[i]);
+    }
+#endif
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
@@ -333,6 +336,13 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, name);
     nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
     nvtx_attrs.message.registered = nvtx_message;
+
+    // 0 is the default (unnamed) category
+    nvtx_attrs.category = maybe_subsystem == JL_TIMING_SUBSYSTEM_LAST ? 0 : maybe_subsystem+1;
+
+    // simple Knuth hash to get nice colors
+    nvtx_attrs.colorType = NVTX_COLOR_ARGB;
+    nvtx_attrs.color = (nvtx_attrs.category * 2654435769) >> 8;
 
     event->nvtx_attrs = nvtx_attrs;
 #endif // USE_NVTX
