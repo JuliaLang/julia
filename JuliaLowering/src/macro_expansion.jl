@@ -146,7 +146,7 @@ function expand_macro(ctx, ex)
         if exc isa MacroExpansionError
             # Add context to the error.
             # TODO: Using rethrow() is kinda ugh. Is there a way to avoid it?
-            rethrow(MacroExpansionError(mctx, ex.ex, exc.msg))
+            rethrow(MacroExpansionError(mctx, ex, exc.msg))
         else
             throw(MacroExpansionError(mctx, ex, "Error expanding macro"))
         end
@@ -202,7 +202,10 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier" && all(==('_'), ex.name_val)
         @ast ctx ex ex=>K"Placeholder"
-    elseif k == K"Identifier" || k == K"MacroName" ||
+    elseif k == K"true" || k == K"false"
+        # FIXME: Move this upstream into JuliaSyntax
+        @ast ctx ex (k == K"true")::K"Bool"
+    elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName" ||
             (is_operator(k) && !haschildren(ex)) # <- TODO: fix upstream
         layerid = get(ex, :scope_layer, ctx.current_layer.id)
         makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)

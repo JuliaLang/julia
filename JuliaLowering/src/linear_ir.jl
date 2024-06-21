@@ -32,15 +32,17 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     code::SyntaxList{GraphType, Vector{NodeId}}
     next_var_id::Ref{Int}
+    next_label_id::Ref{Int}
     is_toplevel_thunk::Bool
+    lambda_locals::Set{VarId}
     return_type::Union{Nothing,NodeId}
     var_info::Dict{VarId,VarInfo}
     mod::Module
 end
 
-function LinearIRContext(ctx, is_toplevel_thunk, return_type)
-    LinearIRContext(ctx.graph, SyntaxList(ctx.graph), ctx.next_var_id,
-                    is_toplevel_thunk, return_type, ctx.var_info, ctx.mod)
+function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
+    LinearIRContext(ctx.graph, SyntaxList(ctx.graph), ctx.next_var_id, Ref(0),
+                    is_toplevel_thunk, lambda_locals, return_type, ctx.var_info, ctx.mod)
 end
 
 function is_valid_body_ir_argument(ex)
@@ -109,7 +111,7 @@ end
 # Emit computation of ex, assigning the result to an ssavar and returning that
 function emit_assign_tmp(ctx::LinearIRContext, ex)
     # TODO: We could replace this with an index into the code array right away?
-    tmp = makenode(ctx, ex, K"SSAValue", var_id=ctx.next_var_id[])
+    tmp = makeleaf(ctx, ex, K"SSAValue", var_id=ctx.next_var_id[])
     ctx.next_var_id[] += 1
     emit(ctx, ex, K"=", tmp, ex)
     return tmp
@@ -145,6 +147,79 @@ function emit_assignment(ctx, srcref, lhs, rhs)
     end
 end
 
+function make_label(ctx, srcref)
+    id = ctx.next_label_id[]
+    ctx.next_label_id[] += 1
+    makeleaf(ctx, srcref, K"label", id)
+end
+
+# flisp: make&mark-label
+function emit_label(ctx, srcref)
+    if !isempty(ctx.code)
+        # Use current label if available
+        e = ctx.code[end]
+        if kind(e) == K"label"
+            return e
+        end
+    end
+    l = make_label(ctx, srcref)
+    emit(ctx, l)
+    l
+end
+
+function compile_condition_term(ctx, ex)
+    cond = compile(ctx, ex, true, false)
+    if !is_valid_body_ir_argument(cond)
+        cond = emit_assign_tmp(ctx, cond)
+    end
+    return cond
+end
+
+# flisp: emit-cond
+function compile_conditional(ctx, ex, false_label)
+    if kind(ex) == K"block"
+        for i in 1:numchildren(ex)-1
+            compile(ctx, ex[i], false, false)
+        end
+        test = ex[end]
+    else
+        test = ex
+    end
+    k = kind(test)
+    if k == K"||"
+        true_label = make_label(ctx, test)
+        for (i,e) in enumerate(children(test))
+            c = compile_condition_term(ctx, e)
+            if i < numchildren(test)
+                next_term_label = make_label(ctx, test)
+                # Jump over short circuit
+                emit(ctx, @ast ctx e [K"gotoifnot" c next_term_label])
+                # Short circuit to true
+                emit(ctx, @ast ctx e [K"goto" true_label])
+                emit(ctx, next_term_label)
+            else
+                emit(ctx, @ast ctx e [K"gotoifnot" c false_label])
+            end
+        end
+        emit(ctx, true_label)
+    elseif k == K"&&"
+        for e in children(test)
+            c = compile_condition_term(ctx, e)
+            emit(ctx, @ast ctx e [K"gotoifnot" c false_label])
+        end
+    else
+        c = compile_condition_term(ctx, test)
+        emit(ctx, @ast ctx test [K"gotoifnot" c false_label])
+    end
+end
+
+function new_mutable_var(ctx, srcref, name)
+    id = new_var_id(ctx)
+    ctx.var_info[id] = VarInfo(name, nothing, :local, false, false)
+    push!(ctx.lambda_locals, id)
+    makeleaf(ctx, srcref, K"Identifier", name, var_id=id)
+end
+
 # This pass behaves like an interpreter on the given code.
 # To perform stateful operations, it calls `emit` to record that something
 # needs to be done. In value position, it returns an expression computing
@@ -154,7 +229,8 @@ end
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"Identifier" || is_literal(k) || k == K"SSAValue" || k == K"quote" || k == K"inert" ||
-            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" || k == K"Placeholder"
+            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" || k == K"Placeholder" ||
+            k == K"Bool"
         # TODO: other kinds: copyast the_exception $ globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall
         if needs_value && k == K"Placeholder"
             # TODO: ensure outterref, globalref work here
@@ -219,6 +295,46 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             compile(ctx, ex[1], needs_value, in_tail_pos)
         else
             nothing
+        end
+    elseif k == K"if" || k == K"elseif"
+        @chk numchildren(ex) <= 3
+        has_else = numchildren(ex) > 2
+        else_label = make_label(ctx, ex)
+        compile_conditional(ctx, ex[1], else_label)
+        if in_tail_pos
+            compile(ctx, ex[2], needs_value, in_tail_pos)
+            emit(ctx, else_label)
+            if has_else
+                compile(ctx, ex[3], needs_value, in_tail_pos)
+            else
+                emit_return(ctx, ex, nothing_(ctx, ex))
+            end
+            nothing
+        else
+            val = needs_value && new_mutable_var(ctx, ex, "if_val")
+            v1 = compile(ctx, ex[2], needs_value, in_tail_pos)
+            if needs_value
+                emit_assignment(ctx, ex, val, v1)
+            end
+            if has_else || needs_value
+                end_label = make_label(ctx, ex)
+                emit(ctx, @ast ctx ex [K"goto" end_label])
+            else
+                end_label = nothing
+            end
+            emit(ctx, else_label)
+            v2 = if has_else
+                compile(ctx, ex[3], needs_value, in_tail_pos)
+            elseif needs_value
+                nothing_(ctx, ex)
+            end
+            if needs_value
+                emit_assignment(ctx, ex, val, v2)
+            end
+            if !isnothing(end_label)
+                emit(ctx, end_label)
+            end
+            val
         end
     elseif k == K"method"
         # TODO
@@ -299,8 +415,17 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         ex
     elseif k == K"SSAValue"
         makeleaf(ctx, ex, K"SSAValue"; var_id=ssa_rewrites[ex.var_id])
-    elseif k == K"goto" || k == K"enter" || k == K"gotoifnot"
+    elseif k == K"enter"
         TODO(ex, "_renumber $k")
+    elseif k == K"goto"
+        @ast ctx ex [K"goto"
+            label_table[ex[1].var_id]::K"label"
+        ]
+    elseif k == K"gotoifnot"
+        @ast ctx ex [K"gotoifnot"
+            _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex[1])
+            label_table[ex[2].var_id]::K"label"
+        ]
     elseif k == K"lambda"
         ex
     else
@@ -316,7 +441,7 @@ end
 function renumber_body(ctx, input_code, slot_rewrites)
     # Step 1: Remove any assignments to SSA variables, record the indices of labels
     ssa_rewrites = Dict{VarId,VarId}()
-    label_table = Dict{String,Int}()
+    label_table = Dict{Int,Int}()
     code = SyntaxList(ctx)
     for ex in input_code
         k = kind(ex)
@@ -332,7 +457,7 @@ function renumber_body(ctx, input_code, slot_rewrites)
                 ex_out = ex[2]
             end
         elseif k == K"label"
-            label_table[ex.name_val] = length(code) + 1
+            label_table[ex.var_id] = length(code) + 1
         else
             ex_out = ex
         end
@@ -373,7 +498,7 @@ function compile_lambda(outer_ctx, ex)
     lambda_info = ex.lambda_info
     return_type = nothing # FIXME
     # TODO: Add assignments for reassigned arguments to body using lambda_info.args
-    ctx = LinearIRContext(outer_ctx, lambda_info.is_toplevel_thunk, return_type)
+    ctx = LinearIRContext(outer_ctx, lambda_info.is_toplevel_thunk, ex.lambda_locals, return_type)
     compile_body(ctx, ex[1])
     slot_rewrites = Dict{VarId,Int}()
     _add_slots!(slot_rewrites, ctx.var_info, (arg.var_id for arg in lambda_info.args))
@@ -394,7 +519,7 @@ function linearize_ir(ctx, ex)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
     # required to call reparent() ...
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.next_var_id,
-                           false, nothing, ctx.var_info, ctx.mod)
+                           Ref(0), false, Set{VarId}(), nothing, ctx.var_info, ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     setattr!(graph, res.id, var_info=ctx.var_info)
     _ctx, res

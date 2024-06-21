@@ -404,4 +404,6 @@ macro A.b(ex)
 end
 """)
 
+include("branching.jl")
+
 end

@@ -12,9 +12,11 @@ end
 
 function Base.showerror(io::IO, exc::LoweringError)
     print(io, "LoweringError:\n")
-    # FIXME
     src = sourceref(exc.ex)
     highlight(io, src; note=exc.msg)
+
+    print(io, "\n\nDetailed provenance:\n")
+    showprov(io, exc.ex, tree=true)
 end
 
 #-------------------------------------------------------------------------------

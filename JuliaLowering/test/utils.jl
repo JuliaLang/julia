@@ -81,3 +81,10 @@ test case comparisons with the `~` function.
 """
 format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
 
+#-------------------------------------------------------------------------------
+
+# Parse and lower `src`, and print statements from the linear IR in text format
+function ir_as_text(mod, src)
+    ex = JuliaLowering.lower(mod, parsestmt(SyntaxTree, src))
+    join(string.(children(ex[1])), "\n")
+end

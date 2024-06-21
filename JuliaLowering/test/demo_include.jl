@@ -1,5 +1,5 @@
 module M
-    using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope
+    using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope, MacroExpansionError, makenode
     using JuliaSyntax
 
     # Introspection
@@ -73,4 +73,56 @@ module M
     macro outer()
         :((1, @inner))
     end
+
+    macro K_str(str)
+        convert(JuliaSyntax.Kind, str[1].value)
+    end
+
+    # Recursive macro call
+    macro recursive(N)
+        Nval = if kind(N) == K"Integer" || kind(N) == K"Value"
+            N.value
+        end
+        if !(Nval isa Integer)
+            throw(MacroExpansionError(N, "argument must be an integer"))
+        end
+        if Nval < 1
+            return N
+        end
+        quote
+            x = $N
+            (@recursive($(Nval-1)), x)
+        end
+    end
+
+    # function var"@recursive"(__context__::JuliaLowering.MacroContext, N)
+    #     @chk kind(N) == K"Integer"
+    #     Nval = N.value::Int
+    #     if Nval < 1
+    #         return N
+    #     end
+    #     @ast __context__ (@HERE) [K"block"
+    #         [K"="(@HERE)
+    #             "x"::K"Identifier"(@HERE)
+    #             N
+    #         ]
+    #         [K"tuple"(@HERE)
+    #             "x"::K"Identifier"(@HERE)
+    #             [K"macrocall"(@HERE)
+    #                 "@recursive"::K"Identifier"
+    #                 (Nval-1)::K"Integer"
+    #             ]
+    #         ]
+    #     ]
+    # end
+
+    # macro inert(ex)
+    #     if kind(ex) != K"quote"
+    #         throw(MacroExpansionError(ex, "expected quote"))
+    #     end
+    #     makenode(__context__, ex,
+    #              makenode(__context__, ex, K"inert", ex))
+    #     @chk kind(ex) == JuliaSyntax.K"quote"
+    #     @ast __context__ ex [JuliaSyntax.K"inert" ex]
+    # end
 end

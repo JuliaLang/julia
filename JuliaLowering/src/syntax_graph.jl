@@ -413,6 +413,7 @@ function _value_string(ex)
     str = k == K"Identifier" || k == K"MacroName" || is_operator(k) ? ex.name_val :
           k == K"Placeholder" ? ex.name_val :
           k == K"SSAValue"    ? "ssa"                 :
+          k == K"label"       ? "label"               :
           k == K"core"        ? "core.$(ex.name_val)" :
           k == K"top"         ? "top.$(ex.name_val)"  :
           k == K"Symbol"      ? ":$(ex.name_val)" :

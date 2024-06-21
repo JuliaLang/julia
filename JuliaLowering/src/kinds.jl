@@ -10,6 +10,9 @@ function _insert_kinds()
             # A literal Julia value of any kind, as might be inserted by the AST
             # during macro expansion
             "Value"
+            # TODO: Emit "true" and "false" tokens as K"Bool" in parser to
+            # harmonize with K"Int" etc?
+            "Bool"
             # An identifier composed entirely of underscores
             "Placeholder"
             # A (quoted) `Symbol`

@@ -67,7 +67,8 @@ function makeleaf(ctx, srcref, k::Kind, value; kws...)
     graph = syntax_graph(ctx)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" || k == K"globalref"
         makeleaf(graph, srcref, k; name_val=value, kws...)
-    elseif k == K"SSAValue"
+    elseif k == K"SSAValue" || k == K"label"
+        # FIXME?
         makeleaf(graph, srcref, k; var_id=value, kws...)
     else
         val = k == K"Integer" ? convert(Int,     value) :
@@ -75,6 +76,7 @@ function makeleaf(ctx, srcref, k::Kind, value; kws...)
               k == K"String"  ? convert(String,  value) :
               k == K"Char"    ? convert(Char,    value) :
               k == K"Value"   ? value                   :
+              k == K"Bool"    ? value                   :
               error("Unexpected leaf kind `$k`")
         makeleaf(graph, srcref, k; value=val, kws...)
     end

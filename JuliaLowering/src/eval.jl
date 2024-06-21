@@ -178,7 +178,7 @@ end
 
 function to_lowered_expr(mod, var_info, ex)
     k = kind(ex)
-    if is_literal(k)
+    if is_literal(k) || k == K"Bool"
         ex.value
     elseif k == K"core"
         GlobalRef(Core, Symbol(ex.name_val))
@@ -223,6 +223,10 @@ function to_lowered_expr(mod, var_info, ex)
         end
     elseif k == K"Value"
         ex.value
+    elseif k == K"goto"
+        Core.GotoNode(ex[1].var_id)
+    elseif k == K"gotoifnot"
+        Core.GotoIfNot(to_lowered_expr(mod, var_info, ex[1]), ex[2].var_id)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #

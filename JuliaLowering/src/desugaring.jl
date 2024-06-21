@@ -26,13 +26,39 @@ function DesugaringContext(ctx)
     DesugaringContext(graph, ctx.next_var_id, ctx.scope_layers, ctx.current_layer.mod)
 end
 
-function expand_condition(ctx, ex)
-    if head(ex) == K"block" || head(ex) == K"||" || head(ex) == K"&&"
-        # || and && get special lowering so that they compile directly to jumps
-        # rather than first computing a bool and then jumping.
-        error("TODO expand_condition")
+# Flatten nested && or || nodes and expand their children
+function expand_cond_children(ctx, ex, cond_kind=kind(ex), flat_children=SyntaxList(ctx))
+    for e in children(ex)
+        if kind(e) == cond_kind
+            expand_cond_children(ctx, e, cond_kind, flat_children)
+        else
+            push!(flat_children, expand_forms_2(ctx, e))
+        end
     end
-    expand_forms_2(ctx, ex)
+    flat_children
+end
+
+# Expand condition in, eg, `if` or `while`
+function expand_condition(ctx, ex)
+    isblock = kind(ex) == K"block"
+    test = isblock ? ex[end] : ex
+    k = kind(test)
+    if k == K"&&" || k == K"||"
+        # `||` and `&&` get special lowering so that they compile directly to
+        # jumps rather than first computing a bool and then jumping.
+        cs = expand_cond_children(ctx, test)
+        @assert length(cs) > 1
+        test = makenode(ctx, test, k, cs)
+    else
+        test = expand_forms_2(ctx, test)
+    end
+    if isblock
+        # Special handling so that the rules for `&&` and `||` can be applied
+        # to the last statement of a block
+        @ast ctx ex [K"block" ex[1:end-1]... test]
+    else
+        test
+    end
 end
 
 function expand_let(ctx, ex)
@@ -549,6 +575,26 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 ex[2]=>K"Symbol"
             ]
         )
+    elseif k == K"?"
+        @chk numchildren(ex) == 3
+        expand_forms_2(ctx, @ast ctx ex [K"if" children(ex)...])
+    elseif k == K"&&" || k == K"||"
+        @chk numchildren(ex) > 1
+        cs = expand_cond_children(ctx, ex)
+        # Attributing correct provenance for `cs[1:end-1]` is tricky in cases
+        # like `a && (b && c)` because the expression constructed here arises
+        # from the source fragment `a && (b` which doesn't follow the tree
+        # structure. For now we attribute to the parent node.
+        cond = length(cs) == 2 ?
+            cs[1] :
+            makenode(ctx, ex, k, cs[1:end-1])
+        # This transformation assumes the type assertion `cond::Bool` will be
+        # added by a later pass.
+        if k == K"&&"
+            @ast ctx ex [K"if" cond cs[end] false::K"Bool"]
+        else
+            @ast ctx ex [K"if" cond true::K"Bool" cs[end]]
+        end
     elseif k == K"doc"
         @chk numchildren(ex) == 2
         sig = expand_forms_2(ctx, ex[2], ex)
@@ -556,6 +602,12 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
         expand_forms_2(ctx, expand_macro_def(ctx, ex))
+    elseif k == K"if" || k == K"elseif"
+        @chk numchildren(ex) >= 2
+        @ast ctx ex [k
+            expand_condition(ctx, ex[1])
+            expand_forms_2(ctx, ex[2:end])...
+        ]
     elseif k == K"let"
         expand_forms_2(ctx, expand_let(ctx, ex))
     elseif k == K"local" || k == K"global"

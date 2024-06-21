@@ -102,34 +102,8 @@ JuliaLowering.include(Main, "demo_include.jl")
 
 Base.eval(M, quote
     function var"@inert"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == K"quote"
-        @ast __context__ ex [K"inert" ex]
-    end
-
-    # Recursive macro call
-    function var"@recursive"(__context__::JuliaLowering.MacroContext, N)
-        @chk kind(N) == K"Integer"
-        Nval = N.value::Int
-        if Nval < 1
-            return N
-        end
-        # quote
-        #     x = $N
-        #     (@recursive $(Nval-1), x)
-        # end
-        @ast __context__ (@HERE) [K"block"
-            [K"="(@HERE)
-                "x"::K"Identifier"(@HERE)
-                N
-            ]
-            [K"tuple"(@HERE)
-                "x"::K"Identifier"(@HERE)
-                [K"macrocall"(@HERE)
-                    "@recursive"::K"Identifier"
-                    (Nval-1)::K"Integer"
-                ]
-            ]
-        ]
+        @chk kind(ex) == JuliaSyntax.K"quote"
+        @ast __context__ ex [JuliaSyntax.K"inert" ex]
     end
 end)
 
@@ -175,9 +149,9 @@ end
 
 # src = """@foo z"""
 
-# src = """
-# M.@recursive 3
-# """
+src = """
+M.@recursive 3
+"""
 
 # src = """
 # begin
@@ -245,6 +219,15 @@ end
 # """
 
 #src = """M.@outer"""
+
+src = """
+begin
+    local a, b
+    if a
+        b
+    end
+end
+"""
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
