@@ -261,7 +261,7 @@ typedef struct _jl_tls_states_t {
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
-    _Atomic(int64_t) gc_sweeps_requested;
+    _Atomic(size_t) gc_sweeps_requested;
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
