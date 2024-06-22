@@ -2845,12 +2845,14 @@ keymap_data(s::PromptState, prompt::Prompt) = prompt.repl
 keymap(ms::MIState, m::ModalInterface) = keymap(state(ms), mode(ms))
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
+# should be locked when adding/editing a repl mode etc.
+const repl_mutate_lock = Base.ReentrantLock()
+
 function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
     Base.reseteof(term)
-    l = Base.ReentrantLock()
     t1 = Threads.@spawn :interactive while true
         wait(s.async_channel)
-        status = @lock l begin
+        status = @lock repl_mutate_lock begin
             fcn = take!(s.async_channel)
             fcn(s)
         end
@@ -2865,7 +2867,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         # and we want to not block typing when the repl task thread is busy
         t2 = Threads.@spawn :interactive while true
             eof(term) || peek(term) # wait before locking but don't consume
-            @lock l begin
+            @lock repl_mutate_lock begin
                 kmap = keymap(s, prompt)
                 fcn = match_input(kmap, s)
                 kdata = keymap_data(s, prompt)
