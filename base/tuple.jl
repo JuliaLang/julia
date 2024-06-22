@@ -76,8 +76,8 @@ keys(@nospecialize t::Tuple) = OneTo(length(t))
 """
     prevind(A, i)
 
-Return the index before `i` in `A`. The returned index is often equivalent to `i
-- 1` for an integer `i`. This function can be useful for generic code.
+Return the index before `i` in `A`. The returned index is often equivalent to
+`i - 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
     The returned index might be out of bounds. Consider using
@@ -110,8 +110,8 @@ function prevind end
 """
     nextind(A, i)
 
-Return the index after `i` in `A`. The returned index is often equivalent to `i
-+ 1` for an integer `i`. This function can be useful for generic code.
+Return the index after `i` in `A`. The returned index is often equivalent to
+`i + 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
     The returned index might be out of bounds. Consider using
