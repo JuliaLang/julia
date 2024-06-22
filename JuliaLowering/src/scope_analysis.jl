@@ -35,7 +35,7 @@
 # end
 #
 # function find_in_ast(f, ex::SyntaxTree)
-#     todo = SyntaxList(ex.graph)
+#     todo = SyntaxList(ex._graph)
 #     push!(todo, ex)
 #     while !isempty(todo)
 #         e1 = pop!(todo)
@@ -352,7 +352,7 @@ function _resolve_scopes!(ctx, ex)
     k = kind(ex)
     if k == K"Identifier"
         id = lookup_var(ctx, VarKey(ex))
-        setattr!(ctx.graph, ex.id, var_id=id)
+        setattr!(ctx.graph, ex._id, var_id=id)
     elseif !haschildren(ex) || is_quoted(ex) || k == K"toplevel"
         return
     # TODO
@@ -377,7 +377,7 @@ function _resolve_scopes!(ctx, ex)
             _resolve_scopes!(ctx, e)
         end
         pop!(ctx.scope_stack)
-        setattr!(ctx.graph, ex.id, lambda_locals=scope.lambda_locals)
+        setattr!(ctx.graph, ex._id, lambda_locals=scope.lambda_locals)
     elseif k == K"scope_block"
         scope = analyze_scope(ctx, ex, ex.scope_type, nothing)
         push!(ctx.scope_stack, scope)

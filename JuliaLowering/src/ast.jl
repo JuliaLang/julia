@@ -21,9 +21,9 @@ end
 #-------------------------------------------------------------------------------
 # AST creation utilities
 _node_id(ex::NodeId) = ex
-_node_id(ex::SyntaxTree) = ex.id
+_node_id(ex::SyntaxTree) = ex._id
 
-_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_same_graph(graph, ex); ex.id)
+_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_same_graph(graph, ex); ex._id)
 
 _node_ids(graph::SyntaxGraph) = ()
 _node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)
@@ -164,7 +164,7 @@ function _expand_ast_tree(defs, ctx, srcref, tree)
         flatargs = []
         for a in tree.args
             if Meta.isexpr(a, :row)
-                append!(flagargs, a.args)
+                append!(flatargs, a.args)
             else
                 push!(flatargs, a)
             end
@@ -255,12 +255,12 @@ end
 # Mapping and copying of AST nodes
 function copy_attrs!(dest, src, all=false)
     # TODO: Make this faster?
-    for (name, attr) in pairs(src.graph.attributes)
+    for (name, attr) in pairs(src._graph.attributes)
         if (all || (name !== :source && name !== :kind && name !== :syntax_flags)) &&
-                haskey(attr, src.id)
-            dest_attr = getattr(dest.graph, name, nothing)
+                haskey(attr, src._id)
+            dest_attr = getattr(dest._graph, name, nothing)
             if !isnothing(dest_attr)
-                dest_attr[dest.id] = attr[src.id]
+                dest_attr[dest._id] = attr[src._id]
             end
         end
     end
@@ -268,7 +268,7 @@ end
 
 function copy_attrs!(dest, head::Union{Kind,JuliaSyntax.SyntaxHead}, all=false)
     if all
-        sethead!(dest.graph, dest.id, head)
+        sethead!(dest._graph, dest._id, head)
     end
 end
 
@@ -311,8 +311,8 @@ function copy_ast(ctx, ex)
     # multiple parents? (How much does this actually happen in practice?)
     s = ex.source
     # TODO: Figure out how to use provenance() here?
-    srcref = s isa NodeId ? copy_ast(ctx, SyntaxTree(ex.graph, s))            :
-             s isa Tuple  ? map(i->copy_ast(ctx, SyntaxTree(ex.graph, i)), s) :
+    srcref = s isa NodeId ? copy_ast(ctx, SyntaxTree(ex._graph, s))            :
+             s isa Tuple  ? map(i->copy_ast(ctx, SyntaxTree(ex._graph, i)), s) :
              s
     if haschildren(ex)
         cs = SyntaxList(ctx)

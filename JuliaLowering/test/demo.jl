@@ -122,7 +122,7 @@ function wrapscope(ex, scope_type)
 end
 
 function softscope_test(ex)
-    g = ensure_attributes(ex.graph, scope_type=Symbol)
+    g = ensure_attributes(ex._graph, scope_type=Symbol)
     wrapscope(wrapscope(JuliaLowering.reparent(g, ex), :neutral), :soft)
 end
 

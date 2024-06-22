@@ -185,87 +185,86 @@ end
 
 #-------------------------------------------------------------------------------
 struct SyntaxTree{GraphType}
-    graph::GraphType
-    id::NodeId
+    _graph::GraphType
+    _id::NodeId
 end
 
-function Base.getproperty(tree::SyntaxTree, name::Symbol)
-    # TODO: Remove access to internals?
-    name === :graph && return getfield(tree, :graph)
-    name === :id  && return getfield(tree, :id)
-    id = getfield(tree, :id)
-    return get(getproperty(getfield(tree, :graph), name), id) do
-        error("Property `$name[$id]` not found")
+function Base.getproperty(ex::SyntaxTree, name::Symbol)
+    name === :_graph && return getfield(ex, :_graph)
+    name === :_id  && return getfield(ex, :_id)
+    _id = getfield(ex, :_id)
+    return get(getproperty(getfield(ex, :_graph), name), _id) do
+        error("Property `$name[$_id]` not found")
     end
 end
 
-function Base.setproperty!(tree::SyntaxTree, name::Symbol, val)
-    return setattr!(tree.graph, tree.id; name=>val)
+function Base.setproperty!(ex::SyntaxTree, name::Symbol, val)
+    return setattr!(ex._graph, ex._id; name=>val)
 end
 
-function Base.propertynames(tree::SyntaxTree)
-    attrnames(tree)
+function Base.propertynames(ex::SyntaxTree)
+    attrnames(ex)
 end
 
-function Base.get(tree::SyntaxTree, name::Symbol, default)
-    attr = getattr(getfield(tree, :graph), name, nothing)
+function Base.get(ex::SyntaxTree, name::Symbol, default)
+    attr = getattr(getfield(ex, :_graph), name, nothing)
     return isnothing(attr) ? default :
-           get(attr, getfield(tree, :id), default)
+           get(attr, getfield(ex, :_id), default)
 end
 
-function Base.getindex(tree::SyntaxTree, i::Integer)
-    child(tree, i)
+function Base.getindex(ex::SyntaxTree, i::Integer)
+    child(ex, i)
 end
 
-function Base.getindex(tree::SyntaxTree, r::UnitRange)
-    SyntaxList(tree.graph, children(tree.graph, tree.id, r))
+function Base.getindex(ex::SyntaxTree, r::UnitRange)
+    SyntaxList(ex._graph, children(ex._graph, ex._id, r))
 end
 
-Base.firstindex(tree::SyntaxTree) = 1
-Base.lastindex(tree::SyntaxTree) = numchildren(tree)
+Base.firstindex(ex::SyntaxTree) = 1
+Base.lastindex(ex::SyntaxTree) = numchildren(ex)
 
-function hasattr(tree::SyntaxTree, name::Symbol)
-    attr = getattr(tree.graph, name, nothing)
-    return !isnothing(attr) && haskey(attr, tree.id)
+function hasattr(ex::SyntaxTree, name::Symbol)
+    attr = getattr(ex._graph, name, nothing)
+    return !isnothing(attr) && haskey(attr, ex._id)
 end
 
-function attrnames(tree::SyntaxTree)
-    attrs = tree.graph.attributes
-    [name for (name, value) in pairs(attrs) if haskey(value, tree.id)]
+function attrnames(ex::SyntaxTree)
+    attrs = ex._graph.attributes
+    [name for (name, value) in pairs(attrs) if haskey(value, ex._id)]
 end
 
 function setattr!(ex::SyntaxTree; attrs...)
-    setattr!(ex.graph, ex.id; attrs...)
+    setattr!(ex._graph, ex._id; attrs...)
 end
 
 # JuliaSyntax tree API
 
-function JuliaSyntax.haschildren(tree::SyntaxTree)
-    haschildren(tree.graph, tree.id)
+function JuliaSyntax.haschildren(ex::SyntaxTree)
+    haschildren(ex._graph, ex._id)
 end
 
-function JuliaSyntax.numchildren(tree::SyntaxTree)
-    numchildren(tree.graph, tree.id)
+function JuliaSyntax.numchildren(ex::SyntaxTree)
+    numchildren(ex._graph, ex._id)
 end
 
-function JuliaSyntax.children(tree::SyntaxTree)
-    SyntaxList(tree.graph, children(tree.graph, tree.id))
+function JuliaSyntax.children(ex::SyntaxTree)
+    SyntaxList(ex._graph, children(ex._graph, ex._id))
 end
 
-function JuliaSyntax.child(tree::SyntaxTree, i::Integer)
-    SyntaxTree(tree.graph, child(tree.graph, tree.id, i))
+function JuliaSyntax.child(ex::SyntaxTree, i::Integer)
+    SyntaxTree(ex._graph, child(ex._graph, ex._id, i))
 end
 
-function JuliaSyntax.head(tree::SyntaxTree)
-    JuliaSyntax.SyntaxHead(kind(tree), flags(tree))
+function JuliaSyntax.head(ex::SyntaxTree)
+    JuliaSyntax.SyntaxHead(kind(ex), flags(ex))
 end
 
-function JuliaSyntax.kind(tree::SyntaxTree)
-    tree.kind
+function JuliaSyntax.kind(ex::SyntaxTree)
+    ex.kind
 end
 
-function JuliaSyntax.flags(tree::SyntaxTree)
-    get(tree, :syntax_flags, 0x0000)
+function JuliaSyntax.flags(ex::SyntaxTree)
+    get(ex, :syntax_flags, 0x0000)
 end
 
 
@@ -309,9 +308,9 @@ end
 function provenance(ex::SyntaxTree)
     s = ex.source
     if s isa NodeId
-        return (SyntaxTree(ex.graph, s),)
+        return (SyntaxTree(ex._graph, s),)
     elseif s isa Tuple
-        return SyntaxTree.((ex.graph,), s)
+        return SyntaxTree.((ex._graph,), s)
     else
         return (s,)
     end
@@ -331,9 +330,9 @@ function _sourceref(sources, id)
     end
 end
 
-function sourceref(tree::SyntaxTree)
-    sources = tree.graph.source
-    id::NodeId = tree.id
+function sourceref(ex::SyntaxTree)
+    sources = ex._graph.source
+    id::NodeId = ex._id
     while true
         s, _ = _sourceref(sources, id)
         if s isa Tuple
@@ -361,7 +360,7 @@ end
 
 function flattened_provenance(ex::SyntaxTree)
     refs = SyntaxList(ex)
-    _flattened_provenance(refs, ex.graph, ex.graph.source, ex.id)
+    _flattened_provenance(refs, ex._graph, ex._graph.source, ex._id)
     return reverse(refs)
 end
 
@@ -370,13 +369,13 @@ function is_ancestor(ex, ancestor)
     if !is_compatible_graph(ex, ancestor)
         return false
     end
-    sources = ex.graph.source
-    id::NodeId = ex.id
+    sources = ex._graph.source
+    id::NodeId = ex._id
     while true
         s = get(sources, id, nothing)
         if s isa NodeId
             id = s
-            if id == ancestor.id
+            if id == ancestor._id
                 return true
             end
         else
@@ -385,12 +384,12 @@ function is_ancestor(ex, ancestor)
     end
 end
 
-JuliaSyntax.filename(tree::SyntaxTree) = filename(sourceref(tree))
-JuliaSyntax.source_location(::Type{LineNumberNode}, tree::SyntaxTree) = source_location(LineNumberNode, sourceref(tree))
-JuliaSyntax.source_location(tree::SyntaxTree) = source_location(sourceref(tree))
-JuliaSyntax.first_byte(tree::SyntaxTree) = first_byte(sourceref(tree))
-JuliaSyntax.last_byte(tree::SyntaxTree) = last_byte(sourceref(tree))
-JuliaSyntax.sourcetext(tree::SyntaxTree) = sourcetext(sourceref(tree))
+JuliaSyntax.filename(ex::SyntaxTree) = filename(sourceref(ex))
+JuliaSyntax.source_location(::Type{LineNumberNode}, ex::SyntaxTree) = source_location(LineNumberNode, sourceref(ex))
+JuliaSyntax.source_location(ex::SyntaxTree) = source_location(sourceref(ex))
+JuliaSyntax.first_byte(ex::SyntaxTree) = first_byte(sourceref(ex))
+JuliaSyntax.last_byte(ex::SyntaxTree) = last_byte(sourceref(ex))
+JuliaSyntax.sourcetext(ex::SyntaxTree) = sourcetext(sourceref(ex))
 
 const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple}
 
@@ -429,7 +428,7 @@ function _value_string(ex)
     end
     if k == K"slot"
         # TODO: Ideally shouldn't need to rewrap the id here...
-        srcex = SyntaxTree(ex.graph, ex.source)
+        srcex = SyntaxTree(ex._graph, ex.source)
         str = "$(str)/$(srcex.name_val)"
     end
     return str
@@ -494,15 +493,15 @@ function reparent(ctx, ex::SyntaxTree)
     # In that case, would we copy all the attributes? That would have slightly
     # different semantics.
     graph = syntax_graph(ctx)
-    @assert graph.edge_ranges === ex.graph.edge_ranges
-    SyntaxTree(graph, ex.id)
+    @assert graph.edge_ranges === ex._graph.edge_ranges
+    SyntaxTree(graph, ex._id)
 end
 
 function ensure_attributes(ex::SyntaxTree; kws...)
     reparent(ensure_attributes(syntax_graph(ex); kws...), ex)
 end
 
-syntax_graph(ex::SyntaxTree) = ex.graph
+syntax_graph(ex::SyntaxTree) = ex._graph
 
 function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::JuliaSyntax.ParseStream; kws...)
     SyntaxTree(JuliaSyntax.build_tree(SyntaxNode, stream; kws...))
@@ -535,18 +534,18 @@ function Base.getindex(v::SyntaxList, r::UnitRange)
     SyntaxList(v.graph, view(v.ids, r))
 end
 
-function Base.setindex!(v::SyntaxList, tree::SyntaxTree, i::Int)
-    check_same_graph(v, tree)
-    v.ids[i] = tree.id
+function Base.setindex!(v::SyntaxList, ex::SyntaxTree, i::Int)
+    check_same_graph(v, ex)
+    v.ids[i] = ex._id
 end
 
 function Base.setindex!(v::SyntaxList, id::NodeId, i::Int)
     v.ids[i] = id
 end
 
-function Base.push!(v::SyntaxList, tree::SyntaxTree)
-    check_same_graph(v, tree)
-    push!(v.ids, tree.id)
+function Base.push!(v::SyntaxList, ex::SyntaxTree)
+    check_same_graph(v, ex)
+    push!(v.ids, ex._id)
 end
 
 function Base.append!(v::SyntaxList, exs)

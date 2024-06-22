@@ -37,7 +37,7 @@ JuliaLowering.include_string(test_mod, """
 
 # wrap expression in scope block of `scope_type`
 function wrapscope(ex, scope_type)
-    g = JuliaLowering.ensure_attributes(ex.graph, scope_type=Symbol)
+    g = JuliaLowering.ensure_attributes(ex._graph, scope_type=Symbol)
     ex = JuliaLowering.reparent(g, ex)
     makenode(ex, ex, K"scope_block", ex; scope_type=scope_type)
 end

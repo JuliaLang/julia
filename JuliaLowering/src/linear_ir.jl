@@ -521,7 +521,7 @@ function linearize_ir(ctx, ex)
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.next_var_id,
                            Ref(0), false, Set{VarId}(), nothing, ctx.var_info, ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
-    setattr!(graph, res.id, var_info=ctx.var_info)
+    setattr!(graph, res._id, var_info=ctx.var_info)
     _ctx, res
 end
 
