@@ -224,9 +224,9 @@ function to_lowered_expr(mod, var_info, ex)
     elseif k == K"Value"
         ex.value
     elseif k == K"goto"
-        Core.GotoNode(ex[1].var_id)
+        Core.GotoNode(ex[1].id)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(to_lowered_expr(mod, var_info, ex[1]), ex[2].var_id)
+        Core.GotoIfNot(to_lowered_expr(mod, var_info, ex[1]), ex[2].id)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #

@@ -150,7 +150,7 @@ end
 function make_label(ctx, srcref)
     id = ctx.next_label_id[]
     ctx.next_label_id[] += 1
-    makeleaf(ctx, srcref, K"label", id)
+    makeleaf(ctx, srcref, K"label", id=id)
 end
 
 # flisp: make&mark-label
@@ -419,12 +419,12 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         TODO(ex, "_renumber $k")
     elseif k == K"goto"
         @ast ctx ex [K"goto"
-            label_table[ex[1].var_id]::K"label"
+            label_table[ex[1].id]::K"label"
         ]
     elseif k == K"gotoifnot"
         @ast ctx ex [K"gotoifnot"
             _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex[1])
-            label_table[ex[2].var_id]::K"label"
+            label_table[ex[2].id]::K"label"
         ]
     elseif k == K"lambda"
         ex
@@ -457,7 +457,7 @@ function renumber_body(ctx, input_code, slot_rewrites)
                 ex_out = ex[2]
             end
         elseif k == K"label"
-            label_table[ex.var_id] = length(code) + 1
+            label_table[ex.id] = length(code) + 1
         else
             ex_out = ex
         end
@@ -515,7 +515,8 @@ function linearize_ir(ctx, ex)
     graph = ensure_attributes(ctx.graph,
                               slot_rewrites=Dict{VarId,Int},
                               var_info=Dict{VarId,VarInfo},
-                              mod=Module)
+                              mod=Module,
+                              id=Int)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
     # required to call reparent() ...
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.next_var_id,

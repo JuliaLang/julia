@@ -67,9 +67,10 @@ function makeleaf(ctx, srcref, k::Kind, value; kws...)
     graph = syntax_graph(ctx)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" || k == K"globalref"
         makeleaf(graph, srcref, k; name_val=value, kws...)
-    elseif k == K"SSAValue" || k == K"label"
-        # FIXME?
+    elseif k == K"SSAValue"
         makeleaf(graph, srcref, k; var_id=value, kws...)
+    elseif k == K"label"
+        makeleaf(graph, srcref, k; id=value, kws...)
     else
         val = k == K"Integer" ? convert(Int,     value) :
               k == K"Float"   ? convert(Float64, value) :

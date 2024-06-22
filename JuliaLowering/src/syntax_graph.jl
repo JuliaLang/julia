@@ -420,6 +420,9 @@ function _value_string(ex)
           k == K"slot"        ? "slot" :
           repr(get(ex, :value, nothing))
     id = get(ex, :var_id, nothing)
+    if isnothing(id)
+        id = get(ex, :id, nothing)
+    end
     if !isnothing(id)
         idstr = replace(string(id),
                         "0"=>"₀", "1"=>"₁", "2"=>"₂", "3"=>"₃", "4"=>"₄",
