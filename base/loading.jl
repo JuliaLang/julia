@@ -1979,7 +1979,7 @@ end
         finally
             for modkey in newdeps
                 insert_extension_triggers(modkey)
-                run_package_callbacks(modkey)
+                stalecheck && run_package_callbacks(modkey)
             end
             empty!(newdeps)
         end
