@@ -53,15 +53,6 @@ function find_project_file(env::Union{Nothing,String}=nothing)
     return safe_realpath(project_file)
 end
 
-function find_root_base_project(start_project::String)
-    project_file = start_project
-    while true
-        base_project_file = Base.base_project(project_file)
-        base_project_file === nothing && return project_file
-        project_file = base_project_file
-    end
-end
-
 function relative_project_path(project_file::String, path::String)
     # compute path relative the project
     # realpath needed to expand symlinks before taking the relative path
@@ -107,17 +98,11 @@ function Pkg_promptf()
         else
             project_name = projname(project_file)
             if project_name !== nothing
-                root = find_root_base_project(project_file)
-                rootname = projname(root)
-                if root !== project_file
-                    path_prefix = "/" * dirname(relative_project_path(root, project_file))
-                else
-                    path_prefix = ""
+                pname = projname(project_file)
+                if textwidth(pname) > 30
+                    pname = first(pname, 27) * "..."
                 end
-                if textwidth(rootname) > 30
-                    rootname = first(rootname, 27) * "..."
-                end
-                prefix = "($(rootname)$(path_prefix)) "
+                prefix = "($(pname)) "
                 prev_prefix = prefix
                 prev_project_timestamp = mtime(project_file)
                 prev_project_file = project_file
