@@ -151,7 +151,7 @@ julia> eltype((x for x in 1:10))
 Any
 
 julia> Base.infer_eltype((Float64(x) for x in 1:10))
-Int64
+Float64
 ```
 """
 function infer_eltype(itr)
