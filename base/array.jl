@@ -2457,6 +2457,7 @@ findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::OneTo) where 
     1 <= p.x <= r.stop ? convert(keytype(r), p.x) : nothing
 
 findfirst(::typeof(iszero), ::OneTo) = nothing
+findfirst(::typeof(isone), r::OneTo) = oneunit(keytype(r))
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
     first(r) <= p.x <= last(r) || return nothing
@@ -2473,6 +2474,7 @@ function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::Step
 end
 
 findfirst(::typeof(iszero), r::AbstractRange) = findfirst(==(zero(first(r))), r)
+findfirst(::typeof(isone), r::AbstractRange) = findfirst(==(one(first(r))), r)
 
 """
     findprev(A, i)
@@ -2645,11 +2647,13 @@ findlast(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findprev(testf, A, last(keys(A)))
 
 # for monotonic ranges, there is a unique index corresponding to a value, so findfirst and findlast are identical
-function findlast(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T},typeof(iszero)}, r::AbstractUnitRange{<:Integer}) where {T<:Integer}
+function findlast(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T},typeof(iszero),typeof(isone)},
+        r::AbstractUnitRange{<:Integer}) where {T<:Integer}
     findfirst(p, r)
 end
 
-function findlast(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}, typeof(iszero)}, r::StepRange{T,S}) where {T,S}
+function findlast(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T},typeof(iszero),typeof(isone)},
+        r::StepRange{T,S}) where {T,S}
     findfirst(p, r)
 end
 

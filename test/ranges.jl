@@ -434,7 +434,8 @@ end
         @test findfirst(isequal(3), Base.OneTo(10)) == 3
         @test findfirst(==(0), Base.OneTo(10)) === nothing
         @test findfirst(==(11), Base.OneTo(10)) === nothing
-        @test isnothing(findfirst(iszero, Base.OneTo(10)))
+        @test @inferred((() -> Val(findfirst(iszero, Base.OneTo(10))))()) == Val(nothing)
+        @test @inferred((() -> Val(findfirst(isone, Base.OneTo(10))))()) == Val(1)
         @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
         @test findfirst(==(2), Int16(3):Int16(7)) === nothing
         @test findfirst(isequal(8), 3:7) === nothing
@@ -457,7 +458,8 @@ end
         @test findlast(isequal(3), Base.OneTo(10)) == 3
         @test findlast(==(0), Base.OneTo(10)) === nothing
         @test findlast(==(11), Base.OneTo(10)) === nothing
-        @test isnothing(findlast(iszero, Base.OneTo(10)))
+        @test @inferred((() -> Val(findlast(iszero, Base.OneTo(10))))()) == Val(nothing)
+        @test @inferred((() -> Val(findlast(isone, Base.OneTo(10))))()) == Val(1)
         @test findlast(==(4), Int16(3):Int16(7)) === Int(2)
         @test findlast(==(2), Int16(3):Int16(7)) === nothing
         @test findlast(isequal(8), 3:7) === nothing
