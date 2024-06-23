@@ -309,23 +309,24 @@ function collect_names_to_warn!(warnings, locals, current_module::Module, ast)
     return nothing
 end
 
-function collect_qualified_access_warnings(ast)
+function collect_qualified_access_warnings(current_mod, ast)
     warnings = Set()
     locals = Set{Symbol}()
-    collect_names_to_warn!(warnings, locals, REPL.active_module(), ast)
+    collect_names_to_warn!(warnings, locals, current_mod, ast)
     filter!(warnings) do (; outer_mod)
         nameof(outer_mod) ∉ locals
     end
     return warnings
 end
 
-function warn_on_non_owning_accesses(ast)
-    warnings = collect_qualified_access_warnings(ast)
+function warn_on_non_owning_accesses(current_mod, ast)
+    warnings = collect_qualified_access_warnings(current_mod, ast)
     for (; outer_mod, mod, owner, name_being_accessed) in warnings
         print_qualified_access_warning(mod, owner, name_being_accessed)
     end
     return ast
 end
+warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(REPL.active_module(), ast)
 
 const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaults for new REPL backends
 

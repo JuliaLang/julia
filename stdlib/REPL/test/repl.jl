@@ -1422,35 +1422,37 @@ end # JSON54872_public
     @test !REPL.has_ancestor(JSON54872, JSON54872.Parser)
 
     # JSON54872.Parser owns `parse`
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         JSON54872.Parser.parse
     end)
     @test isempty(warnings)
 
     # A submodule of `JSON54872` owns `parse`
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         JSON54872.parse
     end)
     @test isempty(warnings)
 
     # `JSON54872` does not own `tryparse` (nor is it public)
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         JSON54872.tryparse
     end)
     @test length(warnings) == 1
-    @test only(warnings) == (; outer_mod = JSON54872, mod = JSON54872, owner = Base, name_being_accessed = :tryparse)
+    @test only(warnings).owner == Base
+    @test only(warnings).name_being_accessed == :tryparse
 
     # Same for nested access
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         JSON54872.Parser.tryparse
     end)
     @test length(warnings) == 1
-    @test only(warnings) == (; outer_mod = JSON54872, mod = JSON54872, owner = Base, name_being_accessed = :tryparse)
+    @test only(warnings).owner == Base
+    @test only(warnings).name_being_accessed == :tryparse
 
     test_logger = TestLogger()
     with_logger(test_logger) do
-        REPL.warn_on_non_owning_accesses(:(JSON54872.tryparse))
-        REPL.warn_on_non_owning_accesses(:(JSON54872.tryparse))
+        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
+        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
     end
     # only 1 logging statement emitted thanks to `maxlog` mechanism
     @test length(test_logger.logs) == 1
@@ -1459,14 +1461,14 @@ end # JSON54872_public
     @test record.message == "tryparse is defined in Base and is not public in $JSON54872"
 
     # However JSON54872_public has `tryparse` declared public
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         JSON54872_public.tryparse
     end)
     @test isempty(warnings)
 
     # Now let us test some tricky cases
     # No warning since `JSON54872` is local (LHS of `=`)
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         let JSON54872 = (; tryparse=1)
             JSON54872.tryparse
         end
@@ -1474,7 +1476,7 @@ end # JSON54872_public
     @test isempty(warnings)
 
     # No warning for nested local access either
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         let JSON54872 = (; Parser = (; tryparse=1))
             JSON54872.Parser.tryparse
         end
@@ -1482,7 +1484,7 @@ end # JSON54872_public
     @test isempty(warnings)
 
     # No warning since `JSON54872` is local (long-form function arg)
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         function f(JSON54872=(; tryparse))
             JSON54872.tryparse
         end
@@ -1490,13 +1492,13 @@ end # JSON54872_public
     @test isempty(warnings)
 
     # No warning since `JSON54872` is local (short-form function arg)
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         f(JSON54872=(; tryparse)) = JSON54872.tryparse
     end)
     @test isempty(warnings)
 
     # No warning since `JSON54872` is local (long-form anonymous function)
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         function (JSON54872=(; tryparse))
             JSON54872.tryparse
         end
@@ -1504,7 +1506,7 @@ end # JSON54872_public
     @test isempty(warnings)
 
     # No warning since `JSON54872` is local (short-form anonymous function)
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         (JSON54872 = (; tryparse)) -> begin
             JSON54872.tryparse
         end
@@ -1512,7 +1514,7 @@ end # JSON54872_public
     @test isempty(warnings)
 
     # false-negative: missing warning
-    warnings = REPL.collect_qualified_access_warnings(quote
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
         let JSON54872 = JSON54872
             JSON54872.tryparse
         end
