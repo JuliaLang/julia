@@ -669,8 +669,6 @@ ifeq ($(USE_BINARYBUILDER_LLVM),1)
 endif
 	@printf $(JULCOLOR)' ==> ./julia binary sizes\n'$(ENDCOLOR)
 	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
-		$(call cygpath_w,$(build_private_libdir)/sys.ji) \
-		$(call cygpath_w,$(build_private_libdir)/corecompiler.ji) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-codegen.$(SHLIB_EXT)) \
