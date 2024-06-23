@@ -1996,8 +1996,12 @@ debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but mor
 function start_loading(modkey::PkgId)
     # handle recursive calls to require
     assert_havelock(require_lock)
-    loading = get(package_locks, modkey, nothing)
-    if loading !== nothing
+    while true
+        loading = get(package_locks, modkey, nothing)
+        if loading === nothing
+            package_locks[modkey] = current_task() => Threads.Condition(require_lock)
+            return nothing
+        end
         # load already in progress for this module on the task
         task, cond = loading
         deps = String[modkey.name]
@@ -2036,10 +2040,9 @@ function start_loading(modkey::PkgId)
             end
             throw(ConcurrencyViolationError(msg))
         end
-        return wait(cond)
+        loading = wait(cond)
+        loading isa Module && return loading
     end
-    package_locks[modkey] = current_task() => Threads.Condition(require_lock)
-    return
 end
 
 function end_loading(modkey::PkgId, @nospecialize loaded)
@@ -2418,9 +2421,9 @@ function _require(pkg::PkgId, env=nothing)
         # attempt to load the module file via the precompile cache locations
         if JLOptions().use_compiled_modules != 0
             @label load_from_cache
-            m = _require_search_from_serialized(pkg, path, UInt128(0), true; reasons)
-            if m isa Module
-                return m
+            loaded = _require_search_from_serialized(pkg, path, UInt128(0), true; reasons)
+            if loaded isa Module
+                return loaded
             end
         end
 
@@ -2456,14 +2459,14 @@ function _require(pkg::PkgId, env=nothing)
                     @goto load_from_cache
                 end
                 # spawn off a new incremental pre-compile task for recursive `require` calls
-                cachefile_or_module = maybe_cachefile_lock(pkg, path) do
+                loaded = maybe_cachefile_lock(pkg, path) do
                     # double-check now that we have lock
                     m = _require_search_from_serialized(pkg, path, UInt128(0), true)
                     m isa Module && return m
-                    compilecache(pkg, path; reasons)
+                    return compilecache(pkg, path; reasons)
                 end
-                cachefile_or_module isa Module && return cachefile_or_module::Module
-                cachefile = cachefile_or_module
+                loaded isa Module && return loaded
+                cachefile = loaded
                 if isnothing(cachefile) # maybe_cachefile_lock returns nothing if it had to wait for another process
                     @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
                 elseif isa(cachefile, Exception)
@@ -2476,11 +2479,11 @@ function _require(pkg::PkgId, env=nothing)
                     # fall-through to loading the file locally if not incremental
                 else
                     cachefile, ocachefile = cachefile::Tuple{String, Union{Nothing, String}}
-                    m = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
-                    if !isa(m, Module)
+                    loaded = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
+                    if !isa(loaded, Module)
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=m
                     else
-                        return m
+                        return loaded
                     end
                 end
                 if JLOptions().incremental != 0
