@@ -38,6 +38,55 @@ getindex(t::Tuple, c::Colon) = t
 get(t::Tuple, i::Integer, default) = i in 1:length(t) ? getindex(t, i) : default
 get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 
+# iterator of `nothing`s
+
+struct _NothingIterator
+    length::Int
+end
+function iterate(i::_NothingIterator, s::Int = 0)
+    < = slt_int; + = add_int  # for bootstrapping
+    (s < i.length) ? (nothing, s + 1) : nothing
+end
+length(i::_NothingIterator) = max(0, i.length)
+eltype(::Type{<:_NothingIterator}) = Nothing
+
+# tuple views
+
+struct _TupleViewFront end
+struct _TupleViewTail end
+const _TupleView = Union{_TupleViewFront,_TupleViewTail}
+_tupleview_length_representation_impl(n::Int) = (_NothingIterator(n)...,)::Tuple{Vararg{Nothing}}
+_tupleview_length_representation(@nospecialize t::Tuple) = _tupleview_length_representation_impl(nfields(t))
+function _tupleview_length_representation_decremented(@nospecialize t::Tuple{Nothing,Vararg{Nothing}})
+    - = sub_int  # bootstrapping
+    _tupleview_length_representation_impl(nfields(t) - 1)
+end
+function _tupleview_single_from(::_TupleViewFront, (@nospecialize parent::Tuple), @nospecialize length::Tuple{Vararg{Nothing}})
+    parent[nfields(length)]
+end
+function _tupleview_single_from(::_TupleViewTail, (@nospecialize parent::Tuple), @nospecialize length::Tuple{Vararg{Nothing}})
+    + = add_int; - = sub_int  # for bootstrapping
+    parent[nfields(parent) - nfields(length) + 1]
+end
+
+_tupleview_tuple_concatenation_helper(::_TupleViewFront, (@nospecialize s), @nospecialize r::Tuple) = (r..., s)
+_tupleview_tuple_concatenation_helper(::_TupleViewTail, (@nospecialize s), @nospecialize r::Tuple) = (s, r...)
+
+function _tupleview_map_to_tuple(
+    func::F, o::_TupleView, (@nospecialize parent::Tuple{Vararg}), @nospecialize length::Tuple{Vararg{Nothing}}
+) where {F}
+    @inline
+    if length === ()
+        ()
+    else
+        let lenm1 = _tupleview_length_representation_decremented(length),
+            e = func(_tupleview_single_from(o, parent, length)),
+            rest = _tupleview_map_to_tuple(func, o, parent, lenm1)::Tuple
+            _tupleview_tuple_concatenation_helper(o, e, rest)
+        end
+    end
+end
+
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
@@ -352,11 +401,7 @@ end
 ## mapping ##
 
 # 1 argument function
-map(f, t::Tuple{})              = ()
-map(f, t::Tuple{Any,})          = (@inline; (f(t[1]),))
-map(f, t::Tuple{Any, Any})      = (@inline; (f(t[1]), f(t[2])))
-map(f, t::Tuple{Any, Any, Any}) = (@inline; (f(t[1]), f(t[2]), f(t[3])))
-map(f, t::Tuple)                = (@inline; (f(t[1]), map(f,tail(t))...))
+map(f, t::Tuple) = _tupleview_map_to_tuple(f, _TupleViewTail(), t, _tupleview_length_representation(t))
 # stop inlining after some number of arguments to avoid code blowup
 const Any32{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                        Any,Any,Any,Any,Any,Any,Any,Any,
