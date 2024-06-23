@@ -2647,8 +2647,8 @@ findlast(testf::Function, A::Union{AbstractArray, AbstractString}) =
     findprev(testf, A, last(keys(A)))
 
 # for monotonic ranges, there is a unique index corresponding to a value, so findfirst and findlast are identical
-function findlast(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T},typeof(iszero),typeof(isone)},
-        r::AbstractUnitRange{<:Integer}) where {T<:Integer}
+function findlast(p::Union{Fix2{typeof(isequal),<:Integer},Fix2{typeof(==),<:Integer},typeof(iszero),typeof(isone)},
+        r::AbstractUnitRange{<:Integer})
     findfirst(p, r)
 end
 
