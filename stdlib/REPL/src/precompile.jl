@@ -58,7 +58,7 @@ $UP_ARROW$DOWN_ARROW$CTRL_C
 f(x) = x03
 f(1,2)
 [][1]
-Base.Iterators.zip
+Base.Iterators.minimum
 cd("complete_path\t\t$CTRL_C
 """
 
