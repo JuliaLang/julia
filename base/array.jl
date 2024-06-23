@@ -737,27 +737,31 @@ end
 # gets a chance to see it, so that recursive calls to the caller
 # don't trigger the inference limiter
 if isdefined(Core, :Compiler)
-    macro default_eltype(itr)
+    macro default_eltype_tight(itr)
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
-                T = ($I).f
+                ($I).f
             else
-                T = Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
+                Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
             end
-            promote_typejoin_union(T)
         end
     end
 else
-    macro default_eltype(itr)
+    macro default_eltype_tight(itr)
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
-                promote_typejoin_union($I.f)
+                ($I).f
             else
                 Any
             end
         end
+    end
+end
+macro default_eltype(itr)
+    return quote
+        promote_typejoin_union(Base.@default_eltype_tight($(esc(itr))))
     end
 end
 
