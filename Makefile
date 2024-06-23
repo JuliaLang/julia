@@ -667,12 +667,17 @@ build-stats:
 ifeq ($(USE_BINARYBUILDER_LLVM),1)
 	@$(MAKE) -C deps install-llvm-tools
 endif
+ifeq ($(OS),Darwin)
+	LIB_LLVM_NAME := libLLVM
+else
+	LIB_LLVM_NAME := $(LLVM_SHARED_LIB_NAME)
+endif
 	@printf $(JULCOLOR)' ==> ./julia binary sizes\n'$(ENDCOLOR)
 	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-codegen.$(SHLIB_EXT)) \
-		$(call cygpath_w,$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).$(SHLIB_EXT)) \
+		$(call cygpath_w,$(build_shlibdir)/$(LIB_LLVM_NAME).$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_bindir)/julia$(EXE)))
 	@printf $(JULCOLOR)' ==> ./julia launch speedtest\n'$(ENDCOLOR)
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
