@@ -672,7 +672,7 @@ endif
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-codegen.$(SHLIB_EXT)) \
-		$(call cygpath_w,$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME)) \
+		$(call cygpath_w,$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_bindir)/julia$(EXE)))
 	@printf $(JULCOLOR)' ==> ./julia launch speedtest\n'$(ENDCOLOR)
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
