@@ -206,19 +206,11 @@ end
 # Temporary alias until Documenter updates
 const softscope! = softscope
 
-function print_qualified_access_warning(mod, owner, name)
-    @warn string(name, " is defined in ", owner, " and is not public in ", mod) maxlog = 1 _id = string("repl_warning", mod, name) _line = nothing _file = nothing _module = nothing
+function print_qualified_access_warning(mod::Module, owner::Module, name::Symbol)
+    @warn string(name, " is defined in ", owner, " and is not public in ", mod) maxlog = 1 _id = string("repl-warning-", mod, "-", owner, "-", name) _line = nothing _file = nothing _module = nothing
 end
 
-function maybe_print_qualified_access_warning(mod, owner, name)
-    mod isa Module || return
-    Base.ispublic(mod, name) && return
-    mod === Base && Base.ispublic(Core, name) && return
-    print_qualified_access_warning(mod, owner, name)
-    return
-end
-
-function has_ancestor(query, target)
+function has_ancestor(query::Module, target::Module)
     query == target && return true
     while true
         next = parentmodule(query)
@@ -228,40 +220,114 @@ function has_ancestor(query, target)
     end
 end
 
-function add_qualified_access_warning(ast)
-    ast isa Expr || return ast
+retrieve_modules(::Module, ::Any) = (nothing,)
+function retrieve_modules(current_module::Module, mod_name::Symbol)
+    mod = try
+        getproperty(current_module, mod_name)
+    catch
+        return (nothing,)
+    end
+    return (mod isa Module ? mod : nothing,)
+end
+retrieve_modules(current_module::Module, mod_name::QuoteNode) = retrieve_modules(current_module, mod_name.value)
+function retrieve_modules(current_module::Module, mod_expr::Expr)
+    if Meta.isexpr(mod_expr, :., 2)
+        current_module = retrieve_modules(current_module, mod_expr.args[1])[1]
+        current_module === nothing && return (nothing,)
+        return (current_module, retrieve_modules(current_module, mod_expr.args[2])...)
+    else
+        return (nothing,)
+    end
+end
+
+add_locals!(locals, ast::Any) = nothing
+function add_locals!(locals, ast::Expr)
+    for arg in ast.args
+        add_locals!(locals, arg)
+    end
+    return nothing
+end
+function add_locals!(locals, ast::Symbol)
+    push!(locals, ast)
+    return nothing
+end
+
+function collect_names_to_warn!(warnings, locals, current_module::Module, ast)
+    ast isa Expr || return
 
     # don't recurse through module definitions
-    ast.head === :module && return ast
+    ast.head === :module && return
 
-    if ast.head == Symbol(".") && length(ast.args) == 2
-        mod_name = ast.args[1]
-        name_being_accessed = ast.args[2]
+    if Meta.isexpr(ast, :., 2)
+        mod_name, name_being_accessed = ast.args
+        # retrieve the (possibly-nested) module being named here
+        mods = retrieve_modules(current_module, mod_name)
+        all(x -> x isa Module, mods) || return
+        outer_mod = first(mods)
+        mod = last(mods)
         if name_being_accessed isa QuoteNode
             name_being_accessed = name_being_accessed.value
         end
-        name_being_accessed isa Symbol || return ast
-        mod = try
-            getproperty(REPL.active_module(), mod_name)
-        catch
-            return ast
-        end
+        name_being_accessed isa Symbol || return
         owner = try
             which(mod, name_being_accessed)
         catch
-            return ast
+            return
         end
-        has_ancestor(owner, mod) && return ast
-        maybe_print_qualified_access_warning(mod, owner, name_being_accessed)
-    else
-        for arg in ast.args
-            add_qualified_access_warning(arg)
+        # if `owner` is a submodule of `mod`, then don't warn. E.g. the name `parse` is present in the module `JSON`
+        # but is owned by `JSON.Parser`; we don't warn if it is accessed as `JSON.parse`.
+        has_ancestor(owner, mod) && return
+        # Don't warn if the name is public in the module we are accessing it
+        Base.ispublic(mod, name_being_accessed) && return
+        # Don't warn if accessing names defined in Core from Base if they are present in Base (e.g. `Base.throw`).
+        mod === Base && Base.ispublic(Core, name_being_accessed) && return
+        push!(warnings, (; outer_mod, mod, owner, name_being_accessed))
+        # no recursion
+        return
+    elseif Meta.isexpr(ast, :(=), 2)
+        lhs, rhs = ast.args
+        # any symbols we find on the LHS we will count as local. This can potentially be overzealous,
+        # but we want to avoid false positives (unnecessary warnings) more than false negatives.
+        add_locals!(locals, lhs)
+        # we'll recurse into the RHS only
+        return collect_names_to_warn!(warnings, locals, current_module, rhs)
+    elseif Meta.isexpr(ast, :function) && length(ast.args) >= 1
+
+        if Meta.isexpr(ast.args[1], :call, 2)
+            func_name, func_args = ast.args[1].args
+            # here we have a function definition and are inspecting it's arguments for local variables.
+            # we will error on the conservative side by adding all symbols we find (regardless if they are local variables or possibly-global default values)
+            add_locals!(locals, func_args)
         end
+        # fall through to general recursion
+    end
+
+    for arg in ast.args
+        collect_names_to_warn!(warnings, locals, current_module, arg)
+    end
+
+    return nothing
+end
+
+function collect_qualified_access_warnings(ast)
+    warnings = Set()
+    locals = Set{Symbol}()
+    collect_names_to_warn!(warnings, locals, REPL.active_module(), ast)
+    filter!(warnings) do (; outer_mod)
+        nameof(outer_mod) ∉ locals
+    end
+    return warnings
+end
+
+function warn_on_non_owning_accesses(ast)
+    warnings = collect_qualified_access_warnings(ast)
+    for (; outer_mod, mod, owner, name_being_accessed) in warnings
+        print_qualified_access_warning(mod, owner, name_being_accessed)
     end
     return ast
 end
 
-const repl_ast_transforms = Any[softscope, add_qualified_access_warning] # defaults for new REPL backends
+const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaults for new REPL backends
 
 # Allows an external package to add hooks into the code loading.
 # The hook should take a Vector{Symbol} of package names and
