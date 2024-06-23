@@ -227,10 +227,8 @@
 
 (define (method-expr-name m)
   (let ((name (cadr m)))
-     (let ((name (if (or (length= m 2) (not (pair? name)) (not (quoted? name))) name (cadr name))))
-       (cond ((not (pair? name)) name)
-             ((eq? (car name) 'globalref) (caddr name))
-             (else name)))))
+      (cond ((globalref? name) (caddr name))
+            (else name))))
 
 ;; extract static parameter names from a (method ...) expression
 (define (method-expr-static-parameters m)
@@ -4087,7 +4085,7 @@ f(x) = yt(x)
                                (newlam    (compact-and-renumber (linearize (car exprs)) 'none 0)))
                           `(toplevel-butfirst
                             (block ,@sp-inits
-                                   (method ,name ,(cl-convert sig fname lam namemap defined toplevel interp opaq globals locals)
+                                   (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq globals locals)
                                            ,(julia-bq-macro newlam)))
                             ,@top-stmts))))
 
