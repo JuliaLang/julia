@@ -147,7 +147,7 @@ same result for the same collection when executed at different points of the pro
 
 # Examples
 ```julia
-julia> eltype((x for x in 1:10))
+julia> eltype((Float64(x) for x in 1:10))
 Any
 
 julia> Base.infer_eltype((Float64(x) for x in 1:10))
