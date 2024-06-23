@@ -8146,13 +8146,13 @@ end
 
 let M = @__MODULE__
     Core.eval(M, :(global a_typed_global))
-    @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
+    @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
-    @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
-    @test Core.set_binding_type!(M, :a_typed_global, Union{Tuple{Integer},Tuple{Nothing}}) === nothing
+    @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
+    @test Core.eval(M, :(global a_typed_global::$(Union{Tuple{Integer},Tuple{Nothing}}))) === nothing
     @test_throws(ErrorException("cannot set type for global $(nameof(M)).a_typed_global. It already has a value or is already set to a different type."),
-                 Core.set_binding_type!(M, :a_typed_global, Union{Nothing,Tuple{Union{Integer,Nothing}}}))
-    @test Core.set_binding_type!(M, :a_typed_global) === nothing
+                 Core.eval(M, :(global a_typed_global::$(Union{Nothing,Tuple{Union{Integer,Nothing}}}))))
+    @test Core.eval(M, :(global a_typed_global)) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
 end
 

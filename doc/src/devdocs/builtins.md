@@ -22,7 +22,6 @@ Core.Intrinsics.atomic_pointerswap
 Core.Intrinsics.atomic_pointermodify
 Core.Intrinsics.atomic_pointerreplace
 Core.get_binding_type
-Core.set_binding_type!
 Core.IntrinsicFunction
 Core.Intrinsics
 Core.IR

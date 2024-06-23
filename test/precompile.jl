@@ -222,9 +222,9 @@ precompile_test_harness(false) do dir
               gnc() = overridenc(1.0)
               Test.@test 1 < gnc() < 5 # compile this
 
-              const abigfloat_f() = big"12.34"
+              abigfloat_f() = big"12.34"
               const abigfloat_x = big"43.21"
-              const abigint_f() = big"123"
+              abigint_f() = big"123"
               const abigint_x = big"124"
 
               # issue #51111
@@ -1916,7 +1916,7 @@ precompile_test_harness("Issue #50538") do load_path
             ex
         end
         const newtype = try
-            Core.set_binding_type!(Base, :newglobal)
+            Core.eval(Base, :(global newglobal::Any))
         catch ex
             ex isa ErrorException || rethrow()
             ex
@@ -1927,10 +1927,10 @@ precompile_test_harness("Issue #50538") do load_path
     ji, ofile = Base.compilecache(Base.PkgId("I50538"))
     @eval using I50538
     @test I50538.newglobal.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
-    @test I50538.newtype.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
+    @test I50538.newtype.msg == "Evaluation into the closed module `Base` breaks incremental compilation because the side effects will not be permanent. This is likely due to some other module mutating `Base` with `eval` during precompilation - don't do this."
     @test_throws(ErrorException("cannot set type for global I50538.undefglobal. It already has a value or is already set to a different type."),
-                 Core.set_binding_type!(I50538, :undefglobal, Int))
-    Core.set_binding_type!(I50538, :undefglobal, Any)
+                 Core.eval(I50538, :(global undefglobal::Int)))
+    Core.eval(I50538, :(global undefglobal::Any))
     @test Core.get_binding_type(I50538, :undefglobal) === Any
     @test !isdefined(I50538, :undefglobal)
 end
