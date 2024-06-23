@@ -38,6 +38,38 @@ getindex(t::Tuple, c::Colon) = t
 get(t::Tuple, i::Integer, default) = i in 1:length(t) ? getindex(t, i) : default
 get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 
+# tuple views
+
+struct _TupleViewFront end
+struct _TupleViewTail end
+const _TupleView = Union{_TupleViewFront,_TupleViewTail}
+_tupleview_length_representation_impl(n::Int) = ((nothing for _ ∈ OneTo(n))...,)::Tuple{Vararg{Nothing}}
+_tupleview_length_representation(@nospecialize t::Tuple) = _tupleview_length_representation_impl(nfields(t))
+function _tupleview_length_representation_decremented(@nospecialize t::Tuple{Nothing,Vararg{Nothing}})
+    - = sub_int  # bootstrapping
+    _tupleview_length_representation_impl(nfields(t) - 1)
+end
+function _tupleview_single_from(::_TupleViewFront, (@nospecialize parent::Tuple), @nospecialize length::Tuple{Vararg{Nothing}})
+    parent[nfields(length)]
+end
+function _tupleview_single_from(::_TupleViewTail, (@nospecialize parent::Tuple), @nospecialize length::Tuple{Vararg{Nothing}})
+    + = add_int; - = sub_int  # for bootstrapping
+    parent[nfields(parent) - nfields(length) + 1]
+end
+
+function _tupleview_find(
+    func::F, o::_TupleView, (@nospecialize parent::Tuple), @nospecialize length::Tuple{Vararg{Nothing}}
+) where {F}
+    @inline
+    if (length === ()) || func(_tupleview_single_from(o, parent, length))
+        nfields(length)::Int
+    else
+        let lenm1 = _tupleview_length_representation_decremented(length)
+            _tupleview_find(func, o, parent, lenm1)::Int
+        end
+    end
+end
+
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
@@ -500,20 +532,24 @@ end
 
 ## find ##
 
-_findfirst_rec(f, i::Int, ::Tuple{}) = nothing
-_findfirst_rec(f, i::Int, t::Tuple) = (@inline; f(first(t)) ? i : _findfirst_rec(f, i+1, tail(t)))
+_findfirst_rec_impl(f, t::Tuple) = length(t) - _tupleview_find(f, _TupleViewTail(), t, _tupleview_length_representation(t)) + 1
+function _findfirst_rec(f, t::Tuple)
+    n = _findfirst_rec_impl(f, t)
+    (n ≤ length(t)) ? n : nothing
+end
 function _findfirst_loop(f::Function, t)
     for i in 1:length(t)
         f(t[i]) && return i
     end
     return nothing
 end
-findfirst(f::Function, t::Tuple) = length(t) < 32 ? _findfirst_rec(f, 1, t) : _findfirst_loop(f, t)
+findfirst(f::Function, t::Tuple) = length(t) < 32 ? _findfirst_rec(f, t) : _findfirst_loop(f, t)
 
 findlast(f::Function, t::Tuple) = length(t) < 32 ? _findlast_rec(f, t) : _findlast_loop(f, t)
-function _findlast_rec(f::Function, x::Tuple)
-    r = findfirst(f, reverse(x))
-    return isnothing(r) ? r : length(x) - r + 1
+_findlast_rec_impl(f::Function, t::Tuple) = _tupleview_find(f, _TupleViewFront(), t, _tupleview_length_representation(t))
+function _findlast_rec(f, t::Tuple)
+    n = _findlast_rec_impl(f, t)
+    iszero(n) ? nothing : n
 end
 function _findlast_loop(f::Function, t)
     for i in reverse(1:length(t))
