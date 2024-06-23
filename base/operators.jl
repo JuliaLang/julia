@@ -581,53 +581,22 @@ const ⊻ = xor
 const ⊼ = nand
 const ⊽ = nor
 
-# foldl for argument lists. expand fully up to a point, then
-# switch to a loop. this allows small cases like `a+b+c+d` to be managed
-# efficiently, without a major slowdown for `+(x...)` when `x` is big.
-# n.b.: keep this method count small, so it can be inferred without hitting the
-# method count limit in inference
-afoldl(op, a) = a
-function afoldl(op, a, bs...)
-    l = length(bs)
-    i =  0; y = a;            l == i && return y
-    #@nexprs 31 i -> (y = op(y, bs[i]); l == i && return y)
-    i =  1; y = op(y, bs[i]); l == i && return y
-    i =  2; y = op(y, bs[i]); l == i && return y
-    i =  3; y = op(y, bs[i]); l == i && return y
-    i =  4; y = op(y, bs[i]); l == i && return y
-    i =  5; y = op(y, bs[i]); l == i && return y
-    i =  6; y = op(y, bs[i]); l == i && return y
-    i =  7; y = op(y, bs[i]); l == i && return y
-    i =  8; y = op(y, bs[i]); l == i && return y
-    i =  9; y = op(y, bs[i]); l == i && return y
-    i = 10; y = op(y, bs[i]); l == i && return y
-    i = 11; y = op(y, bs[i]); l == i && return y
-    i = 12; y = op(y, bs[i]); l == i && return y
-    i = 13; y = op(y, bs[i]); l == i && return y
-    i = 14; y = op(y, bs[i]); l == i && return y
-    i = 15; y = op(y, bs[i]); l == i && return y
-    i = 16; y = op(y, bs[i]); l == i && return y
-    i = 17; y = op(y, bs[i]); l == i && return y
-    i = 18; y = op(y, bs[i]); l == i && return y
-    i = 19; y = op(y, bs[i]); l == i && return y
-    i = 20; y = op(y, bs[i]); l == i && return y
-    i = 21; y = op(y, bs[i]); l == i && return y
-    i = 22; y = op(y, bs[i]); l == i && return y
-    i = 23; y = op(y, bs[i]); l == i && return y
-    i = 24; y = op(y, bs[i]); l == i && return y
-    i = 25; y = op(y, bs[i]); l == i && return y
-    i = 26; y = op(y, bs[i]); l == i && return y
-    i = 27; y = op(y, bs[i]); l == i && return y
-    i = 28; y = op(y, bs[i]); l == i && return y
-    i = 29; y = op(y, bs[i]); l == i && return y
-    i = 30; y = op(y, bs[i]); l == i && return y
-    i = 31; y = op(y, bs[i]); l == i && return y
-    for i in (i + 1):l
+afoldl(op, a, bs...) = _tuple_foldl(op, (a, bs...))
+function afoldl(op,
+    a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10, a11, a12, a13, a14, a15, a16,
+    a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, a31, a32, a33,
+    bs...
+)
+    prefix = (
+        a00, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10, a11, a12, a13, a14, a15, a16,
+        a17, a18, a19, a20, a21, a22, a23, a24, a25, a26, a27, a28, a29, a30, a31, a32, a33
+    )
+    y = _tuple_foldl(op, prefix)
+    for i in eachindex(bs)
         y = op(y, bs[i])
     end
     return y
 end
-setfield!(typeof(afoldl).name.mt, :max_args, 34, :monotonic)
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
