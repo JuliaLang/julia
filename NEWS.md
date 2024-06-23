@@ -9,6 +9,8 @@ New language features
 
 Language changes
 ----------------
+* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
+is considered a bug fix ([#47102])
 
  - When methods are replaced with exactly equivalent ones, the old method is no
    longer deleted implicitly simultaneously, although the new method does take
