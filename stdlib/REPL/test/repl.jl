@@ -3,6 +3,7 @@
 using Test
 using REPL
 using Random
+using Logging
 import REPL.LineEdit
 using Markdown
 
