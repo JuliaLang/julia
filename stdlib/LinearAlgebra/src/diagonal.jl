@@ -812,10 +812,15 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     end
     Td = Base.promote_op(/, eltype(D), eltype(D))
     λ = eigvals(D)
-    evecs = Diagonal{eltype(λ)}(ones(length(λ)))
     if !isnothing(sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
         λ = λ[p]
+        evecs = zeros(Td, size(D))
+        @inbounds for i in eachindex(p)
+            evecs[p[i],i] = one(Td)
+        end
+    else
+        evecs = Diagonal{eltype(λ)}(ones(length(λ)))
     end
     Eigen(λ, evecs)
 end
