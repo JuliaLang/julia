@@ -659,7 +659,7 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     }
     jl_declare_constant(b, m, name);
     jl_checked_assignment(b, m, name, (jl_value_t*)import);
-    b->imported = 1;
+    b->imported = BINDING_IMPORT_IMPORTED;
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists

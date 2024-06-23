@@ -5438,15 +5438,16 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 1);
     if (assign) {
-        if (jl_atomic_load_relaxed(&b->owner) == NULL)
+        if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED)
             // not yet declared
             b = NULL;
     }
     else {
-        b = jl_atomic_load_relaxed(&b->owner);
-        if (b == NULL)
+        if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED)
             // try to look this up now
             b = jl_get_binding(m, s);
+        else if (b->imported != BINDING_IMPORT_NONE)
+            b = jl_atomic_load_relaxed(&b->owner);
     }
     if (b == NULL) {
         // var not found. switch to delayed lookup.
@@ -5487,7 +5488,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         return p;
     }
     if (assign) {
-        if (jl_atomic_load_relaxed(&b->owner) != b) {
+        if (b->imported != BINDING_IMPORT_NONE && b->imported != BINDING_IMPORT_GUARD && b->imported != BINDING_IMPORT_FAILED) {
             // this will fail at runtime, so defer to the runtime to create the error
             ctx.builder.CreateCall(prepare_call(jlgetbindingwrorerror_func),
                     { literal_pointer_val(ctx, (jl_value_t*)m),

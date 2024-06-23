@@ -611,6 +611,27 @@ typedef struct _jl_weakref_t {
     jl_value_t *value;
 } jl_weakref_t;
 
+enum jl_binding_import {
+    // None: The binding was not imported in this partition. It acts as a regular global or const.
+    //  ->restriction does not hold any import-related data.
+    BINDING_IMPORT_NONE     = 0x0,
+    // Implicit: The binding was implicitly import from a `using`'d module.
+    //  ->restriction holds the imported binding
+    BINDING_IMPORT_IMPLICIT = 0x1,
+    // Explicit: The binding was explicitly `using`'d by name
+    //  ->restriction holds the imported binding
+    BINDING_IMPORT_EXPLICIT = 0x2,
+    // Imported: The binding was explicitly `using`'d by name
+    //  ->restriction holds the imported binding
+    BINDING_IMPORT_IMPORTED = 0x3,
+    // Failed: We attempted to import the binding, but the import was ambiguous
+    //  ->restriction is NULL.
+    BINDING_IMPORT_FAILED   = 0x4,
+    // Guard: The binding was looked at, but no global or import was resolved at the time
+    //  ->restriction is NULL.
+    BINDING_IMPORT_GUARD    = 0x5
+};
+
 typedef struct _jl_binding_t {
     JL_DATA_TYPE
     _Atomic(jl_value_t*) value;
@@ -620,10 +641,8 @@ typedef struct _jl_binding_t {
     uint8_t constp:1;
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.
-    uint8_t imported:1;
-    uint8_t usingfailed:1;
+    uint8_t imported:3; // enum jl_binding_import
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
-    uint8_t padding:1;
 } jl_binding_t;
 
 typedef struct {
