@@ -1886,9 +1886,10 @@ end
                 dep = staledeps[i]
                 dep isa Module && continue
                 modpath, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
-                dep = get(loaded_precompiles, modkey => modbuild_id, nothing)
-                if dep === nothing
+                if stalecheck
                     dep = maybe_root_module(modkey)
+                else
+                    dep = get(loaded_precompiles, modkey => modbuild_id, nothing)
                 end
                 while true
                     if dep isa Module
@@ -1929,7 +1930,7 @@ end
         finally
             for modkey in newdeps
                 insert_extension_triggers(modkey)
-                run_package_callbacks(modkey)
+                stalecheck && run_package_callbacks(modkey)
             end
             empty!(newdeps)
         end
