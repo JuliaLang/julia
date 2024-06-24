@@ -120,6 +120,7 @@ Standard library changes
   complete names that have been explicitly `using`-ed. ([#54610])
 - REPL completions can now complete input lines like `[import|using] Mod: xxx|` e.g.
   complete `using Base.Experimental: @op` to `using Base.Experimental: @opaque`. ([#54719])
+- When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB. This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
 
 #### SuiteSparse
 
