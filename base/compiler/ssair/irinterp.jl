@@ -33,11 +33,15 @@ end
 
 function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instruction, irsv::IRInterpretationState)
     stmt = inst[:stmt]
-    mi = stmt.args[1]::MethodInstance
-    world = frame_world(irsv)
-    mi_cache = WorldView(code_cache(interp), world)
-    code = get(mi_cache, mi, nothing)
-    code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
+    ci = stmt.args[1]
+    if ci isa MethodInstance
+        world = frame_world(irsv)
+        mi_cache = WorldView(code_cache(interp), world)
+        code = get(mi_cache, ci, nothing)
+        code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
+    else
+        code = ci::CodeInstance
+    end
     argtypes = collect_argtypes(interp, stmt.args[2:end], nothing, irsv)
     argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
     return concrete_eval_invoke(interp, code, argtypes, irsv)
@@ -144,7 +148,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined || head === :boundscheck
             (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
             add_flag!(inst, flags_for_effects(effects))
-        elseif head === :invoke
+        elseif head === :invoke  # COMBAK: || head === :invoke_modifyfield (similar to call, but for args[2:end])
             rt, (nothrow, noub) = abstract_eval_invoke_inst(interp, inst, irsv)
             if nothrow
                 add_flag!(inst, IR_FLAG_NOTHROW)

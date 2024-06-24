@@ -48,11 +48,14 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         print(io, ", ")
         print(io, stmt.typ)
         print(io, ")")
-    elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], MethodInstance)
+    elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], Union{MethodInstance,CodeInstance})
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
         print(io, "invoke ")
-        mi = stmt.args[1]::Core.MethodInstance
+        mi = stmt.args[1]
+        if !(mi isa Core.MethodInstance)
+            mi = (mi::Core.CodeInstance).def
+        end
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
@@ -66,6 +69,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         end
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
+        # TODO: if we have a CodeInstance, should we print that rettype info here, which may differ (wider or narrower than the ssavaluetypes)
     # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
     elseif isa(stmt, EnterNode)
         print(io, "enter #", stmt.catch_dest, "")

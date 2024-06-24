@@ -5144,7 +5144,18 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
     bool handled = false;
     jl_cgval_t result;
     if (lival.constant) {
-        jl_method_instance_t *mi = (jl_method_instance_t*)lival.constant;
+        jl_method_instance_t *mi;
+        jl_value_t *ci = jl_nothing;
+        if (jl_is_method_instance(lival.constant)) {
+            mi = (jl_method_instance_t*)lival.constant;
+            if (mi != ctx.linfo)
+                ci = ctx.params->lookup(mi, ctx.min_world, ctx.max_world);
+        }
+        else {
+            ci = lival.constant;
+            assert(jl_is_code_instance(ci));
+            mi = ((jl_code_instance_t*)ci)->def;
+        }
         assert(jl_is_method_instance(mi));
         if (mi == ctx.linfo) {
             // handle self-recursion specially
@@ -5162,7 +5173,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             }
         }
         else {
-            jl_value_t *ci = ctx.params->lookup(mi, ctx.min_world, ctx.max_world);
             if (ci != jl_nothing) {
                 jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
                 auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
