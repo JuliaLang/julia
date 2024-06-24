@@ -607,7 +607,7 @@ clean: | $(CLEAN_TARGETS)
 	-rm -fr $(build_datarootdir)/julia/extras
 
 cleanall: clean
-	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support clean-gc
+	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
 	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv
 	-rm -fr $(build_prefix) $(build_staging)
 

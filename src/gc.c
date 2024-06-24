@@ -444,7 +444,7 @@ JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
     if (ct == NULL)
         ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    if (!ptls->in_finalizer && ptls->locks.len == 0 && ptls->finalizers_inhibited == 0) {
+    if (!ptls->in_finalizer && ptls->locks.len == 0 && ptls->finalizers_inhibited == 0 && ptls->engine_nqueued == 0) {
         run_finalizers(ct, 0);
     }
 }
@@ -620,7 +620,7 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
 }
 
 // explicitly scheduled objects for the sweepfunc callback
-static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
+static void gc_sweep_foreign_objs_in_list(arraylist_t *objs) JL_NOTSAFEPOINT
 {
     size_t p = 0;
     for (size_t i = 0; i < objs->len; i++) {
@@ -638,7 +638,7 @@ static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
     objs->len = p;
 }
 
-static void gc_sweep_foreign_objs(void)
+static void gc_sweep_foreign_objs(void) JL_NOTSAFEPOINT
 {
     assert(gc_n_threads);
     for (int i = 0; i < gc_n_threads; i++) {
@@ -1584,8 +1584,11 @@ STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_pa
 // sweep over all memory that is being used and not in a pool
 static void gc_sweep_other(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
 {
+    sweep_stack_pools();
+    gc_sweep_foreign_objs();
     sweep_malloced_memory();
     sweep_big(ptls, sweep_full);
+    jl_engine_sweep(gc_all_tls_states);
 }
 
 static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_NOTSAFEPOINT
@@ -3662,8 +3665,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 #endif
         current_sweep_full = sweep_full;
         sweep_weak_refs();
-        sweep_stack_pools();
-        gc_sweep_foreign_objs();
         gc_sweep_other(ptls, sweep_full);
         gc_scrub();
         gc_verify_tags();
@@ -3953,7 +3954,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // Only disable finalizers on current thread
     // Doing this on all threads is racy (it's impossible to check
     // or wait for finalizers on other threads without dead lock).
-    if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
+    if (!ptls->finalizers_inhibited && ptls->locks.len == 0 && ptls->engine_nqueued == 0) {
         JL_TIMING(GC, GC_Finalizers);
         run_finalizers(ct, 0);
     }

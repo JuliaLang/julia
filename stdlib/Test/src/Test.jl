@@ -2076,8 +2076,7 @@ function detect_ambiguities(mods::Module...;
     filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
     while !isempty(work)
         mod = pop!(work)
-        for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+        for n in names(mod, non_public=true, generated=true)
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
@@ -2147,8 +2146,7 @@ function detect_unbound_args(mods...;
     filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
     while !isempty(work)
         mod = pop!(work)
-        for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
+        for n in names(mod, non_public=true, generated=true)
             if !isdefined(mod, n)
                 if is_in_mods(mod, recursive, mods)
                     if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds

@@ -1605,7 +1605,7 @@ end
 
 skip(s::BufferStream, n) = skip(s.buffer, n)
 
-function reseteof(x::BufferStream)
+function reseteof(s::BufferStream)
     lock(s.cond) do
         s.status = StatusOpen
         nothing

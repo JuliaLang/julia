@@ -1081,6 +1081,12 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 
+"""
+    inferencebarrier(x)
+
+A shorthand for `compilerbarrier(:type, x)` causes the type of this statement to be inferred as `Any`.
+See [`Base.compilerbarrier`](@ref) for more info.
+"""
 inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """

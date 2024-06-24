@@ -261,13 +261,14 @@ typedef struct _jl_tls_states_t {
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
-    _Atomic(int64_t) gc_sweeps_requested;
+    _Atomic(size_t) gc_sweeps_requested;
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
 
     // currently-held locks, to be released when an exception is thrown
     small_arraylist_t locks;
+    size_t engine_nqueued;
 
     JULIA_DEBUG_SLEEPWAKE(
         uint64_t uv_run_enter;
@@ -351,10 +352,12 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
     return jl_gc_state_set(ptls, state, jl_atomic_load_relaxed(&ptls->gc_state));
 }
 #ifdef __clang_gcanalyzer__
-int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE; // this could be a safepoint, but we will assume it is not
-void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
-void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE; // this might not be a safepoint, but we have to assume it could be (statically)
+// these might not be a safepoint (if they are no-op safe=>safe transitions), but we have to assume it could be (statically)
+// however mark a delineated region in which safepoints would be not permissible
+int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT_LEAVE;
+void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_ENTER;
+int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT_ENTER;
+void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE;
 #else
 #define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_UNSAFE)
 #define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_UNSAFE))

@@ -1007,7 +1007,7 @@ void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
     jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)name);
 }
 
-void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings)
+void append_module_names(jl_array_t* a, jl_module_t *m, int non_public, int imported, int usings_explicit, int generated, int deprecated)
 {
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
@@ -1015,42 +1015,47 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         if ((void*)b == jl_nothing)
             break;
         jl_sym_t *asname = b->globalref->name;
-        int hidden = jl_symbol_name(asname)[0]=='#';
+        int isgenerated = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        if (((b->publicp) ||
-             (imported && b->imported) ||
-             (usings && _binding_is_from_explicit_using(b)) ||
-             (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || main_public))) &&
-            (all || (!b->deprecated && !hidden)))
+        if (((jl_atomic_load_relaxed(&b->owner) == b) ? // check if this binding is owned by this module
+                // if it is owned by this module, check if the binding is public:
+                // one exception is bindings imported from other modules,
+                // which might also be owned by this module
+                (b->imported ? imported : (non_public || b->publicp || main_public)) :
+                // if this binding is external, then also include:
+                // - bindings imported from other modules, if `imported` is true
+                // - bindings usinged from other modules explicitly, if `usings_explicit` is true
+                ((imported && b->imported) || (usings_explicit && _binding_is_from_explicit_using(b)))) &&
+            ((generated || !isgenerated) && (deprecated || !b->deprecated))) {
             _append_symbol_to_bindings_array(a, asname);
+        }
     }
 }
 
-void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
+void append_exported_names(jl_array_t* a, jl_module_t *m, int deprecated)
 {
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
         jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
-        if (b->exportp && (all || !b->deprecated))
+        if (b->exportp && (deprecated || !b->deprecated))
             _append_symbol_to_bindings_array(a, b->globalref->name);
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int usings)
+JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int non_public, int imported,
+                                         int usings_explicit, int usings_implicit,
+                                         int generated, int deprecated)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
     JL_GC_PUSH1(&a);
-    append_module_names(a, m, all, imported, usings);
-    if (usings) {
+    append_module_names(a, m, non_public, imported, usings_explicit, generated, deprecated);
+    if (usings_implicit)
         // If `usings` is specified, traverse the list of `using`-ed modules and incorporate
         // the names exported by those modules into the list.
-        for(int i=(int)m->usings.len-1; i >= 0; --i) {
-            jl_module_t *usinged = module_usings_getidx(m, i);
-            append_exported_names(a, usinged, all);
-        }
-    }
+        for (int i = 0; i < m->usings.len; i++)
+            append_exported_names(a, module_usings_getidx(m, i), deprecated);
     JL_GC_POP();
     return (jl_value_t*)a;
 }

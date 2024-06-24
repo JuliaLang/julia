@@ -15,7 +15,7 @@ JLDFLAGS += $(LDFLAGS)
 #  #define ARGUMENT_TO_OVERRIDE 1
 FLAGS := \
 	-D_GNU_SOURCE -I$(BUILDDIR) -I$(SRCDIR) \
-	-I$(SRCDIR)/flisp -I$(SRCDIR)/support -I$(SRCDIR)/gc \
+	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
 	-I$(LIBUV_INC) -I$(build_includedir) \
 	-I$(JULIAHOME)/deps/valgrind
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common \
@@ -44,9 +44,9 @@ SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array genericmemory staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
-	threading scheduler stackwalk method gc-alloc-profiler gc-heap-snapshot \
-	jlapi signal-handling safepoint timing subtype rtutils \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall
+	threading scheduler stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler gc-page-profiler method \
+	jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
+	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine
 
 RT_LLVMLINK :=
 CG_LLVMLINK :=
@@ -108,6 +108,7 @@ ifeq ($(OS),WINNT)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,win32_ucontext.h)
 endif
 HEADERS := $(PUBLIC_HEADERS) $(addprefix $(SRCDIR)/,julia_internal.h options.h timing.h passes.h) $(addprefix $(BUILDDIR)/,$(DTRACE_HEADERS) jl_internal_funcs.inc)
+PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,julia_gcext.h)
 PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLIC_HEADERS)) $(UV_HEADERS))
 
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
@@ -169,9 +170,9 @@ endif
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)
 RT_LIBS := $(WHOLE_ARCHIVE) $(LIBUV) $(WHOLE_ARCHIVE) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
 CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
-RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(BUILDDIR)/gc/libgc-debug.a -ljulia-debug $(RT_LIBS)
+RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a -ljulia-debug $(RT_LIBS)
 CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia-debug -ljulia-internal-debug
-RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a $(WHOLE_ARCHIVE) $(BUILDDIR)/gc/libgc.a -ljulia $(RT_LIBS)
+RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a -ljulia $(RT_LIBS)
 CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
@@ -315,8 +316,12 @@ $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
 $(BUILDDIR)/datatype.o $(BUILDDIR)/datatype.dbg.obj: $(SRCDIR)/support/htable.h $(SRCDIR)/support/htable.inc
 $(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(addprefix $(SRCDIR)/,debuginfo.h processor.h jitlayers.h debug-registry.h)
 $(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h $(SRCDIR)/processor.h
-$(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj: $(SRCDIR)/gc/gc.h $(SRCDIR)/gc-heap-snapshot.h
-$(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj: $(SRCDIR)/gc/gc.h $(SRCDIR)/gc-alloc-profiler.h
+$(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc.h
+$(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc.h
+$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h $(SRCDIR)/gc-page-profiler.h
+$(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj: $(SRCDIR)/gc.h $(SRCDIR)/gc-heap-snapshot.h
+$(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj: $(SRCDIR)/gc.h $(SRCDIR)/gc-alloc-profiler.h
+$(BUILDDIR)/gc-page-profiler.o $(BUILDDIR)/gc-page-profiler.dbg.obj: $(SRCDIR)/gc-page-profiler.h
 $(BUILDDIR)/init.o $(BUILDDIR)/init.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h
@@ -343,16 +348,10 @@ $(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj: $(SRCDIR)/serialize.h $(SRCDIR)/common_symbols1.inc $(SRCDIR)/common_symbols2.inc
 $(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(SRCDIR)/passes.h $(SRCDIR)/jitlayers.h
 
-$(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
+$(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
 $(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): $(SRCDIR)/APInt-C.h
 
 # archive library file rules
-$(BUILDDIR)/gc/libgc.a: $(addprefix $(SRCDIR)/gc/,*.h *.c) $(SRCDIR)/gc/*.c
-	$(MAKE) -C $(SRCDIR)/gc BUILDDIR='$(abspath $(BUILDDIR)/gc)'
-
-$(BUILDDIR)/gc/libgc-debug.a: $(addprefix $(SRCDIR)/gc/,*.h *.c) $(SRCDIR)/gc/*.c
-	$(MAKE) -C $(SRCDIR)/gc debug BUILDDIR='$(abspath $(BUILDDIR)/gc)'
-
 $(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.S *.inc) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
@@ -390,13 +389,13 @@ $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in
 	sed <'$<' >'$@' -e "s/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/" \
 		        -e "s/@LLVM_SHLIB_SYMBOL_VERSION@/$(LLVM_SHLIB_SYMBOL_VERSION)/"
 
-$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(BUILDDIR)/gc/libgc.a $(LIBUV)
+$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(JL_CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 
-$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(BUILDDIR)/gc/libgc-debug.a $(LIBUV)
+$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(JL_CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(call SONAME_FLAGS,libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-internal-debug.$(SHLIB_EXT) $@
@@ -463,10 +462,7 @@ clean-flisp:
 clean-support:
 	-$(MAKE) -C $(SRCDIR)/support clean BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
-clean-gc:
-	-$(MAKE) -C $(SRCDIR)/gc clean BUILDDIR='$(abspath $(BUILDDIR)/gc)'
-
-cleanall: clean clean-flisp clean-support clean-gc clean-analyzegc
+cleanall: clean clean-flisp clean-support clean-analyzegc
 
 $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG_ABSOLUTE)
 	@$(call PRINT_CC, $(CXX) -g $(fPIC) -shared -o $@ -DCLANG_PLUGIN -I$(build_includedir) -L$(build_libdir) \

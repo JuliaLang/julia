@@ -654,7 +654,12 @@ typedef union {
 #define SOURCE_MODE_ABI                     0x1
 #define SOURCE_MODE_FORCE_SOURCE            0x2
 
-JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force, uint8_t source_mode);
+JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
+JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
+void jl_engine_sweep(jl_ptls_t *gc_all_tls_states) JL_NOTSAFEPOINT;
+int jl_engine_hasreserved(jl_method_instance_t *m, jl_value_t *owner) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li, size_t world, uint8_t source_mode);
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
@@ -662,6 +667,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         size_t min_world, size_t max_world, jl_debuginfo_t *edges);
 jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT);
 
+JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner);
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         jl_method_instance_t *mi, jl_value_t *owner,
         jl_value_t *rettype, jl_value_t *exctype,
@@ -799,7 +805,10 @@ jl_array_t *jl_get_loaded_modules(void);
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
+JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val);
+void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error);
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
+JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
 
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
@@ -1616,6 +1625,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_thunk_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_foreigncall_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_as_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_global_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_globaldecl_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_local_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_list_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_dot_sym;

@@ -6,6 +6,8 @@ using REPL # doc lookup function
 include("precompile_utils.jl")
 
 Foo_module = :Foo4b3a94a1a081a8cb
+foo_incl_dep = :foo4b3a94a1a081a8cb
+bar_incl_dep = :bar4b3a94a1a081a8cb
 Foo2_module = :F2oo4b3a94a1a081a8cb
 FooBase_module = :FooBase4b3a94a1a081a8cb
 @eval module ConflictingBindings
@@ -75,6 +77,8 @@ precompile_test_harness(false) do dir
     Foo_file = joinpath(dir, "$Foo_module.jl")
     Foo2_file = joinpath(dir, "$Foo2_module.jl")
     FooBase_file = joinpath(dir, "$FooBase_module.jl")
+    foo_file = joinpath(dir, "$foo_incl_dep.jl")
+    bar_file = joinpath(dir, "$bar_incl_dep.jl")
 
     write(FooBase_file,
           """
@@ -123,11 +127,11 @@ precompile_test_harness(false) do dir
 
               # test that docs get reconnected
               @doc "foo function" foo(x) = x + 1
-              include_dependency("foo.jl")
-              include_dependency("foo.jl")
+              include_dependency("$foo_incl_dep.jl")
+              include_dependency("$foo_incl_dep.jl")
               module Bar
                   public bar
-                  include_dependency("bar.jl")
+                  include_dependency("$bar_incl_dep.jl")
               end
               @doc "Bar module" Bar # this needs to define the META dictionary via eval
               @eval Bar @doc "bar function" bar(x) = x + 2
@@ -218,9 +222,9 @@ precompile_test_harness(false) do dir
               gnc() = overridenc(1.0)
               Test.@test 1 < gnc() < 5 # compile this
 
-              const abigfloat_f() = big"12.34"
+              abigfloat_f() = big"12.34"
               const abigfloat_x = big"43.21"
-              const abigint_f() = big"123"
+              abigint_f() = big"123"
               const abigint_x = big"124"
 
               # issue #51111
@@ -270,6 +274,8 @@ precompile_test_harness(false) do dir
               oid_mat_int = objectid(a_mat_int)
           end
           """)
+    # Issue #52063
+    touch(foo_file); touch(bar_file)
     # Issue #12623
     @test __precompile__(false) === nothing
 
@@ -412,8 +418,7 @@ precompile_test_harness(false) do dir
         modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> mod_fl_mt.filename
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
-        # foo.jl and bar.jl are never written to disk, so they are not relocatable
-        @test map(x -> x.filename, deps) == [ Foo_file, joinpath("@depot", "foo.jl"), joinpath("@depot", "bar.jl") ]
+        @test map(x -> x.filename, deps) == [ Foo_file, joinpath("@depot", foo_file), joinpath("@depot", bar_file) ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
                             Base.PkgId(Foo) => Base.PkgId(Test),
@@ -422,7 +427,7 @@ precompile_test_harness(false) do dir
         @test !isempty(srctxt) && srctxt == read(Foo_file, String)
         @test_throws ErrorException Base.read_dependency_src(cachefile, "/tmp/nonexistent.txt")
         # dependencies declared with `include_dependency` should not be stored
-        @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, "foo.jl"))
+        @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, foo_file))
 
         modules, deps1 = Base.cache_dependencies(cachefile)
         modules_ok = merge(
@@ -612,13 +617,13 @@ precompile_test_harness(false) do dir
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
-    Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String} : Tuple{<:Vector, Nothing}
+    Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt128} : Tuple{<:Vector, Nothing, UInt128}
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Tuple{<:Vector, String} : Bool) # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Tuple{<:Vector, String, UInt128} : Bool) # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
     @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
 
@@ -784,7 +789,7 @@ precompile_test_harness("code caching") do dir
     mi = minternal.specializations::Core.MethodInstance
     @test mi.specTypes == Tuple{typeof(M.getelsize),Vector{Int32}}
     ci = mi.cache
-    @test ci.relocatability == 1
+    @test ci.relocatability == 0
     @test ci.inferred !== nothing
     # ...and that we can add "untracked" roots & non-relocatable CodeInstances to them too
     Base.invokelatest() do
@@ -1519,6 +1524,7 @@ precompile_test_harness("Issue #26028") do load_path
         module Foo26028
         module Bar26028
             x = 0
+            y = 0
         end
         function __init__()
             include(joinpath(@__DIR__, "Baz26028.jl"))
@@ -1528,7 +1534,10 @@ precompile_test_harness("Issue #26028") do load_path
     write(joinpath(load_path, "Baz26028.jl"),
         """
         module Baz26028
-        import Foo26028.Bar26028.x
+        using Test
+        @test_throws(ConcurrencyViolationError("deadlock detected in loading Foo26028 -> Foo26028"),
+                     @eval import Foo26028.Bar26028.x)
+        import ..Foo26028.Bar26028.y
         end
         """)
     Base.compilecache(Base.PkgId("Foo26028"))
@@ -1907,7 +1916,7 @@ precompile_test_harness("Issue #50538") do load_path
             ex
         end
         const newtype = try
-            Core.set_binding_type!(Base, :newglobal)
+            Core.eval(Base, :(global newglobal::Any))
         catch ex
             ex isa ErrorException || rethrow()
             ex
@@ -1918,10 +1927,10 @@ precompile_test_harness("Issue #50538") do load_path
     ji, ofile = Base.compilecache(Base.PkgId("I50538"))
     @eval using I50538
     @test I50538.newglobal.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
-    @test I50538.newtype.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
+    @test I50538.newtype.msg == "Evaluation into the closed module `Base` breaks incremental compilation because the side effects will not be permanent. This is likely due to some other module mutating `Base` with `eval` during precompilation - don't do this."
     @test_throws(ErrorException("cannot set type for global I50538.undefglobal. It already has a value or is already set to a different type."),
-                 Core.set_binding_type!(I50538, :undefglobal, Int))
-    Core.set_binding_type!(I50538, :undefglobal, Any)
+                 Core.eval(I50538, :(global undefglobal::Int)))
+    Core.eval(I50538, :(global undefglobal::Any))
     @test Core.get_binding_type(I50538, :undefglobal) === Any
     @test !isdefined(I50538, :undefglobal)
 end
@@ -1993,6 +2002,46 @@ precompile_test_harness("Generated Opaque") do load_path
     let oc = invokelatest(GeneratedOpaque.oc_re_generated_no_partial)
         @test oc.source.specializations.cache.max_world === typemax(UInt)
         @test oc() === 1
+    end
+end
+
+precompile_test_harness("Issue #52063") do load_path
+    fname = joinpath(load_path, "i_do_not_exist.jl")
+    @test try
+        include_dependency(fname); false
+    catch e
+        @test e isa SystemError
+        @test e.prefix == "opening file or folder $(repr(fname))"
+        true
+    end
+    touch(fname)
+    @test include_dependency(fname) === nothing
+    chmod(fname, 0x000)
+    @test try
+        include_dependency(fname); false
+    catch e
+        @test e isa SystemError
+        @test e.prefix == "opening file or folder $(repr(fname))"
+        true
+    end broken=Sys.iswindows()
+    dir = mktempdir() do dir
+        @test include_dependency(dir) === nothing
+        chmod(dir, 0x000)
+        @test try
+             include_dependency(dir); false
+        catch e
+            @test e isa SystemError
+            @test e.prefix == "opening file or folder $(repr(dir))"
+            true
+        end broken=Sys.iswindows()
+        dir
+    end
+    @test try
+        include_dependency(dir); false
+    catch e
+        @test e isa SystemError
+        @test e.prefix == "opening file or folder $(repr(dir))"
+        true
     end
 end
 
