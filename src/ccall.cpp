@@ -614,6 +614,8 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         jl_cgval_t arg1 = emit_expr(ctx, arg);
         jl_value_t *ptr_ty = arg1.typ;
         if (!jl_is_cpointer_type(ptr_ty)) {
+            if (!ccall)
+                return;
             const char *errmsg = invalid_symbol_err_msg(ccall);
             emit_cpointercheck(ctx, arg1, errmsg);
         }
@@ -703,14 +705,6 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
 
     interpret_symbol_arg(ctx, sym, args[1], /*ccall=*/false, false);
 
-    if (sym.f_name == NULL && sym.fptr == NULL && sym.jl_ptr == NULL && sym.gcroot != NULL) {
-        const char *errmsg = invalid_symbol_err_msg(/*ccall=*/false);
-        jl_cgval_t arg1 = emit_expr(ctx, args[1]);
-        emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type), errmsg);
-        JL_GC_POP();
-        return jl_cgval_t();
-    }
-
     if (sym.jl_ptr != NULL) {
         res = sym.jl_ptr;
     }
@@ -719,13 +713,21 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         if (ctx.emission_context.imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
-    else {
+    else if (sym.f_name != NULL) {
         if (sym.lib_expr) {
             res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), NULL, sym.lib_expr, sym.f_name, ctx.f);
         }
         else /*if (ctx.emission_context.imaging) */{
             res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), sym.f_lib, NULL, sym.f_name, ctx.f);
         }
+    } else {
+        // Fall back to runtime intrinsic
+        JL_GC_POP();
+        jl_cgval_t argv[2];
+        argv[0] = emit_expr(ctx, args[1]);
+        if (nargs == 2)
+            argv[1] = emit_expr(ctx, args[2]);
+        return emit_runtime_call(ctx, nargs == 1 ? JL_I::cglobal_auto : JL_I::cglobal, argv, nargs);
     }
 
     JL_GC_POP();
