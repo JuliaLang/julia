@@ -986,6 +986,10 @@ function run_passes_ipo_safe(
     @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
+    # GVN pass needs to be placed immediately after compact!
+    # as it doesn't use IncrementalCompact and so doesn't support
+    # lazy compaction.
+    @pass "GVN"       ir = gvn!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
     if made_changes

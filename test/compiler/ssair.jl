@@ -532,13 +532,18 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
     end
     # domination analysis
     domtree = Core.Compiler.construct_domtree(ir)
+    dfscached_domtree = Core.Compiler.construct_dfscached_domtree(domtree)
     @test Core.Compiler.dominates(domtree, 1, 2)
     @test Core.Compiler.dominates(domtree, 1, 3)
     @test Core.Compiler.dominates(domtree, 1, 4)
+    @test Core.Compiler.dominates(dfscached_domtree, 1, 2)
+    @test Core.Compiler.dominates(dfscached_domtree, 1, 3)
+    @test Core.Compiler.dominates(dfscached_domtree, 1, 4)
     for i = 2:4
         for j = 1:4
             i == j && continue
             @test !Core.Compiler.dominates(domtree, i, j)
+            @test !Core.Compiler.dominates(dfscached_domtree, i, j)
         end
     end
     # post domination analysis
@@ -551,6 +556,15 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
             i == j && continue
             @test !Core.Compiler.postdominates(post_domtree, i, j)
         end
+    end
+end
+
+# domination analysis
+let ir = Base.code_ircode(exp, (Float64,)) |> only |> first
+    domtree = Core.Compiler.construct_domtree(ir)
+    dfscached_domtree = Core.Compiler.construct_dfscached_domtree(domtree)
+    for bb1 in eachindex(ir.cfg.blocks), bb2 in eachindex(ir.cfg.blocks)
+        @test Core.Compiler.dominates(domtree, bb1, bb2) == Core.Compiler.dominates(dfscached_domtree, bb1, bb2)
     end
 end
 

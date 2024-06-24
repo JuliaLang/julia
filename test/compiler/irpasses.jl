@@ -1471,6 +1471,96 @@ end
 
 @test isnothing(f_with_early_try_catch_exit())
 
+# Test that gvn! works on example from the paper "SCC based value numbering" by L. Taylor Simpson.
+let src = @eval Module() begin
+        function g()
+            x = 1
+            y = 1
+            while true
+                x += 1
+                y += 1
+            end
+        end
+        code_typed(g, Tuple{})[1][1]
+    end
+    nphi = 0
+    for stmt in src.code
+        if stmt isa Core.PhiNode
+            nphi += 1
+        end
+    end
+    @test nphi == 1
+    @test count(iscall((src, Base.add_int)), src.code) == 1
+end
+
+# Test gvn! fixes #50887
+let src = @eval Module() begin
+    function f(x)
+        return Base.exp(x) / (1 + Base.exp(x))
+    end
+    code_typed(f, Tuple{Float64})[1][1]
+    end
+    @test count(isinvoke(:exp), src.code) == 1
+end
+
+# Test gvn! doesn't make illegal changes
+function foo()
+    arr = Int[0]
+    a = arr[]
+    arr[] = 1
+    b = arr[]
+    (a, b)
+end
+@test foo() == (0, 1)
+
+# Test gvn! perform_symbolic_evaluation on PhiNodes works correctly
+@testset "perform_symbolic_evaluation" begin
+    # test if all incoming values to PhiNode are equivalent
+    # to the same SSAValue, dominating edge is found
+
+    function f()
+        x = Base.inferencebarrier(4)
+        if (x > 4)
+            x = Base.inferencebarrier(x)
+        end
+        return x
+    end
+
+    ir = Base.code_ircode(f, Tuple{}) |> only |> first
+    lazydomtree =  Core.Compiler.LazyDomtree(ir)
+
+    ssa_to_ssa = fill(SSAValue(1), 4)
+
+    stmt = PhiNode(Int32[1, 2], Any[SSAValue(1), SSAValue(4)])
+    @test Core.Compiler.perform_symbolic_evaluation!(Any[], stmt, ssa_to_ssa, 3, lazydomtree, ir) == SSAValue(1)
+
+    stmt = PhiNode(Int32[2, 1], Any[SSAValue(4), SSAValue(1)])
+    @test Core.Compiler.perform_symbolic_evaluation!(Any[], stmt, ssa_to_ssa, 3, lazydomtree, ir) == SSAValue(1)
+end
+
+# Test gvn treats phinodes depending on other phinodes in the same block correctly
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # block 1
+        nothing,
+        # block 2
+        PhiNode(Int32[1, 4], Any[false, true]),
+        PhiNode(Int32[4], Any[SSAValue(2)]),
+        GotoIfNot(SSAValue(2), 2),
+        # block 3
+        ReturnNode(SSAValue(3)),
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
+    m.args[1] = copy(src)
+    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
+    @test false === @eval $m
+end
+
 # Issue #51144 - UndefRefError during compaction
 let code = Any[
         # block 1  → 2, 3
