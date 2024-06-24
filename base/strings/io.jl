@@ -354,7 +354,8 @@ function join(io::IO, iterator, delim="")
 end
 
 function _join_preserve_annotations(iterator, args...)
-    if _isannotated(eltype(iterator)) || any(_isannotated, args)
+    if _isannotated(eltype(iterator)) || any(_isannotated, args) ||
+        (!isconcretetype(eltype(iterator)) && !isa(iterator, Iterators.Stateful) && any(_isannotated, iterator))
         io = AnnotatedIOBuffer()
         join(io, iterator, args...)
         read(seekstart(io), AnnotatedString{String})
