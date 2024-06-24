@@ -58,6 +58,7 @@ export
     IOBuffer,
     IOStream,
     LinRange,
+    Lockable,
     Irrational,
     LazyString,
     Matrix,
