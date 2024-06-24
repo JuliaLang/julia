@@ -1241,6 +1241,7 @@ JL_DLLEXPORT void jl_refresh_dbg_module_list(void);
 #endif
 int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx) JL_NOTSAFEPOINT;
 void jl_thread_resume(int tid) JL_NOTSAFEPOINT;
+void *jl_get_task_sp(jl_task_t *t) JL_NOTSAFEPOINT;
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 STATIC_INLINE char *jl_copy_str(char **to, const char *from) JL_NOTSAFEPOINT

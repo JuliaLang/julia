@@ -366,11 +366,14 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
 
     jl_ptls_t ptls2 = task->ptls;
     if (task->copy_stack && ptls2) {
-        *total_start = *active_start = (char*)ptls2->stackbase - ptls2->stacksize;
+        *total_start = (char*)ptls2->stackbase - ptls2->stacksize;
         *total_end = *active_end = (char*)ptls2->stackbase;
+        *active_start = (char*)jl_get_task_sp(task);
+        if (*active_start == NULL)
+            *active_start = *total_start;
     }
     else if (task->stkbuf) {
-        *total_start = *active_start = (char*)task->stkbuf;
+        *total_start = (char*)task->stkbuf;
 #ifndef _OS_WINDOWS_
         jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
         if (ptls0->root_task == task) {
@@ -387,8 +390,15 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
 #ifdef COPY_STACKS
         // save_stack stores the stack of an inactive task in stkbuf, and the
         // actual number of used bytes in copy_stack.
-        if (task->copy_stack > 1)
+        if (task->copy_stack > 1) {
             *active_end = (char*)task->stkbuf + task->copy_stack;
+            *active_start = *total_start;
+        }
+        else {
+            *active_start = (char*)jl_get_task_sp(task);
+            if (*active_start == NULL)
+                *active_start = *total_start;
+        }
 #endif
     }
     else {
@@ -396,11 +406,6 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
         *total_start = *active_start = 0;
         *total_end = *active_end = 0;
         return;
-    }
-
-    if (task == jl_current_task) {
-        // scan up to current `sp` for current thread and task
-        *active_start = (char*)jl_get_frame_addr();
     }
 }
 
