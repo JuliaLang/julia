@@ -1210,6 +1210,11 @@ end
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 
+module loaded_pkgid1 end
+module loaded_pkgid2 end
+module loaded_pkgid3 end
+module loaded_pkgid4 end
+
 @testset "loading deadlock detector" begin
     pkid1 = Base.PkgId("pkgid1")
     pkid2 = Base.PkgId("pkgid2")
@@ -1221,16 +1226,16 @@ append!(Base.DEPOT_PATH, original_depot_path)
     t1 = @async begin
         @test nothing === @lock Base.require_lock Base.start_loading(pkid2) # @async module pkgid2; using pkgid1; end
         notify(e)
-        @test "loaded_pkgid1" == @lock Base.require_lock Base.start_loading(pkid1)
-        @lock Base.require_lock Base.end_loading(pkid2, "loaded_pkgid2")
+        @test loaded_pkgid1 == @lock Base.require_lock Base.start_loading(pkid1)
+        @lock Base.require_lock Base.end_loading(pkid2, loaded_pkgid2)
     end
     wait(e)
     reset(e)
     t2 = @async begin
         @test nothing === @lock Base.require_lock Base.start_loading(pkid3) # @async module pkgid3; using pkgid2; end
         notify(e)
-        @test "loaded_pkgid2" == @lock Base.require_lock Base.start_loading(pkid2)
-        @lock Base.require_lock Base.end_loading(pkid3, "loaded_pkgid3")
+        @test loaded_pkgid2 == @lock Base.require_lock Base.start_loading(pkid2)
+        @lock Base.require_lock Base.end_loading(pkid3, loaded_pkgid3)
     end
     wait(e)
     reset(e)
@@ -1238,8 +1243,8 @@ append!(Base.DEPOT_PATH, original_depot_path)
         @lock Base.require_lock Base.start_loading(pkid3)).value            # try using pkgid3
     @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 -> pkgid4 && pkgid1"),
         @lock Base.require_lock Base.start_loading(pkid4)).value            # try using pkgid4
-    @lock Base.require_lock Base.end_loading(pkid1, "loaded_pkgid1")        # end
-    @lock Base.require_lock Base.end_loading(pkid4, "loaded_pkgid4")        # end
+    @lock Base.require_lock Base.end_loading(pkid1, loaded_pkgid1)        # end
+    @lock Base.require_lock Base.end_loading(pkid4, loaded_pkgid4)        # end
     wait(t2)
     wait(t1)
 end

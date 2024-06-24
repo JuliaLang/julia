@@ -2460,28 +2460,27 @@ function _require(pkg::PkgId, env=nothing)
                 end
                 # spawn off a new incremental pre-compile task for recursive `require` calls
                 loaded = maybe_cachefile_lock(pkg, path) do
-                    # double-check now that we have lock
+                    # double-check the search now that we have lock
                     m = _require_search_from_serialized(pkg, path, UInt128(0), true)
                     m isa Module && return m
                     return compilecache(pkg, path; reasons)
                 end
                 loaded isa Module && return loaded
-                cachefile = loaded
-                if isnothing(cachefile) # maybe_cachefile_lock returns nothing if it had to wait for another process
+                if isnothing(loaded) # maybe_cachefile_lock returns nothing if it had to wait for another process
                     @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
-                elseif isa(cachefile, Exception)
-                    if precompilableerror(cachefile)
+                elseif isa(loaded, Exception)
+                    if precompilableerror(loaded)
                         verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                        @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=m
+                        @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
                     else
-                        @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=m
+                        @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
                     end
                     # fall-through to loading the file locally if not incremental
                 else
-                    cachefile, ocachefile = cachefile::Tuple{String, Union{Nothing, String}}
+                    cachefile, ocachefile = loaded::Tuple{String, Union{Nothing, String}}
                     loaded = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
                     if !isa(loaded, Module)
-                        @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=m
+                        @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
                     else
                         return loaded
                     end
