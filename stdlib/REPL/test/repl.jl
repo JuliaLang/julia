@@ -1874,7 +1874,7 @@ end
         REPL.SHOW_MAXIMUM_BYTES = previous
     end
 end
-                                                                                                      
+
 @testset "Dummy Pkg prompt" begin
     # do this in an empty depot to test default for new users
     withenv("JULIA_DEPOT_PATH" => mktempdir(), "JULIA_LOAD_PATH" => nothing) do
