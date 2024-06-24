@@ -5,7 +5,8 @@
 test_mod = Module()
 
 #-------------------------------------------------------------------------------
-# Tail position
+@testset "Tail position" begin
+
 @test JuliaLowering.include_string(test_mod, """
 let a = true
     if a
@@ -66,8 +67,10 @@ let a = false, b = false
 end
 """) === 3
 
+end
+
 #-------------------------------------------------------------------------------
-# Value, not tail position
+@testset "Value required but not tail position" begin
 
 @test JuliaLowering.include_string(test_mod, """
 let a = true
@@ -135,8 +138,11 @@ let a = false, b = false
 end
 """) === 3
 
+end
+
 #-------------------------------------------------------------------------------
-# Side effects (not value or tail position)
+@testset "Side effects (not value or tail position)" begin
+
 @test JuliaLowering.include_string(test_mod, """
 let a = true
     x = nothing
@@ -209,8 +215,80 @@ let a = false, b = false
 end
 """) === 3
 
+end
+
 #-------------------------------------------------------------------------------
-# Detailed lowering
+@testset "`&&` and `||` chains" begin
+
+@test JuliaLowering.include_string(test_mod, """
+true && "hi"
+""") == "hi"
+
+@test JuliaLowering.include_string(test_mod, """
+true && true && "hi"
+""") == "hi"
+
+@test JuliaLowering.include_string(test_mod, """
+false && "hi"
+""") == false
+
+@test JuliaLowering.include_string(test_mod, """
+true && false && "hi"
+""") == false
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    z = true && "hi"
+    z
+end
+""") == "hi"
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    z = false && "hi"
+    z
+end
+""") == false
+
+
+@test JuliaLowering.include_string(test_mod, """
+true || "hi"
+""") == true
+
+@test JuliaLowering.include_string(test_mod, """
+true || true || "hi"
+""") == true
+
+@test JuliaLowering.include_string(test_mod, """
+false || "hi"
+""") == "hi"
+
+@test JuliaLowering.include_string(test_mod, """
+false || true || "hi"
+""") == true
+
+@test JuliaLowering.include_string(test_mod, """
+false || false || "hi"
+""") == "hi"
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    z = false || "hi"
+    z
+end
+""") == "hi"
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    z = true || "hi"
+    z
+end
+""") == true
+
+end
+
+#-------------------------------------------------------------------------------
+@testset "Detailed lowering tests" begin
 
 @test ir_as_text(test_mod, """
 begin
@@ -296,5 +374,7 @@ slot.₄/d
 (return ssa.₆)
 core.nothing
 (return ssa.₈)"""
+
+end
 
 end
