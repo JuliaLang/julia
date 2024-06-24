@@ -139,10 +139,8 @@ use_const_api(li::CodeInstance) = invoke_api(li) == 2
 function get_staged(mi::MethodInstance, world::UInt)
     may_invoke_generator(mi) || return nothing
     try
-        # user code might throw errors – ignore them
-        ci = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), mi, world, C_NULL)::CodeInfo
-        return ci
-    catch
+        return ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), mi, world, C_NULL)
+    catch # user code might throw errors – ignore them
         return nothing
     end
 end
@@ -162,7 +160,7 @@ function retrieve_code_info(mi::MethodInstance, world::UInt)
         # @atomic ci.inferred = C_NULL
         return src
     end
-    c = isdefined(def, :generator) ? get_staged(mi, world) : nothing
+    c = hasgenerator(def) ? get_staged(mi, world) : nothing
     if c === nothing && isdefined(def, :source)
         src = def.source
         if src === nothing
