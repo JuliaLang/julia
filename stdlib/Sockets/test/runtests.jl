@@ -18,7 +18,7 @@ function killjob(d)
         ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
         sleep(5) # Allow time for profile to collect and print before killing
     end
-    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
+    ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGQUIT)
     nothing
 end
 sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
