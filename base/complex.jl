@@ -518,9 +518,9 @@ function ssqs(x::T, y::T) where T<:Real
     ρ = x*x + y*y
     if !isfinite(ρ) && (isinf(x) || isinf(y))
         ρ = convert(T, Inf)
-    elseif isinf(ρ) || (ρ==0 && (x!=0 || y!=0)) || ρ<nextfloat(zero(T))/(2*eps(T)^2)
+    elseif isinf(ρ) || ((x!=0 || y!=0) && ρ<nextfloat(zero(T))/(2*eps(T)^2))
         m::T = max(abs(x), abs(y))
-        k = m==0 ? 0 : convert(Int, exponent(m))
+        k = convert(Int, exponent(m))
         xk, yk = ldexp(x,-k), ldexp(y,-k)
         ρ = xk*xk + yk*yk
     end
