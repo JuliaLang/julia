@@ -740,30 +740,39 @@ end
 # don't trigger the inference limiter
 if isdefined(Core, :Compiler)
     macro default_eltype_tight(itr)
+        return _default_eltype_tight(itr)
+    end
+    function _default_eltype_tight(itr)
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
-                ($I).f
+                T = ($I).f
             else
-                Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
+                T = Core.Compiler.return_type(_iterator_upper_bound, Tuple{typeof($I)})
             end
         end
     end
 else
     macro default_eltype_tight(itr)
+        return _default_eltype_tight(itr)
+    end
+    function _default_eltype_tight(itr)
         I = esc(itr)
         return quote
             if $I isa Generator && ($I).f isa Type
-                ($I).f
+                T = ($I).f
             else
-                Any
+                T = Any
             end
         end
     end
 end
+
 macro default_eltype(itr)
+    T_expr = _default_eltype_tight(itr)
     return quote
-        promote_typejoin_union(Base.@default_eltype_tight($(esc(itr))))
+        $T_expr
+        promote_typejoin_union(T)
     end
 end
 
