@@ -204,12 +204,17 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
         var = scmsym_to_julia(fl_ctx, args[1]);
     }
     jl_binding_t *b = jl_get_module_binding(mod, var, 0);
+    if (b && b->constp) {
+        return b->restriction ? fl_ctx->T : fl_ctx->F;
+    }
     if (b && b->imported) {
-        if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED)
+        if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED || b->imported == BINDING_IMPORT_DECLARED)
             return fl_ctx->F;
         b = jl_atomic_load_relaxed(&b->owner);
     }
-    return b != NULL && jl_atomic_load_relaxed(&b->value) != NULL ? fl_ctx->T : fl_ctx->F;
+    if (!b)
+        return fl_ctx->F;
+    return jl_atomic_load_relaxed(&b->value) != NULL ? fl_ctx->T : fl_ctx->F;
 }
 
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT

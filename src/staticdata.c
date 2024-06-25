@@ -768,7 +768,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
             if ((void*)b == jl_nothing)
                 break;
             jl_sym_t *name = b->globalref->name;
-            if (name == jl_docmeta_sym && jl_atomic_load_relaxed(&b->value))
+            if (name == jl_docmeta_sym && jl_get_binding_value(b))
                 record_field_change((jl_value_t**)&b->value, jl_nothing);
         }
     }
@@ -928,7 +928,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         for (i = 0; i < np; i++) {
             uint32_t ptr = jl_ptr_offset(t, i);
             int mutabl = t->name->mutabl;
-            if (jl_is_binding(v) && ((jl_binding_t*)v)->constp && i == 0) // value field depends on constp field
+            if (jl_is_binding(v) && ((jl_binding_t*)v)->constp && i == 2) // value field depends on constp field
                 mutabl = 0;
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
             jl_queue_for_serialization_(s, fld, 1, immediate);
@@ -1370,9 +1370,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
                 // Assign type Any to any owned bindings that don't have a type.
                 // We don't want these accidentally managing to diverge later in different compilation units.
-                if (jl_atomic_load_relaxed(&b->owner) == b) {
-                    jl_value_t *old_ty = NULL;
-                    jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+                if (b->imported == BINDING_IMPORT_NONE && !b->constp) {
+                    if (!b->restriction)
+                        jl_atomic_store_relaxed(&b->restriction, (jl_value_t*)jl_any_type);
                 }
             }
         }
@@ -1586,7 +1586,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             for (i = 0; i < np; i++) {
                 size_t offset = jl_ptr_offset(t, i) * sizeof(jl_value_t*);
                 int mutabl = t->name->mutabl;
-                if (jl_is_binding(v) && ((jl_binding_t*)v)->constp && i == 0) // value field depends on constp field
+                if (jl_is_binding(v) && ((jl_binding_t*)v)->constp && i == 2) // value field depends on constp field
                     mutabl = 0;
                 jl_value_t *fld = get_replaceable_field((jl_value_t**)&data[offset], mutabl);
                 size_t fld_pos = offset + reloc_offset;

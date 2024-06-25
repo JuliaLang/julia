@@ -94,9 +94,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
             jl_error("method: invalid declaration");
         }
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
-        _Atomic(jl_value_t*) *bp = &b->value;
-        jl_value_t *gf = jl_generic_function_def(fname, modu, bp, b);
-        return gf;
+        return jl_declare_const_gf(b);
     }
 
     jl_value_t *atypes = NULL, *meth = NULL, *fname = NULL;

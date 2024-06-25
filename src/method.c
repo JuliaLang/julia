@@ -215,6 +215,23 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             if (e->head == jl_method_sym || e->head == jl_module_sym || e->head == jl_throw_undef_if_not_sym) {
                 i++;
             }
+            if (e->head == jl_assign_sym && binding_effects) {
+                jl_value_t *lhs = jl_exprarg(e, 0);
+                if (jl_is_globalref(lhs) || jl_is_symbol(lhs)) {
+                    jl_module_t *mod = jl_is_globalref(lhs) ? jl_globalref_mod(lhs) : module;
+                    jl_sym_t *name = jl_is_globalref(lhs) ? jl_globalref_name(lhs) : (jl_sym_t*)lhs;
+                    if (mod == module) {
+                        // Assignment does not create bindings in foreign modules (#54678)
+                        jl_binding_t *b = jl_get_module_binding(mod, name, 1);
+                        if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED || b->imported == BINDING_IMPORT_DECLARED) {
+                            b->imported = BINDING_IMPORT_NONE;
+                            jl_atomic_store_relaxed(&b->owner, b);
+                            b->restriction = (jl_value_t*)jl_any_type;
+                            jl_gc_wb(b, jl_any_type);
+                        }
+                    }
+                }
+            }
             for (; i < nargs; i++) {
                 // TODO: this should be making a copy, not mutating the source
                 jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals, binding_effects, eager_resolve));
@@ -238,7 +255,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     if (eager_resolve || jl_binding_resolved_p(me_mod, me_sym)) {
                         jl_binding_t *b = jl_get_binding(me_mod, me_sym);
                         if (b && b->constp) {
-                            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
+                            jl_value_t *v = jl_get_binding_value(b);
                             if (v && jl_is_module(v))
                                 return jl_module_globalref((jl_module_t*)v, (jl_sym_t*)s);
                         }
@@ -254,7 +271,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 if (jl_binding_resolved_p(fe_mod, fe_sym)) {
                     // look at some known called functions
                     jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-                    if (b && b->constp && jl_atomic_load_relaxed(&b->value) == jl_builtin_tuple) {
+                    if (b && b->constp && jl_get_binding_value(b) == jl_builtin_tuple) {
                         size_t j;
                         for (j = 1; j < nargs; j++) {
                             if (!jl_is_quotenode(jl_exprarg(e, j)))
@@ -1124,30 +1141,34 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     return m;
 }
 
-// empty generic function def
-JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
-                                                 jl_module_t *module,
-                                                 _Atomic(jl_value_t*) *bp,
-                                                 jl_binding_t *bnd)
+JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
 {
-    jl_value_t *gf = NULL;
-
-    assert(name && bp);
-    if (bnd && jl_atomic_load_relaxed(&bnd->value) != NULL && !bnd->constp)
+    if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
         jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
-    gf = jl_atomic_load_relaxed(bp);
-    if (gf != NULL) {
-        if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
-            jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
+}
+
+JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b)
+{
+    if (b->constp) {
+        jl_value_t *gf = jl_get_binding_value(b);
+        jl_check_gf(gf, b->globalref->name);
+        return gf;
     }
-    if (bnd)
-        bnd->constp = 1; // XXX: use jl_declare_constant and jl_checked_assignment
-    if (gf == NULL) {
-        gf = (jl_value_t*)jl_new_generic_function(name, module);
-        jl_atomic_store(bp, gf); // TODO: fix constp assignment data race
-        if (bnd) jl_gc_wb(bnd, gf);
-    }
+    if (b->imported != BINDING_IMPORT_GUARD && b->imported != BINDING_IMPORT_FAILED && b->imported != BINDING_IMPORT_DECLARED)
+        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(b->globalref->name));
+    jl_value_t *gf = (jl_value_t*)jl_new_generic_function(b->globalref->name, b->globalref->mod);
+    jl_declare_constant_val(b, gf);
     return gf;
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_or_declare_local_gf(jl_value_t **bp, jl_module_t *mod, jl_sym_t *name)
+{
+    jl_value_t *gf = *bp;
+    if (gf) {
+        jl_check_gf(gf, name);
+        return gf;
+    }
+    return (jl_value_t*)jl_new_generic_function(name, mod);
 }
 
 static jl_methtable_t *nth_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT

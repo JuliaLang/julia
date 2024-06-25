@@ -3811,7 +3811,7 @@ void post_boot_hooks(void)
     for (size_t i = 0; i < jl_svec_len(bindings); i++) {
         if (table[i] != jl_nothing) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
+            jl_value_t *v = jl_get_binding_value(b);
             if (v) {
                 if (jl_is_unionall(v))
                     v = jl_unwrap_unionall(v);

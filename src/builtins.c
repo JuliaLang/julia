@@ -1369,19 +1369,10 @@ JL_CALLABLE(jl_f_get_binding_type)
     jl_sym_t *var = (jl_sym_t*)args[1];
     JL_TYPECHK(get_binding_type, module, (jl_value_t*)mod);
     JL_TYPECHK(get_binding_type, symbol, (jl_value_t*)var);
-    jl_value_t *ty = jl_get_binding_type(mod, var);
-    if (ty == (jl_value_t*)jl_nothing) {
-        jl_binding_t *b = jl_get_module_binding(mod, var, 0);
-        if (b == NULL)
-            return (jl_value_t*)jl_any_type;
-        jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
-        if (b2 != b)
-            return (jl_value_t*)jl_any_type;
-        jl_value_t *old_ty = NULL;
-        jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
-        return jl_atomic_load_relaxed(&b->ty);
-    }
-    return ty;
+    jl_value_t *ret = jl_get_binding_type(mod, var);
+    if (ret == jl_nothing)
+        return (jl_value_t*)jl_any_type;
+    return ret;
 }
 
 JL_CALLABLE(jl_f_swapglobal)

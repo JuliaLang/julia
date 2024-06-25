@@ -701,7 +701,7 @@ int foreach_mtable_in_module(
             break;
         jl_sym_t *name = b->globalref->name;
         if (jl_atomic_load_relaxed(&b->owner) == b && b->constp) {
-            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
+            jl_value_t *v = jl_get_binding_value(b);
             if (v) {
                 jl_value_t *uw = jl_unwrap_unionall(v);
                 if (jl_is_datatype(uw)) {
