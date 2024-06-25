@@ -70,7 +70,6 @@ New library functions
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
 * `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
-* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
 
 New library features
 --------------------

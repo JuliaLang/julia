@@ -3222,20 +3222,20 @@ end
 @testset "Wrapping Memory into Arrays" begin
     mem = Memory{Int}(undef, 10) .= 1
     memref = memoryref(mem)
-    @test_throws DimensionMismatch wrap(Array, mem, (10, 10))
-    @test wrap(Array, mem, (5,)) == ones(Int, 5)
-    @test wrap(Array, mem, 2) == ones(Int, 2)
-    @test wrap(Array, memref, 10) == ones(Int, 10)
-    @test wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
-    @test wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
+    @test_throws DimensionMismatch Base.wrap(Array, mem, (10, 10))
+    @test Base.wrap(Array, mem, (5,)) == ones(Int, 5)
+    @test Base.wrap(Array, mem, 2) == ones(Int, 2)
+    @test Base.wrap(Array, memref, 10) == ones(Int, 10)
+    @test Base.wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
+    @test Base.wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
 
     memref2 = memoryref(mem, 3)
-    @test wrap(Array, memref2, (5,)) == ones(Int, 5)
-    @test wrap(Array, memref2, 2) == ones(Int, 2)
-    @test wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
-    @test wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
-    @test_throws DimensionMismatch wrap(Array, memref2, 9)
-    @test_throws DimensionMismatch wrap(Array, memref2, 10)
+    @test Base.wrap(Array, memref2, (5,)) == ones(Int, 5)
+    @test Base.wrap(Array, memref2, 2) == ones(Int, 2)
+    @test Base.wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
+    @test Base.wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
+    @test_throws DimensionMismatch Base.wrap(Array, memref2, 9)
+    @test_throws DimensionMismatch Base.wrap(Array, memref2, 10)
 end
 
 @testset "Memory size" begin
