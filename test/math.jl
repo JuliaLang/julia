@@ -1602,10 +1602,8 @@ end
                     @test Core.Compiler.is_foldable(effects)
                 end
             end
-            @static if Sys.WORD_SIZE != 32 # COMBAK debug this
-                @testset let effects = Base.infer_effects(^, (T,Int))
-                    @test Core.Compiler.is_foldable(effects)
-                end
+            @testset let effects = Base.infer_effects(^, (T,Int))
+                @test Core.Compiler.is_foldable(effects)
             end
             @testset let effects = Base.infer_effects(^, (T,T))
                 @test Core.Compiler.is_foldable(effects)
