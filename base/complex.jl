@@ -1134,3 +1134,15 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
+
+## Machine epsilon for complex ##
+
+function eps(z::Complex{T}) where {T<:AbstractFloat}
+    x, y = eps(real(z)), eps(imag(z))
+    # inline version of hypot(x,y) since it's not defined until later
+    if x < y
+       x, y = y, x
+    end
+    r = y/x
+    x * sqrt(one(T) + r * r)
+end
