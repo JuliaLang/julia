@@ -282,7 +282,7 @@ function Date(y::Int64, m::Int64=1, d::Int64=1)
 end
 
 const DATE_YEAR_TYPEMAX = 252522163911149
-const DATE_YEAR_TYPEMIN = -252522163911148
+const DATE_YEAR_TYPEMIN = -252522163911150
 function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
     0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
