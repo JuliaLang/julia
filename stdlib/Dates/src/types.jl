@@ -250,9 +250,10 @@ function DateTime(y::Int64, m::Int64=1, d::Int64=1,
 end
 
 const DATETIME_YEAR_TYPEMAX = 146138512
+const DATETIME_YEAR_TYPEMIN = -146138511
 function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
                    h::Int64, mi::Int64, s::Int64, ms::Int64, ampm::AMPM=TWENTYFOURHOUR)
-    -DATETIME_YEAR_TYPEMAX <= y <= DATETIME_YEAR_TYPEMAX || return ArgumentError("Year: $y out of range ($(-DATETIME_YEAR_TYPEMAX):$DATETIME_YEAR_TYPEMAX)")
+    DATETIME_YEAR_TYPEMIN <= y <= DATETIME_YEAR_TYPEMAX || return ArgumentError("Year: $y out of range ($(DATETIME_YEAR_TYPEMIN):$DATETIME_YEAR_TYPEMAX)")
     0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
     if ampm == TWENTYFOURHOUR # 24-hour clock
@@ -281,10 +282,11 @@ function Date(y::Int64, m::Int64=1, d::Int64=1)
 end
 
 const DATE_YEAR_TYPEMAX = 252522163911149
+const DATE_YEAR_TYPEMIN = -252522163911148
 function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
     0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
-    -DATE_YEAR_TYPEMAX <= y <= DATE_YEAR_TYPEMAX || return ArgumentError("Year: $y out of range ($(-DATE_YEAR_TYPEMAX):$DATE_YEAR_TYPEMAX)")
+    DATE_YEAR_TYPEMIN <= y <= DATE_YEAR_TYPEMAX || return ArgumentError("Year: $y out of range ($(DATE_YEAR_TYPEMIN):$DATE_YEAR_TYPEMAX)")
     return nothing
 end
 
@@ -466,9 +468,9 @@ Base.zero(::T) where T <: TimeType = zero(T)::Period
 
 
 Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(DATETIME_YEAR_TYPEMAX, 12, 31, 23, 59, 59)
-Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-DATETIME_YEAR_TYPEMAX, 1, 1, 0, 0, 0)
+Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(DATETIME_YEAR_TYPEMIN, 1, 1, 0, 0, 0)
 Base.typemax(::Union{Date, Type{Date}}) = Date(DATE_YEAR_TYPEMAX, 12, 31)
-Base.typemin(::Union{Date, Type{Date}}) = Date(-DATE_YEAR_TYPEMAX, 1, 1)
+Base.typemin(::Union{Date, Type{Date}}) = Date(DATE_YEAR_TYPEMIN, 1, 1)
 Base.typemax(::Union{Time, Type{Time}}) = Time(23, 59, 59, 999, 999, 999)
 Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 # Date-DateTime promotion, isless, ==
