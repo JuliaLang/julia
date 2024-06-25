@@ -249,8 +249,10 @@ function DateTime(y::Int64, m::Int64=1, d::Int64=1,
     return DateTime(UTM(rata))
 end
 
+const DATETIME_YEAR_TYPEMAX = 146138512
 function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
                    h::Int64, mi::Int64, s::Int64, ms::Int64, ampm::AMPM=TWENTYFOURHOUR)
+    -DATETIME_YEAR_TYPEMAX <= y <= DATETIME_YEAR_TYPEMAX || return ArgumentError("Year: $y out of range ($(-DATETIME_YEAR_TYPEMAX):$DATETIME_YEAR_TYPEMAX)")
     0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
     if ampm == TWENTYFOURHOUR # 24-hour clock
@@ -463,8 +465,8 @@ Base.zero(::Type{Time}) = Nanosecond(0)
 Base.zero(::T) where T <: TimeType = zero(T)::Period
 
 
-Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(146138512, 12, 31, 23, 59, 59)
-Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-146138511, 1, 1, 0, 0, 0)
+Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(DATETIME_YEAR_TYPEMAX, 12, 31, 23, 59, 59)
+Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-DATETIME_YEAR_TYPEMAX, 1, 1, 0, 0, 0)
 Base.typemax(::Union{Date, Type{Date}}) = Date(DATE_YEAR_TYPEMAX, 12, 31)
 Base.typemin(::Union{Date, Type{Date}}) = Date(-DATE_YEAR_TYPEMAX, 1, 1)
 Base.typemax(::Union{Time, Type{Time}}) = Time(23, 59, 59, 999, 999, 999)
