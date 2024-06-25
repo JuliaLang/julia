@@ -1083,6 +1083,7 @@ public
 
 # Types
     AbstractLock,
+    AbstractPipe,
     AsyncCondition,
     CodeUnits,
     Event,
@@ -1090,6 +1091,7 @@ public
     Fix2,
     Generator,
     ImmutableDict,
+    Lockable,
     OneTo,
     LogRange,
     AnnotatedString,
@@ -1117,6 +1119,7 @@ public
     split_rest,
     tail,
     checked_length,
+    elsize,
 
 # Loading
     DL_LOAD_PATH,

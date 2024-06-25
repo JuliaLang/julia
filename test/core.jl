@@ -5524,9 +5524,6 @@ let a = Base.StringVector(2^17)
     @test sizeof(c) == 0
 end
 
-# issue #53990 / https://github.com/JuliaLang/julia/pull/53896#discussion_r1555087951
-@test Base.StringVector(UInt64(2)) isa Vector{UInt8}
-
 @test_throws ArgumentError eltype(Bottom)
 
 # issue #16424, re-evaluating type definitions
@@ -8135,6 +8132,7 @@ end
 @test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
 
 let M = @__MODULE__
+    Core.eval(M, :(global a_typed_global))
     @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing

@@ -1766,7 +1766,8 @@ The task will run in the "world age" from the parent at construction when [`sche
 !!! warning
     By default tasks will have the sticky bit set to true `t.sticky`. This models the
     historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
-    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
     bit manually to `false`.
 
 # Examples
@@ -2490,12 +2491,17 @@ cases.
 See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
-```jldoctest
-julia> module M end;
+```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
+julia> module M; global a; end;
 
 julia> M.a  # same as `getglobal(M, :a)`
 ERROR: UndefVarError: `a` not defined in `M`
-Suggestion: check for spelling errors or missing imports.
+Suggestion: add an appropriate import or assignment. This global was declared but not assigned.
+Stacktrace:
+ [1] getproperty(x::Module, f::Symbol)
+   @ Base ./Base.jl:42
+ [2] top-level scope
+   @ none:1
 
 julia> setglobal!(M, :a, 1)
 1

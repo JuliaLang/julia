@@ -887,3 +887,19 @@ end
 ex54166 = Union{Missing, Int64}[missing -2; missing -2];
 dims54166 = (1,2)
 @test (minimum(ex54166; dims=dims54166)[1] === missing)
+
+function foo54599()
+    pkginfo = @noinline bar54599()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    @noinline println(devnull, pkgid)
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+
+#this function used to crash allocopt due to a no predecessors bug
+barnopreds() = Base.inferencebarrier(true) ? (Base.PkgId(Test),1) : nothing
+function foonopreds()
+    pkginfo = @noinline barnopreds()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+@test foonopreds() !== nothing

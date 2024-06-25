@@ -398,14 +398,14 @@ for f in (Base.merge, Base.structdiff)
         fallback_func(a::NamedTuple, b::NamedTuple) = @invoke f(a::NamedTuple, b::NamedTuple)
         @testset let eff = Base.infer_effects(fallback_func)
             @test Core.Compiler.is_foldable(eff)
-            @test eff.nonoverlayed
+            @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(fallback_func)) == NamedTuple
         # test if `max_methods = 4` setting works as expected
         general_func(a::NamedTuple, b::NamedTuple) = f(a, b)
         @testset let eff = Base.infer_effects(general_func)
             @test Core.Compiler.is_foldable(eff)
-            @test eff.nonoverlayed
+            @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(general_func)) == NamedTuple
     end

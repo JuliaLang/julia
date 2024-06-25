@@ -76,8 +76,8 @@ keys(@nospecialize t::Tuple) = OneTo(length(t))
 """
     prevind(A, i)
 
-Return the index before `i` in `A`. The returned index is often equivalent to `i
-- 1` for an integer `i`. This function can be useful for generic code.
+Return the index before `i` in `A`. The returned index is often equivalent to
+`i - 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
     The returned index might be out of bounds. Consider using
@@ -110,8 +110,8 @@ function prevind end
 """
     nextind(A, i)
 
-Return the index after `i` in `A`. The returned index is often equivalent to `i
-+ 1` for an integer `i`. This function can be useful for generic code.
+Return the index after `i` in `A`. The returned index is often equivalent to
+`i + 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
     The returned index might be out of bounds. Consider using
@@ -458,7 +458,7 @@ _totuple(::Type{Tuple{}}, itr, s...) = ()
 
 function _totuple_err(@nospecialize T)
     @noinline
-    throw(ArgumentError("too few elements for tuple type $T"))
+    throw(ArgumentError(LazyString("too few elements for tuple type ", T)))
 end
 
 function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}

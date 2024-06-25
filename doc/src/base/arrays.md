@@ -30,6 +30,7 @@ Base.StridedArray
 Base.StridedVector
 Base.StridedMatrix
 Base.StridedVecOrMat
+Base.GenericMemory
 Base.Memory
 Base.MemoryRef
 Base.Slices
@@ -139,6 +140,7 @@ Base.reshape
 Base.dropdims
 Base.vec
 Base.SubArray
+Base.wrap
 ```
 
 ## Concatenation and permutation

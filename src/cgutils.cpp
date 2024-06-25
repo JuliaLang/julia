@@ -2740,7 +2740,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             else {
                 ptindex = emit_struct_gep(ctx, cast<StructType>(lt), staddr, byte_offset + fsz1);
             }
-            auto val = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, ctx.tbaa().tbaa_unionselbyte);
+            auto val = emit_unionload(ctx, addr, ptindex, jfty, fsz, al, tbaa, !jl_field_isconst(jt, idx), union_max, strct.tbaa);
             if (val.V && val.V != addr) {
                 setNameWithField(ctx.emission_context, val.V, get_objname, jt, idx, Twine());
             }

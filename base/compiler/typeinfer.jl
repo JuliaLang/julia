@@ -244,16 +244,48 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
-    isempty(frames) && push!(frames, frame)
-    valid_worlds = WorldRange()
+    if isempty(frames)
+        push!(frames, frame)
+        finish_nocycle(interp, frame)
+    elseif length(frames) == 1
+        @assert frames[1] === frame "invalid callers_in_cycle"
+        finish_nocycle(interp, frame)
+    else
+        finish_cycle(interp, frames)
+    end
+    empty!(frames)
+    return true
+end
+
+function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
+    frame.dont_work_on_me = true
+    finish(frame, frame.interp)
+    opt = frame.result.src
+    if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
+        optimize(frame.interp, opt, frame.result)
+    end
+    finish!(frame.interp, frame)
+    if is_cached(frame)
+        cache_result!(frame.interp, frame.result)
+    end
+    return nothing
+end
+
+function finish_cycle(::AbstractInterpreter, frames::Vector{InferenceState})
+    cycle_valid_worlds = WorldRange()
+    cycle_valid_effects = EFFECTS_TOTAL
     for caller in frames
         @assert !(caller.dont_work_on_me)
         caller.dont_work_on_me = true
-        # might might not fully intersect these earlier, so do that now
-        valid_worlds = intersect(caller.valid_worlds, valid_worlds)
+        # converge the world age range and effects for this cycle here:
+        # all frames in the cycle should have the same bits of `valid_worlds` and `effects`
+        # that are simply the intersection of each partial computation, without having
+        # dependencies on each other (unlike rt and exct)
+        cycle_valid_worlds = intersect(cycle_valid_worlds, caller.valid_worlds)
+        cycle_valid_effects = merge_effects(cycle_valid_effects, caller.ipo_effects)
     end
     for caller in frames
-        caller.valid_worlds = valid_worlds
+        adjust_cycle_frame!(caller, cycle_valid_worlds, cycle_valid_effects)
         finish(caller, caller.interp)
     end
     for caller in frames
@@ -268,8 +300,22 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
             cache_result!(caller.interp, caller.result)
         end
     end
-    empty!(frames)
-    return true
+    return nothing
+end
+
+function adjust_cycle_frame!(sv::InferenceState, cycle_valid_worlds::WorldRange, cycle_valid_effects::Effects)
+    sv.valid_worlds = cycle_valid_worlds
+    sv.ipo_effects = cycle_valid_effects
+    # traverse the callees of this cycle that are tracked within `sv.cycle_backedges`
+    # and adjust their statements so that they are consistent with the new `cycle_valid_effects`
+    new_flags = flags_for_effects(cycle_valid_effects)
+    for (callee, pc) in sv.cycle_backedges
+        old_currpc = callee.currpc
+        callee.currpc = pc
+        set_curr_ssaflag!(callee, new_flags, IR_FLAGS_EFFECTS)
+        callee.currpc = old_currpc
+    end
+    return nothing
 end
 
 function is_result_constabi_eligible(result::InferenceResult)
@@ -445,6 +491,9 @@ function adjust_effects(ipo_effects::Effects, def::Method)
         ipo_effects = Effects(ipo_effects; noub=ALWAYS_TRUE)
     elseif is_effect_overridden(override, :noub_if_noinbounds) && ipo_effects.noub !== ALWAYS_TRUE
         ipo_effects = Effects(ipo_effects; noub=NOUB_IF_NOINBOUNDS)
+    end
+    if is_effect_overridden(override, :consistent_overlay)
+        ipo_effects = Effects(ipo_effects; nonoverlayed=CONSISTENT_OVERLAY)
     end
     return ipo_effects
 end
@@ -872,7 +921,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         update_valid_age!(caller, frame.valid_worlds)
         isinferred = is_inferred(frame)
         edge = isinferred ? mi : nothing
-        effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
+        effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
+            adjust_effects(effects_for_cycle(frame.ipo_effects), method)
         exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, we can use this local result destructively
@@ -887,10 +937,15 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.valid_worlds)
-    effects = adjust_effects(Effects(), method)
+    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     return EdgeCallResult(frame.bestguess, exc_bestguess, nothing, effects)
 end
+
+# The `:terminates` effect bit must be conservatively tainted unless recursion cycle has
+# been fully resolved. As for other effects, there's no need to taint them at this moment
+# because they will be tainted as we try to resolve the cycle.
+effects_for_cycle(effects::Effects) = Effects(effects; terminates=false)
 
 function cached_return_type(code::CodeInstance)
     rettype = code.rettype
