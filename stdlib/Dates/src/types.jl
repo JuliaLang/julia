@@ -278,10 +278,11 @@ function Date(y::Int64, m::Int64=1, d::Int64=1)
     return Date(UTD(totaldays(y, m, d)))
 end
 
+const DATE_YEAR_TYPEMAX = 252522163911149
 function validargs(T::Type{Date}, y::Int64, m::Int64, d::Int64)
     0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
-    year(typemin(T)) <= y <= year(typemax(T)) || return ArgumentError("Year: $y out of range ($(year(typemin(T))):$(year(typemax(T))))")
+    -DATE_YEAR_TYPEMAX <= y <= DATE_YEAR_TYPEMAX || return ArgumentError("Year: $y out of range ($(-DATE_YEAR_TYPEMAX):$DATE_YEAR_TYPEMAX)")
     return nothing
 end
 
@@ -464,8 +465,8 @@ Base.zero(::T) where T <: TimeType = zero(T)::Period
 
 Base.typemax(::Union{DateTime, Type{DateTime}}) = DateTime(146138512, 12, 31, 23, 59, 59)
 Base.typemin(::Union{DateTime, Type{DateTime}}) = DateTime(-146138511, 1, 1, 0, 0, 0)
-Base.typemax(::Union{Date, Type{Date}}) = Date(252522163911149, 12, 31)
-Base.typemin(::Union{Date, Type{Date}}) = Date(-252522163911150, 1, 1)
+Base.typemax(::Union{Date, Type{Date}}) = Date(DATE_YEAR_TYPEMAX, 12, 31)
+Base.typemin(::Union{Date, Type{Date}}) = Date(-DATE_YEAR_TYPEMAX, 1, 1)
 Base.typemax(::Union{Time, Type{Time}}) = Time(23, 59, 59, 999, 999, 999)
 Base.typemin(::Union{Time, Type{Time}}) = Time(0)
 # Date-DateTime promotion, isless, ==
