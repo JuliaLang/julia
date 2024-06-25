@@ -3226,13 +3226,19 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
         return mark_julia_type(ctx, v, true, jl_any_type);
     } else if (bnd->constp) {
+        while (jl_binding_is_some_import(bnd)) {
+            bnd = (jl_binding_t*)bnd->restriction;
+        }
+        assert(bnd->constp && bnd->imported == BINDING_IMPORT_NONE);
         if (!bnd->restriction) {
             undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
             return jl_cgval_t();
         }
         return mark_julia_const(ctx, bnd->restriction);
-    } else if (bnd->imported == BINDING_IMPORT_IMPLICIT || bnd->imported == BINDING_IMPORT_EXPLICIT || bnd->imported == BINDING_IMPORT_IMPORTED) {
-        bnd = jl_atomic_load_relaxed(&bnd->owner);
+    } else {
+        while (jl_binding_is_some_import(bnd)) {
+            bnd = (jl_binding_t*)bnd->restriction;
+        }
         assert(!bnd->constp && bnd->imported == BINDING_IMPORT_NONE);
     }
     bp = julia_binding_gv(ctx, bnd);
@@ -3240,7 +3246,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         cg_bdw(ctx, name, bnd);
     }
     assert(!bnd->constp);
-    jl_value_t *ty = jl_atomic_load_relaxed(&bnd->restriction);
+    jl_value_t *ty = bnd->restriction;
     bp = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
@@ -3257,7 +3263,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     if (bp == NULL)
         return jl_cgval_t();
     if (bnd && !bnd->constp) {
-        jl_value_t *ty = jl_atomic_load_relaxed(&bnd->restriction);
+        jl_value_t *ty = bnd->restriction;
         if (ty != nullptr) {
             const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
             if (!ismodifyglobal) {
@@ -5484,8 +5490,8 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED || b->imported == BINDING_IMPORT_DECLARED)
             // try to look this up now
             b = jl_get_binding(m, s);
-        else if (b->imported != BINDING_IMPORT_NONE)
-            b = jl_atomic_load_relaxed(&b->owner);
+        while (jl_binding_is_some_import(b))
+            b = (jl_binding_t*)b->restriction;
     }
     if (b == NULL) {
         // var not found. switch to delayed lookup.

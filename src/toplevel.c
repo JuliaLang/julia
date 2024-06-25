@@ -291,7 +291,6 @@ void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
 {
     if (b->imported) {
         if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED || b->imported == BINDING_IMPORT_DECLARED) {
-            jl_atomic_store_relaxed(&b->owner, b);
             b->imported = BINDING_IMPORT_NONE;
             b->restriction = ty;
             jl_gc_wb(b, ty);
@@ -331,7 +330,6 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
     jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
     if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED) {
         b->imported = BINDING_IMPORT_DECLARED;
-        jl_atomic_store_relaxed(&b->owner, b);
     }
     if (set_type) {
         jl_binding_set_type(b, set_type, 1);
@@ -642,14 +640,13 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     jl_sym_t *name = asname ? asname : import->name;
     // TODO: this is a bit race-y with what error message we might print
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
-    if (b->constp && b->restriction == (jl_value_t*)import)
+    if (b->constp && jl_get_binding_value(b) == (jl_value_t*)import)
         return;
     if (b->imported != BINDING_IMPORT_GUARD && b->imported != BINDING_IMPORT_FAILED) {
         jl_errorf("importing %s into %s conflicts with an existing global",
                     jl_symbol_name(name), jl_symbol_name(m->name));
     }
     jl_declare_constant_val(b, (jl_value_t*)import);
-    b->imported = BINDING_IMPORT_IMPORTED;
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists
@@ -665,7 +662,7 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
                     jl_module_t *from = eval_import_path(m, NULL, path->args, &name, keyword);
                     if (name != NULL) {
                         from = (jl_module_t*)jl_eval_global_var(from, name);
-                        if (!jl_is_module(from))
+                        if (!from || !jl_is_module(from))
                             jl_errorf("invalid %s path: \"%s\" does not name a module", keyword, jl_symbol_name(name));
                     }
                     return from;

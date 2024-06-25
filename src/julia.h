@@ -640,8 +640,7 @@ typedef struct _jl_binding_t {
     JL_DATA_TYPE
     _Atomic(jl_value_t*) value;
     jl_globalref_t *globalref;  // cached GlobalRef for this binding
-    _Atomic(struct _jl_binding_t*) owner;  // for individual imported bindings (NULL until 'resolved')
-    _Atomic(jl_value_t*) restriction;  // binding type or const val
+    jl_value_t *restriction;  // binding type or const val
     uint8_t constp:1;
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.

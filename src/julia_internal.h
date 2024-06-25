@@ -860,6 +860,12 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred);
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
+STATIC_INLINE int jl_binding_is_some_import(jl_binding_t *b) {
+    if (!b)
+        return 0;
+    return b->imported == BINDING_IMPORT_IMPLICIT || b->imported == BINDING_IMPORT_EXPLICIT || b->imported == BINDING_IMPORT_IMPORTED;
+}
+
 STATIC_INLINE int is_anonfn_typename(char *name)
 {
     if (name[0] != '#' || name[1] == '#')

@@ -225,7 +225,6 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         jl_binding_t *b = jl_get_module_binding(mod, name, 1);
                         if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED || b->imported == BINDING_IMPORT_DECLARED) {
                             b->imported = BINDING_IMPORT_NONE;
-                            jl_atomic_store_relaxed(&b->owner, b);
                             b->restriction = (jl_value_t*)jl_any_type;
                             jl_gc_wb(b, jl_any_type);
                         }

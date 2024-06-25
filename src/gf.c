@@ -700,7 +700,7 @@ int foreach_mtable_in_module(
         if ((void*)b == jl_nothing)
             break;
         jl_sym_t *name = b->globalref->name;
-        if (jl_atomic_load_relaxed(&b->owner) == b && b->constp) {
+        if (b->imported == BINDING_IMPORT_NONE && b->constp) {
             jl_value_t *v = jl_get_binding_value(b);
             if (v) {
                 jl_value_t *uw = jl_unwrap_unionall(v);
