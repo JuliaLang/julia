@@ -46,6 +46,7 @@ end
 ReverseOrdering(rev::ReverseOrdering) = rev.fwd
 ReverseOrdering(fwd::Fwd) where {Fwd} = ReverseOrdering{Fwd}(fwd)
 ReverseOrdering() = ReverseOrdering(ForwardOrdering())
+ReverseOrdering{Fwd}() where {Fwd} = ReverseOrdering{Fwd}(Fwd())
 
 """
     reverse(o::Base.Ordering)

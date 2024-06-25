@@ -17,7 +17,10 @@ end
 
 @testset "Order" begin
     @test Forward == ForwardOrdering()
-    @test ReverseOrdering(Forward) == ReverseOrdering() == Reverse
+    @test Reverse == ReverseOrdering() == ReverseOrdering(Forward) == ReverseOrdering{ForwardOrdering}()
+    let T = ReverseOrdering{ReverseOrdering{ForwardOrdering}}
+        @test T() isa T
+    end
 end
 
 @testset "midpoint" begin
