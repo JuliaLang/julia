@@ -140,7 +140,6 @@ Base.reshape
 Base.dropdims
 Base.vec
 Base.SubArray
-Base.wrap
 ```
 
 ## Concatenation and permutation
