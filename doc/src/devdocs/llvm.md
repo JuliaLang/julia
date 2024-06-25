@@ -114,7 +114,6 @@ Here are example settings using `bash` syntax:
   * `-print-module-scope`: used in conjunction with `-print-(before|after)`, gets the entire module rather than the IR unit received by the pass
   * `-debug`: prints out a lot of debugging information throughout LLVM
   * `-debug-only=NAME`, prints out debugging statements from files with `DEBUG_TYPE` defined to `NAME`, useful for getting additional context about a problem
-  * `-print-on-crash`, prints out the IR before a crash. This can be quite slow, you can instead use `-print-pass-numbers` to print the pass number before a crash and then use `-print-before-pass-number` to print the IR before the crash, see https://www.npopov.com/2023/10/22/How-to-reduce-LLVM-crashes.html for further details.
 
 ## Debugging LLVM transformations in isolation
 
