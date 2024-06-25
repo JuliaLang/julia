@@ -16,6 +16,7 @@
 #include <array>
 #include <vector>
 #include <set>
+#include <unordered_set>
 #include <functional>
 
 // target machine computation
@@ -1637,6 +1638,17 @@ static const auto &builtin_func_map() {
           { jl_f_finalizer_addr,          new JuliaFunction<>{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} },
           { jl_f__svec_ref_addr,          new JuliaFunction<>{XSTR(jl_f__svec_ref), get_func_sig, get_func_attrs} }
         };
+    return builtins;
+}
+
+static const auto &may_dispatch_builtins() {
+    static std::unordered_set<jl_fptr_args_t> builtins(
+        {jl_f__apply_iterate_addr,
+        jl_f__apply_pure_addr,
+        jl_f__call_in_world_addr,
+        jl_f__call_in_world_total_addr,
+        jl_f__call_latest_addr,
+        });
     return builtins;
 }
 
@@ -5537,10 +5549,15 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             bool handled = emit_builtin_call(ctx, &result, f.constant, argv, nargs - 1, rt, ex, is_promotable);
             if (handled)
                 return result;
-
+            jl_fptr_args_t builtin_fptr = jl_get_builtin_fptr((jl_datatype_t*)jl_typeof(f.constant));
             // special case for some known builtin not handled by emit_builtin_call
-            auto it = builtin_func_map().find(jl_get_builtin_fptr((jl_datatype_t*)jl_typeof(f.constant)));
+            auto it = builtin_func_map().find(builtin_fptr);
             if (it != builtin_func_map().end()) {
+                if (static_call_graph_may_error(ctx.params->static_call_graph) && may_dispatch_builtins().count(builtin_fptr)) {
+                    errs() << "ERROR: Dynamic call to builtin" << jl_symbol_name(((jl_datatype_t*)jl_typeof(f.constant))->name->name);
+                    errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
+                    print_stacktrace(ctx, ctx.params->static_call_graph);
+                }
                 Value *ret = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
                 setName(ctx.emission_context, ret, it->second->name + "_ret");
                 return mark_julia_type(ctx, ret, true, rt);
