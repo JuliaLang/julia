@@ -281,7 +281,7 @@ function Date(y::Int64, m::Int64=1, d::Int64=1)
 end
 
 const DATE_YEAR_TYPEMAX = 252522163911149
-function validargs(T::Type{Date}, y::Int64, m::Int64, d::Int64)
+function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
     0 < m < 13 || return ArgumentError("Month: $m out of range (1:12)")
     0 < d < daysinmonth(y, m) + 1 || return ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))")
     -DATE_YEAR_TYPEMAX <= y <= DATE_YEAR_TYPEMAX || return ArgumentError("Year: $y out of range ($(-DATE_YEAR_TYPEMAX):$DATE_YEAR_TYPEMAX)")
