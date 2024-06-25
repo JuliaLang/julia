@@ -3081,7 +3081,7 @@ function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
     @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
     if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
         mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-        ref = MemoryRef(mem)
+        ref = memoryref(mem)
     end
     return ref
 end
@@ -3097,7 +3097,7 @@ end
 
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
     dims = convert(Dims, dims)
-    ref = _wrap(MemoryRef(m), dims)
+    ref = _wrap(memoryref(m), dims)
     $(Expr(:new, :(Array{T, N}), :ref, :dims))
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
@@ -3107,11 +3107,11 @@ end
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
     dims = (Int(l),)
-    ref = _wrap(MemoryRef(m), (l,))
+    ref = _wrap(memoryref(m), (l,))
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
 @eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}) where {T}
-    ref = MemoryRef(m)
+    ref = memoryref(m)
     dims = (length(m),)
     $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
