@@ -461,6 +461,7 @@ export
     vcat,
     vec,
     view,
+    wrap,
     zeros,
 
 # search, find, match and related functions
