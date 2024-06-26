@@ -593,7 +593,6 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 #endif
 #endif
 
-jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
 
 JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
