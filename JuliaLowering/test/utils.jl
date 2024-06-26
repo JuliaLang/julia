@@ -85,8 +85,37 @@ format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
 
 #-------------------------------------------------------------------------------
 
-# Parse and lower `src`, and print statements from the linear IR in text format
-function ir_as_text(mod, src)
-    ex = JuliaLowering.lower(mod, parsestmt(SyntaxTree, src))
-    join(string.(children(ex[1])), "\n")
+# Test tools
+
+function match_ir_test_case(case_str)
+    m = match(r"# *([^\n]*)\n((?:.|\n)*)#----*\n((?:.|\n)*)"m, strip(case_str))
+    if isnothing(m)
+        error("Malformatted IR test case:\n$(repr(case_str))")
+    end
+    (name=strip(m[1]), input=strip(m[2]), output=strip(m[3]))
 end
+
+function format_ir_test_case(mod, input)
+    ex = parsestmt(SyntaxTree, input)
+    x = JuliaLowering.lower(mod, ex)
+    output = strip(sprint(JuliaLowering.print_ir, x))
+    output = replace(output, string(mod)=>"TestMod")
+end
+
+function test_ir_cases(filename)
+    str = read(filename, String)
+    cases = [match_ir_test_case(s) for s in split(str, r"####*") if strip(s) != ""]
+
+    mod = Module(:TestMod)
+    for (name,input,ref) in cases
+        output = format_ir_test_case(mod, input)
+        @testset "$name" begin
+            if output != ref
+                # Do our own error dumping, as @test will 
+                @error "Test \"$name\" failed" output=Text(output) ref=Text(ref)
+            end
+            @test output == ref
+        end
+    end
+end
+
