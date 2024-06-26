@@ -820,7 +820,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
             evecs[p[i],i] = one(Td)
         end
     else
-        evecs = Diagonal(ones(eltype(λ), length(λ)))
+        evecs = Diagonal(ones(Td, length(λ)))
     end
     Eigen(λ, evecs)
 end
