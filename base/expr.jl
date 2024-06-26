@@ -1109,10 +1109,13 @@ Perform the store operation expressed on the right atomically and return the
 new value.
 
 With assignment (`=`), this operation translates to a `setproperty!(a.b, :x, new)`
-or, in case of reference, to a `setindex_atomic!(m, idx, new)` call.
+or, in case of reference, to a `setindex_atomic!(m, order, new, idx)` call,
+with `order` defaulting to `:sequentially_consistent`.
+
 With any modifying operator this operation translates to a
 `modifyproperty!(a.b, :x, op, addend)[2]` or, in case of reference, to a
-`modifyindex_atomic!(m, idx, op, addend)[2]` call.
+`modifyindex_atomic!(m, order, op, addend, idx...)[2]` call,
+with `order` defaulting to `:sequentially_consistent`.
 
     @atomic a.b.x max arg2
     @atomic a.b.x + arg2
@@ -1132,7 +1135,8 @@ result into the field or the reference in the first argument, and return the val
 `(old, new)`.
 
 This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` or,
-in case of reference to a `modifyindex_atomic!(m, idx, func, arg2)` call.
+in case of reference to a `modifyindex_atomic!(m, order, func, arg2, idx)` call,
+with `order` defaulting to `:sequentially_consistent`.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1221,17 +1225,17 @@ function make_atomic(order, ex)
             return :(getproperty($l, $r, $order))
         elseif isexpr(ex, :call, 3)
             return make_atomic(order, ex.args[2], ex.args[1], ex.args[3])
-        elseif isexpr(ex, :ref, 2)
-            x, idx = esc(ex.args[1]), esc(ex.args[2])
-            return :(getindex_atomic($x, $idx, $order))
+        elseif isexpr(ex, :ref)
+            x, idcs = esc(ex.args[1]), map(esc, ex.args[2:end])
+            return :(getindex_atomic($x, $order, $(idcs...)))
         elseif ex.head === :(=)
             l, r = ex.args[1], esc(ex.args[2])
             if is_expr(l, :., 2)
                 ll, lr = esc(l.args[1]), esc(l.args[2])
                 return :(setproperty!($ll, $lr, $r, $order))
-            elseif is_expr(l, :ref, 2)
-                x, idx = esc(l.args[1]), esc(l.args[2])
-                return :(setindex_atomic!($x, $idx, $r, $order))
+            elseif is_expr(l, :ref)
+                x, idcs = esc(l.args[1]), map(esc, l.args[2:end])
+                return :(setindex_atomic!($x, $order, $r, $(idcs...)))
             end
         end
         if length(ex.args) == 2
@@ -1257,9 +1261,9 @@ function make_atomic(order, a1, op, a2)
     if is_expr(a1, :., 2)
         a1l, a1r, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
         return :(modifyproperty!($a1l, $a1r, $op, $a2, $order))
-    elseif is_expr(a1, :ref, 2)
-        x, idx, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
-        return :(modifyindex_atomic!($x, $idx, $op, $a2, $order))
+    elseif is_expr(a1, :ref)
+        x, idcs, op, a2 = esc(a1.args[1]), map(esc, a1.args[2:end]), esc(op), esc(a2)
+        return :(modifyindex_atomic!($x, $order, $op, $a2, $(idcs...)))
     end
     error("@atomic modify expression missing field access or indexing")
 end
@@ -1275,7 +1279,8 @@ Stores `new` into `a.b.x` (`m[idx]` in case of reference) and returns the old
 value of `a.b.x` (the old value stored at `m[idx]`, respectively).
 
 This operation translates to a `swapproperty!(a.b, :x, new)` or,
-in case of reference, `swapindex_atomic!(mem, idx, new)` call.
+in case of reference, `swapindex_atomic!(mem, order, new, idx)` call,
+with `order` defaulting to `:sequentially_consistent`.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1325,9 +1330,9 @@ function make_atomicswap(order, ex)
     if is_expr(l, :., 2)
         ll, lr = esc(l.args[1]), esc(l.args[2])
         return :(swapproperty!($ll, $lr, $val, $order))
-    elseif is_expr(l, :ref, 2)
-        x, idx = esc(l.args[1]), esc(l.args[2])
-        return :(swapindex_atomic!($x, $idx, $val, $order))
+    elseif is_expr(l, :ref)
+        x, idcs = esc(l.args[1]), map(esc, l.args[2:end])
+        return :(swapindex_atomic!($x, $order, $val, $(idcs...)))
     end
     error("@atomicswap expression missing field access or indexing")
 end
@@ -1346,7 +1351,9 @@ the values `(old, success::Bool)`. Where `success` indicates whether the
 replacement was completed.
 
 This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` or,
-in case of reference, to a `replaceindex_atomic!(mem, idx, expected, desired)` call.
+in case of reference, to a
+`replaceindex_atomic!(mem, success_order, fail_order, expected, desired, idx)` call,
+with both orders defaulting to `:sequentially_consistent`.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1427,14 +1434,14 @@ function make_atomicreplace(success_order, fail_order, ex, old_new)
             old_new = esc(old_new)
             return :(replaceproperty!($ll, $lr, $old_new::Pair..., $success_order, $fail_order))
         end
-    elseif is_expr(ex, :ref, 2)
-        x, idx = esc(ex.args[1]), esc(ex.args[2])
+    elseif is_expr(ex, :ref)
+        x, idcs = esc(ex.args[1]), map(esc, ex.args[2:end])
         if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
             exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
-            return :(replaceindex_atomic!($x, $idx, $exp, $rep, $success_order, $fail_order))
+            return :(replaceindex_atomic!($x, $success_order, $fail_order, $exp, $rep, $(idcs...)))
         else
             old_new = esc(old_new)
-            return :(replaceindex_atomic!($x, $idx, $old_new::Pair..., $success_order, $fail_order))
+            return :(replaceindex_atomic!($x, $success_order, $fail_order, $old_new::Pair..., $(idcs...)))
         end
     end
     error("@atomicreplace expression missing field access or indexing")
@@ -1452,7 +1459,8 @@ Perform the conditional assignment of value atomically if it was previously
 unset. Returned value `success::Bool` indicates whether the assignment was completed.
 
 This operation translates to a `setpropertyonce!(a.b, :x, value)` or,
-in case of reference, to a `setindexonce_atomic!(m, idx, value)` call.
+in case of reference, to a `setindexonce_atomic!(m, success_order, fail_order, value, idx)` call,
+with both orders defaulting to `:sequentially_consistent`.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1525,9 +1533,9 @@ function make_atomiconce(success_order, fail_order, ex)
     if is_expr(l, :., 2)
         ll, lr = esc(l.args[1]), esc(l.args[2])
         return :(setpropertyonce!($ll, $lr, $val, $success_order, $fail_order))
-    elseif is_expr(l, :ref, 2)
-        x, idx = esc(l.args[1]), esc(l.args[2])
-        return :(setindexonce_atomic!($x, $idx, $val, $success_order, $fail_order))
+    elseif is_expr(l, :ref)
+        x, idcs = esc(l.args[1]), map(esc, l.args[2:end])
+        return :(setindexonce_atomic!($x, $success_order, $fail_order, $val, $(idcs...)))
     end
     error("@atomiconce expression missing field access or indexing")
 end

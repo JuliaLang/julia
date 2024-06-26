@@ -341,20 +341,16 @@ end
 view(m::GenericMemory, inds::Colon) = view(m, eachindex(m))
 
 # modify, swap and replace at index
-function getindex_atomic(
-    mem::GenericMemory,
-    i::Int,
-    order=default_access_order(mem)
-)
+function getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)
     memref = memoryref(mem, i)
     return memoryrefget(memref, order, @_boundscheck)
 end
 
 function setindex_atomic!(
     mem::GenericMemory,
-    i::Int,
+    order::Symbol,
     val,
-    order=default_access_order(mem)
+    i::Int,
 )
     T = eltype(mem)
     memref = memoryref(mem, i)
@@ -368,10 +364,10 @@ end
 
 function setindexonce_atomic!(
     mem::GenericMemory,
-    i::Int,
+    success_order::Symbol,
+    fail_order::Symbol,
     val,
-    success_order=default_access_order(mem),
-    fail_order=default_access_order(mem)
+    i::Int,
 )
     T = eltype(mem)
     memref = memoryref(mem, i)
@@ -386,10 +382,10 @@ end
 
 function modifyindex_atomic!(
     mem::GenericMemory,
-    i::Int,
+    order::Symbol,
     op,
     val,
-    order = default_access_order(mem),
+    i::Int,
 )
     memref = memoryref(mem, i)
     return Core.memoryrefmodify!(memref, op, val, order, @_boundscheck)
@@ -397,9 +393,9 @@ end
 
 function swapindex_atomic!(
     mem::GenericMemory,
-    i::Int,
+    order::Symbol,
     val,
-    order = default_access_order(mem),
+    i::Int,
 )
     T = eltype(mem)
     memref = memoryref(mem, i)
@@ -413,11 +409,11 @@ end
 
 function replaceindex_atomic!(
     mem::GenericMemory,
-    i::Int,
+    success_order::Symbol,
+    fail_order::Symbol,
     expected,
     desired,
-    success_order = default_access_order(mem),
-    fail_order = default_access_order(mem),
+    i::Int,
 )
     T = eltype(mem)
     memref = memoryref(mem, i)

@@ -429,9 +429,9 @@ function _test_atomic_get_set_swap_modify(T, x, y, z)
         mem = AtomicMemory{T}(undef, 2)
         @test_throws CanonicalIndexError mem[1] = 3
 
-        @test Base.setindex_atomic!(mem, 1, x) == x
+        @test Base.setindex_atomic!(mem, Base.default_access_order(mem), x, 1) == x
         @test mem[1] == x
-        @test Base.setindex_atomic!(mem, 2, y) == y
+        @test Base.setindex_atomic!(mem, Base.default_access_order(mem), y, 2) == y
         @test mem[2] == y
 
         @test (@atomic mem[1]) == x
