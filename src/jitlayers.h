@@ -535,7 +535,7 @@ public:
     #endif
     uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
-    StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
+    StringRef getFunctionAtAddress(uint64_t Addr, jl_callptr_t invoke, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
     auto getContext() JL_NOTSAFEPOINT {
         return *ContextPool;
     }
@@ -573,6 +573,8 @@ public:
 
     // Note that this is a safepoint due to jl_get_library_ and jl_dlsym calls
     void optimizeDLSyms(Module &M);
+
+    jl_mutex_t jitlock;
 
 private:
 
