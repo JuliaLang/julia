@@ -223,8 +223,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     if (mod == module) {
                         // Assignment does not create bindings in foreign modules (#54678)
                         jl_binding_t *b = jl_get_module_binding(mod, name, 1);
-                        if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED || b->imported == BINDING_KIND_DECLARED) {
-                            b->imported = BINDING_KIND_GLOBAL;
+                        if (b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_DECLARED) {
+                            b->kind = BINDING_KIND_GLOBAL;
                             b->restriction = (jl_value_t*)jl_any_type;
                             jl_gc_wb(b, jl_any_type);
                         }

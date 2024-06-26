@@ -611,7 +611,7 @@ typedef struct _jl_weakref_t {
     jl_value_t *value;
 } jl_weakref_t;
 
-enum jl_kind_import {
+enum jl_kind_kind {
     // Global: This binding partition is a global variable.
     //  -> restriction holds the type restriction
     BINDING_KIND_GLOBAL       = 0x0,
@@ -649,7 +649,7 @@ typedef struct _jl_binding_t {
     jl_value_t *restriction;  // binding type or const val
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.
-    uint8_t imported:4; // enum jl_binding_import
+    uint8_t kind:4; // enum jl_binding_kind
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
 } jl_binding_t;
 

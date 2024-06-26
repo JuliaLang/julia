@@ -3214,7 +3214,7 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    if (bnd->imported == BINDING_KIND_GUARD || bnd->imported == BINDING_KIND_FAILED || bnd->imported == BINDING_KIND_DECLARED) {
+    if (bnd->kind == BINDING_KIND_GUARD || bnd->kind == BINDING_KIND_FAILED || bnd->kind == BINDING_KIND_DECLARED) {
         // try to look this up now.
         // TODO: This is bad and we'd like to delete it.
         jl_get_binding(mod, name);
@@ -3247,7 +3247,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     if (bnd->deprecated) {
         cg_bdw(ctx, name, bnd);
     }
-    assert(bnd->imported == BINDING_KIND_GLOBAL);
+    assert(bnd->kind == BINDING_KIND_GLOBAL);
     jl_value_t *ty = bnd->restriction;
     bp = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
@@ -5484,12 +5484,12 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 1);
     if (assign) {
-        if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED || b->imported == BINDING_KIND_DECLARED)
+        if (b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_DECLARED)
             // not yet declared
             b = NULL;
     }
     else {
-        if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED || b->imported == BINDING_KIND_DECLARED)
+        if (b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_DECLARED)
             // try to look this up now
             b = jl_get_binding(m, s);
         while (jl_binding_is_some_import(b))
@@ -5534,7 +5534,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         return p;
     }
     if (assign) {
-        if (b->imported != BINDING_KIND_GLOBAL && !jl_binding_is_some_guard(b)) {
+        if (b->kind != BINDING_KIND_GLOBAL && !jl_binding_is_some_guard(b)) {
             // this will fail at runtime, so defer to the runtime to create the error
             ctx.builder.CreateCall(prepare_call(jlgetbindingwrorerror_func),
                     { literal_pointer_val(ctx, (jl_value_t*)m),

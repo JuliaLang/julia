@@ -1370,7 +1370,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
                 // Assign type Any to any owned bindings that don't have a type.
                 // We don't want these accidentally managing to diverge later in different compilation units.
-                if (b->imported == BINDING_KIND_GLOBAL) {
+                if (b->kind == BINDING_KIND_GLOBAL) {
                     if (!b->restriction)
                         jl_atomic_store_relaxed(&b->restriction, (jl_value_t*)jl_any_type);
                 }

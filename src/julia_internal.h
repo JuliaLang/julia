@@ -863,19 +863,19 @@ JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *sourc
 STATIC_INLINE int jl_binding_is_some_import(jl_binding_t *b) {
     if (!b)
         return 0;
-    return b->imported == BINDING_KIND_IMPLICIT || b->imported == BINDING_KIND_EXPLICIT || b->imported == BINDING_KIND_IMPORTED;
+    return b->kind == BINDING_KIND_IMPLICIT || b->kind == BINDING_KIND_EXPLICIT || b->kind == BINDING_KIND_IMPORTED;
 }
 
 STATIC_INLINE int jl_binding_is_some_constant(jl_binding_t *b) {
     if (!b)
         return 0;
-    return b->imported == BINDING_KIND_CONST || b->imported == BINDING_KIND_CONST_IMPORT;
+    return b->kind == BINDING_KIND_CONST || b->kind == BINDING_KIND_CONST_IMPORT;
 }
 
 STATIC_INLINE int jl_binding_is_some_guard(jl_binding_t *b) {
     if (!b)
         return 1;
-    return b->imported == BINDING_KIND_FAILED || b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_DECLARED;
+    return b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_DECLARED;
 }
 
 STATIC_INLINE int is_anonfn_typename(char *name)

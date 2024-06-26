@@ -289,9 +289,9 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
 
 void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
 {
-    if (b->imported) {
-        if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED || b->imported == BINDING_KIND_DECLARED) {
-            b->imported = BINDING_KIND_GLOBAL;
+    if (b->kind) {
+        if (b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_DECLARED) {
+            b->kind = BINDING_KIND_GLOBAL;
             b->restriction = ty;
             jl_gc_wb(b, ty);
             return;
@@ -328,8 +328,8 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
         gs = (jl_sym_t*)arg;
     }
     jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
-    if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED) {
-        b->imported = BINDING_KIND_DECLARED;
+    if (b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_FAILED) {
+        b->kind = BINDING_KIND_DECLARED;
     }
     if (set_type) {
         jl_binding_set_type(b, set_type, 1);
@@ -640,12 +640,12 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
     if (jl_get_binding_value_if_const(b) == (jl_value_t*)import)
         return;
-    if (b->imported != BINDING_KIND_GUARD && b->imported != BINDING_KIND_FAILED) {
+    if (b->kind != BINDING_KIND_GUARD && b->kind != BINDING_KIND_FAILED) {
         jl_errorf("importing %s into %s conflicts with an existing global",
                     jl_symbol_name(name), jl_symbol_name(m->name));
     }
     jl_declare_constant_val(b, (jl_value_t*)import);
-    b->imported = BINDING_KIND_CONST_IMPORT;
+    b->kind = BINDING_KIND_CONST_IMPORT;
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists
