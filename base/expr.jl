@@ -1112,7 +1112,7 @@ With assignment (`=`), this operation translates to a `setproperty!(a.b, :x, new
 or, in case of reference, to a `setindex_atomic!(m, idx, new)` call.
 With any modifying operator this operation translates to a
 `modifyproperty!(a.b, :x, op, addend)[2]` or, in case of reference, to a
-`modifyindex!(m, idx, op, addend)[2]` call.
+`modifyindex_atomic!(m, idx, op, addend)[2]` call.
 
     @atomic a.b.x max arg2
     @atomic a.b.x + arg2
@@ -1132,7 +1132,7 @@ result into the field or the reference in the first argument, and return the val
 `(old, new)`.
 
 This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` or,
-in case of reference to a `modifyindex!(m, idx, func, arg2)` call.
+in case of reference to a `modifyindex_atomic!(m, idx, func, arg2)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1259,7 +1259,7 @@ function make_atomic(order, a1, op, a2)
         return :(modifyproperty!($a1l, $a1r, $op, $a2, $order))
     elseif is_expr(a1, :ref, 2)
         x, idx, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
-        return :(modifyindex!($x, $idx, $op, $a2, $order))
+        return :(modifyindex_atomic!($x, $idx, $op, $a2, $order))
     end
     error("@atomic modify expression missing field access or indexing")
 end
@@ -1275,7 +1275,7 @@ Stores `new` into `a.b.x` (`m[idx]` in case of reference) and returns the old
 value of `a.b.x` (the old value stored at `m[idx]`, respectively).
 
 This operation translates to a `swapproperty!(a.b, :x, new)` or,
-in case of reference, `swapindex!(mem, idx, new)` call.
+in case of reference, `swapindex_atomic!(mem, idx, new)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1327,7 +1327,7 @@ function make_atomicswap(order, ex)
         return :(swapproperty!($ll, $lr, $val, $order))
     elseif is_expr(l, :ref, 2)
         x, idx = esc(l.args[1]), esc(l.args[2])
-        return :(swapindex!($x, $idx, $val, $order))
+        return :(swapindex_atomic!($x, $idx, $val, $order))
     end
     error("@atomicswap expression missing field access or indexing")
 end
@@ -1346,7 +1346,7 @@ the values `(old, success::Bool)`. Where `success` indicates whether the
 replacement was completed.
 
 This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` or,
-in case of reference, to a `replaceindex!(mem, idx, expected, desired)` call.
+in case of reference, to a `replaceindex_atomic!(mem, idx, expected, desired)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1431,10 +1431,10 @@ function make_atomicreplace(success_order, fail_order, ex, old_new)
         x, idx = esc(ex.args[1]), esc(ex.args[2])
         if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
             exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
-            return :(replaceindex!($x, $idx, $exp, $rep, $success_order, $fail_order))
+            return :(replaceindex_atomic!($x, $idx, $exp, $rep, $success_order, $fail_order))
         else
             old_new = esc(old_new)
-            return :(replaceindex!($x, $idx, $old_new::Pair..., $success_order, $fail_order))
+            return :(replaceindex_atomic!($x, $idx, $old_new::Pair..., $success_order, $fail_order))
         end
     end
     error("@atomicreplace expression missing field access or indexing")

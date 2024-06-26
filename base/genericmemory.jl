@@ -45,7 +45,7 @@ Fetching of any of its individual elements is performed atomically
     The access to `AtomicMemory` must be done by either using the [`@atomic`](@ref)
     macro or the lower level interface functions: `Base.getindex_atomic`,
     `Base.setindex_atomic!`, `Base.setindexonce_atomic!`,
-    `Base.swapindex!`, `Base.modifyindex!`, and `Base.replaceindex!`.
+    `Base.swapindex_atomic!`, `Base.modifyindex_atomic!`, and `Base.replaceindex_atomic!`.
 
 For details, see [Atomic Operations](@ref man-atomic-operations) as well as macros
 [`@atomic`](@ref), [`@atomiconce`](@ref), [`@atomicswap`](@ref), and [`@atomicreplace`](@ref).
@@ -384,7 +384,7 @@ function setindexonce_atomic!(
     )
 end
 
-function modifyindex!(
+function modifyindex_atomic!(
     mem::GenericMemory,
     i::Int,
     op,
@@ -395,7 +395,7 @@ function modifyindex!(
     return Core.memoryrefmodify!(memref, op, val, order, @_boundscheck)
 end
 
-function swapindex!(
+function swapindex_atomic!(
     mem::GenericMemory,
     i::Int,
     val,
@@ -411,7 +411,7 @@ function swapindex!(
     )
 end
 
-function replaceindex!(
+function replaceindex_atomic!(
     mem::GenericMemory,
     i::Int,
     expected,
