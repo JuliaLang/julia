@@ -1,3 +1,5 @@
+using Test
+
 using JuliaLowering:
     SyntaxGraph, newnode!, ensure_attributes!,
     Kind, SourceRef, SyntaxTree, NodeId,

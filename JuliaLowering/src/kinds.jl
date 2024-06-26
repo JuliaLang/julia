@@ -49,6 +49,8 @@ function _insert_kinds()
             "enter"
             "leave"
             "label"
+            "symbolic_label"
+            "symbolic_goto"
             "goto"
             "gotoifnot"
             "trycatchelse"

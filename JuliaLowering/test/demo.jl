@@ -231,6 +231,19 @@ begin
 end
 """
 
+src = """
+begin
+    local i = 0
+    while i < 10
+        i = i + 1
+        if isodd(i)
+            continue
+        end
+        println(i)
+    end
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)

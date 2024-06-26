@@ -71,6 +71,8 @@ function makeleaf(ctx, srcref, k::Kind, value; kws...)
         makeleaf(graph, srcref, k; var_id=value, kws...)
     elseif k == K"label"
         makeleaf(graph, srcref, k; id=value, kws...)
+    elseif k == K"symbolic_label"
+        makeleaf(graph, srcref, k; name_val=value, kws...)
     else
         val = k == K"Integer" ? convert(Int,     value) :
               k == K"Float"   ? convert(Float64, value) :

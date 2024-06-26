@@ -405,5 +405,6 @@ end
 """)
 
 include("branching.jl")
+include("loops.jl")
 
 end

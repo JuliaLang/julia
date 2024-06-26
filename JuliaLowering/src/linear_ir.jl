@@ -37,12 +37,14 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     lambda_locals::Set{VarId}
     return_type::Union{Nothing,NodeId}
     var_info::Dict{VarId,VarInfo}
+    break_labels::Dict{String, NodeId}
     mod::Module
 end
 
 function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
     LinearIRContext(ctx.graph, SyntaxList(ctx.graph), ctx.next_var_id, Ref(0),
-                    is_toplevel_thunk, lambda_locals, return_type, ctx.var_info, ctx.mod)
+                    is_toplevel_thunk, lambda_locals, return_type, ctx.var_info,
+                    Dict{String,NodeId}(), ctx.mod)
 end
 
 function is_valid_body_ir_argument(ex)
@@ -285,6 +287,31 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             res = compile(ctx, ex[i], islast && needs_value, islast && in_tail_pos)
         end
         res
+    elseif k == K"break_block"
+        end_label = make_label(ctx, ex)
+        name = ex[1].name_val
+        outer_label = get(ctx.break_labels, name, nothing)
+        ctx.break_labels[name] = end_label._id
+        compile(ctx, ex[2], false, false)
+        if isnothing(outer_label)
+            delete!(ctx.break_labels, name)
+        else
+            ctx.break_labels = outer_label
+        end
+        emit(ctx, end_label)
+        if needs_value
+            compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
+        end
+    elseif k == K"break"
+        name = ex[1].name_val
+        label_id = get(ctx.break_labels, name, nothing)
+        if isnothing(label_id)
+            ty = name == "loop_exit" ? "break" : "continue"
+            throw(LoweringError(ex, "$ty must be used inside a `while` or `for` loop"))
+        end
+        label = SyntaxTree(ctx.graph, label_id)
+        # TODO: try/finally handling
+        emit(ctx, @ast ctx ex [K"goto" label])
     elseif k == K"return"
         compile(ctx, ex[1], true, true)
         nothing
@@ -374,6 +401,16 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             lam
         else
             emit(ctx, lam)
+        end
+    elseif k == K"_while"
+        end_label = make_label(ctx, ex)
+        top_label = emit_label(ctx, ex)
+        compile_conditional(ctx, ex[1], end_label)
+        compile(ctx, ex[2], false, false)
+        emit(ctx, @ast ctx ex [K"goto" top_label])
+        emit(ctx, end_label)
+        if needs_value
+            compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
     elseif k == K"global"
         if needs_value
@@ -503,6 +540,7 @@ function compile_lambda(outer_ctx, ex)
     slot_rewrites = Dict{VarId,Int}()
     _add_slots!(slot_rewrites, ctx.var_info, (arg.var_id for arg in lambda_info.args))
     _add_slots!(slot_rewrites, ctx.var_info, sort(collect(ex.lambda_locals)))
+    # @info "" @ast ctx ex [K"block" ctx.code]
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     makenode(ctx, ex, K"lambda",
              makenode(ctx, ex[1], K"block", code),
@@ -520,7 +558,8 @@ function linearize_ir(ctx, ex)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
     # required to call reparent() ...
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.next_var_id,
-                           Ref(0), false, Set{VarId}(), nothing, ctx.var_info, ctx.mod)
+                           Ref(0), false, Set{VarId}(), nothing, ctx.var_info,
+                           Dict{String,NodeId}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     setattr!(graph, res._id, var_info=ctx.var_info)
     _ctx, res

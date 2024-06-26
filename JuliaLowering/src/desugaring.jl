@@ -595,6 +595,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         else
             @ast ctx ex [K"if" cond true::K"Bool" cs[end]]
         end
+    elseif k == K"break"
+        numchildren(ex) > 0 ? ex :
+            @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]
+    elseif k == K"continue"
+        @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
     elseif k == K"doc"
         @chk numchildren(ex) == 2
         sig = expand_forms_2(ctx, ex[2], ex)
@@ -661,6 +666,23 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             eval          ::K"Value"
             ctx.mod       ::K"Value"
             [K"inert" ex]
+        ]
+    elseif k == K"vect"
+        @ast ctx ex [K"call"
+            "vect"::K"top"
+            expand_forms_2(ctx, children(ex))...
+        ]
+    elseif k == K"while"
+        @chk numchildren(ex) == 2
+        @ast ctx ex [K"break_block" "loop_exit"::K"symbolic_label"
+            [K"_while"
+                expand_condition(ctx, ex[1])
+                [K"break_block" "loop_cont"::K"symbolic_label"
+                    [K"scope_block"(scope_type=:neutral)
+                         expand_forms_2(ctx, ex[2])
+                    ]
+                ]
+            ]
         ]
     elseif k == K"inert"
         ex
