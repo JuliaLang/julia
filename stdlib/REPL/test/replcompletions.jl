@@ -2386,3 +2386,8 @@ let (c, r, res) = test_complete_context("si", Main; shift=false)
     @test res
     @test "sin" ∈ c
 end
+
+let (c, r, res) = test_complete_context("const xxx = Base.si", Main)
+    @test res
+    @test "sin" ∈ c
+end
