@@ -2809,9 +2809,9 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
-    depot_path = map(abspath, DEPOT_PATH)
-    dl_load_path = map(abspath, DL_LOAD_PATH)
-    load_path = map(abspath, Base.load_path())
+    depot_path = String[abspath(x) for x in DEPOT_PATH]
+    dl_load_path = String[abspath(x) for x in DL_LOAD_PATH]
+    load_path = String[abspath(x) for x in Base.load_path()]
     # if pkg is a stdlib, append its parent Project.toml to the load path
     parentid = get(EXT_PRIMED, pkg, nothing)
     if parentid !== nothing
