@@ -1097,13 +1097,13 @@ Mark `var` or `ex` as being performed atomically, if `ex` is a supported express
 If no `order` is specified it defaults to :sequentially_consistent.
 
     @atomic a.b.x = new
-    @atomic a.b.x += added
+    @atomic a.b.x += addend
     @atomic :release a.b.x = new
-    @atomic :acquire_release a.b.x += added
+    @atomic :acquire_release a.b.x += addend
     @atomic m[idx] = new
-    @atomic m[idx] += added
+    @atomic m[idx] += addend
     @atomic :release m[idx] = new
-    @atomic :acquire_release m[idx] += added
+    @atomic :acquire_release m[idx] += addend
 
 Perform the store operation expressed on the right atomically and return the
 new value.
@@ -1111,8 +1111,8 @@ new value.
 With assignment (`=`), this operation translates to a `setproperty!(a.b, :x, new)`
 or, in case of reference, to a `setindex_atomic!(m, idx, new)` call.
 With any modifying operator this operation translates to a
-`modifyproperty!(a.b, :x, op, added)[2]` or, in case of reference, to a
-`modifyindex!(m, idx, op, added)[2]` call.
+`modifyproperty!(a.b, :x, op, addend)[2]` or, in case of reference, to a
+`modifyindex!(m, idx, op, addend)[2]` call.
 
     @atomic a.b.x max arg2
     @atomic a.b.x + arg2
