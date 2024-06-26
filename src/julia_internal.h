@@ -860,22 +860,29 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred);
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
-STATIC_INLINE int jl_binding_is_some_import(jl_binding_t *b) {
+STATIC_INLINE int jl_bpart_is_some_import(jl_binding_partition_t *b) JL_NOTSAFEPOINT {
     if (!b)
         return 0;
     return b->kind == BINDING_KIND_IMPLICIT || b->kind == BINDING_KIND_EXPLICIT || b->kind == BINDING_KIND_IMPORTED;
 }
 
-STATIC_INLINE int jl_binding_is_some_constant(jl_binding_t *b) {
+STATIC_INLINE int jl_bpart_is_some_constant(jl_binding_partition_t *b) JL_NOTSAFEPOINT {
     if (!b)
         return 0;
     return b->kind == BINDING_KIND_CONST || b->kind == BINDING_KIND_CONST_IMPORT;
 }
 
-STATIC_INLINE int jl_binding_is_some_guard(jl_binding_t *b) {
+STATIC_INLINE int jl_bpart_is_some_guard(jl_binding_partition_t *b) JL_NOTSAFEPOINT {
     if (!b)
         return 1;
     return b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_DECLARED;
+}
+
+STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT {
+    if (!b)
+        return NULL;
+    assert(jl_is_binding(b));
+    return jl_atomic_load_relaxed(&b->partitions);
 }
 
 STATIC_INLINE int is_anonfn_typename(char *name)

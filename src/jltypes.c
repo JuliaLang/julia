@@ -3148,10 +3148,20 @@ void jl_init_types(void) JL_GC_DISABLED
     assert(jl_module_type->instance == NULL);
     jl_compute_field_offsets(jl_module_type);
 
+    jl_binding_partition_type =
+        jl_new_datatype(jl_symbol("BindingPartition"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(5, "restriction", "min_world", "max_world", "next", "flags"),
+                        jl_svec(5, jl_any_type, jl_ulong_type, jl_ulong_type, jl_any_type/*jl_binding_partition_type*/, jl_uint8_type),
+                        jl_emptysvec, 0, 1, 0);
+    const static uint32_t binding_partition_atomicfields[] = { 0x000d }; // Set fields 1, 3, 4 as atomic
+    jl_binding_partition_type->name->atomicfields = binding_partition_atomicfields;
+    const static uint32_t binding_partition_constfields[] = { 0x0002 }; // Set field 2 as constant
+    jl_binding_partition_type->name->constfields = binding_partition_constfields;
+
     jl_binding_type =
         jl_new_datatype(jl_symbol("Binding"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(4, "value", "globalref", "restriction", "flags"),
-                        jl_svec(4, jl_any_type, jl_any_type/*jl_globalref_type*/, jl_type_type, jl_uint8_type),
+                        jl_perm_symsvec(4, "value", "globalref", "partitions", "flags"),
+                        jl_svec(4, jl_any_type, jl_any_type/*jl_globalref_type*/, jl_binding_partition_type, jl_uint8_type),
                         jl_emptysvec, 0, 1, 0);
     const static uint32_t binding_atomicfields[] = { 0x0005 }; // Set fields 1, 3 as atomic
     jl_binding_type->name->atomicfields = binding_atomicfields;
@@ -3708,6 +3718,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_code_instance_type->types, 15, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 16, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 1, jl_globalref_type);
+    jl_svecset(jl_binding_partition_type->types, 3, jl_binding_partition_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

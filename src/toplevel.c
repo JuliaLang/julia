@@ -156,22 +156,11 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     }
     else {
         jl_binding_t *b = jl_get_module_binding(parent_module, name, 1);
-        jl_declare_constant(b);
-        jl_value_t *old = NULL;
-        if (!jl_atomic_cmpswap(&b->restriction, &old, (jl_value_t*)newm)) {
-            if (!jl_is_module(old)) {
-                jl_errorf("invalid redefinition of constant %s", jl_symbol_name(name));
-            }
-            if (jl_generating_output())
-                jl_errorf("cannot replace module %s during compilation", jl_symbol_name(name));
-            jl_printf(JL_STDERR, "WARNING: replacing module %s.\n", jl_symbol_name(name));
-            old = jl_atomic_exchange(&b->restriction, (jl_value_t*)newm);
-        }
-        jl_gc_wb(b, newm);
-        if (old != NULL) {
+        jl_binding_partition_t *bpart = jl_declare_constant_val(b, (jl_value_t*)newm);
+        if (bpart->next != NULL) {
             // create a hidden gc root for the old module
             JL_LOCK(&jl_modules_mutex);
-            uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, (void*)old);
+            uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, (void*)bpart->next->restriction);
             *refcnt += 1;
             JL_UNLOCK(&jl_modules_mutex);
         }
@@ -289,28 +278,29 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
 
 void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
 {
-    if (b->kind) {
-        if (b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_DECLARED) {
-            b->kind = BINDING_KIND_GLOBAL;
-            b->restriction = ty;
-            jl_gc_wb(b, ty);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    if (bpart->kind != BINDING_KIND_GLOBAL) {
+        if (jl_bpart_is_some_guard(bpart)) {
+            bpart->kind = BINDING_KIND_GLOBAL;
+            bpart->restriction = ty;
+            jl_gc_wb(bpart, ty);
             return;
         } else {
             jl_errorf("cannot set type for imported global %s.%s.",
                     jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
         }
     }
-    if (jl_binding_is_some_constant(b)) {
+    if (jl_bpart_is_some_constant(bpart)) {
         jl_errorf("cannot set type for imported constant %s.%s.",
                   jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
     }
-    jl_value_t *old_ty = b->restriction;
+    jl_value_t *old_ty = bpart->restriction;
     if (!jl_types_equal(ty, old_ty)) {
         jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
                   jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
     }
-    b->restriction = ty;
-    jl_gc_wb(b, ty);
+    bpart->restriction = ty;
+    jl_gc_wb(bpart, ty);
 }
 
 void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
@@ -328,8 +318,9 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
         gs = (jl_sym_t*)arg;
     }
     jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
-    if (b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_FAILED) {
-        b->kind = BINDING_KIND_DECLARED;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    if (bpart->kind == BINDING_KIND_GUARD || bpart->kind == BINDING_KIND_FAILED) {
+        bpart->kind = BINDING_KIND_DECLARED;
     }
     if (set_type) {
         jl_binding_set_type(b, set_type, 1);
@@ -640,12 +631,13 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
     if (jl_get_binding_value_if_const(b) == (jl_value_t*)import)
         return;
-    if (b->kind != BINDING_KIND_GUARD && b->kind != BINDING_KIND_FAILED) {
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    if (bpart->kind != BINDING_KIND_GUARD && bpart->kind != BINDING_KIND_FAILED) {
         jl_errorf("importing %s into %s conflicts with an existing global",
                     jl_symbol_name(name), jl_symbol_name(m->name));
     }
     jl_declare_constant_val(b, (jl_value_t*)import);
-    b->kind = BINDING_KIND_CONST_IMPORT;
+    bpart->kind = BINDING_KIND_CONST_IMPORT;
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists
@@ -707,18 +699,20 @@ static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, con
     JL_GC_POP();
 }
 
-JL_DLLEXPORT void jl_declare_constant_val(jl_binding_t *b, jl_value_t *val)
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_value_t *val)
 {
     jl_declare_constant(b);
-    if (b->restriction) {
-        if (jl_egal(val, b->restriction))
-            return;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    if (bpart->restriction) {
+        if (jl_egal(val, bpart->restriction))
+            return bpart;
         jl_errorf("invalid redefinition of constant %s.%s",
             jl_symbol_name(b->globalref->mod->name),
             jl_symbol_name(b->globalref->name));
     }
-    b->restriction = val;
-    jl_gc_wb(b, val);
+    bpart->restriction = val;
+    jl_gc_wb(bpart, val);
+    return bpart;
 }
 
 JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val)

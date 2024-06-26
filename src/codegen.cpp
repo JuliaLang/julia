@@ -3214,27 +3214,29 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    if (bnd->kind == BINDING_KIND_GUARD || bnd->kind == BINDING_KIND_FAILED || bnd->kind == BINDING_KIND_DECLARED) {
+    jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.max_world);
+    if (jl_bpart_is_some_guard(bpart)) {
         // try to look this up now.
         // TODO: This is bad and we'd like to delete it.
         jl_get_binding(mod, name);
     }
     assert(bnd);
     Value *bp = NULL;
-    if (jl_binding_is_some_guard(bnd)) {
+    if (jl_bpart_is_some_guard(bpart)) {
         // Redo the lookup at runtime
         bp = julia_binding_gv(ctx, bnd);
         Value *v = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
         undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
         return mark_julia_type(ctx, v, true, jl_any_type);
     } else {
-        while (jl_binding_is_some_import(bnd)) {
+        while (jl_bpart_is_some_import(bpart)) {
             if (bnd->deprecated) {
                 cg_bdw(ctx, name, bnd);
             }
-            bnd = (jl_binding_t*)bnd->restriction;
+            bnd = (jl_binding_t*)bpart->restriction;
+            bpart = jl_get_binding_partition(bnd, ctx.max_world);
         }
-        if (jl_binding_is_some_constant(bnd)) {
+        if (jl_bpart_is_some_constant(bpart)) {
             jl_value_t *constval = jl_get_binding_value_if_const(bnd);
             if (!constval) {
                 undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
@@ -3247,8 +3249,8 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     if (bnd->deprecated) {
         cg_bdw(ctx, name, bnd);
     }
-    assert(bnd->kind == BINDING_KIND_GLOBAL);
-    jl_value_t *ty = bnd->restriction;
+    assert(bpart->kind == BINDING_KIND_GLOBAL);
+    jl_value_t *ty = bpart->restriction;
     bp = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
@@ -3262,10 +3264,11 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
 {
     jl_binding_t *bnd = NULL;
     Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, alloc);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.max_world);
     if (bp == NULL)
         return jl_cgval_t();
-    if (bnd && !jl_binding_is_some_constant(bnd)) {
-        jl_value_t *ty = bnd->restriction;
+    if (bnd && !jl_bpart_is_some_constant(bpart)) {
+        jl_value_t *ty = bpart->restriction;
         if (ty != nullptr) {
             const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
             if (!ismodifyglobal) {
@@ -5483,17 +5486,22 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
                                      jl_binding_t **pbnd, bool assign, bool alloc)
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 1);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, ctx.max_world);
     if (assign) {
-        if (b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_DECLARED)
+        if (jl_bpart_is_some_guard(bpart))
             // not yet declared
             b = NULL;
     }
     else {
-        if (b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_DECLARED)
+        if (jl_bpart_is_some_guard(bpart)) {
             // try to look this up now
             b = jl_get_binding(m, s);
-        while (jl_binding_is_some_import(b))
-            b = (jl_binding_t*)b->restriction;
+            bpart = jl_get_binding_partition(b, ctx.max_world);
+        }
+        while (jl_bpart_is_some_import(bpart)) {
+            b = (jl_binding_t*)bpart->restriction;
+            bpart = jl_get_binding_partition(b, ctx.max_world);
+        }
     }
     if (b == NULL) {
         // var not found. switch to delayed lookup.
@@ -5534,7 +5542,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         return p;
     }
     if (assign) {
-        if (b->kind != BINDING_KIND_GLOBAL && !jl_binding_is_some_guard(b)) {
+        if (bpart->kind != BINDING_KIND_GLOBAL && !jl_bpart_is_some_guard(bpart)) {
             // this will fail at runtime, so defer to the runtime to create the error
             ctx.builder.CreateCall(prepare_call(jlgetbindingwrorerror_func),
                     { literal_pointer_val(ctx, (jl_value_t*)m),

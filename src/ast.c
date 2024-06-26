@@ -175,7 +175,8 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_sym_t *var = scmsym_to_julia(fl_ctx, args[0]);
     jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
-    return (b != NULL && b->kind == BINDING_KIND_GLOBAL) ? fl_ctx->T : fl_ctx->F;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    return (bpart != NULL && bpart->kind == BINDING_KIND_GLOBAL) ? fl_ctx->T : fl_ctx->F;
 }
 
 static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -204,14 +205,16 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
         var = scmsym_to_julia(fl_ctx, args[1]);
     }
     jl_binding_t *b = jl_get_module_binding(mod, var, 0);
-    while (jl_binding_is_some_import(b)) {
-        b = (jl_binding_t*)b->restriction;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    while (jl_bpart_is_some_import(bpart)) {
+        b = (jl_binding_t*)bpart->restriction;
+        bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     }
-    if (!b)
+    if (!bpart)
         return fl_ctx->F;
-    if (jl_binding_is_some_guard(b))
+    if (jl_bpart_is_some_guard(bpart))
         return fl_ctx->F;
-    return  (jl_binding_is_some_constant(b) ? b->restriction : jl_atomic_load_relaxed(&b->value)) != NULL ? fl_ctx->T : fl_ctx->F;
+    return  (jl_bpart_is_some_constant(bpart) ? bpart->restriction : jl_atomic_load_relaxed(&b->value)) != NULL ? fl_ctx->T : fl_ctx->F;
 }
 
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT

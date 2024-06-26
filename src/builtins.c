@@ -2500,6 +2500,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("Binding", (jl_value_t*)jl_binding_type);
+    add_builtin("BindingPartition", (jl_value_t*)jl_binding_partition_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
     add_builtin("NamedTuple", (jl_value_t*)jl_namedtuple_type);
 
