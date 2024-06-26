@@ -801,3 +801,8 @@ end
     @test rationalize(Int64, nextfloat(0.1) * im; tol=0) == precise_next * im
     @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
 end
+
+@testset "iszero for 0//0" begin
+    C = reinterpret(reshape, Rational{Int}, zeros(Int, 2, 2, 2))
+    @test !any(iszero, C)
+end
