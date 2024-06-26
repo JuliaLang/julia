@@ -134,10 +134,13 @@ module TestOffsetArray
     using .Main.OffsetArrays
     using Test
 
+    Base.values(r::OffsetArrays.IdOffsetRange) = first(r):last(r)
+    axes1based(a) = map(values, axes(a))
+
     A = OffsetArray(rand(2, 3), -1, -1)
     R = CartesianIndices(A)
-    @test R == CartesianIndices((0:1, 0:2))
-    @test axes(R) == (0:1, 0:2)
+    @test first(R) == first(CartesianIndices((0:1, 0:2))) && last(R) == last(CartesianIndices((0:1, 0:2)))
+    @test axes1based(R) == (0:1, 0:2)
     for i in eachindex(A)
         @test A[i] == A[R[i]]
     end

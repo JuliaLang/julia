@@ -1074,24 +1074,25 @@ end
 
 # comparing and hashing ranges
 @testset "comparing and hashing ranges" begin
-    Rs = AbstractRange[1:1, 1:1:1, 1:2, 1:1:2,
+    Rs = AbstractRange[1:1, 1:1:1, 2:3, 2:1:3,
                        map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 1:-1:0, 17:-3:0,
                        0.0:0.1:1.0, map(Float32,0.0:0.1:1.0),map(Float32,LinRange(0.0, 1.0, 11)),
                        1.0:eps():1.0 .+ 10eps(), 9007199254740990.:1.0:9007199254740994,
                        range(0, stop=1, length=20), map(Float32, range(0, stop=1, length=20)),
                        3:2, 5:-2:7, range(0.0, step=2.0, length=0), 3//2:3//2:0//1, LinRange(2,3,0),
                        Base.OneTo(1), 1:1, 1:-3:1, 1//1:1//3:1//1, range(1.0, step=2.5, length=1),
-                       LinRange(1,1,1), LinRange(1,1,2)]
+                       LinRange(1,1,1), LinRange(1,1,2), Base.IdentityUnitRange(2:3), Base.IdentityUnitRange(2:1)]
     for r in Rs
         local r
         ar = Vector(r)
-        @test r == ar
-        @test isequal(r,ar)
-        @test hash(r) == hash(ar)
+        @test (r == ar) == isone(firstindex(r))
+        @test isequal(r, ar) == isone(firstindex(r))
+        @test (hash(r) == hash(ar)) == isone(firstindex(r))
         for s in Rs
             as = Vector(s)
             @test isequal(r,s) == (hash(r)==hash(s))
-            @test (r==s) == (ar==as)
+            axes_eq = firstindex(r) == firstindex(s) && lastindex(r) == lastindex(s)
+            @test (r == s) == (ar == as && axes_eq)
         end
     end
 end
