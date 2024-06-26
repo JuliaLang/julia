@@ -223,8 +223,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     if (mod == module) {
                         // Assignment does not create bindings in foreign modules (#54678)
                         jl_binding_t *b = jl_get_module_binding(mod, name, 1);
-                        if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED || b->imported == BINDING_IMPORT_DECLARED) {
-                            b->imported = BINDING_IMPORT_NONE;
+                        if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED || b->imported == BINDING_KIND_DECLARED) {
+                            b->imported = BINDING_KIND_GLOBAL;
                             b->restriction = (jl_value_t*)jl_any_type;
                             jl_gc_wb(b, jl_any_type);
                         }
@@ -253,11 +253,9 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 if (fe_mod->istopmod && !strcmp(jl_symbol_name(fe_sym), "getproperty") && jl_is_symbol(s)) {
                     if (eager_resolve || jl_binding_resolved_p(me_mod, me_sym)) {
                         jl_binding_t *b = jl_get_binding(me_mod, me_sym);
-                        if (b && b->constp) {
-                            jl_value_t *v = jl_get_binding_value(b);
-                            if (v && jl_is_module(v))
-                                return jl_module_globalref((jl_module_t*)v, (jl_sym_t*)s);
-                        }
+                        jl_value_t *v = jl_get_binding_value_if_const(b);
+                        if (v && jl_is_module(v))
+                            return jl_module_globalref((jl_module_t*)v, (jl_sym_t*)s);
                     }
                 }
             }
@@ -270,7 +268,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 if (jl_binding_resolved_p(fe_mod, fe_sym)) {
                     // look at some known called functions
                     jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-                    if (b && b->constp && jl_get_binding_value(b) == jl_builtin_tuple) {
+                    if (jl_get_binding_value_if_const(b) == jl_builtin_tuple) {
                         size_t j;
                         for (j = 1; j < nargs; j++) {
                             if (!jl_is_quotenode(jl_exprarg(e, j)))
@@ -1148,14 +1146,14 @@ JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
 
 JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b)
 {
-    if (b->constp) {
-        jl_value_t *gf = jl_get_binding_value(b);
+    jl_value_t *gf = jl_get_binding_value_if_const(b);
+    if (gf) {
         jl_check_gf(gf, b->globalref->name);
         return gf;
     }
-    if (b->imported != BINDING_IMPORT_GUARD && b->imported != BINDING_IMPORT_FAILED && b->imported != BINDING_IMPORT_DECLARED)
+    if (!jl_binding_is_some_guard(b))
         jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(b->globalref->name));
-    jl_value_t *gf = (jl_value_t*)jl_new_generic_function(b->globalref->name, b->globalref->mod);
+    gf = (jl_value_t*)jl_new_generic_function(b->globalref->name, b->globalref->mod);
     jl_declare_constant_val(b, gf);
     return gf;
 }

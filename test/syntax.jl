@@ -2646,7 +2646,7 @@ end
 @test !isdefined(Mod3, :always_undef) # resolve this binding now in Mod3
 @test_throws ErrorException("invalid method definition in Mod3: exported function Mod.always_undef does not exist") Core.eval(Mod3, :(always_undef(x::Int) = x))
 @test_throws ErrorException("cannot declare Mod3.always_undef constant; it already has a value") Core.eval(Mod3, :(const always_undef = 3))
-@test_throws ErrorException("invalid redefinition of constant Mod3.f") Core.eval(Mod3, :(const f = 3))
+@test_throws ErrorException("cannot declare Mod3.f constant; it already has a value") Core.eval(Mod3, :(const f = 3))
 @test_throws ErrorException("cannot declare Mod.maybe_undef constant; it already has a value") Core.eval(Mod, :(const maybe_undef = 3))
 
 z = 42

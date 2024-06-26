@@ -290,8 +290,8 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
 void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
 {
     if (b->imported) {
-        if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED || b->imported == BINDING_IMPORT_DECLARED) {
-            b->imported = BINDING_IMPORT_NONE;
+        if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED || b->imported == BINDING_KIND_DECLARED) {
+            b->imported = BINDING_KIND_GLOBAL;
             b->restriction = ty;
             jl_gc_wb(b, ty);
             return;
@@ -300,7 +300,7 @@ void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
                     jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
         }
     }
-    if (b->constp) {
+    if (jl_binding_is_some_constant(b)) {
         jl_errorf("cannot set type for imported constant %s.%s.",
                   jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
     }
@@ -328,8 +328,8 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
         gs = (jl_sym_t*)arg;
     }
     jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
-    if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED) {
-        b->imported = BINDING_IMPORT_DECLARED;
+    if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED) {
+        b->imported = BINDING_KIND_DECLARED;
     }
     if (set_type) {
         jl_binding_set_type(b, set_type, 1);
@@ -407,9 +407,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
             jl_sym_t *name = jl_globalref_name(f);
             if (jl_binding_resolved_p(mod, name)) {
                 jl_binding_t *b = jl_get_binding(mod, name);
-                if (b && b->constp) {
-                    called = jl_get_binding_value(b);
-                }
+                called = jl_get_binding_value_if_const(b);
             }
         }
         else if (jl_is_quotenode(f)) {
@@ -640,13 +638,14 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     jl_sym_t *name = asname ? asname : import->name;
     // TODO: this is a bit race-y with what error message we might print
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
-    if (b->constp && jl_get_binding_value(b) == (jl_value_t*)import)
+    if (jl_get_binding_value_if_const(b) == (jl_value_t*)import)
         return;
-    if (b->imported != BINDING_IMPORT_GUARD && b->imported != BINDING_IMPORT_FAILED) {
+    if (b->imported != BINDING_KIND_GUARD && b->imported != BINDING_KIND_FAILED) {
         jl_errorf("importing %s into %s conflicts with an existing global",
                     jl_symbol_name(name), jl_symbol_name(m->name));
     }
     jl_declare_constant_val(b, (jl_value_t*)import);
+    b->imported = BINDING_KIND_CONST_IMPORT;
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists

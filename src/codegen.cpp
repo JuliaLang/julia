@@ -2949,10 +2949,11 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
     if (jl_is_globalref(ex)) {
         s = jl_globalref_name(ex);
         jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), s);
-        if (b && b->constp) {
+        jl_value_t *v = jl_get_binding_value_if_const(b);
+        if (v) {
             if (b->deprecated)
                 cg_bdw(ctx, s, b);
-            return jl_get_binding_value(b);
+            return v;
         }
         return NULL;
     }
@@ -2971,10 +2972,11 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                     s = (jl_sym_t*)static_eval(ctx, jl_exprarg(e, 2));
                     if (s && jl_is_symbol(s)) {
                         jl_binding_t *b = jl_get_binding(m, s);
-                        if (b && b->constp) {
+                        jl_value_t *v = jl_get_binding_value_if_const(b);
+                        if (v) {
                             if (b->deprecated)
                                 cg_bdw(ctx, s, b);
-                            return jl_get_binding_value(b);
+                            return v;
                         }
                     }
                 }
@@ -3212,40 +3214,40 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    if (bnd->imported == BINDING_IMPORT_GUARD || bnd->imported == BINDING_IMPORT_FAILED || bnd->imported == BINDING_IMPORT_DECLARED) {
+    if (bnd->imported == BINDING_KIND_GUARD || bnd->imported == BINDING_KIND_FAILED || bnd->imported == BINDING_KIND_DECLARED) {
         // try to look this up now.
         // TODO: This is bad and we'd like to delete it.
         jl_get_binding(mod, name);
     }
     assert(bnd);
     Value *bp = NULL;
-    if (bnd->imported == BINDING_IMPORT_GUARD || bnd->imported == BINDING_IMPORT_FAILED || bnd->imported == BINDING_IMPORT_DECLARED) {
+    if (jl_binding_is_some_guard(bnd)) {
         // Redo the lookup at runtime
         bp = julia_binding_gv(ctx, bnd);
         Value *v = ctx.builder.CreateCall(prepare_call(jlgetbindingvalue_func), { bp });
         undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name, (jl_value_t*)mod);
         return mark_julia_type(ctx, v, true, jl_any_type);
-    } else if (bnd->constp) {
-        while (jl_binding_is_some_import(bnd)) {
-            bnd = (jl_binding_t*)bnd->restriction;
-        }
-        assert(bnd->constp && bnd->imported == BINDING_IMPORT_NONE);
-        if (!bnd->restriction) {
-            undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
-            return jl_cgval_t();
-        }
-        return mark_julia_const(ctx, bnd->restriction);
     } else {
         while (jl_binding_is_some_import(bnd)) {
+            if (bnd->deprecated) {
+                cg_bdw(ctx, name, bnd);
+            }
             bnd = (jl_binding_t*)bnd->restriction;
         }
-        assert(!bnd->constp && bnd->imported == BINDING_IMPORT_NONE);
+        if (jl_binding_is_some_constant(bnd)) {
+            jl_value_t *constval = jl_get_binding_value_if_const(bnd);
+            if (!constval) {
+                undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
+                return jl_cgval_t();
+            }
+            return mark_julia_const(ctx, constval);
+        }
     }
     bp = julia_binding_gv(ctx, bnd);
     if (bnd->deprecated) {
         cg_bdw(ctx, name, bnd);
     }
-    assert(!bnd->constp);
+    assert(bnd->imported == BINDING_KIND_GLOBAL);
     jl_value_t *ty = bnd->restriction;
     bp = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
@@ -3262,7 +3264,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, alloc);
     if (bp == NULL)
         return jl_cgval_t();
-    if (bnd && !bnd->constp) {
+    if (bnd && !jl_binding_is_some_constant(bnd)) {
         jl_value_t *ty = bnd->restriction;
         if (ty != nullptr) {
             const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
@@ -5482,12 +5484,12 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 1);
     if (assign) {
-        if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED || b->imported == BINDING_IMPORT_DECLARED)
+        if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED || b->imported == BINDING_KIND_DECLARED)
             // not yet declared
             b = NULL;
     }
     else {
-        if (b->imported == BINDING_IMPORT_GUARD || b->imported == BINDING_IMPORT_FAILED || b->imported == BINDING_IMPORT_DECLARED)
+        if (b->imported == BINDING_KIND_GUARD || b->imported == BINDING_KIND_FAILED || b->imported == BINDING_KIND_DECLARED)
             // try to look this up now
             b = jl_get_binding(m, s);
         while (jl_binding_is_some_import(b))
@@ -5532,7 +5534,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         return p;
     }
     if (assign) {
-        if (b->imported != BINDING_IMPORT_NONE && b->imported != BINDING_IMPORT_GUARD && b->imported != BINDING_IMPORT_FAILED) {
+        if (b->imported != BINDING_KIND_GLOBAL && !jl_binding_is_some_guard(b)) {
             // this will fail at runtime, so defer to the runtime to create the error
             ctx.builder.CreateCall(prepare_call(jlgetbindingwrorerror_func),
                     { literal_pointer_val(ctx, (jl_value_t*)m),

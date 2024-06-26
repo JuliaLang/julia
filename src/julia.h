@@ -611,29 +611,35 @@ typedef struct _jl_weakref_t {
     jl_value_t *value;
 } jl_weakref_t;
 
-enum jl_binding_import {
-    // None: The binding was not imported in this partition. It acts as a regular global or const.
-    //  ->restriction does not hold any import-related data.
-    BINDING_IMPORT_NONE     = 0x0,
+enum jl_kind_import {
+    // Global: This binding partition is a global variable.
+    //  -> restriction holds the type restriction
+    BINDING_KIND_GLOBAL       = 0x0,
+    // Constant: This binding partition is a constant declared using `const`
+    //  ->restriction holds the constant value
+    BINDING_KIND_CONST        = 0x1,
+    // Import Constant: This binding partition is a constant declared using `import A`
+    //  ->restriction holds the constant value
+    BINDING_KIND_CONST_IMPORT = 0x2,
     // Implicit: The binding was implicitly import from a `using`'d module.
     //  ->restriction holds the imported binding
-    BINDING_IMPORT_IMPLICIT = 0x1,
+    BINDING_KIND_IMPLICIT     = 0x3,
     // Explicit: The binding was explicitly `using`'d by name
     //  ->restriction holds the imported binding
-    BINDING_IMPORT_EXPLICIT = 0x2,
+    BINDING_KIND_EXPLICIT     = 0x4,
     // Imported: The binding was explicitly `using`'d by name
     //  ->restriction holds the imported binding
-    BINDING_IMPORT_IMPORTED = 0x3,
+    BINDING_KIND_IMPORTED     = 0x5,
     // Failed: We attempted to import the binding, but the import was ambiguous
     //  ->restriction is NULL.
-    BINDING_IMPORT_FAILED   = 0x4,
+    BINDING_KIND_FAILED       = 0x6,
     // Declared: The binding was declared using `global` or similar
     // Failed: We attempted to import the binding, but the import was ambiguous
     //  ->restriction is NULL.
-    BINDING_IMPORT_DECLARED = 0x5,
+    BINDING_KIND_DECLARED     = 0x7,
     // Guard: The binding was looked at, but no global or import was resolved at the time
     //  ->restriction is NULL.
-    BINDING_IMPORT_GUARD    = 0x6
+    BINDING_KIND_GUARD        = 0x8
 };
 
 typedef struct _jl_binding_t {
@@ -641,10 +647,9 @@ typedef struct _jl_binding_t {
     _Atomic(jl_value_t*) value;
     jl_globalref_t *globalref;  // cached GlobalRef for this binding
     jl_value_t *restriction;  // binding type or const val
-    uint8_t constp:1;
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.
-    uint8_t imported:3; // enum jl_binding_import
+    uint8_t imported:4; // enum jl_binding_import
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
 } jl_binding_t;
 
@@ -1783,6 +1788,7 @@ JL_DLLEXPORT jl_sym_t *jl_gensym(void);
 JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len);
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b);
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b);
 JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b);
 JL_DLLEXPORT jl_value_t *jl_get_or_declare_local_gf(jl_value_t **bp, jl_module_t *mod, jl_sym_t *name);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
