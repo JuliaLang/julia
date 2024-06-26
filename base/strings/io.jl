@@ -116,7 +116,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     String(_unsafe_take!(s))
 end
 
-function _str_sizehint(x)
+function _str_sizehint(@nospecialize x)
     if x isa Float64
         return 20
     elseif x isa Float32
