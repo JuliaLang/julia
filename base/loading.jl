@@ -2103,6 +2103,7 @@ no effect outside of compilation.
 
 !!! compat "Julia 1.11"
     Keyword argument `track_content` requires at least Julia 1.11.
+    An error is now thrown if `path` is not readable.
 """
 function include_dependency(path::AbstractString; track_content::Bool=true)
     _include_dependency(Main, path, track_content=track_content, path_may_be_dir=true)
