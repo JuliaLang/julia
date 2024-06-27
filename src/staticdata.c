@@ -327,7 +327,9 @@ static arraylist_t deser_sym;
 
 static htable_t serialization_order; // to break cycles, mark all objects that are serialized
 static htable_t nullptrs;
+#ifdef DEBUG_RETAINERS
 static htable_t retainers; // for debug: used to track which parent object caused each obj to be put in the sysimage
+#endif
 // FIFO queue for objects to be serialized. Anything requiring fixup upon deserialization
 // must be "toplevel" in this queue. For types, parameters and field types must appear
 // before the "wrapper" type so they can be properly recached against the running system.
@@ -758,6 +760,7 @@ static uintptr_t jl_fptr_id(void *fptr)
 #define jl_queue_for_serialization(s, v, p) jl_queue_for_serialization_((s), (jl_value_t*)(v), (jl_value_t*)(p), 1, 0)
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, jl_value_t *p, int recursive, int immediate) JL_GC_DISABLED;
 
+#ifdef DEBUG_RETAINERS
 static void print_retainers(jl_value_t *v) JL_GC_DISABLED
 {
     fprintf(stderr, "retained by: \n");
@@ -804,6 +807,7 @@ static void print_retainers(jl_value_t *v) JL_GC_DISABLED
         fprintf(stderr, "::%s\n", tbuf.buf);
     }
 }
+#endif
 
 static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_t *m) JL_GC_DISABLED
 {
@@ -2814,7 +2818,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
     }
     htable_new(&serialization_order, 25000);
+#ifdef DEBUG_RETAINERS
     htable_new(&retainers, 25000);
+#endif
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
     arraylist_new(&serialization_queue, 0);
@@ -3115,7 +3121,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&gvars);
     arraylist_free(&external_fns);
     htable_free(&field_replace);
+#ifdef DEBUG_RETAINERS
     htable_free(&retainers);
+#endif
     htable_free(&serialization_order);
     htable_free(&nullptrs);
     htable_free(&symbol_table);
