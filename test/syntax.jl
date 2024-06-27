@@ -2595,7 +2595,7 @@ using Test
 
 module Mod
 const x = 1
-global maybe_undef, always_undef
+global maybe_undef::Any, always_undef::Any
 export always_undef
 def() = (global maybe_undef = 0)
 func(x) = 2x + 1
@@ -2645,8 +2645,8 @@ end
 @test_throws ErrorException("invalid method definition in Mod3: function Mod3.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
 @test !isdefined(Mod3, :always_undef) # resolve this binding now in Mod3
 @test_throws ErrorException("invalid method definition in Mod3: exported function Mod.always_undef does not exist") Core.eval(Mod3, :(always_undef(x::Int) = x))
-@test_throws ErrorException("cannot assign a value to imported variable Mod.always_undef from module Mod3") Core.eval(Mod3, :(const always_undef = 3))
-@test_throws ErrorException("cannot assign a value to imported variable Mod3.f") Core.eval(Mod3, :(const f = 3))
+@test_throws ErrorException("cannot declare Mod3.always_undef constant; it already has a value") Core.eval(Mod3, :(const always_undef = 3))
+@test_throws ErrorException("cannot declare Mod3.f constant; it already has a value") Core.eval(Mod3, :(const f = 3))
 @test_throws ErrorException("cannot declare Mod.maybe_undef constant; it already has a value") Core.eval(Mod, :(const maybe_undef = 3))
 
 z = 42
@@ -3704,7 +3704,8 @@ end
 module Foreign54607
     # Syntactic, not dynamic
     try_to_create_binding1() = (Foreign54607.foo = 2)
-    @eval try_to_create_binding2() = ($(GlobalRef(Foreign54607, :foo)) = 2)
+    # GlobalRef is allowed for same-module assignment
+    @eval try_to_create_binding2() = ($(GlobalRef(Foreign54607, :foo2)) = 2)
     function global_create_binding()
         global bar
         bar = 3
@@ -3718,7 +3719,12 @@ module Foreign54607
 end
 @test_throws ErrorException (Foreign54607.foo = 1)
 @test_throws ErrorException Foreign54607.try_to_create_binding1()
-@test_throws ErrorException Foreign54607.try_to_create_binding2()
+Foreign54607.try_to_create_binding2()
+function assign_in_foreign_module()
+    (Foreign54607.foo = 1)
+    nothing
+end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(assign_in_foreign_module))
 @test_throws ErrorException begin
     @Base.Experimental.force_compile
     (Foreign54607.foo = 1)
@@ -3857,4 +3863,22 @@ end
         Meta.isexpr(expr, :method) || continue
         @test isa(expr.args[1], Union{GlobalRef, Symbol})
     end
+end
+
+# Test importing the same module twice using two different paths
+module FooDualImport
+end
+module BarDualImport
+import ..FooDualImport
+import ..FooDualImport.FooDualImport
+end
+
+# Test trying to define a constant and then importing the same constant
+const ImportConstant = 1
+module ImportConstantTestModule
+    using Test
+    const ImportConstant = 1
+    import ..ImportConstant
+    @test ImportConstant == 1
+    @test isconst(@__MODULE__, :ImportConstant)
 end

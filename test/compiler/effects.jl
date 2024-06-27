@@ -376,23 +376,18 @@ end
 # as the cached effects can be easily wrong otherwise
 # since the inference currently doesn't track "world-age" of global variables
 @eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
-setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
+setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET2, 42)
 let effects = Base.infer_effects() do
         global_assignment_undefinedyet()
     end
-    @test !Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_nothrow(effects)
 end
 let effects = Base.infer_effects() do
         setglobal!_nothrow_undefinedyet()
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
-global UNDEFINEDYET::String = "0"
-let effects = Base.infer_effects() do
-        global_assignment_undefinedyet()
-    end
-    @test !Core.Compiler.is_nothrow(effects)
-end
+global UNDEFINEDYET2::String = "0"
 let effects = Base.infer_effects() do
         setglobal!_nothrow_undefinedyet()
     end

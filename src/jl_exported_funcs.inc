@@ -192,7 +192,8 @@
     XX(jl_gc_total_hrtime) \
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
-    XX(jl_generic_function_def) \
+    XX(jl_declare_const_gf) \
+    XX(jl_get_or_declare_local_gf) \
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \

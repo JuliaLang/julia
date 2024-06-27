@@ -46,7 +46,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                     # This is the common case, so do not print that information.
                     # It could be the binding was exported by two modules, which we can detect
                     # by the `usingfailed` flag in the binding:
-                    if isdefined(bnd, :flags) && Bool(bnd.flags >> 4 & 1) # magic location of the `usingfailed` flag
+                    if false # TODO: #isdefined(bnd, :flags) && Bool(bnd.flags >> 4 & 1) # magic location of the `usingfailed` flag
                         print(io, "\nHint: It looks like two or more modules export different ",
                               "bindings with this name, resulting in ambiguity. Try explicitly ",
                               "importing it from a particular module, or qualifying the name ",
@@ -626,7 +626,7 @@ mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
 function active_module() # this method is also called from Base
-    isdefined(Base, :active_repl) || return Main
+    isdefined(Base, :active_repl) && Base.active_repl !== nothing || return Main
     return active_module(Base.active_repl::AbstractREPL)
 end
 active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
@@ -658,7 +658,7 @@ function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module; h
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, lastindex(partial), mod, c.modifiers.shift, hint)
     c.modifiers = LineEdit.Modifiers()
-    return unique!(map(completion_text, ret)), partial[range], should_complete
+    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s::PromptState; hint::Bool=false)
@@ -666,14 +666,14 @@ function complete_line(c::ShellCompletionProvider, s::PromptState; hint::Bool=fa
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = shell_completions(full, lastindex(partial), hint)
-    return unique!(map(completion_text, ret)), partial[range], should_complete
+    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s; hint::Bool=false)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)::String
     ret, range, should_complete = bslash_completions(full, lastindex(partial), hint)[2]
-    return unique!(map(completion_text, ret)), partial[range], should_complete
+    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
 end
 
 with_repl_linfo(f, repl) = f(outstream(repl))
@@ -1700,8 +1700,6 @@ function capture_result(n::Ref{Int}, @nospecialize(x))
     n = n[]
     mod = Base.MainInclude
     if !isdefined(mod, :Out)
-        @eval mod global Out
-        @eval mod export Out
         setglobal!(mod, :Out, Dict{Int, Any}())
     end
     if x !== getglobal(mod, :Out) && x !== nothing # remove this?

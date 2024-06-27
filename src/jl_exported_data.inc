@@ -51,6 +51,7 @@
     XX(jl_floatingpoint_type) \
     XX(jl_function_type) \
     XX(jl_binding_type) \
+    XX(jl_binding_partition_type) \
     XX(jl_globalref_type) \
     XX(jl_gotoifnot_type) \
     XX(jl_enternode_type) \

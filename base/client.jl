@@ -511,6 +511,10 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
+# For numbered REPL prompt
+global Out::Any
+export Out
+
 # weakly exposes ans and err variables to Main
 export ans, err
 end

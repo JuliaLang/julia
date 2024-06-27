@@ -8153,7 +8153,7 @@ let M = @__MODULE__
     @test_throws(ErrorException("cannot set type for global $(nameof(M)).a_typed_global. It already has a value or is already set to a different type."),
                  Core.eval(M, :(global a_typed_global::$(Union{Nothing,Tuple{Union{Integer,Nothing}}}))))
     @test Core.eval(M, :(global a_typed_global)) === nothing
-    @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
+    @test Core.get_binding_type(M, :a_typed_global) == Tuple{Union{Integer,Nothing}}
 end
 
 @test Base.unsafe_convert(Ptr{Int}, [1]) !== C_NULL

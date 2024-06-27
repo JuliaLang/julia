@@ -1208,7 +1208,7 @@ end
 
 # Issue 39427
 @test occursin("does not exist.", sprint(show, help_result(":=")))
-global some_undef_global
+global some_undef_global::Any
 @test occursin("exists,", sprint(show, help_result("some_undef_global", @__MODULE__)))
 
 # Issue #40563
