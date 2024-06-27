@@ -4179,35 +4179,8 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
 {
     size_t len = jl_string_len(s);
     if (sz <= len) return s;
-    jl_taggedvalue_t *v = jl_astaggedvalue(s);
-    size_t strsz = len + sizeof(size_t) + 1;
-    if (strsz <= GC_MAX_SZCLASS ||
-        // TODO: because of issue #17971 we can't resize old objects
-        gc_marked(v->bits.gc)) {
-        // pool allocated; can't be grown in place so allocate a new object.
-        jl_value_t *snew = jl_alloc_string(sz);
-        memcpy(jl_string_data(snew), jl_string_data(s), len);
-        return snew;
-    }
-    size_t newsz = sz + sizeof(size_t) + 1;
-    size_t offs = sizeof(bigval_t);
-    size_t oldsz = LLT_ALIGN(strsz + offs, JL_CACHE_BYTE_ALIGNMENT);
-    size_t allocsz = LLT_ALIGN(newsz + offs, JL_CACHE_BYTE_ALIGNMENT);
-    if (allocsz < sz)  // overflow in adding offs, size was "negative"
-        jl_throw(jl_memory_exception);
-    bigval_t *hdr = bigval_header(v);
-    jl_ptls_t ptls = jl_current_task->ptls;
-    maybe_collect(ptls); // don't want this to happen during jl_gc_managed_realloc
-    gc_big_object_unlink(hdr);
-    // TODO: this is not safe since it frees the old pointer. ideally we'd like
-    // the old pointer to be left alone if we can't grow in place.
-    // for now it's up to the caller to make sure there are no references to the
-    // old pointer.
-    bigval_t *newbig = (bigval_t*)gc_managed_realloc_(ptls, hdr, allocsz, oldsz, 1, s, 0);
-    newbig->sz = allocsz;
-    gc_big_object_link(newbig, &ptls->heap.big_objects);
-    jl_value_t *snew = jl_valueof(&newbig->header);
-    *(size_t*)snew = sz;
+    jl_value_t *snew = jl_alloc_string(sz);
+    memcpy(jl_string_data(snew), jl_string_data(s), len);
     return snew;
 }
 
