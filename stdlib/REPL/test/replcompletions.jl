@@ -355,7 +355,7 @@ end
 
 let s = "\\:ko"
     c, r = test_bslashcomplete(s)
-    @test "\\:koala:" in c
+    @test "🐨 \\:koala:" in c
 end
 
 # test emoji symbol completions after unicode #9209
@@ -1461,7 +1461,7 @@ function test_dict_completion(dict_name)
     @test c == Any["(\"q\", 3)]"]
     s = "$dict_name[\"\\alp"
     c, r = test_complete(s)
-    @test c == String["\\alpha"]
+    @test c == String["α \\alpha"]
     s = "$dict_name[\"\\alpha"
     c, r = test_complete(s)
     @test c == String["α"]
@@ -1470,7 +1470,7 @@ function test_dict_completion(dict_name)
     @test c == Any["\"α\"]"]
     s = "$dict_name[:\\alp"
     c, r = test_complete(s)
-    @test c == String["\\alpha"]
+    @test c == String["α \\alpha"]
     s = "$dict_name[:\\alpha"
     c, r = test_complete(s)
     @test c == String["α"]
