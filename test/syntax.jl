@@ -3910,3 +3910,11 @@ module ExtendedIsDefined
         @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
     end
 end
+
+# Test importing the same module twice using two different paths
+module FooDualImport
+end
+module BarDualImport
+import ..FooDualImport
+import ..FooDualImport.FooDualImport
+end

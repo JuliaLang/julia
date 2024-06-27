@@ -657,7 +657,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname,
             if (eq_bindings(bpart, bto, jl_current_task->world_age)) {
                 // already imported - potentially upgrade to _IMPORTED or _EXPLICIT
                 btopart->kind = (explici != 0) ? BINDING_KIND_IMPORTED : BINDING_KIND_EXPLICIT;
-                assert((jl_binding_t*)btopart->restriction == b);
+                // TODO: This will need to be versioned when partitioned
             }
             else if (jl_bpart_is_some_import(btopart)) {
                 // already imported from somewhere else
