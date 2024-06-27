@@ -30,9 +30,6 @@ Base.@ccallable function main() :: Cint
     return 0
 end
 
-main()
-
-precompile(main,())
 
 end
 

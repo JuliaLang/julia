@@ -57,7 +57,7 @@ init_path = joinpath(tmpdir, "init.a")
 img_path = joinpath(tmpdir, "img.a")
 bc_path = joinpath(tmpdir, "img-bc.a")
 
-static_call_graph_arg() = isnothing(static_call_graph) ? `--static_call_graph=$(static_call_graph)` : ``
+static_call_graph_arg() = isnothing(static_call_graph) ?  `` : `--static-call-graph=$(static_call_graph)`
 is_verbose() = verbose ? `--verbose-compilation=yes` : ``
 cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(static_call_graph_arg()) $(joinpath(@__DIR__,"buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
 
