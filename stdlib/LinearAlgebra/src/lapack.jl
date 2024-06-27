@@ -60,10 +60,13 @@ end
 macro chkvalidparam(position::Int, param, validvalues)
     :(chkvalidparam($position, $(string(param)), $(esc(param)), $validvalues))
 end
-function chkvalidparam(position::Int, var::String, val::AbstractChar, validvals)
+function chkvalidparam(position::Int, var::String, val, validvals)
+    # mimic repr for chars without explicitly calling it 
+    _repr(c::AbstractChar) = "'$c'"
+    _repr(c) = c
     if val ∉ validvals
         throw(ArgumentError(
-            lazy"argument #$position: $var must be one of $validvals, but '$val' was passed"))
+            lazy"argument #$position: $var must be one of $validvals, but $(_repr(val)) was passed"))
     end
     return val
 end
