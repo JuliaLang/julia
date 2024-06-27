@@ -257,7 +257,6 @@ typedef struct _jl_tls_states_t {
     _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;
     jl_gc_page_stack_t page_metadata_allocd;
-    jl_gc_page_stack_t page_metadata_buffered;
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;

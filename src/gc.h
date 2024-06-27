@@ -153,7 +153,7 @@ typedef struct _mallocarray_t {
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
     // next metadata structure in per-thread list
-    // or in one of the `jl_gc_global_page_pool_t`
+    // or in one of the `jl_gc_page_stack_t`
     struct _jl_gc_pagemeta_t *next;
     // index of pool that owns this page
     uint8_t pool_n;
