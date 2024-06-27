@@ -848,11 +848,11 @@ STATIC_INLINE void gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
     assert(!gc_alloc_map_is_set((char*)o));
     bigval_t *hdr = bigval_header(o);
     if (mark_mode == GC_OLD_MARKED) {
-        ptls->gc_cache.perm_scanned_bytes += hdr->sz & ~3;
+        ptls->gc_cache.perm_scanned_bytes += hdr->sz;
         gc_queue_big_marked(ptls, hdr, 0);
     }
     else {
-        ptls->gc_cache.scanned_bytes += hdr->sz & ~3;
+        ptls->gc_cache.scanned_bytes += hdr->sz;
         // We can't easily tell if the object is old or being promoted
         // from the gc bits but if the `age` is `0` then the object
         // must be already on a young list.
@@ -862,7 +862,7 @@ STATIC_INLINE void gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
         }
     }
     objprofile_count(jl_typeof(jl_valueof(o)),
-                     mark_mode == GC_OLD_MARKED, hdr->sz & ~3);
+                     mark_mode == GC_OLD_MARKED, hdr->sz);
 }
 
 // This function should be called exactly once during marking for each pool
@@ -1074,9 +1074,9 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv) JL_NOTSAFEPOINT
             *pv = nxt;
             if (nxt)
                 nxt->prev = pv;
-            gc_num.freed += v->sz&~3;
+            gc_num.freed += v->sz;
 #ifdef MEMDEBUG
-            memset(v, 0xbb, v->sz&~3);
+            memset(v, 0xbb, v->sz);
 #endif
             gc_invoke_callbacks(jl_gc_cb_notify_external_free_t,
                 gc_cblist_notify_external_free, (v));
