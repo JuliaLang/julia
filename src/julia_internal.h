@@ -819,6 +819,28 @@ void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
 
+STATIC_INLINE struct _jl_module_using *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_module_t *module_usings_getmod(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+
+#ifndef __clang_gcanalyzer__
+// The analyzer doesn't like looking through the arraylist, so just model the
+// access for it using this function
+STATIC_INLINE struct _jl_module_using *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
+    return (struct _jl_module_using *)&(m->usings.items[3*i]);
+}
+STATIC_INLINE jl_module_t *module_usings_getmod(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT {
+    return module_usings_getidx(m, i)->mod;
+}
+#endif
+
+STATIC_INLINE size_t module_usings_length(jl_module_t *m) JL_NOTSAFEPOINT {
+    return m->usings.len/3;
+}
+
+STATIC_INLINE size_t module_usings_max(jl_module_t *m) JL_NOTSAFEPOINT {
+    return m->usings.max/3;
+}
+
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs);
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src);
