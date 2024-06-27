@@ -31,6 +31,7 @@ end
     _assert_tostring(msg) = ""
     reinit_stdio() = nothing
     JuliaSyntax.enable_in_core!() = nothing
+    init_active_project() = ACTIVE_PROJECT[] = nothing
     set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
     disable_library_threading() = nothing
     @inline function invokelatest(f::F, args...; kwargs...) where F
