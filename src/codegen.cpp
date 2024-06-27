@@ -2131,16 +2131,14 @@ static void print_stack_crumbs(jl_codectx_t &ctx)
         }
         if (caller) {
             if (jl_is_method_instance(caller)) {
-                while (std::get<CallFrames>(it->second).size() > 1) {
-                    auto &frame = std::get<CallFrames>(it->second).front();
+                for (auto it2 = std::get<CallFrames>(it->second).begin(); it2 != (std::prev(std::get<CallFrames>(it->second).end())); ++it2) {
+                    auto frame = *it2;
                     errs() << std::get<0>(frame) << "<inlined> \n";
                     errs() << "In " << std::get<1>(frame) << ":" << std::get<unsigned int>(frame) << "\n";
-                    std::get<CallFrames>(it->second).pop_front();
                 }
                 auto &frame = std::get<CallFrames>(it->second).front();
                 jl_((jl_value_t*)caller);
                 errs() << "In " << std::get<1>(frame) << ":" << std::get<unsigned int>(frame) << "\n";
-                std::get<CallFrames>(it->second).pop_front();
             }
         }
         else
@@ -2221,20 +2219,19 @@ static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT
         }
         if (caller) {
             if (jl_is_method_instance(caller)) {
-                while (std::get<CallFrames>(it->second).size() > 1) {
-                    auto &frame = std::get<CallFrames>(it->second).front();
+                //TODO: Use a subrange when C++20 is a thing
+                for (auto it2 = std::get<CallFrames>(it->second).begin(); it2 != (std::prev(std::get<CallFrames>(it->second).end())); ++it2) {
+                    auto frame = *it2;
                     jl_value_t *stackframe = StackFrame(jl_nothing, std::get<0>(frame), std::get<1>(frame), std::get<unsigned int>(frame), jl_true);
                     if (stackframe == nullptr)
                         print_stack_crumbs(ctx);
                     jl_array_ptr_1d_push(out, stackframe);
-                    std::get<CallFrames>(it->second).pop_front();
                 }
-                auto &frame = std::get<CallFrames>(it->second).front();
+                auto &frame = std::get<CallFrames>(it->second).back();
                 jl_value_t *stackframe = StackFrame((jl_value_t *)caller, std::get<0>(frame), std::get<1>(frame), std::get<unsigned int>(frame), jl_false);
                 if (stackframe == nullptr)
                     print_stack_crumbs(ctx);
                 jl_array_ptr_1d_push(out, stackframe);
-                std::get<CallFrames>(it->second).pop_front();
             }
         }
         else
@@ -2269,16 +2266,16 @@ static void print_stacktrace(jl_codectx_t &ctx, int static_call_graph)
         jl_value_t *args[2] = { base_stderr, (jl_value_t *)bt };
         jl_apply_generic(show_backtrace, args, 2);
     } JL_CATCH {
-        jl_safe_printf("Error showing backtrace\n");
+        jl_printf(JL_STDERR,"Error showing backtrace\n");
         print_stack_crumbs(ctx);
     }
 
-    fprintf(stderr, "\n");
+    jl_printf(JL_STDERR, "\n\n");
     JL_GC_POP();
     ct->world_age = last_age;
 
     if (static_call_graph == JL_STATIC_CALL_GRAPH_SAFE) {
-        jl_safe_printf("Aborting compilation due to finding a dynamic dispatch");
+        jl_printf(JL_STDERR,"Aborting compilation due to finding a dynamic dispatch");
         exit(1);
     }
     return;
