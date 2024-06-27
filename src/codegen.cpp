@@ -2277,8 +2277,10 @@ static void print_stacktrace(jl_codectx_t &ctx, int static_call_graph)
     JL_GC_POP();
     ct->world_age = last_age;
 
-    if (static_call_graph == JL_STATIC_CALL_GRAPH_SAFE)
-        jl_error("Aborting compilation due to finding a dynamic dispatch");
+    if (static_call_graph == JL_STATIC_CALL_GRAPH_SAFE) {
+        jl_safe_printf("Aborting compilation due to finding a dynamic dispatch");
+        exit(1);
+    }
     return;
 }
 
