@@ -79,8 +79,6 @@ macro stable_muladdmul(expr)
     for (i, e) in enumerate(expr.args)
         e isa Expr || continue
         if e.head == :call && e.args[1] == :MulAddMul && length(e.args) == 3
-            e.args[2] isa Symbol || continue
-            e.args[3] isa Symbol || continue
             local asym = e.args[2]
             local bsym = e.args[3]
 
