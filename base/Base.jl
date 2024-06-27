@@ -405,11 +405,6 @@ include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
-# These used to be in build_h.jl and are retained for backwards compatibility.
-# NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
-const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
-const liblapack_name = libblas_name
-
 # Concurrency (part 2)
 # Note that `atomics.jl` here should be deprecated
 Core.eval(Threads, :(include("atomics.jl")))
