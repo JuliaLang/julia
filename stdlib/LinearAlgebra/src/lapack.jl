@@ -61,7 +61,8 @@ macro chkvalidparam(position::Int, param, validvalues)
     :(chkvalidparam($position, $(string(param)), $(esc(param)), $validvalues))
 end
 function chkvalidparam(position::Int, var::String, val, validvals)
-    # mimic repr for chars without explicitly calling it 
+    # mimic `repr` for chars without explicitly calling it
+    # This is because `repr` introduces dynamic dispatch
     _repr(c::AbstractChar) = "'$c'"
     _repr(c) = c
     if val ∉ validvals
