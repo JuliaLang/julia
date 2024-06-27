@@ -3918,3 +3918,13 @@ module BarDualImport
 import ..FooDualImport
 import ..FooDualImport.FooDualImport
 end
+
+# Test trying to define a constant and then importing the same constant
+const ImportConstant = 1
+module ImportConstantTestModule
+    using Test
+    const ImportConstant = 1
+    import ..ImportConstant
+    @test ImportConstant == 1
+    @test isconst(@__MODULE__, :ImportConstant)
+end
