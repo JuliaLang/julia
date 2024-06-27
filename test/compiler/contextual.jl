@@ -10,12 +10,9 @@ module MiniCassette
     # A minimal demonstration of the cassette mechanism. Doesn't support all the
     # fancy features, but sufficient to exercise this code path in the compiler.
 
-    using Core.Compiler: retrieve_code_info, CodeInfo,
-        MethodInstance, SSAValue, GotoNode, GotoIfNot, ReturnNode, SlotNumber, quoted,
-        signature_type, anymap
-    using Base: _methods_by_ftype
+    using Core.IR
+    using Core.Compiler: retrieve_code_info, quoted, signature_type, anymap
     using Base.Meta: isexpr
-    using Test
 
     export Ctx, overdub
 
@@ -75,12 +72,12 @@ module MiniCassette
         end
     end
 
-    function overdub_generator(world::UInt, source, self, c, f, args)
+    function overdub_generator(world::UInt, source, self, ctx, f, args)
         @nospecialize
         if !Base.issingletontype(f)
             # (c, f, args..) -> f(args...)
-            code_info = :(return f(args...))
-            return Core.GeneratedFunctionStub(identity, Core.svec(:overdub, :c, :f, :args), Core.svec())(world, source, code_info)
+            ex = :(return f(args...))
+            return Core.GeneratedFunctionStub(identity, Core.svec(:overdub, :ctx, :f, :args), Core.svec())(world, source, ex)
         end
 
         tt = Tuple{f, args...}
@@ -88,25 +85,23 @@ module MiniCassette
         mi = Core.Compiler.specialize_method(match)
         # Unsupported in this mini-cassette
         @assert !mi.def.isva
-        code_info = retrieve_code_info(mi, world)
-        @assert isa(code_info, CodeInfo)
-        code_info = copy(code_info)
-        @assert code_info.edges === nothing
-        code_info.edges = MethodInstance[mi]
-        transform!(mi, code_info, length(args), match.sparams)
+        src = retrieve_code_info(mi, world)
+        @assert isa(src, CodeInfo)
+        src = copy(src)
+        @assert src.edges === nothing
+        src.edges = MethodInstance[mi]
+        transform!(mi, src, length(args), match.sparams)
         # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
         # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
         # Match the generator, since that's what our transform! does
-        code_info.nargs = 4
-        code_info.isva = true
-        return code_info
+        src.nargs = 4
+        src.isva = true
+        return src
     end
 
-    @inline function overdub(c::Ctx, f::Union{Core.Builtin, Core.IntrinsicFunction}, args...)
-        f(args...)
-    end
+    @inline overdub(::Ctx, f::Union{Core.Builtin, Core.IntrinsicFunction}, args...) = f(args...)
 
-    @eval function overdub(c::Ctx, f, args...)
+    @eval function overdub(ctx::Ctx, f, args...)
         $(Expr(:meta, :generated_only))
         $(Expr(:meta, :generated, overdub_generator))
     end
@@ -149,14 +144,15 @@ end
 
 end # module OverlayModule
 
-methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, Base.get_world_counter())
-@test only(methods).method.module === Base.Math
-
-methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
-@test only(methods).method.module === OverlayModule
-
-methods = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
-@test isempty(methods)
+let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, Base.get_world_counter())
+    @test only(ms).method.module === Base.Math
+end
+let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
+    @test only(ms).method.module === OverlayModule
+end
+let ms = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
+    @test isempty(ms)
+end
 
 # precompilation
 
