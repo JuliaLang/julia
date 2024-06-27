@@ -510,11 +510,11 @@ function CodeInstance(
     mi::MethodInstance, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
     effects::UInt32, @nospecialize(analysis_results),
-    relocatability::UInt8, edges::Union{DebugInfo,Nothing})
+    relocatability::UInt8, di::Union{DebugInfo,Nothing}, edges::SimpleVector)
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any),
+        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any, Any),
         mi, owner, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
-        effects, analysis_results, relocatability, edges)
+        effects, analysis_results, relocatability, di, edges)
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
