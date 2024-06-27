@@ -51,9 +51,9 @@ eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedI
     ref = a.ref
     if M == 1 && N !== 1
         mem = ref.mem::Memory{T}
-        if !(ref === GenericMemoryRef(mem) && len === mem.length)
+        if !(ref === memoryref(mem) && len === mem.length)
             mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-            ref = GenericMemoryRef(mem)::typeof(ref)
+            ref = memoryref(mem)::typeof(ref)
         end
     end
     # or we could use `a = Array{T,N}(undef, ntuple(0, Val(N))); a.ref = ref; a.size = dims; return a` here
