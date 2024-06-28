@@ -1283,13 +1283,7 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     // Do not pass in `ptls` as argument. This slows down the fast path
     // in pool_alloc significantly
     jl_ptls_t ptls = jl_current_task->ptls;
-    jl_gc_pagemeta_t *pg = pop_lf_back(&ptls->page_metadata_buffered);
-    if (pg != NULL) {
-        gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
-    }
-    else {
-        pg = jl_gc_alloc_page();
-    }
+    jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
     pg->osize = p->osize;
     pg->thread_n = ptls->tid;
     set_page_metadata(pg);
@@ -1421,12 +1415,9 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
     }
 }
 
-int64_t buffered_pages = 0;
-
 // Walks over a page, reconstruting the free lists if the page contains at least one live object. If not,
 // queues up the page for later decommit (i.e. through `madvise` on Unix).
-static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
-                          jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
+static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
     jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
@@ -1442,22 +1433,10 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
     gc_page_serializer_init(s, pg);
 
     int re_use_page = 1;
-    int keep_as_local_buffer = 0;
     int freedall = 1;
     int pg_skpd = 1;
     if (!pg->has_marked) {
         re_use_page = 0;
-    #ifdef _P64 // TODO: re-enable on `_P32`?
-        // lazy version: (empty) if the whole page was already unused, free it (return it to the pool)
-        // eager version: (freedall) free page as soon as possible
-        // the eager one uses less memory.
-        // FIXME - need to do accounting on a per-thread basis
-        // on quick sweeps, keep a few pages empty but allocated for performance
-        if (!current_sweep_full && buffered_pages <= default_collect_interval / GC_PAGE_SZ) {
-            buffered_pages++;
-            keep_as_local_buffer = 1;
-        }
-    #endif
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
         gc_page_profile_write_empty_page(s, page_profile_enabled);
         goto done;
@@ -1544,12 +1523,7 @@ done:
     }
     else {
         gc_alloc_map_set(pg->data, GC_PAGE_LAZILY_FREED);
-        if (keep_as_local_buffer) {
-            push_lf_back(buffered, pg);
-        }
-        else {
-            push_lf_back(&global_page_pool_lazily_freed, pg);
-        }
+        push_lf_back(&global_page_pool_lazily_freed, pg);
     }
     gc_page_profile_write_to_file(s);
     gc_update_page_fragmentation_data(pg);
@@ -1560,15 +1534,14 @@ done:
 }
 
 // the actual sweeping over all allocated pages in a memory pool
-STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *lazily_freed,
-                                      jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_page_stack_t *allocd, jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     int p_n = pg->pool_n;
     int t_n = pg->thread_n;
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
     jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
     int osize = pg->osize;
-    gc_sweep_page(s, p, allocd, lazily_freed, pg, osize);
+    gc_sweep_page(s, p, allocd, pg, osize);
 }
 
 // sweep over all memory that is being used and not in a pool
@@ -1634,7 +1607,7 @@ int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_sc
                 push_lf_back_nosync(&tmp, pg);
             }
             else {
-                gc_sweep_pool_page(&serializer, dest, &ptls2->page_metadata_buffered, pg);
+                gc_sweep_pool_page(&serializer, dest, pg);
             }
             if (n_pages_to_scan >= n_pages_worth_parallel_sweep) {
                 break;
@@ -1715,7 +1688,7 @@ void gc_sweep_pool_parallel(jl_ptls_t ptls)
                 if (pg == NULL) {
                     continue;
                 }
-                gc_sweep_pool_page(&serializer, dest, &ptls2->page_metadata_buffered, pg);
+                gc_sweep_pool_page(&serializer, dest, pg);
                 found_pg = 1;
             }
             if (!found_pg) {
@@ -1747,13 +1720,38 @@ void gc_sweep_pool_parallel(jl_ptls_t ptls)
 // free all pages (i.e. through `madvise` on Linux) that were lazily freed
 void gc_free_pages(void)
 {
+    size_t n_pages_seen = 0;
+    jl_gc_page_stack_t tmp;
+    memset(&tmp, 0, sizeof(tmp));
     while (1) {
         jl_gc_pagemeta_t *pg = pop_lf_back(&global_page_pool_lazily_freed);
         if (pg == NULL) {
             break;
         }
+        n_pages_seen++;
+        // keep the last few pages around for a while
+        if (n_pages_seen * GC_PAGE_SZ <= default_collect_interval) {
+            push_lf_back(&tmp, pg);
+            continue;
+        }
         jl_gc_free_page(pg);
         push_lf_back(&global_page_pool_freed, pg);
+    }
+    // If concurrent page sweeping is disabled, then `gc_free_pages` will be called in the stop-the-world
+    // phase. We can guarantee, therefore, that there won't be any concurrent modifications to
+    // `global_page_pool_lazily_freed`, so it's safe to assign `tmp` back to `global_page_pool_lazily_freed`.
+    // Otherwise, we need to use the thread-safe push_lf_back/pop_lf_back functions.
+    if (jl_n_sweepthreads == 0) {
+        global_page_pool_lazily_freed = tmp;
+    }
+    else {
+        while (1) {
+            jl_gc_pagemeta_t *pg = pop_lf_back(&tmp);
+            if (pg == NULL) {
+                break;
+            }
+            push_lf_back(&global_page_pool_lazily_freed, pg);
+        }
     }
 }
 
@@ -1761,7 +1759,6 @@ void gc_free_pages(void)
 static void gc_sweep_pool(void)
 {
     gc_time_pool_start();
-    buffered_pages = 0;
 
     // For the benefit of the analyzer, which doesn't know that gc_n_threads
     // doesn't change over the course of this function
@@ -1801,12 +1798,6 @@ static void gc_sweep_pool(void)
                 pg->nfree = (GC_PAGE_SZ - (last_p - gc_page_data(last_p - 1))) / p->osize;
                 pg->has_young = 1;
             }
-        }
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_buffered.bottom);
-        while (pg != NULL) {
-            jl_gc_pagemeta_t *pg2 = pg->next;
-            buffered_pages++;
-            pg = pg2;
         }
     }
 
