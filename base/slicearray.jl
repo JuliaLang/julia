@@ -15,7 +15,7 @@ An `AbstractArray` of slices into a parent array over specified dimension(s),
 returning views that select all the data from the other dimension(s).
 
 These should typically be constructed by [`eachslice`](@ref), [`eachcol`](@ref) or
-[`eachrow`](@ref).
+[`eachrow`](@ref). [`ColumnSlices`](@ref) and [`RowSlices`](@ref) are special cases.
 
 [`parent(s::Slices)`](@ref) will return the parent array.
 """
@@ -86,9 +86,10 @@ the ordering of the dimensions will match those in `dims`. If `drop = false`, th
 `Slices` will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
-See [`stack`](@ref)`(slices; dims)` for the inverse of `eachslice(A; dims::Integer)`.
+For matrices, the case `dims = 1` is [`eachrow`](@ref), and `dims = 2` is [`eachcol`](@ref).
 
-See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectdim`](@ref).
+[`stack`](@ref)`(slices; dims)` is the inverse of `eachslice(A; dims::Integer, drop=true)`.
+See also [`mapslices`](@ref) and [`selectdim`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
@@ -106,7 +107,7 @@ julia> m = [1 2 3; 4 5 6; 7 8 9]
  7  8  9
 
 julia> s = eachslice(m, dims=1)
-3-element RowSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+3-element eachrow(::Matrix{Int64}) of 3-element slices with eltype Int64:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
@@ -117,11 +118,24 @@ julia> s[1]
  2
  3
 
-julia> eachslice(m, dims=1, drop=false)
-3×1 Slices{Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}, 2}:
+julia> eachslice(m, dims=1, drop=false)  # keyword changes size of container
+3×1 eachslice(::Matrix{Int64}, dims = 1, drop = false) of 3-element slices with eltype Int64:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
+
+julia> x3 = rand(Int8, 3,4,5);
+
+julia> eachslice(x3, dims=(3,2)) |> summary  # order of dims matters here
+"5×4 eachslice(::Array{Int8, 3}, dims = (3, 2)) of 3-element slices with eltype Int8"
+
+julia> eachslice(x3, dims=(3,2), drop=false) |> summary
+"1×4×5 eachslice(::Array{Int8, 3}, dims = (2, 3), drop = false) of 3-element slices with eltype Int8"
+
+julia> eachslice(Any[pi, 2pi], dims=1)  # eachrow would produce vector slices
+2-element eachslice(::Vector{Any}, dims = 1) of 0-dimensional slices with eltype Any:
+ fill(π)
+ fill(6.283185307179586)
 ```
 """
 @inline function eachslice(A; dims, drop=true)
@@ -147,20 +161,29 @@ See also [`eachcol`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 # Examples
 
 ```jldoctest
-julia> a = [1 2; 3 4]
-2×2 Matrix{Int64}:
- 1  2
- 3  4
+julia> a = [1 2 3; 40 50 60]
+2×3 Matrix{Int64}:
+  1   2   3
+ 40  50  60
 
 julia> s = eachrow(a)
-2-element RowSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
- [1, 2]
- [3, 4]
+2-element eachrow(::Matrix{Int64}) of 3-element slices with eltype Int64:
+ [1, 2, 3]
+ [40, 50, 60]
 
 julia> s[1]
-2-element view(::Matrix{Int64}, 1, :) with eltype Int64:
+3-element view(::Matrix{Int64}, 1, :) with eltype Int64:
  1
  2
+ 3
+
+julia> s isa RowSlices, s[1] isa SubArray
+(true, true)
+
+julia> eachrow(Any[pi, 2pi])  # reshapes vector to matrix before slicing
+2-element eachrow(::Matrix{Any}) of 1-element slices with eltype Any:
+ [π]
+ [6.283185307179586]
 ```
 """
 eachrow(A::AbstractMatrix) = _eachslice(A, (1,), true)
@@ -185,20 +208,31 @@ See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 # Examples
 
 ```jldoctest
-julia> a = [1 2; 3 4]
-2×2 Matrix{Int64}:
- 1  2
- 3  4
+julia> a = [1 2 3; 40 50 60]
+2×3 Matrix{Int64}:
+  1   2   3
+ 40  50  60
 
 julia> s = eachcol(a)
-2-element ColumnSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
- [1, 3]
- [2, 4]
+3-element eachcol(::Matrix{Int64}) of 2-element slices with eltype Int64:
+ [1, 40]
+ [2, 50]
+ [3, 60]
 
-julia> s[1]
-2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
- 1
- 3
+julia> s[3]
+2-element view(::Matrix{Int64}, :, 3) with eltype Int64:
+  3
+ 60
+
+julia> s isa ColumnSlices
+true
+
+julia> parent(s) === a
+true
+
+julia> eachcol('a':'c')  # accepts AbstractVector too, reshapes to 1-colum matrix:
+1-element eachcol(reshape(::StepRange{Char, Int64}, 3, 1)) of 3-element slices with eltype Char:
+ ['a', 'b', 'c']
 ```
 """
 eachcol(A::AbstractMatrix) = _eachslice(A, (2,), true)
@@ -243,3 +277,34 @@ end
 end
 
 parent(s::Slices) = s.parent
+
+function _element_size(s::Slices)
+    long = map((n,l) -> l === (:) ? n : nothing, size(s.parent), s.slicemap)
+    filter(!isnothing, long)
+end
+
+# These control summary printing, like `3-element eachcol(adjoint(::Matrix{Int64})) of ...`
+function showarg(io::IO, s::ColumnSlices, toplevel)
+    print(io, "eachcol(")
+    showarg(io, parent(s), false)
+    print(io, ')')
+    toplevel && print(io, " of ", dims2string(_element_size(s)), " slices with eltype ", eltype(eltype(s)))
+    return nothing
+end
+function showarg(io::IO, s::RowSlices, toplevel)
+    print(io, "eachrow(")
+    showarg(io, parent(s), false)
+    print(io, ')')
+    toplevel && print(io, " of ", dims2string(_element_size(s)), " slices with eltype ", eltype(eltype(s)))
+    return nothing
+end
+function showarg(io::IO, s::Slices, toplevel)
+    drop = ndims(s) + ndims(eltype(s)) > ndims(parent(s))
+    dims_vec = filter(c -> c isa Integer, [findfirst(==(d), s.slicemap) for d in 1:ndims(parent(s))])
+    dims = length(dims_vec) == 1 ? only(dims_vec) : Tuple(dims_vec)
+    print(io, "eachslice(")
+    showarg(io, parent(s), false)
+    print(io, ", dims = ", dims, drop ? ", drop = false)" : ")")
+    toplevel && print(io, " of ", dims2string(_element_size(s)), " slices with eltype ", eltype(eltype(s)))
+    return nothing
+end
