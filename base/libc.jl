@@ -176,12 +176,19 @@ struct TimeVal
    usec::Int64
 end
 
-function TimeVal()
-    tv = Ref{TimeVal}()
-    status = ccall(:jl_gettimeofday, Cint, (Ref{TimeVal},), tv)
-    status != 0 && error("unable to determine current time: ", status)
-    return tv[]
+struct TimeSpec
+   sec::Int64
+   nsec::Int64
 end
+
+function TimeSpec()
+    ts = Ref{TimeSpec}()
+    status = ccall(:jl_gettimeofday, Cint, (Ref{TimeSpec},), ts)
+    status != 0 && error("unable to determine current time: ", status)
+    return ts[]
+end
+
+Base.convert(::Type{TimeVal}, ts::TimeSpec) = TimeVal(ts.sec, div(ts.nsec, 1000))
 
 """
     TmStruct([seconds])
@@ -280,7 +287,7 @@ time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
 """
     time() -> Float64
 
-Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+Get the system time in seconds since the epoch. Resolution is system dependent and limited to milliseconds on windows, with (up to) nanosecond resolution on other platforms.
 """
 time() = ccall(:jl_clock_now, Float64, ())
 

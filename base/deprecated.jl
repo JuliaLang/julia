@@ -506,3 +506,15 @@ end
 @deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
 
 # END 1.11 deprecations
+
+# BEGIN 1.12 deprecations
+
+@deprecate splat(x) Splat(x) false
+# When removing this, also remove the struct & its constructor in Libc
+function Libc.TimeVal()
+    Base.depwarn("`TimeVal()` is deprecated, use `TimeSpec()` and convert to microseconds manually or move to the higher precision directly instead.", :TimeVal)
+    convert(Libc.TimeVal, Libc.TimeSpec())
+end
+
+# END 1.12 deprecations
+
