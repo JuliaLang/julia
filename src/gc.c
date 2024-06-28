@@ -1538,8 +1538,15 @@ done:
     gc_page_profile_write_to_file(s);
     gc_update_page_fragmentation_data(pg);
     gc_time_count_page(freedall, pg_skpd);
-    jl_ptls_t ptls = gc_all_tls_states[pg->thread_n];
-    jl_atomic_fetch_add_relaxed(&ptls->gc_num.pool_live_bytes, GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize); //TODO: Could we avoid doing a fetch_add here?
+    jl_ptls_t ptls = jl_current_task->ptls;
+    // Note that we aggregate the `pool_live_bytes` over all threads before returning this
+    // value to the user. It doesn't matter how the `pool_live_bytes` are partitioned among
+    // the threads as long as the sum is correct. Let's add the `pool_live_bytes` to the current thread
+    // instead of adding it to the thread that originally allocated the page, so we can avoid
+    // an atomic-fetch-add here.
+    size_t delta = (GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize);
+    jl_atomic_store_relaxed(&ptls->gc_num.pool_live_bytes,
+        jl_atomic_load_relaxed(&ptls->gc_num.pool_live_bytes) + delta);
     jl_atomic_fetch_add_relaxed((_Atomic(int64_t) *)&gc_num.freed, (nfree - old_nfree) * osize);
 }
 
