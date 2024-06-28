@@ -568,6 +568,8 @@ A = OffsetArray(view(rand(4,4), 1:4, 4:-1:1), (-3,5))
 # issue #33614
 A = OffsetArray(-1:0, (-2,))
 @test reshape(A, :) === A
+@test axes(similar(typeof(A),axes(A))) == axes(A)
+@time eltype(similar(typeof(A),axes(A))) == eltype(A)
 Arsc = reshape(A, :, 1)
 Arss = reshape(A, 2, 1)
 @test Arsc[1,1] == Arss[1,1] == -1
