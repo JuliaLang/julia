@@ -12,7 +12,7 @@ Sys.__init_build()
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
-Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 using Base.Meta
 

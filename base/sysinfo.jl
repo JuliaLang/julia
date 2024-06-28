@@ -166,7 +166,7 @@ end
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    global STDLIB = abspath(BINDIR, Base.DATAROOTDIR, "julia", "stdlib", vers)
     nothing
 end
 
