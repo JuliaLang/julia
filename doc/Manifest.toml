@@ -2,7 +2,7 @@
 
 julia_version = "1.12.0-DEV"
 manifest_format = "2.0"
-project_hash = "1e9ffa7d4739f7d125a5e2c66af8747a8effd889"
+project_hash = "38e76f9ae2e42e494d7351ebe72607f73ee7d2af"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -48,6 +48,14 @@ deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "CodecZlib", "Dates", 
 git-tree-sha1 = "f15a91e6e3919055efa4f206f942a73fedf5dfe6"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "1.4.0"
+
+[[deps.DocumenterVitepress]]
+deps = ["ANSIColoredPrinters", "Base64", "DocStringExtensions", "Documenter", "IOCapture", "Markdown", "NodeJS_20_jll", "REPL"]
+git-tree-sha1 = "2b368d90d019b16b79bc709c461560a5a6521e82"
+repo-rev = "master"
+repo-url = "https://github.com/LuxDL/DocumenterVitepress.jl"
+uuid = "4710194d-e776-4893-9690-8d956a29c365"
+version = "0.0.18"
 
 [[deps.Downloads]]
 deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
@@ -174,6 +182,12 @@ version = "2024.3.11"
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
+
+[[deps.NodeJS_20_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "e81a9cc8344600b8e3cc07c29444f4554816e1a2"
+uuid = "c7aee132-11e1-519c-8219-0a43005e73c2"
+version = "20.11.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
