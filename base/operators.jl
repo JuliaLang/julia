@@ -1094,6 +1094,19 @@ unwrap_composed(c) = (maybeconstructor(c),)
 call_composed(fs, x, kw) = (@inline; fs[1](call_composed(tail(fs), x, kw)))
 call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
 
+function hash(f::ComposedFunction, h::UInt)::UInt
+    h = hash(f.inner, h)
+    hash(f.outer, h)
+end
+
+function isequal(f1::ComposedFunction, f2::ComposedFunction)::Bool
+    isequal(f1.inner, f2.inner) && isequal(f1.outer, f2.outer)
+end
+
+function ==(f1::ComposedFunction, f2::ComposedFunction)::Bool
+    ==(f1.inner, f2.inner) && ==(f1.outer, f2.outer)
+end
+
 struct Constructor{F} <: Function end
 (::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
 maybeconstructor(::Type{F}) where {F} = Constructor{F}()
