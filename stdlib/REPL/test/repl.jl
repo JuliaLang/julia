@@ -1478,6 +1478,11 @@ end
         @test isempty(mods)
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
         @test mods == [:Foo]
+
+        mods = REPL.modules_to_be_loaded(:(import .Foo: a))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(:(using .Foo: a))
+        @test isempty(mods)
     end
 end
 
