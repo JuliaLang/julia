@@ -417,7 +417,7 @@ Uses [`BroadcastStyle`](@ref) to get the style for each argument, and uses
 
 ```jldoctest
 julia> Broadcast.combine_styles([1], [1 2; 3 4])
-Base.Broadcast.DefaultArrayStyle{2}()
+Broadcast.DefaultArrayStyle{2}()
 ```
 """
 function combine_styles end
@@ -441,10 +441,10 @@ determine a common `BroadcastStyle`.
 
 ```jldoctest
 julia> Broadcast.result_style(Broadcast.DefaultArrayStyle{0}(), Broadcast.DefaultArrayStyle{3}())
-Base.Broadcast.DefaultArrayStyle{3}()
+Broadcast.DefaultArrayStyle{3}()
 
 julia> Broadcast.result_style(Broadcast.Unknown(), Broadcast.DefaultArrayStyle{1}())
-Base.Broadcast.DefaultArrayStyle{1}()
+Broadcast.DefaultArrayStyle{1}()
 ```
 """
 function result_style end

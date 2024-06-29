@@ -1299,13 +1299,15 @@ end
 # which allocates. The method below provides the same behavior without allocating.
 # See https://github.com/JuliaLang/julia/pull/42773 for perf information.
 function print_fullname(io::IO, m::Module)
+    module_name = nameof(m)
     mp = parentmodule(m)
-    if m === Main || m === Base || m === Core || mp === m
-        show_sym(io, nameof(m))
+    active_mod = get(io, :module, active_module())
+    if m === Main || m === Base || m === Core || mp === m || isvisible(module_name, mp, active_mod)
+        show_sym(io, module_name)
     else
         print_fullname(io, mp)
         print(io, '.')
-        show_sym(io, nameof(m))
+        show_sym(io, module_name)
     end
 end
 
