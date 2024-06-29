@@ -214,7 +214,7 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         }
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
-        size = builder.CreateAdd(size, ConstantInt::get(T_size, sizeof(void*)));
+        // allocTypedFunc does not include the type tag in the allocation size!
         newI = builder.CreateCall(allocTypedFunc, { ptls, size, ConstantPointerNull::get(Type::getInt8PtrTy(F.getContext())) });
         derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sizeof(void*));
     }

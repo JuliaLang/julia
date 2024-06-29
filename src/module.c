@@ -702,13 +702,15 @@ JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 
 static uint_t bindingkey_hash(size_t idx, jl_svec_t *data)
 {
-    jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx);
+    jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx); // This must always happen inside the lock
     jl_sym_t *var = b->globalref->name;
     return var->hash;
 }
 
 static int bindingkey_eq(size_t idx, const void *var, jl_svec_t *data, uint_t hv)
 {
+    if (idx >= jl_svec_len(data))
+        return 0; // We got a OOB access, probably due to a data race
     jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx);
     jl_sym_t *name = b->globalref->name;
     return var == name;

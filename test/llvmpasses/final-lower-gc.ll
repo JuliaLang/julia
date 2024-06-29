@@ -95,9 +95,8 @@ top:
   %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
-; CHECK: %0 = add i64 %size, 8
-; TYPED: %v = call noalias nonnull dereferenceable(8) {} addrspace(10)* @ijl_gc_alloc_typed(i8* %ptls_i8, i64 %0, i8* null)
-; OPAQUE: %v = call noalias nonnull dereferenceable(8) ptr addrspace(10) @ijl_gc_alloc_typed(ptr %ptls_i8, i64 %0, ptr null)
+; TYPED: %v = call noalias nonnull dereferenceable(8) {} addrspace(10)* @ijl_gc_alloc_typed(i8* %ptls_i8, i64 %size, i8* null)
+; OPAQUE: %v = call noalias nonnull dereferenceable(8) ptr addrspace(10) @ijl_gc_alloc_typed(ptr %ptls_i8, i64 %size, ptr null)
   %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 %size)
   %0 = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
   %1 = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %0, i64 -1

@@ -5,9 +5,9 @@
 
 #define XX(name) \
 .global CNAME(name) SEP \
+CNAME(name)##: SEP \
 .cfi_startproc SEP \
 .p2align    2 SEP \
-CNAME(name)##: SEP \
     adrp x16, PAGE(CNAME(name##_addr)) SEP \
     ldr x16, [x16, PAGEOFF(CNAME(name##_addr))] SEP \
     br x16 SEP \
