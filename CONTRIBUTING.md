@@ -263,10 +263,12 @@ When running the ordinary test workflow on the stdlib packages, the system image
 version overrides the version you are developing.
 To test stdlib packages, you can do the following steps:
 
-1. Edit the UUID field of the `Project.toml` in the stdlib package
-2. Change the current directory to the directory of the stdlib you are developing
-3. Start julia with `julia --project=.`
-4. You can now test the package by running `pkg> test` in Pkg mode.
+1. Open the `Project.toml` in the stdlib package you are devoloping and check whether
+   your Julia version matches the package version.
+2. Edit the UUID field of the `Project.toml` in the stdlib package.
+3. Change the current directory to the directory of the stdlib you are developing.
+4. Start Julia with `julia --project=.`.
+5. You can now test the package by running `pkg> test` in Pkg mode.
 
 Because you changed the UUID, the package manager treats the stdlib package as
 different from the one in the system image, and the system image version will
