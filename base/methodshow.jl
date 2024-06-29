@@ -46,6 +46,12 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
     return s, string_with_env(env, t)
 end
 
+"""
+    method_argnames(m::Method)
+
+Return the argument names of a `Method` as a `Vector{Symbol}`. The first element is `Symbol("#self#")`.
+The remaining elements are the argument names.
+"""
 function method_argnames(m::Method)
     argnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), m.slot_syms)
     isempty(argnames) && return argnames
