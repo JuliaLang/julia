@@ -434,24 +434,26 @@ function _test_atomic_get_set_swap_modify(T, x, y, z)
         @test Base.setindex_atomic!(mem, Base.default_access_order(mem), y, 2) == y
         @test mem[2] == y
 
+        idx = UInt32(2)
+
         @test (@atomic mem[1]) == x
-        @test (@atomic mem[2]) == y
+        @test (@atomic mem[idx]) == y
 
-        (old, new) = (mem[2], z)
+        (old, new) = (mem[idx], z)
         # old and new are intentionally of different types to test inner conversion
-        @test (@atomic mem[2] = new) == new
-        @test mem[2] == new
-        @atomic mem[2] = old
+        @test (@atomic mem[idx] = new) == new
+        @test mem[idx] == new
+        @atomic mem[idx] = old
 
-        @test (@atomicswap mem[2] = new) == old
-        @test mem[2] == new
-        @atomic mem[2] = old
+        @test (@atomicswap mem[idx] = new) == old
+        @test mem[idx] == new
+        @atomic mem[idx] = old
 
         try
             old + new
-            @test (@atomic mem[2] += new) == old + new
-            @test mem[2] == old + new
-            @atomic mem[2] = old
+            @test (@atomic mem[idx] += new) == old + new
+            @test mem[idx] == old + new
+            @atomic mem[idx] = old
         catch err
             if !(err isa MethodError)
                 rethrow(err)
@@ -474,21 +476,23 @@ function _test_atomic_setonce_replace(T, initial, desired)
             @test !isassigned(mem, 1)
         end
 
-        expected = @atomic mem[2]
-        @test (@atomicreplace mem[2] expected => desired) == (old=expected, success=true)
-        @test mem[2] == desired
+        idx = UInt(2)
 
-        @atomic mem[2] = expected
-        @test (@atomicreplace mem[2] desired => desired) == (old=expected, success=false)
-        @test mem[2] == expected
+        expected = @atomic mem[idx]
+        @test (@atomicreplace mem[idx] expected => desired) == (old=expected, success=true)
+        @test mem[idx] == desired
 
-        @atomic mem[2] = expected
-        @test (@atomicreplace mem[2] Pair(expected, desired)) == (old=expected, success=true)
-        @test mem[2] == desired
+        @atomic mem[idx] = expected
+        @test (@atomicreplace mem[idx] desired => desired) == (old=expected, success=false)
+        @test mem[idx] == expected
 
-        @atomic mem[2] = expected
-        @test (@atomicreplace mem[2] Pair(desired, desired)) == (old=initial, success=false)
-        @test mem[2] == expected
+        @atomic mem[idx] = expected
+        @test (@atomicreplace mem[idx] Pair(expected, desired)) == (old=expected, success=true)
+        @test mem[idx] == desired
+
+        @atomic mem[idx] = expected
+        @test (@atomicreplace mem[idx] Pair(desired, desired)) == (old=initial, success=false)
+        @test mem[idx] == expected
     end
 end
 @testset "@atomic with AtomicMemory" begin
