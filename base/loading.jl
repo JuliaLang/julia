@@ -1357,6 +1357,7 @@ end
 mutable struct ExtensionId
     const id::PkgId
     const parentid::PkgId # just need the name, for printing
+    const n_total_triggers::Int
     ntriggers::Int # how many more packages must be defined until this is loaded
 end
 
@@ -1452,7 +1453,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             continue  # extension is already primed or loaded, don't add it again
         end
         EXT_PRIMED[id] = parent
-        gid = ExtensionId(id, parent, 1 + length(triggers))
+        gid = ExtensionId(id, parent, 1 + length(triggers), 1 + length(triggers))
         trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, parent)
         push!(trigger1, gid)
         for trigger in triggers
@@ -1496,25 +1497,21 @@ function run_extension_callbacks(pkgid::PkgId)
     # take ownership of extids that depend on this pkgid
     extids = pop!(EXT_DORMITORY, pkgid, nothing)
     extids === nothing && return
+    extids_to_load = Vector{ExtensionId}()
     for extid in extids
-        if extid.ntriggers > 0
-            # indicate pkgid is loaded
-            extid.ntriggers -= 1
-        end
-        if extid.ntriggers < 0
-            # indicate pkgid is loaded
-            extid.ntriggers += 1
-            succeeded = false
-        else
-            succeeded = true
-        end
+        extid.ntriggers -= 1
         if extid.ntriggers == 0
-            # actually load extid, now that all dependencies are met,
-            # and record the result
-            succeeded = succeeded && run_extension_callbacks(extid)
-            succeeded || push!(EXT_DORMITORY_FAILED, extid)
+            push!(extids_to_load, extid)
         end
     end
+    # Load extensions with the fewest triggers first
+    sort!(extids_to_load, by=extid->extid.n_total_triggers)
+    for extid in extids_to_load
+        # actually load extid, now that all dependencies are met,
+        succeeded = run_extension_callbacks(extid)
+        succeeded || push!(EXT_DORMITORY_FAILED, extid)
+    end
+
     return
 end
 
