@@ -25,6 +25,7 @@ IdDict{Any, String} with 3 entries:
 ```
 """
 mutable struct IdDict{K,V} <: AbstractDict{K,V}
+    # NOTE make sure to sync the struct definition with `jl_id_dict_t` in julia.h
     ht::Memory{Any}
     count::Int
     ndel::Int
@@ -73,18 +74,35 @@ function sizehint!(d::IdDict, newsz)
     rehash!(d, newsz)
 end
 
-function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
+# get (index) for the key
+#     index - where a key is stored, or -pos if not present
+#             and was inserted at pos
+function ht_keyindex2!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(KeyTypeError(K, key))
-    if !(val isa V) # avoid a dynamic call
-        val = convert(V, val)::V
-    end
+    return ccall(:jl_eqtable_keyindex, Cssize_t, (Any, Any), d, key)
+end
+
+@propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, keyindex::Int) where {K, V}
+    d.ht[keyindex+1] = val
+    d.count += 1
+
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max((length(d.ht)%UInt)>>1, 32))
         d.ndel = 0
     end
-    inserted = RefValue{Cint}(0)
-    d.ht = ccall(:jl_eqtable_put, Memory{Any}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
-    d.count += inserted[]
+    return nothing
+end
+
+function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
+    if !(val isa V) # avoid a dynamic call
+        val = convert(V, val)::V
+    end
+    keyindex = ht_keyindex2!(d, key)
+    if keyindex >= 0
+        @inbounds d.ht[keyindex+1] = val
+    else
+        @inbounds _setindex!(d, val, -keyindex)
+    end
     return d
 end
 
@@ -143,16 +161,22 @@ end
 
 length(d::IdDict) = d.count
 
+isempty(d::IdDict) = length(d) == 0
+
 copy(d::IdDict) = typeof(d)(d)
 
 function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
-    if val === secret_table_token
+    keyindex = ht_keyindex2!(d, key)
+
+    if keyindex < 0
+        # If convert call fails we need the key to be deleted
+        d.ndel += 1
         val = isa(default, V) ? default : convert(V, default)::V
-        setindex!(d, val, key)
-        return val
-    else
+        d.ndel -= 1
+        @inbounds _setindex!(d, val, -keyindex)
         return val::V
+    else
+        return @inbounds d.ht[keyindex+1]::V
     end
 end
 
