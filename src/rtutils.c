@@ -423,6 +423,19 @@ static int substr_isspace(char *p, char *pend)
     return 1;
 }
 
+static int is_double_valid(double out, char *p, char *pend, char *bstr)
+{
+    if (errno == ERANGE && (out == 0 || out == HUGE_VAL || out == -HUGE_VAL)) {
+        return 0;
+    }
+    else if (p == bstr) {
+        return 0;
+    }
+    // Deal with case where the substring might be something like "1 ",
+    // which is OK, and "1 X", which we don't allow.
+    return substr_isspace(p, pend) ? 1 : 0;
+}
+
 JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, size_t len)
 {
     char *p;
@@ -446,18 +459,21 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
         bstr = newstr;
         pend = bstr+len;
     }
-    double out = jl_strtod_c(bstr, &p);
 
-    if (errno==ERANGE && (out==0 || out==HUGE_VAL || out==-HUGE_VAL)) {
-        hasvalue = 0;
-    }
-    else if (p == bstr) {
-        hasvalue = 0;
-    }
-    else {
-        // Deal with case where the substring might be something like "1 ",
-        // which is OK, and "1 X", which we don't allow.
-        hasvalue = substr_isspace(p, pend) ? 1 : 0;
+    double out = jl_strtod_c(bstr, &p);
+    hasvalue = is_double_valid(out, p, pend, bstr);
+    if (hasvalue == 0) {
+        // Deal with the case where the substring might be something like "1f0".
+        // strtod/strtof doesn't recognize f/F for exponents, so modify
+        // the first instance of f/F to e.
+        char *ptr_to_first_f = strpbrk(bstr, "fF");
+        if (ptr_to_first_f) {
+            char original = *ptr_to_first_f;
+            *ptr_to_first_f = 'e';
+            out = jl_strtod_c(bstr, &p);
+            hasvalue = is_double_valid(out, p, pend, bstr);
+            *ptr_to_first_f = original;
+        }
     }
 
     if (__unlikely(tofree))
@@ -482,6 +498,19 @@ JL_DLLEXPORT int jl_substrtod(char *str, size_t offset, size_t len, double *out)
 #define HUGE_VALF (1e25f * 1e25f)
 #endif
 
+static int is_float_valid(float out, char *p, char *pend, char *bstr)
+{
+    if (errno == ERANGE && (out == 0 || out == HUGE_VAL || out == -HUGE_VAL)) {
+        return 0;
+    }
+    else if (p == bstr) {
+        return 0;
+    }
+    // Deal with case where the substring might be something like "1 ",
+    // which is OK, and "1 X", which we don't allow.
+    return substr_isspace(p, pend) ? 1 : 0;
+}
+
 JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, size_t len)
 {
     char *p;
@@ -505,22 +534,32 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
         bstr = newstr;
         pend = bstr+len;
     }
+
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
     float out = (float)jl_strtod_c(bstr, &p);
 #else
     float out = jl_strtof_c(bstr, &p);
 #endif
 
-    if (errno==ERANGE && (out==0 || out==HUGE_VALF || out==-HUGE_VALF)) {
-        hasvalue = 0;
-    }
-    else if (p == bstr) {
-        hasvalue = 0;
-    }
-    else {
-        // Deal with case where the substring might be something like "1 ",
-        // which is OK, and "1 X", which we don't allow.
-        hasvalue = substr_isspace(p, pend) ? 1 : 0;
+    hasvalue = is_float_valid(out, p, pend, bstr);
+    if (hasvalue == 0) {
+        // Deal with the case where the substring might be something like "1f0".
+        // strtod/strtof doesn't recognize f/F for exponents, so modify
+        // the first instance of f/F to e.
+        char *ptr_to_first_f = strpbrk(bstr, "fF");
+        if (ptr_to_first_f) {
+            char original = *ptr_to_first_f;
+            *ptr_to_first_f = 'e';
+
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
+            out = (float)jl_strtod_c(bstr, &p);
+#else
+            out = jl_strtof_c(bstr, &p);
+#endif
+
+            hasvalue = is_float_valid(out, p, pend, bstr);
+            *ptr_to_first_f = original;
+        }
     }
 
     if (__unlikely(tofree))
