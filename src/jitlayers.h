@@ -29,37 +29,12 @@
 #include <stack>
 #include <queue>
 
-
-// As of LLVM 13, there are two runtime JIT linker implementations, the older
-// RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
-// (used via orc::ObjectLinkingLayer).
-//
-// JITLink is not only more flexible (which isn't of great importance for us, as
-// we do only single-threaded in-process codegen), but crucially supports using
-// the Small code model, where the linker needs to fix up relocations between
-// object files that end up far apart in address space. RuntimeDyld can't do
-// that and relies on the Large code model instead, which is broken on
-// aarch64-darwin (macOS on ARM64), and not likely to ever be supported there
-// (see https://bugs.llvm.org/show_bug.cgi?id=52029).
-//
-// However, JITLink is a relatively young library and lags behind in platform
-// and feature support (e.g. Windows, JITEventListeners for various profilers,
-// etc.). Thus, we currently only use JITLink where absolutely required, that is,
-// for Mac/aarch64 and Linux/aarch64.
-// #define JL_FORCE_JITLINK
-
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 # define HAS_SANITIZER
 #endif
 // The sanitizers don't play well with our memory manager
 
-#if defined(JL_FORCE_JITLINK) || defined(_CPU_AARCH64_) || defined(HAS_SANITIZER)
-# define JL_USE_JITLINK
-#endif
-
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
-# include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
-# include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 
 using namespace llvm;
 
@@ -354,33 +329,11 @@ using SharedBytesT = StringSet<MaxAlignedAllocImpl<sizeof(StringSet<>::MapEntryT
 
 class JuliaOJIT {
 public:
-#ifdef JL_USE_JITLINK
     typedef orc::ObjectLinkingLayer ObjLayerT;
-#else
-    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
-#endif
-    struct LockLayerT : public orc::ObjectLayer {
-
-        LockLayerT(orc::ObjectLayer &BaseLayer) JL_NOTSAFEPOINT : orc::ObjectLayer(BaseLayer.getExecutionSession()), BaseLayer(BaseLayer) {}
-        ~LockLayerT() JL_NOTSAFEPOINT = default;
-
-        void emit(std::unique_ptr<orc::MaterializationResponsibility> R,
-                            std::unique_ptr<MemoryBuffer> O) override {
-            JL_TIMING(LLVM_JIT, JIT_Link);
-#ifndef JL_USE_JITLINK
-            std::lock_guard<std::mutex> lock(EmissionMutex);
-#endif
-            BaseLayer.emit(std::move(R), std::move(O));
-        }
-    private:
-        orc::ObjectLayer &BaseLayer;
-        std::mutex EmissionMutex;
-    };
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef orc::IRTransformLayer OptSelLayerT;
-    typedef orc::IRTransformLayer DepsVerifyLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     template
     <typename ResourceT, size_t max = 0,
@@ -495,21 +448,15 @@ public:
 
     struct DLSymOptimizer;
 
-private:
-    // Custom object emission notification handler for the JuliaOJIT
-    template <typename ObjT, typename LoadResult>
-    void registerObject(const ObjT &Obj, const LoadResult &LO);
-
 public:
 
     JuliaOJIT() JL_NOTSAFEPOINT;
     ~JuliaOJIT() JL_NOTSAFEPOINT;
 
     void enableJITDebuggingSupport() JL_NOTSAFEPOINT;
-#ifndef JL_USE_JITLINK
-    // JITLink doesn't support old JITEventListeners (yet).
-    void RegisterJITEventListener(JITEventListener *L) JL_NOTSAFEPOINT;
-#endif
+    void enableIntelJITEventListener() JL_NOTSAFEPOINT;
+    void enableOProfileJITEventListener() JL_NOTSAFEPOINT;
+    void enablePerfJITEventListener() JL_NOTSAFEPOINT;
 
     orc::SymbolStringPtr mangle(StringRef Name) JL_NOTSAFEPOINT;
     void addGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
@@ -601,19 +548,13 @@ private:
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
-#ifndef JL_USE_JITLINK
-    const std::shared_ptr<RTDyldMemoryManager> MemMgr;
-#else
     std::atomic<size_t> total_size{0};
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
-#endif
     ObjLayerT ObjectLayer;
-    LockLayerT LockLayer;
     CompileLayerT CompileLayer;
     JITPointersLayerT JITPointersLayer;
     OptimizeLayerT OptimizeLayer;
     OptSelLayerT OptSelLayer;
-    DepsVerifyLayerT DepsVerifyLayer;
     CompileLayerT ExternalCompileLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
