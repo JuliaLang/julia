@@ -284,7 +284,6 @@ typedef struct {
 static jl_datatype_t *datatype_stack_internal;
 static jl_datatype_t *datatype_stack_external;
 static jl_datatype_t *datatype_stack;
-static jl_ptls_t ptls;
 
 static size_t gc_alloc_size(jl_value_t *val)
 {
@@ -333,7 +332,7 @@ int internal_obj_scan(jl_value_t *val)
     }
 }
 
-dynstack_t *allocate_stack_mem(size_t capacity)
+dynstack_t *allocate_stack_mem(jl_ptls_t ptls, size_t capacity)
 {
     size_t size = offsetof(dynstack_t, data) + capacity * sizeof(jl_value_t *);
     jl_datatype_t *type = datatype_stack_internal;
@@ -377,13 +376,14 @@ jl_value_t *stk_type()
 
 // Create a new stack object
 
-jl_value_t *stk_make()
+jl_value_t *stk_make(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *hdr =
             jl_gc_alloc_typed(ptls, sizeof(jl_value_t *), datatype_stack);
     JL_GC_PUSH1(hdr);
     *(dynstack_t **)hdr = NULL;
-    dynstack_t *stk = allocate_stack_mem(8);
+    dynstack_t *stk = allocate_stack_mem(ptls, 8);
     *(dynstack_t **)hdr = stk;
     jl_gc_schedule_foreign_sweepfunc(ptls, (jl_value_t *)(stk));
     JL_GC_POP();
@@ -408,7 +408,8 @@ void stk_push(jl_value_t *s, jl_value_t *v)
         jl_gc_wb((jl_value_t *)stk, v);
     }
     else {
-        dynstack_t *newstk = allocate_stack_mem(stk->capacity * 3 / 2 + 1);
+        jl_ptls_t ptls = jl_get_ptls_states();
+        dynstack_t *newstk = allocate_stack_mem(ptls, stk->capacity * 3 / 2 + 1);
         newstk->size = stk->size;
         memcpy(newstk->data, stk->data, sizeof(jl_value_t *) * stk->size);
         *(dynstack_t **)s = newstk;
@@ -453,6 +454,7 @@ static jl_module_t *module;
 
 void root_scanner(int full)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     for (int i = 0; i < NAUXROOTS; i++) {
         if (aux_roots[i])
             jl_gc_mark_queue_obj(ptls, aux_roots[i]);
@@ -477,7 +479,7 @@ static int stack_grows_down(void) {
   return is_lower_stack_frame_ptr(buf);
 }
 
-void task_scanner(jl_task_t *task, int root_task)
+void task_scanner(jl_task_t *task, int root_task, jl_ptls_t ptls)
 {
     int var_on_frame;
 
@@ -603,7 +605,6 @@ int main()
     jl_init();
     if (jl_gc_enable_conservative_gc_support() < 0)
         abort();
-    ptls = jl_get_ptls_states();
     jl_gc_set_cb_root_scanner(root_scanner, 1);
     jl_gc_set_cb_task_scanner(task_scanner, 1);
     jl_gc_set_cb_pre_gc(pre_gc_func, 1);
