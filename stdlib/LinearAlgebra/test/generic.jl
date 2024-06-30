@@ -647,6 +647,14 @@ end
     end
 end
 
+@testset "dot with missing" begin
+    x = [5, 6, missing]
+    y = [missing, 5, 6]
+    @test ismissing(dot(x, x))
+    @test ismissing(dot(x, y))
+    @test ismissing(dot(y, x))
+end
+
 @testset "condskeel #34512" begin
     A = rand(3, 3)
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
