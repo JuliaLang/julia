@@ -373,20 +373,47 @@ Register a one-argument function to be called before the REPL interface is initi
 interactive sessions; this is useful to customize the interface. The argument of `f` is the
 REPL object. This function should be called from within the `.julia/config/startup.jl`
 initialization file.
+The function `f` is not called if REPL is already initialized.  Use [`afterreplinit`](@ref)
+to call `f` even when REPL is already initialized.
 """
 atreplinit(f::Function) = (pushfirst!(repl_hooks, f); nothing)
 
-function __atreplinit(repl)
+function _run_repl_hooks(repl_hooks, args...)
     for f in repl_hooks
         try
-            f(repl)
+            f(args...)
         catch err
             showerror(stderr, err)
             println(stderr)
         end
     end
 end
-_atreplinit(repl) = invokelatest(__atreplinit, repl)
+_atreplinit(repl) = invokelatest(_run_repl_hooks, repl_hooks, repl)
+
+const _afterreplinit_hooks = []
+
+_afterreplinit(repl, backend) =
+    invokelatest(_run_repl_hooks, _afterreplinit_hooks, repl, backend)
+
+"""
+    afterreplinit(f)
+
+Register a two-argument function to be called after the REPL interface and its backend are
+initialized in interactive sessions.  This is useful to customize the interface like
+registering a new keybind.  The function `f` has to accept two arguments: the REPL object
+(e.g., `REPL.LineEditREPL`) and its backend (e.g., `REPL.REPLBackend`).  `afterreplinit`
+may be called from `.julia/config/startup.jl` and `__init__` of a module.  Unlike
+[`atreplinit`](@ref), `f` is called even when `afterreplinit(f)` is invoked after the REPL
+is initialized.
+"""
+function afterreplinit(f)
+    if isdefined(Base, :active_repl) && isdefined(Base, :active_repl_backend)
+        f(active_repl, active_repl_backend)
+    else
+        pushfirst!(_afterreplinit_hooks, f)
+    end
+    return nothing
+end
 
 function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
@@ -444,7 +471,10 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
             # REPLDisplay
             pushdisplay(REPL.REPLDisplay(repl))
             _atreplinit(repl)
-            REPL.run_repl(repl, backend->(global active_repl_backend = backend))
+            REPL.run_repl(repl, function(backend)
+                global active_repl_backend = backend
+                _afterreplinit(repl, backend)
+            end)
         end
     else
         # otherwise provide a simple fallback
