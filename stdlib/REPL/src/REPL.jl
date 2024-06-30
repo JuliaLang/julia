@@ -362,8 +362,75 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
+SHOW_MAXIMUM_BYTES::Int = 20480
+
+# Limit printing during REPL display
+mutable struct LimitIO{IO_t <: IO} <: IO
+    io::IO_t
+    maxbytes::Int
+    n::Int # max bytes to write
+end
+LimitIO(io::IO, maxbytes) = LimitIO(io, maxbytes, 0)
+
+# Forward `ioproperties` onwards (for interop with IOContext)
+Base.ioproperties(io::LimitIO) = Base.ioproperties(io.io)
+
+struct LimitIOException <: Exception
+    maxbytes::Int
+end
+
+function Base.showerror(io::IO, e::LimitIOException)
+    print(io, "$LimitIOException: aborted printing after attempting to print more than $(Base.format_bytes(e.maxbytes)) within a `LimitIO`.")
+end
+
+function Base.write(io::LimitIO, v::UInt8)
+    io.n > io.maxbytes && throw(LimitIOException(io.maxbytes))
+    io.n += write(io.io, v)
+end
+
+# Semantically, we only need to override `Base.write`, but we also
+# override `unsafe_write` for performance.
+function Base.unsafe_write(io::Base.IOContext{<:LimitIO}, p::Ptr{UInt8}, nb::UInt)
+    limiter = io.io
+    # already exceeded? throw
+    limiter.n > limiter.maxbytes && throw(LimitIOException(limiter.maxbytes))
+    remaining = limiter.maxbytes - limiter.n # >= 0
+
+    # Not enough bytes left; we will print up to the limit, then throw
+    if remaining < nb
+        if remaining > 0
+            # note we pass on the `ioproperties` with the inner `limiter.io` object
+            Base.unsafe_write(IOContext(limiter.io, Base.ioproperties(io)), p, remaining)
+        end
+        throw(LimitIOException(limiter.maxbytes))
+    end
+
+    # We won't hit the limit so we'll write the full `nb` bytes, again passing along the `ioproperties`.
+    bytes_written = Base.unsafe_write(IOContext(limiter.io, Base.ioproperties(io)), p, nb)
+    limiter.n += bytes_written
+    return bytes_written
+end
+
+# wrap to hit optimized method
+function Base.unsafe_write(limiter::LimitIO, p::Ptr{UInt8}, nb::UInt)
+    return unsafe_write(IOContext(limiter), p, nb)
+end
+
 struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
+end
+
+function show_limited(io::IO, mime::MIME, x)
+    try
+        # We wrap in a LimitIO to limit the amount of printing.
+        # We unpack `IOContext`s, since we will pass the properties on the outside.
+        inner = io isa IOContext ? io.io : io
+        wrapped_limiter = IOContext(LimitIO(inner, SHOW_MAXIMUM_BYTES), Base.ioproperties(io))
+        show(wrapped_limiter, mime, x)
+    catch e
+        e isa LimitIOException || rethrow()
+        printstyled(io, "…[printing stopped after displaying $(Base.format_bytes(e.maxbytes))]"; color=:light_yellow, bold=true)
+    end
 end
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
@@ -382,7 +449,7 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
-        show(io, mime, x[])
+        show_limited(io, mime, x[])
         println(io)
     end
     return nothing
