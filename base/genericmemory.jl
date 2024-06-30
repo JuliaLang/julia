@@ -340,18 +340,13 @@ end
 end
 view(m::GenericMemory, inds::Colon) = view(m, eachindex(m))
 
-# modify, swap and replace at index
+# get, set(once), modify, swap and replace at index, atomically
 function getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)
     memref = memoryref(mem, i)
     return memoryrefget(memref, order, @_boundscheck)
 end
 
-function setindex_atomic!(
-    mem::GenericMemory,
-    order::Symbol,
-    val,
-    i::Int,
-)
+function setindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
     T = eltype(mem)
     memref = memoryref(mem, i)
     return memoryrefset!(
@@ -380,23 +375,12 @@ function setindexonce_atomic!(
     )
 end
 
-function modifyindex_atomic!(
-    mem::GenericMemory,
-    order::Symbol,
-    op,
-    val,
-    i::Int,
-)
+function modifyindex_atomic!(mem::GenericMemory, order::Symbol, op, val, i::Int)
     memref = memoryref(mem, i)
     return Core.memoryrefmodify!(memref, op, val, order, @_boundscheck)
 end
 
-function swapindex_atomic!(
-    mem::GenericMemory,
-    order::Symbol,
-    val,
-    i::Int,
-)
+function swapindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
     T = eltype(mem)
     memref = memoryref(mem, i)
     return Core.memoryrefswap!(
