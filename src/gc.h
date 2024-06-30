@@ -449,6 +449,54 @@ extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
 extern gc_heapstatus_t gc_heap_stats;
 
+STATIC_INLINE int gc_first_parallel_collector_thread_id(void) JL_NOTSAFEPOINT
+{
+    if (jl_n_markthreads == 0) {
+        return 0;
+    }
+    return gc_first_tid;
+}
+
+STATIC_INLINE int gc_last_parallel_collector_thread_id(void) JL_NOTSAFEPOINT
+{
+    if (jl_n_markthreads == 0) {
+        return -1;
+    }
+    return gc_first_tid + jl_n_markthreads - 1;
+}
+
+STATIC_INLINE int gc_ith_parallel_collector_thread_id(int i) JL_NOTSAFEPOINT
+{
+    assert(i >= 0 && i < jl_n_markthreads);
+    return gc_first_tid + i;
+}
+
+STATIC_INLINE int gc_is_parallel_collector_thread(int tid) JL_NOTSAFEPOINT
+{
+    return tid >= gc_first_tid && tid <= gc_last_parallel_collector_thread_id();
+}
+
+STATIC_INLINE int gc_random_parallel_collector_thread_id(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    assert(jl_n_markthreads > 0);
+    int v = gc_first_tid + (int)cong(jl_n_markthreads - 1, &ptls->rngseed);
+    assert(v >= gc_first_tid && v <= gc_last_parallel_collector_thread_id());
+    return v;
+}
+
+STATIC_INLINE int gc_parallel_collector_threads_enabled(void) JL_NOTSAFEPOINT
+{
+    return jl_n_markthreads > 0;
+}
+
+STATIC_INLINE void gc_check_ptls_of_parallel_collector_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    (void)ptls;
+    assert(gc_parallel_collector_threads_enabled());
+    assert(ptls != NULL);
+    assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
+}
+
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
     return container_of(o, bigval_t, header);
