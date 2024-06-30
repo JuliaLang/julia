@@ -437,18 +437,33 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
         return powermod(invmod(x, m), -p, m)
     end
     (m == 1 || m == -1) && return zero(m)
-    b = oftype(m,mod(x,m))  # this also checks for divide by zero
-
     t = prevpow(2, p)
-    r = 1
-    while true
-        if p >= t
-            r = mod(widemul(r,b),m)
-            p -= t
+    r = one(T)
+    if T <: BitInteger && (T<:Signed ? -abs(m) >= (typemin(T)>>(8(sizeof(T)>>1))) : m <= (typemax(T)>>(8(sizeof(T)>>1))))
+        # we don't want to take this path for `m == typemin(T)` when
+        # `T` is signed; the above condition will be `false`
+        mis = MultiplicativeInverses.multiplicativeinverse(m)
+        b = oftype(m,mod(x,mis))  # this also checks for divide by zero
+        while true
+            if p >= t
+                r = mod(r * b, mis)
+                p -= t
+            end
+            t >>>= 1
+            t <= 0 && break
+            r = mod(r * r, mis)
         end
-        t >>>= 1
-        t <= 0 && break
-        r = mod(widemul(r,r),m)
+    else
+        b = oftype(m,mod(x,m))  # this also checks for divide by zero
+        while true
+            if p >= t
+                r = oftype(m, mod(widemul(r,b),m))
+                p -= t
+            end
+            t >>>= 1
+            t <= 0 && break
+            r = oftype(m, mod(widemul(r,r),m))
+        end
     end
     return r
 end
