@@ -262,7 +262,7 @@ millisecond or input of `0.001`.
 """
 function sleep(sec::Real)
     sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
-    wait(Timer(sec))
+    _trywait(Timer(sec)) # don't error if timer already closed
     nothing
 end
 
