@@ -412,6 +412,113 @@ end
 which has nearly identical behavior but will be much faster (because the type instability is eliminated).
 Note that we do not impose `F<:Function`: this means callable objects which do not subtype `Function` are also allowed for the field `f`.
 
+### Avoid Overspecializing Functions
+
+In the previous section, we advised you to specialize functions concretely instead of using a `::Function` field in a struct.
+However, this approach has its drawbacks. Consider the following simplified code example,
+which solves a problem on a specific domain based on user-provided boundary conditions:
+
+```julia
+struct Domain end
+
+struct MyProblem{F<:Function}
+    domain::Domain
+    boundary_condition::F
+end
+
+function solve(::MyProblem)
+    # Code to solve the problem
+end
+
+prob = MyProblem(Domain(), x -> x^2)
+solve(prob)
+```
+
+In Julia, functions are compiled based on input types. Thus, the type of `prob` is:
+
+```julia
+julia> typeof(prob)
+MyProblem{var"#1#2"}
+```
+
+Here, `var"#1#2"` represents the auto-generated name for the closure `x -> x^2`. When solving another problem with a different boundary condition:
+
+```
+julia> prob2 = MyProblem(Domain(), x -> x^3);
+
+julia> typeof(prob2)
+MyProblem{var"#3#4"}
+```
+
+A new compilation of `solve` is required for this new `MyProblem` type that specializes on the new closure.
+If `solve` has a lengthy compilation time and the performance gains from specializing on the function are minimal,
+you might end up recompiling similar code repeatedly with negligible benefits.
+
+Moreover, if `solve` is part of a package, structuring code this way prevents effective precompilation of `solve` on `MyProblem`
+since the type created during precompilation differs from those instantiated by users.
+
+To mitigate this, you could define `MyProblem` as follows:
+
+```julia
+struct MyProblem
+    domain::Domain
+    boundary_condition::Function
+end
+```
+
+This change ensures the type of `MyProblem` remains consistent regardless of the function passed. However, this introduces other issues (as mentioned in the previous section):
+
+- The return type of the boundary condition function becomes `Any`, which can degrade performance across your program by causing type instability.
+- Each call to the boundary function incurs overhead due to dynamic dispatch and can lead to allocations.
+
+Ideally, we'd like to specialize `MyProblem` based on the input and output types of the function, rather than the function itself.
+This allows the compiled code to remain valid even if the function changes, similar to a function pointer in other languages.
+Julia enables this through `Core.OpaqueClosure`, which is parameterized by its input and output types:
+
+```julia
+struct Domain end
+
+struct MyProblem{Input, Output}
+    domain::Domain
+    boundary_condition::Core.OpaqueClosure{Input, Output}
+end
+
+MyProblem(domain::Domain, f::Function) = MyProblem(domain, Base.Experimental.@opaque Tuple{Float64} x -> f(x)::Float64)
+```
+
+Note that here, we hardcode the input and output to `Float64`, but these could be user-specified or computed based on other argument types in the construction of `MyProblem`. With this approach:
+
+```
+julia> prob3 = MyProblem(Domain(), x -> x^2);
+
+julia> prob4 = MyProblem(Domain(), x -> x^3);
+
+julia> typeof(prob3) == typeof(prob4)
+true
+```
+
+This modification ensures that `MyProblem` is not specialized on the specific function but rather on the input and output types.
+From the timing and `@code_warntype` below we can also see that the cost of calling the boundary condition function is minimal and the return value is properly inferred.
+
+```julia
+function compute_boundary_conditions(prob::MyProblem, x)
+    prob.boundary_condition(x)
+end
+
+julia> @btime compute_boundary_conditions($prob3, 1.0)
+  4.916 ns (0 allocations: 0 bytes)
+1.0
+
+julia> @code_warntype compute_boundary_conditions(prob3, 1.0)
+MethodInstance for compute_boundary_conditions(::MyProblem{Tuple{Float64}, Float64}, ::Float64)
+...
+Body::Float64
+```
+
+This method ensures precise type inference and eliminates allocation during function calls,
+enhancing overall performance without forcing specialization on the input function itself.
+
+
 ### Avoid fields with abstract containers
 
 The same best practices also work for container types:
