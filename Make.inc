@@ -92,6 +92,9 @@ WITH_DTRACE := 0
 # Enable ITTAPI integration
 WITH_ITTAPI := 0
 
+# Enable NVTX integration
+WITH_NVTX := 0
+
 # Enable Tracy support
 WITH_TRACY := 0
 WITH_TRACY_CALLSTACKS := 0
@@ -806,6 +809,11 @@ endif
 ifeq ($(WITH_TIMING_COUNTS), 1)
 JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
+endif
+
+ifeq ($(WITH_NVTX), 1)
+JCXXFLAGS += -DUSE_NVTX
+JCFLAGS += -DUSE_NVTX
 endif
 
 # ===========================================================================

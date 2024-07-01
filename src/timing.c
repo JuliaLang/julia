@@ -6,7 +6,7 @@
 #include "options.h"
 #include "stdio.h"
 
-#if defined(USE_TRACY) || defined(USE_ITTAPI)
+#if defined(USE_TRACY) || defined(USE_ITTAPI) || defined(USE_NVTX)
 #define DISABLE_FREQUENT_EVENTS
 #endif
 
@@ -48,6 +48,10 @@ static jl_mutex_t jl_timing_counts_events_lock;
 static arraylist_t jl_timing_ittapi_events;
 static jl_mutex_t jl_timing_ittapi_events_lock;
 #endif //USE_ITTAPI
+
+#ifdef USE_NVTX
+static nvtxDomainHandle_t jl_timing_nvtx_domain;
+#endif
 
 #ifdef USE_TIMING_COUNTS
 static int cmp_counts_events(const void *a, const void *b) {
@@ -138,6 +142,13 @@ void jl_init_timing(void)
     // Sort the subsystem names for quick enable/disable lookups
     qsort(jl_timing_subsystems, JL_TIMING_SUBSYSTEM_LAST,
           sizeof(const char *), indirect_strcmp);
+
+#ifdef USE_NVTX
+    jl_timing_nvtx_domain = nvtxDomainCreateA("julia");
+    for (int i = 0; i < JL_TIMING_SUBSYSTEM_LAST; i++) {
+        nvtxDomainNameCategoryA(jl_timing_nvtx_domain, i + 1, jl_timing_subsystems[i]);
+    }
+#endif
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
@@ -317,6 +328,25 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     event->ittapi_event = _jl_timing_ittapi_event_create(name);
 #endif // USE_ITTAPI
 
+#ifdef USE_NVTX
+    nvtxEventAttributes_t nvtx_attrs = {0};
+    nvtx_attrs.version = NVTX_VERSION;
+    nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, name);
+    nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+    nvtx_attrs.message.registered = nvtx_message;
+
+    // 0 is the default (unnamed) category
+    nvtx_attrs.category = maybe_subsystem == JL_TIMING_SUBSYSTEM_LAST ? 0 : maybe_subsystem+1;
+
+    // simple Knuth hash to get nice colors
+    nvtx_attrs.colorType = NVTX_COLOR_ARGB;
+    nvtx_attrs.color = (nvtx_attrs.category * 2654435769) >> 8;
+
+    event->nvtx_attrs = nvtx_attrs;
+#endif // USE_NVTX
+
 #ifdef USE_TRACY
     event->tracy_srcloc.name = name;
     event->tracy_srcloc.function = function;
@@ -347,6 +377,7 @@ JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *block) {
     uint64_t t = cycleclock(); (void)t;
     _COUNTS_START(&block->counts_ctx, t);
     _ITTAPI_START(block);
+    _NVTX_START(block);
     _TRACY_START(block);
 
     jl_timing_block_t **prevp = &jl_current_task->ptls->timing_stack;
@@ -362,6 +393,7 @@ JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *block) {
     if (block->is_running) {
         uint64_t t = cycleclock(); (void)t;
         _ITTAPI_STOP(block);
+        _NVTX_STOP(block);
         _TRACY_STOP(block->tracy_ctx);
         _COUNTS_STOP(block, t);
 
