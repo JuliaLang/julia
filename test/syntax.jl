@@ -1254,6 +1254,23 @@ end
 # issue #9972
 @test Meta.lower(@__MODULE__, :(f(;3))) == Expr(:error, "invalid keyword argument syntax \"3\"")
 
+@testset "underscore currying" begin
+    @test div(_, 3)(13) === 4
+    @test (_+1)(3) === 4
+    @test (_.re)(5+6im) === 5
+    @test (_[2])([7,8,9]) === 8
+    @test_broken div.(10,_)([1,2,3,4]) == [10,5,3,2]
+    @test_broken (_ .+ 1)([1,2,3,4]) == [2,3,4,5]
+    @test (_ // _)(3,4) === 3//4
+    let _round(x,d; kws...) = round(x; digits=d, kws...) # test a 2-arg func with keywords
+        @test _round(_, 2, base=10)(pi) == 3.14
+        @test _round(_, 2, base=2)(pi) === _round(_, _, base=2)(pi, 2) == 3.25
+    end
+    @test split(_)("a b") == ["a","b"]
+    @test split(_, limit=2)("a b c") == ["a","b c"]
+    @test Meta.lower(@__MODULE__, :(f(_...))) == Expr(:error, "invalid underscore argument \"_...\"")
+end
+
 # issue #25055, make sure quote makes new Exprs
 function f25055()
     x = quote end

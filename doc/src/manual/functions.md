@@ -342,6 +342,35 @@ function that returns this time rounded to the nearest integer assigned to the v
 `seconds`. Each time this anonymous function is called as `seconds()` the current time will
 be calculated and returned.
 
+As a shorthand to create simple anonymous functions from other functions, if you pass an underscore
+`_` as a function *argument* it automatically constructs an anonymous function where `_` is
+the *parameter*.  For example, the expression `f(_,y)` is equivalent to `x -> f(x,y)`.  This
+includes infix functions like `_ + 1` (equivalent to `x -> x + 1`), indexing
+([`getindex`](@ref)) `_[i]` (equivalent to `x -> x[i]`), and
+field access `_.a` (equivalent to `x -> x.a`).   (This is called [partial application](https://en.wikipedia.org/wiki/Partial_application) of a function, and
+is sometimes informally referred to by the related term "[currying](https://en.wikipedia.org/wiki/Currying)".)
+For example, the following code averages the second element of each array in a collection, by
+passing the anonymous function `_[2]` (equivalent to `x -> x[2]`) as the first argument
+to [`sum`](@ref):
+
+```jldoctest
+julia> sum(_[2], [ [1,3,4], [1,2,5], [3,1,2], [4,4,4] ])
+10
+```
+
+More generally, if `_` is passed multiple times to the *same* function call,
+then each appearance of `_` is converted into a *different* argument of the
+anonymous function, in the order they appear.  For example, `f(_,y,_)` is
+equivalent to `(x,z) -> f(x,y,z)`.
+
+The `_` construction only applies to a *single* function call,
+not to nested function calls: `f(g(_))` is equivalent to `f(x -> g(x))`, not
+to `x -> f(g(x))`.  For example, the expression `2*_ + 1`, or
+equivalently the nested call `(+)((*)(2,_), 1)`, only converts `2*_`
+into a function, so the whole expression becomes `(x->2*x) + 1`, which
+will give an error because no method is defined to add `+ 1` to a function.
+Similarly, `f(g(_),_)` is converted into `y -> f(x -> g(x), y)`.
+
 ## Tuples
 
 Julia has a built-in data structure called a *tuple* that is closely related to function

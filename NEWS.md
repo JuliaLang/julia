@@ -3,6 +3,8 @@ Julia v1.12 Release Notes
 
 New language features
 ---------------------
+* An underscore `_` as a function argument, e.g. `f(_, y)`, is now shorthand
+  for the "curried" anonymous function `x -> f(x, y)` ([#24990]).
 
 - A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
   find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
