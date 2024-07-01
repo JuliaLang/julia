@@ -178,6 +178,7 @@
     XX(jl_gc_pool_alloc_instrumented) \
     XX(jl_gc_queue_multiroot) \
     XX(jl_gc_queue_root) \
+    XX(jl_gc_force_mark_old) \
     XX(jl_gc_safepoint) \
     XX(jl_gc_schedule_foreign_sweepfunc) \
     XX(jl_gc_set_cb_notify_external_alloc) \

@@ -6293,6 +6293,11 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             val = jl_fieldref_noalloc(expr, 0);
         if (jl_is_method(ctx.linfo->def.method)) // toplevel exprs are already rooted
             val = jl_ensure_rooted(ctx, val);
+        else {
+            jl_task_t *ct = jl_current_task;
+            jl_gc_force_mark_old(ct->ptls, val); // Make the value old and marked + put it in the remset
+        }                                        // Top level expressions are no longer rooted after execution
+                                                 // so storing a new object into an old binding will cause GC corruption
         return mark_julia_const(ctx, val);
     }
 

@@ -72,3 +72,17 @@ end
 @testset "Base.GC docstrings" begin
     @test isempty(Docs.undocumented_names(GC))
 end
+
+#testset doesn't work here because this needs to run in top level
+#Check that we ensure objects in toplevel exprs are rooted
+global dims54422 = [] # allocate the Binding
+GC.gc(); GC.gc(); # force the binding to be old
+GC.enable(false); # prevent new objects from being old
+@eval begin
+    Base.Experimental.@force_compile # use the compiler
+    dims54422 = $([])
+    nothing
+end
+GC.enable(true); GC.gc(false) # incremental collection
+@test typeof(dims54422) == Vector{Any}
+@test isempty(dims54422)
