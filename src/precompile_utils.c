@@ -384,8 +384,10 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
         jl_methtable_t *mt = (jl_methtable_t*)ptrhash_get(mtables, old_mt);
         size_t min_world = 1;
         size_t max_world = ~(size_t)0;
+        size_t world =  jl_atomic_load_acquire(&jl_world_counter);
+        jl_value_t * lookup = jl_gf_invoke_lookup_worlds(m->sig, (jl_value_t *)mt, world, &min_world, &max_world);
         // Check if the method is already in the new table, if not then insert it there
-        if (jl_gf_invoke_lookup_worlds(m->sig, (jl_value_t *)mt, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world) == jl_nothing){
+        if (lookup == jl_nothing || ((jl_method_match_t*)lookup)->method != m) {
             //TODO: should this be a function like unsafe_insert_method?
             size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
             size_t max_world = jl_atomic_load_relaxed(&m->deleted_world);
@@ -396,6 +398,7 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
             jl_atomic_store_relaxed(&m->deleted_world, max_world);
             jl_atomic_store_relaxed(&newentry->min_world, min_world);
             jl_atomic_store_relaxed(&newentry->max_world, max_world);
+            mi = cache_method(mt, &mt->cache, (jl_value_t*)mt, (jl_tupletype_t *)mi->specTypes, m, world, min_world, max_world, mi->sparam_vals);
         }
     }
 

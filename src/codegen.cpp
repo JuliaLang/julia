@@ -5595,7 +5595,46 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             }
         }
     }
-    if (static_call_graph_may_error(ctx.params->static_call_graph)) {
+    int failed_dispatch = !argv[0].constant;
+    if (ctx.params->static_call_graph != JL_STATIC_CALL_GRAPH_NO) {
+        size_t min_valid = 1;
+        size_t max_valid = ~(size_t)0;
+        size_t latest_world = jl_get_world_counter(); // TODO: marshal the world age of the compilation here.
+
+        // Find all methods matching the call signature
+        jl_array_t *matches = NULL;
+        jl_value_t *tup = NULL;
+        JL_GC_PUSH2(&tup, &matches);
+        if (!failed_dispatch) {
+            SmallVector<jl_value_t*> argtypes;
+            for (auto& arg: argv)
+                argtypes.push_back(arg.typ);
+            tup = jl_apply_tuple_type_v(argtypes.data(), argtypes.size());
+            matches = (jl_array_t*)jl_matching_methods((jl_tupletype_t*)tup, jl_nothing, 10 /*TODO: make global*/, 1,
+                                                latest_world, &min_valid, &max_valid, NULL);
+            if ((jl_value_t*)matches == jl_nothing)
+                failed_dispatch = 1;
+        }
+
+        // Expand each matching method to its unique specialization, if it has exactly one
+        if (!failed_dispatch) {
+            size_t k;
+            size_t len = new_invokes.len;
+            for (k = 0; k < jl_array_nrows(matches); k++) {
+                jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
+                jl_method_instance_t *mi = jl_method_match_to_mi(match, latest_world, min_valid, max_valid, 1);
+                if (!mi) {
+                    new_invokes.len = len;
+                    failed_dispatch = 1;
+                    break;
+                }
+                arraylist_push(&new_invokes, mi);
+            }
+        }
+        JL_GC_POP();
+    }
+
+    if (failed_dispatch && static_call_graph_may_error(ctx.params->static_call_graph)) {
         errs() << "Dynamic call to ";
         jl_jmp_buf *old_buf = jl_get_safe_restore();
         jl_jmp_buf buf;

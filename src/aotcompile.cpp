@@ -409,23 +409,32 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= this_world && this_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
-                if (jl_options.static_call_graph && !codeinst) {
+                if (jl_options.static_call_graph != JL_STATIC_CALL_GRAPH_NO && !codeinst) {
                     // If we're building a small image, we need to compile everything
                     // to ensure that we have all the information we need.
                     jl_safe_printf("Codegen decided not to compile code root");
                     jl_(mi);
                     abort();
                 }
-                if (codeinst && !params.compiled_functions.count(codeinst)) {
+                if (codeinst && !params.compiled_functions.count(codeinst) && !data->jl_fvar_map.count(codeinst)) {
                     // now add it to our compilation results
-                    JL_GC_PROMISE_ROOTED(codeinst->rettype);
-                    orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
-                            Triple(clone.getModuleUnlocked()->getTargetTriple()));
-                    jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
-                    if (result_m)
-                        params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
+                    // Const returns do not do codegen, but juliac inspects codegen results so make a dummy fvar entry to represent it
+                    if (jl_options.static_call_graph != JL_STATIC_CALL_GRAPH_NO && codeinst->invoke == jl_fptr_const_return_addr) {
+                        data->jl_fvar_map[codeinst] = std::make_tuple((uint32_t)-3, (uint32_t)-3);
+                    } else {
+                        JL_GC_PROMISE_ROOTED(codeinst->rettype);
+                        orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(codeinst->def),
+                                params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
+                                Triple(clone.getModuleUnlocked()->getTargetTriple()));
+                        jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
+                        if (result_m)
+                            params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
+                    }
                 }
+            } else if (this_world != jl_typeinf_world) {
+                jl_safe_printf("Codegen could not find requested codeinstance to be compiled\n");
+                jl_(mi);
+                abort();
             }
             // TODO: is goto the best way to do this?
             jl_compile_workqueue(params, policy);
