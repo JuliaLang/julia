@@ -27,6 +27,8 @@ not a call to a generic function.
 """
 struct MethodMatchInfo <: CallInfo
     results::MethodLookupResult
+    mt::MethodTable
+    fullmatch::Bool
 end
 nsplit_impl(info::MethodMatchInfo) = 1
 getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
@@ -42,19 +44,21 @@ each partition (`info.matches::Vector{MethodMatchInfo}`).
 This info is illegal on any statement that is not a call to a generic function.
 """
 struct UnionSplitInfo <: CallInfo
-    matches::Vector{MethodMatchInfo}
+    matches::Vector{MethodLookupResult}
+    mts::Vector{MethodTable}
+    fullmatches::Vector{Bool}
 end
 
 nmatches(info::MethodMatchInfo) = length(info.results)
 function nmatches(info::UnionSplitInfo)
     n = 0
     for mminfo in info.matches
-        n += nmatches(mminfo)
+        n += length(mminfo)
     end
     return n
 end
 nsplit_impl(info::UnionSplitInfo) = length(info.matches)
-getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit_impl(info.matches[idx], 1)
+getsplit_impl(info::UnionSplitInfo, idx::Int) = info.matches[idx]
 getresult_impl(::UnionSplitInfo, ::Int) = nothing
 
 abstract type ConstResult end

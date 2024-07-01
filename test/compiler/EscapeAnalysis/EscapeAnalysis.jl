@@ -2248,13 +2248,13 @@ end
 # accounts for ThrownEscape via potential MethodError
 
 # no method error
-@noinline identity_if_string(x::SafeRef) = (println("preventing inlining"); nothing)
+@noinline identity_if_string(x::SafeRef{<:AbstractString}) = (println("preventing inlining"); nothing)
 let result = code_escapes((SafeRef{String},)) do x
         identity_if_string(x)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
-let result = code_escapes((Union{SafeRef{String},Nothing},)) do x
+let result = code_escapes((SafeRef,)) do x
         identity_if_string(x)
     end
     i = only(findall(iscall((result.ir, identity_if_string)), result.ir.stmts.stmt))

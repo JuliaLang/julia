@@ -50,12 +50,13 @@ struct InliningCase
 end
 
 struct UnionSplit
-    fully_covered::Bool
+    handled_all_cases::Bool # All possible dispatches are included in the cases
+    fully_covered::Bool # All handled cases are fully covering
     atype::DataType
     cases::Vector{InliningCase}
     bbs::Vector{Int}
-    UnionSplit(fully_covered::Bool, atype::DataType, cases::Vector{InliningCase}) =
-        new(fully_covered, atype, cases, Int[])
+    UnionSplit(handled_all_cases::Bool, fully_covered::Bool, atype::DataType, cases::Vector{InliningCase}) =
+        new(handled_all_cases, fully_covered, atype, cases, Int[])
 end
 
 struct InliningEdgeTracker
@@ -215,7 +216,7 @@ end
 
 function cfg_inline_unionsplit!(ir::IRCode, idx::Int, union_split::UnionSplit,
                                 state::CFGInliningState, params::OptimizationParams)
-    (; fully_covered, #=atype,=# cases, bbs) = union_split
+    (; handled_all_cases, fully_covered, #=atype,=# cases, bbs) = union_split
     inline_into_block!(state, block_for_inst(ir, idx))
     from_bbs = Int[]
     delete!(state.split_targets, length(state.new_cfg_blocks))
@@ -235,7 +236,7 @@ function cfg_inline_unionsplit!(ir::IRCode, idx::Int, union_split::UnionSplit,
             end
         end
         push!(from_bbs, length(state.new_cfg_blocks))
-        if !(i == length(cases) && fully_covered)
+        if !(i == length(cases) && (handled_all_cases && fully_covered))
             # This block will have the next condition or the final else case
             push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx)))
             push!(state.new_cfg_blocks[cond_bb].succs, length(state.new_cfg_blocks))
@@ -244,7 +245,7 @@ function cfg_inline_unionsplit!(ir::IRCode, idx::Int, union_split::UnionSplit,
         end
     end
     # The edge from the fallback block.
-    fully_covered || push!(from_bbs, length(state.new_cfg_blocks))
+    !handled_all_cases && push!(from_bbs, length(state.new_cfg_blocks))
     # This block will be the block everyone returns to
     push!(state.new_cfg_blocks, BasicBlock(StmtRange(idx, idx), from_bbs, orig_succs))
     join_bb = length(state.new_cfg_blocks)
@@ -523,7 +524,7 @@ assuming their order stays the same post-discovery in `ml_matches`.
 function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                                union_split::UnionSplit, boundscheck::Symbol,
                                todo_bbs::Vector{Tuple{Int,Int}}, interp::AbstractInterpreter)
-    (; fully_covered, atype, cases, bbs) = union_split
+    (; handled_all_cases, fully_covered, atype, cases, bbs) = union_split
     stmt, typ, line = compact.result[idx][:stmt], compact.result[idx][:type], compact.result[idx][:line]
     join_bb = bbs[end]
     pn = PhiNode()
@@ -538,7 +539,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
         cond = true
         nparams = fieldcount(atype)
         @assert nparams == fieldcount(mtype)
-        if !(i == ncases && fully_covered)
+        if !(i == ncases && fully_covered && handled_all_cases)
             for i = 1:nparams
                 aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
                 # If this is always true, we don't need to check for it
@@ -597,16 +598,38 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
     end
     bb += 1
     # We're now in the fall through block, decide what to do
-    if !fully_covered
+    if !handled_all_cases
         ssa = insert_node_here!(compact, NewInstruction(stmt, typ, line))
         push!(pn.edges, bb)
         push!(pn.values, ssa)
         insert_node_here!(compact, NewInstruction(GotoNode(join_bb), Any, line))
         finish_current_bb!(compact, 0)
+    elseif !fully_covered
+        ir_inline_method_error!(compact, idx, argexprs, interp)
+        finish_current_bb!(compact, 0)
+        ncases == 0 && return insert_node_here!(compact, NewInstruction(nothing, Any, line))
     end
-
     # We're now in the join block.
     return insert_node_here!(compact, NewInstruction(pn, typ, line))
+end
+
+"""
+    ir_inline_method_error!
+
+Insert a static method error for the call expression at `idx` in `compact`
+The call is inserted at the current IncrementalCompact cursor
+"""
+function ir_inline_method_error!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any}, interp::AbstractInterpreter)
+    line = compact.result[idx][:line]
+    world_age_stmt = Expr(:foreigncall, :(:jl_get_tls_world_age), UInt, svec(), 0, :(:ccall))
+    flags = recompute_effects_flags(optimizer_lattice(interp), world_age_stmt, UInt, compact)
+    world_age = insert_node_here!(compact, NewInstruction(world_age_stmt, UInt, NoCallInfo(), line, flags))
+    argtuple = insert_node_here!(compact, NewInstruction(Expr(:call, GlobalRef(Core, :tuple), argexprs[2:end]...), Tuple, line))
+
+    methoderr_stmt = Expr(:new, MethodError, argexprs[1], argtuple, world_age)
+    methoderr = insert_node_here!(compact, NewInstruction(methoderr_stmt, MethodError, line))
+    insert_node_here!(compact, NewInstruction(Expr(:call, GlobalRef(Core, :throw), methoderr), Union{}, line))
+    insert_node_here!(compact, NewInstruction(ReturnNode(), Union{}, line))
 end
 
 function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inbounds::Bool, interp::AbstractInterpreter)
@@ -1348,10 +1371,6 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             # Too many applicable methods
             # Or there is a (partial?) ambiguity
             return nothing
-        elseif length(meth) == 0
-            # No applicable methods; try next union split
-            handled_all_cases = false
-            continue
         end
         local split_fully_covered = false
         for (j, match) in enumerate(meth)
@@ -1392,12 +1411,23 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             handled_all_cases &= handle_any_const_result!(cases,
                 result, match, argtypes, info, flag, state; allow_typevars=true)
         end
+        if !fully_covered
+            atype = argtypes_to_type(sig.argtypes)
+            # We will emit an inline MethodError so we need a backedge to the MethodTable
+            unwrapped_info = info isa ConstCallInfo ? info.call : info
+            if unwrapped_info isa UnionSplitInfo
+                for (fullmatch, mt) in zip(unwrapped_info.fullmatches, unwrapped_info.mts)
+                    !fullmatch && push!(state.edges, mt, atype)
+                end
+            elseif unwrapped_info isa MethodMatchInfo
+                push!(state.edges, unwrapped_info.mt, atype)
+            else @assert false end
+        end
     elseif !isempty(cases)
         # if we've not seen all candidates, union split is valid only for dispatch tuples
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
-
-    return cases, (handled_all_cases & fully_covered), joint_effects
+    return cases, handled_all_cases, fully_covered, joint_effects
 end
 
 function handle_call!(todo::Vector{Pair{Int,Any}},
@@ -1405,9 +1435,9 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     state::InliningState)
     cases = compute_inlining_cases(info, flag, sig, state)
     cases === nothing && return nothing
-    cases, all_covered, joint_effects = cases
+    cases, handled_all_cases, fully_covered, joint_effects = cases
     atype = argtypes_to_type(sig.argtypes)
-    handle_cases!(todo, ir, idx, stmt, atype, cases, all_covered, joint_effects)
+    handle_cases!(todo, ir, idx, stmt, atype, cases, handled_all_cases, fully_covered, joint_effects)
 end
 
 function handle_match!(cases::Vector{InliningCase},
@@ -1496,19 +1526,19 @@ function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallIn
 end
 
 function handle_cases!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stmt::Expr,
-    @nospecialize(atype), cases::Vector{InliningCase}, all_covered::Bool,
+    @nospecialize(atype), cases::Vector{InliningCase}, handled_all_cases::Bool, fully_covered::Bool,
     joint_effects::Effects)
     # If we only have one case and that case is fully covered, we may either
     # be able to do the inlining now (for constant cases), or push it directly
     # onto the todo list
-    if all_covered && length(cases) == 1
+    if fully_covered && handled_all_cases && length(cases) == 1
         handle_single_case!(todo, ir, idx, stmt, cases[1].item)
-    elseif length(cases) > 0
+    elseif length(cases) > 0 || handled_all_cases
         isa(atype, DataType) || return nothing
         for case in cases
             isa(case.sig, DataType) || return nothing
         end
-        push!(todo, idx=>UnionSplit(all_covered, atype, cases))
+        push!(todo, idx=>UnionSplit(handled_all_cases, fully_covered, atype, cases))
     else
         add_flag!(ir[SSAValue(idx)], flags_for_effects(joint_effects))
     end
