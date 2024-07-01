@@ -643,21 +643,24 @@ module IteratorsMD
         # CartesianPartition.
         mi = iter.parent.mi
         ci = iter.parent.parent
-        ax, ax1 = axes(ci), Base.axes1(ci)
-        subs = Base.ind2sub_rs(ax, mi, first(iter.indices[1]))
-        vl, fl = Base._sub2ind(tail(ax), tail(subs)...), subs[1]
-        vr, fr = divrem(last(iter.indices[1]) - 1, mi[end]) .+ (1, first(ax1))
+        ax1 = Base.axes1(ci)
+        function splitdim1(i, mi)
+            d, r = divrem(i - 1, mi)
+            d + 1, r + first(ax1)
+        end
+        vl, fl = splitdim1(first(iter.indices[1]), mi[1])
+        vr, fr = splitdim1(last(iter.indices[1]), mi[1])
+        # form the iterator for outer dimensions, equivalent to vec(oci), but mi is reused
         oci = CartesianIndices(tail(ci.indices))
-        # A fake CartesianPartition to reuse the outer iterate fallback
-        outer = @inbounds view(ReshapedArray(oci, (length(oci),), mi), vl:vr)
-        init = @inbounds dec(oci[tail(subs)...].I, oci.indices) # real init state
+        roci = ReshapedArray(oci, (length(oci),), tail(mi))
+        outer = @inbounds view(roci, vl:vr)
         # Use Generator to make inner loop branchless
         @inline function skip_len_I(i::Int, I::CartesianIndex)
             l = i == 1 ? fl : first(ax1)
             r = i == length(outer) ? fr : last(ax1)
             l - first(ax1), r - l + 1, I
         end
-        (skip_len_I(i, I) for (i, I) in Iterators.enumerate(Iterators.rest(outer, (init, 0))))
+        (skip_len_I(i, I) for (i, I) in Iterators.enumerate(outer))
     end
     @inline function simd_outer_range(iter::CartesianPartition{CartesianIndex{2}})
         # But for two-dimensional Partitions the above is just a simple one-dimensional range
