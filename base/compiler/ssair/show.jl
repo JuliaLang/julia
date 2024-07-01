@@ -31,11 +31,17 @@ function Base.show(io::IO, cfg::CFG)
     end
 end
 
-function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool)
+function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool,
+                    unstable_ssa::Union{Nothing, BitSet} = nothing)
     if idx in used
         idx_s = string(idx)
         pad = " "^(maxlength_idx - length(idx_s) + 1)
-        print(io, "%", idx_s, pad, "= ")
+        if unstable_ssa != nothing && idx in unstable_ssa
+            printstyled(io, "%", idx_s, color = :red)
+        else
+            print(io, "%", idx_s)
+        end
+        print(io, pad, "= ")
     else
         print(io, " "^(maxlength_idx + 4))
     end
@@ -44,7 +50,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     if !color && stmt isa PiNode
         # when the outer context is already colored (green, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
-        show_unquoted(io, stmt.val, indent)
+        show_unquoted(io, stmt.val, indent, 0, unstable_ssa)
         print(io, ", ")
         print(io, stmt.typ)
         print(io, ")")
@@ -79,7 +85,11 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         show_unquoted_phinode(io, stmt, indent, "#")
     elseif stmt isa GotoIfNot
         show_unquoted_gotoifnot(io, stmt, indent, "#")
+    elseif stmt isa ReturnNode
+        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0, show_type ? unstable_ssa : nothing)
     # everything else in the IR, defer to the generic AST printer
+    elseif stmt isa Expr
+        show_unquoted(io, stmt, indent, show_type ? prec_decl : 0, 0, show_type ? unstable_ssa : nothing)
     else
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
     end
@@ -89,12 +99,13 @@ end
 show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io, Core.SlotNumber(val.n), indent, prec)
 
 show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
-function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String)
+function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String, unstable_ssa::Union{Nothing, BitSet} = nothing)
     args = String[let
         e = stmt.edges[i]
         v = !isassigned(stmt.values, i) ? "#undef" :
             sprint(; context=io) do io′
-                show_unquoted(io′, stmt.values[i], indent)
+                val = stmt.values[i]
+                show_unquoted(io′, val, indent)
             end
         "$prefix$e => $v"
         end for i in 1:length(stmt.edges)
@@ -104,45 +115,55 @@ function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::Strin
     print(io, ')')
 end
 
-function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, ::Int)
+function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, prec::Int, unstable_ssa::Union{Nothing, BitSet} = nothing)
     print(io, "φᶜ (")
     first = true
     for v in stmt.values
         first ? (first = false) : print(io, ", ")
-        show_unquoted(io, v, indent)
+        show_unquoted(io, v, indent, prec)
     end
     print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::PiNode, indent::Int, ::Int)
+function show_unquoted(io::IO, stmt::PiNode, indent::Int, prec::Int, unstable_ssa::Union{Nothing, BitSet} = nothing)
     print(io, "π (")
-    show_unquoted(io, stmt.val, indent)
+    show_unquoted(io, stmt.val, indent, prec, unstable_ssa)
     print(io, ", ")
     printstyled(io, stmt.typ, color=:cyan)
     print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, ::Int)
+function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, prec::Int, unstable_ssa::Union{Nothing, BitSet} = nothing)
     print(io, "ϒ (")
-    isdefined(stmt, :val) ?
-        show_unquoted(io, stmt.val, indent) :
+    if isdefined(stmt, :val)
+        if stmt.val isa SSAValue
+            show_unquoted(io, stmt.val, indent, prec, unstable_ssa)
+        else
+            show_unquoted(io, stmt.val, indent, prec)
+        end
+    else
         print(io, "#undef")
+    end
     print(io, ")")
 end
 
-function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, ::Int)
+function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, prec::Int, unstable_ssa::Union{Nothing, BitSet} = nothing)
     if !isdefined(stmt, :val)
         print(io, "unreachable")
     else
         print(io, "return ")
-        show_unquoted(io, stmt.val, indent)
+        if stmt.val isa SSAValue
+            show_unquoted(io, stmt.val, indent, prec, unstable_ssa)
+        else
+            show_unquoted(io, stmt.val, indent, prec)
+        end
     end
 end
 
 show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int) = show_unquoted_gotoifnot(io, stmt, indent, "%")
 function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String)
     print(io, "goto ", prefix, stmt.dest, " if not ")
-    show_unquoted(io, stmt.cond, indent)
+    show_unquoted(io, stmt.cond, indent, 0)
 end
 
 function should_print_ssa_type(@nospecialize node)
@@ -628,13 +649,13 @@ end
 #   at index `idx`. This function is repeatedly called until it returns `nothing`.
 #   to iterate nodes that are to be inserted after the statement, set `attach_after=true`.
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
-                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false)
+                      used::BitSet, cfg::CFG, bb_idx::Int, unstable_ssa::Union{Nothing, BitSet} = nothing; pop_new_node! = Returns(nothing), only_after::Bool=false)
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
-                        used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color)
+                        used, cfg, bb_idx, unstable_ssa; pop_new_node!, only_after, config.bb_color)
 end
 
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
-                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false, bb_color=:light_black)
+                      used::BitSet, cfg::CFG, bb_idx::Int, unstable_ssa::Union{Nothing, BitSet} = nothing; pop_new_node! = Returns(nothing), only_after::Bool=false, bb_color=:light_black)
     stmt = _stmt(code, idx)
     type = _type(code, idx)
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -693,7 +714,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
         show_type = should_print_ssa_type(new_node_inst)
         let maxlength_idx=maxlength_idx, show_type=show_type
             with_output_color(:green, io) do io′
-                print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
+                print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type, unstable_ssa)
             end
         end
 
@@ -722,7 +743,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
             stmt = statement_indices_to_labels(stmt, cfg)
         end
         show_type = type !== nothing && should_print_ssa_type(stmt)
-        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
+        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type, unstable_ssa)
         if type !== nothing # ignore types for pre-inference code
             if type === UNDEF
                 # This is an error, but can happen if passes don't update their type information
@@ -846,6 +867,12 @@ statementidx_lineinfo_printer(f, code::IRCode) = f(code.debuginfo, :var"unknown 
 statementidx_lineinfo_printer(f, code::CodeInfo) = f(code.debuginfo, :var"unknown scope")
 statementidx_lineinfo_printer(code) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
 
+function is_unstable_ssa(code::CodeInfo, idx::Int)
+    ssaType = _type(code, idx)
+    is_unstable = isa(ssaType, Type) & (!Base.isdispatchelem(ssaType) || ssaType == Core.Box)
+    return is_unstable
+end
+
 function stmts_used(io::IO, code::IRCode, warn_unset_entry=true)
     insts = code.stmts
     used = BitSet()
@@ -881,10 +908,10 @@ end
 default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code))
 
 function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, inds, config::IRShowConfig,
-                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
+                       used::BitSet, cfg::CFG, bb_idx::Int, unstable_ssa::Union{Nothing, BitSet} = nothing; pop_new_node! = Returns(nothing))
     for idx in inds
         if config.should_print_stmt(ir, idx, used)
-            bb_idx = show_ir_stmt(io, ir, idx, config, used, cfg, bb_idx; pop_new_node!)
+            bb_idx = show_ir_stmt(io, ir, idx, config, used, cfg, bb_idx, unstable_ssa; pop_new_node!)
         elseif bb_idx <= length(cfg.blocks) && idx == cfg.blocks[bb_idx].stmts.stop
             bb_idx += 1
         end
@@ -912,9 +939,10 @@ end
 function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
+    unstable_ssa = filter(idx -> is_unstable_ssa(ci, idx), used)
     cfg = compute_basic_blocks(ci.code)
     let io = IOContext(io, :maxssaid=>length(ci.code))
-        show_ir_stmts(io, ci, 1:length(ci.code), config, used, cfg, 1; pop_new_node!)
+        show_ir_stmts(io, ci, 1:length(ci.code), config, used, cfg, 1, unstable_ssa; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)
 end
