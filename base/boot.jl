@@ -670,7 +670,7 @@ macro __doc__(x)
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
 
-isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :.) || isa(x, Union{QuoteNode, Symbol})
+isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :var".") || isa(x, Union{QuoteNode, Symbol})
 iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(ex.args[1]) : (isa(ex, Expr) && ex.head === :call)
 iscallexpr(ex) = false
 function ignoredoc(source, mod, str, expr)

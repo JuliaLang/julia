@@ -21,7 +21,7 @@ resolve(b::Binding) = getfield(b.mod, b.var)
 
 function splitexpr(x::Expr)
     isexpr(x, :macrocall) ? splitexpr(x.args[1]) :
-    isexpr(x, :.)         ? (x.args[1], x.args[2]) :
+    isexpr(x, :var".")    ? (x.args[1], x.args[2]) :
     error("Invalid @var syntax `$x`.")
 end
 splitexpr(s::Symbol) = Expr(:macrocall, getfield(Base, Symbol("@__MODULE__")), nothing), quot(s)

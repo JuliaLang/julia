@@ -1517,7 +1517,7 @@ const expr_infix_wide = Set{Symbol}([
 const expr_infix = Set{Symbol}([:(:), :(->), :(::)])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
-                         :ref => ('[',']'), :curly => ('{','}'), :(.) => ('(',')'))
+                         :ref => ('[',']'), :curly => ('{','}'), :var"." => ('(',')'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
                          :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'),
                          :ncat =>('[',']'), :nrow =>('[',']'),
@@ -1770,9 +1770,9 @@ end
 # kw: `=` expressions are parsed with head `kw` in this context
 function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
     op, cl = expr_calls[head]
-    if (isa(func, Symbol) && func !== :(:) && !(head === :. && isoperator(func))) ||
+    if (isa(func, Symbol) && func !== :(:) && !(head === :var"." && isoperator(func))) ||
             (isa(func, Symbol) && !is_valid_identifier(func)) ||
-            (isa(func, Expr) && (func.head === :. || func.head === :curly || func.head === :macroname)) ||
+            (isa(func, Expr) && (func.head === :var"." || func.head === :curly || func.head === :macroname)) ||
             isa(func, GlobalRef)
         show_unquoted(io, func, indent, 0, quote_level)
     else
@@ -1780,7 +1780,7 @@ function show_call(io::IO, head, func, func_args, indent, quote_level, kw::Bool)
         show_unquoted(io, func, indent, 0, quote_level)
         print(io, ')')
     end
-    if head === :(.)
+    if head === :var"."
         print(io, '.')
     end
     if !isempty(func_args) && isa(func_args[1], Expr) && (func_args[1]::Expr).head === :parameters
@@ -1908,7 +1908,7 @@ function valid_import_path(@nospecialize(ex), allow_as = true)
     if allow_as && is_expr(ex, :as) && length((ex::Expr).args) == 2
         ex = (ex::Expr).args[1]
     end
-    return is_expr(ex, :(.)) && length((ex::Expr).args) > 0 && all(a->isa(a,Symbol), (ex::Expr).args)
+    return is_expr(ex, :var".") && length((ex::Expr).args) > 0 && all(a->isa(a,Symbol), (ex::Expr).args)
 end
 
 function show_import_path(io::IO, ex, quote_level)
@@ -1923,10 +1923,10 @@ function show_import_path(io::IO, ex, quote_level)
             end
             show_import_path(io, ex.args[i], quote_level)
         end
-    elseif ex.head === :(.)
+    elseif ex.head === :var"."
         for i = 1:length(ex.args)
             sym = ex.args[i]::Symbol
-            if sym === :(.)
+            if sym === :var"."
                 print(io, '.')
             else
                 if sym === :(..)
@@ -1947,7 +1947,7 @@ end
 function allow_macroname(ex)
     if (ex isa Symbol && first(string(ex)) == '@') ||
        ex isa GlobalRef ||
-       (is_expr(ex, :(.)) && length(ex.args) == 2 &&
+       (is_expr(ex, :var".") && length(ex.args) == 2 &&
         (is_expr(ex.args[2], :quote) || ex.args[2] isa QuoteNode))
        return Expr(:macroname, ex)
     else
@@ -1979,7 +1979,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     head, args, nargs = ex.head, ex.args, length(ex.args)
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
-    if head === :(.) && (nargs != 2 || !is_expr(args[2], :tuple))
+    if head === :var"." && (nargs != 2 || !is_expr(args[2], :tuple))
         # standalone .op
         if nargs == 1 && args[1] isa Symbol && isoperator(args[1]::Symbol)
             print(io, "(.", args[1], ")")
@@ -1987,7 +1987,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             item = args[1]
             # field
             field = unquoted(args[2])
-            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item)) && !is_expr(item, :(.))
+            parens = !is_quoted(item) && !(item isa Symbol && isidentifier(item)) && !is_expr(item, :var".")
             parens && print(io, '(')
             show_unquoted(io, item, indent, 0, quote_level)
             parens && print(io, ')')
@@ -2156,7 +2156,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
-        funcargslike = head === :(.) ? (args[2]::Expr).args : args[2:end]
+        funcargslike = head === :var"." ? (args[2]::Expr).args : args[2:end]
         show_call(head === :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
 
     # comprehensions
@@ -2335,10 +2335,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             show_sym(io, arg1, allow_macroname=true)
         elseif arg1 isa GlobalRef
             show_globalref(io, arg1, allow_macroname=true)
-        elseif is_expr(arg1, :(.)) && length((arg1::Expr).args) == 2
+        elseif is_expr(arg1, :var".") && length((arg1::Expr).args) == 2
             arg1 = arg1::Expr
             m = arg1.args[1]
-            if m isa Symbol || m isa GlobalRef || is_expr(m, :(.), 2)
+            if m isa Symbol || m isa GlobalRef || is_expr(m, :var".", 2)
                 show_unquoted(io, m)
             else
                 print(io, "(")
@@ -2755,7 +2755,7 @@ resolvebinding(@nospecialize(ex)) = ex
 resolvebinding(ex::QuoteNode) = ex.value
 resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
 function resolvebinding(ex::Expr)
-    if ex.head === :. && isa(ex.args[2], Symbol)
+    if ex.head === :var"." && isa(ex.args[2], Symbol)
         parent = resolvebinding(ex.args[1])
         if isa(parent, Module)
             return resolvebinding(GlobalRef(parent, ex.args[2]))

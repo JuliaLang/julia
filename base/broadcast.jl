@@ -1250,7 +1250,7 @@ __dot__(x) = x
 function __dot__(x::Expr)
     dotargs = Base.mapany(__dot__, x.args)
     if x.head === :call && dottable(x.args[1])
-        Expr(:., dotargs[1], Expr(:tuple, dotargs[2:end]...))
+        Expr(:var".", dotargs[1], Expr(:tuple, dotargs[2:end]...))
     elseif x.head === :comparison
         Expr(:comparison, (iseven(i) && dottable(arg) && arg isa Symbol && isoperator(arg) ?
                                Symbol('.', arg) : arg for (i, arg) in pairs(dotargs))...)

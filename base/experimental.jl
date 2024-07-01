@@ -457,4 +457,18 @@ without adding them to the global method table.
 """
 :@MethodTable
 
+struct GetPropertyLens
+    syms::Tuple{Vararg{Symbol}}
+end
+Base.getproperty() = GetPropertyLens(())
+Base.getproperty(lens::GetPropertyLens, s::Symbol) =
+    GetPropertyLens(tuple(getfield(lens, :syms)..., s))
+
+function (lens::GetPropertyLens)(strct)
+    syms = getfield(lens, :syms)
+    isempty(syms) && return strct
+    sym = first(syms)
+    return GetPropertyLens(Base.tail(syms))(Base.getproperty(strct, sym))
+end
+
 end
