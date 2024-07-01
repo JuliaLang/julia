@@ -3335,8 +3335,8 @@ bitstring(B::BitArray) = sprint(bitshow, B)
 function show(io::IO, oc::Core.OpaqueClosure)
     A, R = typeof(oc).parameters
     show_tuple_as_call(io, Symbol(""), A; hasfirst=false)
-    print(io, "::", R)
     print(io, "->◌")
+    print(io, "::", R)
 end
 
 function show(io::IO, ::MIME"text/plain", oc::Core.OpaqueClosure{A, R}) where {A, R}
