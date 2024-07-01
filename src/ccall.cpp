@@ -826,16 +826,18 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     size_t nargt = jl_svec_len(tt);
     SmallVector<llvm::Type*, 0> argtypes;
     SmallVector<Value *, 8> argvals(nargt);
+
+    if (nargs - 3 != nargt) {
+        emit_error(ctx, "Mismatch between number of argument types and number of arguments to llvmcall");
+        JL_GC_POP();
+        return jl_cgval_t();
+    }
+
     for (size_t i = 0; i < nargt; ++i) {
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(ctx, tti, &toboxed);
         argtypes.push_back(t);
-        if (4 + i > nargs) {
-            emit_error(ctx, "Missing arguments to llvmcall!");
-            JL_GC_POP();
-            return jl_cgval_t();
-        }
         jl_value_t *argi = args[4 + i];
         jl_cgval_t arg = emit_expr(ctx, argi);
 
