@@ -155,6 +155,16 @@ for str in [u8str]
     @test findprev(isequal('ε'), str, 4) == nothing
 end
 
+# See the comments in #54579
+@testset "Search for invalid chars" begin
+    @test findfirst(==('\xff'), "abc\xffde") == 4
+    @test findprev(isequal('\xa6'), "abc\xa69", 5) == 4
+    @test isnothing(findfirst(==('\xff'), "abcdeæd"))
+
+    @test isnothing(findnext(==('\xa6'), "æ", 1))
+    @test isnothing(findprev(==('\xa6'), "æa", 2))
+end
+
 # string forward search with a single-char string
 @test findfirst("x", astr) == nothing
 @test findfirst("H", astr) == 1:1
@@ -445,6 +455,45 @@ end
             @test_throws BoundsError findprev(pattern, A, -3)
         end
     end
+
+    @test findall([0x01, 0x02], [0x03, 0x01, 0x02, 0x01, 0x02, 0x06]) == [2:3, 4:5]
+    @test isempty(findall([0x04, 0x05], [0x03, 0x04, 0x06]))
+end
+
+# Issue 54578
+@testset "No conflation of Int8 and UInt8" begin
+    # Work for mixed types if the values are the same
+    @test findfirst(==(Int8(1)), [0x01]) == 1
+    @test findnext(iszero, Int8[0, -2, 0, -3], 2) == 3
+    @test findfirst(Int8[1,4], UInt8[0, 2, 4, 1, 8, 1, 4, 2]) == 6:7
+    @test findprev(UInt8[5, 6], Int8[1, 9, 2, 5, 6, 3], 6) == 4:5
+
+    # Returns nothing for the same methods if the values are different,
+    # even if the bitpatterns are the same
+    @test isnothing(findfirst(==(Int8(-1)), [0xff]))
+    @test isnothing(findnext(isequal(0xff), Int8[-1, -2, -1], 2))
+    @test isnothing(findfirst(UInt8[0xff, 0xfe], Int8[0, -1, -2, 1, 8, 1, 4, 2]))
+    @test isnothing(findprev(UInt8[0xff, 0xfe], Int8[1, 9, 2, -1, -2, 3], 6))
+end
+
+@testset "DenseArray with offsets" begin
+    isdefined(Main, :OffsetDenseArrays) || @eval Main include("../testhelpers/OffsetDenseArrays.jl")
+    OffsetDenseArrays = Main.OffsetDenseArrays
+
+    A = OffsetDenseArrays.OffsetDenseArray(collect(0x61:0x69), 100)
+    @test findfirst(==(0x61), A) == 101
+    @test findlast(==(0x61), A) == 101
+    @test findfirst(==(0x00), A) === nothing
+
+    @test findfirst([0x62, 0x63, 0x64], A) == 102:104
+    @test findlast([0x63, 0x64], A) == 103:104
+    @test findall([0x62, 0x63], A) == [102:103]
+
+    @test findfirst(iszero, A) === nothing
+    A = OffsetDenseArrays.OffsetDenseArray([0x01, 0x02, 0x00, 0x03], -100)
+    @test findfirst(iszero, A) == -97
+    @test findnext(==(0x02), A, -99) == -98
+    @test findnext(==(0x02), A, -97) === nothing
 end
 
 # issue 32568
