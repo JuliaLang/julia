@@ -1149,40 +1149,96 @@ julia> filter(!isletter, str)
 !(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
-    Fix1(f, x)
+    Fix{n}(f, x)
+    Fix{kw}(f, x)
+    Fix(f; [kw]=x)
 
-A type representing a partially-applied version of the two-argument function
-`f`, with the first argument fixed to the value "x". In other words,
-`Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+A type representing a partially-applied version of a function `f`, with the argument
+"x" fixed at argument `n::Int` or keyword `kw::Symbol`.
+In other words, `Fix{3}(f, x)` behaves similarly to
+`(y1, y2, y3) -> f(y1, y2, x, y3)` for the 4-argument function `f`.
 
-See also [`Fix2`](@ref Base.Fix2).
+You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behaves
+similarly to `x -> g(x; a=2)` for a function `g` with one argument and one keyword argument.
+You can also write this as `Fix{:a}(g, 2)`.
 """
-struct Fix1{F,T} <: Function
+struct Fix{N,F,T} <: Function
     f::F
     x::T
 
-    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
+    function Fix{N}(f::Union{F,Type{F}}, x) where {N,F}
+        _N = _standardize_fix_param(Val(N))
+        new{_N,_stable_typeof(f),_stable_typeof(x)}(f, x)
+    end
+end
+function Fix(f::Union{F,Type{F}}; kws...) where {F}
+    if length(kws) != 1
+        throw(ArgumentError("`Fix` expects exactly one argument or keyword argument"))
+    end
+    Fix{only(keys(kws))}(f, only(values(kws)))
 end
 
-(f::Fix1)(y) = f.f(f.x, y)
+function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
+    @inline
+    _validate_fix_args(Val(N), Val(M))
+    _validate_fix_kwargs(Val(N); kws...)
+    if N isa Integer
+        if N > 1
+            return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
+        else # N == 1
+            return f.f(f.x, args...; kws...)
+        end
+    else # N isa Symbol
+        f_kws = NamedTuple{(N,)}((f.x,))
+        return f.f(args...; f_kws..., kws...)
+    end
+end
+
+function _standardize_fix_param(::Val{N}) where {N}
+    if N isa Integer
+        if N < 1
+            throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
+        end
+        return Int64(N)
+    elseif N isa Symbol
+        return N
+    else
+        throw(ArgumentError("Expected type parameter in `Fix` to be an integer or symbol, but got type=$(typeof(N))"))
+    end
+end
+function _validate_fix_args(::Val{N}, ::Val{M}) where {N,M}
+    if N isa Integer && N > 1 && M < N - 1
+        throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
+    end
+end
+function _validate_fix_kwargs(::Val{N}; kws...) where {N}
+    if N isa Symbol && N in keys(kws)
+        throw(ArgumentError("found duplicate keyword argument passed to `Fix{N}`"))
+    end
+end
+
+"""
+    Fix1(f, x)
+
+A type representing a partially-applied version of the function
+`f`, with the first argument fixed to the value "x". In other words,
+`Fix1(f, x)` behaves similarly to `y->f(x, y)` for a 2-argument function `f`.
+
+See also [`Fix2`](@ref Base.Fix2) and [`Fix`](@ref Base.Fix).
+"""
+const Fix1{F,T} = Fix{1,F,T}
 
 """
     Fix2(f, x)
 
-A type representing a partially-applied version of the two-argument function
+A type representing a partially-applied version of the function
 `f`, with the second argument fixed to the value "x". In other words,
-`Fix2(f, x)` behaves similarly to `y->f(y, x)`.
+`Fix2(f, x)` behaves similarly to `y->f(y, x)` for a 2-argument function `f`.
+
+See also [`Fix`](@ref Base.Fix).
 """
-struct Fix2{F,T} <: Function
-    f::F
-    x::T
+const Fix2{F,T} = Fix{2,F,T}
 
-    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
-end
-
-(f::Fix2)(y) = f.f(y, f.x)
 
 """
     isequal(x)
