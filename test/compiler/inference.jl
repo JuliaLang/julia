@@ -5757,3 +5757,14 @@ end
 bar54341(args...) = foo54341(4, args...)
 
 @test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int
+
+# issue #52385
+struct S52385{T} end
+g52385(x::S52385{Union{}}) = x
+g52385(x::S52385{<:Tuple{Integer}}) = nothing
+function f52385(x)
+    z1 = Core.compilerbarrier(:type, x)::S52385{<:Tuple{Nothing}}
+    z2 = g52385(z1)
+    return nothing === z2, z2
+end
+@test f52385(S52385{Tuple{Union{}}}()) === (true, nothing)
