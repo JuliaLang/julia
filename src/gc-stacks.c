@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia.h"
 #ifndef _OS_WINDOWS_
 #  include <sys/resource.h>
 #endif
@@ -222,13 +223,17 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     if (stk == NULL) {
         if (jl_atomic_load_relaxed(&num_stack_mappings) >= MAX_STACK_MAPPINGS) {
             // we accept that this can go over by as much as nthreads since it's not a CAS
+            jl_safe_printf("number of stack mappings (%u) has reached the limit (%u)\n",
+                           jl_atomic_load_relaxed(&num_stack_mappings), MAX_STACK_MAPPINGS);
             errno = ENOMEM;
             return NULL;
         }
         // TODO: allocate blocks of stacks? but need to mprotect individually anyways
         stk = malloc_stack(ssize);
-        if (stk == MAP_FAILED)
+        if (stk == MAP_FAILED){
+            jl_safe_printf("mmap or mprotect failed when allocing the stack\n");
             return NULL;
+        }
     }
     *bufsz = ssize;
     if (owner) {
