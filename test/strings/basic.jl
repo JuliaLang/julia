@@ -1093,6 +1093,17 @@ let v = [0x40,0x41,0x42]
     @test String(view(v, 2:3)) == "AB"
 end
 
+# issue #54369
+let v = Base.StringMemory(3)
+    v .= [0x41,0x42,0x43]
+    s = String(v)
+    @test s == "ABC"
+    @test v == [0x41,0x42,0x43]
+    v[1] = 0x43
+    @test s == "ABC"
+    @test v == [0x43,0x42,0x43]
+end
+
 # make sure length for identical String and AbstractString return the same value, PR #25533
 let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100))*"∀εa∀aε",
                                    String(rand(rng, UInt8, 200))]

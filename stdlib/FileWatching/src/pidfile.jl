@@ -280,7 +280,7 @@ function open_exclusive(path::String;
 end
 
 function _rand_filename(len::Int=4) # modified from Base.Libc
-    slug = Base.StringMemory(len)
+    slug = Base.StringVector(len)
     chars = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     for i = 1:len
         slug[i] = chars[(Libc.rand() % length(chars)) + 1]
