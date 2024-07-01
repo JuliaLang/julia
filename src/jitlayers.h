@@ -90,6 +90,7 @@ struct OptimizationOptions {
     bool enable_vector_pipeline;
     bool remove_ni;
     bool cleanup;
+    bool warn_missed_transformations;
 
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
@@ -103,12 +104,13 @@ struct OptimizationOptions {
         bool enable_loop_optimizations=true,
         bool enable_vector_pipeline=true,
         bool remove_ni=true,
-        bool cleanup=true) {
+        bool cleanup=true,
+        bool warn_missed_transformations=false) {
         return {lower_intrinsics, dump_native, external_use, llvm_only,
                 always_inline, enable_early_simplifications,
                 enable_early_optimizations, enable_scalar_optimizations,
                 enable_loop_optimizations, enable_vector_pipeline,
-                remove_ni, cleanup};
+                remove_ni, cleanup, warn_missed_transformations};
     }
 };
 
