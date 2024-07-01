@@ -35,6 +35,7 @@
 #include <llvm/Passes/PassPlugin.h>
 
 // NewPM needs to manually include all the pass headers
+#include <llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/Annotation2Metadata.h>
 #include <llvm/Transforms/IPO/ConstantMerge.h>
@@ -46,6 +47,7 @@
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/ADCE.h>
 #include <llvm/Transforms/Scalar/AnnotationRemarks.h>
+#include <llvm/Transforms/Scalar/BDCE.h>
 #include <llvm/Transforms/Scalar/CorrelatedValuePropagation.h>
 #include <llvm/Transforms/Scalar/DCE.h>
 #include <llvm/Transforms/Scalar/DeadStoreElimination.h>
@@ -75,7 +77,9 @@
 #include <llvm/Transforms/Scalar/SimpleLoopUnswitch.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
 #include <llvm/Transforms/Scalar/WarnMissedTransforms.h>
+#include <llvm/Transforms/Utils/LibCallsShrinkWrap.h>
 #include <llvm/Transforms/Utils/InjectTLIMappings.h>
+#include <llvm/Transforms/Utils/RelLookupTableConverter.h>
 #include <llvm/Transforms/Vectorize/LoopVectorize.h>
 #include <llvm/Transforms/Vectorize/SLPVectorizer.h>
 #include <llvm/Transforms/Vectorize/VectorCombine.h>
@@ -210,10 +214,10 @@ namespace {
             .convertSwitchRangeToICmp(true)
             .convertSwitchToLookupTable(true)
             .forwardSwitchCondToPhi(true)
+            .needCanonicalLoops(false)
             //These mess with loop rotation, so only do them after that
             .hoistCommonInsts(true)
-            // Causes an SRET assertion error in late-gc-lowering
-            // .sinkCommonInsts(true)
+            .sinkCommonInsts(true)
             ;
     }
 
@@ -355,8 +359,7 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
           FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
           if (O.getSpeedupLevel() >= 1) {
 #if JL_LLVM_VERSION >= 160000
-              // TODO check the LLVM 15 default.
-              FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+            FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
 #else
               FPM.addPass(SROAPass());
 #endif
@@ -397,26 +400,27 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
           FunctionPassManager FPM;
           if (O.getSpeedupLevel() >= 2) {
 #if JL_LLVM_VERSION >= 160000
-              // TODO check the LLVM 15 default.
-              FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+            FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
 #else
               FPM.addPass(SROAPass());
 #endif
-              // SROA can duplicate PHI nodes which can block LowerSIMD
-              FPM.addPass(InstCombinePass());
-              FPM.addPass(JumpThreadingPass());
-              FPM.addPass(CorrelatedValuePropagationPass());
-              FPM.addPass(ReassociatePass());
-              FPM.addPass(EarlyCSEPass());
-              JULIA_PASS(FPM.addPass(AllocOptPass()));
-          } else { // if (O.getSpeedupLevel() >= 1) (exactly)
-              FPM.addPass(InstCombinePass());
-              FPM.addPass(EarlyCSEPass());
-          }
-          invokePeepholeEPCallbacks(FPM, PB, O);
-          MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
-      }
-      MPM.addPass(GlobalDCEPass());
+            // SROA can duplicate PHI nodes which can block LowerSIMD
+            FPM.addPass(EarlyCSEPass());
+            FPM.addPass(JumpThreadingPass());
+            FPM.addPass(CorrelatedValuePropagationPass());
+            FPM.addPass(InstCombinePass());
+            FPM.addPass(AggressiveInstCombinePass());
+            FPM.addPass(LibCallsShrinkWrapPass());
+            FPM.addPass(ReassociatePass());
+            JULIA_PASS(FPM.addPass(AllocOptPass()));
+        } else { // if (O.getSpeedupLevel() >= 1) (exactly)
+            FPM.addPass(EarlyCSEPass());
+            FPM.addPass(InstCombinePass());
+        }
+        invokePeepholeEPCallbacks(FPM, PB, O);
+        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+    }
+    MPM.addPass(GlobalDCEPass());
     }
     MPM.addPass(AfterEarlyOptimizationMarkerPass());
 }
@@ -476,17 +480,18 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
         if (O.getSpeedupLevel() >= 2) {
             JULIA_PASS(FPM.addPass(AllocOptPass()));
     #if JL_LLVM_VERSION >= 160000
-            // TODO check the LLVM 15 default.
-            FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+            FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
     #else
             FPM.addPass(SROAPass());
     #endif
+            FPM.addPass(VectorCombinePass(/*TryEarlyFoldsOnly=*/true));
             FPM.addPass(InstSimplifyPass());
             FPM.addPass(GVNPass());
             FPM.addPass(MemCpyOptPass());
             FPM.addPass(SCCPPass());
+            FPM.addPass(BDCEPass());
             FPM.addPass(CorrelatedValuePropagationPass());
-            FPM.addPass(DCEPass());
+            FPM.addPass(ADCEPass());
             FPM.addPass(IRCEPass());
             FPM.addPass(InstCombinePass());
             FPM.addPass(JumpThreadingPass());
@@ -501,11 +506,12 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
             JULIA_PASS(FPM.addPass(AllocOptPass()));
             {
                 LoopPassManager LPM;
-                LPM.addPass(LoopDeletionPass());
-                LPM.addPass(LoopInstSimplifyPass());
-                FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM)));
+                LPM.addPass(LICMPass(LICMOptions()));
+                LPM.addPass(JuliaLICMPass());
+                FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */true));
             }
-            FPM.addPass(LoopDistributePass());
+            FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
+            FPM.addPass(InstCombinePass());
         }
         invokeScalarOptimizerCallbacks(FPM, PB, O);
     }
@@ -516,6 +522,13 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
     FPM.addPass(BeforeVectorizationMarkerPass());
     if (options.enable_vector_pipeline) {
         //TODO look into loop vectorize options
+        // Rerotate loops that might have been unrotated in the simplification
+        LoopPassManager LPM;
+        LPM.addPass(LoopRotatePass());
+        LPM.addPass(LoopDeletionPass());
+        FPM.addPass(createFunctionToLoopPassAdaptor(
+        std::move(LPM), /*UseMemorySSA=*/false, /*UseBlockFrequencyInfo=*/false));
+        FPM.addPass(LoopDistributePass());
         FPM.addPass(InjectTLIMappings());
         FPM.addPass(LoopVectorizePass());
         FPM.addPass(LoopLoadEliminationPass());
@@ -524,13 +537,15 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         FPM.addPass(SLPVectorizerPass());
         invokeVectorizerCallbacks(FPM, PB, O);
         FPM.addPass(VectorCombinePass());
-        FPM.addPass(ADCEPass());
+        FPM.addPass(InstCombinePass());
         //TODO add BDCEPass here?
         // This unroll will unroll vectorized loops
         // as well as loops that we tried but failed to vectorize
         FPM.addPass(LoopUnrollPass(LoopUnrollOptions(O.getSpeedupLevel(), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
+        FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+        FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
+        FPM.addPass(AfterVectorizationMarkerPass());
     }
-    FPM.addPass(AfterVectorizationMarkerPass());
 }
 
 static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
