@@ -1148,6 +1148,7 @@ julia> filter(!isletter, str)
 !(f::Function) = (!) ∘ f
 !(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
+#=
 """
     Fix1(f, x)
 
@@ -1183,6 +1184,40 @@ struct Fix2{F,T} <: Function
 end
 
 (f::Fix2)(y) = f.f(y, f.x)
+=#
+
+interleave(bind::Tuple{}, args::Tuple{}) = ()
+interleave(bind::Tuple{}, args::Tuple) = error("more args than positions")
+interleave(bind, args) = _interleave(first(bind), tail(bind), args)
+
+# `nothing` indicates a position to be bound
+_interleave(firstbind::Nothing, tailbind::Tuple, args::Tuple) = (
+  first(args), interleave(tailbind, tail(args))...)
+
+# allow escaping of e.g. `nothing`
+_interleave(firstbind::Some{T}, tailbind::Tuple, args::Tuple) where T = (
+  something(firstbind), interleave(tailbind, args)...)
+
+_interleave(firstbind::T, tailbind::Tuple, args::Tuple) where T = (
+  firstbind, interleave(tailbind, args)...)
+
+struct Bind{F, A} <: Function
+  f::F
+  a::A
+end
+
+function (c::Bind)(args...)
+  c.f(interleave(c.a, args)...)
+end
+
+const Fix1{F, X} =  Bind{F, Tuple{Some{X}, Nothing}}
+const Fix2{F, X} =  Bind{F, Tuple{Nothing, Some{X}}}
+Fix1(f, x) = Bind(f, (Some(x), nothing))
+Fix2(f, x) = Bind(f, (nothing, Some(x)))
+
+getx(f::Fix1) = something(f.a[1])
+getx(f::Fix2) = something(f.a[2])
+
 
 """
     isequal(x)

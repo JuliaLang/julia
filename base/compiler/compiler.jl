@@ -102,6 +102,9 @@ include("range.jl")
 include("expr.jl")
 include("error.jl")
 
+# Some type
+include("some.jl")
+
 # core numeric operations & types
 ==(x::T, y::T) where {T} = x === y
 include("bool.jl")
