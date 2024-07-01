@@ -3429,10 +3429,14 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
     }
 
     if (at->isVectorTy()) {
+        BasicBlock *retBB = BasicBlock::Create(ctx.builder.getContext(), "ret", ctx.f);
+        BasicBlock *falseBB = BasicBlock::Create(ctx.builder.getContext(), "false", ctx.f);
+        BasicBlock *trueBB = BasicBlock::Create(ctx.builder.getContext(), "fld", ctx.f);
         jl_svec_t *types = ((jl_datatype_t*)arg1.typ)->types;
-        Value *answer = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
         Value *varg1 = emit_unbox(ctx, at, arg1, arg1.typ);
         Value *varg2 = emit_unbox(ctx, at, arg2, arg2.typ);
+        ctx.builder.CreateBr(trueBB);
+        ctx.builder.SetInsertPoint(trueBB);
         for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
             jl_value_t *fldty = jl_svecref(types, i);
             Value *subAns, *fld1, *fld2;
@@ -3441,9 +3445,24 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
             subAns = emit_bits_compare(ctx,
                     mark_julia_type(ctx, fld1, false, fldty),
                     mark_julia_type(ctx, fld2, false, fldty));
-            answer = ctx.builder.CreateAnd(answer, subAns);
+            if (i == l - 1) {
+                ctx.builder.CreateCondBr(subAns, retBB, falseBB);
+                trueBB = ctx.builder.GetInsertBlock();
+            }
+            else {
+                BasicBlock *fldBB = BasicBlock::Create(ctx.builder.getContext(), "fld", ctx.f);
+                ctx.builder.CreateCondBr(subAns, fldBB, falseBB);
+                trueBB = ctx.builder.GetInsertBlock();
+                ctx.builder.SetInsertPoint(fldBB);
+            }
         }
-        return answer;
+        ctx.builder.SetInsertPoint(falseBB);
+        ctx.builder.CreateBr(retBB);
+        ctx.builder.SetInsertPoint(retBB);
+        PHINode *phi = ctx.builder.CreatePHI(getInt1Ty(ctx.builder.getContext()), 2);
+        phi->addIncoming(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1), trueBB);
+        phi->addIncoming(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), falseBB);
+        return phi;
     }
 
     if (at->isAggregateType()) { // Struct or Array
@@ -3575,11 +3594,20 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
         }
         else {
             jl_svec_t *types = sty->types;
-            Value *answer = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
+            BasicBlock *retBB = BasicBlock::Create(ctx.builder.getContext(), "ret", ctx.f);
+            BasicBlock *falseBB = BasicBlock::Create(ctx.builder.getContext(), "false", ctx.f);
+            BasicBlock *trueBB = BasicBlock::Create(ctx.builder.getContext(), "fld", ctx.f);
+            ctx.builder.CreateBr(trueBB);
+            ctx.builder.SetInsertPoint(trueBB);
             for (size_t i = 0, l = jl_svec_len(types); i < l; i++) {
                 jl_value_t *fldty = jl_svecref(types, i);
-                if (type_is_ghost(julia_type_to_llvm(ctx, fldty)))
+                if (type_is_ghost(julia_type_to_llvm(ctx, fldty))) {
+                    if (i == l - 1) {
+                        ctx.builder.CreateBr(retBB);
+                        trueBB = ctx.builder.GetInsertBlock();
+                    }
                     continue;
+                }
                 Value *nullcheck1 = nullptr;
                 Value *nullcheck2 = nullptr;
                 auto fld1 = emit_getfield_knownidx(ctx, arg1, i, sty, jl_memory_order_notatomic, &nullcheck1);
@@ -3593,9 +3621,24 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 else {
                     fld_answer = emit_f_is(ctx, fld1, fld2, nullcheck1, nullcheck2);
                 }
-                answer = ctx.builder.CreateAnd(answer, fld_answer);
+                if (i == l - 1) {
+                    ctx.builder.CreateCondBr(fld_answer, retBB, falseBB);
+                    trueBB = ctx.builder.GetInsertBlock();
+                }
+                else {
+                    BasicBlock *fldBB = BasicBlock::Create(ctx.builder.getContext(), "fld", ctx.f);
+                    ctx.builder.CreateCondBr(fld_answer, fldBB, falseBB);
+                    trueBB = ctx.builder.GetInsertBlock();
+                    ctx.builder.SetInsertPoint(fldBB);
+                }
             }
-            return answer;
+            ctx.builder.SetInsertPoint(falseBB);
+            ctx.builder.CreateBr(retBB);
+            ctx.builder.SetInsertPoint(retBB);
+            PHINode *phi = ctx.builder.CreatePHI(getInt1Ty(ctx.builder.getContext()), 2);
+            phi->addIncoming(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1), trueBB);
+            phi->addIncoming(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), falseBB);
+            return phi;
         }
     }
     assert(0 && "what is this llvm type?");
