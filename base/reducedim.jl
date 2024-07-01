@@ -196,11 +196,8 @@ end
 
 ## generic (map)reduction
 
-has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = false
-has_fast_linear_indexing(a::Array) = true
-has_fast_linear_indexing(::Union{Number,Ref,AbstractChar}) = true  # 0d objects, for Broadcasted
-has_fast_linear_indexing(bc::Broadcast.Broadcasted) =
-    all(has_fast_linear_indexing, bc.args)
+has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = IndexStyle(a) === IndexLinear()
+has_fast_linear_indexing(a::AbstractVector) = true
 
 function check_reducedims(R, A)
     # Check whether R has compatible dimensions w.r.t. A for reduction
