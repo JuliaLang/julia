@@ -920,13 +920,19 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 
 extern bt_context_t *jl_to_bt_context(void *sigctx);
 
-static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
+// If psp is NULL, record a backtrace of task t.
+// If it is non-NULL, instead return the task's stack pointer there.
+// It will only be valid after this function returns if the task is not currently running.
+static void task_stack_info(jl_task_t *t, void **psp) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     ptls->bt_size = 0;
     if (t == ct) {
-        ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
+        if (psp)
+            *psp = jl_get_frame_addr();
+        else
+            ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
         return;
     }
     bt_context_t *context = NULL;
@@ -1157,12 +1163,36 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
      #pragma message("jl_rec_backtrace not defined for unknown task system")
 #endif
     }
-    if (context)
-        ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, context,  t->gcstack);
+    if (psp)
+        *psp = NULL;
+    if (context) {
+        if (psp) {
+            bt_cursor_t cursor;
+            if (jl_unw_init(&cursor, context)) {
+                uintptr_t ip;
+                jl_unw_step(&cursor, 0, &ip, (uintptr_t*)psp);
+            }
+        }
+        else {
+            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, context,  t->gcstack);
+        }
+    }
     if (old == -1)
         jl_atomic_store_relaxed(&t->tid, old);
     else if (old != ptls->tid)
         jl_thread_resume(old);
+}
+
+static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    task_stack_info(t, NULL);
+}
+
+void *jl_get_task_sp(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    void *sp;
+    task_stack_info(t, &sp);
+    return sp;
 }
 
 //--------------------------------------------------
