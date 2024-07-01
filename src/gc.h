@@ -744,24 +744,6 @@ static inline void gc_scrub(void)
 }
 #endif
 
-#ifdef OBJPROFILE
-void objprofile_count(void *ty, int old, int sz) JL_NOTSAFEPOINT;
-void objprofile_printall(void);
-void objprofile_reset(void);
-#else
-static inline void objprofile_count(void *ty, int old, int sz) JL_NOTSAFEPOINT
-{
-}
-
-static inline void objprofile_printall(void)
-{
-}
-
-static inline void objprofile_reset(void)
-{
-}
-#endif
-
 #ifdef MEMPROFILE
 void gc_stats_all_pool(void);
 void gc_stats_big_obj(void);

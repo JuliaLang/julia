@@ -74,9 +74,6 @@
 // GC_TIME prints time taken by each phase of GC
 // #define GC_TIME
 
-// OBJPROFILE counts objects by type
-// #define OBJPROFILE
-
 // pool allocator configuration options
 
 // GC_SMALL_PAGE allocates objects in 4k pages
