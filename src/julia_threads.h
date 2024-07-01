@@ -209,6 +209,10 @@ typedef struct _jl_tls_states_t {
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
+#define JL_GC_PARALLEL_COLLECTOR_THREAD 3
+    // gc_state = 3 means the thread is a parallel collector thread (i.e. never runs Julia code)
+#define JL_GC_CONCURRENT_COLLECTOR_THREAD 4
+    // gc_state = 4 means the thread is a concurrent collector thread (background sweeper thread that never runs Julia code)
     _Atomic(int8_t) gc_state; // read from foreign threads
     // execution of certain certain impure
     // statements is prohibited from certain
@@ -340,6 +344,8 @@ void jl_sigint_safepoint(jl_ptls_t tls);
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
                                      int8_t old_state)
 {
+    assert(old_state != JL_GC_PARALLEL_COLLECTOR_THREAD);
+    assert(old_state != JL_GC_CONCURRENT_COLLECTOR_THREAD);
     jl_atomic_store_release(&ptls->gc_state, state);
     if (state == JL_GC_STATE_UNSAFE || old_state == JL_GC_STATE_UNSAFE)
         jl_gc_safepoint_(ptls);
