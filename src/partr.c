@@ -131,7 +131,7 @@ void jl_parallel_gc_threadfun(void *arg)
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
     // wait for all threads
-    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
+    jl_gc_state_set(ptls, JL_GC_PARALLEL_COLLECTOR_THREAD, 0);
     uv_barrier_wait(targ->barrier);
 
     // free the thread argument here
@@ -143,10 +143,10 @@ void jl_parallel_gc_threadfun(void *arg)
             uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
         }
         uv_mutex_unlock(&gc_threads_lock);
-        if (may_mark()) {
-            gc_mark_loop_parallel(ptls, 0);
-        }
-        if (may_sweep(ptls)) { // not an else!
+        assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
+        gc_mark_loop_parallel(ptls, 0);
+        if (may_sweep(ptls)) {
+            assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
             gc_sweep_pool_parallel(ptls);
             jl_atomic_fetch_add(&ptls->gc_sweeps_requested, -1);
         }
@@ -166,13 +166,14 @@ void jl_concurrent_gc_threadfun(void *arg)
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
     // wait for all threads
-    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
+    jl_gc_state_set(ptls, JL_GC_CONCURRENT_COLLECTOR_THREAD, 0);
     uv_barrier_wait(targ->barrier);
 
     // free the thread argument here
     free(targ);
 
     while (1) {
+        assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_CONCURRENT_COLLECTOR_THREAD);
         uv_sem_wait(&gc_sweep_assists_needed);
         gc_free_pages();
     }
