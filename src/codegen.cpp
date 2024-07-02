@@ -5622,7 +5622,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             size_t len = new_invokes.len;
             for (k = 0; k < jl_array_nrows(matches); k++) {
                 jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
-                jl_method_instance_t *mi = jl_method_match_to_mi(match, latest_world, min_valid, max_valid, 1);
+                jl_method_instance_t *mi = jl_method_match_to_mi(match, latest_world, min_valid, max_valid, 0);
                 if (!mi) {
                     new_invokes.len = len;
                     failed_dispatch = 1;
