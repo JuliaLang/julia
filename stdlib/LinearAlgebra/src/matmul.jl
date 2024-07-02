@@ -301,16 +301,36 @@ true
 """
 @inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) = _mul!(C, A, B, α, β)
 # Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
-@inline _mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
+module BLASMatMul
+@enum BlasFunction SYRK HERK GEMM NONE
+end
+@inline function _mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number)
+    tA = wrapper_char(A)
+    tB = wrapper_char(B)
+    tA_uc = uppercase(tA)
+    tB_uc = uppercase(tB)
+    isntc = wrapper_char_NTC(A) & wrapper_char_NTC(B)
+    blasfn = if (tA_uc == 'T' && tB_uc == 'N') || (tA_uc == 'N' && tB_uc == 'T')
+        BLASMatMul.SYRK
+    elseif (tA_uc == 'C' && tB_uc == 'N') || (tA_uc == 'N' && tB_uc == 'C')
+        BLASMatMul.HERK
+    elseif isntc
+        BLASMatMul.GEMM
+    else
+        BLASMatMul.NONE
+    end
+
     generic_matmatmul_wrapper!(
         C,
-        wrapper_char(A),
-        wrapper_char(B),
+        tA,
+        tB,
         _unwrap(A),
         _unwrap(B),
         α, β,
-        Val(wrapper_char_NTC(A) & wrapper_char_NTC(B))
+        Val(isntc),
+        Val(blasfn)
     )
+end
 
 # this indirection allows is to specialize on the types of the wrappers of A and B to some extent,
 # even though the wrappers are stripped off in mul!
@@ -415,7 +435,7 @@ end
 
 # THE one big BLAS dispatch. This is split into two methods to improve latency
 Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                                    α::Number, β::Number, ::Val{true}) where {T<:BlasFloat}
+                                    α::Number, β::Number, ::Val{true}, ::Val{blasfn}) where {T<:BlasFloat, blasfn}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if any(iszero, size(A)) || any(iszero, size(B)) || iszero(α)
@@ -425,24 +445,29 @@ Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix
         return _rmul_or_fill!(C, β)
     end
     matmul2x2or3x3_nonzeroalpha!(C, tA, tB, A, B, α, β) && return C
-    # We convert the chars to uppercase to potentially unwrap a WrapperChar,
-    # and extract the char corresponding to the wrapper type
-    tA_uc, tB_uc = uppercase(tA), uppercase(tB)
-    # the map in all ensures constprop by acting on tA and tB individually, instead of looping over them.
-    if tA_uc == 'T' && tB_uc == 'N' && A === B
-        return syrk_wrapper!(C, 'T', A, α, β)
-    elseif tA_uc == 'N' && tB_uc == 'T' && A === B
-        return syrk_wrapper!(C, 'N', A, α, β)
-    elseif tA_uc == 'C' && tB_uc == 'N' && A === B
-        return herk_wrapper!(C, 'C', A, α, β)
-    elseif tA_uc == 'N' && tB_uc == 'C' && A === B
-        return herk_wrapper!(C, 'N', A, α, β)
+    _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, Val(blasfn))
+end
+Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, ::Val{BLASMatMul.SYRK})
+    tA_uc = uppercase(tA)
+    if A === B
+        return syrk_wrapper!(C, tA_uc, A, α, β)
     else
         return gemm_wrapper!(C, tA, tB, A, B, α, β)
     end
 end
+Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, ::Val{BLASMatMul.HERK})
+    tA_uc = uppercase(tA)
+    if A === B
+        return herk_wrapper!(C, tA_uc, A, α, β)
+    else
+        return gemm_wrapper!(C, tA, tB, A, B, α, β)
+    end
+end
+Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, ::Val{BLASMatMul.GEMM})
+    return gemm_wrapper!(C, tA, tB, A, B, α, β)
+end
 Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                                    α::Number, β::Number, ::Val{false}) where {T<:BlasFloat}
+                                    α::Number, β::Number, ::Val{false}, @nospecialize(::Val)) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if any(iszero, size(A)) || any(iszero, size(B)) || iszero(α)
