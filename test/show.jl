@@ -248,6 +248,8 @@ end
 @test repr(:(∓ 1)) == ":(∓1)"
 @test repr(:(± 1)) == ":(±1)"
 
+eval_parse_repr(x) = eval(Meta.parse(repr(x)))
+eval_parse_repr_test(x) = @test eval_parse_repr(x) == x
 for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:ref, :f, Expr(:(=), :x, 1)),
            Expr(:vect, 1, 2, Expr(:kw, :x, 1)),
@@ -260,7 +262,7 @@ for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
            Expr(:call, :*, 0, :x01),
            Expr(:call, :*, 0, :b01),
            Expr(:call, :*, 0, :o01)]
-    @test eval(Meta.parse(repr(ex))) == ex
+    @test eval_parse_repr(ex) == ex
 end
 
 @test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
@@ -294,8 +296,8 @@ end
 @test_repr "3:4:5"
 let ex4 = Expr(:call, :(:), 1, 2, 3, 4),
     ex1 = Expr(:call, :(:), 1)
-    @test eval(Meta.parse(repr(ex4))) == ex4
-    @test eval(Meta.parse(repr(ex1))) == ex1
+    @test eval_parse_repr(ex4) == ex4
+    @test eval_parse_repr(ex1) == ex1
 end
 
 # Complex
@@ -1716,7 +1718,6 @@ let x = TypeVar(:_, Number), y = TypeVar(:_, Number)
 end
 
 
-is_juliarepr(x) = eval(Meta.parse(repr(x))) == x
 @testset "unionall types" begin
     X = TypeVar(gensym())
     Y = TypeVar(gensym(), Ref, Ref)
@@ -1724,28 +1725,28 @@ is_juliarepr(x) = eval(Meta.parse(repr(x))) == x
     struct TestTVUpper{A<:Integer} end
 
     # named typevars
-    @test is_juliarepr(Ref{A} where A)
-    @test is_juliarepr(Ref{A} where A>:Ref)
-    @test is_juliarepr(Ref{A} where A<:Ref)
-    @test is_juliarepr(Ref{A} where Ref<:A<:Ref)
-    @test is_juliarepr(TestTVUpper{<:Real})
-    @test is_juliarepr(TestTVUpper{<:Integer})
-    @test is_juliarepr(TestTVUpper{<:Signed})
+    eval_parse_repr_test(Ref{A} where A)
+    eval_parse_repr_test(Ref{A} where A>:Ref)
+    eval_parse_repr_test(Ref{A} where A<:Ref)
+    eval_parse_repr_test(Ref{A} where Ref<:A<:Ref)
+    eval_parse_repr_test(TestTVUpper{<:Real})
+    eval_parse_repr_test(TestTVUpper{<:Integer})
+    eval_parse_repr_test(TestTVUpper{<:Signed})
 
     # typearg order
-    @test is_juliarepr(UnionAll(X, Pair{X,<:Any}))
-    @test is_juliarepr(UnionAll(X, Pair{<:Any,X}))
+    eval_parse_repr_test(UnionAll(X, Pair{X,<:Any}))
+    eval_parse_repr_test(UnionAll(X, Pair{<:Any,X}))
 
     # duplicates
-    @test is_juliarepr(UnionAll(X, Pair{X,X}))
+    eval_parse_repr_test(UnionAll(X, Pair{X,X}))
 
     # nesting
-    @test is_juliarepr(UnionAll(X, Ref{Ref{X}}))
-    @test is_juliarepr(Union{T, Int} where T)
-    @test is_juliarepr(Pair{A, <:A} where A)
+    eval_parse_repr_test(UnionAll(X, Ref{Ref{X}}))
+    eval_parse_repr_test(Union{T, Int} where T)
+    eval_parse_repr_test(Pair{A, <:A} where A)
 
     # renumbered typevars with same names
-    @test is_juliarepr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z}))))
+    eval_parse_repr_test(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z}))))
 
     # shortened typevar printing
     @test repr(Ref{<:Any}) == "Ref"
@@ -1762,9 +1763,9 @@ is_juliarepr(x) = eval(Meta.parse(repr(x))) == x
     @test endswith(repr(TestTVUpper{<:Signed}), "TestTVUpper{<:Signed}")
 
     # exception for tuples
-    @test is_juliarepr(Tuple)
-    @test is_juliarepr(Tuple{})
-    @test is_juliarepr(Tuple{<:Any})
+    @test eval_parse_repr(Tuple) == Tuple
+    @test eval_parse_repr(Tuple{}) == Tuple{}
+    @test eval_parse_repr(Tuple{<:Any}) == Tuple{<:Any}
 end
 
 @testset "showarg" begin
@@ -2199,7 +2200,7 @@ end
 
 # issue #30927
 Z = Array{Float64}(undef,0,0)
-@test eval(Meta.parse(repr(Z))) == Z
+@test eval_parse_repr(Z) == Z
 
 @testset "show undef" begin
     # issue  #33204 - Parseable `repr` for `undef`
@@ -2256,7 +2257,7 @@ end
 
 @testset "0-dimensional Array. Issue #31481" begin
     for x in (zeros(Int32), collect('b'), fill(nothing), BitArray(0))
-        @test eval(Meta.parse(repr(x))) == x
+        @test eval_parse_repr(x) == x
     end
     @test showstr(zeros(Int32)) == "fill(0)"
     @test showstr(collect('b')) == "fill('b')"
