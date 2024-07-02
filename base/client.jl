@@ -3,6 +3,11 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
+const JULIA_PROMPT = "julia>"
+const PKG_PROMPT = "pkg>"
+const SHELL_PROMPT = "shell>"
+const HELP_PROMPT = "help?>"
+
 have_color = nothing
 have_truecolor = nothing
 const default_color_warn = :yellow
@@ -122,7 +127,7 @@ function display_error(io::IO, er, bt)
 end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
-function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
+function eval_user_input(errio, @nospecialize(ast), show_value::Bool, input_str::String)
     errcount = 0
     lasterr = nothing
     have_color = get(stdout, :color, false)::Bool
@@ -134,6 +139,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
                 istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
+                lasterr isa ParseError && check_for_prompt_start(input_str)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
@@ -454,16 +460,17 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         let input = stdin
             if isa(input, File) || isa(input, IOStream)
                 # for files, we can slurp in the whole thing at once
-                ex = parse_input_line(read(input, String))
+                input_str = read(input, String)
+                ex = parse_input_line(input_str)
                 if Meta.isexpr(ex, :toplevel)
                     # if we get back a list of statements, eval them sequentially
                     # as if we had parsed them sequentially
                     for stmt in ex.args
-                        eval_user_input(stderr, stmt, true)
+                        eval_user_input(stderr, stmt, true, input_str)
                     end
                     body = ex.args
                 else
-                    eval_user_input(stderr, ex, true)
+                    eval_user_input(stderr, ex, true, input_str)
                 end
             else
                 while !eof(input)
@@ -471,8 +478,8 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
                         print("julia> ")
                         flush(stdout)
                     end
+                    line = ""
                     try
-                        line = ""
                         ex = nothing
                         while !eof(input)
                             line *= readline(input, keep=true)
@@ -481,7 +488,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
                                 break
                             end
                         end
-                        eval_user_input(stderr, ex, true)
+                        eval_user_input(stderr, ex, true, line)
                     catch err
                         isa(err, InterruptException) ? print("\n\n") : rethrow()
                     end
@@ -490,6 +497,22 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         end
     end
     nothing
+end
+
+function check_for_prompt_start(line::String)
+    if startswith(line, JULIA_PROMPT)
+        printstyled("Tip:"; color=info_color())
+        println(" No need to type `$JULIA_PROMPT`; enter your commands directly.")
+    elseif startswith(line, PKG_PROMPT)
+        printstyled("Tip:"; color=info_color())
+        println(" To switch to the `$PKG_PROMPT` prompt, press `]` rather than typing `$PKG_PROMPT`.")
+    elseif startswith(line, SHELL_PROMPT)
+        printstyled("Tip:"; color=info_color())
+        println(" To switch to the `$SHELL_PROMPT` prompt, press `;` rather than typing `$SHELL_PROMPT`.")
+    elseif startswith(line, HELP_PROMPT)
+        printstyled("Tip:"; color=info_color())
+        println(" To switch to the `$HELP_PROMPT` prompt, press `?` rather than typing `$HELP_PROMPT`.")
+    end
 end
 
 # MainInclude exists to weakly add certain identifiers to Main
