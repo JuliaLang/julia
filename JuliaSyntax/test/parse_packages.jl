@@ -9,10 +9,10 @@ end
 end
 
 base_path = let
-    p = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base") 
+    p = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base")
     if !isdir(p)
         # For julia 1.9 images.
-        p = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "src", "base") 
+        p = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "src", "base")
         if !isdir(p)
             error("source for Julia base not found")
         end
@@ -39,10 +39,10 @@ base_tests_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
             return nothing
         end
 
-        if endswith(f, "core.jl") 
+        if endswith(f, "core.jl")
             # The test
             # @test Union{Tuple{T}, Tuple{T,Int}} where {T} === widen_diagonal(Union{Tuple{T}, Tuple{T,Int}} where {T})
-            # depends on a JuliaSyntax bugfix and parses differently (wrong) using 
+            # depends on a JuliaSyntax bugfix and parses differently (wrong) using
             # flisp. This was added in julia#52228 and backported in julia#52045
             if v"1.10.0-rc1.39" <= VERSION
                 return nothing
@@ -50,6 +50,11 @@ base_tests_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
                 # Loose comparison due to `for f() = 1:3` syntax
                 return exprs_roughly_equal
             end
+        end
+
+        # subtype.jl also depends on the where precedence JuliaSyntax bugfix as of julia#53034
+        if endswith(f, "subtype.jl") && v"1.11.0-DEV.1382" <= VERSION
+            return nothing
         end
 
         return exprs_equal_no_linenum
