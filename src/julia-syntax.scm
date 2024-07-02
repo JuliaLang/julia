@@ -983,8 +983,6 @@
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
      `(block
-       ;; This is to prevent the :isdefined below from resolving the binding to an import.
-       ;; This will be reworked to a different check with world-age partitioned bindings.
        (global ,name)
        (scope-block
         (block
@@ -998,7 +996,7 @@
                         (call (core svec) ,@attrs)
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
-         (if (isdefined (globalref (thismodule) ,name))
+         (if (isdefined (globalref (thismodule) ,name) (false))
              (block
               (= ,prev (globalref (thismodule) ,name))
               (if (call (core _equiv_typedef) ,prev ,name)
@@ -1061,7 +1059,7 @@
        (= ,name (call (core _abstracttype) (thismodule) (inert ,name) (call (core svec) ,@params)))
        (call (core _setsuper!) ,name ,super)
        (call (core _typebody!) ,name)
-       (if (&& (isdefined (globalref (thismodule) ,name))
+       (if (&& (isdefined (globalref (thismodule) ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))
@@ -1081,7 +1079,7 @@
        (= ,name (call (core _primitivetype) (thismodule) (inert ,name) (call (core svec) ,@params) ,n))
        (call (core _setsuper!) ,name ,super)
        (call (core _typebody!) ,name)
-       (if (&& (isdefined (globalref (thismodule) ,name))
+       (if (&& (isdefined (globalref (thismodule) ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))

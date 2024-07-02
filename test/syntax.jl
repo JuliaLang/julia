@@ -3865,3 +3865,42 @@ module UndefGlobal54954
 end
 using .UndefGlobal54954: theglobal54954
 @test Core.get_binding_type(@__MODULE__, :theglobal54954) === Int
+
+# Extended isdefined
+module ExtendedIsDefined
+    using Test
+    module Import
+        export x2, x3
+        x2 = 2
+        x3 = 3
+        x4 = 4
+    end
+    const x1 = 1
+    using .Import
+    import .Import.x4
+    @test x2 == 2 # Resolve the binding
+    @eval begin
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+    end
+
+    @eval begin
+        @Base.Experimental.force_compile
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+    end
+end
