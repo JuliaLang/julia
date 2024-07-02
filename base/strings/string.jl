@@ -27,8 +27,6 @@ function Base.showerror(io::IO, exc::StringIndexError)
     end
 end
 
-const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, FastContiguousSubArray{UInt8,1,CodeUnits{UInt8,String}}, FastContiguousSubArray{UInt8,1,Vector{UInt8}}, FastContiguousSubArray{Int8,1,Vector{Int8}}}
-
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
 """
@@ -81,7 +79,7 @@ function String(v::Vector{UInt8})
     end
     # optimized empty!(v); sizehint!(v, 0) calls
     setfield!(v, :size, (0,))
-    setfield!(v, :ref, MemoryRef(Memory{UInt8}()))
+    setfield!(v, :ref, memoryref(Memory{UInt8}()))
     return str
 end
 
@@ -434,7 +432,7 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
     between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
-    return iterate_continued(s, i, u)
+    return @noinline iterate_continued(s, i, u)
 end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in

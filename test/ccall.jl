@@ -1937,3 +1937,14 @@ end
 
 # issue #52025
 @test Base.unsafe_convert(Ptr{Ptr{Cchar}}, Base.cconvert(Ptr{Ptr{Cchar}}, map(pointer, ["ab"]))) isa Ptr{Ptr{Cchar}}
+
+# Cglobal with non-static symbols doesn't error
+function cglobal_non_static1()
+    sym = (:global_var, libccalltest)
+    cglobal(sym)
+end
+global the_sym = (:global_var, libccalltest)
+cglobal_non_static2() = cglobal(the_sym)
+
+@test isa(cglobal_non_static1(), Ptr)
+@test isa(cglobal_non_static2(), Ptr)

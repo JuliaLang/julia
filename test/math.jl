@@ -885,14 +885,14 @@ end
 end
 
 @testset "isapprox" begin
-  # #22742: updated isapprox semantics
-  @test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
-  @test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
-  @test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
+    # #22742: updated isapprox semantics
+    @test !isapprox(1.0, 1.0+1e-12, atol=1e-14)
+    @test isapprox(1.0, 1.0+0.5*sqrt(eps(1.0)))
+    @test !isapprox(1.0, 1.0+1.5*sqrt(eps(1.0)), atol=sqrt(eps(1.0)))
 
-  # #13132: Use of `norm` kwarg for scalar arguments
-  @test isapprox(1, 1+1.0e-12, norm=abs)
-  @test !isapprox(1, 1+1.0e-12, norm=x->1)
+    # #13132: Use of `norm` kwarg for scalar arguments
+    @test isapprox(1, 1+1.0e-12, norm=abs)
+    @test !isapprox(1, 1+1.0e-12, norm=x->1)
 end
 
 # test AbstractFloat fallback pr22716
@@ -1595,13 +1595,19 @@ end
         @testset let T = T
             for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
                         asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
-                @testset let f = f
-                    @test Base.infer_return_type(f, (T,)) != Union{}
-                    @test Core.Compiler.is_foldable(Base.infer_effects(f, (T,)))
+                @testset let f = f,
+                             rt = Base.infer_return_type(f, (T,)),
+                             effects = Base.infer_effects(f, (T,))
+                    @test rt != Union{}
+                    @test Core.Compiler.is_foldable(effects)
                 end
             end
-            @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
-            @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
+            @testset let effects = Base.infer_effects(^, (T,Int))
+                @test Core.Compiler.is_foldable(effects)
+            end
+            @testset let effects = Base.infer_effects(^, (T,T))
+                @test Core.Compiler.is_foldable(effects)
+            end
         end
     end
 end;

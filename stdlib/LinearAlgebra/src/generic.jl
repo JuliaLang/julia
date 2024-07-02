@@ -79,8 +79,6 @@ macro stable_muladdmul(expr)
     for (i, e) in enumerate(expr.args)
         e isa Expr || continue
         if e.head == :call && e.args[1] == :MulAddMul && length(e.args) == 3
-            e.args[2] isa Symbol || continue
-            e.args[3] isa Symbol || continue
             local asym = e.args[2]
             local bsym = e.args[3]
 
@@ -2014,19 +2012,24 @@ function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
     BLAS.chkuplo(uplo)
     m,n = size(A)
     m1,n1 = size(B)
-    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
     A = Base.unalias(B, A)
     if uplo == 'U'
-        for j=1:n
-            for i=1:min(j,m)
-                @inbounds B[i,j] = A[i,j]
-            end
+        if n < m
+            (m1 < n || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($n,$n)"))
+        else
+            (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
         end
-    else  # uplo == 'L'
-        for j=1:n
-            for i=j:m
-                @inbounds B[i,j] = A[i,j]
-            end
+        for j in 1:n, i in 1:min(j,m)
+            @inbounds B[i,j] = A[i,j]
+        end
+    else # uplo == 'L'
+        if m < n
+            (m1 < m || n1 < m) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$m)"))
+        else
+            (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+        end
+        for j in 1:n, i in j:m
+            @inbounds B[i,j] = A[i,j]
         end
     end
     return B

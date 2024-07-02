@@ -257,6 +257,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
+    # handling of `@temp` in --project and JULIA_PROJECT
+    @test tempdir() == readchomp(`$exename --project=@temp -e 'println(Base.active_project())'`)[1:lastindex(tempdir())]
+    @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
+
     # --quiet, --banner
     let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
         @test read(`$exename                   -e $p`, String) == "(0, -1)"
@@ -429,9 +433,30 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "isinteractive()" -i`) == "true"
 
     # --color
-    @test readchomp(`$exename --color=yes -E "Base.have_color"`) == "true"
-    @test readchomp(`$exename --color=no -E "Base.have_color"`) == "false"
-    @test errors_not_signals(`$exename --color=false`)
+    function color_cmd(; flag, no_color=nothing, force_color=nothing)
+        cmd = `$exename --color=$flag -E "Base.have_color"`
+        return addenv(cmd, "NO_COLOR" => no_color, "FORCE_COLOR" => force_color)
+    end
+
+    @test readchomp(color_cmd(flag="auto")) == "nothing"
+    @test readchomp(color_cmd(flag="no")) == "false"
+    @test readchomp(color_cmd(flag="yes")) == "true"
+    @test errors_not_signals(color_cmd(flag="false"))
+    @test errors_not_signals(color_cmd(flag="true"))
+
+    @test readchomp(color_cmd(flag="auto", no_color="")) == "nothing"
+    @test readchomp(color_cmd(flag="auto", no_color="1")) == "false"
+    @test readchomp(color_cmd(flag="no", no_color="1")) == "false"
+    @test readchomp(color_cmd(flag="yes", no_color="1")) == "true"
+
+    @test readchomp(color_cmd(flag="auto", force_color="")) == "nothing"
+    @test readchomp(color_cmd(flag="auto", force_color="1")) == "true"
+    @test readchomp(color_cmd(flag="no", force_color="1")) == "false"
+    @test readchomp(color_cmd(flag="yes", force_color="1")) == "true"
+
+    @test readchomp(color_cmd(flag="auto", no_color="1", force_color="1")) == "true"
+    @test readchomp(color_cmd(flag="no", no_color="1", force_color="1")) == "false"
+    @test readchomp(color_cmd(flag="yes", no_color="1", force_color="1")) == "true"
 
     # --history-file
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)"
@@ -767,6 +792,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
     @test errors_not_signals(`$exename --worker=true`)
+
+    # --trace-compile-timing
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-compile=stderr --trace-compile-timing -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
 
     # test passing arguments
     mktempdir() do dir

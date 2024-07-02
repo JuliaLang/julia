@@ -61,9 +61,13 @@ macro chkvalidparam(position::Int, param, validvalues)
     :(chkvalidparam($position, $(string(param)), $(esc(param)), $validvalues))
 end
 function chkvalidparam(position::Int, var::String, val, validvals)
+    # mimic `repr` for chars without explicitly calling it
+    # This is because `repr` introduces dynamic dispatch
+    _repr(c::AbstractChar) = "'$c'"
+    _repr(c) = c
     if val ∉ validvals
         throw(ArgumentError(
-            lazy"argument #$position: $var must be one of $validvals, but $(repr(val)) was passed"))
+            lazy"argument #$position: $var must be one of $validvals, but $(_repr(val)) was passed"))
     end
     return val
 end
@@ -3701,7 +3705,7 @@ for (trcon, trevc, trrfs, elty) in
         # LOGICAL            SELECT( * )
         # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
-        function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
+        Base.@constprop :aggressive function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
                         VL::AbstractMatrix{$elty} = similar(T),
                         VR::AbstractMatrix{$elty} = similar(T))
             require_one_based_indexing(select, T, VL, VR)
@@ -7157,9 +7161,23 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         function lacpy!(B::AbstractMatrix{$elty}, A::AbstractMatrix{$elty}, uplo::AbstractChar)
             require_one_based_indexing(A, B)
             chkstride1(A, B)
-            m,n = size(A)
-            m1,n1 = size(B)
-            (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+            m, n = size(A)
+            m1, n1 = size(B)
+            if uplo == 'U'
+                if n < m
+                    (m1 < n || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($n,$n)"))
+                else
+                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+                end
+            elseif uplo == 'L'
+                if m < n
+                    (m1 < m || n1 < m) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$m)"))
+                else
+                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+                end
+            else
+                (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+            end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             ccall((@blasfunc($fn), libblastrampoline), Cvoid,

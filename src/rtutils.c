@@ -152,9 +152,9 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *
     jl_throw(jl_new_struct(jl_undefvarerror_type, var, scope));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_sym_t *type_name, jl_sym_t *var)
+JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_datatype_t *t, jl_sym_t *var)
 {
-    jl_errorf("type %s has no field %s", jl_symbol_name(type_name), jl_symbol_name(var));
+    jl_throw(jl_new_struct(jl_fielderror_type, t, var));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
@@ -248,7 +248,6 @@ JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
     eh->locks_len = ct->ptls->locks.len;
     eh->defer_signal = ct->ptls->defer_signal;
     eh->world_age = ct->world_age;
-    ct->eh = eh;
 #ifdef ENABLE_TIMINGS
     eh->timing_stack = ct->ptls->timing_stack;
 #endif

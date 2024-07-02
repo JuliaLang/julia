@@ -188,9 +188,15 @@ end
 diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
 diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
-Base._reverse(A::Diagonal, dims) = reverse!(Matrix(A); dims)
-Base._reverse(A::Diagonal, ::Colon) = Diagonal(reverse(A.diag))
-Base._reverse!(A::Diagonal, ::Colon) = (reverse!(A.diag); A)
+@inline function getindex(D::Diagonal, b::BandIndex)
+    @boundscheck checkbounds(D, b)
+    if b.band == 0
+        @inbounds r = D.diag[b.index]
+    else
+        r = diagzero(D, Tuple(_cartinds(b))...)
+    end
+    r
+end
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
@@ -211,6 +217,10 @@ end
 parent(D::Diagonal) = D.diag
 
 copy(D::Diagonal) = Diagonal(copy(D.diag))
+
+Base._reverse(A::Diagonal, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::Diagonal, ::Colon) = Diagonal(reverse(A.diag))
+Base._reverse!(A::Diagonal, ::Colon) = (reverse!(A.diag); A)
 
 ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
@@ -810,7 +820,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
             evecs[p[i],i] = one(Td)
         end
     else
-        evecs = Matrix{Td}(I, size(D))
+        evecs = Diagonal(ones(Td, length(λ)))
     end
     Eigen(λ, evecs)
 end
@@ -914,6 +924,36 @@ function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
 end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
+
+function cholesky!(A::Diagonal, ::RowMaximum; tol=0.0, check=true)
+    if !ishermitian(A)
+        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
+                            tol, convert(BlasInt, -1))
+        check && checkpositivedefinite(convert(BlasInt, -1))
+    else
+        d = A.diag
+        n = length(d)
+        info = 0
+        rank = n
+        p = sortperm(d, rev = true, by = real)
+        tol = tol < 0 ? n*eps(eltype(A))*real(d[p[1]]) : tol # LAPACK behavior
+        permute!(d, p)
+        @inbounds for i in eachindex(d)
+            di = d[i]
+            rootdi, j = _cholpivoted!(di, tol)
+            if j == 0
+                d[i] = rootdi
+            else
+                rank = i - 1
+                info = 1
+                break
+            end
+        end
+        C = CholeskyPivoted(A, 'U', p, convert(BlasInt, rank), tol, convert(BlasInt, info))
+        check && chkfullrank(C)
+    end
+    return C
+end
 
 inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
 

@@ -3,6 +3,7 @@
 #include "llvm-version.h"
 #include "passes.h"
 
+#include "llvm/IR/DerivedTypes.h"
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -510,7 +511,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                     // This could really be anything, but it's not loaded
                     // from a tracked pointer, so it doesn't matter what
                     // it is--just pick something simple.
-                    CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                    CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
                 }
                 continue;
             }
@@ -545,12 +546,12 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                         if (II->getIntrinsicID() == Intrinsic::masked_load) {
                             fld_idx = -1;
                             if (!isSpecialPtr(CurrentV->getType())) {
-                                CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                                CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
                             }
                         } else {
                             if (auto VTy2 = dyn_cast<VectorType>(CurrentV->getType())) {
                                 if (!isSpecialPtr(VTy2->getElementType())) {
-                                    CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                                    CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
                                     fld_idx = -1;
                                 }
                             }
@@ -2256,9 +2257,7 @@ SmallVector<int, 0> LateLowerGCFrame::ColorRoots(const State &S) {
 Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
 {
     assert(T == T_size || isa<PointerType>(T));
-    auto TV = cast<PointerType>(V->getType());
-    auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
-    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
+    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
 }
 
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
@@ -2438,8 +2437,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 // the type tag. (Note that if the size is not a constant, it will call
                 // gc_alloc_obj, and will redundantly set the tag.)
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
-                auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
+                auto ptls = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
                 auto newI = builder.CreateCall(
                     allocBytesIntrinsic,
                     {
@@ -2520,7 +2518,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     // the julia.call signature is varargs, the optimizer is allowed
                     // to rewrite pointee types. It'll go away with opaque pointer
                     // types anyway.
-                    Builder.CreateAlignedStore(Builder.CreateBitCast(*arg_it, T_prjlvalue),
+                    Builder.CreateAlignedStore(*arg_it,
                             Builder.CreateInBoundsGEP(T_prjlvalue, Frame, ConstantInt::get(T_int32, slot++)),
                             Align(sizeof(void*)));
                 }
