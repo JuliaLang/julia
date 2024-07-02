@@ -861,8 +861,6 @@ STATIC_INLINE void gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
             gc_queue_big_marked(ptls, hdr, 1);
         }
     }
-    objprofile_count(jl_typeof(jl_valueof(o)),
-                     mark_mode == GC_OLD_MARKED, hdr->sz);
 }
 
 // This function should be called exactly once during marking for each pool
@@ -884,8 +882,6 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
             page->has_young = 1;
         }
     }
-    objprofile_count(jl_typeof(jl_valueof(o)),
-                     mark_mode == GC_OLD_MARKED, page->osize);
     page->has_marked = 1;
 #endif
 }
@@ -2677,8 +2673,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 size_t dtsz = l * sizeof(void *) + sizeof(jl_svec_t);
                 if (update_meta)
                     gc_setmark(ptls, o, bits, dtsz);
-                else if (foreign_alloc)
-                    objprofile_count(jl_simplevector_type, bits == GC_OLD_MARKED, dtsz);
                 jl_value_t *objary_parent = new_obj;
                 jl_value_t **objary_begin = data;
                 jl_value_t **objary_end = data + l;
@@ -2689,8 +2683,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             else if (vtag == jl_module_tag << 4) {
                 if (update_meta)
                     gc_setmark(ptls, o, bits, sizeof(jl_module_t));
-                else if (foreign_alloc)
-                    objprofile_count(jl_module_type, bits == GC_OLD_MARKED, sizeof(jl_module_t));
                 jl_module_t *mb_parent = (jl_module_t *)new_obj;
                 uintptr_t nptr = ((mb_parent->usings.len + 1) << 2) | (bits & GC_OLD);
                 gc_mark_module_binding(ptls, mb_parent, nptr, bits);
@@ -2698,8 +2690,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             else if (vtag == jl_task_tag << 4) {
                 if (update_meta)
                     gc_setmark(ptls, o, bits, sizeof(jl_task_t));
-                else if (foreign_alloc)
-                    objprofile_count(jl_task_type, bits == GC_OLD_MARKED, sizeof(jl_task_t));
                 jl_task_t *ta = (jl_task_t *)new_obj;
                 gc_scrub_record_task(ta);
                 if (gc_cblist_task_scanner) {
@@ -2768,16 +2758,12 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 size_t dtsz = jl_string_len(new_obj) + sizeof(size_t) + 1;
                 if (update_meta)
                     gc_setmark(ptls, o, bits, dtsz);
-                else if (foreign_alloc)
-                    objprofile_count(jl_string_type, bits == GC_OLD_MARKED, dtsz);
             }
             else {
                 jl_datatype_t *vt = ijl_small_typeof[vtag / sizeof(*ijl_small_typeof)];
                 size_t dtsz = jl_datatype_size(vt);
                 if (update_meta)
                     gc_setmark(ptls, o, bits, dtsz);
-                else if (foreign_alloc)
-                    objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
             }
             return;
         }
@@ -2796,9 +2782,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 else
                     gc_setmark_big(ptls, o, bits);
             }
-            else if (foreign_alloc) {
-                objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_array_t));
-            }
             if (flags.how == 0) {
                 void *data_ptr = (char*)a + sizeof(jl_array_t) +jl_array_ndimwords(a->flags.ndims) * sizeof(size_t);
                 gc_heap_snapshot_record_hidden_edge(new_obj, data_ptr, jl_array_nbytes(a), 2);
@@ -2813,8 +2796,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             }
             else if (flags.how == 2) {
                 if (update_meta || foreign_alloc) {
-                    objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
-                                     jl_array_nbytes(a));
                     gc_heap_snapshot_record_hidden_edge(new_obj, a->data, jl_array_nbytes(a), flags.pooled);
                     if (bits == GC_OLD_MARKED) {
                         ptls->gc_cache.perm_scanned_bytes += jl_array_nbytes(a);
@@ -2881,8 +2862,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         size_t dtsz = jl_datatype_size(vt);
         if (update_meta)
             gc_setmark(ptls, o, bits, dtsz);
-        else if (foreign_alloc)
-            objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
         if (vt == jl_weakref_type)
             return;
         const jl_datatype_layout_t *layout = vt->layout;
@@ -3221,7 +3200,6 @@ static void gc_premark(jl_ptls_t ptls2)
     void **items = remset->items;
     for (size_t i = 0; i < len; i++) {
         jl_value_t *item = (jl_value_t *)items[i];
-        objprofile_count(jl_typeof(item), 2, 0);
         jl_astaggedvalue(item)->bits.gc = GC_OLD_MARKED;
     }
 }
@@ -3586,8 +3564,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     gc_stats_all_pool();
     gc_stats_big_obj();
-    objprofile_printall();
-    objprofile_reset();
     gc_num.total_allocd += gc_num.allocd;
     if (!prev_sweep_full)
         promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
