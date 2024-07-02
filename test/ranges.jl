@@ -439,15 +439,48 @@ end
         @test findfirst(isequal(3), Base.OneTo(10)) == 3
         @test findfirst(==(0), Base.OneTo(10)) == nothing
         @test findfirst(==(11), Base.OneTo(10)) == nothing
+        @test @inferred((() -> Val(findfirst(iszero, Base.OneTo(10))))()) == Val(nothing)
+        @test @inferred((() -> Val(findfirst(isone, Base.OneTo(10))))()) == Val(1)
         @test findfirst(==(4), Int16(3):Int16(7)) === Int(2)
         @test findfirst(==(2), Int16(3):Int16(7)) == nothing
         @test findfirst(isequal(8), 3:7) == nothing
+        @test isnothing(findfirst(==(0), UnitRange(-0.5, 0.5)))
+        @test findfirst(==(2), big(1):big(2)) === 2
         @test findfirst(isequal(7), 1:2:10) == 4
+        @test findfirst(iszero, -5:5) == 6
+        @test isnothing(findfirst(iszero, 2:5))
         @test findfirst(==(7), 1:2:10) == 4
         @test findfirst(==(10), 1:2:10) == nothing
         @test findfirst(==(11), 1:2:10) == nothing
         @test findfirst(==(-7), 1:-1:-10) == 9
         @test findfirst(==(2),1:-1:2) == nothing
+        @test isnothing(findfirst(iszero, 5:-2:-5))
+        @test findfirst(iszero, 6:-2:-6) == 4
+        @test findfirst(==(Int128(2)), Int128(1):Int128(1):Int128(4)) === 2
+    end
+    @testset "findlast" begin
+        @test findlast(==(1), Base.IdentityUnitRange(-1:1)) == 1
+        @test findlast(isequal(3), Base.OneTo(10)) == 3
+        @test findlast(==(0), Base.OneTo(10)) == nothing
+        @test findlast(==(11), Base.OneTo(10)) == nothing
+        @test @inferred((() -> Val(findlast(iszero, Base.OneTo(10))))()) == Val(nothing)
+        @test @inferred((() -> Val(findlast(isone, Base.OneTo(10))))()) == Val(1)
+        @test findlast(==(4), Int16(3):Int16(7)) === Int(2)
+        @test findlast(==(2), Int16(3):Int16(7)) == nothing
+        @test findlast(isequal(8), 3:7) == nothing
+        @test isnothing(findlast(==(0), UnitRange(-0.5, 0.5)))
+        @test findlast(==(2), big(1):big(2)) === 2
+        @test findlast(isequal(7), 1:2:10) == 4
+        @test findlast(iszero, -5:5) == 6
+        @test isnothing(findlast(iszero, 2:5))
+        @test findlast(==(7), 1:2:10) == 4
+        @test findlast(==(10), 1:2:10) == nothing
+        @test findlast(==(11), 1:2:10) == nothing
+        @test findlast(==(-7), 1:-1:-10) == 9
+        @test findlast(==(2),1:-1:2) == nothing
+        @test isnothing(findlast(iszero, 5:-2:-5))
+        @test findlast(iszero, 6:-2:-6) == 4
+        @test findlast(==(Int128(2)), Int128(1):Int128(1):Int128(4)) === 2
     end
     @testset "reverse" begin
         @test reverse(reverse(1:10)) == 1:10
