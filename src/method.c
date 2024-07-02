@@ -889,10 +889,8 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     for (j = 1; j < m->nargs && j <= sizeof(m->nospecialize) * 8; j++) {
         jl_value_t *ai = jl_array_ptr_ref(src->slotnames, j);
         if (ai == (jl_value_t*)jl_unused_sym) {
-            // TODO: enable this. currently it triggers a bug on arguments like
-            // ::Type{>:Missing}
-            //int sn = j-1;
-            //m->nospecialize |= (1 << sn);
+            int sn = j-1;
+            m->nospecialize |= (1 << sn);
             continue;
         }
         if (j <= 8) {
