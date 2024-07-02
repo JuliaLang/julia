@@ -620,18 +620,18 @@ end
 
 isequal(x::T, y::T) where {T<:IEEEFloat} = fpiseq(x, y)
 
-# interpret as sign-magnitude integer
-@inline function _fpint(x)
-    IntT = inttype(typeof(x))
-    ix = reinterpret(IntT, x)
-    return ifelse(ix < zero(IntT), ix ⊻ typemax(IntT), ix)
-end
-
 @inline function isless(a::T, b::T) where T<:IEEEFloat
-    (isnan(a) || isnan(b)) && return !isnan(a)
-
-    return _fpint(a) < _fpint(b)
+    botval = flipifneg(reinterpret(Signed, typemin(T)))
+    topval = flipifneg(reinterpret(Signed, typemax(T)))
+    offset = typemin(botval) - botval # adding offset will place typemin(T) at the bottom, wrapping NaN to the top
+    u = flipifneg(reinterpret(Signed, a)) + offset
+    v = flipifneg(reinterpret(Signed, b)) + offset
+    return (u < v) & (u <= topval+offset) # (a < b) & (a <= Inf), with the proper signed zero handling
 end
+
+# if negative, flip all bits except the top bit
+# used for permuting the order of IEEEFloat values
+flipifneg(x::BitSigned) = xor(x, ifelse(signbit(x), typemax(x), zero(x)))
 
 # Exact Float (Tf) vs Integer (Ti) comparisons
 # Assumes:

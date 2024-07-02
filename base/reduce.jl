@@ -244,6 +244,8 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 # certain `op` (e.g. `min` and `max`) may have their own specialized versions.
 @noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted,
                                   ifirst::Integer, ilast::Integer, blksize::Int)
+    Eltype = _mapped_eltype(f, A)
+    pre, op_fast, post = _makefast_reduction(op, Eltype)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return mapreduce_first(f, op, a1)
@@ -251,12 +253,12 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
-        v = op(f(a1), f(a2))
+        v = op_fast(pre(f(a1)), pre(f(a2)))
         @simd for i = ifirst + 2 : ilast
             @inbounds ai = A[i]
-            v = op(v, f(ai))
+            v = op_fast(v, pre(f(ai)))
         end
-        return v
+        return post(v)
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
@@ -306,6 +308,9 @@ pairwise_blocksize(f, op) = 1024
 # This combination appears to show a benefit from a larger block size
 pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
+# The following operations prefer non-pairwise reduction.
+pairwise_blocksize(_, ::Union{typeof(min),typeof(max)}) = typemax(Int)
+pairwise_blocksize(_, ::Union{typeof(|),typeof(&)}) = typemax(Int)
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed; consider supplying `init` to the reducer"))
@@ -608,64 +613,6 @@ julia> prod(1:5; init = 1.0)
 """
 prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
 
-## maximum, minimum, & extrema
-_fast(::typeof(min),x,y) = min(x,y)
-_fast(::typeof(max),x,y) = max(x,y)
-function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
-        x,
-        ifelse(x > y, x, y))
-end
-
-function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
-        x,
-        ifelse(x < y, x, y))
-end
-
-isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
-isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
-isbadzero(op, x) = false
-isgoodzero(::typeof(max), x) = isbadzero(min, x)
-isgoodzero(::typeof(min), x) = isbadzero(max, x)
-
-function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
-                        A::AbstractArrayOrBroadcasted, first::Int, last::Int)
-    a1 = @inbounds A[first]
-    v1 = mapreduce_first(f, op, a1)
-    v2 = v3 = v4 = v1
-    chunk_len = 256
-    start = first + 1
-    simdstop  = start + chunk_len - 4
-    while simdstop <= last - 3
-        @inbounds for i in start:4:simdstop
-            v1 = _fast(op, v1, f(A[i+0]))
-            v2 = _fast(op, v2, f(A[i+1]))
-            v3 = _fast(op, v3, f(A[i+2]))
-            v4 = _fast(op, v4, f(A[i+3]))
-        end
-        checkbounds(A, simdstop+3)
-        start += chunk_len
-        simdstop += chunk_len
-    end
-    v = op(op(v1,v2),op(v3,v4))
-    for i in start:last
-        @inbounds ai = A[i]
-        v = op(v, f(ai))
-    end
-
-    # enforce correct order of 0.0 and -0.0
-    # e.g. maximum([0.0, -0.0]) === 0.0
-    # should hold
-    if isbadzero(op, v)
-        for i in first:last
-            x = @inbounds A[i]
-            isgoodzero(op,x) && return x
-        end
-    end
-    return v
-end
-
 """
     maximum(f, itr; [init])
 
@@ -860,6 +807,8 @@ function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
     z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
     z1, z2
 end
+
+pairwise_blocksize(::ExtremaMap, ::typeof(_extrema_rf)) = typemax(Int)
 
 ## findmax, findmin, argmax & argmin
 
@@ -1382,4 +1331,59 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
         n = (n + x[i]) % T
     end
     return n
+end
+
+_mapped_eltype(f, A) = _return_type(f, Tuple{@default_eltype(A)})
+
+"""
+    Base._makefast_reduction(op, T) -> (pre, op_fast, post)
+
+Define a series of functions that can be used accelerate the computation of `op(x, y)`.
+Incorrect results may be produced if it does not hold that `op(x::T, y::T)` and
+`post(op_fast(pre(x::T), pre(y::T)))` produce equivalent results (and further, that this
+holds for arbitrary-length reductions). This can be useful if `op_fast` is much faster
+than `op` after the preprocessing provided by `pre`.
+
+The fallback return value for this method is `(identity, op, identity)`, corresponding
+to no change to the processing.
+"""
+_makefast_reduction(op, T) = (identity, op, identity)
+
+# The idea behind the following functions is to transform `IEEEFloat` values to native `Signed` values that obey the same `min`/`max` behavior.
+# Namely, the float values must match the semantics of `<` except that `-0.0 < +0.0` and `NaN` is preferred over any other value.
+# In the case that both arguments are `NaN`, either value may be returned.
+# If we reinterpret(Signed,::IEEEFloat), the signed-integer ordering is:
+#   -0.0, ... negative values in ascending magnitude ..., -Inf, -NaN, 0.0, ... positive values in ascending magnitude ..., +Inf, +NaN
+# The desired ordering for min is:
+#   NaN (unspecified sign), -Inf, ... negative values in descending magnitude ..., -0.0, +0.0, ... positive values in ascending magnitude ..., +Inf
+# The desired ordering for max is:
+#   -Inf, ... negative values in descending magnitude ..., -0.0, +0.0, ... positive values in ascending magnitude ..., +Inf, NaN (unspecified sign)
+# Achieving this ordering requires two steps:
+#   1) flip the ordering of all values with a negative sign
+#   2) circularly shift the values so that NaNs are together at the correct end of the spectrum
+# The following functions perform this transformation and reverse it.
+# Under this scheme, we place a total order on every value (including NaNs), although the ordering of NaNs is an implementation detail.
+for (T, S) in ((Float16, Int16), (Float32, Int32), (Float64, Int64))
+    topval = flipifneg(reinterpret(S, typemax(T)))
+    botval = flipifneg(reinterpret(S, typemin(T)))
+    offset_min = typemax(topval) - topval # adding this to a int-interpreted float will place typemax(T) at the top
+    offset_max = typemin(botval) - botval # adding this to a int-interpreted float will place typemin(T) at the bottom
+
+    for (op, offset) in ((min, offset_min), (max, offset_max))
+        @eval function _makefast_reduction(::typeof($op), ::Type{$T})
+            preprocess(x::$T) = reinterpret($T, flipifneg(reinterpret($S, x)) + $offset)
+            reduction(x::$T, y::$T) = reinterpret($T, $op(reinterpret($S, x), reinterpret($S, y)))
+            postprocess(x::$T) = reinterpret($T, flipifneg(reinterpret($S, x) - $offset))
+            return preprocess, reduction, postprocess
+        end
+    end
+
+    @eval function _makefast_reduction(::typeof(_extrema_rf), ::Type{NTuple{2,$T}}) # used for extrema
+        premin, reducemin, postmin = _makefast_reduction(min, $T)
+        premax, reducemax, postmax = _makefast_reduction(max, $T)
+        preprocess((x, y)::NTuple{2,$T}) = (premin(x), premax(y))
+        reduction((x1, y1)::NTuple{2,$T}, (x2, y2)::NTuple{2,$T}) = (reducemin(x1, x2), reducemax(y1, y2))
+        postprocess((x, y)::NTuple{2,$T}) = (postmin(x), postmax(y))
+        return preprocess, reduction, postprocess
+    end
 end
