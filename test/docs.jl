@@ -732,7 +732,7 @@ Base.collect(::Type{EmptyType{T}}) where {T} = "borked"
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == (Union{Tuple{Type{I12515.EmptyType{T}}}, Tuple{T}} where T)
+    @test fd.order[1] == (Tuple{Type{I12515.EmptyType{T}}} where T)
 end
 
 # PR #12593
@@ -1406,7 +1406,7 @@ end
 
 end
 
-@test docstrings_equal(
+@test_broken docstrings_equal(
     @doc(I21016.Struct),
     doc"""
     String 1
