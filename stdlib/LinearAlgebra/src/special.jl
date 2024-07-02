@@ -463,6 +463,9 @@ for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"
     end
 end
 
+Base._cat(dims, A::Union{AbstractArray,AbstractQ,Number}...) =
+    Base._cat_t(dims, Base.promote_eltypeof(A...), A...)
+
 hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractArray,AbstractQ,UniformScaling}...) = _hvcat(rows, A...)
 hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractArray,AbstractQ,UniformScaling,Number}...) = _hvcat(rows, A...)
 function _hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractArray,AbstractQ,UniformScaling,Number}...; array_type = promote_to_array_type(A))

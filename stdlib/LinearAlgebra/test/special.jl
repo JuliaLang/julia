@@ -275,8 +275,8 @@ end
     specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq, zeros(Int,N,N))
     for specialmata in specialmats, specialmatb in specialmats
         MA = collect(specialmata); MB = collect(specialmatb)
-        @test hcat(specialmata, specialmatb) == hcat(MA, MB)
-        @test vcat(specialmata, specialmatb) == vcat(MA, MB)
+        @test hcat(specialmata, specialmatb) == cat(specialmata, specialmatb, dims=2) == hcat(MA, MB)
+        @test vcat(specialmata, specialmatb) == cat(specialmata, specialmatb, dims=1) == vcat(MA, MB)
         @test hvcat((1,1), specialmata, specialmatb) == hvcat((1,1), MA, MB)
         @test cat(specialmata, specialmatb; dims=(1,2)) == cat(MA, MB; dims=(1,2))
     end
@@ -286,12 +286,12 @@ end
     for specialmat in specialmats
         SM = Matrix(specialmat)
         # --> Tests applicable only to pairs of matrices
-        @test vcat(specialmat, densemat) == vcat(SM, densemat)
-        @test vcat(densemat, specialmat) == vcat(densemat, SM)
+        @test vcat(specialmat, densemat) == cat(specialmat, densemat, dims=1) == vcat(SM, densemat)
+        @test vcat(densemat, specialmat) == cat(densemat, specialmat, dims=1) == vcat(densemat, SM)
         # --> Tests applicable also to pairs including vectors
         for specialmat in specialmats, othermatorvec in (densemat, densevec)
             SM = Matrix(specialmat); OM = Array(othermatorvec)
-            @test hcat(specialmat, othermatorvec) == hcat(SM, OM)
+            @test hcat(specialmat, othermatorvec) == cat(specialmat, othermatorvec, dims=2) == hcat(SM, OM)
             @test hcat(othermatorvec, specialmat) == hcat(OM, SM)
             @test hvcat((2,), specialmat, othermatorvec) == hvcat((2,), SM, OM)
             @test hvcat((2,), othermatorvec, specialmat) == hvcat((2,), OM, SM)
