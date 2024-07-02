@@ -5,15 +5,6 @@
   lightweight processes (symmetric coroutines)
 */
 
-// need this to get the real definition of ucontext_t,
-// if we're going to use the ucontext_t implementation there
-//#if defined(__APPLE__) && defined(JL_HAVE_UCONTEXT)
-//#pragma push_macro("_XOPEN_SOURCE")
-//#define _XOPEN_SOURCE
-//#include <ucontext.h>
-//#pragma pop_macro("_XOPEN_SOURCE")
-//#endif
-
 // this is needed for !COPY_STACKS to work on linux
 #ifdef _FORTIFY_SOURCE
 // disable __longjmp_chk validation so that we can jump between stacks
@@ -265,21 +256,21 @@ JL_NO_ASAN static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *l
     void *_y = t->stkbuf;
     assert(_x != NULL && _y != NULL);
     memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
-#if defined(JL_HAVE_UNW_CONTEXT)
+#if defined(JL_TASK_SWITCH_LIBUNWIND)
     volatile int returns = 0;
     int r = unw_getcontext(&lastt->ctx.ctx);
     if (++returns == 2) // r is garbage after the first return
         return;
     if (r != 0 || returns != 1)
         abort();
-#elif defined(JL_HAVE_ASM) || defined(_OS_WINDOWS_)
+#elif defined(JL_TASK_SWITCH_ASM) || defined(JL_TASK_SWITCH_WINDOWS)
     if (jl_setjmp(lastt->ctx.copy_ctx.uc_mcontext, 0))
         return;
 #else
 #error COPY_STACKS is incompatible with this platform
 #endif
     tsan_switch_to_copyctx(&t->ctx);
-#if defined(_OS_WINDOWS_)
+#if defined(JL_TASK_SWITCH_WINDOWS)
     jl_setcontext(&t->ctx.copy_ctx);
 #else
     jl_longjmp(t->ctx.copy_ctx.uc_mcontext, 1);
@@ -1254,54 +1245,39 @@ skip_pop_exception:;
 }
 
 
-#if defined(JL_HAVE_UCONTEXT)
-#ifdef _OS_WINDOWS_
-#define setcontext jl_setcontext
-#define swapcontext jl_swapcontext
-#define makecontext jl_makecontext
-#endif
+#ifdef JL_TASK_SWITCH_WINDOWS
 static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT
 {
-#ifndef _OS_WINDOWS_
-    int r = getcontext(t);
-    if (r != 0)
-        jl_error("getcontext failed");
-#endif
     void *stk = jl_malloc_stack(ssize, owner);
     if (stk == NULL)
         return NULL;
     t->uc_stack.ss_sp = stk;
     t->uc_stack.ss_size = *ssize;
-#ifdef _OS_WINDOWS_
-    makecontext(t, &start_task);
-#else
-    t->uc_link = NULL;
-    makecontext(t, &start_task, 0);
-#endif
+    jl_makecontext(t, &start_task);
     return (char*)stk;
 }
 static void jl_start_fiber_set(jl_ucontext_t *t)
 {
-    setcontext(&t->ctx);
+    jl_setcontext(&t->ctx);
 }
 static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     assert(lastt);
     tsan_switch_to_ctx(t);
-    swapcontext(&lastt->ctx, &t->ctx);
+    jl_swapcontext(&lastt->ctx, &t->ctx);
 }
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     tsan_switch_to_ctx(t);
-    swapcontext(&lastt->ctx, &t->ctx);
+    jl_swapcontext(&lastt->ctx, &t->ctx);
 }
 static void jl_set_fiber(jl_ucontext_t *t)
 {
-    setcontext(&t->ctx);
+    jl_setcontext(&t->ctx);
 }
 #endif
 
-#if defined(JL_HAVE_UNW_CONTEXT) || defined(JL_HAVE_ASM)
+#if defined(JL_TASK_SWITCH_LIBUNWIND) || defined(JL_TASK_SWITCH_ASM)
 static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
 {
     char *stkbuf = (char*)jl_malloc_stack(ssize, owner);
@@ -1315,7 +1291,7 @@ static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
 }
 #endif
 
-#if defined(JL_HAVE_UNW_CONTEXT)
+#if defined(JL_TASK_SWITCH_LIBUNWIND)
 static inline void jl_unw_swapcontext(unw_context_t *old, unw_cursor_t *c)
 {
     volatile int returns = 0;
@@ -1342,7 +1318,7 @@ static void jl_set_fiber(jl_ucontext_t *t)
         abort();
     unw_resume(&c);
 }
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
@@ -1356,7 +1332,7 @@ static void jl_set_fiber(jl_ucontext_t *t)
 }
 #endif
 
-#if defined(JL_HAVE_UNW_CONTEXT) && !defined(JL_HAVE_ASM)
+#if defined(JL_TASK_SWITCH_LIBUNWIND) && !defined(JL_TASK_SWITCH_ASM)
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #define PUSH_RET(ctx, stk) \
     do { \
@@ -1420,11 +1396,11 @@ static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 }
 #endif
 
-#if defined(JL_HAVE_ASM)
+#if defined(JL_TASK_SWITCH_ASM)
 JL_NO_ASAN static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     assert(lastt);
-#ifdef JL_HAVE_UNW_CONTEXT
+#ifdef JL_TASK_SWITCH_LIBUNWIND
     volatile int returns = 0;
     int r = unw_getcontext(&lastt->ctx);
     if (++returns == 2) // r is garbage after the first return
@@ -1504,7 +1480,7 @@ JL_NO_ASAN static void jl_start_fiber_set(jl_ucontext_t *t)
         " trap; \n"
         : : "r"(stk), "r"(fn) : "memory");
 #else
-#error JL_HAVE_ASM defined but not implemented for this CPU type
+#error JL_TASK_SWITCH_ASM defined but not implemented for this CPU type
 #endif
     __builtin_unreachable();
 }

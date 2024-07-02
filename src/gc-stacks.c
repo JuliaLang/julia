@@ -22,7 +22,7 @@
 // number of stacks to always keep available per pool
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
-#if defined(_OS_WINDOWS_) || (!defined(_OS_OPENBSD_) && !defined(JL_HAVE_UCONTEXT) && !defined(JL_HAVE_SIGALTSTACK))
+#if !defined(_OS_OPENBSD_)
 #define JL_USE_GUARD_PAGE   1
 const size_t jl_guard_size = (4096 * 8);
 #else

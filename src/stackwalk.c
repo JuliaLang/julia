@@ -954,7 +954,7 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
     }
     if (context == NULL && (!t->copy_stack && t->started && t->stkbuf != NULL)) {
         // need to read the context from the task stored state
-#if defined(_OS_WINDOWS_)
+#if defined(JL_TASK_SWITCH_WINDOWS)
         memset(&c, 0, sizeof(c));
         _JUMP_BUFFER *mctx = (_JUMP_BUFFER*)&t->ctx.ctx.uc_mcontext;
 #if defined(_CPU_X86_64_)
@@ -977,11 +977,9 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         #error Windows is currently only supported on x86 and x86_64
 #endif
         context = &c;
-#elif defined(JL_HAVE_UNW_CONTEXT)
+#elif defined(JL_TASK_SWITCH_LIBUNWIND)
         context = &t->ctx.ctx;
-#elif defined(JL_HAVE_UCONTEXT)
-        context = jl_to_bt_context(&t->ctx.ctx);
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
         memset(&c, 0, sizeof(c));
      #if defined(_OS_LINUX_) && defined(__GLIBC__)
         __jmp_buf *mctx = &t->ctx.ctx.uc_mcontext->__jmpbuf;
