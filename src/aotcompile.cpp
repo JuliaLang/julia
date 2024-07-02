@@ -432,9 +432,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                     }
                 }
             } else if (this_world != jl_typeinf_world) {
+                /*
                 jl_safe_printf("Codegen could not find requested codeinstance to be compiled\n");
                 jl_(mi);
                 abort();
+                */
             }
             // TODO: is goto the best way to do this?
             jl_compile_workqueue(params, policy);
