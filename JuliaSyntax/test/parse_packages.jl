@@ -39,9 +39,17 @@ base_tests_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
             return nothing
         end
 
-        if endswith(f, "core.jl")
-            # Loose comparison due to `for f() = 1:3` syntax
-            return exprs_roughly_equal
+        if endswith(f, "core.jl") 
+            # The test
+            # @test Union{Tuple{T}, Tuple{T,Int}} where {T} === widen_diagonal(Union{Tuple{T}, Tuple{T,Int}} where {T})
+            # depends on a JuliaSyntax bugfix and parses differently (wrong) using 
+            # flisp. This was added in julia#52228 and backported in julia#52045
+            if v"1.10.0-rc1.39" <= VERSION
+                return nothing
+            else
+                # Loose comparison due to `for f() = 1:3` syntax
+                return exprs_roughly_equal
+            end
         end
 
         return exprs_equal_no_linenum
