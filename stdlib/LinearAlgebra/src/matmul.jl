@@ -301,8 +301,10 @@ true
 """
 @inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) = _mul!(C, A, B, α, β)
 # Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
-module BLASMatMul
-@enum BlasFunction SYRK HERK GEMM NONE
+module BlasFlag
+@enum BlasFunction SYRK HERK GEMM SYMM HEMM NONE
+const ValSyrkHerkGemm = Union{Val{SYRK}, Val{HERK}, Val{GEMM}}
+const ValSymmHemmGeneric = Union{Val{SYMM}, Val{HEMM}, Val{NONE}}
 end
 @inline function _mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number)
     tA = wrapper_char(A)
@@ -310,14 +312,22 @@ end
     tA_uc = uppercase(tA)
     tB_uc = uppercase(tB)
     isntc = wrapper_char_NTC(A) & wrapper_char_NTC(B)
-    blasfn = if (tA_uc == 'T' && tB_uc == 'N') || (tA_uc == 'N' && tB_uc == 'T')
-        BLASMatMul.SYRK
-    elseif (tA_uc == 'C' && tB_uc == 'N') || (tA_uc == 'N' && tB_uc == 'C')
-        BLASMatMul.HERK
-    elseif isntc
-        BLASMatMul.GEMM
+    blasfn = if isntc
+        if (tA_uc == 'T' && tB_uc == 'N') || (tA_uc == 'N' && tB_uc == 'T')
+            BlasFlag.SYRK
+        elseif (tA_uc == 'C' && tB_uc == 'N') || (tA_uc == 'N' && tB_uc == 'C')
+            BlasFlag.HERK
+        else isntc
+            BlasFlag.GEMM
+        end
     else
-        BLASMatMul.NONE
+        if (tA_uc == 'S' && tB_uc == 'N') || (tA_uc == 'N' && tB_uc == 'S')
+            BlasFlag.SYMM
+        elseif (tA_uc == 'H' && tB_uc == 'N') || (tA_uc == 'N' && tB_uc == 'H')
+            BlasFlag.HEMM
+        else
+            BlasFlag.NONE
+        end
     end
 
     generic_matmatmul_wrapper!(
@@ -327,8 +337,7 @@ end
         _unwrap(A),
         _unwrap(B),
         α, β,
-        Val(isntc),
-        Val(blasfn)
+        Val(blasfn),
     )
 end
 
@@ -435,7 +444,7 @@ end
 
 # THE one big BLAS dispatch. This is split into two methods to improve latency
 Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                                    α::Number, β::Number, ::Val{true}, ::Val{blasfn}) where {T<:BlasFloat, blasfn}
+                                    α::Number, β::Number, val::BlasFlag.ValSyrkHerkGemm) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if any(iszero, size(A)) || any(iszero, size(B)) || iszero(α)
@@ -445,29 +454,31 @@ Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix
         return _rmul_or_fill!(C, β)
     end
     matmul2x2or3x3_nonzeroalpha!(C, tA, tB, A, B, α, β) && return C
-    _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, Val(blasfn))
+    _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, val)
+    return C
 end
-Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, ::Val{BLASMatMul.SYRK})
-    tA_uc = uppercase(tA)
+Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, ::Val{BlasFlag.SYRK})
     if A === B
+        tA_uc = uppercase(tA) # potentially strip a WrapperChar
         return syrk_wrapper!(C, tA_uc, A, α, β)
     else
         return gemm_wrapper!(C, tA, tB, A, B, α, β)
     end
 end
-Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, ::Val{BLASMatMul.HERK})
-    tA_uc = uppercase(tA)
+Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, ::Val{BlasFlag.HERK})
     if A === B
+        tA_uc = uppercase(tA) # potentially strip a WrapperChar
         return herk_wrapper!(C, tA_uc, A, α, β)
     else
         return gemm_wrapper!(C, tA, tB, A, B, α, β)
     end
 end
-Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, ::Val{BLASMatMul.GEMM})
+Base.@constprop :aggressive function _syrk_herk_gemm_wrapper!(C, tA, tB, A, B, α, β, ::Val{BlasFlag.GEMM})
     return gemm_wrapper!(C, tA, tB, A, B, α, β)
 end
+_valtypeparam(v::Val{T}) where {T} = T
 Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                                    α::Number, β::Number, ::Val{false}, @nospecialize(::Val)) where {T<:BlasFloat}
+                                    α::Number, β::Number, val::BlasFlag.ValSymmHemmGeneric) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if any(iszero, size(A)) || any(iszero, size(B)) || iszero(α)
@@ -477,23 +488,40 @@ Base.@constprop :aggressive function generic_matmatmul_wrapper!(C::StridedMatrix
         return _rmul_or_fill!(C, β)
     end
     matmul2x2or3x3_nonzeroalpha!(C, tA, tB, A, B, α, β) && return C
-    # We convert the chars to uppercase to potentially unwrap a WrapperChar,
-    # and extract the char corresponding to the wrapper type
-    tA_uc, tB_uc = uppercase(tA), uppercase(tB)
     alpha, beta = promote(α, β, zero(T))
-    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
-        if tA_uc == 'S' && tB_uc == 'N'
-            return BLAS.symm!('L', tA == 'S' ? 'U' : 'L', alpha, A, B, beta, C)
-        elseif tA_uc == 'N' && tB_uc == 'S'
-            return BLAS.symm!('R', tB == 'S' ? 'U' : 'L', alpha, B, A, beta, C)
-        elseif tA_uc == 'H' && tB_uc == 'N'
-            return BLAS.hemm!('L', tA == 'H' ? 'U' : 'L', alpha, A, B, beta, C)
-        elseif tA_uc == 'N' && tB_uc == 'H'
-            return BLAS.hemm!('R', tB == 'H' ? 'U' : 'L', alpha, B, A, beta, C)
-        end
+    blasfn = _valtypeparam(val)
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T} && blasfn ∈ (BlasFlag.SYMM, BlasFlag.HEMM)
+        _blasfn = blasfn
+        αβ = (alpha, beta)
+    else
+        _blasfn = BlasFlag.NONE
+        αβ = (α, β)
     end
-    return _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
+    _symm_hemm_generic!(C, tA, tB, A, B, αβ..., Val(_blasfn))
+    return C
 end
+function _lrchar_ulchar(tA, tB)
+    if uppercase(tA) == 'N'
+        lrchar = 'R'
+        ulchar = isuppercase(tB) ? 'U' : 'L'
+    else
+        lrchar = 'L'
+        ulchar = isuppercase(tA) ? 'U' : 'L'
+    end
+    return lrchar, ulchar
+end
+function _symm_hemm_generic!(C, tA, tB, A, B, alpha, beta, ::Val{BlasFlag.SYMM})
+    lrchar, ulchar = _lrchar_ulchar(tA, tB)
+    BLAS.symm!(lrchar, ulchar, alpha, A, B, beta, C)
+end
+function _symm_hemm_generic!(C, tA, tB, A, B, alpha, beta, ::Val{BlasFlag.HEMM})
+    lrchar, ulchar = _lrchar_ulchar(tA, tB)
+    BLAS.hemm!(lrchar, ulchar, alpha, A, B, beta, C)
+end
+Base.@constprop :aggressive function _symm_hemm_generic!(C, tA, tB, A, B, α, β, ::Val{BlasFlag.NONE})
+    _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
+end
+
 # legacy method
 Base.@constprop :aggressive generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
         _add::MulAddMul = MulAddMul()) where {T<:BlasFloat} =
