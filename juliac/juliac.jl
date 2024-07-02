@@ -29,8 +29,11 @@ let i = 1
             i += 1
         elseif startswith(arg, "--static-call-graph")
             arg = split(arg, '=')
-            @assert(length(arg) == 2)
-            global static_call_graph = arg[2]
+            if length(arg) == 1
+                global static_call_graph = "safe"
+            else
+                global static_call_graph = arg[2]
+            end
         elseif arg == "--compile-ccallable"
             global add_ccallables = true
         else
