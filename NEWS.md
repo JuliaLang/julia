@@ -6,6 +6,15 @@ New language features
 
 - A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
   find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
+- the `@atomic(...)` macro family supports now the reference assignment syntax, e.g.
+  `@atomic :monotonic v[3] += 4` modifies `v[3]` atomically with monotonic ordering semantics. ([#54707])
+  The supported syntax allows
+  - atomic fetch (`x = @atomic v[3]`),
+  - atomic set (`@atomic v[3] = 4`),
+  - atomic modify (`@atomic v[3] += 2`),
+  - atomic set once (`@atomiconce v[3] = 2`),
+  - atomic swap (`x = @atomicswap v[3] = 2`), and
+  - atomic replace (`x = @atomicreplace v[3] 2=>5`).
 
 Language changes
 ----------------
