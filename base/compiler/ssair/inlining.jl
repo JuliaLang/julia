@@ -1672,7 +1672,7 @@ function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
                                    @nospecialize(type), sig::Signature, state::InliningState)
     OptimizationParams(state.interp).inlining || return nothing
     (; f, ft, argtypes) = sig
-
+    ⊑ = partialorder(optimizer_lattice(state.interp))
     if isa(type, Const) # || isconstType(type)
         val = type.val
         is_inlineable_constant(val) || return nothing
@@ -1714,8 +1714,24 @@ function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
             elseif cond.val === false
                 return SomeCase(stmt.args[4])
             end
-        elseif ⊑(optimizer_lattice(state.interp), cond, Bool) && stmt.args[3] === stmt.args[4]
+        elseif cond ⊑ Bool && stmt.args[3] === stmt.args[4]
             return SomeCase(stmt.args[3])
+        end
+    elseif f === and_int && length(argtypes) == 3
+        argtype2, argtype3 = argtypes[2], argtypes[3]
+        if argtype2 isa Const && argtype2.val === true && argtype3 ⊑ Bool
+            return SomeCase(stmt.args[3])
+        end
+        if argtype3 isa Const && argtype3.val === true && argtype2 ⊑ Bool
+            return SomeCase(stmt.args[2])
+        end
+    elseif f === or_int && length(argtypes) == 3
+        argtype2, argtype3 = argtypes[2], argtypes[3]
+        if argtype2 isa Const && argtype2.val === false && argtype3 ⊑ Bool
+            return SomeCase(stmt.args[3])
+        end
+        if argtype3 isa Const && argtype3.val === false && argtype2 ⊑ Bool
+            return SomeCase(stmt.args[2])
         end
     end
     return nothing

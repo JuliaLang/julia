@@ -2214,3 +2214,9 @@ let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
     @test irfunc(Issue52644(Tuple{})) === :DataType
     @test_throws MethodError irfunc(Issue52644(Tuple{<:Integer}))
 end
+
+# inlining optimization for `and_int` and `or_int`
+@test fully_eliminated(x->x&true, (Bool,); retval=Argument(2))
+@test fully_eliminated(x->true&x, (Bool,); retval=Argument(2))
+@test fully_eliminated(x->x|false, (Bool,); retval=Argument(2))
+@test fully_eliminated(x->false|x, (Bool,); retval=Argument(2))
