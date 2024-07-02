@@ -815,7 +815,22 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
             if isa(exc, typeof(extype))
                 success = true
                 for fld in 1:nfields(extype)
-                    if !isequal(getfield(extype, fld), getfield(exc, fld))
+                    # We check three cases.
+                    if isdefined(extype, fld) && isdefined(exc, fld)
+                        # Case 1: extype.fld is defined and exc.fld is defined.
+                        # In this case, we compare the two values.
+                        # It is a success iff extype.fld is equal to exc.fld
+                        if !isequal(getfield(extype, fld), getfield(exc, fld))
+                            success = false
+                            break
+                        end
+                    elseif !isdefined(extype, fld) && !isdefined(exc, fld)
+                        # Case 2: extype.fld is undefined and exc.fld is undefined.
+                        # In this case, because both of the fields are undefined,
+                        # we consider this case to be a success.
+                    else
+                        # Case 3: one is defined and the other is undefined.
+                        # We consider this case to be a failure.
                         success = false
                         break
                     end
