@@ -33,7 +33,7 @@ JL_DLLEXPORT int jl_getFunctionInfo_fallback(jl_frame_t **frames, uintptr_t poin
 }
 
 JL_DLLEXPORT void jl_register_fptrs_fallback(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
-                       jl_method_instance_t **linfos, size_t n)
+                       jl_code_instance_t **linfos, size_t n)
 {
     (void)image_base; (void)fptrs; (void)linfos; (void)n;
 }

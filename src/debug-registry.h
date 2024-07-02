@@ -82,7 +82,7 @@ public:
     struct image_info_t {
         uint64_t base;
         jl_image_fptrs_t fptrs;
-        jl_method_instance_t **fvars_linfo;
+        jl_code_instance_t **fvars_linfo;
         size_t fvars_n;
     };
 
@@ -114,7 +114,7 @@ private:
     typedef rev_map<uint64_t, objfileentry_t> objfilemap_t;
 
     objectmap_t objectmap{};
-    rev_map<size_t, std::pair<size_t, jl_method_instance_t *>> linfomap{};
+    rev_map<size_t, std::pair<size_t, jl_code_instance_t *>> linfomap{};
 
     // Maintain a mapping of unrealized function names -> linfo objects
     // so that when we see it get emitted, we can add a link back to the linfo
@@ -135,7 +135,7 @@ public:
     libc_frames_t libc_frames{};
 
     void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
-    jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
+    jl_code_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const llvm::object::ObjectFile &Object,
                         std::function<uint64_t(const llvm::StringRef &)> getLoadAddress,
                         std::function<void*(void*)> lookupWriteAddress);
