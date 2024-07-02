@@ -189,7 +189,6 @@ lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
 if RawFD !== OS_HANDLE
     global stat(fd::RawFD)  = stat(Libc._get_osfhandle(fd))
 end
-stat(fd::Integer)           = stat(RawFD(fd))
 
 """
     stat(file)
