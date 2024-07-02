@@ -38,7 +38,7 @@ const TOMLDict  = Dict{String, Any}
 # Parser #
 ##########
 
-mutable struct Parser
+mutable struct Parser{Dates}
     str::String
     # 1 character look ahead
     current_char::Char
@@ -84,14 +84,11 @@ mutable struct Parser
 
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
-
-    # Optionally populate with the Dates stdlib to change the type of Date types returned
-    Dates::Union{Module, Nothing}
 end
 
-function Parser(str::String; filepath=nothing)
+function Parser{Dates}(str::String; filepath=nothing) where {Dates}
     root = TOMLDict()
-    l = Parser(
+    l = Parser{Dates}(
             str,                  # str
             EOF_CHAR,             # current_char
             firstindex(str),      # pos
@@ -106,12 +103,12 @@ function Parser(str::String; filepath=nothing)
             IdSet{Any}(),         # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
             root,
-            filepath,
-            nothing
+            filepath
         )
     startup(l)
     return l
 end
+
 function startup(l::Parser)
     # Populate our one character look-ahead
     c = eat_char(l)
@@ -122,8 +119,12 @@ function startup(l::Parser)
     end
 end
 
-Parser() = Parser("")
-Parser(io::IO) = Parser(read(io, String))
+Parser{Dates}() where {Dates} = Parser{Dates}("")
+Parser{Dates}(io::IO) where {Dates} = Parser{Dates}(read(io, String))
+
+Parser() = Parser{nothing}()
+Parser(io::IO) = Parser{nothing}(io)
+Parser(str::String; filepath=nothing) = Parser{nothing}(str; filepath)
 
 function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
     p.str = str
@@ -1021,8 +1022,7 @@ function parse_datetime(l)
     return try_return_datetime(l, year, month, day, h, m, s, ms)
 end
 
-function try_return_datetime(p, year, month, day, h, m, s, ms)
-    Dates = p.Dates
+function try_return_datetime(p::Parser{Dates}, year, month, day, h, m, s, ms) where Dates
     if Dates !== nothing
         try
             return Dates.DateTime(year, month, day, h, m, s, ms)
@@ -1035,8 +1035,7 @@ function try_return_datetime(p, year, month, day, h, m, s, ms)
     end
 end
 
-function try_return_date(p, year, month, day)
-    Dates = p.Dates
+function try_return_date(p::Parser{Dates}, year, month, day) where Dates
     if Dates !== nothing
         try
             return Dates.Date(year, month, day)
@@ -1058,8 +1057,7 @@ function parse_local_time(l::Parser)
     return try_return_time(l, h, m, s, ms)
 end
 
-function try_return_time(p, h, m, s, ms)
-    Dates = p.Dates
+function try_return_time(p::Parser{Dates}, h, m, s, ms) where Dates
     if Dates !== nothing
         try
             return Dates.Time(h, m, s, ms)

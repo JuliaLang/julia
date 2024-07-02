@@ -44,8 +44,7 @@ const Parser = Internals.Parser
 Constructor for a TOML `Parser` which returns date and time objects from Dates.
 """
 function DTParser(args...; kwargs...)
-    parser = Parser(args...; kwargs...)
-    parser.Dates = Dates
+    parser = Parser{Dates}(args...; kwargs...)
     return parser
 end
 
