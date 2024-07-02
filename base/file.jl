@@ -230,15 +230,19 @@ julia> mkpath("intermediate_dir/actually_a_directory.txt") # creates two directo
 julia> isdir("intermediate_dir/actually_a_directory.txt")
 true
 
+julia> mkpath("my/test/dir/") # returns the original `path`
+"my/test/dir/"
 ```
 """
 function mkpath(path::AbstractString; mode::Integer = 0o777)
-    isdirpath(path) && (path = dirname(path))
-    dir = dirname(path)
-    (path == dir || isdir(path)) && return path
-    mkpath(dir, mode = checkmode(mode))
+    parent = dirname(path)
+    # stop recursion for `""`, `"/"`, or existing dir
+    (path == parent || isdir(path)) && return path
+    mkpath(parent, mode = checkmode(mode))
     try
-        mkdir(path, mode = mode)
+        # The `isdir` check could be omitted, then `mkdir` will throw an error in cases like `x/`.
+        # Although the error will not be rethrown, we avoid it in advance for performance reasons.
+        isdir(path) || mkdir(path, mode = mode)
     catch err
         # If there is a problem with making the directory, but the directory
         # does in fact exist, then ignore the error. Else re-throw it.
@@ -246,7 +250,7 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
             rethrow()
         end
     end
-    path
+    return path
 end
 
 # Files that were requested to be deleted but can't be by the current process
