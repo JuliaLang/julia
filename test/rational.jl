@@ -801,3 +801,336 @@ end
     @test rationalize(Int64, nextfloat(0.1) * im; tol=0) == precise_next * im
     @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
 end
+
+function naive_rational_to_bigfloat(x)
+    f = let x = x
+        () -> BigFloat(numerator(x))/denominator(x)
+    end
+    setprecision(f, BigFloat, 1024)
+end
+
+function test_rational_to_float_systematic_with_naive_impl(::Type{F}, q, rm) where {F}
+    no_alloc_rat = let
+        f(::Rational{Bool}) = true
+        function f(x)
+            if (sizeof(Int) < 8) && (8 < sizeof(x))
+                # `div(::Int128, ::Int128)` is implemented via `BigInt`on 32-bit Julia
+                false
+            else
+                isbits(widen(x))
+            end
+        end
+        f
+    end
+    want_no_alloc = no_alloc_rat(q) && isbitstype(widen(F))
+    want_no_alloc && @test iszero(@allocated F(q, rm))
+    @test F(naive_rational_to_bigfloat(q), rm) == @inferred F(q, rm)
+end
+
+function test_rational_to_float_systematic_with_naive_impl(::Type{BigFloat}, q, rm, prec)
+    reference = BigFloat(naive_rational_to_bigfloat(q), rm, precision = prec)
+    @test precision(reference) == prec
+    t = let reference = reference, prec = prec
+        function(res)
+            @test res == reference
+            @test precision(res) == prec
+        end
+    end
+
+    t(BigFloat(q, rm, precision = prec))
+
+    let
+        res = setprecision(BigFloat, prec) do
+            BigFloat(q, rm)
+        end
+        t(res)
+    end
+
+    let
+        if rm isa RoundingMode
+            res = setrounding(BigFloat, rm) do
+                BigFloat(q, precision = prec)
+            end
+            t(res)
+        end
+    end
+end
+
+function test_rational_to_float_systematic_with_naive_impl(::Type{BigFloat}, q, rm)
+    for prec ∈ vcat(Base.OneTo(5), 256, 512)
+        test_rational_to_float_systematic_with_naive_impl(BigFloat, q, rm, prec)
+    end
+end
+
+function test_rational_to_float_systematic_with_naive_impl(::Type{F}, q) where {F}
+    M = Base.MPFR
+    mpfr_rms = (
+        M.MPFRRoundDown, M.MPFRRoundUp, M.MPFRRoundFromZero,
+        M.MPFRRoundToZero, M.MPFRRoundNearest
+    )
+    rms = (
+        RoundDown, RoundFromZero, RoundNearest, RoundToZero, RoundUp,
+        # XXX: these could be tested, but would require more effort to
+        #      test, as MPFR doesn't support them:
+        #
+        # ```julia
+        # RoundNearestTiesAway, RoundNearestTiesUp,
+        # ```
+        ((F <: BigFloat) ? mpfr_rms : ())...
+    )
+    for rm ∈ rms
+        test_rational_to_float_systematic_with_naive_impl(F, q, rm)
+    end
+end
+
+function min_no_promotion_impl(isless::F, a::T, b) where {F, T}
+    if isless(b, a)
+        T(b)::T
+    else
+        a
+    end
+end
+min_no_promotion(a::T, b) where {T} = min_no_promotion_impl(isless, a, b)
+max_no_promotion(a::T, b) where {T} = min_no_promotion_impl(((l, r) -> isless(r, l)), a, b)
+
+safe_typemin(::Type{T}) where {T} = typemin(T)::T
+safe_typemax(::Type{T}) where {T} = typemax(T)::T
+
+safe_typemin(::Type{BigInt}) = -safe_typemax(BigInt) - 1
+safe_typemax(::Type{BigInt}) = (one(BigInt) << 511) - 1
+
+function test_rational_to_float_systematic_with_naive(::Type{F}, ::Type{T}) where {F,T}
+    range_typemin = function(x)
+        l = safe_typemin(T)
+        u = safe_typemax(T)
+        b = min_no_promotion(u, l + x)
+        l:b
+    end
+
+    range_typemax = function(x)
+        l = safe_typemin(T)
+        u = safe_typemax(T)
+        a = max_no_promotion(l, u - x)
+        a:u
+    end
+
+    range_zero = function(x)
+        l = safe_typemin(T)
+        u = safe_typemax(T)
+        a = max_no_promotion(l, -x)
+        b = min_no_promotion(u,  x)
+        a:b
+    end
+
+    k = 20
+    nums = Vector{T}()
+    dens = Vector{T}()
+
+    append!(nums, range_typemin(k))
+
+    for x ∈ range_zero(k)
+        push!(nums, x)
+        (0 < x) && push!(dens, x)
+    end
+
+    for x ∈ range_typemax(k)
+        push!(nums, x)
+        (0 < x) && push!(dens, x)
+    end
+
+    sort!(nums)
+    sort!(dens)
+    unique!(nums)
+    unique!(dens)
+
+    for num ∈ nums
+        for den ∈ dens
+            # XXX: shift `n` and `d` to vary the FP exponent more
+            test_rational_to_float_systematic_with_naive_impl(F, num//den)
+        end
+    end
+end
+
+function test_rational_to_float_ldexp_fallback(::Type{F}, ::Type{T}) where {F,T}
+    l = max_no_promotion(safe_typemin(T), -5)
+    u = min_no_promotion(safe_typemax(T),  5)
+    prec = precision(F)
+    rm = RoundNearest
+    rtfp = Base.RationalToFloat.to_floating_point_fallback
+    for num ∈ l:u
+        for den ∈ true:u
+            @test F(num//den) == rtfp(F, BigInt, num, den, rm, prec)
+        end
+    end
+end
+
+function test_rational_to_float_correctly_rounded_up_down(x, f, ::Val{:down})
+    @test f ≤ x < nextfloat(f)
+end
+
+function test_rational_to_float_correctly_rounded_up_down(x, f, ::Val{:up})
+    @test prevfloat(f) < x ≤ f
+end
+
+function test_rational_to_float_simplest_rms_up_down(::Type{F}, ::Type{T}, rm, sb, ::V) where {F,T,V<:Val}
+    range_typemax = function(x)
+        l = one(T)::T
+        u = safe_typemax(T)
+        a = max_no_promotion(l, u - x)
+        a:u
+    end
+
+    range_zero = function(x)
+        u = safe_typemax(T)
+        b = min_no_promotion(u, x)
+        true:b
+    end
+
+    k = 20
+    nds = Vector{T}()
+    append!(nds, range_zero(k))
+    append!(nds, range_typemax(k))
+    sort!(nds)
+    unique!(nds)
+
+    for num ∈ nds
+        for den ∈ nds
+            x_pos = num // den
+            x = sb ? -x_pos : x_pos
+            f = F(x, rm)
+            test_rational_to_float_correctly_rounded_up_down(x, f, V())
+        end
+    end
+end
+
+function test_rational_to_float_simplest_rms(::Type{F}, ::Type{T}) where {F,T}
+    M = Base.MPFR
+    rms_up   = (RoundUp,       ((F <: BigFloat) ? (M.MPFRRoundUp,)       : ())...)
+    rms_down = (RoundDown,     ((F <: BigFloat) ? (M.MPFRRoundDown,)     : ())...)
+    rms_fz   = (RoundFromZero, ((F <: BigFloat) ? (M.MPFRRoundFromZero,) : ())...)
+    rms_tz   = (RoundToZero,   ((F <: BigFloat) ? (M.MPFRRoundToZero,)   : ())...)
+
+    if T <: Signed
+        @testset "negatives" begin
+            @testset "round down" begin
+                for rm ∈ (rms_fz..., rms_down...)
+                    test_rational_to_float_simplest_rms_up_down(F, T, rm, true, Val(:down))
+                end
+            end
+            @testset "round up" begin
+                for rm ∈ (rms_tz..., rms_up...)
+                    test_rational_to_float_simplest_rms_up_down(F, T, rm, true, Val(:up))
+                end
+            end
+        end
+    end
+
+    @testset "positives" begin
+        @testset "round down" begin
+            for rm ∈ (rms_tz..., rms_down...)
+                test_rational_to_float_simplest_rms_up_down(F, T, rm, false, Val(:down))
+            end
+        end
+        @testset "round up" begin
+            for rm ∈ (rms_fz..., rms_up...)
+                test_rational_to_float_simplest_rms_up_down(F, T, rm, false, Val(:up))
+            end
+        end
+    end
+end
+
+struct AbstractFloatFallback <: AbstractFloat
+    x::Float32
+    AbstractFloatFallback(x::Float32) = new(x)
+end
+AbstractFloatFallback(n::Integer) = AbstractFloatFallback(Float32(n))
+Base.precision(::Type{AbstractFloatFallback}) = 10
+Base.ldexp(x::AbstractFloatFallback, n::Integer) = AbstractFloatFallback(ldexp(x.x, n))
+Base.:-(x::AbstractFloatFallback) = AbstractFloatFallback(-x.x)
+
+struct IntegerFallback <: Integer
+    n::Int
+    IntegerFallback(n::Int) = new(n)
+end
+Base.signbit(n::IntegerFallback) = signbit(n.n)
+Base.BigInt(n::IntegerFallback) = BigInt(n.n)
+Base.oneunit(n::IntegerFallback) = IntegerFallback(oneunit(n.n))
+Base.:+(l::IntegerFallback, r::IntegerFallback) = IntegerFallback(l.n + r.n)
+Base.log2(n::IntegerFallback) = log2(n.n)
+
+@testset "rational number to floating-point number" begin
+    @testset "defined for unknown types" begin
+        Floats = (Float16, AbstractFloatFallback)
+        rationals = (3//1, Base.unsafe_rational(IntegerFallback(3), IntegerFallback(1)))
+        @testset "F: $F" for F ∈ Floats
+            @testset "q: $q" for q ∈ rationals
+                if F <: AbstractFloatFallback
+                    @test F(q).x == 3
+                else
+                    @test F(q) == 3
+                end
+            end
+        end
+    end
+
+    Us = (UInt8, UInt16, UInt32, UInt64, UInt128)
+    Ss = (Int8, Int16, Int32, Int64, Int128)
+    Ts = (Bool, Us..., Ss..., BigInt)
+    Fs = (Float16, Float32, Float64, BigFloat)
+
+    @testset "`Rational` parameterized by `Union`" begin
+        @testset "F: $F" for F ∈ Fs
+            @testset "T: $T" for T ∈ Ts
+                Q = Rational{Union{Bool,T}}
+                o = one(T)
+                @test isone(F(Q(o,    o)))
+                @test isone(F(Q(o,    true)))
+                @test isone(F(Q(true, o)))
+                @test isone(F(Q(true, true)))
+            end
+        end
+    end
+
+    @testset "defined method with default rounding mode" begin
+        @testset "F: $F" for F ∈ Fs
+            @testset "T: $T" for T ∈ Ts
+                @test isone(F(one(Rational{T})))
+            end
+        end
+    end
+
+    @testset "the simplest rounding modes; up, down" begin
+        @testset "F: $F" for F ∈ Fs
+            @testset "T: $T" for T ∈ Ts
+                test_rational_to_float_simplest_rms(F, T)
+            end
+        end
+    end
+
+    @testset "with naive conversion via `BigFloat`" begin
+        @testset "F: $F" for F ∈ Fs
+            @testset "T: $T" for T ∈ Ts
+                test_rational_to_float_systematic_with_naive(F, T)
+            end
+        end
+    end
+
+    @testset "`ldexp`-based fallback" begin
+        @testset "F: $F" for F ∈ Fs
+            @testset "T: $T" for T ∈ Ts
+                test_rational_to_float_ldexp_fallback(F, T)
+            end
+        end
+    end
+
+    @testset "special" begin
+        @test Float16(9//70000) === Float16(0.0001286)
+        @test Float32(16777216//16777217) < 1
+        @test float(-9223372036854775808//9223372036854775807) == -1
+
+        # issue #52394
+        @test Float16(10^8 // (10^9 + 1)) === convert(Float16, 10^8 // (10^9 + 1)) === Float16(0.1)
+        @test Float16((typemax(UInt128)-0x01) // typemax(UInt128)) === Float16(1.0)
+        @test Float32((typemax(UInt128)-0x01) // typemax(UInt128)) === Float32(1.0)
+    end
+end
