@@ -1192,7 +1192,7 @@ julia> @atomic max(mem[1], 10) # change the first value of mem to the max value,
 4 => 10
 
 julia> @atomic mem[1] max 5 # again change the first value of mem to the max value, with sequential consistency
-10 => 5
+10 => 10
 ```
 
 !!! compat "Julia 1.7"
