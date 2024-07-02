@@ -621,10 +621,10 @@ g40612(a, b) = a[]|a[] === b[]|b[]
 
 # issue #41438
 struct A41438{T}
-  x::Ptr{T}
+    x::Ptr{T}
 end
 struct B41438{T}
-  x::T
+    x::T
 end
 f41438(y) = y[].x
 @test A41438.body.layout != C_NULL
@@ -722,14 +722,14 @@ mutable struct A42645{T}
     end
 end
 mutable struct B42645{T}
-  y::A42645{T}
+    y::A42645{T}
 end
 x42645 = 1
 function f42645()
-  res = B42645(A42645([x42645]))
-  res.y = A42645([x42645])
-  res.y.x = true
-  res
+    res = B42645(A42645([x42645]))
+    res.y = A42645([x42645])
+    res.y.x = true
+    res
 end
 @test ((f42645()::B42645).y::A42645{Int}).x
 
@@ -859,7 +859,7 @@ foo50964(1) # Shouldn't assert!
 
 # https://github.com/JuliaLang/julia/issues/51233
 obj51233 = (1,)
-@test_throws ErrorException obj51233.x
+@test_throws FieldError obj51233.x
 
 # Very specific test for multiversioning
 if Sys.ARCH === :x86_64
@@ -938,3 +938,21 @@ BigStructAnyInt() = BigStructAnyInt((Union{Base.inferencebarrier(Float64), Int}=
 @test egal_any54109(Torture1_54109(), Torture1_54109())
 @test egal_any54109(Torture2_54109(), Torture2_54109())
 @test !egal_any54109(Torture1_54109(), Torture1_54109((DefaultOr54109(2.0, false) for i = 1:897)...))
+
+bar54599() = Base.inferencebarrier(true) ? (Base.PkgId(Main),1) : nothing
+
+function foo54599()
+    pkginfo = @noinline bar54599()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    @noinline println(devnull, pkgid)
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+
+#this function used to crash allocopt due to a no predecessors bug
+barnopreds() = Base.inferencebarrier(true) ? (Base.PkgId(Test),1) : nothing
+function foonopreds()
+    pkginfo = @noinline barnopreds()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+@test foonopreds() !== nothing

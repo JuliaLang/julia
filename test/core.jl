@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :ipo_purity_bits, :analysis_results]),
+        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
@@ -32,7 +32,7 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
         (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:cache, :precompiled]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
@@ -1924,9 +1924,9 @@ end
 
 # issue #4526
 f4526(x) = isa(x.a, Nothing)
-@test_throws ErrorException f4526(1)
-@test_throws ErrorException f4526(im)
-@test_throws ErrorException f4526(1+2im)
+@test_throws FieldError f4526(1)
+@test_throws FieldError f4526(im)
+@test_throws FieldError f4526(1+2im)
 
 # issue #4528
 function f4528(A, B)
@@ -4298,13 +4298,13 @@ end
 abstract type abstest_14825 end
 
 mutable struct t1_14825{A <: abstest_14825, B}
-  x::A
-  y::B
+    x::A
+    y::B
 end
 
 mutable struct t2_14825{C, B} <: abstest_14825
-  x::C
-  y::t1_14825{t2_14825{C, B}, B}
+    x::C
+    y::t1_14825{t2_14825{C, B}, B}
 end
 
 @test t2_14825{Int,Int}.types[2] <: t1_14825
@@ -6251,6 +6251,16 @@ let
     @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A5)), 6)
 end
 
+# More unsafe_wrap
+let
+    a = [1, 2, 3]
+    GC.@preserve a begin
+        m = unsafe_wrap(Memory{Int}, pointer(a), (3,))
+        @test m == a
+        @test m isa Memory{Int}
+    end
+end
+
 # copyto!
 A23567 = Vector{Union{Float64, Nothing}}(undef, 5)
 B23567 = collect(Union{Float64, Nothing}, 1.0:3.0)
@@ -6779,14 +6789,14 @@ primitive type TypeWith24Bits 24 end
 TypeWith24Bits(x::UInt32) = Core.Intrinsics.trunc_int(TypeWith24Bits, x)
 let x = TypeWith24Bits(0x112233), y = TypeWith24Bits(0x445566), z = TypeWith24Bits(0x778899)
     a = [x, x]
-    Core.memoryrefset!(Core.memoryref(a.ref, 2, true), y, :not_atomic, true)
+    Core.memoryrefset!(Core.memoryrefnew(a.ref, 2, true), y, :not_atomic, true)
     @test a == [x, y]
     a[2] = z
     @test a == [x, z]
     @test pointer(a, 2) - pointer(a, 1) == 4
 
     b = [(x, x), (x, x)]
-    Core.memoryrefset!(Core.memoryref(b.ref, 2, true), (x, y), :not_atomic, true)
+    Core.memoryrefset!(Core.memoryrefnew(b.ref, 2, true), (x, y), :not_atomic, true)
     @test b == [(x, x), (x, y)]
     b[2] = (y, z)
     @test b == [(x, x), (y, z)]
@@ -8135,13 +8145,14 @@ end
 @test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
 
 let M = @__MODULE__
-    @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
+    Core.eval(M, :(global a_typed_global))
+    @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
-    @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
-    @test Core.set_binding_type!(M, :a_typed_global, Union{Tuple{Integer},Tuple{Nothing}}) === nothing
+    @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
+    @test Core.eval(M, :(global a_typed_global::$(Union{Tuple{Integer},Tuple{Nothing}}))) === nothing
     @test_throws(ErrorException("cannot set type for global $(nameof(M)).a_typed_global. It already has a value or is already set to a different type."),
-                 Core.set_binding_type!(M, :a_typed_global, Union{Nothing,Tuple{Union{Integer,Nothing}}}))
-    @test Core.set_binding_type!(M, :a_typed_global) === nothing
+                 Core.eval(M, :(global a_typed_global::$(Union{Nothing,Tuple{Union{Integer,Nothing}}}))))
+    @test Core.eval(M, :(global a_typed_global)) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
 end
 
@@ -8153,3 +8164,84 @@ macro macroception()
 end
 
 @test (@macroception()) === 1
+
+# overlay method tables
+# =====================
+
+module OverlayModule
+
+using Base.Experimental: @MethodTable, @overlay
+
+@MethodTable mt
+# long function def
+@overlay mt function sin(x::Float64)
+    1
+end
+# short function def
+@overlay mt cos(x::Float64) = 2
+# parametric function def
+@overlay mt tan(x::T) where {T} = 3
+
+end # module OverlayModule
+
+let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, Base.get_world_counter())
+    @test only(ms).method.module === Base.Math
+end
+let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
+    @test only(ms).method.module === OverlayModule
+end
+let ms = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
+    @test isempty(ms)
+end
+
+# precompilation
+let load_path = mktempdir()
+    depot_path = mktempdir()
+    try
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, depot_path)
+
+        write(joinpath(load_path, "Foo.jl"),
+            """
+            module Foo
+            Base.Experimental.@MethodTable(mt)
+            Base.Experimental.@overlay mt sin(x::Int) = 1
+            end
+            """)
+
+        # precompiling Foo serializes the overlay method through the `mt` binding in the module
+        Foo = Base.require(Main, :Foo)
+        @test length(Foo.mt) == 1
+
+        write(joinpath(load_path, "Bar.jl"),
+            """
+            module Bar
+            Base.Experimental.@MethodTable(mt)
+            end
+            """)
+
+        write(joinpath(load_path, "Baz.jl"),
+            """
+            module Baz
+            using Bar
+            Base.Experimental.@overlay Bar.mt sin(x::Int) = 1
+            end
+            """)
+
+        # when referring an method table in another module,
+        # the overlay method needs to be discovered explicitly
+        Bar = Base.require(Main, :Bar)
+        @test length(Bar.mt) == 0
+        Baz = Base.require(Main, :Baz)
+        @test length(Bar.mt) == 1
+    finally
+        filter!((≠)(load_path), LOAD_PATH)
+        filter!((≠)(depot_path), DEPOT_PATH)
+        rm(load_path, recursive=true, force=true)
+        try
+            rm(depot_path, force=true, recursive=true)
+        catch err
+            @show err
+        end
+    end
+end

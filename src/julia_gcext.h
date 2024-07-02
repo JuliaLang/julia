@@ -39,8 +39,8 @@ typedef void (*jl_gc_cb_notify_gc_pressure_t)(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t cb, int enable);
 
 // Types for custom mark and sweep functions.
-typedef uintptr_t (*jl_markfunc_t)(jl_ptls_t, jl_value_t *obj);
-typedef void (*jl_sweepfunc_t)(jl_value_t *obj);
+typedef uintptr_t (*jl_markfunc_t)(jl_ptls_t, jl_value_t *obj) JL_NOTSAFEPOINT;
+typedef void (*jl_sweepfunc_t)(jl_value_t *obj) JL_NOTSAFEPOINT;
 
 // Function to create a new foreign type with custom
 // mark and sweep functions.
@@ -60,10 +60,10 @@ JL_DLLEXPORT int jl_reinit_foreign_type(
         jl_markfunc_t markfunc,
         jl_sweepfunc_t sweepfunc);
 
-JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt);
+JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void);
-JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void);
+JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void) JL_NOTSAFEPOINT;
 
 // Field layout descriptor for custom types that do
 // not fit Julia layout conventions. This is associated with
@@ -80,9 +80,9 @@ JL_DLLEXPORT void *jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty);
 // Queue an object or array of objects for scanning by the garbage collector.
 // These functions must only be called from within a root scanner callback
 // or from within a custom mark function.
-JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj);
+JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
-    jl_value_t **objs, size_t nobjs);
+    jl_value_t **objs, size_t nobjs) JL_NOTSAFEPOINT;
 
 // Sweep functions will not automatically be called for objects of
 // foreign types, as that may not always be desired. Only calling
@@ -133,7 +133,7 @@ JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void);
 // jl_typeof(obj) is an actual type object.
 //
 // NOTE: Only valid to call from within a GC context.
-JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p);
+JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p) JL_NOTSAFEPOINT;
 
 // Return a non-null pointer to the start of the stack area if the task
 // has an associated stack buffer. In that case, *size will also contain
@@ -150,7 +150,7 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
 // and may not be tight.
 JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
                                        char **active_start, char **active_end,
-                                       char **total_start, char **total_end);
+                                       char **total_start, char **total_end) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

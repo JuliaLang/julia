@@ -492,3 +492,8 @@ end
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
 Base.ArithmeticStyle(::Type{<:AbstractTime}) = Base.ArithmeticWraps()
+
+# minimal Base.TOML support
+Date(d::Base.TOML.Date) = Date(d.year, d.month, d.day)
+Time(t::Base.TOML.Time) = Time(t.hour, t.minute, t.second, t.ms)
+DateTime(dt::Base.TOML.DateTime) = DateTime(Date(dt.date), Time(dt.time))

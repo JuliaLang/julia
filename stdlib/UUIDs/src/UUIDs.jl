@@ -10,7 +10,7 @@ using Random
 
 import SHA
 
-export UUID, uuid1, uuid4, uuid5, uuid_version
+export UUID, uuid1, uuid4, uuid5, uuid7, uuid_version
 
 import Base: UUID
 
@@ -155,6 +155,45 @@ function uuid5(ns::UUID, name::String)
         v = (v << 0x08) | hash_result[idx]
     end
     return UUID(v)
+end
+
+"""
+    uuid7([rng::AbstractRNG]) -> UUID
+
+Generates a version 7 (random or pseudo-random) universally unique identifier (UUID),
+as specified by RFC 9652.
+
+The default rng used by `uuid7` is not `Random.default_rng()` and every invocation of `uuid7()` without
+an argument should be expected to return a unique identifier. Importantly, the outputs of
+`uuid7` do not repeat even when `Random.seed!(seed)` is called. Currently (as of Julia 1.12),
+`uuid7` uses `Random.RandomDevice` as the default rng. However, this is an implementation
+detail that may change in the future.
+
+!!! compat "Julia 1.12"
+    `uuid7()` is available as of Julia 1.12.
+
+# Examples
+```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
+julia> using Random
+
+julia> rng = Xoshiro(123);
+
+julia> uuid7(rng)
+UUID("019026ca-e086-772a-9638-f7b8557cd282")
+```
+"""
+function uuid7(rng::AbstractRNG=Random.RandomDevice())
+    bytes = rand(rng, UInt128)
+    # make space for the timestamp
+    bytes &= 0x0000000000000fff3fffffffffffffff
+    # version & variant
+    bytes |= 0x00000000000070008000000000000000
+
+    # current time in ms, rounded to an Integer
+    timestamp = round(UInt128, time() * 1e3)
+    bytes |= timestamp << UInt128(80)
+
+    return UUID(bytes)
 end
 
 end

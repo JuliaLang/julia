@@ -136,10 +136,10 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     JL_GC_PUSHARGS(argv, nargs - 1);
     size_t i;
     for (i = 1; i < nargs; i++)
-        argv[i] = eval_value(args[i], s);
+        argv[i-1] = eval_value(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
     assert(jl_is_method_instance(meth));
-    jl_value_t *result = jl_invoke(argv[1], &argv[2], nargs - 2, meth);
+    jl_value_t *result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, meth);
     JL_GC_POP();
     return result;
 }
@@ -298,7 +298,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             argv[i] = eval_value(args[i], s);
         JL_NARGSV(new_opaque_closure, 4);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], argv+4, nargs-4, 1);
+            argv[4], argv+5, nargs-5, 1);
         JL_GC_POP();
         return ret;
     }
@@ -529,6 +529,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
                 ct->scope = new_scope;
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                    ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
@@ -537,6 +538,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else {
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                    ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
@@ -569,9 +571,13 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 else {
                     jl_module_t *modu;
                     jl_sym_t *sym;
+                    // Plain assignment is allowed to create bindings at
+                    // toplevel and only for the current module
+                    int alloc = toplevel;
                     if (jl_is_globalref(lhs)) {
                         modu = jl_globalref_mod(lhs);
                         sym = jl_globalref_name(lhs);
+                        alloc &= modu == s->module;
                     }
                     else {
                         assert(jl_is_symbol(lhs));
@@ -579,7 +585,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                         sym = (jl_sym_t*)lhs;
                     }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, sym);
+                    jl_binding_t *b = jl_get_binding_wr(modu, sym, alloc);
                     jl_checked_assignment(b, modu, sym, rhs);
                     JL_GC_POP();
                 }
@@ -621,6 +627,18 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 else if (head == jl_toplevel_sym) {
                     jl_value_t *res = jl_toplevel_eval(s->module, stmt);
                     s->locals[jl_source_nslots(s->src) + s->ip] = res;
+                }
+                else if (head == jl_globaldecl_sym) {
+                    jl_value_t *val = eval_value(jl_exprarg(stmt, 1), s);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
+                    jl_declare_global(s->module, jl_exprarg(stmt, 0), val);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
+                }
+                else if (head == jl_const_sym) {
+                    jl_value_t *val = jl_expr_nargs(stmt) == 1 ? NULL : eval_value(jl_exprarg(stmt, 1), s);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
+                    jl_eval_const_decl(s->module, jl_exprarg(stmt, 0), val);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);
@@ -805,7 +823,13 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
         assert(jl_is_method_instance(specializations));
         jl_method_instance_t *mi = (jl_method_instance_t *)specializations;
         jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
-        code = jl_uncompress_ir(source, ci, jl_atomic_load_relaxed(&ci->inferred));
+        jl_value_t *src = jl_atomic_load_relaxed(&ci->inferred);
+        if (!src) {
+            // This can happen if somebody did :new_opaque_closure with broken IR. This is definitely bad
+            // and UB, but let's try to be slightly nicer than segfaulting here for people debugging.
+            jl_error("Internal Error: Opaque closure with no source at all");
+        }
+        code = jl_uncompress_ir(source, ci, src);
     }
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;

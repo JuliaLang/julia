@@ -125,6 +125,32 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 #endif
 }
 
+#if defined(_OS_WINDOWS_)
+void win32_formatmessage(DWORD code, char *reason, int len) {
+    DWORD res;
+    LPWSTR errmsg;
+    res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                         FORMAT_MESSAGE_FROM_SYSTEM |
+                         FORMAT_MESSAGE_IGNORE_INSERTS |
+                         FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                         NULL, code,
+                         MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+                         (LPWSTR)&errmsg, 0, NULL);
+    if (!res && (GetLastError() == ERROR_MUI_FILE_NOT_FOUND ||
+                 GetLastError() == ERROR_RESOURCE_TYPE_NOT_FOUND)) {
+      res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                           FORMAT_MESSAGE_FROM_SYSTEM |
+                           FORMAT_MESSAGE_IGNORE_INSERTS |
+                           FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                           NULL, code,
+                           0, (LPWSTR)&errmsg, 0, NULL);
+    }
+    res = WideCharToMultiByte(CP_UTF8, 0, errmsg, -1, reason, len, NULL, NULL);
+    reason[len - 1] = '\0';
+    LocalFree(errmsg);
+}
+#endif
+
 // Find the location of libjulia.
 char *lib_dir = NULL;
 JL_DLLEXPORT const char * jl_get_libdir()
@@ -135,21 +161,21 @@ JL_DLLEXPORT const char * jl_get_libdir()
     }
 #if defined(_OS_WINDOWS_)
     // On Windows, we use GetModuleFileNameW
-    wchar_t *libjulia_path = utf8_to_wchar(LIBJULIA_NAME);
     HMODULE libjulia = NULL;
 
-    // Get a handle to libjulia.
-    if (!libjulia_path) {
-        jl_loader_print_stderr3("ERROR: Unable to convert path ", LIBJULIA_NAME, " to wide string!\n");
+    // Get a handle to libjulia
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)jl_get_libdir, &libjulia)) {
+        DWORD err = GetLastError();
+        jl_loader_print_stderr3("ERROR: could not locate library \"", LIBJULIA_NAME, "\"\n");
+
+        char msg[2048];
+        win32_formatmessage(err, msg, sizeof(msg));
+        jl_loader_print_stderr(msg);
         exit(1);
     }
-    libjulia = LoadLibraryW(libjulia_path);
-    if (libjulia == NULL) {
-        jl_loader_print_stderr3("ERROR: Unable to load ", LIBJULIA_NAME, "!\n");
-        exit(1);
-    }
-    free(libjulia_path);
-    libjulia_path = (wchar_t*)malloc(32768 * sizeof(wchar_t)); // max long path length
+
+    wchar_t *libjulia_path = (wchar_t*)malloc(32768 * sizeof(wchar_t)); // max long path length
     if (!GetModuleFileNameW(libjulia, libjulia_path, 32768)) {
         jl_loader_print_stderr("ERROR: GetModuleFileName() failed\n");
         exit(1);

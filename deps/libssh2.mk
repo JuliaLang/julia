@@ -49,12 +49,12 @@ $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extr
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) --build $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) test
+	$(CMAKE) --build $(dir $@) test
 endif
 	echo 1 > $@
 

@@ -479,7 +479,7 @@ end
 @test f15259(1,2) == (1,2,1,2)
 # check that error cases are still correct
 @eval g15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); a.z)
-@test_throws ErrorException g15259(1,1)
+@test_throws FieldError g15259(1,1)
 @eval h15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); getfield(a, 3))
 @test_throws BoundsError h15259(1,1)
 
@@ -1097,7 +1097,7 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 
 # PR #28284, check that constants propagate through calls to new
 struct t28284
-  x::Int
+    x::Int
 end
 f28284() = Val(t28284(1))
 @inferred f28284()
@@ -2564,6 +2564,14 @@ Base.return_types(intermustalias_edgecase, (Any,); interp=MustAliasInterpreter()
 @test Base.return_types((Any,); interp=MustAliasInterpreter()) do x
     intermustalias_edgecase(x)
 end |> only === Core.Compiler.InterMustAlias
+
+@test Base.infer_return_type((AliasableField,Integer,); interp=MustAliasInterpreter()) do a, x
+    s = (;x)
+    if getfield(a, :f) isa Symbol
+        return getfield(s, getfield(a, :f))
+    end
+    return 0
+end == Integer
 
 function f25579(g)
     h = g[]
@@ -4262,10 +4270,10 @@ let # Test the presence of PhiNodes in lowered IR by taking the above function,
     Core.Compiler.replace_code_newstyle!(ci, ir)
     ci.ssavaluetypes = length(ci.ssavaluetypes)
     @test any(x->isa(x, Core.PhiNode), ci.code)
-    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(b, 1.0)
     @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
-    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
 end
@@ -5290,6 +5298,15 @@ end
 end
 foo51090(b) = return bar51090(b)
 @test !fully_eliminated(foo51090, (Int,))
+
+Base.@assume_effects :terminates_globally @noinline function bar51090_terminates(b)
+    b == 0 && return
+    r = foo51090_terminates(b - 1)
+    Base.donotdelete(b)
+    return r
+end
+foo51090_terminates(b) = return bar51090_terminates(b)
+@test !fully_eliminated(foo51090_terminates, (Int,))
 
 # exploit throwness from concrete eval for intrinsics
 @test Base.return_types() do

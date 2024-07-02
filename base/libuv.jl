@@ -2,7 +2,7 @@
 
 # Core definitions for interacting with the libuv library from Julia
 
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
+include(string(Base.BUILDROOT, "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
 
 # convert UV handle data to julia object, checking for null
 function uv_sizeof_handle(handle)
@@ -138,13 +138,13 @@ function reinit_stdio()
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO
     opts = JLOptions()
-    if opts.color != 0
-        have_color = (opts.color == 1)
+    color = colored_text(opts)
+    if !isnothing(color)
         if !isa(stdout, TTY)
-            global stdout = IOContext(stdout, :color => have_color)
+            global stdout = IOContext(stdout, :color => color::Bool)
         end
         if !isa(stderr, TTY)
-            global stderr = IOContext(stderr, :color => have_color)
+            global stderr = IOContext(stderr, :color => color::Bool)
         end
     end
     nothing

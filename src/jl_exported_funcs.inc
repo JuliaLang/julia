@@ -194,6 +194,7 @@
     XX(jl_generating_output) \
     XX(jl_generic_function_def) \
     XX(jl_gensym) \
+    XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
@@ -406,6 +407,7 @@
     XX(jl_safepoint_suspend_thread) \
     XX(jl_safepoint_resume_thread) \
     XX(jl_SC_CLK_TCK) \
+    XX(jl_setaffinity) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
     XX(jl_set_errno) \
@@ -469,8 +471,6 @@
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
     XX(jl_typeassert) \
-    XX(jl_typeinf_lock_begin) \
-    XX(jl_typeinf_lock_end) \
     XX(jl_typeinf_timing_begin) \
     XX(jl_typeinf_timing_end) \
     XX(jl_typename_str) \

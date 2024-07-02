@@ -100,6 +100,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-ir
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
+                        0, // trace_compile_timing
     };
     jl_options_initialized = 1;
 }
@@ -115,7 +116,8 @@ static const char opts[]  =
     " --help-hidden                                 Print uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@.}]                        Set <dir> as the active project/environment.\n"
+    " --project[={<dir>|@temp|@.}]                  Set <dir> as the active project/environment.\n"
+    "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
     "                                               file is found.\n"
@@ -158,7 +160,7 @@ static const char opts[]  =
     "                                               process affinity is not configured, and sets M to 1.\n"
     " --gcthreads=N[,M]                             Use N threads for the mark phase of GC and M (0 or 1)\n"
     "                                               threads for the concurrent sweeping phase of GC.\n"
-    "                                               N is set to half of the number of compute threads and\n"
+    "                                               N is set to the number of compute threads and\n"
     "                                               M is set to 0 if unspecified.\n"
     " -p, --procs {N|auto}                          Integer value N launches N additional local worker\n"
     "                                               processes `auto` launches as many workers as the\n"
@@ -257,6 +259,8 @@ static const char opts_hidden[]  =
     "                                               complete)\n"
     " --trace-compile={stderr|name}                 Print precompile statements for methods compiled\n"
     "                                               during execution or save to a path\n"
+    " --trace-compile-timing                        If --trace-compile is enabled show how long each took to\n"
+    "                                               compile in ms\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
 ;
@@ -279,6 +283,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_inline,
            opt_polly,
            opt_trace_compile,
+           opt_trace_compile_timing,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -355,6 +360,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
+        { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -793,7 +799,7 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --inline (%s)", optarg);
             }
             break;
-       case opt_polly:
+        case opt_polly:
             if (!strcmp(optarg,"yes"))
                 jl_options.polly = JL_OPTIONS_POLLY_ON;
             else if (!strcmp(optarg,"no"))
@@ -802,10 +808,13 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --polly (%s)", optarg);
             }
             break;
-         case opt_trace_compile:
+        case opt_trace_compile:
             jl_options.trace_compile = strdup(optarg);
             if (!jl_options.trace_compile)
                 jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            break;
+        case opt_trace_compile_timing:
+            jl_options.trace_compile_timing = 1;
             break;
         case opt_math_mode:
             if (!strcmp(optarg,"ieee"))

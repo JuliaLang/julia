@@ -248,7 +248,7 @@ no
 ## Short-Circuit Evaluation
 
 The `&&` and `||` operators in Julia correspond to logical “and” and “or” operations, respectively,
-and are typically used for this purpose.  However, they have an additional property of *short-circuit*
+and are typically used for this purpose. However, they have an additional property of *short-circuit*
 evaluation: they don't necessarily evaluate their second argument, as explained below.  (There
 are also bitwise `&` and `|` operators that can be used as logical “and” and “or” *without*
 short-circuit behavior, but beware that `&` and `|` have higher precedence than `&&` and `||` for evaluation order.)
@@ -601,6 +601,7 @@ below all interrupt the normal flow of control.
 | [`DomainError`](@ref)         |
 | [`EOFError`](@ref)            |
 | [`ErrorException`](@ref)      |
+| [`FieldError`](@ref)          |
 | [`InexactError`](@ref)        |
 | [`InitError`](@ref)           |
 | [`InterruptException`](@ref)  |

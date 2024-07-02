@@ -166,6 +166,9 @@ Random.seed!(1)
 
         @testset for func in (conj, transpose, adjoint)
             @test func(func(T)) == T
+            if func ∈ (transpose, adjoint)
+                @test func(func(T)) === T
+            end
         end
 
         @testset "permutedims(::Bidiagonal)" begin
@@ -902,6 +905,18 @@ end
     C1, C2 = zeros(2), zeros(2)
     @test mul!(C1, B, sv) == mul!(C2, B, v)
     @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
+end
+
+@testset "Reverse operation on Bidiagonal" begin
+    n = 5
+    d = randn(n)
+    e = randn(n - 1)
+    for uplo in (:U, :L)
+        B = Bidiagonal(d, e, uplo)
+        @test reverse(B, dims=1) == reverse(Matrix(B), dims=1)
+        @test reverse(B, dims=2) == reverse(Matrix(B), dims=2)
+        @test reverse(B)::Bidiagonal == reverse(Matrix(B))
+    end
 end
 
 @testset "Matrix conversion for non-numeric" begin

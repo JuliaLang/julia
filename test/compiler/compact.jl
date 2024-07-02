@@ -35,3 +35,17 @@ end
     verify_ir(new_ir)
     @test length(new_ir.cfg.blocks) == 1
 end
+
+# Test reverse affinity insert at start of compact
+@testset "IncrementalCompact reverse affinity insert" begin
+    ir = only(Base.code_ircode(foo_test_function, (Int,)))[1]
+    compact = IncrementalCompact(ir)
+    @test !Core.Compiler.did_just_finish_bb(compact)
+
+    insert_node_here!(compact, NewInstruction(ReturnNode(1), Union{}, ir[SSAValue(1)][:line]), true)
+    new_ir = finish(compact)
+    # TODO: Should IncrementalCompact be doing this internally?
+    empty!(new_ir.cfg.blocks[1].succs)
+    verify_ir(new_ir)
+    @test length(new_ir.cfg.blocks) == 1
+end

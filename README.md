@@ -35,8 +35,8 @@
 ## The Julia Language
 
 Julia is a high-level, high-performance dynamic language for technical
-computing.  The main homepage for Julia can be found at
-[julialang.org](https://julialang.org/).  This is the GitHub
+computing. The main homepage for Julia can be found at
+[julialang.org](https://julialang.org/). This is the GitHub
 repository of Julia source code, including instructions for compiling
 and installing Julia, below.
 
@@ -74,7 +74,7 @@ for OS and platform combinations.
 
 If everything works correctly, you will see a Julia banner and an
 interactive prompt into which you can enter expressions for
-evaluation.  You can read about [getting
+evaluation. You can read about [getting
 started](https://docs.julialang.org/en/v1/manual/getting-started/) in the manual.
 
 **Note**: Although some OS package managers provide Julia, such
@@ -94,7 +94,7 @@ and then use the command prompt to change into the resulting julia directory. By
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.10.2
+    git checkout v1.10.3
 
 To build the `julia` executable, run `make` from within the julia directory.
 

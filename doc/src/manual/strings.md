@@ -25,7 +25,7 @@ There are a few noteworthy high-level features about Julia's strings:
     the [UTF-8](https://en.wikipedia.org/wiki/UTF-8) encoding. (A [`transcode`](@ref) function is
     provided to convert to/from other Unicode encodings.)
   * All string types are subtypes of the abstract type `AbstractString`, and external packages define
-    additional `AbstractString` subtypes (e.g. for other encodings).  If you define a function expecting
+    additional `AbstractString` subtypes (e.g. for other encodings). If you define a function expecting
     a string argument, you should declare the type as `AbstractString` in order to accept any string
     type.
   * Like C and Java, but unlike most dynamic languages, Julia has a first-class type for representing
@@ -244,7 +244,7 @@ happens to contain only a single character. In Julia these are very different th
 Range indexing makes a copy of the selected part of the original string.
 Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref).
 More simply, using the [`@views`](@ref) macro on a block of code converts all string slices
-into substrings.  For example:
+into substrings. For example:
 
 ```jldoctest
 julia> str = "long string"
@@ -402,7 +402,7 @@ julia> collect(eachindex(s))
 ```
 
 To access the raw code units (bytes for UTF-8) of the encoding, you can use the [`codeunit(s,i)`](@ref)
-function, where the index `i` runs consecutively from `1` to [`ncodeunits(s)`](@ref).  The [`codeunits(s)`](@ref)
+function, where the index `i` runs consecutively from `1` to [`ncodeunits(s)`](@ref). The [`codeunits(s)`](@ref)
 function returns an `AbstractVector{UInt8}` wrapper that lets you access these raw codeunits (bytes) as an array.
 
 Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
@@ -957,11 +957,11 @@ i   Do case-insensitive pattern matching.
     that would cross the Unicode rules/non-Unicode rules boundary
     (ords 255/256) will not succeed.
 
-m   Treat string as multiple lines.  That is, change "^" and "$"
+m   Treat string as multiple lines. That is, change "^" and "$"
     from matching the start or end of the string to matching the
     start or end of any line anywhere within the string.
 
-s   Treat string as single line.  That is, change "." to match any
+s   Treat string as single line. That is, change "." to match any
     character whatsoever, even a newline, which normally it would
     not match.
 
@@ -1012,7 +1012,7 @@ ERROR: syntax: invalid escape sequence
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient
 for regular expressions containing quotation marks or newlines).
 
-The `Regex()` constructor may be used to create a valid regex string programmatically.  This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
+The `Regex()` constructor may be used to create a valid regex string programmatically. This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
 
 ```jldoctest
 julia> using Dates

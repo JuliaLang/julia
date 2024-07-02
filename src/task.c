@@ -272,7 +272,7 @@ JL_NO_ASAN static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *l
         return;
     if (r != 0 || returns != 1)
         abort();
-#elif defined(JL_HAVE_ASM) || defined(JL_HAVE_SIGALTSTACK) || defined(_OS_WINDOWS_)
+#elif defined(JL_HAVE_ASM) || defined(_OS_WINDOWS_)
     if (jl_setjmp(lastt->ctx.copy_ctx.uc_mcontext, 0))
         return;
 #else
@@ -888,31 +888,46 @@ As in DotMix and SplitMix, each task is assigned unique task "pedigree"
 coordinates. Our pedigree construction is a bit different and uses only binary
 coordinates rather than arbitrary integers. Each pedigree is an infinite
 sequence of ones and zeros with only finitely many ones. Each task has a "fork
-index": the root task has index 0; the fork index of a task the jth child task
-of a parent task with fork index i is i+j. The root task's coordinates are all
-zeros; each child task's coordinates are the same as its parents except at its
-fork index, where the parent has a zero while the child has a one. A task's
-coordinates after its fork index are all zeros. The coordinates of a tasks
-ancestors are all prefixes of its own coordinates, padded with zeros.
+index": the root task has index 0; the fork index of the jth child task of a
+parent task with fork index i is i+j. The root task's coordinates are all zeros;
+each child task's coordinates are the same as its parents except at its fork
+index, where the parent has a zero while the child has a one; each task's
+coordinates after its fork index are all zeros. The last common ancestor of two
+tasks has coordinates that are the longest common prefix of their coordinates.
 
-Also as in DotMix and SplitMix, we generate a sequence of pseudorandom weights
+Also as in DotMix and SplitMix, we generate a sequence of pseudorandom "weights"
 to combine with the coordinates of each task. This sequence is common across all
-tasks, and different mix values for each task derive from their coordinates
-being different. In DotMix and SplitMix, this is a literal dot product: the
-pseudorandom weights are multiplied by corresponding task coordinate and added
-up. While this does provably make collisions as unlikely as randomly assigned
-task seeds, this linear construction can be used to create linearly correlated
-states between tasks. However, it turns out that the compression construction
-need not be linear, commutative, associative, etc. which allows us to avoid any
-linear or other obvious correlations between related sets of tasks.
+tasks, and different mix values for tasks stem entirely from task coordinates
+being different. In DotMix and SplitMix the mix function is a literal dot
+product: the pseudorandom weights are multiplied by corresponding task
+coordinate and summed. While this does provably make collisions as unlikely as
+random seeding, this linear construction can be used to create linearly
+correlated states between more than two tasks. However, it turns out that the
+compression mixing construction need not be linear, nor commutative, nor
+associative. In fact, the mixing function need only be bijective in both
+arguments. This allows us to use a much more non-trivial mixing function and
+avoid any linear or other obvious correlations between related sets of tasks.
 
-To generalize SplitMix's optimized dot product construction, we similarly
-compute each task's compression function value incrementally by combining the
-parent's compression value with pseudorandom weight corresponding with the
-child's fork index. Formally, if the parent's compression value is c then we can
-compute the child's compression value as c′ = f(c, wᵢ) where w is the vector of
-pseudorandom weights. What is f? It can be any function that is bijective in
-each argument for all values of the other argument:
+We maintain an LCG in rngState[4] to generate pseudorandom weights. An LCG by
+itself is a very bad RNG, but we combine this one with xoshiro256 state
+registers in a non-trivial way and then apply the PCG-RXS-M-XS-64 output
+function to that. Even if the xoshiro256 states are all zeros, which they should
+never be, the output would be the same as PCG-RXS-M-XS-64, which is a solid
+statistical RNG. Each time a child is forked, we update the LCG in both parent
+and child tasks, corresponding to increasing the fork index. In the parent,
+that's all we have to do -- the main RNG state remains unchanged. Recall that
+spawning a child should not affect subsequent RNG draws in the parent. The next
+time the parent forks a child, the mixing weight used will be different. In the
+child, we use the LCG state to perturb the child's main RNG state registers,
+rngState[0..3].
+
+To generalize SplitMix's optimized dot product construction, we also compute
+each task's compression function value incrementally by combining the parent's
+compression value with pseudorandom weight corresponding with the child's fork
+index. Formally, if the parent's compression value is c then we can compute the
+child's compression value as c′ = f(c, wᵢ) where w is the vector of pseudorandom
+weights. What is f? It can be any function that is bijective in each argument
+for all values of the other argument:
 
     * For all c: w ↦ f(c, w) is bijective
     * For all w: c ↦ f(c, w) is bijective
@@ -932,57 +947,80 @@ bijection on each argument witnessed by these inverses:
     * c′ ↦ (2c′+1)(2w+1)⁻¹÷2 % 2^64
     * w′ ↦ (2c+1)⁻¹(2w′+1)÷2 % 2^64
 
-The second PCG output step is a bijection and designed to be significantly
-non-linear -- non-linear enough to mask the linearity of the LCG that drives the
-PCG-RXS-M-XS-64 RNG and allows it to pass statistical RNG test suites despite
-having the same size state and output. In particular, since this mixing function
-is highly non-associative and non-linear, we (hopefully) don't have any
-discernible relationship between these values:
+Here (2w+1)⁻¹ is the modular inverse of (2w+1) mod 2^64, guaranteed to exist
+since 2w+1 is odd. The second PCG output step is a bijection and designed to be
+significantly non-linear -- non-linear enough to mask the linearity of the LCG
+that drives the PCG-RXS-M-XS-64 RNG and allows it to pass statistical RNG test
+suites despite having the same size state and output. In particular, since this
+mixing function is highly non-associative and non-linear, we (hopefully) don't
+have any discernible relationship between these values:
 
     * c₀₀ = c
     * c₁₀ = f(c, wᵢ)
     * c₀₁ = f(c, wⱼ)
     * c₁₁ = f(f(c, wᵢ), wⱼ)
 
-When f is simply `+` then these have a very obvious relationship:
+When f is simply `+` then these have a very obvious linear relationship:
 
     c₀₀ + c₁₁ == c₁₀ + c₀₁
 
-This relationship holds regardless of what wᵢ and wⱼ are and is precisely what
-allows easy creation of correlated tasks with the DotMix/SplitMix construction
-that we previously used. Expressing any relationship between these values with
-our mixing function would require inverting the PCG output function (doable but
-non-trivial), knowing the weights wᵢ and wⱼ, and then applying the inversion
-functions for those weights appropriately. Since the weights are pseudo-randomly
-generated and not directly observable, this is infeasible.
+This relationship holds regardless of what wᵢ and wⱼ are and allows easy
+creation of correlated tasks with the way we were previously using the
+DotMix/SplitMix construction. SplitMix itself does not output the raw dot
+product, probably because the authors were aware of this linearity issue;
+instead: they apply the MurmurHash3 finalizer to the dot-product to get an
+output that masks linear relationships. I had failed to understand the
+importance of that finalizer. One possible fix for our task splitting
+correlation issue would have been to also apply a non-linear finalizer
+(MurmurHash3 is one of the best) to our dot product before using it to perturb
+the xoshiro256 state. There are two problems with that fix, however:
 
-We maintain an LCG in rngState[4] to generate pseudorandom weights. An LCG by
-itself is a very bad RNG, but we combine this one with xoshiro256 state
-registers in a non-trivial way and then apply the PCG-RXS-M-XS-64 output
-function to that. Even if the xoshiro256 states are all zeros, which they should
-never be, the output would be the same as PCG-RXS-M-XS-64, which is a solid
-statistical RNG.
+1. It requires accumulating the dot product somewhere. The old approach
+   accumulates dot products directly in the xoshiro registers; if we were to
+   accumulate and then finalize, the dot product has to be stored somewhere
+   in each task. We want our tasks to be as small as possible, so adding
+   another 64-bit field that we never change would be unfortunate.
 
-Each time a child is forked, we update the LCG in both parent and child tasks,
-corresponding to increasing the fork index. In the parent, that's all we have to
-do -- the main RNG state remains unchanged. Recall that spawning a child should
-*not* affect subsequent RNG draws in the parent. The next time the parent forks
-a child, the mixing weight used will be different. In the child, we use the LCG
-state to perturb the child's main RNG state registers, rngState[0..3].
+2. We still need to apply the PCG finalizer to the internal LCG in order to
+   generate dot product weights. SplitMix uses a shared static array of
+   1024 pre-generated random weights; we could do the same, but that limits
+   the number of task splits to a max of 1024 before weights have to be
+   reused. We can't use the LCG directly because it's highly linear and we
+   need four variations of the internal RNG stream for the four xoshiro256
+   registers. That means we'd have to apply the PCG finalizer, add it to
+   our dot product accumulator field in the child task, then apply the
+   MurmurHash3 finalizer to that dot product and use the result to purturb
+   the main RNG state.
 
-Since we want these registers to behave independently, we use four different
-variations on f to mix the LCG state with each of the four main RNG registers.
-Each variation first xors the LCG state with a different random constant before
-combining that value above with the old register state via multiplication; the
-PCG-RXS-M-XS-64 output function is then applied to that mixed state, with a
-different multiplier constant for each variation / register index. Xor is used
-in the first step since we multiply the result with the state immediately after
-and multiplication distributes over `+` and commutes with `*`, which makes both
-options suspect; multiplication doesn't distribute over or commute with xor. We
-also use a different odd multiplier in PCG-RXS-M-XS-64 for each RNG register.
-These three sources of variation (different xor constants, different xoshiro256
-state, different PCG multipliers) are sufficient for each of the four outputs to
-behave statistically independently.
+We avoid both problems by recognizing that the mixing function can be much less
+simple while still allowing the essential collision resistance proof to go
+through. We replace addition with a highly non-linear, non-associative mixing
+function that includes the PCG output function. This allows us to continue to use
+the xoshiro state registers for mixing function accumulation as well as for its
+primary purpose. It also obviates the need for double finalization: it would
+have been disastrous to use LCG state directly as weights for a linear
+construction like SplitMix, but using it as the input to a non-linear mixer that
+includes the strongest PCG output function is reasonable (and precisely what
+PCG-RXS-M-XS-64 does). Since the output of the mixing function is already
+non-linearly finalized, there's no need to apply yet another finalizer.
+
+Since there are four xoshiro256 registers that we want to behave independently
+as mix accumulators, we use four different variations on the mixing function,
+keyed by register index (0-3). Each variation first xors the LCG state with a
+different random constant before combining that value above with the old
+register state via multiplication. The PCG-RXS-M-XS-64 output function is then
+applied to that mixed state, with a different multiplier constant for each
+variation / register index. Xor is used in the first step since we multiply the
+result with the state immediately after and multiplication distributes over `+`
+and commutes with `*`, making both suspect options. Multiplication doesn't
+distribute over or commute with xor. We also use a different odd multiplier in
+PCG-RXS-M-XS-64 for each RNG register. These four sources of variation
+(different initial state, different xor constants, different xoshiro256 state,
+different PCG multipliers) are hopefully sufficient for each of the four outputs
+to behave statistically independently, in the sense that even if two different
+tasks happen to have a state collision in one 64-bit register, it is highly
+improbable that all four registers collide at the same time, giving an actual
+main RNG state collision.
 
 [1]: https://www.pcg-random.org/pdf/hmc-cs-2014-0905.pdf
 
@@ -1470,115 +1508,6 @@ JL_NO_ASAN static void jl_start_fiber_set(jl_ucontext_t *t)
 #endif
     __builtin_unreachable();
 }
-#endif
-
-#if defined(JL_HAVE_SIGALTSTACK)
-#if defined(_COMPILER_TSAN_ENABLED_)
-#error TSAN support not currently implemented for this tasking model
-#endif
-
-static void start_basefiber(int sig)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
-        start_task(); // sanitizer_finish_switch_fiber is part of start_task
-}
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
-{
-    stack_t uc_stack, osigstk;
-    struct sigaction sa, osa;
-    sigset_t set, oset;
-    void *stk = jl_malloc_stack(ssize, owner);
-    if (stk == NULL)
-        return NULL;
-    // setup
-    jl_ptls_t ptls = jl_current_task->ptls;
-    _jl_ucontext_t base_ctx;
-    memcpy(&base_ctx, &ptls->base_ctx, sizeof(base_ctx));
-    sigfillset(&set);
-    if (pthread_sigmask(SIG_BLOCK, &set, &oset) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("pthread_sigmask failed");
-    }
-    uc_stack.ss_sp = stk;
-    uc_stack.ss_size = *ssize;
-    uc_stack.ss_flags = 0;
-    if (sigaltstack(&uc_stack, &osigstk) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaltstack failed");
-    }
-    memset(&sa, 0, sizeof(sa));
-    sigemptyset(&sa.sa_mask);
-    sa.sa_handler = start_basefiber;
-    sa.sa_flags = SA_ONSTACK;
-    if (sigaction(SIGUSR2, &sa, &osa) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaction failed");
-    }
-    // emit signal
-    pthread_kill(pthread_self(), SIGUSR2); // initializes jl_basectx
-    sigdelset(&set, SIGUSR2);
-    sigsuspend(&set);
-    // cleanup
-    if (sigaction(SIGUSR2, &osa, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaction failed");
-    }
-    if (osigstk.ss_size < MINSTKSZ && (osigstk.ss_flags | SS_DISABLE))
-       osigstk.ss_size = MINSTKSZ;
-    if (sigaltstack(&osigstk, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaltstack failed");
-    }
-    if (pthread_sigmask(SIG_SETMASK, &oset, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("pthread_sigmask failed");
-    }
-    if (&ptls->base_ctx != t) {
-        memcpy(&t, &ptls->base_ctx, sizeof(base_ctx));
-        memcpy(&ptls->base_ctx, &base_ctx, sizeof(base_ctx)); // restore COPY_STACKS context
-    }
-    return (char*)stk;
-}
-static void jl_start_fiber_set(jl_ucontext_t *t) {
-    jl_longjmp(t->ctx.uc_mcontext, 1); // (doesn't return)
-}
-static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
-{
-    assert(lastt);
-    if (lastt && jl_setjmp(lastt->ctx.uc_mcontext, 0))
-        return;
-    tsan_switch_to_ctx(t);
-    jl_start_fiber_set(t);
-}
-static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
-{
-    if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
-        return;
-    tsan_switch_to_ctx(t);
-    jl_start_fiber_set(t); // doesn't return
-}
-static void jl_set_fiber(jl_ucontext_t *t)
-{
-    jl_longjmp(t->ctx.uc_mcontext, 1);
-}
-#endif
-
-#if defined(JL_HAVE_ASYNCIFY)
-#if defined(_COMPILER_TSAN_ENABLED_)
-#error TSAN support not currently implemented for this tasking model
-#endif
-
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT
-{
-    void *stk = jl_malloc_stack(ssize, owner);
-    if (stk == NULL)
-        return NULL;
-    t->stackbottom = stk;
-    t->stacktop = ((char*)stk) + *ssize;
-    return (char*)stk;
-}
-// jl_*_fiber implemented in js
 #endif
 
 // Initialize a root task using the given stack.

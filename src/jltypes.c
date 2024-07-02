@@ -1499,11 +1499,11 @@ jl_unionall_t *jl_rename_unionall(jl_unionall_t *u)
     return (jl_unionall_t*)t;
 }
 
-jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val)
+jl_value_t *jl_substitute_var_nothrow(jl_value_t *t, jl_tvar_t *var, jl_value_t *val, int nothrow)
 {
     if (val == (jl_value_t*)var)
         return t;
-    int nothrow = jl_is_typevar(val) ? 0 : 1;
+    nothrow = jl_is_typevar(val) ? 0 : nothrow;
     jl_typeenv_t env = { var, val, NULL };
     return inst_type_w_(t, &env, NULL, 1, nothrow);
 }
@@ -1725,7 +1725,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
 }
 
-static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, size_t np)
+static int check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, size_t np, int nothrow)
 {
     jl_value_t *wrapper = tn->wrapper;
     jl_value_t **bounds;
@@ -1743,6 +1743,10 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
         assert(jl_is_unionall(wrapper));
         jl_tvar_t *tv = ((jl_unionall_t*)wrapper)->var;
         if (!within_typevar(params[i], bounds[2*i], bounds[2*i+1])) {
+            if (nothrow) {
+                JL_GC_POP();
+                return 1;
+            }
             if (tv->lb != bounds[2*i] || tv->ub != bounds[2*i+1])
                 // pass a new version of `tv` containing the instantiated bounds
                 tv = jl_new_typevar(tv->name, bounds[2*i], bounds[2*i+1]);
@@ -1752,12 +1756,26 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
         int j;
         for (j = 2*i + 2; j < 2*np; j++) {
             jl_value_t *bj = bounds[j];
-            if (bj != (jl_value_t*)jl_any_type && bj != jl_bottom_type)
-                bounds[j] = jl_substitute_var(bj, tv, params[i]);
+            if (bj != (jl_value_t*)jl_any_type && bj != jl_bottom_type) {
+                int isub = j & 1;
+                // use different nothrow level for lb and ub substitution.
+                // TODO: This assuming the top instantiation could only start with
+                // `nothrow == 2` or `nothrow == 0`. If `nothrow` is initially set to 1
+                // then we might miss some inner error, perhaps the normal path should
+                // also follow this rule？
+                jl_value_t *nb = jl_substitute_var_nothrow(bj, tv, params[i], nothrow ? (isub ? 2 : 1) : 0 );
+                if (nb == NULL) {
+                    assert(nothrow);
+                    JL_GC_POP();
+                    return 1;
+                }
+                bounds[j] = nb;
+            }
         }
         wrapper = ((jl_unionall_t*)wrapper)->body;
     }
     JL_GC_POP();
+    return 0;
 }
 
 static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
@@ -2004,13 +2022,8 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     // for whether this is even valid
     if (check && !istuple) {
         assert(ntp > 0);
-        JL_TRY {
-            check_datatype_parameters(tn, iparams, ntp);
-        }
-        JL_CATCH {
-            if (!nothrow) jl_rethrow();
+        if (check_datatype_parameters(tn, iparams, ntp, nothrow))
             return NULL;
-        }
     }
     else if (ntp == 0 && jl_emptytuple_type != NULL) {
         // empty tuple type case
@@ -2401,7 +2414,8 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         jl_value_t *elt = jl_svecref(tp, i);
         jl_value_t *pi = inst_type_w_(elt, env, stack, check, nothrow);
         if (pi == NULL) {
-            if (i == ntp-1 && jl_is_vararg(elt)) {
+            assert(nothrow);
+            if (nothrow == 1 || (i == ntp-1 && jl_is_vararg(elt))) {
                 t = NULL;
                 break;
             }
@@ -2420,6 +2434,10 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
     return t;
 }
 
+// `nothrow` means that when type checking fails, the type instantiation should
+// return `NULL` instead of immediately throwing an error. If `nothrow` == 2 then
+// we further assume that the imprecise instantiation for non invariant parameters
+// is acceptable, and inner error (`NULL`) would be ignored.
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check, int nothrow)
 {
     size_t i;
@@ -2440,11 +2458,10 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         jl_value_t *var = NULL;
         jl_value_t *newbody = NULL;
         JL_GC_PUSH3(&lb, &var, &newbody);
-        JL_TRY {
-            lb = inst_type_w_(ua->var->lb, env, stack, check, 0);
-        }
-        JL_CATCH {
-            if (!nothrow) jl_rethrow();
+        // set nothrow <= 1 to ensure lb's accuracy.
+        lb = inst_type_w_(ua->var->lb, env, stack, check, nothrow ? 1 : 0);
+        if (lb == NULL) {
+            assert(nothrow);
             t = NULL;
         }
         if (t != NULL) {
@@ -2468,11 +2485,9 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             if (newbody == NULL) {
                 t = NULL;
             }
-            else if (newbody == (jl_value_t*)jl_emptytuple_type) {
-                // NTuple{0} => Tuple{} can make a typevar disappear
-                t = (jl_value_t*)jl_emptytuple_type;
-            }
-            else if (nothrow && !jl_has_typevar(newbody, (jl_tvar_t *)var)) {
+            else if (!jl_has_typevar(newbody, (jl_tvar_t *)var)) {
+                // inner instantiation might make a typevar disappear, e.g.
+                // NTuple{0,T} => Tuple{}
                 t = newbody;
             }
             else if (newbody != ua->body || var != (jl_value_t*)ua->var) {
@@ -2489,16 +2504,21 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         jl_value_t *b = NULL;
         JL_GC_PUSH2(&a, &b);
         b = inst_type_w_(u->b, env, stack, check, nothrow);
+        if (nothrow) {
+            // ensure jl_type_union nothrow.
+            if (a && !(jl_is_typevar(a) || jl_is_type(a)))
+                a = NULL;
+            if (b && !(jl_is_typevar(b) || jl_is_type(b)))
+                b = NULL;
+        }
         if (a != u->a || b != u->b) {
             if (!check) {
                 // fast path for `jl_rename_unionall`.
                 t = jl_new_struct(jl_uniontype_type, a, b);
             }
-            else if (nothrow && a == NULL) {
-                t = b;
-            }
-            else if (nothrow && b == NULL) {
-                t = a;
+            else if (a == NULL || b == NULL) {
+                assert(nothrow);
+                t = nothrow == 1 ? NULL : a == NULL ? b : a;
             }
             else {
                 assert(a != NULL && b != NULL);
@@ -2516,15 +2536,21 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         JL_GC_PUSH2(&T, &N);
         if (v->T) {
             T = inst_type_w_(v->T, env, stack, check, nothrow);
-            if (T == NULL)
-                T = jl_bottom_type;
-            if (v->N) // This branch should never throw.
-                N = inst_type_w_(v->N, env, stack, check, 0);
+            if (T == NULL) {
+                if (nothrow == 2)
+                    T = jl_bottom_type;
+                else
+                    t = NULL;
+            }
+            if (t && v->N) {
+                // set nothrow <= 1 to ensure invariant parameter's accuracy.
+                N = inst_type_w_(v->N, env, stack, check, nothrow ? 1 : 0);
+                if (N == NULL)
+                    t = NULL;
+            }
         }
-        if (T != v->T || N != v->N) {
-            // `Vararg` is special, we'd better handle inner error at Tuple level.
+        if (t && (T != v->T || N != v->N))
             t = (jl_value_t*)jl_wrap_vararg(T, N, check, nothrow);
-        }
         JL_GC_POP();
         return t;
     }
@@ -2543,16 +2569,15 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
     int bound = 0;
     for (i = 0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
-        JL_TRY {
-            jl_value_t *pi = inst_type_w_(elt, env, stack, check, 0);
-            iparams[i] = pi;
-            bound |= (pi != elt);
-        }
-        JL_CATCH {
-            if (!nothrow) jl_rethrow();
+        // set nothrow <= 1 to ensure invariant parameter's accuracy.
+        jl_value_t *pi = inst_type_w_(elt, env, stack, check, nothrow ? 1 : 0);
+        if (pi == NULL) {
+            assert(nothrow);
             t = NULL;
+            break;
         }
-        if (t == NULL) break;
+        iparams[i] = pi;
+        bound |= (pi != elt);
     }
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
     if (t != NULL && bound)
@@ -3288,7 +3313,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(21,
+                        jl_perm_symsvec(22,
                             "code",
                             "debuginfo",
                             "ssavaluetypes",
@@ -3296,11 +3321,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             "slotnames",
                             "slotflags",
                             "slottypes",
+                            "rettype",
                             "parent",
-                            "method_for_inference_limit_heuristics",
                             "edges",
                             "min_world",
                             "max_world",
+                            "method_for_inference_limit_heuristics",
                             "nargs",
                             "propagate_inbounds",
                             "has_fcall",
@@ -3310,7 +3336,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "constprop",
                             "purity",
                             "inlining_cost"),
-                        jl_svec(21,
+                        jl_svec(22,
                             jl_array_any_type,
                             jl_debuginfo_type,
                             jl_any_type,
@@ -3320,9 +3346,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
+                            jl_any_type, // prefers svec, but tolerates Vector{Any}
+                            jl_ulong_type,
+                            jl_ulong_type,
                             jl_any_type,
-                            jl_ulong_type,
-                            jl_ulong_type,
                             jl_ulong_type,
                             jl_bool_type,
                             jl_bool_type,
@@ -3333,7 +3360,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type,
                             jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 21);
+                        0, 1, 22);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
@@ -3412,37 +3439,35 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(8,
+                        jl_perm_symsvec(7,
                             "def",
                             "specTypes",
                             "sparam_vals",
                             "backedges",
                             "cache",
-                            "inInference",
                             "cache_with_orig",
                             "precompiled"),
-                        jl_svec(8,
+                        jl_svec(7,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
                             jl_simplevector_type,
                             jl_array_any_type,
                             jl_any_type/*jl_code_instance_type*/,
                             jl_bool_type,
-                            jl_bool_type,
                             jl_bool_type),
                         jl_emptysvec,
                         0, 1, 3);
     // These fields should be constant, but Serialization wants to mutate them in initialization
-    //const static uint32_t method_instance_constfields[1] = { 0x00000007 }; // (1<<0)|(1<<1)|(1<<2);
-    const static uint32_t method_instance_atomicfields[1] = { 0x0000090 }; // (1<<4)|(1<<7);
-    //Fields 4 and 5 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe. TODO: except inInference
+    //const static uint32_t method_instance_constfields[1] = { 0b0000111 }; // fields 1, 2, 3
+    const static uint32_t method_instance_atomicfields[1]  = { 0b1010000 }; // fields 5, 7
+    //Fields 4 and 5 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe.
     //jl_method_instance_type->name->constfields = method_instance_constfields;
     jl_method_instance_type->name->atomicfields = method_instance_atomicfields;
 
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(18,
+                        jl_perm_symsvec(17,
                             "def",
                             "owner",
                             "next",
@@ -3454,11 +3479,11 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inferred",
                             "debuginfo", // TODO: rename to edges?
                             //"absolute_max",
-                            "ipo_purity_bits", "purity_bits",
+                            "ipo_purity_bits",
                             "analysis_results",
                             "specsigflags", "precompile", "relocatability",
                             "invoke", "specptr"), // function object decls
-                        jl_svec(18,
+                        jl_svec(17,
                             jl_method_instance_type,
                             jl_any_type,
                             jl_any_type,
@@ -3470,7 +3495,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_debuginfo_type,
                             //jl_bool_type,
-                            jl_uint32_type, jl_uint32_type,
+                            jl_uint32_type,
                             jl_any_type,
                             jl_bool_type,
                             jl_bool_type,
@@ -3479,11 +3504,11 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b000001010011100011 }; // Set fields 1, 2, 6-8, 11, 13 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b110110101100011100 }; // Set fields 3-5, 9, 10, 12, 14-15, 17-18 as atomic
-    //Fields 4-5 are only operated on by construction and deserialization, so are const at runtime
-    //Fields 13 and 17 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
-    //Except for field 9 (inferred), which is volatile unless you know which other places are currently using it
+    const static uint32_t code_instance_constfields[1]  = { 0b00000100011100011 }; // Set fields 1, 2, 6-8, 12 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b11011011100011100 }; // Set fields 3-5, 9, 10, 11, 13-14, 16-17 as atomic
+    // Fields 4-5 are only operated on by construction and deserialization, so are effectively const at runtime
+    // Fields ipo_purity_bits and analysis_results are not currently threadsafe or reliable, as they get mutated after optimization, but are not declared atomic
+    // and there is no way to tell (during inference) if their value is finalized yet (to wait for them to be narrowed if applicable)
     jl_code_instance_type->name->constfields = code_instance_constfields;
     jl_code_instance_type->name->atomicfields = code_instance_atomicfields;
 
@@ -3624,8 +3649,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
     jl_svecset(jl_method_instance_type->types, 4, jl_code_instance_type);
+    jl_svecset(jl_code_instance_type->types, 15, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 16, jl_voidpointer_type);
-    jl_svecset(jl_code_instance_type->types, 17, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 1, jl_globalref_type);
     jl_svecset(jl_binding_type->types, 2, jl_binding_type);
 
@@ -3700,6 +3725,7 @@ void post_boot_hooks(void)
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
+    jl_fielderror_type     = (jl_datatype_t*)core("FieldError");
     jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");

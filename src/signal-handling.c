@@ -309,6 +309,11 @@ static void jl_check_profile_autostop(void)
     }
 }
 
+static void stack_overflow_warning(void)
+{
+    jl_safe_printf("Warning: detected a stack overflow; program state may be corrupted, so further execution might be unreliable.\n");
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else

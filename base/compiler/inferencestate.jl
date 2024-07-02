@@ -247,7 +247,7 @@ mutable struct InferenceState
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     ssavaluetypes::Vector{Any}
-    stmt_edges::Vector{Union{Nothing,Vector{Any}}}
+    stmt_edges::Vector{Vector{Any}}
     stmt_info::Vector{CallInfo}
 
     #= intermediate states for interprocedural abstract interpretation =#
@@ -298,7 +298,7 @@ mutable struct InferenceState
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
-        stmt_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
+        stmt_edges = Vector{Vector{Any}}(undef, nstmts)
         stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
@@ -336,7 +336,10 @@ mutable struct InferenceState
         end
 
         if def isa Method
-            ipo_effects = Effects(ipo_effects; nonoverlayed=is_nonoverlayed(def))
+            nonoverlayed = is_nonoverlayed(def) ? ALWAYS_TRUE :
+                is_effect_overridden(def, :consistent_overlay) ? CONSISTENT_OVERLAY :
+                ALWAYS_FALSE
+            ipo_effects = Effects(ipo_effects; nonoverlayed)
         end
 
         restrict_abstract_call_sites = isa(def, Module)
@@ -600,9 +603,10 @@ end
 function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     world = get_inference_world(interp)
-    src = retrieve_code_info(result.linfo, world)
+    mi = result.linfo
+    src = retrieve_code_info(mi, world)
     src === nothing && return nothing
-    maybe_validate_code(result.linfo, src, "lowered")
+    maybe_validate_code(mi, src, "lowered")
     return InferenceState(result, src, cache_mode, interp)
 end
 InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =
@@ -805,9 +809,9 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
     return nothing
 end
 
-function add_cycle_backedge!(caller::InferenceState, frame::InferenceState, currpc::Int)
+function add_cycle_backedge!(caller::InferenceState, frame::InferenceState)
     update_valid_age!(caller, frame.valid_worlds)
-    backedge = (caller, currpc)
+    backedge = (caller, caller.currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
     add_backedge!(caller, frame.linfo)
     return frame
@@ -815,16 +819,17 @@ end
 
 function get_stmt_edges!(caller::InferenceState, currpc::Int=caller.currpc)
     stmt_edges = caller.stmt_edges
-    edges = stmt_edges[currpc]
-    if edges === nothing
-        edges = stmt_edges[currpc] = []
+    if !isassigned(stmt_edges, currpc)
+        return stmt_edges[currpc] = Any[]
+    else
+        return stmt_edges[currpc]
     end
-    return edges
 end
 
 function empty_backedges!(frame::InferenceState, currpc::Int=frame.currpc)
-    edges = frame.stmt_edges[currpc]
-    edges === nothing || empty!(edges)
+    if isassigned(frame.stmt_edges, currpc)
+        empty!(frame.stmt_edges[currpc])
+    end
     return nothing
 end
 
