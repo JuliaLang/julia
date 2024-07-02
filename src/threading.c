@@ -163,14 +163,16 @@ BOOLEAN WINAPI DllMain(IN HINSTANCE hDllHandle, IN DWORD nReason,
 
 #if defined(_CPU_X86_64_)
 #define SAVE_ERRNO \
-    DWORD *plast_error = (DWORD*)(__readgsqword(0x30) + 0x68); \
-    DWORD last_error = *plast_error
+    DWORD *plast_error; \
+    __asm__ ("movq %%gs:0x30,%0" : "=r" (plast_error)); \
+    DWORD last_error = *(plast_error + 0x68)
 #define LOAD_ERRNO \
     *plast_error = last_error
 #elif defined(_CPU_X86_)
 #define SAVE_ERRNO \
-    DWORD *plast_error = (DWORD*)(__readfsdword(0x18) + 0x34); \
-    DWORD last_error = *plast_error
+    DWORD *plast_error; \
+    __asm__ ("movq %%gs:0x18,%0" : "=r" (plast_error)); \
+    DWORD last_error = *(plast_error + 0x34)
 #define LOAD_ERRNO \
     *plast_error = last_error
 #else
