@@ -127,8 +127,11 @@ function _trywait(t::Union{Timer, AsyncCondition})
         t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
     else
         if !isopen(t)
-            close(t) # wait for the close to complete
-            return false
+            set = t.set
+            if !set
+                close(t) # wait for the close to complete
+                return false
+            end
         end
         iolock_begin()
         set = t.set
