@@ -298,7 +298,12 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
-        nothrow = consistent = isdefinedconst_globalref(stmt)
+        if assume_bindings_static(src)
+            nothrow = isdefined_globalref(stmt)
+            consistent = nothrow & isconst(stmt)
+        else
+            nothrow = consistent = isdefinedconst_globalref(stmt)
+        end
         return (consistent, nothrow, nothrow)
     elseif isa(stmt, Expr)
         (; head, args) = stmt
@@ -1129,7 +1134,6 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     stmtinfo = sv.stmt_info
-    meta = Expr[]
     idx = 1
     oldidx = 1
     nstmts = length(code)
@@ -1229,9 +1233,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         renumber_cfg_stmts!(sv.cfg, blockchangemap)
     end
 
-    for i = 1:length(code)
-        code[i] = process_meta!(meta, code[i])
-    end
+    meta = process_meta!(code, InferenceParams(sv.inlining.interp).assume_bindings_static)
     strip_trailing_junk!(code, ssavaluetypes, ssaflags, di, sv.cfg, stmtinfo)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
@@ -1242,13 +1244,32 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes)
 end
 
-function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
-    if isexpr(stmt, :meta) && length(stmt.args) ≥ 1
-        push!(meta, stmt)
-        return nothing
+function process_meta!(code::Vector{Any}, assume_bindings_static::Bool)
+    meta = Expr[]
+    for i = 1:length(code)
+        stmt = code[i]
+        if isexpr(stmt, :meta) && length(stmt.args) ≥ 1
+            push!(meta, stmt)
+            code[i] = nothing
+        end
     end
-    return stmt
+    # Temporarily put the configurations of `AbstractInterpreter` that created this `IRCode`
+    # into `meta::Vector{Any}`, making it accessible for various optimization passes.
+    # The `replace_code_newstyle!` needs to filter out these temporary nodes inserted here.
+    pushfirst!(meta, Expr(:assume_bindings_static, assume_bindings_static))
+    return meta
 end
+
+function assume_bindings_static(ir::IRCode)
+    for node = ir.meta
+        node.head === :meta && break
+        if node.head === :assume_bindings_static
+            return node.args[1]::Bool
+        end
+    end
+    return false
+end
+assume_bindings_static(compact::IncrementalCompact) = assume_bindings_static(compact.ir)
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code

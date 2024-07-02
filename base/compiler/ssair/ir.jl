@@ -429,7 +429,8 @@ struct IRCode
     new_nodes::NewNodeStream
     meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, debuginfo::DebugInfoStream, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
+    function IRCode(stmts::InstructionStream, cfg::CFG, debuginfo::DebugInfoStream,
+                    argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
         return new(stmts, argtypes, sptypes, debuginfo, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
@@ -443,7 +444,8 @@ struct IRCode
         di = copy(di)
         di.edges = copy(di.edges)
         di.codelocs = stmts.line
-        return new(stmts, copy(ir.argtypes), copy(ir.sptypes), di, copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+        return new(stmts, copy(ir.argtypes), copy(ir.sptypes), di, copy(ir.cfg),
+                   copy(ir.new_nodes), copy(ir.meta))
     end
 end
 

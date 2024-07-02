@@ -56,7 +56,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             error("")
         end
     elseif isa(op, GlobalRef)
-        if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
+        if !(assume_bindings_static(ir) ? isdefined_globalref(op) : isdefinedconst_globalref(op))
             @verify_error "Unbound GlobalRef not allowed in value position"
             error("")
         end
