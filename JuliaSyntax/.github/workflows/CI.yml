@@ -23,7 +23,9 @@ jobs:
           - '1.6'
           - '1.7'
           - '1.8'
+          - '1.9'
           - '1'
+          - 'pre'
           - 'nightly'
         os:
           - ubuntu-latest
@@ -65,7 +67,7 @@ jobs:
           - {os: 'ubuntu-latest', version: '1.8', arch: 'x86'}
     steps:
       - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
@@ -92,7 +94,7 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: julia-actions/setup-julia@v2
         with:
           version: 1.6
           arch: x64
