@@ -1,3 +1,4 @@
+using Test
 # Install dependencies needed to build the documentation.
 Base.ACTIVE_PROJECT[] = nothing
 empty!(LOAD_PATH)
@@ -445,6 +446,54 @@ end
 
 const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
 
+function check_versions(available_folders)
+    vnums = [VersionNumber(x) for x in available_folders]
+    master_version = maximum(vnums)
+    filter!(x -> x.major == 1 && x.minor == master_version.minor-1, vnums)
+    
+    pre_release_versions = []   # array to be returned
+
+    alpha_version = nothing
+    beta_version = nothing
+    rc_version = nothing
+
+    for version in vnums
+        prerelease = version.prerelease[1] 
+
+        if !isempty(prerelease)
+            if occursin(r"^rc", prerelease)
+                rc_version = version
+                beta_version = nothing  
+                alpha_version = nothing  
+            elseif occursin(r"^beta", prerelease)
+                if isnothing(rc_version)
+                    beta_version = version
+                end
+                alpha_version = nothing
+            elseif occursin(r"^alpha", prerelease)
+                if isnothing(rc_version) && isnothing(beta_version)
+                    alpha_version = version
+                end
+            end
+        end
+
+        if !isnothing(rc_version)
+            push!(pre_release_versions, "v$(rc_version)")
+        elseif !isnothing(beta_version)
+            push!(pre_release_versions, "v$(beta_version)")
+        elseif !isnothing(alpha_version)
+            push!(pre_release_versions, "v$(alpha_version)")
+        else
+            push!(pre_release_versions, "v$(master_version)")
+        end
+    end
+    return pre_release_versions
+end
+
+@testset "check_versions" begin
+    @test check_versions(["v1.9.0"]) == ["v1.9.0"]
+end
+
 # Hack to make rc docs visible in the version selector
 struct Versions versions end
 function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
@@ -453,18 +502,7 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     cd(() -> filter!(!islink, available_folders), dir)
     filter!(x -> occursin(Base.VERSION_REGEX, x), available_folders)
 
-    # Look for docs for an "active" release candidate and insert it
-    vnums = [VersionNumber(x) for x in available_folders]
-    master_version = maximum(vnums)
-    filter!(x -> x.major == 1 && x.minor == master_version.minor-1, vnums)
-    rc = maximum(vnums)
-    if !isempty(rc.prerelease) && occursin(r"^rc", rc.prerelease[1])
-        src = "v$(rc)"
-        @assert src ∈ available_folders
-        push!(v.versions, src => src, pop!(v.versions))
-    end
-
-    return Documenter.Writers.HTMLWriter.expand_versions(dir, v.versions)
+    return Documenter.Writers.HTMLWriter.expand_versions(dir, check_versions(available_folders))
 end
 
 if "deploy" in ARGS
