@@ -2794,17 +2794,19 @@ function _sortedfindin(v::Union{AbstractArray, Tuple}, w)
     return out
 end
 
-function findall(pred::Fix2{typeof(in),<:Union{Array{<:Real},Real}}, x::Array{<:Real})
-    if issorted(x, Sort.Forward) && issorted(pred.x, Sort.Forward)
-        return _sortedfindin(x, pred.x)
+function _findin(x::AbstractArray, pred)
+    # issorted fails for some element types so the issorted checks
+    # have to be restricted collections with ordereable elements
+    if OrderStyle(eltype(x)) === OrderStyle(eltype(pred)) === Ordered() && issorted(x) && issorted(pred)
+        return _sortedfindin(x, pred)
     else
-        return _findin(x, pred.x)
+        return _findin(x, pred)
     end
 end
-# issorted fails for some element types so the method above has to be restricted
-# to element with isless/< defined.
+
+# the following definitions are separate from eachother to avoid method ambiguity
 findall(pred::Fix2{typeof(in)}, x::AbstractArray) = _findin(x, pred.x)
-findall(pred::Fix2{typeof(in)}, x::Tuple) = _findin(x, pred.x)
+findall(pred::Fix2{typeof(in)}, x::Tuple        ) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)
