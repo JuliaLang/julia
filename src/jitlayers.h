@@ -26,6 +26,7 @@
 #include "julia_internal.h"
 #include "platform.h"
 #include "llvm-codegen-shared.h"
+#include "llvm-version.h"
 #include <stack>
 #include <queue>
 
@@ -640,4 +641,8 @@ void optimizeDLSyms(Module &M);
 // NewPM
 #include "passes.h"
 
+#if JL_LLVM_VERSION >= 180000
+CodeGenOptLevel CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
+#else
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
+#endif

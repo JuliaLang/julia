@@ -94,7 +94,7 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
     for (auto &F: M.functions()) {
         auto FN = F.getName();
 
-        if (FN.startswith("julia.cpu.have_fma.")) {
+        if (FN.starts_with("julia.cpu.have_fma.")) {
             for (Use &U: F.uses()) {
                 User *RU = U.getUser();
                 CallInst *I = cast<CallInst>(RU);

@@ -935,6 +935,10 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
                                         jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     uint32_t nbytes = (nbits + 7) / 8;
     uint32_t alignm = next_power_of_two(nbytes);
+# if defined(_CPU_X86_) && !defined(_OS_WINDOWS_)
+    if (alignm == 8)
+        alignm = 4;
+# endif
     if (alignm > MAX_ALIGN)
         alignm = MAX_ALIGN;
     // memoize isprimitivetype, since it is much easier than checking

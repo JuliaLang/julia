@@ -298,12 +298,12 @@ attributes #2 = { inaccessiblemem_or_argmemonly }
 
 ; COM: Loop simplification makes the exit condition obvious
 ; AFTERLOOPSIMPLIFICATION: L35.lr.ph:
-; AFTERLOOPSIMPLIFICATION-NEXT: add nuw nsw
+; AFTERLOOPSIMPLIFICATION: add nuw nsw
 
 ; COM: Scalar optimization removes the previous add from the preheader
-; AFTERSCALAROPTIMIZATION: L35.preheader:
+; AFTERSCALAROPTIMIZATION: L35.lr.ph:
 ; AFTERSCALAROPTIMIZATION-NOT: add nuw nsw
-; AFTERSCALAROPTIMIZATION-NEXT: br label %L35
+; AFTERSCALAROPTIMIZATION: br label %L35
 
 ; COM: Vectorization does stuff
 ; AFTERVECTORIZATION: vector.body

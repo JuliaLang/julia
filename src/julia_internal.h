@@ -17,6 +17,8 @@
 #include <uv.h>
 #include <llvm-c/Types.h>
 #include <llvm-c/Orc.h>
+#include <llvm-version.h>
+
 #if !defined(_WIN32)
 #include <unistd.h>
 #else
@@ -96,6 +98,26 @@ JL_DLLIMPORT void *__tsan_create_fiber(unsigned flags);
 JL_DLLIMPORT void *__tsan_get_current_fiber(void);
 JL_DLLIMPORT void __tsan_destroy_fiber(void *fiber);
 JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
+#endif
+
+#ifndef _OS_WINDOWS_
+    #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
+        #define MAX_ALIGN 8
+    #elif defined(_CPU_AARCH64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)))
+    // int128 is 16 bytes aligned on aarch64 and on x86 with LLVM >= 18
+        #define MAX_ALIGN 16
+    #elif defined(_P64)
+    // Generically we assume MAX_ALIGN is sizeof(void*)
+        #define MAX_ALIGN 8
+    #else
+        #define MAX_ALIGN 4
+    #endif
+#else
+    #if JL_LLVM_VERSION >= 180000
+        #define MAX_ALIGN 16
+    #else
+        #define MAX_ALIGN 8
+    #endif
 #endif
 
 #ifndef alignof
@@ -405,7 +427,7 @@ static const int jl_gc_sizeclasses[] = {
 #ifdef GC_SMALL_PAGE
 #ifdef _P64
 #  define JL_GC_N_POOLS 39
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
 #  define JL_GC_N_POOLS 40
 #else
 #  define JL_GC_N_POOLS 41
@@ -413,7 +435,7 @@ static const int jl_gc_sizeclasses[] = {
 #else
 #ifdef _P64
 #  define JL_GC_N_POOLS 49
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
 #  define JL_GC_N_POOLS 50
 #else
 #  define JL_GC_N_POOLS 51
@@ -428,7 +450,7 @@ STATIC_INLINE int jl_gc_alignment(size_t sz) JL_NOTSAFEPOINT
 #ifdef _P64
     (void)sz;
     return 16;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
     return sz <= 4 ? 8 : 16;
 #else
     // szclass 8
@@ -460,7 +482,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz) JL_NOTSAFEPOINT
     if (sz <= 8)
         return 0;
     const int N = 0;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
     if (sz <= 8)
         return (sz >= 4 ? 1 : 0);
     const int N = 1;
@@ -478,7 +500,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
     if (sz >= 16 && sz <= 152) {
 #ifdef _P64
         const int N = 0;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
         const int N = 1;
 #else
         const int N = 2;
