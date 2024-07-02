@@ -1868,6 +1868,11 @@ end
     A = [0.0, 1.0]
     @test replstr(view(A, [1], :)) == "1×1 view(::Matrix{Float64}, [1], :) with eltype Float64:\n 0.0"
 
+    # Issue #29109
+    @test repr(BitVector([true, false])) == "BitVector([1, 0])"
+    @test_repr "BitVector([1, 0])"
+    @test repr(BitMatrix([1 1 1 0; 1 0 1 1; 1 1 1 1; 1 0 1 1])) == "BitMatrix([1 1 1 0; 1 0 1 1; 1 1 1 1; 1 0 1 1])"
+
     # issue #27680
     @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
               "Set([(1.0, 1.0), (3.0, 3.0), (2.0, 2.0)])" :
@@ -2176,7 +2181,7 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 @testset "Bool" begin
     @test repr(true) == "true"
     @test repr(Number[true, false]) == "Number[true, false]"
-    @test repr([true, false]) == "Bool[1, 0]" == repr(BitVector([true, false]))
+    @test repr([true, false]) == "Bool[1, 0]" != repr(BitVector([true, false]))
     @test_repr "Bool[1, 0]"
 end
 
