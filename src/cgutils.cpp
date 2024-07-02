@@ -1598,7 +1598,7 @@ static bool can_optimize_isa_union(jl_uniontype_t *type)
 // a simple case of emit_isa that is obvious not to include a safe-point
 static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_datatype_t *dt, bool could_be_null=false)
 {
-    assert(jl_is_concrete_type((jl_value_t*)dt));
+    assert(jl_is_concrete_type((jl_value_t*)dt) || is_uniquerep_Type((jl_value_t*)dt));
     if (arg.TIndex) {
         unsigned tindex = get_box_tindex(dt, arg.typ);
         if (tindex > 0) {
@@ -1621,7 +1621,12 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
             BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_isa", ctx.f);
             ctx.builder.CreateCondBr(isboxed, isaBB, postBB);
             ctx.builder.SetInsertPoint(isaBB);
-            Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg.Vboxed, false, true), emit_tagfrom(ctx, dt));
+            Value *istype_boxed = NULL;
+            if (is_uniquerep_Type((jl_value_t*)dt)) {
+                istype_boxed = ctx.builder.CreateICmpEQ(decay_derived(ctx, arg.Vboxed), decay_derived(ctx, literal_pointer_val(ctx, jl_tparam0(dt))));
+            } else {
+                istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg.Vboxed, false, true), emit_tagfrom(ctx, dt));
+            }
             ctx.builder.CreateBr(postBB);
             isaBB = ctx.builder.GetInsertBlock(); // could have changed
             ctx.builder.SetInsertPoint(postBB);
