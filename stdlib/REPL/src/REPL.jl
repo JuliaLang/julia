@@ -151,6 +151,8 @@ using .REPLCompletions
 include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
+include("Pkg_beforeload.jl")
+
 @nospecialize # use only declared type signatures
 
 answer_color(::AbstractREPL) = ""
@@ -283,11 +285,14 @@ function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
             arg = arg::Expr
             arg1 = first(arg.args)
             if arg1 isa Symbol # i.e. `Foo`
-                if arg1 != :. # don't include local imports
+                if arg1 != :. # don't include local import `import .Foo`
                     push!(mods, arg1)
                 end
             else # i.e. `Foo: bar`
-                push!(mods, first((arg1::Expr).args))
+                sym = first((arg1::Expr).args)::Symbol
+                if sym != :. # don't include local import `import .Foo: a`
+                    push!(mods, sym)
+                end
             end
         end
     end
@@ -656,7 +661,7 @@ function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module; h
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, lastindex(partial), mod, c.modifiers.shift, hint)
     c.modifiers = LineEdit.Modifiers()
-    return unique!(map(completion_text, ret)), partial[range], should_complete
+    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s::PromptState; hint::Bool=false)
@@ -664,14 +669,14 @@ function complete_line(c::ShellCompletionProvider, s::PromptState; hint::Bool=fa
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = shell_completions(full, lastindex(partial), hint)
-    return unique!(map(completion_text, ret)), partial[range], should_complete
+    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s; hint::Bool=false)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)::String
     ret, range, should_complete = bslash_completions(full, lastindex(partial), hint)[2]
-    return unique!(map(completion_text, ret)), partial[range], should_complete
+    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
 end
 
 with_repl_linfo(f, repl) = f(outstream(repl))
@@ -1082,19 +1087,6 @@ setup_interface(
     extra_repl_keymap::Any = repl.options.extra_keymap
 ) = setup_interface(repl, hascolor, extra_repl_keymap)
 
-const Pkg_pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-const Pkg_REPLExt_pkgid = Base.PkgId(Base.UUID("ceef7b17-42e7-5b1c-81d4-4cc4a2494ccf"), "REPLExt")
-
-function load_pkg()
-    @lock Base.require_lock begin
-        REPLExt = Base.require_stdlib(Pkg_pkgid, "REPLExt")
-        # require_stdlib does not guarantee that the `__init__` of the package is done when loading is done async
-        # but we need to wait for the repl mode to be set up
-        lock = get(Base.package_locks, Pkg_REPLExt_pkgid.uuid, nothing)
-        lock !== nothing && wait(lock[2])
-        return REPLExt
-    end
-end
 
 # This non keyword method can be precompiled which is important
 function setup_interface(
@@ -1173,7 +1165,7 @@ function setup_interface(
 
     # Set up dummy Pkg mode that will be replaced once Pkg is loaded
     # use 6 dots to occupy the same space as the most likely "@v1.xx" env name
-    dummy_pkg_mode = Prompt("(......) $PKG_PROMPT",
+    dummy_pkg_mode = Prompt(Pkg_promptf,
         prompt_prefix = hascolor ? repl.pkg_color : "",
         prompt_suffix = hascolor ?
         (repl.envcolors ? Base.input_color : repl.input_color) : "",

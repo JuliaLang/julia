@@ -211,7 +211,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
             A[k,k] = Akk
             AkkInv = inv(copy(Akk'))
             for j = k + 1:n
-                for i = 1:k - 1
+                @simd for i = 1:k - 1
                     A[k,j] -= A[i,k]'A[i,j]
                 end
                 A[k,j] = AkkInv*A[k,j]
@@ -236,14 +236,15 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
                 return LowerTriangular(A), convert(BlasInt, k)
             end
             A[k,k] = Akk
-            AkkInv = inv(Akk)
+            AkkInv = inv(copy(Akk'))
             for j = 1:k - 1
+                Akjc = A[k,j]'
                 @simd for i = k + 1:n
-                    A[i,k] -= A[i,j]*A[k,j]'
+                    A[i,k] -= A[i,j]*Akjc
                 end
             end
-            for i = k + 1:n
-                A[i,k] *= AkkInv'
+            @simd for i = k + 1:n
+                A[i,k] *= AkkInv
             end
         end
      end
@@ -301,103 +302,104 @@ _cholpivoted!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular}, tol::Real,
     LAPACK.pstrf!('L', A, tol)
 ## Non BLAS/LAPACK element types (generic)
 function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, check::Bool)
+    rTA = real(eltype(A))
     # checks
     Base.require_one_based_indexing(A)
     n = LinearAlgebra.checksquare(A)
     # initialization
     piv = collect(1:n)
-    dots = zeros(real(eltype(A)), n)
+    dots = zeros(rTA, n)
     temp = similar(dots)
-    info = 0
-    rank = n
 
     @inbounds begin
         # first step
-        ajj, q = findmax(i -> real(A[i,i]), 1:n)
-        stop = tol < 0 ? eps(eltype(A))*n*abs(ajj) : tol
-        if ajj ≤ stop
-            return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
-        end
+        Akk, q = findmax(i -> real(A[i,i]), 1:n)
+        stop = tol < 0 ? eps(rTA)*n*abs(Akk) : tol
+        Akk ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
         # swap
         _swap_rowcols!(A, UpperTriangular, n, 1, q)
         piv[1], piv[q] = piv[q], piv[1]
-        A[1,1] = ajj = sqrt(ajj)
-        @views A[1, 2:n] .= A[1, 2:n] ./ ajj
+        A[1,1] = Akk = sqrt(Akk)
+        AkkInv = inv(copy(Akk'))
+        @simd for j in 2:n
+            A[1, j] *= AkkInv
+        end
 
-        for j in 2:n
-            for k in j:n
-                dots[k] += abs2(A[j-1, k])
-                temp[k] = real(A[k,k]) - dots[k]
+        for k in 2:n
+            @simd for j in k:n
+                dots[j] += abs2(A[k-1, j])
+                temp[j] = real(A[j,j]) - dots[j]
             end
-            ajj, q = findmax(i -> temp[i], j:n)
-            if ajj ≤ stop
-                rank = j - 1
-                info = 1
-                break
-            end
-            q += j - 1
+            Akk, q = findmax(j -> temp[j], k:n)
+            Akk ≤ stop && return A, piv, convert(BlasInt, k - 1), convert(BlasInt, 1)
+            q += k - 1
             # swap
-            _swap_rowcols!(A, UpperTriangular, n, j, q)
-            dots[j], dots[q] = dots[q], dots[j]
-            piv[j], piv[q] = piv[q], piv[j]
+            _swap_rowcols!(A, UpperTriangular, n, k, q)
+            dots[k], dots[q] = dots[q], dots[k]
+            piv[k], piv[q] = piv[q], piv[k]
             # update
-            A[j,j] = ajj = sqrt(ajj)
-            @views if j < n
-                mul!(A[j, (j+1):n], A[1:(j-1), (j+1):n]', A[1:(j-1), j], -1, true)
-                A[j, j+1:n] ./= ajj
+            A[k,k] = Akk = sqrt(Akk)
+            AkkInv = inv(copy(Akk'))
+            for j in (k+1):n
+                @simd for i in 1:(k-1)
+                    A[k,j] -= A[i,k]'A[i,j]
+                end
+                A[k,j] = AkkInv * A[k,j]
             end
         end
-        return A, piv, convert(BlasInt, rank), convert(BlasInt, info)
+        return A, piv, convert(BlasInt, n), convert(BlasInt, 0)
     end
 end
 function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, check::Bool)
+    rTA = real(eltype(A))
     # checks
     Base.require_one_based_indexing(A)
     n = LinearAlgebra.checksquare(A)
     # initialization
     piv = collect(1:n)
-    dots = zeros(real(eltype(A)), n)
+    dots = zeros(rTA, n)
     temp = similar(dots)
-    info = 0
-    rank = n
 
     @inbounds begin
         # first step
-        ajj, q = findmax(i -> real(A[i,i]), 1:n)
-        stop = tol < 0 ? eps(eltype(A))*n*abs(ajj) : tol
-        if ajj ≤ stop
-            return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
-        end
+        Akk, q = findmax(i -> real(A[i,i]), 1:n)
+        stop = tol < 0 ? eps(rTA)*n*abs(Akk) : tol
+        Akk ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
         # swap
         _swap_rowcols!(A, LowerTriangular, n, 1, q)
         piv[1], piv[q] = piv[q], piv[1]
-        A[1,1] = ajj = sqrt(ajj)
-        @views A[2:n, 1] .= A[2:n, 1] ./ ajj
+        A[1,1] = Akk = sqrt(Akk)
+        AkkInv = inv(copy(Akk'))
+        @simd for i in 2:n
+            A[i,1] *= AkkInv
+        end
 
-        for j in 2:n
-            for k in j:n
-                dots[k] += abs2(A[k, j-1])
-                temp[k] = real(A[k,k]) - dots[k]
+        for k in 2:n
+            @simd for j in k:n
+                dots[j] += abs2(A[j, k-1])
+                temp[j] = real(A[j,j]) - dots[j]
             end
-            ajj, q = findmax(i -> temp[i], j:n)
-            q += j - 1
-            if ajj ≤ stop
-                rank = j - 1
-                info = 1
-                break
-            end
+            Akk, q = findmax(i -> temp[i], k:n)
+            Akk ≤ stop && return A, piv, convert(BlasInt, k-1), convert(BlasInt, 1)
+            q += k - 1
             # swap
-            _swap_rowcols!(A, LowerTriangular, n, j, q)
-            dots[j], dots[q] = dots[q], dots[j]
-            piv[j], piv[q] = piv[q], piv[j]
+            _swap_rowcols!(A, LowerTriangular, n, k, q)
+            dots[k], dots[q] = dots[q], dots[k]
+            piv[k], piv[q] = piv[q], piv[k]
             # update
-            A[j,j] = ajj = sqrt(ajj)
-            @views if j < n
-                mul!(A[(j+1):n, j], A[(j+1):n, 1:(j-1)], A[j, 1:(j-1)], -1, true)
-                A[j+1:n, j] ./= ajj
+            A[k,k] = Akk = sqrt(Akk)
+            for j in 1:(k-1)
+                Akjc = A[k,j]'
+                @simd for i in (k+1):n
+                    A[i,k] -= A[i,j]*Akjc
+                end
+            end
+            AkkInv = inv(copy(Akk'))
+            @simd for i in (k+1):n
+                A[i, k] *= AkkInv
             end
         end
-        return A, piv, convert(BlasInt, rank), convert(BlasInt, info)
+        return A, piv, convert(BlasInt, n), convert(BlasInt, 0)
     end
 end
 function _cholpivoted!(x::Number, tol)
@@ -411,7 +413,7 @@ end
 # cholesky!. Destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
 ## No pivoting (default)
-function cholesky!(A::RealHermSymComplexHerm, ::NoPivot = NoPivot(); check::Bool = true)
+function cholesky!(A::SelfAdjoint, ::NoPivot = NoPivot(); check::Bool = true)
     C, info = _chol!(A.data, A.uplo == 'U' ? UpperTriangular : LowerTriangular)
     check && checkpositivedefinite(info)
     return Cholesky(C.data, A.uplo, info)
@@ -453,7 +455,7 @@ end
 
 ## With pivoting
 ### Non BLAS/LAPACK element types (generic).
-function cholesky!(A::RealHermSymComplexHerm, ::RowMaximum; tol = 0.0, check::Bool = true)
+function cholesky!(A::SelfAdjoint, ::RowMaximum; tol = 0.0, check::Bool = true)
     AA, piv, rank, info = _cholpivoted!(A.data, A.uplo == 'U' ? UpperTriangular : LowerTriangular, tol, check)
     C = CholeskyPivoted(AA, A.uplo, piv, rank, tol, info)
     check && chkfullrank(C)

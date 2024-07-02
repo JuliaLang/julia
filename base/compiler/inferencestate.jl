@@ -336,7 +336,10 @@ mutable struct InferenceState
         end
 
         if def isa Method
-            ipo_effects = Effects(ipo_effects; nonoverlayed=is_nonoverlayed(def))
+            nonoverlayed = is_nonoverlayed(def) ? ALWAYS_TRUE :
+                is_effect_overridden(def, :consistent_overlay) ? CONSISTENT_OVERLAY :
+                ALWAYS_FALSE
+            ipo_effects = Effects(ipo_effects; nonoverlayed)
         end
 
         restrict_abstract_call_sites = isa(def, Module)
@@ -600,9 +603,10 @@ end
 function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
     world = get_inference_world(interp)
-    src = retrieve_code_info(result.linfo, world)
+    mi = result.linfo
+    src = retrieve_code_info(mi, world)
     src === nothing && return nothing
-    maybe_validate_code(result.linfo, src, "lowered")
+    maybe_validate_code(mi, src, "lowered")
     return InferenceState(result, src, cache_mode, interp)
 end
 InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =

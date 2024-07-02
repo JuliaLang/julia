@@ -1641,6 +1641,34 @@ julia> ex.msg
 ErrorException
 
 """
+    FieldError(type::DataType, field::Symbol)
+
+An operation tried to access invalid `field` of `type`.
+
+!!! compat "Julia 1.12"
+    Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
+
+See [`getfield`](@ref)
+
+# Examples
+```jldoctest
+julia> struct AB
+          a::Float32
+          b::Float64
+       end
+
+julia> ab = AB(1, 3)
+AB(1.0f0, 3.0)
+
+julia> ab.c # field `c` doesn't exist
+ERROR: FieldError: type AB has no field c
+Stacktrace:
+[...]
+```
+"""
+FieldError
+
+"""
     WrappedException(msg)
 
 Generic type for `Exception`s wrapping another `Exception`, such as `LoadError` and
@@ -1786,7 +1814,8 @@ The task will run in the "world age" from the parent at construction when [`sche
 !!! warning
     By default tasks will have the sticky bit set to true `t.sticky`. This models the
     historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
-    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
     bit manually to `false`.
 
 # Examples
@@ -2542,18 +2571,6 @@ Retrieve the declared type of the binding `name` from the module `module`.
 Core.get_binding_type
 
 """
-    Core.set_binding_type!(module::Module, name::Symbol, [type::Type])
-
-Set the declared type of the binding `name` in the module `module` to `type`. Error if the
-binding already has a type that is not equivalent to `type`. If the `type` argument is
-absent, set the binding type to `Any` if unset, but do not error.
-
-!!! compat "Julia 1.9"
-    This function requires Julia 1.9 or later.
-"""
-Core.set_binding_type!
-
-"""
     swapglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
 
 Atomically perform the operations to simultaneously get and set a global.
@@ -2688,12 +2705,12 @@ julia> Memory{Float64}(undef, 3)
 Memory{T}(::UndefInitializer, n)
 
 """
-    `memoryref(::GenericMemory)`
+    memoryref(::GenericMemory)
 
 Construct a `GenericMemoryRef` from a memory object. This does not fail, but the
 resulting memory will point out-of-bounds if and only if the memory is empty.
 """
-memoryref(::Memory)
+memoryref(::GenericMemory)
 
 """
     memoryref(::GenericMemory, index::Integer)

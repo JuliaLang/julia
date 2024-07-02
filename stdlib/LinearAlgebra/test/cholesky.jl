@@ -6,18 +6,23 @@ using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted,
     PosDefException, RankDeficientException, chkfullrank
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 function unary_ops_tests(a, ca, tol; n=size(a, 1))
     @test inv(ca)*a ≈ Matrix(I, n, n)
     @test a*inv(ca) ≈ Matrix(I, n, n)
     @test abs((det(ca) - det(a))/det(ca)) <= tol # Ad hoc, but statistically verified, revisit
-    @test logdet(ca) ≈ logdet(a)
-    @test logdet(ca) ≈ log(det(ca))  # logdet is less likely to overflow
+    @test logdet(ca) ≈ logdet(a) broken = eltype(a) <: Quaternion
+    @test logdet(ca) ≈ log(det(ca)) # logdet is less likely to overflow
     logabsdet_ca = logabsdet(ca)
     logabsdet_a = logabsdet(a)
     @test logabsdet_ca[1] ≈ logabsdet_a[1]
     @test logabsdet_ca[2] ≈ logabsdet_a[2]
     @test isposdef(ca)
-    @test_throws ErrorException ca.Z
+    @test_throws FieldError ca.Z
     @test size(ca) == size(a)
     @test Array(copy(ca)) ≈ a
     @test tr(ca) ≈ tr(a) skip=ca isa CholeskyPivoted
@@ -53,16 +58,22 @@ end
     breal = randn(n,2)/2
     bimg  = randn(n,2)/2
 
-    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
-        a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-        a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
+    for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Complex{BigFloat}, Quaternion{Float64}, Int)
+        a = if eltya == Int
+            rand(1:7, n, n)
+        elseif eltya <: Real
+            convert(Matrix{eltya}, areal)
+        elseif eltya <: Complex
+            convert(Matrix{eltya}, complex.(areal, aimg))
+        else
+            convert(Matrix{eltya}, Quaternion.(areal, aimg, a2real, a2img))
+        end
 
         ε = εa = eps(abs(float(one(eltya))))
 
         # Test of symmetric pos. def. strided matrix
-        apd  = a'*a
-        @inferred cholesky(apd)
-        capd  = factorize(apd)
+        apd  = Matrix(Hermitian(a'*a))
+        capd  = @inferred cholesky(apd)
         r     = capd.U
         κ     = cond(apd, 1) #condition number
 
@@ -70,7 +81,7 @@ end
         if eltya != Int
             @test Factorization{eltya}(capd) === capd
             if eltya <: Real
-                @test Array(Factorization{complex(eltya)}(capd)) ≈ Array(factorize(complex(apd)))
+                @test Array(Factorization{complex(eltya)}(capd)) ≈ Array(cholesky(complex(apd)))
                 @test eltype(Factorization{complex(eltya)}(capd)) == complex(eltya)
             end
         end
@@ -87,16 +98,16 @@ end
         #but only with Random.seed!(1234321) set before the loops.
         E = abs.(apd - r'*r)
         for i=1:n, j=1:n
-            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
+            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*sqrt(real(apd[i,i]*apd[j,j]))
         end
         E = abs.(apd - Matrix(capd))
         for i=1:n, j=1:n
-            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
+            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*sqrt(real(apd[i,i]*apd[j,j]))
         end
         @test LinearAlgebra.issuccess(capd)
         @inferred(logdet(capd))
 
-        apos = apd[1,1]
+        apos = real(apd[1,1])
         @test all(x -> x ≈ √apos, cholesky(apos).factors)
 
         # Test cholesky with Symmetric/Hermitian upper/lower
@@ -132,7 +143,7 @@ end
                 @test Matrix(@inferred cholesky(Symmetric(S, uplo))) ≈ S
             end
         end
-        @test Matrix(cholesky(S).U) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
+        @test Matrix(cholesky(S).U) ≈ [2 -1; 0 float(eltya)(sqrt(real(eltya)(3)))] / float(eltya)(sqrt(real(eltya)(2)))
         @test Matrix(cholesky(S)) ≈ S
 
         # test extraction of factor and re-creating original matrix
@@ -143,15 +154,25 @@ end
         end
 
         #pivoted upper Cholesky
-        cpapd = cholesky(apdh, RowMaximum())
-        unary_ops_tests(apdh, cpapd, ε*κ*n)
-        @test rank(cpapd) == n
-        @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
+        for tol in (0.0, -1.0), APD in (apdh, apdhL)
+            cpapd = cholesky(APD, RowMaximum(), tol=tol)
+            unary_ops_tests(APD, cpapd, ε*κ*n)
+            @test rank(cpapd) == n
+            @test all(diff(real(diag(cpapd.factors))).<=0.) # diagonal should be non-increasing
 
-        @test cpapd.P*cpapd.L*cpapd.U*cpapd.P' ≈ apd
+            @test cpapd.P*cpapd.L*cpapd.U*cpapd.P' ≈ apd
+        end
 
         for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-            b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+            b = if eltya <: Quaternion
+                convert(Matrix{eltya}, Quaternion.(breal, bimg, bimg, bimg))
+            elseif eltyb == Int
+                rand(1:5, n, 2)
+            elseif eltyb <: Complex
+                convert(Matrix{eltyb}, complex.(breal, bimg))
+            elseif eltyb <: Real
+                convert(Matrix{eltyb}, breal)
+            end
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
 
@@ -182,7 +203,13 @@ end
         for eltyb in (Float64, ComplexF64)
             Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
             Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
-            B = (eltya <: Complex || eltyb <: Complex) ? complex.(Breal, Bimg) : Breal
+            B = if eltya <: Quaternion
+                Quaternion.(Float64.(Breal), Float64.(Bimg), Float64.(Bimg), Float64.(Bimg))
+            elseif eltya <: Complex || eltyb <: Complex
+                complex.(Breal, Bimg)
+            else
+                Breal
+            end
             εb = eps(abs(float(one(eltyb))))
             ε = max(εa,εb)
 
@@ -205,7 +232,13 @@ end
         @testset "solve with generic Cholesky" begin
             Breal = convert(Matrix{BigFloat}, randn(n,n)/2)
             Bimg  = convert(Matrix{BigFloat}, randn(n,n)/2)
-            B = eltya <: Complex ? complex.(Breal, Bimg) : Breal
+            B = if eltya <: Quaternion
+                eltya.(Breal, Bimg, Bimg, Bimg)
+            elseif eltya <: Complex
+                complex.(Breal, Bimg)
+            else
+                Breal
+            end
             εb = eps(abs(float(one(eltype(B)))))
             ε = max(εa,εb)
 
@@ -213,22 +246,22 @@ end
 
                 # Test error bound on linear solver: LAWNS 14, Theorem 2.1
                 # This is a surprisingly loose bound
-                cpapd = cholesky(eltya <: Complex ? apdh : apds)
+                cpapd = cholesky(eltya <: Real ? apds : apdh)
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL)
+                cpapd = cholesky(eltya <: Real ? apdsL : apdhL)
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Complex ? apdh : apds, RowMaximum())
+                cpapd = cholesky(eltya <: Real ? apds : apdh, RowMaximum())
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
                 @test norm(BB * apd - B, 1) / norm(B, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-                cpapd = cholesky(eltya <: Complex ? apdhL : apdsL, RowMaximum())
+                cpapd = cholesky(eltya <: Real ? apdsL : apdhL, RowMaximum())
                 BB = copy(B)
                 rdiv!(BB, cpapd)
                 @test norm(B / apd - BB, 1) / norm(BB, 1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
@@ -358,7 +391,7 @@ end
         0.11192755545114 - 0.1603741874112385im 0.8439562576196216 + 1.0850814110398734im
         -1.0568488936791578 - 0.06025820467086475im 0.12696236014017806 - 0.09853584666755086im]
     cholesky(Hermitian(apd, :L), RowMaximum()) \ b
-    r = factorize(apd).U
+    r = cholesky(apd).U
     E = abs.(apd - r'*r)
     ε = eps(abs(float(one(ComplexF32))))
     n = 10

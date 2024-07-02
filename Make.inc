@@ -550,7 +550,17 @@ export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 endif
 endif
 
-JLDFLAGS :=
+# Conditional setting of RELRO flag for enhanced security on Linux builds.
+# RELRO (Read-Only Relocations) is a security feature that marks certain sections
+# of the binary as read-only to prevent exploitation techniques like
+# GOT (Global Offset Table) overwriting attacks.
+ifeq ($(OS),Linux)
+    RELRO_FLAG := -Wl,-z,relro
+else
+    RELRO_FLAG :=
+endif
+
+JLDFLAGS := $(RELRO_FLAG)
 
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.

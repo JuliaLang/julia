@@ -50,7 +50,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
             @testset "QR decomposition (without pivoting)" begin
                 qra   = @inferred qr(a)
                 q, r  = qra.Q, qra.R
-                @test_throws ErrorException qra.Z
+                @test_throws FieldError qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q*squareQ(q)' ≈ Matrix(I, a_1, a_1)
                 @test q'*Matrix(1.0I, a_1, a_1)' ≈ squareQ(q)'
@@ -79,7 +79,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
             @testset "Thin QR decomposition (without pivoting)" begin
                 qra   = @inferred qr(a[:, 1:n1], NoPivot())
                 q,r   = qra.Q, qra.R
-                @test_throws ErrorException qra.Z
+                @test_throws FieldError qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q'*rectangularQ(q) ≈ Matrix(I, a_1, n1)
                 @test q*r ≈ a[:, 1:n1]
@@ -106,7 +106,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
 
                 qrpa  = factorize(a[1:n1,:])
                 q,r = qrpa.Q, qrpa.R
-                @test_throws ErrorException qrpa.Z
+                @test_throws FieldError qrpa.Z
                 p = qrpa.p
                 @test q'*squareQ(q) ≈ Matrix(I, n1, n1)
                 @test q*squareQ(q)' ≈ Matrix(I, n1, n1)
@@ -134,7 +134,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
             @testset "(Automatic) Thin (pivoted) QR decomposition" begin
                 qrpa  = factorize(a[:,1:n1])
                 q,r = qrpa.Q, qrpa.R
-                @test_throws ErrorException qrpa.Z
+                @test_throws FieldError qrpa.Z
                 p = qrpa.p
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
                 @test q*squareQ(q)' ≈ Matrix(I, a_1, a_1)

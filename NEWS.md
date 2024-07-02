@@ -43,6 +43,8 @@ Compiler/Runtime improvements
   `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
   IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
 
+- A new exception `FieldError` is now introduced to raise/handle `getfield` exceptions. Previously `getfield` exception was captured by fallback generic exception `ErrorException`. Now that `FieldError` is more specific `getfield` related exceptions that can occur should use `FieldError` exception instead. ([#54504])
+
 Command-line option changes
 ---------------------------
 
@@ -52,6 +54,8 @@ Command-line option changes
 [`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
 variables. ([#53742]).
 * `--project=@temp` starts Julia with a temporary environment.
+* New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
+  to compile, in ms. ([#54662])
 
 Multi-threading changes
 -----------------------
@@ -65,6 +69,7 @@ New library functions
 * `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
+* `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
 
 New library features
 --------------------

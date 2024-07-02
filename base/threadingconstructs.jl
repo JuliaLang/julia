@@ -67,7 +67,7 @@ function _tpid_to_sym(tpid::Int8)
     elseif tpid == -1
         return :foreign
     else
-        throw(ArgumentError("Unrecognized threadpool id $tpid"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool id ", tpid)))
     end
 end
 
@@ -79,7 +79,7 @@ function _sym_to_tpid(tp::Symbol)
     elseif tp == :foreign
         return Int8(-1)
     else
-        throw(ArgumentError("Unrecognized threadpool name `$tp`"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool name `", tp, "`")))
     end
 end
 
@@ -464,7 +464,7 @@ macro spawn(args...)
         if ttype isa QuoteNode
             ttype = ttype.value
             if ttype !== :interactive && ttype !== :default
-                throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+                throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
         else

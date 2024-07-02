@@ -3287,7 +3287,7 @@ one *without* a colon in the slice. This is `view(A,:,i,:)`, whereas
 `mapslices(f, A; dims=(1,3))` uses `A[:,i,:]`. The function `f` may mutate
 values in the slice without affecting `A`.
 """
-function mapslices(f, A::AbstractArray; dims)
+@constprop :aggressive function mapslices(f, A::AbstractArray; dims)
     isempty(dims) && return map(f, A)
 
     for d in dims
