@@ -1278,6 +1278,12 @@ function -(r::LinRange)
     LinRange{typeof(start)}(start, -r.stop, length(r))
 end
 
+for f in (:rad2deg, :deg2rad)
+    @eval $f(r::AbstractRange) = StepRangeLen($f(first(r)), $f(step(r)), length(r))
+    @eval $f(r::StepRangeLen{T}) where {T} = StepRangeLen{typeof($f(T(r.ref)))}($f(r.ref), $f(r.step), length(r), r.offset)
+    @eval $f(r::LinRange) = LinRange($f(r.start), $f(r.stop), r.len)
+end
+
 # promote eltype if at least one container wouldn't change, otherwise join container types.
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a # we assume a === b
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}}) where {T,S,n} = a
