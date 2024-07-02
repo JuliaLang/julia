@@ -369,6 +369,8 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
             is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
 }
 
+JL_DLLEXPORT void jl_save_context_for_conservative_scanning(jl_ptls_t ptls, void *ctx);
+
 JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     assert(sig == SIGSEGV || sig == SIGBUS);
@@ -382,6 +384,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         return;
     }
     if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
+        jl_save_context_for_conservative_scanning(ct->ptls, context);
         jl_set_gc_and_wait();
         // Do not raise sigint on worker thread
         if (jl_atomic_load_relaxed(&ct->tid) != 0)

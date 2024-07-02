@@ -285,6 +285,10 @@ typedef struct _jl_tls_states_t {
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
 #endif
+
+#ifdef GC_SAVE_CONTEXT_FOR_CONSERVATIVE_SCANNING
+    ucontext_t ctx_at_the_time_gc_started;
+#endif
 } jl_tls_states_t;
 
 #ifndef JL_LIBRARY_EXPORTS

@@ -152,6 +152,12 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
                                        char **active_start, char **active_end,
                                        char **total_start, char **total_end) JL_NOTSAFEPOINT;
 
+// Save the context of a task for conservative scanning.
+// Requires `GC_SAVE_CONTEXT_FOR_CONSERVATIVE_SCANNING` to be defined.
+// If ctx is NULL, the registers of the thread at the moment of the call are saved, else
+// the registers of the context ctx are saved into the `ctx_at_the_time_gc_started` field of Julia's TLS.
+JL_DLLEXPORT void jl_save_context_for_conservative_scanning(jl_ptls_t ptls, void *ctx);
+
 #ifdef __cplusplus
 }
 #endif

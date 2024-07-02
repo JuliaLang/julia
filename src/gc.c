@@ -3505,6 +3505,7 @@ size_t jl_maxrss(void);
 // Only one thread should be running in this function
 static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
+    jl_save_context_for_conservative_scanning(ptls, NULL);
     combine_thread_gc_counts(&gc_num, 1);
 
     // We separate the update of the graph from the update of live_bytes here
@@ -4492,6 +4493,22 @@ JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
 JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void)
 {
     return jl_atomic_load(&support_conservative_marking);
+}
+
+JL_DLLEXPORT void jl_save_context_for_conservative_scanning(jl_ptls_t ptls, void *ctx)
+{
+#ifdef GC_SAVE_CONTEXT_FOR_CONSERVATIVE_SCANNING
+    if (ctx == NULL) {
+        // Save the context for the thread as it was running at the time of the call
+        int r = getcontext(&ptls->ctx_at_the_time_gc_started);
+        if (r == -1) {
+            jl_safe_printf("Failed to save context for conservative scanning\n");
+            abort();
+        }
+        return;
+    }
+    memcpy(&ptls->ctx_at_the_time_gc_started, ctx, sizeof(ucontext_t));
+#endif
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)

@@ -82,6 +82,13 @@
 // GC_SMALL_PAGE allocates objects in 4k pages
 // #define GC_SMALL_PAGE
 
+// GC_SAVE_CONTEXT_FOR_CONSERVATIVE_SCANNING saves the context of the tasks that
+// were running right before GC started so that they can be used for conservative
+// scanning. Currently only available on x86_64 Linux.
+#define GC_SAVE_CONTEXT_FOR_CONSERVATIVE_SCANNING
+#if !defined(x86_64) || !defined(_OS_LINUX_)
+#undef GC_SAVE_CONTEXT_FOR_CONSERVATIVE_SCANNING
+#endif
 
 // method dispatch profiling --------------------------------------------------
 
