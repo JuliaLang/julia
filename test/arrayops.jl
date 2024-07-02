@@ -3209,6 +3209,55 @@ end
     @test_throws DimensionMismatch [fill(1); rand(2, 2, 2)]
 end
 
+@testset "< and isless on AbstractVector" begin
+    @test [1,2] < [1,3]
+    @test [1] < [1,2]
+    @test !([1,2] < [1,2])
+    @test [2,1] > [1,2]
+    @test !([-0.0] < [0.0])
+    @test !([-0.0] > [0.0])
+
+    @test isless([1,2], [1,3])
+    @test isless([1], [1,2])
+    @test !isless([1,2], [1,2])
+    @test !isless([2,1], [1,2])
+    @test isless([-0.0], [0.0])
+    @test !isless([0.0], [-0.0])
+
+    t = 1:16
+    @test [t...,1,2] < [t...,1,3]
+    @test [t...,1,] < [t...,1,2]
+    @test !([t...,1,2] < [t...,1,2])
+    @test [t...,2,1] > [t...,1,2]
+
+    @test isless([t...,1,2], [t...,1,3])
+    @test isless([t...,1,], [t...,1,2])
+    @test !isless([t...,1,2], [t...,1,2])
+    @test !isless([t...,2,1], [t...,1,2])
+
+    @test ismissing([1, missing] < [1, 3])
+    @test ismissing([1, missing] < [1, missing])
+    @test ismissing([missing, 1] < [missing, 2])
+    @test ismissing([1, 2] < [1, missing])
+    @test ismissing([1, missing] < [1, 2])
+    @test ismissing([missing] < [missing])
+    @test ismissing([1] < [missing])
+    @test [] < [missing]
+    @test [1] < [2, missing]
+    @test [1, missing] < [2, missing]
+
+    @test !isless([1, missing], [1, 3])
+    @test !isless([1, missing], [1, missing])
+    @test isless([missing, 1], [missing, 2])
+    @test isless([1, 2], [1, missing])
+    @test !isless([1, missing], [1, 2])
+    @test !isless([missing], [missing])
+    @test isless([1], [missing])
+    @test isless([], [missing])
+    @test isless([1], [2, missing])
+    @test isless([1, missing], [2, missing])
+end
+
 @testset "eltype of zero for arrays (issue #41348)" begin
     for a in Any[[DateTime(2020), DateTime(2021)], [Date(2000), Date(2001)], [Time(1), Time(2)]]
         @test a + zero(a) == a
