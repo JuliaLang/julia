@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "gc.h"
+#include "gc-common.h"
+#include "gc-stock.h"
 #include "julia.h"
 #include <inttypes.h>
 #include <stddef.h>

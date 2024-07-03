@@ -82,6 +82,7 @@ typedef struct _jl_tls_states_t *jl_ptls_t;
 #ifdef JL_LIBRARY_EXPORTS
 #include "uv.h"
 #endif
+#include "gc-interface.h"
 #include "julia_atomics.h"
 #include "julia_threads.h"
 #include "julia_assert.h"
@@ -1047,35 +1048,14 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
 #endif
 
-JL_DLLEXPORT int jl_gc_enable(int on);
-JL_DLLEXPORT int jl_gc_is_enabled(void);
-
-typedef enum {
-    JL_GC_AUTO = 0,         // use heuristics to determine the collection type
-    JL_GC_FULL = 1,         // force a full collection
-    JL_GC_INCREMENTAL = 2,  // force an incremental collection
-} jl_gc_collection_t;
-
-JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t);
-
 JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_add_quiescent(jl_ptls_t ptls, void **v, void *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_finalize(jl_value_t *o);
-JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
-JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz);
 JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, struct _jl_task_t *owner) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz);
-JL_DLLEXPORT void jl_gc_use(jl_value_t *a);
-// Set GC memory trigger in bytes for greedy memory collecting
-JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
-JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void);
-
-JL_DLLEXPORT void jl_clear_malloc_data(void);
 
 // GC write barriers
-JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *root) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_gc_queue_multiroot(const jl_value_t *root, const void *stored, jl_datatype_t *dt) JL_NOTSAFEPOINT;
 
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
@@ -1107,7 +1087,6 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
         jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
 }
 
-JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void jl_gc_safepoint(void);
 JL_DLLEXPORT int jl_safepoint_suspend_thread(int tid, int waitstate);
 JL_DLLEXPORT void jl_safepoint_suspend_all_threads(struct _jl_task_t *ct);

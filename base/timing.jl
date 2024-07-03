@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# This type must be kept in sync with the C struct in src/gc.h
+# This type must be kept in sync with the C struct in src/gc-interface.h
 struct GC_Num
     allocd          ::Int64 # GC internal
     deferred_alloc  ::Int64 # GC internal
@@ -47,7 +47,7 @@ gc_total_bytes(gc_num::GC_Num) =
     gc_num.allocd + gc_num.deferred_alloc + gc_num.total_allocd
 
 function GC_Diff(new::GC_Num, old::GC_Num)
-    # logic from `src/gc.c:jl_gc_total_bytes`
+    # logic from `jl_gc_total_bytes`
     old_allocd = gc_total_bytes(old)
     new_allocd = gc_total_bytes(new)
     return GC_Diff(new_allocd       - old_allocd,
