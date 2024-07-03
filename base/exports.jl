@@ -1080,6 +1080,7 @@ public
     Checked,
     Filesystem,
     Order,
+    ScopedValues,
     Sort,
 
 # Types
