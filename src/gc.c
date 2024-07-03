@@ -3400,13 +3400,6 @@ JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
     return num;
 }
 
-JL_DLLEXPORT void jl_gc_reset_stats(void)
-{
-    gc_num.max_pause = 0;
-    gc_num.max_memory = 0;
-    gc_num.max_time_to_safepoint = 0;
-}
-
 // TODO: these were supposed to be thread local
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT
 {
