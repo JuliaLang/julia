@@ -84,6 +84,9 @@ mutable struct Parser{Dates}
 
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
+
+    # Optionally populate with the Dates stdlib to change the type of Date types returned
+    Dates::Union{Module, Nothing} # TODO: remove once Pkg is updated
 end
 
 function Parser{Dates}(str::String; filepath=nothing) where {Dates}
@@ -103,7 +106,8 @@ function Parser{Dates}(str::String; filepath=nothing) where {Dates}
             IdSet{Any}(),         # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
             root,
-            filepath
+            filepath,
+            nothing
         )
     startup(l)
     return l
@@ -122,9 +126,7 @@ end
 Parser{Dates}() where {Dates} = Parser{Dates}("")
 Parser{Dates}(io::IO) where {Dates} = Parser{Dates}(read(io, String))
 
-Parser() = Parser{nothing}()
-Parser(io::IO) = Parser{nothing}(io)
-Parser(str::String; filepath=nothing) = Parser{nothing}(str; filepath)
+# Parser(...) will be defined by TOML stdlib
 
 function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
     p.str = str
@@ -1023,9 +1025,10 @@ function parse_datetime(l)
 end
 
 function try_return_datetime(p::Parser{Dates}, year, month, day, h, m, s, ms) where Dates
-    if Dates !== nothing
+    if Dates !== nothing || p.Dates !== nothing
+        mod = Dates !== nothing ? Dates : p.Dates
         try
-            return Dates.DateTime(year, month, day, h, m, s, ms)
+            return mod.DateTime(year, month, day, h, m, s, ms)
         catch ex
             ex isa ArgumentError && return ParserError(ErrParsingDateTime)
             rethrow()
@@ -1036,9 +1039,10 @@ function try_return_datetime(p::Parser{Dates}, year, month, day, h, m, s, ms) wh
 end
 
 function try_return_date(p::Parser{Dates}, year, month, day) where Dates
-    if Dates !== nothing
+    if Dates !== nothing || p.Dates !== nothing
+        mod = Dates !== nothing ? Dates : p.Dates
         try
-            return Dates.Date(year, month, day)
+            return mod.Date(year, month, day)
         catch ex
             ex isa ArgumentError && return ParserError(ErrParsingDateTime)
             rethrow()
@@ -1058,9 +1062,10 @@ function parse_local_time(l::Parser)
 end
 
 function try_return_time(p::Parser{Dates}, h, m, s, ms) where Dates
-    if Dates !== nothing
+    if Dates !== nothing || p.Dates !== nothing
+        mod = Dates !== nothing ? Dates : p.Dates
         try
-            return Dates.Time(h, m, s, ms)
+            return mod.Time(h, m, s, ms)
         catch ex
             ex isa ArgumentError && return ParserError(ErrParsingDateTime)
             rethrow()

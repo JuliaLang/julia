@@ -268,7 +268,7 @@ struct TOMLCache{Dates}
     p::TOML.Parser{Dates}
     d::Dict{String, CachedTOMLDict}
 end
-const TOML_CACHE = TOMLCache(TOML.Parser(), Dict{String, CachedTOMLDict}())
+const TOML_CACHE = TOMLCache(TOML.Parser{nothing}(), Dict{String, CachedTOMLDict}())
 
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
