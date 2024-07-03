@@ -512,11 +512,19 @@ function _lrchar_ulchar(tA, tB)
 end
 function _symm_hemm_generic!(C, tA, tB, A, B, alpha, beta, ::Val{BlasFlag.SYMM})
     lrchar, ulchar = _lrchar_ulchar(tA, tB)
-    BLAS.symm!(lrchar, ulchar, alpha, A, B, beta, C)
+    if lrchar == 'L'
+        BLAS.symm!(lrchar, ulchar, alpha, A, B, beta, C)
+    else
+        BLAS.symm!(lrchar, ulchar, alpha, B, A, beta, C)
+    end
 end
 function _symm_hemm_generic!(C, tA, tB, A, B, alpha, beta, ::Val{BlasFlag.HEMM})
     lrchar, ulchar = _lrchar_ulchar(tA, tB)
-    BLAS.hemm!(lrchar, ulchar, alpha, A, B, beta, C)
+    if lrchar == 'L'
+        BLAS.hemm!(lrchar, ulchar, alpha, A, B, beta, C)
+    else
+        BLAS.hemm!(lrchar, ulchar, alpha, B, A, beta, C)
+    end
 end
 Base.@constprop :aggressive function _symm_hemm_generic!(C, tA, tB, A, B, α, β, ::Val{BlasFlag.NONE})
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
