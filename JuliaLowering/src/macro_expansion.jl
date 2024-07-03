@@ -16,7 +16,7 @@ end
 
 struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
-    next_var_id::Ref{VarId}
+    bindings::Bindings
     scope_layers::Vector{ScopeLayer}
     current_layer::ScopeLayer
 end
@@ -121,7 +121,7 @@ function eval_macro_name(ctx, ex)
     ctx3, ex3 = resolve_scopes!(ctx2, ex2)
     ctx4, ex4 = linearize_ir(ctx3, ex3)
     mod = ctx.current_layer.mod
-    expr_form = to_lowered_expr(mod, ex4.var_info, ex4)
+    expr_form = to_lowered_expr(mod, ex4.bindings, ex4)
     eval(mod, expr_form)
 end
 
@@ -162,7 +162,7 @@ function expand_macro(ctx, ex)
         expanded = append_sourceref(ctx, expanded, ex)
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, parentmodule(macfunc), true)
         push!(ctx.scope_layers, new_layer)
-        inner_ctx = MacroExpansionContext(ctx.graph, ctx.next_var_id, ctx.scope_layers, new_layer)
+        inner_ctx = MacroExpansionContext(ctx.graph, ctx.bindings, ctx.scope_layers, new_layer)
         expanded = expand_forms_1(inner_ctx, expanded)
     else
         expanded = @ast ctx ex expanded::K"Value"
@@ -229,16 +229,16 @@ end
 
 function expand_forms_1(mod::Module, ex::SyntaxTree)
     graph = ensure_attributes(syntax_graph(ex),
-                              var_id=VarId,
+                              var_id=IdTag,
                               scope_layer=LayerId,
                               __macro_ctx__=Nothing)
     layers = ScopeLayer[ScopeLayer(1, mod, false)]
-    ctx = MacroExpansionContext(graph, Ref{VarId}(1), layers, layers[1])
+    ctx = MacroExpansionContext(graph, Bindings(), layers, layers[1])
     ex2 = expand_forms_1(ctx, reparent(ctx, ex))
     graph2 = delete_attributes(graph, :__macro_ctx__)
     # TODO: Returning the context with pass-specific mutable data is a bad way
     # to carry state into the next pass.
-    ctx2 = MacroExpansionContext(graph2, ctx.next_var_id, ctx.scope_layers,
+    ctx2 = MacroExpansionContext(graph2, ctx.bindings, ctx.scope_layers,
                                  ctx.current_layer)
     return ctx2, reparent(ctx2, ex2)
 end

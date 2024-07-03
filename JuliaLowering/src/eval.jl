@@ -98,9 +98,9 @@ end
 
 # Convert SyntaxTree to the CodeInfo+Expr data stuctures understood by the
 # Julia runtime
-function to_code_info(ex, mod, funcname, nargs, var_info, slot_rewrites)
+function to_code_info(ex, mod, funcname, nargs, bindings, slot_rewrites)
     input_code = children(ex)
-    code = Any[to_lowered_expr(mod, var_info, ex) for ex in input_code]
+    code = Any[to_lowered_expr(mod, bindings, ex) for ex in input_code]
 
     debuginfo = ir_debug_info(ex)
 
@@ -115,7 +115,7 @@ function to_code_info(ex, mod, funcname, nargs, var_info, slot_rewrites)
     slot_rename_inds = Dict{String,Int}()
     slotflags = Vector{UInt8}(undef, nslots)
     for (id,i) in slot_rewrites
-        info = var_info[id]
+        info = lookup_binding(bindings, id)
         name = info.name
         ni = get(slot_rename_inds, name, 0)
         slot_rename_inds[name] = ni + 1
@@ -176,7 +176,7 @@ function to_code_info(ex, mod, funcname, nargs, var_info, slot_rewrites)
     )
 end
 
-function to_lowered_expr(mod, var_info, ex)
+function to_lowered_expr(mod, bindings, ex)
     k = kind(ex)
     if is_literal(k) || k == K"Bool"
         ex.value
@@ -203,7 +203,7 @@ function to_lowered_expr(mod, var_info, ex)
     elseif k == K"SSAValue"
         Core.SSAValue(ex.var_id)
     elseif k == K"return"
-        Core.ReturnNode(to_lowered_expr(mod, var_info, ex[1]))
+        Core.ReturnNode(to_lowered_expr(mod, bindings, ex[1]))
     elseif is_quoted(k)
         if k == K"inert"
             ex[1]
@@ -215,7 +215,7 @@ function to_lowered_expr(mod, var_info, ex)
             "top-level scope" :
             "none"              # FIXME
         nargs = length(ex.lambda_info.args)
-        ir = to_code_info(ex[1], mod, funcname, nargs, var_info, ex.slot_rewrites)
+        ir = to_code_info(ex[1], mod, funcname, nargs, bindings, ex.slot_rewrites)
         if ex.lambda_info.is_toplevel_thunk
             Expr(:thunk, ir)
         else
@@ -226,7 +226,7 @@ function to_lowered_expr(mod, var_info, ex)
     elseif k == K"goto"
         Core.GotoNode(ex[1].id)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(to_lowered_expr(mod, var_info, ex[1]), ex[2].id)
+        Core.GotoIfNot(to_lowered_expr(mod, bindings, ex[1]), ex[2].id)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -243,7 +243,7 @@ function to_lowered_expr(mod, var_info, ex)
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")
         end
-        Expr(head, map(e->to_lowered_expr(mod, var_info, e), children(ex))...)
+        Expr(head, map(e->to_lowered_expr(mod, bindings, e), children(ex))...)
     end
 end
 
@@ -259,7 +259,7 @@ function Core.eval(mod::Module, ex::SyntaxTree)
         return x
     end
     linear_ir = lower(mod, ex)
-    expr_form = to_lowered_expr(mod, linear_ir.var_info, linear_ir)
+    expr_form = to_lowered_expr(mod, linear_ir.bindings, linear_ir)
     eval(mod, expr_form)
 end
 

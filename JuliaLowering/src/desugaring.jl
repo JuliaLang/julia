@@ -10,7 +10,7 @@ end
 
 struct DesugaringContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
-    next_var_id::Ref{VarId}
+    bindings::Bindings
     scope_layers::Vector{ScopeLayer}
     mod::Module
 end
@@ -21,9 +21,9 @@ function DesugaringContext(ctx)
                               source=SourceAttrType,
                               value=Any, name_val=String,
                               scope_type=Symbol, # :hard or :soft
-                              var_id=VarId,
+                              var_id=IdTag,
                               lambda_info=LambdaInfo)
-    DesugaringContext(graph, ctx.next_var_id, ctx.scope_layers, ctx.current_layer.mod)
+    DesugaringContext(graph, ctx.bindings, ctx.scope_layers, ctx.current_layer.mod)
 end
 
 # Flatten nested && or || nodes and expand their children
@@ -691,7 +691,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     else
         if k == K"="
             @chk numchildren(ex) == 2
-            if kind(ex[1]) ∉ KSet"Identifier Placeholder SSAValue"
+            if kind(ex[1]) ∉ KSet"Identifier Placeholder BindingId"
                 TODO(ex, "destructuring assignment")
             end
         end

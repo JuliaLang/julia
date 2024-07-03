@@ -8,16 +8,12 @@ using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attribu
 using JuliaSyntaxFormatter
 
 # Extract variable kind for highlighting purposes
-function var_kind(e)
-    id = get(e, :var_id, nothing)
+function var_kind(ex)
+    id = get(ex, :var_id, nothing)
     if isnothing(id)
         return nothing
     end
-    info = get(ctx3.var_info, id, nothing)
-    if isnothing(info)
-        return nothing
-    end
-    return info.kind
+    return lookup_binding(ctx3, id).kind
 end
 
 function formatsrc(ex; kws...)
@@ -263,7 +259,7 @@ ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
 ctx4, ex_compiled = JuliaLowering.linearize_ir(ctx3, ex_scoped)
 @info "Linear IR" ex_compiled formatsrc(ex_compiled, color_by=:var_id)
 
-ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.var_info, ex_compiled)
+ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.bindings, ex_compiled)
 @info "CodeInfo" ex_expr
 
 eval_result = Base.eval(in_mod, ex_expr)

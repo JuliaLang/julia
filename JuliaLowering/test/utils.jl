@@ -61,7 +61,7 @@ function _format_as_ast_macro(io, ex, indent)
     else
         val_str = if k == K"Identifier" || k == K"core" || k == K"top"
             repr(ex.name_val)
-        elseif k == K"SSAValue"
+        elseif k == K"BindingId"
             repr(ex.var_id)
         else
             repr(get(ex, :value, nothing))

@@ -24,6 +24,8 @@ function _insert_kinds()
             "loopinfo"
             # Identifier for a value which is only assigned once
             "SSAValue"
+            # Unique identifying integer for bindings (of variables, constants, etc)
+            "BindingId"
             # Scope expressions `(hygienic_scope ex s)` mean `ex` should be
             # interpreted as being in scope `s`.
             "hygienic_scope"

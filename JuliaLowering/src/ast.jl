@@ -2,20 +2,59 @@
 abstract type AbstractLoweringContext end
 
 """
-Unique symbolic identity for a variable
+Unique symbolic identity for a variable, constant, label, or other entity
 """
-const VarId = Int
+const IdTag = Int
+
+"""
+Metadata about a binding
+"""
+struct BindingInfo
+    name::String
+    mod::Union{Nothing,Module} # Set when `kind === :global`
+    kind::Symbol              # :local :global :argument :static_parameter
+    is_ssa::Bool              # Single assignment, defined before use
+    is_ambiguous_local::Bool  # Local, but would be global in soft scope (ie, the REPL)
+end
+
+"""
+Metadata about "entities" (variables, constants, etc) in the program. Each
+entity is associated to a unique integer id, the BindingId. A binding will be
+inferred for each *name* in the user's source program by symbolic analysis of
+the source.
+
+However, bindings can also be introduced programmatically during lowering or
+macro expansion: the primary key for bindings is the `BindingId` integer, not
+a name.
+"""
+struct Bindings
+    info::Vector{BindingInfo}
+end
+
+Bindings() = Bindings(Vector{BindingInfo}())
+
+function new_binding(bindings::Bindings, info::BindingInfo)
+    push!(bindings.info, info)
+    return length(bindings.info)
+end
+
+function lookup_binding(bindings::Bindings, id::Integer)
+    bindings.info[id]
+end
+
+function lookup_binding(bindings::Bindings, ex::SyntaxTree)
+    # TODO: @assert kind(ex) == K"BindingId"
+    bindings.info[ex.var_id]
+end
+
+function lookup_binding(ctx::AbstractLoweringContext, id)
+    lookup_binding(ctx.bindings, id)
+end
 
 const LayerId = Int
 
 function syntax_graph(ctx::AbstractLoweringContext)
     ctx.graph
-end
-
-function new_var_id(ctx::AbstractLoweringContext)
-    id = ctx.next_var_id[]
-    ctx.next_var_id[] += 1
-    return id
 end
 
 #-------------------------------------------------------------------------------
@@ -67,7 +106,7 @@ function makeleaf(ctx, srcref, k::Kind, value; kws...)
     graph = syntax_graph(ctx)
     if k == K"Identifier" || k == K"core" || k == K"top" || k == K"Symbol" || k == K"globalref"
         makeleaf(graph, srcref, k; name_val=value, kws...)
-    elseif k == K"SSAValue"
+    elseif k == K"BindingId"
         makeleaf(graph, srcref, k; var_id=value, kws...)
     elseif k == K"label"
         makeleaf(graph, srcref, k; id=value, kws...)
@@ -104,9 +143,21 @@ unused(ctx, ex) = core_ref(ctx, ex, "UNUSED")
 
 top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
 
-# Create a new SSA variable
+# Create a new SSA binding
 function ssavar(ctx::AbstractLoweringContext, srcref)
-    makeleaf(ctx, srcref, K"SSAValue", var_id=new_var_id(ctx))
+    # TODO: Store this name in only one place? Probably use the provenance chain?
+    name = "ssa"
+    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, true, false))
+    # Create an identifier
+    nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
+    makeleaf(ctx, nameref, K"BindingId", var_id=id)
+end
+
+# Create a new local mutable variable
+function new_mutable_var(ctx::AbstractLoweringContext, srcref, name)
+    id = new_binding(ctx, BindingInfo(name, nothing, :local, false, false))
+    nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
+    makeleaf(ctx, nameref, K"BindingId", var_id=id)
 end
 
 # Assign `ex` to an SSA variable.

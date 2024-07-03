@@ -22,6 +22,10 @@ function is_valid_ir_argument(ex)
             #k == K"core" || k == K"slot" || k = K"static_parameter")
 end
 
+function is_ssa(ctx, ex)
+    kind(ex) == K"BindingId" && lookup_binding(ctx, ex).is_ssa
+end
+
 """
 Context for creating linear IR.
 
@@ -31,19 +35,18 @@ linear IR.
 struct LinearIRContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
     code::SyntaxList{GraphType, Vector{NodeId}}
-    next_var_id::Ref{Int}
+    bindings::Bindings
     next_label_id::Ref{Int}
     is_toplevel_thunk::Bool
-    lambda_locals::Set{VarId}
+    lambda_locals::Set{IdTag}
     return_type::Union{Nothing,NodeId}
-    var_info::Dict{VarId,VarInfo}
     break_labels::Dict{String, NodeId}
     mod::Module
 end
 
 function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
-    LinearIRContext(ctx.graph, SyntaxList(ctx.graph), ctx.next_var_id, Ref(0),
-                    is_toplevel_thunk, lambda_locals, return_type, ctx.var_info,
+    LinearIRContext(ctx.graph, SyntaxList(ctx.graph), ctx.bindings, Ref(0),
+                    is_toplevel_thunk, lambda_locals, return_type,
                     Dict{String,NodeId}(), ctx.mod)
 end
 
@@ -75,8 +78,8 @@ function is_const_read_arg(ctx, ex)
            k == K"quote" || k == K"inert" || k == K"top" || k == K"core"
 end
 
-function is_valid_ir_rvalue(lhs, rhs)
-    return kind(lhs) == K"SSAValue"  ||
+function is_valid_ir_rvalue(ctx, lhs, rhs)
+    return is_ssa(ctx, lhs) ||
            is_valid_ir_argument(rhs) ||
            (kind(lhs) == K"Identifier" &&
             # FIXME: add: splatnew isdefined invoke cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref
@@ -112,9 +115,7 @@ end
 
 # Emit computation of ex, assigning the result to an ssavar and returning that
 function emit_assign_tmp(ctx::LinearIRContext, ex)
-    # TODO: We could replace this with an index into the code array right away?
-    tmp = makeleaf(ctx, ex, K"SSAValue", var_id=ctx.next_var_id[])
-    ctx.next_var_id[] += 1
+    tmp = ssavar(ctx, ex)
     emit(ctx, ex, K"=", tmp, ex)
     return tmp
 end
@@ -135,7 +136,7 @@ end
 
 function emit_assignment(ctx, srcref, lhs, rhs)
     if !isnothing(rhs)
-        if is_valid_ir_rvalue(lhs, rhs)
+        if is_valid_ir_rvalue(ctx, lhs, rhs)
             emit(ctx, srcref, K"=", lhs, rhs)
         else
             r = emit_assign_tmp(ctx, rhs)
@@ -215,11 +216,13 @@ function compile_conditional(ctx, ex, false_label)
     end
 end
 
-function new_mutable_var(ctx, srcref, name)
-    id = new_var_id(ctx)
-    ctx.var_info[id] = VarInfo(name, nothing, :local, false, false)
+function new_mutable_var(ctx::LinearIRContext, srcref, name)
+    # TODO: Deduplicate this somehow with generic new_mutable_var?
+    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, false, false))
+    nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
+    var = makeleaf(ctx, nameref, K"BindingId", var_id=id)
     push!(ctx.lambda_locals, id)
-    makeleaf(ctx, srcref, K"Identifier", name, var_id=id)
+    var
 end
 
 # This pass behaves like an interpreter on the given code.
@@ -230,7 +233,7 @@ end
 # TODO: Is it ok to return `nothing` if we have no value in some sense?
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
-    if k == K"Identifier" || is_literal(k) || k == K"SSAValue" || k == K"quote" || k == K"inert" ||
+    if k == K"Identifier" || is_literal(k) || k == K"BindingId" || k == K"quote" || k == K"inert" ||
             k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" || k == K"Placeholder" ||
             k == K"Bool"
         # TODO: other kinds: copyast the_exception $ globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall
@@ -439,7 +442,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
             makeleaf(ctx, ex, K"slot"; var_id=slot_id)
         else
             # TODO: look up any static parameters
-            info = ctx.var_info[id]
+            info = lookup_binding(ctx, id)
             if info.kind === :global
                 makeleaf(ctx, ex, K"globalref", ex.name_val, mod=info.mod)
             else
@@ -450,8 +453,17 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         TODO(ex, "_renumber $k")
     elseif is_literal(k) || is_quoted(k) || k == K"global"
         ex
-    elseif k == K"SSAValue"
-        makeleaf(ctx, ex, K"SSAValue"; var_id=ssa_rewrites[ex.var_id])
+    elseif k == K"BindingId"
+        # TODO: This case should replace K"Identifier" completely. For now only
+        # SSA variables go through here. Instead, we should branch on ssa_rewrites.
+        id = ex.var_id
+        if haskey(ssa_rewrites, id)
+            makeleaf(ctx, ex, K"SSAValue"; var_id=ssa_rewrites[id])
+        else
+            slot_id = get(slot_rewrites, id, nothing)
+            @assert !isnothing(slot_id)
+            makeleaf(ctx, ex, K"slot"; var_id=slot_id)
+        end
     elseif k == K"enter"
         TODO(ex, "_renumber $k")
     elseif k == K"goto"
@@ -477,15 +489,15 @@ end
 # flisp: renumber-lambda, compact-ir
 function renumber_body(ctx, input_code, slot_rewrites)
     # Step 1: Remove any assignments to SSA variables, record the indices of labels
-    ssa_rewrites = Dict{VarId,VarId}()
+    ssa_rewrites = Dict{IdTag,IdTag}()
     label_table = Dict{Int,Int}()
     code = SyntaxList(ctx)
     for ex in input_code
         k = kind(ex)
         ex_out = nothing
-        if k == K"=" && kind(ex[1]) == K"SSAValue"
+        if k == K"=" && is_ssa(ctx, ex[1])
             lhs_id = ex[1].var_id
-            if kind(ex[2]) == K"SSAValue"
+            if is_ssa(ctx, ex[2])
                 # For SSA₁ = SSA₂, record that all uses of SSA₁ should be replaced by SSA₂
                 ssa_rewrites[lhs_id] = ssa_rewrites[ex[2].var_id]
             else
@@ -519,10 +531,10 @@ function compile_body(ctx, ex)
     # TODO: Filter out any newvar nodes where the arg is definitely initialized
 end
 
-function _add_slots!(slot_rewrites, var_info, var_ids)
+function _add_slots!(slot_rewrites, bindings, ids)
     n = length(slot_rewrites) + 1
-    for id in var_ids
-        info = var_info[id]
+    for id in ids
+        info = lookup_binding(bindings, id)
         if info.kind == :local || info.kind == :argument
             slot_rewrites[id] = n
             n += 1
@@ -537,9 +549,10 @@ function compile_lambda(outer_ctx, ex)
     # TODO: Add assignments for reassigned arguments to body using lambda_info.args
     ctx = LinearIRContext(outer_ctx, lambda_info.is_toplevel_thunk, ex.lambda_locals, return_type)
     compile_body(ctx, ex[1])
-    slot_rewrites = Dict{VarId,Int}()
-    _add_slots!(slot_rewrites, ctx.var_info, (arg.var_id for arg in lambda_info.args))
-    _add_slots!(slot_rewrites, ctx.var_info, sort(collect(ex.lambda_locals)))
+    slot_rewrites = Dict{IdTag,Int}()
+    _add_slots!(slot_rewrites, ctx.bindings, (arg.var_id for arg in lambda_info.args))
+    # Sorting the lambda locals is required to remove dependence on Dict iteration order.
+    _add_slots!(slot_rewrites, ctx.bindings, sort(collect(ex.lambda_locals)))
     # @info "" @ast ctx ex [K"block" ctx.code]
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     makenode(ctx, ex, K"lambda",
@@ -551,17 +564,17 @@ end
 
 function linearize_ir(ctx, ex)
     graph = ensure_attributes(ctx.graph,
-                              slot_rewrites=Dict{VarId,Int},
-                              var_info=Dict{VarId,VarInfo},
+                              slot_rewrites=Dict{IdTag,Int},
+                              bindings=Bindings,
                               mod=Module,
                               id=Int)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
     # required to call reparent() ...
-    _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.next_var_id,
-                           Ref(0), false, Set{VarId}(), nothing, ctx.var_info,
+    _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
+                           Ref(0), false, Set{IdTag}(), nothing,
                            Dict{String,NodeId}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
-    setattr!(graph, res._id, var_info=ctx.var_info)
+    setattr!(graph, res._id, bindings=ctx.bindings)
     _ctx, res
 end
 

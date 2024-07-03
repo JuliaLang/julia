@@ -412,6 +412,7 @@ function _value_string(ex)
     str = k == K"Identifier" || k == K"MacroName" || is_operator(k) ? ex.name_val :
           k == K"Placeholder" ? ex.name_val :
           k == K"SSAValue"    ? "ssa"                 :
+          k == K"BindingId"   ? "bnd"                 :
           k == K"label"       ? "label"               :
           k == K"core"        ? "core.$(ex.name_val)" :
           k == K"top"         ? "top.$(ex.name_val)"  :
@@ -430,10 +431,12 @@ function _value_string(ex)
                         "5"=>"₅", "6"=>"₆", "7"=>"₇", "8"=>"₈", "9"=>"₉")
         str = "$(str).$idstr"
     end
-    if k == K"slot"
-        # TODO: Ideally shouldn't need to rewrap the id here...
-        srcex = SyntaxTree(ex._graph, ex.source)
-        str = "$(str)/$(srcex.name_val)"
+    if k == K"slot" || k == K"BindingId"
+        p = provenance(ex)[1]
+        while kind(p) != K"Identifier"
+            p = provenance(p)[1]
+        end
+        str = "$(str)/$(p.name_val)"
     end
     return str
 end
