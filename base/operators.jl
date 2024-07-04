@@ -1177,9 +1177,7 @@ struct Fix{N,F,T} <: Function
     end
 end
 function Fix(f::Union{F,Type{F}}; kws...) where {F}
-    if length(kws) != 1
-        throw(ArgumentError("`Fix` expects exactly one argument or keyword argument"))
-    end
+    length(kws) != 1 && throw(ArgumentError("`Fix` expects exactly one argument or keyword argument"))
     Fix{only(keys(kws))}(f, only(values(kws)))
 end
 
