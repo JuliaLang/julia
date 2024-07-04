@@ -1172,7 +1172,11 @@ struct Fix{N,F,T} <: Function
     x::T
 
     function Fix{N}(f::F, x) where {N,F}
-        _validate_fix_param(N)
+        if N isa Int && N < 1
+            throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
+        elseif !(N isa Union{Int,Symbol})
+            throw(ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=$(typeof(N))"))
+        end
         new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
 end
@@ -1190,11 +1194,6 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
         M < N-1 && throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
         return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
     end
-end
-
-function _validate_fix_param(N)
-    N isa Int && N < 1 && throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
-    !(N isa Union{Int,Symbol}) && throw(ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=$(typeof(N))"))
 end
 
 """
