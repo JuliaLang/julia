@@ -1161,6 +1161,11 @@ In other words, `Fix{3}(f, x)` behaves similarly to
 You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behaves
 similarly to `x -> g(x; a=2)` for a function `g` with one argument and one keyword argument.
 You can also write this as `Fix{:a}(g, 2)`.
+
+!!! note
+    Nesting multiple `Fix`es is discouraged as it is ambiguous and sometimes
+    counterintuitive. For example, `Fix{1}(Fix{2}(f, 4), 4)` fixes the first and second arg,
+    while `Fix{2}(Fix{1}(f, 4), 4)` fixes the first and third arg.
 """
 struct Fix{N,F,T} <: Function
     f::F
