@@ -1151,7 +1151,7 @@ static void combine_thread_gc_counts(jl_gc_num_t *dest, int update_heap) JL_NOTS
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls = gc_all_tls_states[i];
         if (ptls) {
-            dest->allocd += (jl_atomic_load_relaxed(&ptls->gc_num.allocd) + gc_num.interval);
+            dest->allocd += jl_atomic_load_relaxed(&ptls->gc_num.allocd);
             dest->malloc += jl_atomic_load_relaxed(&ptls->gc_num.malloc);
             dest->realloc += jl_atomic_load_relaxed(&ptls->gc_num.realloc);
             dest->poolalloc += jl_atomic_load_relaxed(&ptls->gc_num.poolalloc);
@@ -1178,7 +1178,7 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
         jl_ptls_t ptls = gc_all_tls_states[i];
         if (ptls != NULL) {
             // don't reset `pool_live_bytes` here
-            jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
+            jl_atomic_store_relaxed(&ptls->gc_num.allocd, 0);
             jl_atomic_store_relaxed(&ptls->gc_num.malloc, 0);
             jl_atomic_store_relaxed(&ptls->gc_num.realloc, 0);
             jl_atomic_store_relaxed(&ptls->gc_num.poolalloc, 0);
@@ -3817,7 +3817,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     jl_timing_counter_dec(JL_TIMING_COUNTER_HeapSize, gc_num.freed);
 
     gc_time_summary(sweep_full, t_start, gc_end_time, gc_num.freed,
-                    live_bytes, gc_num.interval, pause,
+                    live_bytes, pause,
                     gc_num.time_to_safepoint,
                     gc_num.mark_time, gc_num.sweep_time);
     if (collection == JL_GC_AUTO) {
@@ -3850,8 +3850,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
-        size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_num.allocd) + gc_num.interval;
-        jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
+        size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_num.allocd);
+        jl_atomic_store_relaxed(&ptls->gc_num.allocd, -default_collect_interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
         jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
         return;
@@ -4004,7 +4004,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     arraylist_new(&mq->reclaim_set, 32);
 
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
-    jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
 }
 
 void jl_free_thread_gc_state(jl_ptls_t ptls)
@@ -4038,7 +4037,6 @@ void jl_gc_init(void)
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
     jl_atomic_store_relaxed(&gc_heap_stats.heap_target, default_collect_interval);
-    gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;

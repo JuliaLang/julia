@@ -74,7 +74,6 @@ typedef struct {
     uint64_t    freecall;
     uint64_t    total_time;
     uint64_t    total_allocd;
-    size_t      interval;
     int         pause;
     int         full_sweep;
     uint64_t    max_pause;
@@ -616,7 +615,7 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                          int64_t live_bytes, int64_t estimate_freed,
                          int sweep_full);
 void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
-                     uint64_t freed, uint64_t live, uint64_t interval,
+                     uint64_t freed, uint64_t live,
                      uint64_t pause, uint64_t ttsp, uint64_t mark,
                      uint64_t sweep);
 void gc_heuristics_summary(
@@ -652,7 +651,7 @@ STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
 #define  gc_time_summary(sweep_full, start, end, freed, live,           \
-                         interval, pause, ttsp, mark, sweep)
+                         pause, ttsp, mark, sweep)
 #define gc_heuristics_summary( \
         old_alloc_diff, alloc_mem, \
         old_mut_time, alloc_time, \
