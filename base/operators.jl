@@ -1187,7 +1187,7 @@ end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     if N isa Symbol
-        N in keys(kws) && throw(ArgumentError("found duplicate keyword argument passed to `Fix{N}`"))
+        N in keys(kws) && throw(ArgumentError("found duplicate keyword argument passed to `Fix`"))
         f_kws = NamedTuple{(N,)}((f.x,))
         return f.f(args...; f_kws..., kws...)
     else # Int

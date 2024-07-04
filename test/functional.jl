@@ -353,11 +353,9 @@ end
             sum1(x) == [3.0 3.0]
         end
         @testset "Dummy-proofing" begin
-            @test_throws ArgumentError Fix{0}(>, 1)
-            @test_throws "expected `N` in `Fix{N}` to be integer greater than 0" Fix{0}(>, 1)
+            @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0") Fix{0}(>, 1)
 
-            @test_throws ArgumentError Fix{0.5}(>, 1)
-            @test_throws "expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=Float64" Fix{0.5}(>, 1)
+            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=Float64") Fix{0.5}(>, 1)
 
             @test_throws ArgumentError Fix{UInt64(1)}(>, 1)
 
@@ -365,8 +363,7 @@ end
             sum1 = Fix(sum; dims=1)
             x = ones(3, 2)
             @test sum1(x) == [3.0 3.0]
-            @test_throws ArgumentError sum1(x; dims=2)
-            @test_throws "found duplicate keyword argument passed to `Fix{N}`" sum1(x; dims=2)
+            @test_throws ArgumentError("found duplicate keyword argument passed to `Fix`") sum1(x; dims=2)
         end
     end
 end
