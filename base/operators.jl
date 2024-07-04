@@ -1172,7 +1172,7 @@ struct Fix{N,F,T} <: Function
     x::T
 
     function Fix{N}(f::F, x) where {N,F}
-        _validate_fix_param(Val(N))
+        _validate_fix_param(N)
         new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
 end
@@ -1193,7 +1193,7 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     end
 end
 
-function _validate_fix_param(::Val{N}) where {N}
+function _validate_fix_param(N)
     if N isa Int
         N < 1 && throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
     elseif !(N isa Symbol)
