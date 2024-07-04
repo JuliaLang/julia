@@ -366,7 +366,7 @@ end
             x = ones(3, 2)
             @test sum1(x) == [3.0 3.0]
             @test_throws ArgumentError sum1(x; dims=2)
-            @test_throws "found duplicate keyword argument(s) passed to `Fix{N}`" sum1(x; dims=2)
+            @test_throws "found duplicate keyword argument passed to `Fix{N}`" sum1(x; dims=2)
         end
     end
 end
