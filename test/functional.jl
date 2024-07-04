@@ -308,11 +308,7 @@ end
 
                 # One over
                 fixed_g3 = Fix{3}(g, 100)
-                @test_throws ArgumentError fixed_g3(1)
-                @test_throws(
-                    "expected at least 2 arguments to a `Fix` function with `N=3`",
-                    fixed_g3(1)
-                )
+                @test_throws ArgumentError("expected at least 2 arguments to a `Fix` function with `N=3`") fixed_g3(1)
             end
         end
         @testset "Type Stability and Inference" begin
@@ -357,7 +353,7 @@ end
 
             @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=Float64") Fix{0.5}(>, 1)
 
-            @test_throws ArgumentError Fix{UInt64(1)}(>, 1)
+            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=UInt64") Fix{UInt64(1)}(>, 1)
 
             # duplicate keywords
             sum1 = Fix(sum; dims=1)
