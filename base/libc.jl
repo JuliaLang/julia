@@ -34,6 +34,19 @@ the OS file backing the stream.
 primitive type RawFD 32 end
 RawFD(fd::Integer) = bitcast(RawFD, Cint(fd))
 RawFD(fd::RawFD) = fd
+
+"""
+    RawFD(stream)
+
+Return the file descriptor backing the stream or file. Note that this function only applies
+to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+
+!!! compat "Julia 1.12"
+    `RawFD(::Union{IOStream, File})` requires at least Julia 1.12.
+"""
+RawFD(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
+RawFD(f::File) = RawFD(f.handle)
+
 Base.cconvert(::Type{Cint}, fd::RawFD) = bitcast(Cint, fd)
 
 dup(x::RawFD) = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,), x)
