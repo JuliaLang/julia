@@ -54,7 +54,7 @@ to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 """
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
-stat(s::IOStream) = stat(fd(s))
+stat(s::IOStream) = stat(RawFD(fd(s)))
 
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Cvoid},), s.ios) != 0
 
