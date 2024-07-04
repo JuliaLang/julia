@@ -56,10 +56,12 @@ struct NameKey
 end
 
 #-------------------------------------------------------------------------------
-function _find_scope_vars!(assignments, locals, globals, used_names, ex)
+function _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, ex)
     k = kind(ex)
     if k == K"Identifier"
         push!(used_names, NameKey(ex))
+    elseif k == K"BindingId"
+        push!(used_bindings, ex.var_id)
     elseif !haschildren(ex) || is_quoted(k) ||
             k in KSet"scope_block lambda module toplevel"
         return
@@ -73,10 +75,10 @@ function _find_scope_vars!(assignments, locals, globals, used_names, ex)
         if !(kind(v) in KSet"BindingId globalref outerref Placeholder")
             get!(assignments, NameKey(v), v)
         end
-        _find_scope_vars!(assignments, locals, globals, used_names, ex[2])
+        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, ex[2])
     else
         for e in children(ex)
-            _find_scope_vars!(assignments, locals, globals, used_names, e)
+            _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, e)
         end
     end
 end
@@ -91,8 +93,9 @@ function find_scope_vars(ex)
     locals = Dict{NameKey,ExT}()
     globals = Dict{NameKey,ExT}()
     used_names = Set{NameKey}()
+    used_bindings = Set{IdTag}()
     for e in children(ex)
-        _find_scope_vars!(assignments, locals, globals, used_names, e)
+        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, e)
     end
 
     # Sort by key so that id generation is deterministic
@@ -100,8 +103,9 @@ function find_scope_vars(ex)
     locals = sort(collect(pairs(locals)), by=first)
     globals = sort(collect(pairs(globals)), by=first)
     used_names = sort(collect(used_names))
+    used_bindings = sort(collect(used_bindings))
 
-    return assignments, locals, globals, used_names
+    return assignments, locals, globals, used_names, used_bindings
 end
 
 function Base.isless(a::NameKey, b::NameKey)
@@ -202,7 +206,7 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     is_toplevel = !isnothing(lambda_info) && lambda_info.is_toplevel_thunk
     in_toplevel_thunk = is_toplevel || (!is_outer_lambda_scope && parentscope.in_toplevel_thunk)
 
-    assignments, locals, globals, used = find_scope_vars(ex)
+    assignments, locals, globals, used, used_bindings = find_scope_vars(ex)
 
     # Create new lookup table for variables in this scope which differ from the
     # parent scope.
@@ -323,6 +327,12 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     for id in values(var_ids)
         vk = var_kind(ctx, id)
         if vk === :local
+            push!(lambda_locals, id)
+        end
+    end
+    for id in used_bindings
+        info = lookup_binding(ctx, id)
+        if !info.is_ssa && info.kind == :local
             push!(lambda_locals, id)
         end
     end

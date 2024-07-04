@@ -415,6 +415,16 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
+    elseif k == K"_do_while"
+        end_label = make_label(ctx, ex)
+        top_label = emit_label(ctx, ex)
+        compile(ctx, ex[1], false, false)
+        compile_conditional(ctx, ex[2], end_label)
+        emit(ctx, @ast ctx ex [K"goto" top_label])
+        emit(ctx, end_label)
+        if needs_value
+            compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
+        end
     elseif k == K"global"
         if needs_value
             throw(LoweringError(ex, "misplaced `global` declaration"))

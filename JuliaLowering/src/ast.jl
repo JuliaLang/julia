@@ -144,9 +144,8 @@ unused(ctx, ex) = core_ref(ctx, ex, "UNUSED")
 top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
 
 # Create a new SSA binding
-function ssavar(ctx::AbstractLoweringContext, srcref)
+function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
     # TODO: Store this name in only one place? Probably use the provenance chain?
-    name = "ssa"
     id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, true, false))
     # Create an identifier
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
@@ -155,15 +154,15 @@ end
 
 # Create a new local mutable variable
 function new_mutable_var(ctx::AbstractLoweringContext, srcref, name)
-    id = new_binding(ctx, BindingInfo(name, nothing, :local, false, false))
+    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, false, false))
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
     makeleaf(ctx, nameref, K"BindingId", var_id=id)
 end
 
 # Assign `ex` to an SSA variable.
 # Return (variable, assignment_node)
-function assign_tmp(ctx::AbstractLoweringContext, ex)
-    var = ssavar(ctx, ex)
+function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
+    var = ssavar(ctx, ex, name)
     assign_var = makenode(ctx, ex, K"=", var, ex)
     var, assign_var
 end

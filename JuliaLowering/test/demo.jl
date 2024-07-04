@@ -240,6 +240,12 @@ begin
 end
 """
 
+src = """
+for i in [3,1,2]
+    println("i = ", i)
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)

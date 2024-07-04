@@ -26,6 +26,63 @@ function DesugaringContext(ctx)
     DesugaringContext(graph, ctx.bindings, ctx.scope_layers, ctx.current_layer.mod)
 end
 
+function is_identifier_like(ex)
+    k = kind(ex)
+    k == K"Identifier" || k == K"BindingId" || k == K"Placeholder"
+end
+
+is_assignment(ex) = kind(ex) == K"="
+
+function has_parameters(ex)
+    numchildren(ex) >= 1 && kind(ex[end]) == K"parameters"
+end
+
+# Create an assignment `$lhs = $rhs` where `lhs` must be "simple". If `rhs` is
+# a block, sink the assignment into the last statement of the block to keep
+# more expressions at top level. `rhs` should already be expanded.
+#
+# flisp: sink-assignment
+function simple_assignment(ctx, assign_srcref, lhs, rhs)
+    @assert is_identifier_like(lhs)
+    if kind(rhs) == K"block"
+        @ast ctx assign_srcref [K"block"
+            rhs[1:end-1]...
+            [K"=" lhs rhs[end]]
+        ]
+    else
+        @ast ctx assign_srcref [K"=" lhs rhs]
+    end
+end
+
+function expand_tuple_destruct(ctx, ex)
+    lhs = ex[1]
+    @assert kind(lhs) == K"tuple"
+    rhs = expand_forms_2(ctx, ex[2])
+
+    # FIXME: This is specialized to only the form produced by lowering of `for`.
+    @assert numchildren(lhs) == 2 && all(is_identifier_like, children(lhs))
+    @ast ctx ex [K"block"
+        r = rhs
+        [K"=" lhs[1] [K"call" "getindex"::K"top" r 1::K"Integer"]]
+        [K"=" lhs[2] [K"call" "getindex"::K"top" r 2::K"Integer"]]
+    ]
+end
+
+function expand_assignment(ctx, ex)
+    @chk numchildren(ex) == 2
+    lhs = ex[1]
+    rhs = ex[2]
+    kl = kind(lhs)
+    if is_identifier_like(lhs)
+        simple_assignment(ctx, ex, lhs, expand_forms_2(ctx, rhs))
+    elseif kl == K"tuple"
+        # TODO: has_parameters
+        expand_tuple_destruct(ctx, ex)
+    else
+        TODO(ex)
+    end
+end
+
 # Flatten nested && or || nodes and expand their children
 function expand_cond_children(ctx, ex, cond_kind=kind(ex), flat_children=SyntaxList(ctx))
     for e in children(ex)
@@ -146,6 +203,59 @@ function expand_call(ctx, ex)
     else
         @ast ctx ex [K"call" expand_forms_2(ctx, cs)...]
     end
+end
+
+function expand_for(ctx, ex)
+    iterspec = ex[1]
+
+    iter_var = iterspec[1]
+    iter_ex = iterspec[2]
+
+    # TODO: multiple iteration variables
+    @assert is_identifier_like(iter_var)
+
+    next = new_mutable_var(ctx, iterspec, "next")
+    state = ssavar(ctx, iterspec, "state")
+    collection = ssavar(ctx, iter_ex, "collection")
+
+    # Inner body
+    inner_body = ex[2]
+    body = @ast ctx inner_body [K"block"
+        [K"=" [K"tuple" iter_var state] next]
+        inner_body
+    ]
+    body = @ast ctx inner_body [K"break_block"
+        "loop_cont"::K"symbolic_label"
+        [K"let"(scope_type=:neutral)
+             [K"block"
+                 # TODO: copied-vars
+             ]
+             body
+        ]
+    ]
+
+    # Nearly all this machinery is lowering of the iteration specification, so
+    # most gets attributed to `iterspec`.
+    loop = @ast ctx ex [K"block"
+        [K"="(iter_ex) collection iter_ex]
+        # next = top.iterate(collection)
+        [K"="(iterspec) next [K"call" "iterate"::K"top" collection]]
+        # TODO if outer require-existing-local
+        [K"if"(iterspec) # if next !== nothing
+            [K"call"(iterspec) "not_int"::K"top" [K"call" "==="::K"core" next "nothing"::K"core"]]
+            [K"_do_while"(ex)
+                [K"block"
+                    body
+                    [K"="(iterspec) next [K"call" "iterate"::K"top" collection state]]
+                ]
+                [K"call"(iterspec) "not_int"::K"top" [K"call" "==="::K"core" next "nothing"::K"core"]]
+            ]
+        ]
+    ]
+
+    @ast ctx ex [K"break_block" "loop_exit"::K"symbolic_label"
+        loop
+    ]
 end
 
 # Strip variable type declarations from within a `local` or `global`, returning
@@ -595,6 +705,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         else
             @ast ctx ex [K"if" cond true::K"Bool" cs[end]]
         end
+    elseif k == K"="
+        expand_assignment(ctx, ex)
     elseif k == K"break"
         numchildren(ex) > 0 ? ex :
             @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]
@@ -603,6 +715,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"doc"
         @chk numchildren(ex) == 2
         sig = expand_forms_2(ctx, ex[2], ex)
+    elseif k == K"for"
+        expand_forms_2(ctx, expand_for(ctx, ex))
     elseif k == K"function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
@@ -689,12 +803,6 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif !haschildren(ex)
         ex
     else
-        if k == K"="
-            @chk numchildren(ex) == 2
-            if kind(ex[1]) ∉ KSet"Identifier Placeholder BindingId"
-                TODO(ex, "destructuring assignment")
-            end
-        end
         mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
     end
 end
