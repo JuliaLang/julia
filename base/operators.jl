@@ -1172,8 +1172,8 @@ struct Fix{N,F,T} <: Function
     x::T
 
     function Fix{N}(f::Union{F,Type{F}}, x) where {N,F}
-        _N = _standardize_fix_param(Val(N))
-        new{_N,_stable_typeof(f),_stable_typeof(x)}(f, x)
+        _validate_fix_param(Val(N))
+        new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
 end
 function Fix(f::Union{F,Type{F}}; kws...) where {F}
@@ -1199,16 +1199,11 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     end
 end
 
-function _standardize_fix_param(::Val{N}) where {N}
-    if N isa Integer
-        if N < 1
-            throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
-        end
-        return Int64(N)
-    elseif N isa Symbol
-        return N
-    else
-        throw(ArgumentError("Expected type parameter in `Fix` to be an integer or symbol, but got type=$(typeof(N))"))
+function _validate_fix_param(::Val{N}) where {N}
+    if N isa Int64
+        N < 1 && throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
+    elseif !(N isa Symbol)
+        throw(ArgumentError("Expected type parameter in `Fix` to be `Int64` or `Symbol`, but got type=$(typeof(N))"))
     end
 end
 function _validate_fix_args(::Val{N}, ::Val{M}) where {N,M}
