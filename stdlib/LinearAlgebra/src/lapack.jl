@@ -7164,19 +7164,11 @@ for (fn, elty) in ((:dlacpy_, :Float64),
             m, n = size(A)
             m1, n1 = size(B)
             if uplo == 'U'
-                if n < m
-                    (m1 < n || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($n,$n)"))
-                else
-                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
-                end
+                lacpy_size_check((m1, n1), (n < m ? n : m, n))
             elseif uplo == 'L'
-                if m < n
-                    (m1 < m || n1 < m) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$m)"))
-                else
-                    (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
-                end
+                lacpy_size_check((m1, n1), (m, m < n ? m : n))
             else
-                (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
+                lacpy_size_check((m1, n1), (m, n))
             end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
@@ -7188,6 +7180,9 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         end
     end
 end
+
+# The noinline annotation reduces latency
+@noinline lacpy_size_check((m1, n1), (m, n)) = (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
 
 """
     lacpy!(B, A, uplo) -> B
