@@ -1189,11 +1189,7 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
         f_kws = NamedTuple{(N,)}((f.x,))
         return f.f(args...; f_kws..., kws...)
     else # Integer
-        if N > 1
-            return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
-        else # N == 1
-            return f.f(f.x, args...; kws...)
-        end
+        return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
     end
 end
 
