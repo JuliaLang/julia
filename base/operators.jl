@@ -1183,8 +1183,11 @@ end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     @inline
-    _validate_fix_args(Val(N), Val(M))
-    _validate_fix_kwargs(Val(N); kws...)
+    if N isa Int && M < N-1
+        throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
+    elseif N isa Symbol && N in keys(kws)
+        throw(ArgumentError("found duplicate keyword argument passed to `Fix{N}`"))
+    end
     if N isa Symbol
         f_kws = NamedTuple{(N,)}((f.x,))
         return f.f(args...; f_kws..., kws...)
@@ -1198,16 +1201,6 @@ function _validate_fix_param(::Val{N}) where {N}
         N < 1 && throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
     elseif !(N isa Symbol)
         throw(ArgumentError("Expected type parameter in `Fix` to be `Int64` or `Symbol`, but got type=$(typeof(N))"))
-    end
-end
-function _validate_fix_args(::Val{N}, ::Val{M}) where {N,M}
-    if N isa Integer && N > 1 && M < N - 1
-        throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
-    end
-end
-function _validate_fix_kwargs(::Val{N}; kws...) where {N}
-    if N isa Symbol && N in keys(kws)
-        throw(ArgumentError("found duplicate keyword argument passed to `Fix{N}`"))
     end
 end
 
