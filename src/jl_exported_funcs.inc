@@ -140,10 +140,6 @@
     XX(jl_gc_add_ptr_finalizer) \
     XX(jl_gc_add_quiescent) \
     XX(jl_gc_allocobj) \
-    XX(jl_gc_alloc_0w) \
-    XX(jl_gc_alloc_1w) \
-    XX(jl_gc_alloc_2w) \
-    XX(jl_gc_alloc_3w) \
     XX(jl_gc_alloc_typed) \
     XX(jl_gc_big_alloc) \
     XX(jl_gc_big_alloc_instrumented) \
