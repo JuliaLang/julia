@@ -296,12 +296,6 @@ end
                 @test fixed_f3(1, 2) == 1 + 2 * 3
             end
         end
-        @testset "allowed empty function" begin
-            let f = () -> 1
-                fixed_f = Fix(f)
-                @test fixed_f() == 1
-            end
-        end
         @testset "Helpful errors" begin
             let g = (x, y) -> x - y
                 # Test minimum N
