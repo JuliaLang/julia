@@ -1195,7 +1195,7 @@ end
 
 function _validate_fix_param(N)
     N isa Int && N < 1 && throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
-    !(N isa Union{Int,Symbol}) && throw(ArgumentError("Expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=$(typeof(N))"))
+    !(N isa Union{Int,Symbol}) && throw(ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=$(typeof(N))"))
 end
 
 """

@@ -348,24 +348,21 @@ end
             @test g3("") == "123"
         end
         @testset "With kwargs" begin
-            sum1 = Base.Fix(sum; dims=1)
+            sum1 = Fix(sum; dims=1)
             x = ones(3, 2)
             sum1(x) == [3.0 3.0]
         end
         @testset "Dummy-proofing" begin
-            @test_throws ArgumentError Base.Fix{0}(>, 1)
-            @test_throws "expected `N` in `Fix{N}` to be integer greater than 0" Base.Fix{0}(>, 1)
+            @test_throws ArgumentError Fix{0}(>, 1)
+            @test_throws "expected `N` in `Fix{N}` to be integer greater than 0" Fix{0}(>, 1)
 
-            @test_throws ArgumentError Base.Fix{0.5}(>, 1)
-            @test_throws "expected `N` in `Fix{N}` to be integer greater than 0" Base.Fix{0.5}(>, 1)
+            @test_throws ArgumentError Fix{0.5}(>, 1)
+            @test_throws "expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=Float64" Fix{0.5}(>, 1)
 
-            _get_fix_n(::Fix{N}) where {N} = N
-            f = Fix{UInt64(1)}(>, 1)
-            # Will automatically convert
-            @test _get_fix_n(f) isa Int64
+            @test_throws ArgumentError Fix{UInt64(1)}(>, 1)
 
             # duplicate keywords
-            sum1 = Base.Fix(sum; dims=1)
+            sum1 = Fix(sum; dims=1)
             x = ones(3, 2)
             @test sum1(x) == [3.0 3.0]
             @test_throws ArgumentError sum1(x; dims=2)
