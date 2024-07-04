@@ -1188,13 +1188,13 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     if N isa Symbol
         f_kws = NamedTuple{(N,)}((f.x,))
         return f.f(args...; f_kws..., kws...)
-    else # Integer
+    else # Int
         return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
     end
 end
 
 function _validate_fix_param(::Val{N}) where {N}
-    if N isa Int64
+    if N isa Int
         N < 1 && throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
     elseif !(N isa Symbol)
         throw(ArgumentError("Expected type parameter in `Fix` to be `Int64` or `Symbol`, but got type=$(typeof(N))"))
