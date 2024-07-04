@@ -1216,24 +1216,12 @@ function _validate_fix_kwargs(::Val{N}; kws...) where {N}
 end
 
 """
-    Fix1(f, x)
-
-A type representing a partially-applied version of the function
-`f`, with the first argument fixed to the value "x". In other words,
-`Fix1(f, x)` behaves similarly to `y->f(x, y)` for a 2-argument function `f`.
-
-See also [`Fix2`](@ref Base.Fix2) and [`Fix`](@ref Base.Fix).
+Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
 """
 const Fix1{F,T} = Fix{1,F,T}
 
 """
-    Fix2(f, x)
-
-A type representing a partially-applied version of the function
-`f`, with the second argument fixed to the value "x". In other words,
-`Fix2(f, x)` behaves similarly to `y->f(y, x)` for a 2-argument function `f`.
-
-See also [`Fix`](@ref Base.Fix).
+Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).
 """
 const Fix2{F,T} = Fix{2,F,T}
 
