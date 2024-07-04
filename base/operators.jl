@@ -1185,15 +1185,15 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     @inline
     _validate_fix_args(Val(N), Val(M))
     _validate_fix_kwargs(Val(N); kws...)
-    if N isa Integer
+    if N isa Symbol
+        f_kws = NamedTuple{(N,)}((f.x,))
+        return f.f(args...; f_kws..., kws...)
+    else # Integer
         if N > 1
             return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
         else # N == 1
             return f.f(f.x, args...; kws...)
         end
-    else # N isa Symbol
-        f_kws = NamedTuple{(N,)}((f.x,))
-        return f.f(args...; f_kws..., kws...)
     end
 end
 
