@@ -703,4 +703,14 @@ end
     @test B == At
 end
 
+@testset "error message in transpose" begin
+    v = zeros(2)
+    A = zeros(1,1)
+    B = zeros(2,3)
+    for (t1, t2) in Any[(A, v), (v, A), (A, B)]
+        @test_throws "axes of the destination are incompatible with that of the source" transpose!(t1, t2)
+        @test_throws "axes of the destination are incompatible with that of the source" adjoint!(t1, t2)
+    end
+end
+
 end # module TestAdjointTranspose

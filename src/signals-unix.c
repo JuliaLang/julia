@@ -404,6 +404,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
     if (ct->eh == NULL)
         sigdie_handler(sig, info, context);
     if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+        stack_overflow_warning();
         jl_throw_in_ctx(ct, jl_stackovf_exception, sig, context);
     }
     else if (jl_is_on_sigstack(ct->ptls, info->si_addr, context)) {

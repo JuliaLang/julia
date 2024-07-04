@@ -257,6 +257,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
+    # handling of `@temp` in --project and JULIA_PROJECT
+    @test tempdir() == readchomp(`$exename --project=@temp -e 'println(Base.active_project())'`)[1:lastindex(tempdir())]
+    @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
+
     # --quiet, --banner
     let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
         @test read(`$exename                   -e $p`, String) == "(0, -1)"
@@ -788,6 +792,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
     @test errors_not_signals(`$exename --worker=true`)
+
+    # --trace-compile-timing
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-compile=stderr --trace-compile-timing -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
 
     # test passing arguments
     mktempdir() do dir

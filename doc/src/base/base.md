@@ -415,6 +415,7 @@ Core.DivideError
 Core.DomainError
 Base.EOFError
 Core.ErrorException
+Core.FieldError
 Core.InexactError
 Core.InterruptException
 Base.KeyError

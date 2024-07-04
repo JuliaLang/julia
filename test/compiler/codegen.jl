@@ -859,7 +859,7 @@ foo50964(1) # Shouldn't assert!
 
 # https://github.com/JuliaLang/julia/issues/51233
 obj51233 = (1,)
-@test_throws ErrorException obj51233.x
+@test_throws FieldError obj51233.x
 
 # Very specific test for multiversioning
 if Sys.ARCH === :x86_64
@@ -938,3 +938,21 @@ BigStructAnyInt() = BigStructAnyInt((Union{Base.inferencebarrier(Float64), Int}=
 @test egal_any54109(Torture1_54109(), Torture1_54109())
 @test egal_any54109(Torture2_54109(), Torture2_54109())
 @test !egal_any54109(Torture1_54109(), Torture1_54109((DefaultOr54109(2.0, false) for i = 1:897)...))
+
+bar54599() = Base.inferencebarrier(true) ? (Base.PkgId(Main),1) : nothing
+
+function foo54599()
+    pkginfo = @noinline bar54599()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    @noinline println(devnull, pkgid)
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+
+#this function used to crash allocopt due to a no predecessors bug
+barnopreds() = Base.inferencebarrier(true) ? (Base.PkgId(Test),1) : nothing
+function foonopreds()
+    pkginfo = @noinline barnopreds()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+@test foonopreds() !== nothing
