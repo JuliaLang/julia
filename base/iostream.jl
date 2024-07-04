@@ -51,6 +51,9 @@ end
 
 Return the file descriptor backing the stream or file. Note that this function only applies
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+
+File descriptors should typically be represented as [`RawFD`](@ref) objects, rather than
+as `Int`s, to ensure that they are properly interpreted.
 """
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
