@@ -1194,11 +1194,8 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
 end
 
 function _validate_fix_param(N)
-    if N isa Int
-        N < 1 && throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
-    elseif !(N isa Symbol)
-        throw(ArgumentError("Expected type parameter in `Fix` to be `Int64` or `Symbol`, but got type=$(typeof(N))"))
-    end
+    N isa Int && N < 1 && throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
+    !(N isa Union{Int,Symbol}) && throw(ArgumentError("Expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=$(typeof(N))"))
 end
 
 """
