@@ -1183,11 +1183,9 @@ end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     @inline
-    if N isa Int && M < N-1
-        throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
-    elseif N isa Symbol && N in keys(kws)
-        throw(ArgumentError("found duplicate keyword argument passed to `Fix{N}`"))
-    end
+    N isa Symbol && N in keys(kws) && throw(ArgumentError("found duplicate keyword argument passed to `Fix{N}`"))
+    N isa Int && M < N-1 && throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
+
     if N isa Symbol
         f_kws = NamedTuple{(N,)}((f.x,))
         return f.f(args...; f_kws..., kws...)
