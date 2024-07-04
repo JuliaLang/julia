@@ -144,12 +144,10 @@ typedef struct {
     // variables for tracking big objects
     struct _bigval_t *big_objects;
 
-    // variables for tracking "remembered set"
-    arraylist_t _remset[2]; // contains jl_value_t*
     // lower bound of the number of pointers inside remembered values
     int remset_nptr;
-    arraylist_t *remset;
-    arraylist_t *last_remset;
+    // remembered set
+    arraylist_t remset;
 
     // variables for allocating objects from pools
 #define JL_GC_N_MAX_POOLS 51 // conservative. must be kept in sync with `src/julia_internal.h`
