@@ -1171,12 +1171,12 @@ struct Fix{N,F,T} <: Function
     f::F
     x::T
 
-    function Fix{N}(f::Union{F,Type{F}}, x) where {N,F}
+    function Fix{N}(f::F, x) where {N,F}
         _validate_fix_param(Val(N))
         new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
 end
-function Fix(f::Union{F,Type{F}}; kws...) where {F}
+function Fix(f::F; kws...) where {F}
     length(kws) != 1 && throw(ArgumentError("`Fix` expects exactly one argument or keyword argument"))
     Fix{only(keys(kws))}(f, only(values(kws)))
 end
