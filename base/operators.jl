@@ -1163,9 +1163,10 @@ similarly to `x -> g(x; a=2)` for a function `g` with one argument and one keywo
 You can also write this as `Fix{:a}(g, 2)`.
 
 !!! note
-    Nesting multiple `Fix`es is discouraged as it is ambiguous and sometimes
-    counterintuitive. For example, `Fix{1}(Fix{2}(f, 4), 4)` fixes the first and second arg,
-    while `Fix{2}(Fix{1}(f, 4), 4)` fixes the first and third arg.
+    When nesting multiple `Fix`, note that the `N` in `Fix{N}` is _relative_ to the current
+    available arguments, rather than an absolute ordering on the target function. For example,
+    `Fix{1}(Fix{2}(f, 4), 4)` fixes the first and second arg, while `Fix{2}(Fix{1}(f, 4), 4)`
+    fixes the first and third arg.
 """
 struct Fix{N,F,T} <: Function
     f::F
