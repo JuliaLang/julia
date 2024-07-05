@@ -1150,8 +1150,8 @@ julia> filter(!isletter, str)
 
 """
     Fix{n}(f, x)
-    Fix{kw}(f, x)
-    Fix(f; [kw=]x)
+    Fix{:kw}(f, x)
+    Fix(f; kw=x)
 
 A type representing a partially-applied version of a function `f`, with the argument
 "x" fixed at argument `n::Int` or keyword `kw::Symbol`.
