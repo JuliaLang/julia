@@ -1,7 +1,7 @@
 cmd = Base.julia_cmd()
 cmd = `$cmd --startup-file=no --history-file=no`
 output_type = nothing  # exe, sharedlib, sysimage
-static_call_graph = nothing
+trim = nothing
 outname = nothing
 file = nothing
 add_ccallables = false
@@ -11,7 +11,7 @@ if help !== nothing
     println(
         """
         Usage: julia juliac.jl [--output-exe | --output-lib | --output-sysimage] <name> [options] <file.jl>
-        --static-call-graph=<no,safe,unsafe,unsafe-warn>  Only output code statically determined to be reachable
+        --trim=<no,safe,unsafe,unsafe-warn>  Only output code statically determined to be reachable
         --compile-ccallable  Include all methods marked `@ccallable` in output
         --verbose            Request verbose output
         """)
@@ -27,12 +27,12 @@ let i = 1
             i == length(ARGS) && error("Output specifier requires an argument")
             global outname = ARGS[i+1]
             i += 1
-        elseif startswith(arg, "--static-call-graph")
+        elseif startswith(arg, "--trim")
             arg = split(arg, '=')
             if length(arg) == 1
-                global static_call_graph = "safe"
+                global trim = "safe"
             else
-                global static_call_graph = arg[2]
+                global trim = arg[2]
             end
         elseif arg == "--compile-ccallable"
             global add_ccallables = true
@@ -60,7 +60,7 @@ init_path = joinpath(tmpdir, "init.a")
 img_path = joinpath(tmpdir, "img.a")
 bc_path = joinpath(tmpdir, "img-bc.a")
 
-static_call_graph_arg() = isnothing(static_call_graph) ?  `` : `--static-call-graph=$(static_call_graph)`
+static_call_graph_arg() = isnothing(trim) ?  `` : `--static-call-graph=$(trim)`
 is_verbose() = verbose ? `--verbose-compilation=yes` : ``
 cmd = addenv(`$cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(static_call_graph_arg()) $(joinpath(@__DIR__,"buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
 
