@@ -381,8 +381,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     params.debug_level = cgparams->debug_info_level;
     params.external_linkage = _external_linkage;
     arraylist_new(&new_invokes, 0);
-    size_t compile_for[] = { jl_typeinf_world, _world }; // TODO: juliac doesn't need the typeinf world
-    for (int worlds = 0; worlds < 2; worlds++) {
+    size_t compile_for[] = { jl_typeinf_world, _world };
+    int worlds = 0;
+    if (jl_options.static_call_graph != JL_STATIC_CALL_GRAPH_NO)
+        worlds = 1;
+    for (; worlds < 2; worlds++) {
         JL_TIMING(NATIVE_AOT, NATIVE_Codegen);
         size_t this_world = compile_for[worlds];
         if (!this_world)
