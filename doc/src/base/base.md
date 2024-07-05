@@ -102,6 +102,10 @@ where
 ;
 =
 ?:
+.=
+.
+->
+::
 ```
 
 ## Standard Modules
