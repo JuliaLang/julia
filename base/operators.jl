@@ -1196,6 +1196,10 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     end
 end
 
+# Special cases for improved constant propagation
+(f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
+(f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
+
 """
 Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
 """
