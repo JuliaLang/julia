@@ -922,7 +922,7 @@ const _kind_names =
 
 """
     K"name"
-    Kind(namestr)
+    Kind(id)
 
 `Kind` is a type tag for specifying the type of tokens and interior nodes of
 a syntax tree. Abstractly, this tag is used to define our own *sum types* for
@@ -997,6 +997,18 @@ end
 
 function Base.show(io::IO, k::Kind)
     print(io, "K\"$(convert(String, k))\"")
+end
+
+# Save the string representation rather than the bit pattern so that kinds
+# can be serialized and deserialized across different JuliaSyntax versions.
+function Base.write(io::IO, k::Kind)
+    str = convert(String, k)
+    write(io, UInt8(length(str))) + write(io, str)
+end
+function Base.read(io::IO, ::Type{Kind})
+    len = read(io, UInt8)
+    str = String(read(io, len))
+    convert(Kind, str)
 end
 
 #-------------------------------------------------------------------------------

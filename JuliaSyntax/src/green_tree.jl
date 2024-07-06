@@ -38,6 +38,7 @@ head(node::GreenNode)        = node.head
 
 Base.summary(node::GreenNode) = summary(node.head)
 
+Base.hash(node::GreenNode, h::UInt) = hash((node.head, node.span, node.args), h)
 function Base.:(==)(n1::GreenNode, n2::GreenNode)
     n1.head == n2.head && n1.span == n2.span && n1.args == n2.args
 end

@@ -17,6 +17,12 @@ mutable struct TreeNode{NodeData}   # ? prevent others from using this with Node
     end
 end
 
+# Exclude parent from hash and equality checks. This means that subtrees can compare equal.
+Base.hash(node::TreeNode, h::UInt) = hash((node.children, node.data), h)
+function Base.:(==)(a::TreeNode{T}, b::TreeNode{T}) where T
+    a.children == b.children && a.data == b.data
+end
+
 # Implement "pass-through" semantics for field access: access fields of `data`
 # as if they were part of `TreeNode`
 function Base.getproperty(node::TreeNode, name::Symbol)
@@ -42,6 +48,11 @@ struct SyntaxData <: AbstractSyntaxData
     raw::GreenNode{SyntaxHead}
     position::Int
     val::Any
+end
+
+Base.hash(data::SyntaxData, h::UInt) = hash((data.source, data.raw, data.position, data.val), h)
+function Base.:(==)(a::SyntaxData, b::SyntaxData)
+    a.source == b.source && a.raw == b.raw && a.position == b.position && a.val == b.val
 end
 
 """

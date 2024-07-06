@@ -37,3 +37,4 @@ if VERSION >= v"1.6"
     include("parse_packages.jl")
 end
 
+include("serialization.jl")
