@@ -39,6 +39,7 @@ jobs:
           # - 1.0
           # - 1.6
           # - 1
+          # - pre
           # - nightly
           # but remove some configurations from the build matrix to reduce CI time.
           # See https://github.com/marketplace/actions/setup-julia-environment
@@ -49,6 +50,7 @@ jobs:
           - {os: 'macOS-latest', version: '1.5'}
           - {os: 'macOS-latest', version: '1.7'}
           - {os: 'macOS-latest', version: '1.8'}
+          - {os: 'macOS-latest', version: '1.9'}
           # MacOS not available on x86
           - {os: 'macOS-latest', arch: 'x86'}
           - {os: 'windows-latest', version: '1.1'}
@@ -58,6 +60,7 @@ jobs:
           - {os: 'windows-latest', version: '1.5'}
           - {os: 'windows-latest', version: '1.7'}
           - {os: 'windows-latest', version: '1.8'}
+          - {os: 'windows-latest', version: '1.9'}
           - {os: 'ubuntu-latest', version: '1.1', arch: 'x86'}
           - {os: 'ubuntu-latest', version: '1.2', arch: 'x86'}
           - {os: 'ubuntu-latest', version: '1.3', arch: 'x86'}
@@ -65,6 +68,7 @@ jobs:
           - {os: 'ubuntu-latest', version: '1.5', arch: 'x86'}
           - {os: 'ubuntu-latest', version: '1.7', arch: 'x86'}
           - {os: 'ubuntu-latest', version: '1.8', arch: 'x86'}
+          - {os: 'ubuntu-latest', version: '1.9', arch: 'x86'}
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v2
