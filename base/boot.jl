@@ -448,8 +448,7 @@ end
 mutable struct WeakRef
     value
     WeakRef() = WeakRef(nothing)
-    WeakRef(@nospecialize(v)) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
-                                      (Ptr{Cvoid}, Any), getptls(), v)
+    WeakRef(@nospecialize(v)) = ccall(:jl_gc_new_weakref, Ref{WeakRef}, (Any, ), v)
 end
 
 Tuple{}() = ()

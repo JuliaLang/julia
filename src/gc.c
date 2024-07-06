@@ -903,16 +903,6 @@ STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
 
 // weak references
 
-JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
-                                                jl_value_t *value)
-{
-    jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*),
-                                                  jl_weakref_type);
-    wr->value = value;  // NOTE: wb not needed here
-    small_arraylist_push(&ptls->heap.weak_refs, wr);
-    return wr;
-}
-
 static void clear_weak_refs(void)
 {
     assert(gc_n_threads);
@@ -4314,7 +4304,10 @@ JL_DLLEXPORT void jl_finalize(jl_value_t *o)
 JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    return jl_gc_new_weakref_th(ptls, value);
+    jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*), jl_weakref_type);
+    wr->value = value;  // NOTE: wb not needed here
+    small_arraylist_push(&ptls->heap.weak_refs, wr);
+    return wr;
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
