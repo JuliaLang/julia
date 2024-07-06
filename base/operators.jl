@@ -1156,7 +1156,7 @@ julia> filter(!isletter, str)
 A type representing a partially-applied version of a function `f`, with the argument
 "x" fixed at argument `n::Int` or keyword `kw::Symbol`.
 In other words, `Fix{3}(f, x)` behaves similarly to
-`(y1, y2, y3) -> f(y1, y2, x, y3)` for the 4-argument function `f`.
+`(y1, y2, y3...) -> f(y1, y2, x, y3...)`.
 
 You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behaves
 similarly to `x -> g(x; a=2)` for a function `g` with one argument and one keyword argument.
@@ -1174,25 +1174,25 @@ struct Fix{N,F,T} <: Function
 
     function Fix{N}(f::F, x) where {N,F}
         if N isa Int && N < 1
-            throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0"))
+            throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, got $N"))
         elseif !(N isa Union{Int,Symbol})
-            throw(ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=$(typeof(N))"))
+            throw(ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got $N::$(typeof(N))"))
         end
         new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
 end
 function Fix(f::F; kws...) where {F}
-    length(kws) != 1 && throw(ArgumentError("`Fix` expects exactly one argument or keyword argument"))
+    length(kws) != 1 && throw(ArgumentError("`Fix` expects exactly one argument or keyword argument, got keywords $(keys(kws))"))
     Fix{only(keys(kws))}(f, only(values(kws)))
 end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     if N isa Symbol
-        N in keys(kws) && throw(ArgumentError("found duplicate keyword argument passed to `Fix`"))
+        N in keys(kws) && throw(ArgumentError("found duplicate keyword argument $N passed to a `Fix` function"))
         f_kws = NamedTuple{(N,)}((f.x,))
         return f.f(args...; f_kws..., kws...)
     else # Int
-        M < N-1 && throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`"))
+        M < N-1 && throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`, got $M"))
         return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
     end
 end
