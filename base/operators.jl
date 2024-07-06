@@ -1174,7 +1174,7 @@ struct Fix{N,F,T} <: Function
 
     function Fix{N}(f::F, x) where {N,F}
         if N isa Int && N < 1
-            throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, got $N"))
+            throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, but got $N"))
         elseif !(N isa Union{Int,Symbol})
             throw(ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got `$N::$(typeof(N))`"))
         end

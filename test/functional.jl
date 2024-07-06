@@ -353,7 +353,7 @@ end
             @test f() == 'a'
         end
         @testset "Dummy-proofing" begin
-            @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, got 0") Fix{0}(>, 1)
+            @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, but got 0") Fix{0}(>, 1)
             @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got `0.5::Float64`") Fix{0.5}(>, 1)
             @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got `1::UInt64`") Fix{UInt64(1)}(>, 1)
 
