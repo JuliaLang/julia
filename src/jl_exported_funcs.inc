@@ -163,7 +163,6 @@
     XX(jl_gc_pool_live_bytes) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
-    XX(jl_gc_managed_realloc) \
     XX(jl_gc_mark_queue_obj) \
     XX(jl_gc_mark_queue_objarray) \
     XX(jl_gc_max_internal_obj_size) \
