@@ -346,6 +346,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                         # undefined GlobalRef as assignment RHS is OK
                         continue
                     end
+                elseif stmt.head === :isdefined
+                    if length(stmt.args) > 2 || (length(stmt.args) == 2 && !isa(stmt.args[2], Bool))
+                        @verify_error "malformed isdefined"
+                        error("")
+                    end
+                    if stmt.args[1] isa GlobalRef
+                        # undefined GlobalRef is OK in isdefined
+                        continue
+                    end
                 elseif stmt.head === :gc_preserve_end
                     # We allow gc_preserve_end tokens to span across try/catch
                     # blocks, which isn't allowed for regular SSA values, so
