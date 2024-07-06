@@ -327,8 +327,16 @@ function (*)(D::Diagonal, V::AbstractVector)
     return D.diag .* V
 end
 
-rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
-lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
+function rmul!(A::AbstractMatrix, D::Diagonal)
+    _muldiag_size_check(A, D)
+    A .*= permutedims(D.diag)
+    return A
+end
+function lmul!(D::Diagonal, B::AbstractVecOrMat)
+    _muldiag_size_check(D, B)
+    B .= D.diag .* B
+    return B
+end
 
 function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
     require_one_based_indexing(out, B)
