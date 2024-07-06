@@ -933,4 +933,15 @@ end
     @test B[1,2] == B[Int8(1),UInt16(2)] == B[big(1), Int16(2)]
 end
 
+@testset "rmul!/lmul! with banded matrices" begin
+    A = Bidiagonal(rand(4), rand(3), :U)
+    @testset "$(nameof(typeof(B)))" for B in (
+                            Bidiagonal(rand(4), rand(3), :L),
+                            Diagonal(rand(4))
+                    )
+        @test_throws ArgumentError rmul!(B, A)
+        @test_throws ArgumentError lmul!(A, B)
+    end
+end
+
 end # module TestBidiagonal
