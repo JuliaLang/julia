@@ -3999,6 +3999,14 @@ end
 end
 @test f13432b(true) == true
 @test f13432b(false) == false
+@noinline function f13432c(x)
+    offset = x ? Base.Bottom : 1
+    # Barrier for inference, so the optimizer cannot optimize this,
+    # but codegen can still see this is a constant
+    return ===(offset, Base.inferencebarrier(Base.Bottom))
+end
+@test f13432c(true) == true
+@test f13432c(false) == false
 
 #13433, read!(::IO, a::Vector{UInt8}) should return a
 mutable struct IO13433 <: IO end

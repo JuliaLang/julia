@@ -956,7 +956,7 @@ static const auto jlboundp_func = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(getInt32Ty(C),
-                {T_pjlvalue, T_pjlvalue}, false);
+                {T_pjlvalue, T_pjlvalue, getInt32Ty(C)}, false);
     },
     nullptr,
 };
@@ -5545,7 +5545,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
     return mark_julia_type(ctx, sp, true, jl_any_type);
 }
 
-static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
+static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_import)
 {
     Value *isnull = NULL;
     if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
@@ -5604,8 +5604,8 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
             modu = ctx.module;
             name = (jl_sym_t*)sym;
         }
-        jl_binding_t *bnd = jl_get_binding(modu, name);
-        if (bnd) {
+        jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
+        if (bnd && jl_atomic_load_relaxed(&bnd->owner) == bnd) {
             if (jl_atomic_load_acquire(&bnd->value) != NULL && bnd->constp)
                 return mark_julia_const(ctx, jl_true);
             Value *bp = julia_binding_gv(ctx, bnd);
@@ -5619,7 +5619,8 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
         else {
             Value *v = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
                     literal_pointer_val(ctx, (jl_value_t*)modu),
-                    literal_pointer_val(ctx, (jl_value_t*)name)
+                    literal_pointer_val(ctx, (jl_value_t*)name),
+                    ConstantInt::get(getInt32Ty(ctx.builder.getContext()), allow_import)
                 });
             isnull = ctx.builder.CreateICmpNE(v, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
         }
@@ -6304,8 +6305,13 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
     if (head == jl_isdefined_sym) {
-        assert(nargs == 1);
-        return emit_isdefined(ctx, args[0]);
+        assert(nargs == 1 || nargs == 2);
+        int allow_import = 1;
+        if (nargs == 2) {
+            assert(jl_is_bool(args[1]));
+            allow_import = args[1] == jl_true;
+        }
+        return emit_isdefined(ctx, args[0], allow_import);
     }
     else if (head == jl_throw_undef_if_not_sym) {
         assert(nargs == 2);
