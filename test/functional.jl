@@ -308,7 +308,7 @@ end
 
                 # One over
                 fixed_g3 = Fix{3}(g, 100)
-                @test_throws ArgumentError("expected at least 2 arguments to a `Fix` function with `N=3`, got 1") fixed_g3(1)
+                @test_throws ArgumentError("expected at least 2 arguments to a `Fix` function with `N=3`, but got 1") fixed_g3(1)
             end
         end
         @testset "Type Stability and Inference" begin
