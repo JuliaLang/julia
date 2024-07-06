@@ -308,7 +308,7 @@ end
 
                 # One over
                 fixed_g3 = Fix{3}(g, 100)
-                @test_throws ArgumentError("expected at least 2 arguments to a `Fix` function with `N=3`") fixed_g3(1)
+                @test_throws ArgumentError("expected at least 2 arguments to a `Fix` function with `N=3`, got 1") fixed_g3(1)
             end
         end
         @testset "Type Stability and Inference" begin
@@ -348,16 +348,20 @@ end
             x = ones(3, 2)
             sum1(x) == [3.0 3.0]
         end
+        @testset "Zero arguments" begin
+            f = Fix{1}(x -> x, 'a')
+            @test f() == 'a'
+        end
         @testset "Dummy-proofing" begin
-            @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0") Fix{0}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=Float64") Fix{0.5}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got type=UInt64") Fix{UInt64(1)}(>, 1)
+            @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, got 0") Fix{0}(>, 1)
+            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got `0.5::Float64`") Fix{0.5}(>, 1)
+            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got `1::UInt64`") Fix{UInt64(1)}(>, 1)
 
             # duplicate keywords
             sum1 = Fix(sum; dims=1)
             x = ones(3, 2)
             @test sum1(x) == [3.0 3.0]
-            @test_throws ArgumentError("found duplicate keyword argument passed to `Fix`") sum1(x; dims=2)
+            @test_throws ArgumentError("found duplicate keyword argument `dims` passed to a `Fix` function") sum1(x; dims=2)
         end
     end
 end

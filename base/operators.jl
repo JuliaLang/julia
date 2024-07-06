@@ -1176,7 +1176,7 @@ struct Fix{N,F,T} <: Function
         if N isa Int && N < 1
             throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, got $N"))
         elseif !(N isa Union{Int,Symbol})
-            throw(ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got $N::$(typeof(N))"))
+            throw(ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got `$N::$(typeof(N))`"))
         end
         new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
@@ -1188,7 +1188,7 @@ end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     if N isa Symbol
-        N in keys(kws) && throw(ArgumentError("found duplicate keyword argument $N passed to a `Fix` function"))
+        N in keys(kws) && throw(ArgumentError("found duplicate keyword argument `$N` passed to a `Fix` function"))
         f_kws = NamedTuple{(N,)}((f.x,))
         return f.f(args...; f_kws..., kws...)
     else # Int
