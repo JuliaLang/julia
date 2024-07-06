@@ -362,6 +362,9 @@ end
             x = ones(3, 2)
             @test sum1(x) == [3.0 3.0]
             @test_throws ArgumentError("found duplicate keyword argument `dims` passed to a `Fix` function") sum1(x; dims=2)
+
+            # Trying to fix multiple keywords
+            @test_throws ArgumentError("`Fix` expects exactly one argument or keyword argument, but got keywords `(:kw1, :kw2)`") Fix((args...; kwargs...) -> 1; kw1=1, kw2=2)
         end
     end
 end

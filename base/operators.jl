@@ -1182,7 +1182,7 @@ struct Fix{N,F,T} <: Function
     end
 end
 function Fix(f::F; kws...) where {F}
-    length(kws) != 1 && throw(ArgumentError("`Fix` expects exactly one argument or keyword argument, but got keywords $(keys(kws))"))
+    length(kws) != 1 && throw(ArgumentError("`Fix` expects exactly one argument or keyword argument, but got keywords `$(keys(kws))`"))
     Fix{only(keys(kws))}(f, only(values(kws)))
 end
 
@@ -1192,7 +1192,7 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
         f_kws = NamedTuple{(N,)}((f.x,))
         return f.f(args...; f_kws..., kws...)
     else # Int
-        M < N-1 && throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`, bug got $M"))
+        M < N-1 && throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`, but got $M"))
         return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
     end
 end
