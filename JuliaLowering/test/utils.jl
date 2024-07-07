@@ -1,10 +1,16 @@
 using Test
 
+using JuliaLowering
+using JuliaSyntax
+
+using JuliaSyntax: sourcetext
+
 using JuliaLowering:
     SyntaxGraph, newnode!, ensure_attributes!,
     Kind, SourceRef, SyntaxTree, NodeId,
     makenode, makeleaf, setattr!, sethead!,
-    haschildren, numchildren, children
+    haschildren, numchildren, children,
+    @ast, flattened_provenance, showprov
 
 function _ast_test_graph()
     graph = SyntaxGraph()

@@ -75,10 +75,14 @@ struct MacroExpansionError
     context::Union{Nothing,MacroContext}
     ex::SyntaxTree
     msg::String
+    position::Symbol
 end
 
-function MacroExpansionError(ex::SyntaxTree, msg::AbstractString)
-    MacroExpansionError(nothing, ex, msg)
+"""
+`position` - the source position relative to the node - may be `:begin` or `:end` or `:all`
+"""
+function MacroExpansionError(ex::SyntaxTree, msg::AbstractString; position=:all)
+    MacroExpansionError(nothing, ex, msg, position)
 end
 
 function Base.showerror(io::IO, exc::MacroExpansionError)
@@ -89,9 +93,21 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
               " in module ", ctx.scope_layer.mod)
     end
     print(io, ":\n")
-    # FIXME:
+    # TODO: Display niceties:
+    # * Show the full provenance tree somehow, in addition to the primary
+    #   source location we're showing here?
+    # * What if the expression doesn't arise from a source file?
+    # * How to deal with highlighting trivia? Could provide a token kind or
+    #   child position within the raw tree? How to abstract this??
     src = sourceref(exc.ex)
-    highlight(io, src.file, first_byte(src):last_byte(src), note=exc.msg)
+    fb = first_byte(src)
+    lb = last_byte(src)
+    pos = exc.position
+    byterange = pos == :all     ? (fb:lb)   :
+                pos == :begin   ? (fb:fb-1) :
+                pos == :end     ? (lb+1:lb) :
+                error("Unknown position $pos")
+    highlight(io, src.file, byterange, note=exc.msg)
 end
 
 function set_scope_layer(ctx, ex, layer_id, force)
@@ -206,7 +222,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # FIXME: Move this upstream into JuliaSyntax
         @ast ctx ex (k == K"true")::K"Bool"
     elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName" ||
-            (is_operator(k) && !haschildren(ex)) # <- TODO: fix upstream
+            (is_operator(k) && !haschildren(ex)) # <- TODO: fix upstream: make operator *tokens* into identifiers
         layerid = get(ex, :scope_layer, ctx.current_layer.id)
         makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)
     elseif k == K"var" || k == K"char" || k == K"parens"
@@ -215,7 +231,20 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         expand_forms_1(ctx, ex[1])
     elseif k == K"quote"
         @chk numchildren(ex) == 1
-        expand_forms_1(ctx, expand_quote(ctx, ex[1]))
+        # TODO: Upstream should set a general flag for detecting parenthesized
+        # expressions so we don't need to dig into `green_tree` here. Ugh!
+        plain_symbol = has_flags(ex, JuliaSyntax.COLON_QUOTE) && 
+                       kind(ex[1]) == K"Identifier" &&
+                       (sr = sourceref(ex); sr isa SourceRef && kind(sr.green_tree[2]) != K"parens")
+        if plain_symbol
+            # As a compromise for compatibility, we treat non-parenthesized
+            # colon quoted identifiers like `:x` as plain Symbol literals
+            # because these are ubiquitiously used in Julia programs as ad hoc
+            # enum-like entities rather than pieces of AST.
+            @ast ctx ex[1] ex[1]=>K"Symbol"
+        else
+            expand_forms_1(ctx, expand_quote(ctx, ex[1]))
+        end
     elseif k == K"macrocall"
         expand_macro(ctx, ex)
     elseif k == K"module" || k == K"toplevel" || k == K"inert"

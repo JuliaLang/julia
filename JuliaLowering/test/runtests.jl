@@ -1,10 +1,5 @@
 using Test
 
-using JuliaLowering
-using JuliaSyntax
-using JuliaSyntax: sourcetext
-using JuliaLowering: @ast, flattened_provenance, showprov
-
 include("utils.jl")
 
 @testset "JuliaLowering.jl" begin
@@ -211,7 +206,7 @@ end
 # interpolations at multiple depths
 ex = JuliaLowering.include_string(test_mod, """
 let
-    args = (:x,:y)
+    args = (:(x),:(y))
     quote
         x = 1
         y = 2
@@ -249,6 +244,9 @@ end
 ex2 = JuliaLowering.eval(test_mod, ex)
 @test sourcetext(ex2[1][2]) == "x"
 @test sourcetext(ex2[1][3]) == "y"
+
+@test JuliaLowering.include_string(test_mod, ":x") isa Symbol
+@test JuliaLowering.include_string(test_mod, ":(x)") isa SyntaxTree
 
 #-------------------------------------------------------------------------------
 # Macro expansion
