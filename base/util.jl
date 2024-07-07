@@ -70,9 +70,9 @@ Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
-function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...;
+function with_output_color(f::F, color::Union{Int, Symbol}, io::IO, args...;
         bold::Bool = false, italic::Bool = false, underline::Bool = false, blink::Bool = false,
-        reverse::Bool = false, hidden::Bool = false)
+        reverse::Bool = false, hidden::Bool = false) where {F<:Function}
     buf = IOBuffer()
     iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)

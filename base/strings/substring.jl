@@ -232,12 +232,43 @@ end
     return n
 end
 
-# nothrow needed here because for v in a can't prove the indexing is inbounds.
-@assume_effects :foldable :nothrow string(a::Union{Char, String, Symbol}...) = _string(a...)
+# TODO: Investigate why inlining fails here and does not perfectly forward this argument
+# # nothrow needed here because for v in a can't prove the indexing is inbounds.
+# @assume_effects :foldable :nothrow string(a::Union{Char, String, Symbol}...) = _string(a...)
 
-string(a::Union{Char, String, SubString{String}, Symbol}...) = _string(a...)
+# string(a::Union{Char, String, SubString{String}, Symbol}...) = _string(a...)
 
-function _string(a::Union{Char, String, SubString{String}, Symbol}...)
+
+@assume_effects :foldable :nothrow function string(a::Union{Char, String, Symbol}...)
+    n = 0
+    for v in a
+        # 4 types is too many for automatic Union-splitting, so we split manually
+        # and allow one specializable call site per concrete type
+        if v isa Char
+            n += ncodeunits(v)
+        elseif v isa String
+            n += sizeof(v)
+        elseif v isa SubString{String}
+            n += sizeof(v)
+        else
+            n += sizeof(v::Symbol)
+        end
+    end
+    out = _string_n(n)
+    offs = 1
+    for v in a
+        if v isa Char
+            offs += __unsafe_string!(out, v, offs)
+        elseif v isa String || v isa SubString{String}
+            offs += __unsafe_string!(out, v, offs)
+        else
+            offs += __unsafe_string!(out, v::Symbol, offs)
+        end
+    end
+    return out
+end
+
+function string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
         # 4 types is too many for automatic Union-splitting, so we split manually

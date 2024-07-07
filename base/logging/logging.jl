@@ -41,12 +41,38 @@ filtering.
 function handle_message end
 
 """
-    shouldlog(logger, level, _module, group, id)
+    shouldlog(logger, level, _module, group, id, maxlog)
 
 Return `true` when `logger` accepts a message at `level`, generated for
 `_module`, `group` and with unique log identifier `id`.
 """
 function shouldlog end
+
+# TODO: All of these functions also need an invoke boundary for normal usage...
+
+"""
+    make_normalization_context(logger, nkwargs::Int, maxlog::Union{Int,Nothing})
+
+Generate a "context" object, to be passed in as the second argument of
+`normalize_message` and `normalize_kwarg`.
+"""
+make_normalization_context(logger::AbstractLogger, nkwargs::Int) = nothing
+
+"""
+    normalize_message(logger, context, message)
+"""
+normalize_message(logger::AbstractLogger, context::Any, message::Any) = message
+
+"""
+    normalize_kwarg(logger, context, key, value)
+
+Convert the provided `value` into a String which will be passed to
+`handle_message` for printing.
+
+Applied to all kwargs seen by handle message, except `maxlog` which is not
+printed.
+"""
+normalize_kwarg(logger::AbstractLogger, context::Any, key::Symbol, value::Any) = value
 
 """
     min_enabled_level(logger)
@@ -74,15 +100,6 @@ catch_exceptions(logger) = true
 
 # Prevent invalidation when packages define custom loggers
 # Using invoke in combination with @nospecialize eliminates backedges to these methods
-Base.@constprop :none function _invoked_shouldlog(logger, level, _module, group, id)
-    @nospecialize
-    return invoke(
-        shouldlog,
-        Tuple{typeof(logger), typeof(level), typeof(_module), typeof(group), typeof(id)},
-        logger, level, _module, group, id
-    )::Bool
-end
-
 function _invoked_min_enabled_level(@nospecialize(logger))
     return invoke(min_enabled_level, Tuple{typeof(logger)}, logger)::LogLevel
 end
@@ -217,14 +234,14 @@ There are some keys which allow automatically generated log data to be
 overridden:
 
   * `_module=mod` can be used to specify a different originating module from
-    the source location of the message.
+    the source location of the message. May also be `nothing`.
   * `_group=symbol` can be used to override the message group (this is
     normally derived from the base name of the source file).
   * `_id=symbol` can be used to override the automatically generated unique
     message identifier.  This is useful if you need to very closely associate
     messages generated on different source lines.
   * `_file=string` and `_line=integer` can be used to override the apparent
-    source location of a log message.
+    source location of a log message. May also be `nothing`.
 
 There's also some key value pairs which have conventional meaning:
 
@@ -287,7 +304,7 @@ _log_record_ids = Set{Symbol}()
 # the source location in the originating module, but ideally should be stable
 # across versions of the originating module, provided the log generating
 # statement itself doesn't change.
-function log_record_id(_module, level, message, log_kws)
+function log_record_id(_module::Union{Module,Nothing}, level, message, log_kws)
     @nospecialize
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
     # Use an arbitrarily chosen eight hex digits here. TODO: Figure out how to
@@ -346,13 +363,23 @@ end
 function logmsg_code(_module, file, line, level, message, exs...)
     @nospecialize
     log_data = process_logmsg_exs(_module, file, line, level, message, exs...)
-    if !isa(message, Symbol) && issimple(message) && isempty(log_data.kwargs)
+    nkwargs = length(log_data.kwargs) - (log_data.maxlog !== nothing)
+    kwargs_setup = quote
+        local splat_ = $(log_data.kwargs_splat)
+        local nkwargs = $(nkwargs) + length(splat_)
+        local ctx = $make_normalization_context(logger, nkwargs)
+        normalize_kwarg_(key, value) = $normalize_kwarg(logger, ctx, key, value)
+        splat = $(log_data.kwargs_splat === () ? () : :(NamedTuple(k=>normalize_kwarg_(k,v) for (k,v) in $pairs(splat_))))
+    end
+    splat = log_data.kwargs_splat === () ? () : (:(splat...),)
+    if !isa(message, Symbol) && issimple(message) && isempty(log_data.kwargs) && log_data.kwargs_splat === ()
         logrecord = quote
-            msg = $(message)
+            $(kwargs_setup)
+            msg = $normalize_message(logger, ctx, $message)
             kwargs = (;)
             true
         end
-    elseif issimple(message) && all(issimplekw, log_data.kwargs)
+    elseif issimple(message) && all(issimplekw, log_data.kwargs) && log_data.kwargs_splat === ()
         # if message and kwargs are just values and variables, we can avoid try/catch
         # complexity by adding the code for testing the UndefVarError by hand
         checkerrors = nothing
@@ -368,8 +395,9 @@ function logmsg_code(_module, file, line, level, message, exs...)
         logrecord = quote
             let err = $checkerrors
                 if err === nothing
-                    msg = $(message)
-                    kwargs = (;$(log_data.kwargs...))
+                    $(kwargs_setup)
+                    msg = $normalize_message(logger, ctx, $message)
+                    kwargs = (;$(log_data.kwargs...), $(splat...))
                     true
                 else
                     @invokelatest logging_error(logger, level, _module, group, id, file, line, err, false)
@@ -380,8 +408,9 @@ function logmsg_code(_module, file, line, level, message, exs...)
     else
         logrecord = quote
             try
-                msg = $(esc(message))
-                kwargs = (;$(log_data.kwargs...))
+                $(kwargs_setup)
+                msg = $normalize_message(logger, ctx, $(esc(message)))
+                kwargs = (;$(log_data.kwargs...), $(splat...))
                 true
             catch err
                 @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
@@ -400,15 +429,16 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 logger = $(current_logger_for_env)(std_level, group, _module)
                 if !(logger === nothing)
                     id = $(log_data._id)
+                    maxlog = $(log_data.maxlog)
                     # Second chance at an early bail-out (before computing the message),
                     # based on arbitrary logger-specific logic.
-                    if invokelatest($shouldlog, logger, level, _module, group, id)
+                    if invokelatest($shouldlog, logger, level, _module, group, id, maxlog)
                         file = $(log_data._file)
                         if file isa String
                             file = Base.fixup_stdlib_path(file)
                         end
                         line = $(log_data._line)
-                        local msg, kwargs
+                        local msg, kwargs, splat
                         $(logrecord) && invokelatest($handle_message,
                             logger, level, msg, _module, group, id, file, line;
                             kwargs...)
@@ -425,32 +455,51 @@ function process_logmsg_exs(_orig_module, _file, _line, level, message, exs...)
     local _group, _id
     _module = _orig_module
     kwargs = Any[]
+    kwargs_splat = ()
+    maxlog = nothing
     for ex in exs
-        if ex isa Expr && ex.head === :(=)
-            k, v = ex.args
+        if ex isa Expr && ex.head === :... # Keyword splatting
+            kwargs_splat = esc(ex.args[1])
+        else
+            if ex isa Expr && ex.head === :(=) # Explicit keyword arguments
+                k, v = ex.args
+            else # Positional arguments - will be converted to key value pairs automatically.
+                k, v = (ex, ex)
+            end
+
             if !(k isa Symbol)
                 k = Symbol(k)
             end
 
             # Recognize several special keyword arguments
             if k === :_group
-                _group = esc(v)
+                _group = :(convert(Symbol, $(esc(v)))::Symbol)
             elseif k === :_id
-                _id = esc(v)
+                _id = :(convert(Symbol, $(esc(v)))::Symbol)
             elseif k === :_module
-                _module = esc(v)
+                _module = :($(esc(v))::Union{Module,Nothing})
             elseif k === :_file
-                _file = esc(v)
+                if v isa Nothing || v isa String
+                    _file = esc(v)
+                else
+                    _file = :((__file = $(esc(v)); __file isa Nothing ? __file : convert(String, __file)::String))
+                end
             elseif k === :_line
-                _line = esc(v)
+                if v isa UnitRange{Int} || v isa Int || v isa Nothing
+                    _line = esc(v)
+                elseif v isa Integer
+                    _line = :(convert(Int, $(esc(v)))::Int)
+                else
+                    _line = :((__line = $(esc(v)); (__line isa UnitRange{Int} || __line isa Nothing) ? __line : convert(Int, __line::Int)))
+                end
+            elseif k === :maxlog
+                maxlog = (v isa Nothing || v isa Int) ? esc(v) : :(convert(Int, $(esc(v))::Int))
+                # maxlog is also provided in kwargs for backwards-compatibility
+                push!(kwargs, Expr(:kw, k, esc(v)))
             else
                 # Copy across key value pairs for structured log records
-                push!(kwargs, Expr(:kw, k, esc(v)))
+                push!(kwargs, Expr(:kw, k, :(normalize_kwarg_($(Meta.quot(k)), $(esc(v))))))
             end
-        elseif ex isa Expr && ex.head === :... # Keyword splatting
-            push!(kwargs, esc(ex))
-        else # Positional arguments - will be converted to key value pairs automatically.
-            push!(kwargs, Expr(:kw, Symbol(ex), esc(ex)))
         end
     end
 
@@ -460,7 +509,7 @@ function process_logmsg_exs(_orig_module, _file, _line, level, message, exs...)
     if !@isdefined(_id)
         _id = Expr(:quote, log_record_id(_orig_module, level, message, exs))
     end
-    return (;_module, _group, _id, _file, _line, kwargs)
+    return (;_module, _group, _id, _file, _line, maxlog, kwargs, kwargs_splat)
 end
 
 function default_group_code(file)
@@ -475,21 +524,24 @@ end
 
 
 # Report an error in log message creation
-@noinline function logging_error(logger, level, _module, group, id,
-                                 filepath, line, @nospecialize(err), real::Bool)
+@noinline function logging_error(logger, level::LogLevel, _module::Union{Module,Nothing}, group::Symbol, id::Symbol,
+                                 filepath::Union{String,Nothing}, line::Union{UnitRange{Int},Int,Nothing}, @nospecialize(err), real::Bool)
     @nospecialize
     if !_invoked_catch_exceptions(logger)
         real ? rethrow(err) : throw(err)
     end
     msg = try
-              "Exception while generating log record in module $_module at $filepath:$line"
+              str = "Exception while generating log record in module "
+              str *= string(_module)
+              str *= " at "
+              str *= string(filepath)
+              str *= ":"
+              str *= string(line)
           catch ex
               LazyString("Exception handling log message: ", ex)
           end
     bt = real ? catch_backtrace() : backtrace()
-    handle_message(
-        logger, Error, msg, _module, :logevent_error, id, filepath, line;
-        exception=(err,bt))
+    handle_message(logger, Error, msg, _module, :logevent_error, id, filepath, line) # TODO: Find a way to support the exception object via TypedCallable?
     nothing
 end
 
@@ -520,6 +572,17 @@ function current_logstate()
 end
 
 with_logstate(f::Function, logstate) = @with(CURRENT_LOGSTATE => logstate, f())
+
+function shouldlog(logger::AbstractLogger, level::LogLevel, _module::Union{Module,Nothing}, group::Symbol, id::Symbol, maxlog::Union{Int,Nothing})
+    # Fallback for legacy AbstractLoggers that don't expect `maxlog` argument
+    return shouldlog(logger, level, _module, group, id)
+end
+
+# could put be into this:
+#
+# struct ExoticallyTyped
+    # contents::Any
+# end
 
 #-------------------------------------------------------------------------------
 # Control of the current logger and early log filtering
@@ -655,45 +718,49 @@ greater or equal to `Warn` will be logged to `stderr` and below to `stdout`.
 struct SimpleLogger <: AbstractLogger
     stream::IO
     min_level::LogLevel
-    message_limits::Dict{Any,Int}
+    message_limits::Dict{Symbol,Int}
 end
-SimpleLogger(stream::IO, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
+SimpleLogger(stream::IO, level=Info) = SimpleLogger(stream, level, Dict{Symbol,Int}())
 SimpleLogger(level=Info) = SimpleLogger(closed_stream, level)
 
-shouldlog(logger::SimpleLogger, level, _module, group, id) =
-    get(logger.message_limits, id, 1) > 0
+function shouldlog(logger::SimpleLogger, level::LogLevel, _module::Union{Module,Nothing}, group::Symbol, id::Symbol, maxlog::Union{Int,Nothing})
+    get(logger.message_limits, id, 1) <= 0 && return false
+    maxlog === nothing && return true
+    remaining = get!(logger.message_limits, id, maxlog)
+    logger.message_limits[id] = remaining - 1
+    return remaining > 0
+end
 
 min_enabled_level(logger::SimpleLogger) = logger.min_level
 
 catch_exceptions(logger::SimpleLogger) = false
 
-function handle_message(logger::SimpleLogger, level::LogLevel, message, _module, group, id,
-                        filepath, line; kwargs...)
+# TODO: These should become `make_serializer()` and `serialize_kwarg()`
+make_normalization_context(logger::SimpleLogger, nkwargs::Int) = nothing
+normalize_message(logger::SimpleLogger, ::Nothing, message::Any) = convert(String, string(message))::String
+normalize_kwarg(logger::SimpleLogger, ::Nothing, key::Symbol, value::Any) = convert(String, string(value))::String
+
+function handle_message(logger::SimpleLogger, level::LogLevel, message::String, _module::Union{Module,Nothing}, group::Symbol, id::Symbol,
+                        filepath::Union{String,Nothing}, line::Union{Int,UnitRange{Int},Nothing}; kwargs...)
     @nospecialize
-    maxlog = get(kwargs, :maxlog, nothing)
-    if maxlog isa Core.BuiltinInts
-        remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
-        logger.message_limits[id] = remaining - 1
-        remaining > 0 || return
-    end
     buf = IOBuffer()
-    stream::IO = logger.stream
-    if !(isopen(stream)::Bool)
-        stream = stderr
-    end
+    # stream::IO = logger.stream
+    # if !(isopen(stream)::Bool)
+        stream = Core.stderr
+    # end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
-    msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
-    msg1, rest = Iterators.peel(msglines)
+    msglines = eachsplit(chomp(message), '\n')
+    msg1, rest = Iterators.peel(msglines)::Tuple
     println(iob, "┌ ", levelstr, ": ", msg1)
     for msg in rest
         println(iob, "│ ", msg)
     end
     for (key, val) in kwargs
         key === :maxlog && continue
-        println(iob, "│   ", key, " = ", val)
+        println(iob, "│   ", string(key), " = ", val::String)
     end
-    println(iob, "└ @ ", _module, " ", filepath, ":", line)
+    println(iob, "└ @ ", string(_module), " ", filepath, ":", string(line))
     write(stream, take!(buf))
     nothing
 end
