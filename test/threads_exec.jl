@@ -1122,23 +1122,25 @@ end
 
 # issue #41546, thread-safe package loading
 @testset "package loading" begin
-    ch = Channel{Bool}(threadpoolsize())
+    ntasks = max(threadpoolsize(), 4)
+    ch = Channel{Bool}(ntasks)
     barrier = Base.Event()
     old_act_proj = Base.ACTIVE_PROJECT[]
     try
         pushfirst!(LOAD_PATH, "@")
         Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
         @sync begin
-            for _ in 1:threadpoolsize()
+            for _ in 1:ntasks
                 Threads.@spawn begin
                     put!(ch, true)
                     wait(barrier)
                     @eval using TestPkg
                 end
             end
-            for _ in 1:threadpoolsize()
+            for _ in 1:ntasks
                 take!(ch)
             end
+            close(ch)
             notify(barrier)
         end
         @test Base.root_module(@__MODULE__, :TestPkg) isa Module
