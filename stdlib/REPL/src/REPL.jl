@@ -408,7 +408,7 @@ function Base.unsafe_write(io::Base.IOContext{<:LimitIO}, p::Ptr{UInt8}, nb::UIn
     # We won't hit the limit so we'll write the full `nb` bytes, again passing along the `ioproperties`.
     bytes_written = Base.unsafe_write(IOContext(limiter.io, Base.ioproperties(io)), p, nb)
     limiter.n += bytes_written
-    return bytes_written
+    return bytes_written::Union{UInt, Int}
 end
 
 # wrap to hit optimized method
