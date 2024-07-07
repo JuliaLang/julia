@@ -8,11 +8,11 @@ begin
 end
 #-------------------------
 1   slot.₁/a
-2   (gotoifnot ssa.₁ label.₅)
+2   (gotoifnot %.₁ label.₅)
 3   slot.₂/b
-4   (return ssa.₃)
+4   (return %.₃)
 5   core.nothing
-6   (return ssa.₅)
+6   (return %.₅)
 
 ######################################
 # Branching, !tail && !value
@@ -25,10 +25,10 @@ begin
 end
 #-------------------------
 1   slot.₁/a
-2   (gotoifnot ssa.₁ label.₄)
+2   (gotoifnot %.₁ label.₄)
 3   slot.₂/b
 4   slot.₃/c
-5   (return ssa.₄)
+5   (return %.₄)
 
 ######################################
 # Branching with else
@@ -42,11 +42,11 @@ begin
 end
 #---------------------
 1   slot.₁/a
-2   (gotoifnot ssa.₁ label.₅)
+2   (gotoifnot %.₁ label.₅)
 3   slot.₂/b
-4   (return ssa.₃)
+4   (return %.₃)
 5   slot.₃/c
-6   (return ssa.₅)
+6   (return %.₅)
 
 ######################################
 # Branching with else, !tail && !value
@@ -61,12 +61,12 @@ begin
 end
 #---------------------
 1   slot.₁/a
-2   (gotoifnot ssa.₁ label.₅)
+2   (gotoifnot %.₁ label.₅)
 3   slot.₂/b
 4   (goto label.₆)
 5   slot.₃/c
 6   slot.₄/d
-7   (return ssa.₆)
+7   (return %.₆)
 
 ######################################
 # Blocks compile directly to branches
@@ -79,10 +79,10 @@ end
 #---------------------
 1   slot.₁/a
 2   slot.₂/b
-3   (gotoifnot ssa.₂ label.₈)
+3   (gotoifnot %.₂ label.₈)
 4   slot.₃/c
-5   (gotoifnot ssa.₄ label.₈)
+5   (gotoifnot %.₄ label.₈)
 6   slot.₄/d
-7   (return ssa.₆)
+7   (return %.₆)
 8   core.nothing
-9   (return ssa.₈)
+9   (return %.₈)
