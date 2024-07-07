@@ -28,24 +28,28 @@ struct ConsoleLogger <: AbstractLogger
     meta_formatter
     show_limited::Bool
     right_justify::Int
-    message_limits::Dict{Any,Int}
+    message_limits::Dict{Symbol,Int}
 end
 function ConsoleLogger(stream::IO, min_level=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
     ConsoleLogger(stream, min_level, meta_formatter,
-                  show_limited, right_justify, Dict{Any,Int}())
+                  show_limited, right_justify, Dict{Symbol,Int}())
 end
 function ConsoleLogger(min_level=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
     ConsoleLogger(closed_stream, min_level, meta_formatter,
-                  show_limited, right_justify, Dict{Any,Int}())
+                  show_limited, right_justify, Dict{Symbol,Int}())
 end
 
-
-shouldlog(logger::ConsoleLogger, level, _module, group, id) =
-    get(logger.message_limits, id, 1) > 0
+function shouldlog(logger::ConsoleLogger, level::LogLevel, _module::Union{Module,Nothing}, group::Symbol, id::Symbol, maxlog::Union{Int,Nothing})
+    get(logger.message_limits, id, 1) <= 0 && return false
+    maxlog === nothing && return true
+    remaining = get!(logger.message_limits, id, maxlog)
+    logger.message_limits[id] = remaining - 1
+    return remaining > 0
+end
 
 min_enabled_level(logger::ConsoleLogger) = logger.min_level
 
@@ -64,7 +68,7 @@ function default_logcolor(level::LogLevel)
                     Base.error_color()
 end
 
-function default_metafmt(level::LogLevel, _module, group, id, file, line)
+function default_metafmt(level::LogLevel, _module::Union{Module,Nothing}, group::Symbol, id::Symbol, file::Union{String,Nothing}, line::Union{UnitRange{Int},Int,Nothing})
     @nospecialize
     color = default_logcolor(level)
     prefix = string(level == Warn ? "Warning" : string(level), ':')
@@ -75,7 +79,7 @@ function default_metafmt(level::LogLevel, _module, group, id, file, line)
         _module !== nothing && (suffix *= " ")
         suffix *= contractuser(file)::String
         if line !== nothing
-            suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
+            suffix *= ":$(isa(line, UnitRange{Int}) ? "$(first(line))-$(last(line))" : line)"
         end
     end
     !isempty(suffix) && (suffix = "@ " * suffix)
@@ -103,45 +107,54 @@ function termlength(str)
     return N
 end
 
-function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module, group, id,
-                        filepath, line; kwargs...)
-    @nospecialize
-    hasmaxlog = haskey(kwargs, :maxlog) ? 1 : 0
-    maxlog = get(kwargs, :maxlog, nothing)
-    if maxlog isa Core.BuiltinInts
-        remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
-        logger.message_limits[id] = remaining - 1
-        remaining > 0 || return
-    end
+termlength(str::Base.AnnotatedString) = textwidth(str)
 
+function make_normalization_context(logger::ConsoleLogger, nkwargs::Int)
+    stream = logger.stream
+    dsize = displaysize(stream)::Tuple{Int,Int}
+    valbuf = IOBuffer()
+    rows_per_value = max(1, dsize[1] ÷ (nkwargs + 1))
+    valio = IOContext(IOContext(valbuf, stream),
+                      :displaysize => (rows_per_value, dsize[2] - 5),
+                      :limit => logger.show_limited)
+    return (valbuf, valio)
+end
+
+function normalize_message(logger::ConsoleLogger, (valbuf, valio)::Tuple{IOBuffer, IOContext}, message_::Any)
+    message = string(message_)
+    if Base._isannotated(message) && !isempty(Base.annotations(message))
+        return Base.AnnotatedString(String(message), Base.annotations(message))::Base.AnnotatedString{String}
+    else
+        return String(message)::String
+    end
+end
+
+function normalize_kwarg(logger::ConsoleLogger, (valbuf, valio)::Tuple{IOBuffer, IOContext}, key::Symbol, value::Any)
+    showvalue(valio, value)
+    return String(take!(valbuf))::String
+end
+
+function handle_message(logger::ConsoleLogger, level::LogLevel, message::Union{String,Base.AnnotatedString{String}}, _module::Union{Module,Nothing},
+                        group::Symbol, id::Symbol, filepath::Union{String,Nothing}, line::Union{UnitRange{Int},Int,Nothing}; kwargs...)
+    @nospecialize
     # Generate a text representation of the message and all key value pairs,
     # split into lines.  This is specialised to improve type inference,
     # and reduce the risk of resulting method invalidations.
-    message = string(message)
-    msglines = if Base._isannotated(message) && !isempty(Base.annotations(message))
-        message = Base.AnnotatedString(String(message), Base.annotations(message))
-        @NamedTuple{indent::Int, msg::Union{SubString{Base.AnnotatedString{String}}, SubString{String}}}[
-            (indent=0, msg=l) for l in split(chomp(message), '\n')]
-    else
-        [(indent=0, msg=l) for l in split(
-             chomp(convert(String, message)::String), '\n')]
-    end
-    stream::IO = logger.stream
-    if !(isopen(stream)::Bool)
-        stream = stderr
-    end
-    dsize = displaysize(stream)::Tuple{Int,Int}
+    MaybeAnnotatedSubString = Union{SubString{Base.AnnotatedString{String}}, SubString{String}}
+    msglines = @NamedTuple{indent::Int, msg::MaybeAnnotatedSubString}[
+        @NamedTuple{indent::Int, msg::MaybeAnnotatedSubString}((0,l)) for l in split(chomp(message), '\n')
+    ]
+    # stream::IO = logger.stream
+    # if !(isopen(stream)::Bool)
+        # stream = stderr
+    # end
+    stream = Core.stderr
     nkwargs = length(kwargs)::Int
-    if nkwargs > hasmaxlog
+    if nkwargs > 0
         valbuf = IOBuffer()
-        rows_per_value = max(1, dsize[1] ÷ (nkwargs + 1 - hasmaxlog))
-        valio = IOContext(IOContext(valbuf, stream),
-                          :displaysize => (rows_per_value, dsize[2] - 5),
-                          :limit => logger.show_limited)
         for (key, val) in kwargs
             key === :maxlog && continue
-            showvalue(valio, val)
-            vallines = split(String(take!(valbuf)), '\n')
+            vallines = split(val::String, '\n')
             if length(vallines) == 1
                 push!(msglines, (indent=2, msg=SubString("$key = $(vallines[1])")))
             else
@@ -153,13 +166,15 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
 
     # Format lines as text with appropriate indentation and with a box
     # decoration on the left.
-    color, prefix, suffix = logger.meta_formatter(level, _module, group, id, filepath, line)::Tuple{Union{Symbol,Int},String,String}
+    # color, prefix, suffix = logger.meta_formatter(level, _module, group, id, filepath, line)::Tuple{Union{Symbol,Int},String,String}
+    color, prefix, suffix = default_metafmt(level, _module, group, id, filepath, line)::Tuple{Union{Symbol,Int},String,String}
     minsuffixpad = 2
     buf = IOBuffer()
     iob = IOContext(buf, stream)
     nonpadwidth = 2 + (isempty(prefix) || length(msglines) > 1 ? 0 : length(prefix)+1) +
                   msglines[end].indent + termlength(msglines[end].msg) +
                   (isempty(suffix) ? 0 : length(suffix)+minsuffixpad)
+    dsize = displaysize(stream)::Tuple{Int,Int}
     justify_width = min(logger.right_justify, dsize[2])
     if nonpadwidth > justify_width && !isempty(suffix)
         push!(msglines, (indent=0, msg=SubString("")))
@@ -173,7 +188,8 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
                                          "└ "
         printstyled(iob, boxstr, bold=true, color=color)
         if i == 1 && !isempty(prefix)
-            printstyled(iob, prefix, " ", bold=true, color=color)
+            printstyled(iob, prefix, bold=true, color=color)
+            print(iob, " ")
         end
         print(iob, " "^indent, msg)
         if i == length(msglines) && !isempty(suffix)

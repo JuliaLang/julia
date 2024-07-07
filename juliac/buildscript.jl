@@ -27,9 +27,34 @@ end
 
 (f::Base.RedirectStdStream)(io::Core.CoreSTDOUT) = Base._redirect_io_global(io, f.unix_fd)
 
+@eval Base.CoreLogging begin
+    _invoked_catch_exceptions(logger) = false #catch_exceptions(logger)
+    _invoked_min_enabled_level(logger) = min_enabled_level(logger)
+    function make_normalization_context(logger::ConsoleLogger, nkwargs::Int)
+        stream = logger.stream::IOBuffer
+        dsize = displaysize(stream)::Tuple{Int,Int}
+        valbuf = IOBuffer()
+        rows_per_value = max(1, dsize[1] ÷ (nkwargs + 1))
+        valio = IOContext(IOContext(valbuf, stream),
+                          :displaysize => (rows_per_value, dsize[2] - 5),
+                          :limit => logger.show_limited)
+        return (valbuf, valio)
+    end
+    current_logger() = _global_logstate.logger::ConsoleLogger
+    @noinline Base.@constprop :none function current_logger_for_env(std_level::LogLevel, group, _module)
+        logstate = @inline current_logstate()
+        if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
+            return logstate.logger::ConsoleLogger
+        end
+        return nothing
+    end
+end
+
 @eval Base begin
     _assert_tostring(msg) = ""
     reinit_stdio() = nothing
+    get(::Core.CoreSTDERR, key::Symbol, default) = key === :color ? get_have_color() : default
+    get(::Core.CoreSTDOUT, key::Symbol, default) = key === :color ? get_have_color() : default
     JuliaSyntax.enable_in_core!() = nothing
     init_active_project() = ACTIVE_PROJECT[] = nothing
     set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
@@ -38,6 +63,8 @@ end
     @inline function invokelatest(f::F, args...; kwargs...) where F
         return f(args...; kwargs...)
     end
+    # nothrow needed here because for v in a can't prove the indexing is inbounds.
+
     function sprint(f::F, args::Vararg{Any,N}; context=nothing, sizehint::Integer=0) where {F<:Function,N}
         s = IOBuffer(sizehint=sizehint)
         if context isa Tuple

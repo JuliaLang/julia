@@ -116,6 +116,7 @@ function Logging.handle_message(logger::TestLogger, level, msg, _module,
     @lock logger.lock begin
         push!(logger.logs, r)
     end
+    return nothing
 end
 
 # Catch exceptions for the test logger only if specified
