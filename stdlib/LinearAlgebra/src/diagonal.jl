@@ -329,12 +329,18 @@ end
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
     _muldiag_size_check(A, D)
-    A .*= permutedims(D.diag)
+    for I in CartesianIndices(A)
+        row, col = Tuple(I)
+        @inbounds A[row, col] *= D.diag[col]
+    end
     return A
 end
 function lmul!(D::Diagonal, B::AbstractVecOrMat)
     _muldiag_size_check(D, B)
-    B .= D.diag .* B
+    for I in CartesianIndices(B)
+        row = I[1]
+        @inbounds B[I] = D.diag[row] * B[I]
+    end
     return B
 end
 

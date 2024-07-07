@@ -494,14 +494,22 @@ function rmul!(B::AbstractMatrix, A::Bidiagonal)
     (; dv, ev) = A
     if A.uplo == 'U'
         for k in reverse(axes(dv,1)[2:end])
-            @views @. B[:,k] = B[:,k] * dv[k] + B[:,k-1] * ev[k-1]
+            for i in axes(B,1)
+                B[i,k] = B[i,k] * dv[k] + B[i,k-1] * ev[k-1]
+            end
         end
-        @views B[:,1] .*= dv[1]
+        for i in axes(B,1)
+            B[i,1] *= dv[1]
+        end
     else
         for k in axes(ev,1)
-            @views @. B[:,k] = B[:,k] * dv[k] + B[:,k+1] * ev[k]
+            for i in axes(B,1)
+                B[i,k] = B[i,k] * dv[k] + B[i,k+1] * ev[k]
+            end
         end
-        @views B[:,end] .*= dv[end]
+        for i in axes(B,1)
+            B[i,end] *= dv[end]
+        end
     end
     return B
 end
