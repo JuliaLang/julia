@@ -307,7 +307,7 @@ jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
         }
         else {
-            codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_ABI);
+            codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI);
             /* Even if this codeinst is ordinarily not cacheable, we need to force
              * it into the cache here, since it was explicitly requested and is
              * otherwise not reachable from anywhere in the system image.

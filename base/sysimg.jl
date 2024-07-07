@@ -68,22 +68,29 @@ let
 
     # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
     # Run with the `--exclude-jlls` option to filter out all JLL packages
-    stdlibs = [
-        # No dependencies
-        :FileWatching, # used by loading.jl -- implicit assumption that init runs
-        :Libdl, # Transitive through LinAlg
-        :Artifacts, # Transitive through LinAlg
-        :SHA, # transitive through Random
-        :Sockets, # used by stream.jl
+    if isdefined(Base.BuildSettings, :INCLUDE_STDLIBS)
+        # e.g. INCLUDE_STDLIBS = "FileWatching,Libdl,Artifacts,SHA,Sockets,LinearAlgebra,Random"
+        stdlibs = Symbol.(split(Base.BuildSettings.INCLUDE_STDLIBS, ","))
+    else
+        # TODO: this is included for compatibility with PackageCompiler, which looks for it.
+        # This should eventually be removed so we only use `BuildSettings`.
+        stdlibs = [
+            # No dependencies
+            :FileWatching, # used by loading.jl -- implicit assumption that init runs
+            :Libdl, # Transitive through LinAlg
+            :Artifacts, # Transitive through LinAlg
+            :SHA, # transitive through Random
+            :Sockets, # used by stream.jl
 
-        # Transitive through LingAlg
-        # OpenBLAS_jll
-        # libblastrampoline_jll
+            # Transitive through LingAlg
+            # OpenBLAS_jll
+            # libblastrampoline_jll
 
-        # 1-depth packages
-        :LinearAlgebra, # Commits type-piracy and GEMM
-        :Random, # Can't be removed due to rand being exported by Base
-    ]
+            # 1-depth packages
+            :LinearAlgebra, # Commits type-piracy and GEMM
+            :Random, # Can't be removed due to rand being exported by Base
+        ]
+    end
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
@@ -139,6 +146,7 @@ end
 
 empty!(Base.TOML_CACHE.d)
 Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+@eval Base BUILDROOT = ""
 @eval Sys begin
     BINDIR = ""
     STDLIB = ""

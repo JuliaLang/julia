@@ -46,7 +46,7 @@ SRCS := \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading scheduler stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler gc-page-profiler method \
 	jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall
+	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine
 
 RT_LLVMLINK :=
 CG_LLVMLINK :=
@@ -127,7 +127,7 @@ ifeq ($(JULIACODEGEN),LLVM)
 ifneq ($(USE_SYSTEM_LLVM),0)
 # USE_SYSTEM_LLVM != 0
 CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
-LLVM_SHLIB_SYMBOL_VERSION := $(shell nm -D --with-symbol-versions $(shell $(LLVM_CONFIG_HOST) --libfiles --link-shared | awk '{print $1; exit}') | \
+LLVM_SHLIB_SYMBOL_VERSION := $(shell readelf -W --dyn-syms $(shell $(LLVM_CONFIG_HOST) --libfiles --link-shared | awk '{print $1; exit}') | \
                                grep _ZN4llvm3Any6TypeId | head -n 1 | sed -ne 's/.*@//p')
 
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms

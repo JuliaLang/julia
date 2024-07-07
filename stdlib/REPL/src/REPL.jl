@@ -151,6 +151,8 @@ using .REPLCompletions
 include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
+include("Pkg_beforeload.jl")
+
 @nospecialize # use only declared type signatures
 
 answer_color(::AbstractREPL) = ""
@@ -269,7 +271,7 @@ function check_for_missing_packages_and_run_hooks(ast)
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
-        isempty(install_packages_hooks) && Base.require_stdlib(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
+        isempty(install_packages_hooks) && load_pkg()
         for f in install_packages_hooks
             Base.invokelatest(f, mods) && return
         end
@@ -283,11 +285,14 @@ function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
             arg = arg::Expr
             arg1 = first(arg.args)
             if arg1 isa Symbol # i.e. `Foo`
-                if arg1 != :. # don't include local imports
+                if arg1 != :. # don't include local import `import .Foo`
                     push!(mods, arg1)
                 end
             else # i.e. `Foo: bar`
-                push!(mods, first((arg1::Expr).args))
+                sym = first((arg1::Expr).args)::Symbol
+                if sym != :. # don't include local import `import .Foo: a`
+                    push!(mods, sym)
+                end
             end
         end
     end
@@ -575,6 +580,7 @@ mutable struct LineEditREPL <: AbstractREPL
     answer_color::String
     shell_color::String
     help_color::String
+    pkg_color::String
     history_file::Bool
     in_shell::Bool
     in_help::Bool
@@ -587,13 +593,13 @@ mutable struct LineEditREPL <: AbstractREPL
     interface::ModalInterface
     backendref::REPLBackendRef
     frontend_task::Task
-    function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors)
+    function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
         if !hascolor
             opts.beep_colors = [""]
         end
-        new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
+        new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
             in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
     end
 end
@@ -610,6 +616,7 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
         hascolor ? Base.answer_color() : "",
         hascolor ? Base.text_colors[:red] : "",
         hascolor ? Base.text_colors[:yellow] : "",
+        hascolor ? Base.text_colors[:blue] : "",
         false, false, false, envcolors
     )
 
@@ -654,7 +661,7 @@ function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module; h
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, lastindex(partial), mod, c.modifiers.shift, hint)
     c.modifiers = LineEdit.Modifiers()
-    return unique!(map(completion_text, ret)), partial[range], should_complete
+    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s::PromptState; hint::Bool=false)
@@ -662,14 +669,14 @@ function complete_line(c::ShellCompletionProvider, s::PromptState; hint::Bool=fa
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = shell_completions(full, lastindex(partial), hint)
-    return unique!(map(completion_text, ret)), partial[range], should_complete
+    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s; hint::Bool=false)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)::String
     ret, range, should_complete = bslash_completions(full, lastindex(partial), hint)[2]
-    return unique!(map(completion_text, ret)), partial[range], should_complete
+    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
 end
 
 with_repl_linfo(f, repl) = f(outstream(repl))
@@ -1080,6 +1087,7 @@ setup_interface(
     extra_repl_keymap::Any = repl.options.extra_keymap
 ) = setup_interface(repl, hascolor, extra_repl_keymap)
 
+
 # This non keyword method can be precompiled which is important
 function setup_interface(
     repl::LineEditREPL,
@@ -1155,6 +1163,34 @@ function setup_interface(
         end,
         sticky = true)
 
+    # Set up dummy Pkg mode that will be replaced once Pkg is loaded
+    # use 6 dots to occupy the same space as the most likely "@v1.xx" env name
+    dummy_pkg_mode = Prompt(Pkg_promptf,
+        prompt_prefix = hascolor ? repl.pkg_color : "",
+        prompt_suffix = hascolor ?
+        (repl.envcolors ? Base.input_color : repl.input_color) : "",
+        repl = repl,
+        complete = LineEdit.EmptyCompletionProvider(),
+        on_done = respond(line->nothing, repl, julia_prompt),
+        on_enter = function (s::MIState)
+                # This is hit when the user tries to execute a command before the real Pkg mode has been
+                # switched to. Ok to do this even if Pkg is loading on the other task because of the loading lock.
+                REPLExt = load_pkg()
+                if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
+                    for mode in repl.interface.modes
+                        if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
+                            # pkg mode
+                            buf = copy(LineEdit.buffer(s))
+                            transition(s, mode) do
+                                LineEdit.state(s, mode).input_buffer = buf
+                            end
+                        end
+                    end
+                end
+                return true
+            end,
+        sticky = true)
+
 
     ################################# Stage II #############################
 
@@ -1162,7 +1198,8 @@ function setup_interface(
     # We will have a unified history for all REPL modes
     hp = REPLHistoryProvider(Dict{Symbol,Prompt}(:julia => julia_prompt,
                                                  :shell => shell_mode,
-                                                 :help  => help_mode))
+                                                 :help  => help_mode,
+                                                 :pkg  => dummy_pkg_mode))
     if repl.history_file
         try
             hist_path = find_hist_file()
@@ -1185,6 +1222,7 @@ function setup_interface(
     julia_prompt.hist = hp
     shell_mode.hist = hp
     help_mode.hist = hp
+    dummy_pkg_mode.hist = hp
 
     julia_prompt.on_done = respond(x->Base.parse_input_line(x,filename=repl_filename(repl,hp)), repl, julia_prompt)
 
@@ -1225,47 +1263,36 @@ function setup_interface(
         end,
         ']' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                # print a dummy pkg prompt while Pkg loads
-                LineEdit.clear_line(LineEdit.terminal(s))
-                # use 6 .'s here because its the same width as the most likely `@v1.xx` env name
-                print(LineEdit.terminal(s), styled"{blue,bold:({gray:......}) pkg> }")
-                pkg_mode = nothing
-                transition_finished = false
-                iolock = Base.ReentrantLock() # to avoid race between tasks reading stdin & input buffer
-                # spawn Pkg load to avoid blocking typing during loading. Typing will block if only 1 thread
+                buf = copy(LineEdit.buffer(s))
+                transition(s, dummy_pkg_mode) do
+                    LineEdit.state(s, dummy_pkg_mode).input_buffer = buf
+                end
+                # load Pkg on another thread if available so that typing in the dummy Pkg prompt
+                # isn't blocked, but instruct the main REPL task to do the transition via s.async_channel
                 t_replswitch = Threads.@spawn begin
-                    pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                    REPLExt = Base.require_stdlib(pkgid, "REPLExt")
+                    REPLExt = load_pkg()
                     if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
-                        for mode in repl.interface.modes
-                            if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
-                                pkg_mode = mode
-                                break
+                        put!(s.async_channel,
+                            function (s::MIState)
+                                LineEdit.mode(s) === dummy_pkg_mode || return :ok
+                                for mode in repl.interface.modes
+                                    if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
+                                        buf = copy(LineEdit.buffer(s))
+                                        transition(s, mode) do
+                                            LineEdit.state(s, mode).input_buffer = buf
+                                        end
+                                        if !isempty(s) && @invokelatest(LineEdit.check_for_hint(s))
+                                            @invokelatest(LineEdit.refresh_line(s))
+                                        end
+                                        break
+                                    end
+                                end
+                                return :ok
                             end
-                        end
-                    end
-                    if pkg_mode !== nothing
-                        @lock iolock begin
-                            buf = copy(LineEdit.buffer(s))
-                            transition(s, pkg_mode) do
-                                LineEdit.state(s, pkg_mode).input_buffer = buf
-                            end
-                            if !isempty(s)
-                                @invokelatest(LineEdit.check_for_hint(s)) && @invokelatest(LineEdit.refresh_line(s))
-                            end
-                            transition_finished = true
-                        end
+                        )
                     end
                 end
                 Base.errormonitor(t_replswitch)
-                # while loading just accept all keys, no keymap functionality
-                while !istaskdone(t_replswitch)
-                    # wait but only take if task is still running
-                    peek(stdin, Char)
-                    @lock iolock begin
-                        transition_finished || edit_insert(s, read(stdin, Char))
-                    end
-                end
             else
                 edit_insert(s, ']')
             end
@@ -1448,9 +1475,9 @@ function setup_interface(
     b = Dict{Any,Any}[skeymap, mk, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(b, extra_repl_keymap)
 
-    shell_mode.keymap_dict = help_mode.keymap_dict = LineEdit.keymap(b)
+    shell_mode.keymap_dict = help_mode.keymap_dict = dummy_pkg_mode.keymap_dict = LineEdit.keymap(b)
 
-    allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt]
+    allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode, search_prompt, prefix_prompt]
     return ModalInterface(allprompts)
 end
 

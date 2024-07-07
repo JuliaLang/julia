@@ -479,7 +479,7 @@ CodeInfo(
 !!! compat "Julia 1.10"
     The usage within a function body requires at least Julia 1.10.
 
-!!! compact "Julia 1.11"
+!!! compat "Julia 1.11"
     The code block annotation requires at least Julia 1.11.
 
 !!! warning
@@ -525,7 +525,7 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
 
 !!! note
     The `:consistent`-cy assertion is made world-age wise. More formally, write
-    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then we require:
+    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
     ```math
     ∀ i, x, y: x ≡ y → fᵢ(x) ≡ fᵢ(y)
     ```
@@ -737,7 +737,7 @@ macro assume_effects(args...)
     lastex = args[end]
     override = compute_assumed_settings(args[begin:end-1])
     if is_function_def(unwrap_macrocalls(lastex))
-        return esc(pushmeta!(lastex, form_purity_expr(override)))
+        return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
     elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
         lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(lastex.args, 3, Core.Compiler.encode_effects_override(override))
@@ -762,7 +762,7 @@ function compute_assumed_settings(settings)
     for setting in settings
         override = compute_assumed_setting(override, setting)
         override === nothing &&
-            throw(ArgumentError("@assume_effects $setting not supported"))
+            throw(ArgumentError("`@assume_effects $setting` not supported"))
     end
     return override
 end
@@ -810,10 +810,11 @@ function compute_assumed_setting(override::EffectsOverride, @nospecialize(settin
 end
 
 function form_purity_expr(override::EffectsOverride)
-    return Expr(:purity,
-        override.consistent, override.effect_free, override.nothrow,
-        override.terminates_globally, override.terminates_locally, override.notaskstate,
-        override.inaccessiblememonly, override.noub, override.noub_if_noinbounds)
+    ex = Expr(:purity)
+    for i = 1:Core.Compiler.NUM_EFFECTS_OVERRIDES
+        push!(ex.args, getfield(override, i))
+    end
+    return ex
 end
 
 """

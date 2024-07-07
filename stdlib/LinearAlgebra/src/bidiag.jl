@@ -751,18 +751,6 @@ function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
     return A.uplo == 'L' ? LowerTriangular(C) : C
 end
 
-function *(A::Diagonal, B::SymTridiagonal)
-    TS = promote_op(*, eltype(A), eltype(B))
-    out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
-    mul!(out, A, B)
-end
-
-function *(A::SymTridiagonal, B::Diagonal)
-    TS = promote_op(*, eltype(A), eltype(B))
-    out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
-    mul!(out, A, B)
-end
-
 function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)

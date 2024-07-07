@@ -186,34 +186,14 @@ static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instructi
     return inst;
 }
 
-// bitcast a value, but preserve its address space when dealing with pointer types
-static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder, llvm::Value *v, llvm::Type *jl_value)
-{
-    using namespace llvm;
-    if (isa<PointerType>(jl_value) &&
-        v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
-        // Cast to the proper address space
-        #if JL_LLVM_VERSION >= 170000
-        Type *jl_value_addr = PointerType::get(jl_value, v->getType()->getPointerAddressSpace());
-        #else
-        Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
-        #endif
-        return builder.CreateBitCast(v, jl_value_addr);
-    }
-    else {
-        return builder.CreateBitCast(v, jl_value);
-    }
-}
-
 // Get PTLS through current task.
 static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *pgcstack)
 {
     using namespace llvm;
-    auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
     auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
     const int pgcstack_offset = offsetof(jl_task_t, gcstack);
     return builder.CreateInBoundsGEP(
-            T_pjlvalue, emit_bitcast_with_builder(builder, pgcstack, T_ppjlvalue),
+            T_pjlvalue, pgcstack,
             ConstantInt::get(T_size, -(pgcstack_offset / sizeof(void *))),
             "current_task");
 }
@@ -222,18 +202,17 @@ static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &bui
 static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *current_task, llvm::MDNode *tbaa)
 {
     using namespace llvm;
-    auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
     auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
     const int ptls_offset = offsetof(jl_task_t, ptls);
     llvm::Value *pptls = builder.CreateInBoundsGEP(
-            T_pjlvalue, emit_bitcast_with_builder(builder, current_task, T_ppjlvalue),
+            T_pjlvalue, current_task,
             ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
             "ptls_field");
     LoadInst *ptls_load = builder.CreateAlignedLoad(T_pjlvalue,
-            emit_bitcast_with_builder(builder, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
+            pptls, Align(sizeof(void *)), "ptls_load");
     // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
     tbaa_decorate(tbaa, ptls_load);
-    return builder.CreateBitCast(ptls_load, T_ppjlvalue, "ptls");
+    return ptls_load;
 }
 
 // Get signal page through current task.
@@ -242,9 +221,7 @@ static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &
     using namespace llvm;
     // return builder.CreateCall(prepare_call(reuse_signal_page_func));
     auto T_psize = T_size->getPointerTo();
-    auto T_ppsize = T_psize->getPointerTo();
     int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void *);
-    ptls = emit_bitcast_with_builder(builder, ptls, T_ppsize);
     llvm::Value *psafepoint = builder.CreateInBoundsGEP(
             T_psize, ptls, ConstantInt::get(T_size, nthfield));
     LoadInst *ptls_load = builder.CreateAlignedLoad(
@@ -291,9 +268,8 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
 {
     using namespace llvm;
     Type *T_int8 = state->getType();
-    llvm::Value *ptls_i8 = emit_bitcast_with_builder(builder, ptls, builder.getInt8PtrTy());
     Constant *offset = ConstantInt::getSigned(builder.getInt32Ty(), offsetof(jl_tls_states_t, gc_state));
-    Value *gc_state = builder.CreateInBoundsGEP(T_int8, ptls_i8, ArrayRef<Value*>(offset), "gc_state");
+    Value *gc_state = builder.CreateInBoundsGEP(T_int8, ptls, ArrayRef<Value*>(offset), "gc_state");
     if (old_state == nullptr) {
         old_state = builder.CreateLoad(T_int8, gc_state);
         cast<LoadInst>(old_state)->setOrdering(AtomicOrdering::Monotonic);

@@ -348,8 +348,7 @@ nanoseconds, the amount of time after which spinning threads should sleep.
 
 ### [`JULIA_NUM_GC_THREADS`](@id JULIA_NUM_GC_THREADS)
 
-Sets the number of threads used by Garbage Collection. If unspecified is set to
-half of the number of worker threads.
+Sets the number of threads used by Garbage Collection. If unspecified is set to the number of worker threads.
 
 !!! compat "Julia 1.10"
     The environment variable was added in 1.10
@@ -482,35 +481,6 @@ See [Triggered During Execution](@ref).
 Allows you to enable or disable zones for a specific Julia run.
 For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable
 the `INFERENCE` zones. See [Dynamically Enabling and Disabling Zones](@ref).
-
-### [`JULIA_GC_ALLOC_POOL`](@id JULIA_GC_ALLOC_POOL)
-### [`JULIA_GC_ALLOC_OTHER`](@id JULIA_GC_ALLOC_OTHER)
-### [`JULIA_GC_ALLOC_PRINT`](@id JULIA_GC_ALLOC_PRINT)
-
-If set, these environment variables take strings that optionally start with the
-character `'r'`, followed by a string interpolation of a colon-separated list of
-three signed 64-bit integers (`int64_t`). This triple of integers `a:b:c`
-represents the arithmetic sequence `a`, `a + b`, `a + 2*b`, ... `c`.
-
-*   If it's the `n`th time that `jl_gc_pool_alloc()` has been called, and `n`
-    belongs to the arithmetic sequence represented by `$JULIA_GC_ALLOC_POOL`,
-    then garbage collection is forced.
-*   If it's the `n`th time that `maybe_collect()` has been called, and `n` belongs
-    to the arithmetic sequence represented by `$JULIA_GC_ALLOC_OTHER`, then garbage
-    collection is forced.
-*   If it's the `n`th time that `jl_gc_collect()` has been called, and `n` belongs
-    to the arithmetic sequence represented by `$JULIA_GC_ALLOC_PRINT`, then counts
-    for the number of calls to `jl_gc_pool_alloc()` and `maybe_collect()` are
-    printed.
-
-If the value of the environment variable begins with the character `'r'`, then
-the interval between garbage collection events is randomized.
-
-!!! note
-
-    These environment variables only have an effect if Julia was compiled with
-    garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
-    in the build configuration).
 
 ### [`JULIA_GC_NO_GENERATIONAL`](@id JULIA_GC_NO_GENERATIONAL)
 

@@ -535,6 +535,17 @@ function datatype_nfields(dt::DataType)
 end
 
 """
+    Base.datatype_npointers(dt::DataType) -> Int
+
+Return the number of pointers in the layout of a datatype.
+"""
+function datatype_npointers(dt::DataType)
+    @_foldable_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+end
+
+"""
     Base.datatype_pointerfree(dt::DataType) -> Bool
 
 Return whether instances of this type can contain references to gc-managed memory.
@@ -542,9 +553,7 @@ Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
-    return npointers == 0
+    return datatype_npointers(dt) == 0
 end
 
 """
@@ -976,7 +985,7 @@ julia> struct Foo
        end
 
 julia> Base.fieldindex(Foo, :z)
-ERROR: type Foo has no field z
+ERROR: FieldError: type Foo has no field z
 Stacktrace:
 [...]
 
@@ -1159,7 +1168,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     for m in method_instances(f, t, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
-                code = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)::CodeInfo
+                code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",

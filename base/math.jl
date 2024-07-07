@@ -1328,9 +1328,7 @@ end
 end
 
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
-    x^clamp(n, Int64)
-end
-@constprop :aggressive @inline function ^(x::Float64, n::Int64)
+    n = clamp(n, Int64)
     n == 0 && return one(x)
     if use_power_by_squaring(n)
         return pow_body(x, n)

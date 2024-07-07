@@ -426,8 +426,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `isdefined`
 
-    `Expr(:isdefined, :x)` returns a Bool indicating whether `x` has
-    already been defined in the current scope.
+    `Expr(:isdefined, :x [, allow_import])` returns a Bool indicating whether `x` has
+    already been defined in the current scope. The optional second argument is a boolean
+    that specifies whether `x` should be considered defined by an import or if only constants
+    or globals in the current module count as being defined. If `x` is not a global, the argument
+    is ignored.
 
   * `the_exception`
 
@@ -519,17 +522,21 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
 
-      * `args[2]` : isva
-
-        Indicates whether the closure accepts varargs.
-
-      * `args[3]` : lb
+      * `args[2]` : lb
 
         Lower bound on the output type. (Defaults to `Union{}`)
 
-      * `args[4]` : ub
+      * `args[3]` : ub
 
         Upper bound on the output type. (Defaults to `Any`)
+
+      * `args[4]` : constprop
+
+        Indicates whether the opaque closure's identity may be used for constant
+        propagation. The `@opaque` macro enables this by default, but this will
+        cause additional inference which may be undesirable and prevents the
+        code from running during precompile.
+        If `args[4]` is a method, the argument is considered skipped.
 
       * `args[5]` : method
 
