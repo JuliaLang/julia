@@ -59,4 +59,6 @@ function Base.repeat(A::Fill; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, n
     Fill(getindex_value(A), sz)
 end
 
+Base.zero(f::Fill) = Fill(zero(f.value), size(f))
+
 end

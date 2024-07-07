@@ -231,7 +231,8 @@ promote_rule(::Type{<:Matrix}, ::Type{<:Bidiagonal}) = Matrix
 function Tridiagonal{T}(A::Bidiagonal) where T
     dv = convert(AbstractVector{T}, A.dv)
     ev = convert(AbstractVector{T}, A.ev)
-    z = fill!(similar(ev), zero(T))
+    # ensure that the types are identical, even if zero returns a different type
+    z = oftype(ev, zero(ev))
     A.uplo == 'U' ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
 end
 promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
