@@ -285,11 +285,14 @@ function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
             arg = arg::Expr
             arg1 = first(arg.args)
             if arg1 isa Symbol # i.e. `Foo`
-                if arg1 != :. # don't include local imports
+                if arg1 != :. # don't include local import `import .Foo`
                     push!(mods, arg1)
                 end
             else # i.e. `Foo: bar`
-                push!(mods, first((arg1::Expr).args))
+                sym = first((arg1::Expr).args)::Symbol
+                if sym != :. # don't include local import `import .Foo: a`
+                    push!(mods, sym)
+                end
             end
         end
     end
