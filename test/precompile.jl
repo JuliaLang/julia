@@ -2045,4 +2045,28 @@ precompile_test_harness("Issue #52063") do load_path
     end
 end
 
+precompile_test_harness("Binding Unique") do load_path
+    write(joinpath(load_path, "UniqueBinding1.jl"),
+        """
+        module UniqueBinding1
+            export x
+            global x = 1
+        end
+        """)
+    write(joinpath(load_path, "UniqueBinding2.jl"),
+        """
+        module UniqueBinding2
+            using UniqueBinding1
+            const thebinding = ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding1, :x, true)
+            const thebinding2 = ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), @__MODULE__, :thebinding, true)
+        end
+        """)
+
+    @eval using UniqueBinding1
+    @eval using UniqueBinding2
+
+    @test UniqueBinding2.thebinding === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding1, :x, true)
+    @test UniqueBinding2.thebinding2 === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding2, :thebinding, true)
+end
+
 finish_precompile_test!()

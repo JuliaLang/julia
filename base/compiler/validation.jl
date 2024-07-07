@@ -9,7 +9,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :(&) => 1:1,
     :(=) => 2:2,
     :method => 1:4,
-    :const => 1:1,
+    :const => 1:2,
     :new => 1:typemax(Int),
     :splatnew => 2:2,
     :the_exception => 0:0,
@@ -24,7 +24,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :global => 1:1,
     :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects), args..., roots...
     :cfunction => 5:5,
-    :isdefined => 1:1,
+    :isdefined => 1:2,
     :code_coverage_effect => 0:0,
     :loopinfo => 0:typemax(Int),
     :gc_preserve_begin => 0:typemax(Int),

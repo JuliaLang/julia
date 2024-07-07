@@ -821,14 +821,14 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             if (jl_is_expr(a) && ((jl_expr_t*)a)->head == jl_dot_sym) {
                 name = NULL;
                 jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "using");
-                jl_module_t *u = import;
-                if (name != NULL)
-                    u = (jl_module_t*)jl_eval_global_var(import, name);
                 if (from) {
                     // `using A: B` and `using A: B.c` syntax
                     jl_module_use(m, import, name);
                 }
                 else {
+                    jl_module_t *u = import;
+                    if (name != NULL)
+                        u = (jl_module_t*)jl_eval_global_var(import, name);
                     if (!jl_is_module(u))
                         jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,
                             "invalid using path: \"%s\" does not name a module",

@@ -144,12 +144,10 @@ typedef struct {
     // variables for tracking big objects
     struct _bigval_t *big_objects;
 
-    // variables for tracking "remembered set"
-    arraylist_t _remset[2]; // contains jl_value_t*
     // lower bound of the number of pointers inside remembered values
     int remset_nptr;
-    arraylist_t *remset;
-    arraylist_t *last_remset;
+    // remembered set
+    arraylist_t remset;
 
     // variables for allocating objects from pools
 #define JL_GC_N_MAX_POOLS 51 // conservative. must be kept in sync with `src/julia_internal.h`
@@ -209,6 +207,10 @@ typedef struct _jl_tls_states_t {
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
+#define JL_GC_PARALLEL_COLLECTOR_THREAD 3
+    // gc_state = 3 means the thread is a parallel collector thread (i.e. never runs Julia code)
+#define JL_GC_CONCURRENT_COLLECTOR_THREAD 4
+    // gc_state = 4 means the thread is a concurrent collector thread (background sweeper thread that never runs Julia code)
     _Atomic(int8_t) gc_state; // read from foreign threads
     // execution of certain certain impure
     // statements is prohibited from certain
@@ -257,7 +259,6 @@ typedef struct _jl_tls_states_t {
     _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;
     jl_gc_page_stack_t page_metadata_allocd;
-    jl_gc_page_stack_t page_metadata_buffered;
     jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
@@ -341,6 +342,8 @@ void jl_sigint_safepoint(jl_ptls_t tls);
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
                                      int8_t old_state)
 {
+    assert(old_state != JL_GC_PARALLEL_COLLECTOR_THREAD);
+    assert(old_state != JL_GC_CONCURRENT_COLLECTOR_THREAD);
     jl_atomic_store_release(&ptls->gc_state, state);
     if (state == JL_GC_STATE_UNSAFE || old_state == JL_GC_STATE_UNSAFE)
         jl_gc_safepoint_(ptls);

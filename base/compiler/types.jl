@@ -206,14 +206,14 @@ struct InferenceParams
 end
 function InferenceParams(
     params::InferenceParams = InferenceParams( # default constructor
-        #=max_methods::Int=# 3,
+        #=max_methods::Int=# BuildSettings.MAX_METHODS,
         #=max_union_splitting::Int=# 4,
         #=max_apply_union_enum::Int=# 8,
         #=max_tuple_splat::Int=# 32,
         #=tuple_complexity_limit_depth::Int=# 3,
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
-        #=unoptimize_throw_blocks::Bool=# true,
+        #=unoptimize_throw_blocks::Bool=# BuildSettings.UNOPTIMIZE_THROW_BLOCKS,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false);
     max_methods::Int = params.max_methods,

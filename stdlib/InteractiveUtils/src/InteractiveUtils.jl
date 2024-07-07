@@ -261,8 +261,8 @@ function _subtypes_in!(mods::Array, x::Type)
     while !isempty(mods)
         m = pop!(mods)
         xt = xt::DataType
-        for s in names(m, non_public=true)
-            if isdefined(m, s)
+        for s in names(m, all = true)
+            if isdefined(m, s) && !isdeprecated(m, s)
                 t = getfield(m, s)
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
                 if isa(dt, DataType)

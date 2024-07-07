@@ -177,7 +177,7 @@ let
     @test Base.binding_module(TestMod7648, :d7648) == TestMod7648
     @test Base.binding_module(TestMod7648, :a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
-    defaultset = Set(Symbol[:Foo7648, :TestMod7648, :c7648, :foo7648, :foo7648_nomethods])
+    defaultset = Set(Symbol[:Foo7648, :TestMod7648, :a9475, :c7648, :f9475, :foo7648, :foo7648_nomethods])
     allset = defaultset ∪ Set(Symbol[
         Symbol("#eval"), Symbol("#foo7648"), Symbol("#foo7648_nomethods"), Symbol("#include"),
         :TestModSub9475, :d7648, :eval, :f7648, :include])
@@ -189,7 +189,7 @@ let
         :GenericSet, :GenericString, :LogRecord, :Test, :TestLogger, :TestSetException,
         :detect_ambiguities, :detect_unbound_args])
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
-    usings = Set(Symbol[:x36529, :TestModSub9475, :a9475, :f9475, :f54609]) ∪ usings_from_Test ∪ usings_from_Base
+    usings = Set(Symbol[:x36529, :TestModSub9475, :f54609]) ∪ usings_from_Test ∪ usings_from_Base
     @test Set(names(TestMod7648)) == defaultset
     @test Set(names(TestMod7648, all=true)) == allset
     @test Set(names(TestMod7648, all=true, imported=true)) == allset ∪ imported
@@ -209,16 +209,8 @@ global unexported::Int = 0
 end
 using Base: @assume_effects
 using .Inner
-end # baremodule Test54609Simple
-let usings_explicit = names(Test54609Simple; usings_explicit=true)
-    @test Symbol("@assume_effects") ∈ usings_explicit
-    @test :exported ∉ usings_explicit
-    @test :unexported ∉ usings_explicit
-    usings_implicit = names(Test54609Simple; usings_implicit=true)
-    @test Symbol("@assume_effects") ∉ usings_implicit
-    @test :exported ∈ usings_implicit
-    @test :unexported ∉ usings_implicit
-    usings = names(Test54609Simple; usings=true)
+end
+let usings = names(Test54609Simple; usings=true)
     @test Symbol("@assume_effects") ∈ usings
     @test :Base ∉ usings
     @test :exported ∈ usings
@@ -238,7 +230,7 @@ let usings = names(Test54609Complex; usings=true)
     @test :exported_new ∈ usings
     @test :exported_old ∉ usings
     @test :_Test54609Complex ∈ usings # should include the `using`ed module itself
-    usings_all = names(Test54609Complex; usings=true, deprecated=true)
+    usings_all = names(Test54609Complex; usings=true, all=true)
     @test :exported_new ∈ usings_all
     @test :exported_old ∈ usings_all # deprecated names should be included with `all=true`
 end

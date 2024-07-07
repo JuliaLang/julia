@@ -684,6 +684,14 @@ static int caching_tag(jl_value_t *v) JL_NOTSAFEPOINT
         if (jl_is_method(m) && jl_object_in_image(m))
             return 1 + type_in_worklist(mi->specTypes);
     }
+    if (jl_is_binding(v)) {
+        jl_globalref_t *gr = ((jl_binding_t*)v)->globalref;
+        if (!gr)
+            return 0;
+        if (!jl_object_in_image((jl_value_t*)gr->mod))
+            return 0;
+        return 1;
+    }
     if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
         if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars)
@@ -825,6 +833,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         // them wrong and segfault. The jl_code_for_staged function should
         // prevent this from happening, so we do not need to detect that user
         // error now.
+    }
+    if (s->incremental && jl_is_binding(v)) {
+        if (needs_uniquing(v)) {
+            jl_binding_t *b = (jl_binding_t*)v;
+            jl_queue_for_serialization(s, b->globalref->mod);
+            jl_queue_for_serialization(s, b->globalref->name);
+            goto done_fields;
+        }
     }
     if (s->incremental && jl_is_globalref(v)) {
         jl_globalref_t *gr = (jl_globalref_t*)v;
@@ -1132,7 +1148,7 @@ static void record_uniquing(jl_serializer_state *s, jl_value_t *fld, uintptr_t o
     if (s->incremental && jl_needs_serialization(s, fld) && needs_uniquing(fld)) {
         if (jl_is_datatype(fld) || jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(fld)))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)offset);
-        else if (jl_is_method_instance(fld))
+        else if (jl_is_method_instance(fld) || jl_is_binding(fld))
             arraylist_push(&s->uniquing_objs, (void*)(uintptr_t)offset);
         else
             assert(0 && "unknown object type with needs_uniquing set");
@@ -1350,7 +1366,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             }
             else if (jl_typetagis(v, jl_binding_type)) {
                 jl_binding_t *b = (jl_binding_t*)v;
-                if (b->globalref == NULL || jl_object_in_image((jl_value_t*)b->globalref->mod))
+                if (b->globalref == NULL)
                     jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
                 // Assign type Any to any owned bindings that don't have a type.
                 // We don't want these accidentally managing to diverge later in different compilation units.
@@ -3476,6 +3492,18 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 obj[0] = newobj;
             }
         }
+        else if (otyp == (uintptr_t)jl_binding_type) {
+            jl_value_t *m = obj[0];
+            if (jl_is_binding(m)) {
+                newobj = m; // already done
+            }
+            else {
+                arraylist_push(&cleanup_list, (void*)obj);
+                jl_value_t *name = obj[1];
+                newobj = (jl_value_t*)jl_get_module_binding((jl_module_t*)m, (jl_sym_t*)name, 1);
+                obj[0] = newobj;
+            }
+        }
         else {
             abort(); // should be unreachable
         }
@@ -3491,6 +3519,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         jl_value_t *t = jl_typeof(item);
         if (t == (jl_value_t*)jl_method_instance_type)
             memset(o, 0xba, sizeof(jl_value_t*) * 3); // only specTypes and sparams fields stored
+        else if (t == (jl_value_t*)jl_binding_type)
+            memset(o, 0xba, sizeof(jl_value_t*) * 3); // stored as mod/name
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
