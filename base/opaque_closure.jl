@@ -18,7 +18,7 @@ the argument type may be fixed length even if the function is variadic.
     This interface is experimental and subject to change or removal without notice.
 """
 macro opaque(ex)
-    esc(Expr(:opaque_closure, nothing, nothing, nothing, ex))
+    esc(Expr(:opaque_closure, nothing, nothing, nothing, #= allow_partial =# true, ex))
 end
 
 macro opaque(ty, ex)
@@ -34,7 +34,7 @@ macro opaque(ty, ex)
     end
     AT = (AT !== :_) ? AT : nothing
     RT = (RT !== :_) ? RT : nothing
-    return esc(Expr(:opaque_closure, AT, RT, RT, ex))
+    return esc(Expr(:opaque_closure, AT, RT, RT, #= allow_partial =# true, ex))
 end
 
 # OpaqueClosure construction from pre-inferred CodeInfo/IRCode
