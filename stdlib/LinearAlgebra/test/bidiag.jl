@@ -938,10 +938,15 @@ end
     dv = FillArrays.Fill(3, n)
     ev = FillArrays.Fill(2, n-1)
     z = FillArrays.Fill(0, n-1)
+    dvf = FillArrays.Fill(Float64(3), n)
+    evf = FillArrays.Fill(Float64(2), n-1)
+    zf = FillArrays.Fill(Float64(0), n-1)
     B = Bidiagonal(dv, ev, :U)
     @test Tridiagonal{Int}(B) === Tridiagonal(B) === Tridiagonal(z, dv, ev)
+    @test Tridiagonal{Float64}(B) === Tridiagonal(zf, dvf, evf)
     B = Bidiagonal(dv, ev, :L)
     @test Tridiagonal{Int}(B) === Tridiagonal(B) === Tridiagonal(ev, dv, z)
+    @test Tridiagonal{Float64}(B) === Tridiagonal(evf, dvf, zf)
 end
 
 end # module TestBidiagonal
