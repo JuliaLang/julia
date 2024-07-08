@@ -55,7 +55,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 }
 
 
-static void free_stack(void *stkbuf, size_t bufsz)
+static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
 #ifdef JL_USE_GUARD_PAGE
     size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
@@ -111,7 +111,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 }
 # endif
 
-static void free_stack(void *stkbuf, size_t bufsz)
+static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
 #ifdef JL_USE_GUARD_PAGE
     size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
@@ -124,7 +124,7 @@ static void free_stack(void *stkbuf, size_t bufsz)
 }
 #endif
 
-JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void)
+JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void) JL_NOTSAFEPOINT
 {
     return jl_atomic_load_relaxed(&num_stack_mappings);
 }
@@ -159,7 +159,7 @@ static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
 }
 
 
-static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
+static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
 #ifdef _COMPILER_ASAN_ENABLED_
     __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
@@ -238,7 +238,7 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     return stk;
 }
 
-void sweep_stack_pools(void)
+void sweep_stack_pools(void) JL_NOTSAFEPOINT
 {
     // Stack sweeping algorithm:
     //    // deallocate stacks if we have too many sitting around unused

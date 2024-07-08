@@ -576,90 +576,6 @@ void jl_gc_debug_print_status(void)
 }
 #endif
 
-#ifdef OBJPROFILE
-static htable_t obj_counts[3];
-static htable_t obj_sizes[3];
-void objprofile_count(void *ty, int old, int sz)
-{
-    if (gc_verifying) return;
-    if ((intptr_t)ty <= 0x10) {
-        ty = (void*)jl_buff_tag;
-    }
-    else if (ty != (void*)jl_buff_tag && ty != jl_malloc_tag &&
-             jl_is_datatype(ty) && jl_is_datatype_singleton((jl_datatype_t*)ty)) {
-        ty = jl_singleton_tag;
-    }
-    void **bp = ptrhash_bp(&obj_counts[old], ty);
-    if (*bp == HT_NOTFOUND)
-        *bp = (void*)2;
-    else
-        (*((intptr_t*)bp))++;
-    bp = ptrhash_bp(&obj_sizes[old], ty);
-    if (*bp == HT_NOTFOUND)
-        *bp = (void*)(intptr_t)(1 + sz);
-    else
-        *((intptr_t*)bp) += sz;
-}
-
-void objprofile_reset(void)
-{
-    for (int g = 0; g < 3; g++) {
-        htable_reset(&obj_counts[g], 0);
-        htable_reset(&obj_sizes[g], 0);
-    }
-}
-
-static void objprofile_print(htable_t nums, htable_t sizes)
-{
-    for(int i=0; i < nums.size; i+=2) {
-        if (nums.table[i+1] != HT_NOTFOUND) {
-            void *ty = nums.table[i];
-            int num = (intptr_t)nums.table[i + 1] - 1;
-            size_t sz = (uintptr_t)ptrhash_get(&sizes, ty) - 1;
-            static const int ptr_hex_width = 2 * sizeof(void*);
-            if (sz > 2e9) {
-                jl_safe_printf(" %6d : %*.1f GB of (%*p) ",
-                               num, 6, ((double)sz) / 1024 / 1024 / 1024,
-                               ptr_hex_width, ty);
-            }
-            else if (sz > 2e6) {
-                jl_safe_printf(" %6d : %*.1f MB of (%*p) ",
-                               num, 6, ((double)sz) / 1024 / 1024,
-                               ptr_hex_width, ty);
-            }
-            else if (sz > 2e3) {
-                jl_safe_printf(" %6d : %*.1f kB of (%*p) ",
-                               num, 6, ((double)sz) / 1024,
-                               ptr_hex_width, ty);
-            }
-            else {
-                jl_safe_printf(" %6d : %*d  B of (%*p) ",
-                          num, 6, (int)sz, ptr_hex_width, ty);
-            }
-            if (ty == (void*)jl_buff_tag)
-                jl_safe_printf("#<buffer>");
-            else if (ty == jl_malloc_tag)
-                jl_safe_printf("#<malloc>");
-            else if (ty == jl_singleton_tag)
-                jl_safe_printf("#<singletons>");
-            else
-                jl_static_show(JL_STDERR, (jl_value_t*)ty);
-            jl_safe_printf("\n");
-        }
-    }
-}
-
-void objprofile_printall(void)
-{
-    jl_safe_printf("Transient mark :\n");
-    objprofile_print(obj_counts[0], obj_sizes[0]);
-    jl_safe_printf("Perm mark :\n");
-    objprofile_print(obj_counts[1], obj_sizes[1]);
-    jl_safe_printf("Remset :\n");
-    objprofile_print(obj_counts[2], obj_sizes[2]);
-}
-#endif
-
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
 STATIC_INLINE double jl_ns2ms(int64_t t)
 {
@@ -991,13 +907,6 @@ void jl_gc_debug_init(void)
         arraylist_new(&bits_save[i], 0);
     arraylist_new(&lostval_parents, 0);
     arraylist_new(&lostval_parents_done, 0);
-#endif
-
-#ifdef OBJPROFILE
-    for (int g = 0; g < 3; g++) {
-        htable_new(&obj_counts[g], 0);
-        htable_new(&obj_sizes[g], 0);
-    }
 #endif
 
 #ifdef GC_FINAL_STATS

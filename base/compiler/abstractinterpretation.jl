@@ -692,11 +692,9 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
     world = get_inference_world(interp)
-    callee_method2 = method_for_inference_heuristics(method, sig, sparams, world) # Union{Method, Nothing}
-
-    inf_method2 = method_for_inference_limit_heuristics(frame) # limit only if user token match
-    inf_method2 isa Method || (inf_method2 = nothing)
-    if callee_method2 !== inf_method2
+    callee_method2 = method_for_inference_heuristics(method, sig, sparams, world)
+    inf_method2 = method_for_inference_limit_heuristics(frame)
+    if callee_method2 !== inf_method2 # limit only if user token match
         return false
     end
     if isa(frame, InferenceState) && cache_owner(frame.interp) !== cache_owner(interp)
@@ -733,15 +731,14 @@ end
 
 # This function is used for computing alternate limit heuristics
 function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector, world::UInt)
-    if isdefined(method, :generator) && !(method.generator isa Core.GeneratedFunctionStub) && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams)
-        if isa(method_instance, MethodInstance)
-            cinfo = get_staged(method_instance, world)
-            if isa(cinfo, CodeInfo)
-                method2 = cinfo.method_for_inference_limit_heuristics
-                if method2 isa Method
-                    return method2
-                end
+    if (hasgenerator(method) && !(method.generator isa Core.GeneratedFunctionStub) &&
+        may_invoke_generator(method, sig, sparams))
+        mi = specialize_method(method, sig, sparams)
+        cinfo = get_staged(mi, world)
+        if isa(cinfo, CodeInfo)
+            method2 = cinfo.method_for_inference_limit_heuristics
+            if method2 isa Method
+                return method2
             end
         end
     end
@@ -749,11 +746,9 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
 end
 
 function matches_sv(parent::AbsIntState, sv::AbsIntState)
-    sv_method2 = method_for_inference_limit_heuristics(sv) # limit only if user token match
-    sv_method2 isa Method || (sv_method2 = nothing)
-    parent_method2 = method_for_inference_limit_heuristics(parent) # limit only if user token match
-    parent_method2 isa Method || (parent_method2 = nothing)
-    return frame_instance(parent).def === frame_instance(sv).def && sv_method2 === parent_method2
+    # limit only if user token match
+    return (frame_instance(parent).def === frame_instance(sv).def &&
+            method_for_inference_limit_heuristics(sv) === method_for_inference_limit_heuristics(parent))
 end
 
 function is_edge_recursed(edge::MethodInstance, caller::AbsIntState)

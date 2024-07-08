@@ -1281,6 +1281,9 @@ Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = memoryref(S.data.ref, S
             end
         end
     end
+    # constant propagation in the PermutedDimsArray constructor
+    X = @inferred (A -> PermutedDimsArray(A, (2,3,1)))(A)
+    @test @inferred((X -> PermutedDimsArray(X, (3,1,2)))(X)) == A
 end
 
 @testset "simple 2d strided views, permutes, transposes" for sz in ((5, 3), (7, 11))

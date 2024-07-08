@@ -607,7 +607,7 @@ clean: | $(CLEAN_TARGETS)
 	-rm -fr $(build_datarootdir)/julia/extras
 
 cleanall: clean
-	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support clean-gc
+	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
 	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv
 	-rm -fr $(build_prefix) $(build_staging)
 
@@ -670,7 +670,14 @@ endif
 	@printf $(JULCOLOR)' ==> ./julia binary sizes\n'$(ENDCOLOR)
 	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
+		$(call cygpath_w,$(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)) \
+		$(call cygpath_w,$(build_shlibdir)/libjulia-codegen.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_bindir)/julia$(EXE)))
+ifeq ($(OS),Darwin)
+	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_shlibdir)/libLLVM.$(SHLIB_EXT)))
+else
+	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).$(SHLIB_EXT)))
+endif
 	@printf $(JULCOLOR)' ==> ./julia launch speedtest\n'$(ENDCOLOR)
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')

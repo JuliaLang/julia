@@ -140,10 +140,6 @@
     XX(jl_gc_add_ptr_finalizer) \
     XX(jl_gc_add_quiescent) \
     XX(jl_gc_allocobj) \
-    XX(jl_gc_alloc_0w) \
-    XX(jl_gc_alloc_1w) \
-    XX(jl_gc_alloc_2w) \
-    XX(jl_gc_alloc_3w) \
     XX(jl_gc_alloc_typed) \
     XX(jl_gc_big_alloc) \
     XX(jl_gc_big_alloc_instrumented) \
@@ -167,7 +163,6 @@
     XX(jl_gc_pool_live_bytes) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
-    XX(jl_gc_managed_realloc) \
     XX(jl_gc_mark_queue_obj) \
     XX(jl_gc_mark_queue_objarray) \
     XX(jl_gc_max_internal_obj_size) \
@@ -471,8 +466,6 @@
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
     XX(jl_typeassert) \
-    XX(jl_typeinf_lock_begin) \
-    XX(jl_typeinf_lock_end) \
     XX(jl_typeinf_timing_begin) \
     XX(jl_typeinf_timing_end) \
     XX(jl_typename_str) \

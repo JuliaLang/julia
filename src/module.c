@@ -681,10 +681,10 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
     b->exportp |= exported;
 }
 
-JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var) // unlike most queries here, this is currently seq_cst
+JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // unlike most queries here, this is currently seq_cst
 {
-    jl_binding_t *b = jl_get_binding(m, var);
-    return b && (jl_atomic_load(&b->value) != NULL);
+    jl_binding_t *b = allow_import ? jl_get_binding(m, var) : jl_get_module_binding(m, var, 0);
+    return b && (jl_atomic_load_relaxed(&b->owner) == b) && (jl_atomic_load(&b->value) != NULL);
 }
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)

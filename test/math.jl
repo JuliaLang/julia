@@ -1602,11 +1602,9 @@ end
                     @test Core.Compiler.is_foldable(effects)
                 end
             end
-            @static if !(Sys.iswindows()&&Int==Int32) # COMBAK debug this
             @testset let effects = Base.infer_effects(^, (T,Int))
                 @test Core.Compiler.is_foldable(effects)
             end
-            end # @static
             @testset let effects = Base.infer_effects(^, (T,T))
                 @test Core.Compiler.is_foldable(effects)
             end

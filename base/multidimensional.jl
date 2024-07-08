@@ -685,6 +685,40 @@ end  # IteratorsMD
 
 using .IteratorsMD
 
+# from genericmemory.jl:
+## generate vararg methods for atomic indexing
+for ex in (
+    :(getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)),
+    :(setindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)),
+    :(setindexonce_atomic!(mem::GenericMemory, success_order::Symbol, fail_order::Symbol, val, i::Int)),
+    :(modifyindex_atomic!(mem::GenericMemory, order::Symbol, op, val, i::Int)),
+    :(swapindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)),
+    :(replaceindex_atomic!(mem::GenericMemory, success_order::Symbol, fail_order::Symbol, expected, desired, i::Int,)),
+)
+    fn = ex.args[1]
+    args = ex.args[2:end-1]
+
+    @eval begin
+        function $fn($(args...), i::Union{Integer,CartesianIndex}...)
+            return $fn($(args...), CartesianIndex(to_indices($(args[1]), i)))
+        end
+
+        function $fn($(args...), i::CartesianIndex)
+            return $fn($(args...), Tuple(i)...)
+        end
+
+        function $fn($(args...), i::Integer...)
+            idcs = to_indices($(args[1]), i)
+            S = IndexStyle($(args[1]))
+            if isa(S, IndexLinear)
+                return $fn($(args...), _to_linear_index($(args[1]), idcs...))
+            else
+                return $fn($(args...), _to_subscript_indices($(args[1]), idcs...))
+            end
+        end
+    end
+end
+
 ## Bounds-checking with CartesianIndex
 # Disallow linear indexing with CartesianIndex
 @inline checkbounds(::Type{Bool}, A::AbstractArray, i::CartesianIndex) =

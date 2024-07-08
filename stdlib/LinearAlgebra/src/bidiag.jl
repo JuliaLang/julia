@@ -231,7 +231,8 @@ promote_rule(::Type{<:Matrix}, ::Type{<:Bidiagonal}) = Matrix
 function Tridiagonal{T}(A::Bidiagonal) where T
     dv = convert(AbstractVector{T}, A.dv)
     ev = convert(AbstractVector{T}, A.ev)
-    z = fill!(similar(ev), zero(T))
+    # ensure that the types are identical, even if zero returns a different type
+    z = oftype(ev, zero(ev))
     A.uplo == 'U' ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
 end
 promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
@@ -749,18 +750,6 @@ function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(B, TS, size(B)), A, B)
     return A.uplo == 'L' ? LowerTriangular(C) : C
-end
-
-function *(A::Diagonal, B::SymTridiagonal)
-    TS = promote_op(*, eltype(A), eltype(B))
-    out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
-    mul!(out, A, B)
-end
-
-function *(A::SymTridiagonal, B::Diagonal)
-    TS = promote_op(*, eltype(A), eltype(B))
-    out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
-    mul!(out, A, B)
 end
 
 function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)

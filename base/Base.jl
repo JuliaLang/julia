@@ -265,8 +265,28 @@ function strcat(x::String, y::String)
     end
     return out
 end
-include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
-include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
+BUILDROOT::String = ""
+
+baremodule BuildSettings
+end
+
+let i = 1
+    global BUILDROOT
+    while i <= length(Core.ARGS)
+        if Core.ARGS[i] == "--buildsettings"
+            include(BuildSettings, ARGS[i+1])
+            i += 1
+        else
+            BUILDROOT = Core.ARGS[i]
+        end
+        i += 1
+    end
+end
+
+include(strcat(BUILDROOT, "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
+include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
 # Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
 # a slightly more verbose fashion than usual, because we're running so early.
 const DL_LOAD_PATH = String[]
@@ -562,7 +582,7 @@ include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexp
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
+include(@__MODULE__, string(BUILDROOT, "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
 
 end_base_include = time_ns()
 
@@ -606,6 +626,10 @@ function __init__()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(explicit_loaded_modules)
+    @assert isempty(loaded_precompiles)
+    for (mod, key) in module_keys
+        loaded_precompiles[key => module_build_id(mod)] = mod
+    end
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end

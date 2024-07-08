@@ -242,7 +242,7 @@ version = "1.11.0"
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.6.1+0"
+version = "7.7.0+0"
 
 [[deps.TOML]]
 deps = ["Dates"]

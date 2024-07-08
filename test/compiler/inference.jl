@@ -2565,6 +2565,14 @@ Base.return_types(intermustalias_edgecase, (Any,); interp=MustAliasInterpreter()
     intermustalias_edgecase(x)
 end |> only === Core.Compiler.InterMustAlias
 
+@test Base.infer_return_type((AliasableField,Integer,); interp=MustAliasInterpreter()) do a, x
+    s = (;x)
+    if getfield(a, :f) isa Symbol
+        return getfield(s, getfield(a, :f))
+    end
+    return 0
+end == Integer
+
 function f25579(g)
     h = g[]
     t = (h === nothing)
