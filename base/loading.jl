@@ -1935,10 +1935,9 @@ end
                 dep = staledeps[i]
                 dep isa Module && continue
                 modpath, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
-                if stalecheck
+                dep = get(loaded_precompiles, modkey => modbuild_id, nothing)
+                if dep === nothing
                     dep = maybe_root_module(modkey)
-                else
-                    dep = get(loaded_precompiles, modkey => modbuild_id, nothing)
                 end
                 while true
                     if dep isa Module
