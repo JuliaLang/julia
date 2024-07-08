@@ -609,6 +609,7 @@ JL_DLLEXPORT void jl_fill_codeinst(
     codeinst->analysis_results = analysis_results;
     assert(jl_atomic_load_relaxed(&codeinst->min_world) == 1);
     assert(jl_atomic_load_relaxed(&codeinst->max_world) == 0);
+    jl_atomic_store_release(&codeinst->inferred, jl_nothing);
     jl_atomic_store_release(&codeinst->min_world, min_world);
     jl_atomic_store_release(&codeinst->max_world, max_world);
 }
