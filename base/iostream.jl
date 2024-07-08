@@ -52,7 +52,7 @@ end
 Return the file descriptor backing the stream or file. Note that this function only applies
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 """
-fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
+fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
 
