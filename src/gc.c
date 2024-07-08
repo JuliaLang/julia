@@ -1401,7 +1401,8 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
 
 // Walks over a page, reconstruting the free lists if the page contains at least one live object. If not,
 // queues up the page for later decommit (i.e. through `madvise` on Unix).
-static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
+static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_ptls_t ptls, jl_gc_pool_t *p,
+                          jl_gc_page_stack_t *allocd, jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
     jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
@@ -1513,7 +1514,6 @@ done:
     gc_page_profile_write_to_file(s);
     gc_update_page_fragmentation_data(pg);
     gc_time_count_page(freedall, pg_skpd);
-    jl_ptls_t ptls = jl_current_task->ptls;
     // Note that we aggregate the `pool_live_bytes` over all threads before returning this
     // value to the user. It doesn't matter how the `pool_live_bytes` are partitioned among
     // the threads as long as the sum is correct. Let's add the `pool_live_bytes` to the current thread
@@ -1526,14 +1526,15 @@ done:
 }
 
 // the actual sweeping over all allocated pages in a memory pool
-STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_page_stack_t *allocd, jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_ptls_t ptls, jl_gc_page_stack_t *allocd,
+                                      jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     int p_n = pg->pool_n;
     int t_n = pg->thread_n;
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
     jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
     int osize = pg->osize;
-    gc_sweep_page(s, p, allocd, pg, osize);
+    gc_sweep_page(s, ptls, p, allocd, pg, osize);
 }
 
 // sweep over all memory that is being used and not in a pool
@@ -1602,7 +1603,7 @@ int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_sc
                 push_lf_back_nosync(&tmp, pg);
             }
             else {
-                gc_sweep_pool_page(&serializer, dest, pg);
+                gc_sweep_pool_page(&serializer, ptls, dest, pg);
             }
             if (n_pages_to_scan >= n_pages_worth_parallel_sweep) {
                 break;
@@ -1687,7 +1688,7 @@ void gc_sweep_pool_parallel(jl_ptls_t ptls)
                 if (pg == NULL) {
                     continue;
                 }
-                gc_sweep_pool_page(&serializer, dest, pg);
+                gc_sweep_pool_page(&serializer, ptls, dest, pg);
                 found_pg = 1;
             }
             if (!found_pg) {
