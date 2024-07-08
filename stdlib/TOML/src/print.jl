@@ -101,7 +101,7 @@ function printvalue(f::MbyFunc, io::IO, value::TOMLValue, sorted::Bool)
     value isa AbstractFloat  ? Base.print(io, isnan(value) ? "nan" :
                                               isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
                                               Float64(value)) :  # TOML specifies IEEE 754 binary64 for float
-    value isa AbstractString ? (qmark = Base.contains(value, "\n") ? "\"\"\"" : "\""; 
+    value isa AbstractString ? (qmark = Base.contains(value, "\n") ? "\"\"\"" : "\"";
                                 Base.print(io, qmark);
                                 print_toml_escaped(io, value);
                                 Base.print(io, qmark)) :
