@@ -122,7 +122,7 @@ Standard library changes
   complete `using Base.Experimental: @op` to `using Base.Experimental: @opaque`. ([#54719])
 - the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
   and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
-  in the REPL will now issue a warning the first time occurs.
+  in the REPL will now issue a warning the first time occurs. ([#54872])
 
 #### SuiteSparse
 
