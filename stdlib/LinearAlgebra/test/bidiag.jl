@@ -952,11 +952,19 @@ end
         S32 = SizedArrays.SizedArray{(3,2)}(rand(3,2))
         S33 = SizedArrays.SizedArray{(3,3)}(rand(3,3))
         S22 = SizedArrays.SizedArray{(2,2)}(rand(2,2))
-        B = Bidiagonal(fill(S32, 4), fill(S32, 3), :U)
-        D = Diagonal(fill(S22, size(B,2)))
-        @test rmul!(copy(B), D) ≈ B * D
-        D = Diagonal(fill(S33, size(B,1)))
-        @test lmul!(D, copy(B)) ≈ D * B
+        for uplo in (:L, :U)
+            B = Bidiagonal(fill(S32, 4), fill(S32, 3), uplo)
+            D = Diagonal(fill(S22, size(B,2)))
+            @test rmul!(copy(B), D) ≈ B * D
+            D = Diagonal(fill(S33, size(B,1)))
+            @test lmul!(D, copy(B)) ≈ D * B
+        end
+
+        B = Bidiagonal(fill(S33, 4), fill(S33, 3), :U)
+        D = Diagonal(fill(S32, 4))
+        @test lmul!(B, Array(D)) ≈ B * D
+        B = Bidiagonal(fill(S22, 4), fill(S22, 3), :U)
+        @test rmul!(Array(D), B) ≈ D * B
     end
 end
 
