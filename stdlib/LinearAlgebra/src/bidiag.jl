@@ -469,6 +469,7 @@ const BiTri = Union{Bidiagonal,Tridiagonal}
 @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
+# B .= A * B
 function lmul!(A::Bidiagonal, B::AbstractVecOrMat)
     _muldiag_size_check(A, B)
     (; dv, ev) = A
@@ -489,6 +490,19 @@ function lmul!(A::Bidiagonal, B::AbstractVecOrMat)
     end
     return B
 end
+# B .= D * B
+function lmul!(D::Diagonal, B::Bidiagonal)
+    _muldiag_size_check(D, B)
+    (; dv, ev) = B
+    isL = B.uplo == 'L'
+    dv[1] = D.diag[1] * dv[1]
+    for i in axes(ev,1)
+        ev[i] = D.diag[i + isL] * ev[i]
+        dv[i+1] = D.diag[i+1] * dv[i+1]
+    end
+    return B
+end
+# B .= B * A
 function rmul!(B::AbstractMatrix, A::Bidiagonal)
     _muldiag_size_check(A, B)
     (; dv, ev) = A
@@ -510,6 +524,18 @@ function rmul!(B::AbstractMatrix, A::Bidiagonal)
         for i in axes(B,1)
             B[i,end] *= dv[end]
         end
+    end
+    return B
+end
+# B .= B * D
+function rmul!(B::Bidiagonal, D::Diagonal)
+    _muldiag_size_check(B, D)
+    (; dv, ev) = B
+    isU = B.uplo == 'U'
+    dv[1] *= D.diag[1]
+    for i in axes(ev,1)
+        ev[i] *= D.diag[i + isU]
+        dv[i+1] *= D.diag[i+1]
     end
     return B
 end
