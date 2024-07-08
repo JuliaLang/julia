@@ -6,6 +6,15 @@ New language features
 
 - A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
   find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
+- the `@atomic(...)` macro family supports now the reference assignment syntax, e.g.
+  `@atomic :monotonic v[3] += 4` modifies `v[3]` atomically with monotonic ordering semantics. ([#54707])
+  The supported syntax allows
+  - atomic fetch (`x = @atomic v[3]`),
+  - atomic set (`@atomic v[3] = 4`),
+  - atomic modify (`@atomic v[3] += 2`),
+  - atomic set once (`@atomiconce v[3] = 2`),
+  - atomic swap (`x = @atomicswap v[3] = 2`), and
+  - atomic replace (`x = @atomicreplace v[3] 2=>5`).
 
 Language changes
 ----------------
@@ -120,7 +129,11 @@ Standard library changes
   complete names that have been explicitly `using`-ed. ([#54610])
 - REPL completions can now complete input lines like `[import|using] Mod: xxx|` e.g.
   complete `using Base.Experimental: @op` to `using Base.Experimental: @opaque`. ([#54719])
-- When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB. This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
+- the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
+  and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
+  in the REPL will now issue a warning the first time occurs. ([#54872])
+- When an object is printed automatically (by being returned in the REPL), its display is now truncated after printing 20 KiB.
+  This does not affect manual calls to `show`, `print`, and so forth. ([#53959])
 
 #### SuiteSparse
 
