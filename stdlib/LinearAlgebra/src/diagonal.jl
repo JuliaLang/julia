@@ -335,6 +335,19 @@ function rmul!(A::AbstractMatrix, D::Diagonal)
     end
     return A
 end
+# T .= T * D
+function rmul!(T::Tridiagonal, D::Diagonal)
+    _muldiag_size_check(T, D)
+    (; dl, d, du) = T
+    d[1] *= D.diag[1]
+    for i in axes(dl,1)
+        dl[i] *= D.diag[i]
+        du[i] *= D.diag[i+1]
+        d[i+1] *= D.diag[i+1]
+    end
+    return T
+end
+
 function lmul!(D::Diagonal, B::AbstractVecOrMat)
     _muldiag_size_check(D, B)
     for I in CartesianIndices(B)
@@ -342,6 +355,20 @@ function lmul!(D::Diagonal, B::AbstractVecOrMat)
         @inbounds B[I] = D.diag[row] * B[I]
     end
     return B
+end
+
+# in-place multiplication with a diagonal
+# T .= D * T
+function lmul!(D::Diagonal, T::Tridiagonal)
+    _muldiag_size_check(D, T)
+    (; dl, d, du) = T
+    d[1] = D.diag[1] * d[1]
+    for i in axes(dl,1)
+        dl[i] = D.diag[i+1] * dl[i]
+        du[i] = D.diag[i] * du[i]
+        d[i+1] = D.diag[i+1] * d[i+1]
+    end
+    return T
 end
 
 function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
