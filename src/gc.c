@@ -1007,15 +1007,9 @@ STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz)
     return jl_valueof(&v->header);
 }
 
-// Deprecated version, supported for legacy code.
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
-{
-    jl_value_t *val = jl_gc_big_alloc_inner(ptls, sz);
-    maybe_record_alloc_to_profile(val, sz, jl_gc_unknown_type_tag);
-    return val;
-}
+
 // Instrumented version of jl_gc_big_alloc_inner, called into by LLVM-generated code.
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc_instrumented(jl_ptls_t ptls, size_t sz, jl_value_t *type)
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz, jl_value_t *type)
 {
     jl_value_t *val = jl_gc_big_alloc_inner(ptls, sz);
     maybe_record_alloc_to_profile(val, sz, (jl_datatype_t*)type);
@@ -1289,7 +1283,7 @@ STATIC_INLINE jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
     jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + pool_offset);
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 #ifdef MEMDEBUG
-    return jl_gc_big_alloc(ptls, osize);
+    return jl_gc_big_alloc(ptls, osize, NULL);
 #endif
     maybe_collect(ptls);
     jl_atomic_store_relaxed(&ptls->gc_num.allocd,
@@ -1337,17 +1331,8 @@ STATIC_INLINE jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
     return jl_valueof(v);
 }
 
-// Deprecated version, supported for legacy code.
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
-                                          int osize)
-{
-    jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
-    maybe_record_alloc_to_profile(val, osize, jl_gc_unknown_type_tag);
-    return val;
-}
 // Instrumented version of jl_gc_pool_alloc_inner, called into by LLVM-generated code.
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc_instrumented(jl_ptls_t ptls, int pool_offset,
-                                        int osize, jl_value_t* type)
+JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset, int osize, jl_value_t* type)
 {
     jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);
