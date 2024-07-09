@@ -121,7 +121,7 @@ You can protect access to a critical region in your finalizer with one of these 
     This can be a good strategy to use for code with event loops
     and is employed by `Gtk.jl` to manage lifetime ref-counting.
 
-    If you use `Threads.@spawn` then you will not have control over with thread the spawned task will run on, so you will still need to acquire a lock in the task.
+    If you use `Threads.@spawn` then you will not have control over which thread the spawned task will run on, so you will still need to acquire a lock in the task.
     If you define your own queue then you can avoid this by only draining the queue from one thread at a time.
 
     An example using `Threads.@spawn`:
