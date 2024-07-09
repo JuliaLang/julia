@@ -908,7 +908,7 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
 {
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*),
                                                   jl_weakref_type);
-    wr->value = value;  // NOTE: wb not needed here
+    jl_atomic_store_relaxed(&wr->value, value);  // NOTE: wb not needed here
     small_arraylist_push(&ptls->heap.weak_refs, wr);
     return wr;
 }
@@ -923,8 +923,8 @@ static void clear_weak_refs(void)
             void **lst = ptls2->heap.weak_refs.items;
             for (n = 0; n < l; n++) {
                 jl_weakref_t *wr = (jl_weakref_t*)lst[n];
-                if (!gc_marked(jl_astaggedvalue(wr->value)->bits.gc))
-                    wr->value = (jl_value_t*)jl_nothing;
+                if (!gc_marked(jl_astaggedvalue(jl_atomic_load_relaxed(&wr->value))->bits.gc))
+                    jl_atomic_store_relaxed(&wr->value, (jl_value_t*)jl_nothing);
             }
         }
     }
