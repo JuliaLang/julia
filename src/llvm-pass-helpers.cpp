@@ -258,8 +258,8 @@ namespace jl_intrinsics {
 }
 
 namespace jl_well_known {
-    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc_instrumented);
-    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc_instrumented);
+    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
+    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
 
