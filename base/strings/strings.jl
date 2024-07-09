@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("strings/annotated.jl")
 include("strings/search.jl")
 include("strings/unicode.jl")
 

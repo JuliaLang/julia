@@ -114,7 +114,7 @@
                    (deparse-prefix-call (cadr e) (cddr e) #\( #\)))))
            (($ &)          (if (and (pair? (cadr e))
                                     (not (memq (caadr e)
-                                               '(outerref null true false tuple $ vect braces))))
+                                               '(null true false tuple $ vect braces))))
                                (string (car e) "(" (deparse (cadr e)) ")")
                                (string (car e) (deparse (cadr e)))))
            ((|::|)         (if (length= e 2)
@@ -249,12 +249,11 @@
            ;; misc syntax forms
            ((import using)
             (string (car e) " " (string.join (map deparse-import-path (cdr e)) ", ")))
-           ((global local export) (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
+           ((global local export public) (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
            ((const)        (string "const " (deparse (cadr e))))
            ((top)          (deparse (cadr e)))
            ((core)         (string "Core." (deparse (cadr e))))
            ((globalref)    (string (deparse (cadr e)) "." (deparse-colon-dot (caddr e))))
-           ((outerref)     (string (deparse (cadr e))))
            ((ssavalue)     (string "SSAValue(" (cadr e) ")"))
            ((line)         (if (length= e 2)
                                (string "# line " (cadr e))
@@ -298,7 +297,7 @@
 ;; predicates and accessors
 
 (define (quoted? e)
-  (memq (car e) '(quote top core globalref outerref line break inert meta inbounds inline noinline loopinfo)))
+  (memq (car e) '(quote top core globalref line break inert meta inbounds inline noinline loopinfo)))
 (define (quotify e) `',e)
 (define (unquote e)
   (if (and (pair? e) (memq (car e) '(quote inert)))
@@ -392,9 +391,6 @@
 
 (define (globalref? e)
   (and (pair? e) (eq? (car e) 'globalref)))
-
-(define (outerref? e)
-  (and (pair? e) (eq? (car e) 'outerref)))
 
 (define (nothing? e)
   (and (pair? e) (eq? (car e) 'null)))

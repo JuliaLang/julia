@@ -103,17 +103,20 @@ end
     has_offset_axes(A, B, ...)
 
 Return `true` if the indices of `A` start with something other than 1 along any axis.
-If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
+If multiple arguments are passed, equivalent to `has_offset_axes(A) || has_offset_axes(B) || ...`.
 
 See also [`require_one_based_indexing`](@ref).
 """
+has_offset_axes() = false
 has_offset_axes(A) = _any_tuple(x->Int(first(x))::Int != 1, false, axes(A)...)
 has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
-# Use `_any_tuple` to avoid unneeded invoke.
-# note: this could call `any` directly if the compiler can infer it
-has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
 has_offset_axes(::Colon) = false
 has_offset_axes(::Array) = false
+# note: this could call `any` directly if the compiler can infer it. We don't use _any_tuple
+# here because it stops full elision in some cases (#49332) and we don't need handling of
+# `missing` (has_offset_axes(A) always returns a Bool)
+has_offset_axes(A, As...) = has_offset_axes(A) || has_offset_axes(As...)
+
 
 """
     require_one_based_indexing(A::AbstractArray)
@@ -268,8 +271,8 @@ julia> ndims(A)
 3
 ```
 """
-ndims(::AbstractArray{T,N}) where {T,N} = N
-ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N
+ndims(::AbstractArray{T,N}) where {T,N} = N::Int
+ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N::Int
 ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 """
@@ -446,7 +449,7 @@ julia> firstindex(rand(3,4,5), 2)
 firstindex(a::AbstractArray) = (@inline; first(eachindex(IndexLinear(), a)))
 firstindex(a, d) = (@inline; first(axes(a, d)))
 
-first(a::AbstractArray) = a[first(eachindex(a))]
+@propagate_inbounds first(a::AbstractArray) = a[first(eachindex(a))]
 
 """
     first(coll)
@@ -678,15 +681,12 @@ function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     checkbounds_indices(Bool, axes(A), I)
 end
 
-# Linear indexing is explicitly allowed when there is only one (non-cartesian) index
+# Linear indexing is explicitly allowed when there is only one (non-cartesian) index;
+# indices that do not allow linear indexing (e.g., logical arrays, cartesian indices, etc)
+# must add specialized methods to implement their restrictions
 function checkbounds(::Type{Bool}, A::AbstractArray, i)
     @inline
-    checkindex(Bool, eachindex(IndexLinear(), A), i)
-end
-# As a special extension, allow using logical arrays that match the source array exactly
-function checkbounds(::Type{Bool}, A::AbstractArray{<:Any,N}, I::AbstractArray{Bool,N}) where N
-    @inline
-    axes(A) == axes(I)
+    return checkindex(Bool, eachindex(IndexLinear(), A), i)
 end
 
 """
@@ -720,18 +720,13 @@ of `IA`.
 
 See also [`checkbounds`](@ref).
 """
-function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple)
+function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{Any, Vararg})
     @inline
-    checkindex(Bool, IA[1], I[1])::Bool & checkbounds_indices(Bool, tail(IA), tail(I))
+    return checkindex(Bool, get(inds, 1, OneTo(1)), I[1])::Bool &
+        checkbounds_indices(Bool, safe_tail(inds), tail(I))
 end
-function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple)
-    @inline
-    checkindex(Bool, OneTo(1), I[1])::Bool & checkbounds_indices(Bool, (), tail(I))
-end
-checkbounds_indices(::Type{Bool}, IA::Tuple, ::Tuple{}) = (@inline; all(x->length(x)==1, IA))
-checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 
-throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
+checkbounds_indices(::Type{Bool}, inds::Tuple, ::Tuple{}) = (@inline; all(x->length(x)==1, inds))
 
 # check along a single dimension
 """
@@ -753,20 +748,19 @@ julia> checkindex(Bool, 1:20, 21)
 false
 ```
 """
-checkindex(::Type{Bool}, inds::AbstractUnitRange, i) =
-    throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
+checkindex(::Type{Bool}, inds, i) = throw(ArgumentError(LazyString("unable to check bounds for indices of type ", typeof(i))))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::IdentityUnitRange, i::Real) = checkindex(Bool, inds.indices, i)
 checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i - one(i)) < unsigned(last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
-function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
-    @_propagate_inbounds_meta
-    isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
-end
-checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractVector{Bool}) = indx == axes1(I)
-checkindex(::Type{Bool}, indx::AbstractUnitRange, I::AbstractArray{Bool}) = false
-function checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray)
+checkindex(::Type{Bool}, inds::AbstractUnitRange, i::AbstractRange) =
+    isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
+# range like indices with cheap `extrema`
+checkindex(::Type{Bool}, inds::AbstractUnitRange, i::LinearIndices) =
+    isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
+
+function checkindex(::Type{Bool}, inds, I::AbstractArray)
     @inline
     b = true
     for i in I
@@ -890,7 +884,7 @@ julia> empty([1.0, 2.0, 3.0], String)
 String[]
 ```
 """
-empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = similar(a, U, 0)
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
@@ -902,10 +896,17 @@ emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 In-place [`copy`](@ref) of `src` into `dst`, discarding any pre-existing
 elements in `dst`.
 If `dst` and `src` are of the same type, `dst == src` should hold after
-the call. If `dst` and `src` are multidimensional arrays, they must have
+the call. If `dst` and `src` are vector types, they must have equal
+offset. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 
+$(_DOCS_ALIASING_WARNING)
+
 See also [`copyto!`](@ref).
+
+!!! note
+    When operating on vector types, if `dst` and `src` are not of the
+    same length, `dst` is resized to `length(src)` prior to the `copy`.
 
 !!! compat "Julia 1.1"
     This method requires at least Julia 1.1. In Julia 1.0 this method
@@ -1034,6 +1035,8 @@ the other elements are left untouched.
 
 See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> x = [1., 0., 3., 0., 5.];
@@ -1120,8 +1123,8 @@ function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstar
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
-               src::AbstractArray, sstart::Integer,
-               n::Integer)
+                 src::AbstractArray, sstart::Integer,
+                 n::Integer)
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
@@ -1198,7 +1201,26 @@ function copymutable(a::AbstractArray)
 end
 copymutable(itr) = collect(itr)
 
-zero(x::AbstractArray{T}) where {T} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
+zero(x::AbstractArray) = map(zero, x)
+
+function _one(unit::T, mat::AbstractMatrix) where {T}
+    (rows, cols) = axes(mat)
+    (length(rows) == length(cols)) ||
+      throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
+    zer = zero(unit)::T
+    require_one_based_indexing(mat)
+    I = similar(mat, T)
+    fill!(I, zer)
+    for i ∈ rows
+        I[i, i] = unit
+    end
+    I
+end
+
+one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
+oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
@@ -1229,10 +1251,10 @@ end
 # note: the following type definitions don't mean any AbstractArray is convertible to
 # a data Ref. they just map the array element type to the pointer type for
 # convenience in cases that work.
-pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
+pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, cconvert(Ptr{T}, x))
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @inline
-    unsafe_convert(Ptr{T}, x) + Int(_memory_offset(x, i))::Int
+    pointer(x) + Int(_memory_offset(x, i))::Int
 end
 
 # The distance from pointer(x) to the element at x[I...] in bytes
@@ -1254,8 +1276,11 @@ end
 """
     getindex(A, inds...)
 
-Return a subset of array `A` as specified by `inds`, where each `ind` may be,
-for example, an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+Return a subset of array `A` as selected by the indices `inds`.
+
+Each index may be any [supported index type](@ref man-supported-index-types), such
+as an [`Integer`](@ref), [`CartesianIndex`](@ref), [range](@ref Base.AbstractRange), or [array](@ref man-multi-dim-arrays) of supported indices.
+A [:](@ref Base.Colon) may be used to select all elements along a specific dimension, and a boolean array (e.g. an `Array{Bool}` or a [`BitArray`](@ref)) may be used to filter for elements where the corresponding index is `true`.
 
 When `inds` selects multiple elements, this function returns a newly
 allocated array. To index multiple elements without making a copy,
@@ -1282,6 +1307,27 @@ julia> getindex(A, 2:4)
 3-element Vector{Int64}:
  3
  2
+ 4
+
+julia> getindex(A, 2, 1)
+3
+
+julia> getindex(A, CartesianIndex(2, 1))
+3
+
+julia> getindex(A, :, 2)
+2-element Vector{Int64}:
+ 2
+ 4
+
+julia> getindex(A, 2, :)
+2-element Vector{Int64}:
+ 3
+ 4
+
+julia> getindex(A, A .> 2)
+2-element Vector{Int64}:
+ 3
  4
 ```
 """
@@ -1370,6 +1416,8 @@ _unsafe_ind2sub(sz, i) = (@inline; _ind2sub(sz, i))
 Store values from array `X` within some subset of `A` as specified by `inds`.
 The syntax `A[inds...] = X` is equivalent to `(setindex!(A, X, inds...); X)`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = zeros(2,2);
@@ -1425,6 +1473,8 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)
     r
 end
+
+_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
 
 """
     parent(A)
@@ -1491,12 +1541,14 @@ much more common case where aliasing does not occur. By default,
 unaliascopy(A::Array) = copy(A)
 unaliascopy(A::AbstractArray)::typeof(A) = (@noinline; _unaliascopy(A, copy(A)))
 _unaliascopy(A::T, C::T) where {T} = C
-_unaliascopy(A, C) = throw(ArgumentError("""
-    an array of type `$(typename(typeof(A)).wrapper)` shares memory with another argument
-    and must make a preventative copy of itself in order to maintain consistent semantics,
-    but `copy(::$(typeof(A)))` returns a new array of type `$(typeof(C))`.
-    To fix, implement:
-        `Base.unaliascopy(A::$(typename(typeof(A)).wrapper))::typeof(A)`"""))
+function _unaliascopy(A, C)
+    Aw = typename(typeof(A)).wrapper
+    throw(ArgumentError(LazyString("an array of type `", Aw, "` shares memory with another argument ",
+    "and must make a preventative copy of itself in order to maintain consistent semantics, ",
+    "but `copy(::", typeof(A), ")` returns a new array of type `", typeof(C), "`.\n",
+    """To fix, implement:
+        `Base.unaliascopy(A::""", Aw, ")::typeof(A)`")))
+end
 unaliascopy(A) = A
 
 """
@@ -1507,7 +1559,7 @@ Perform a conservative test to check if arrays `A` and `B` might share the same 
 By default, this simply checks if either of the arrays reference the same memory
 regions, as identified by their [`Base.dataids`](@ref).
 """
-mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_isdisjoint(dataids(A), dataids(B))
+mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !isempty(A) && !isempty(B) && !_isdisjoint(dataids(A), dataids(B))
 mightalias(x, y) = false
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
@@ -1531,7 +1583,8 @@ their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
-dataids(A::Array) = (UInt(pointer(A)),)
+dataids(A::Memory) = (B = ccall(:jl_genericmemory_owner, Any, (Any,), A); (UInt(pointer(B isa typeof(A) ? B : A)),))
+dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
 
@@ -1587,13 +1640,15 @@ eltypeof(x::AbstractArray) = eltype(x)
 
 promote_eltypeof() = error()
 promote_eltypeof(v1) = eltypeof(v1)
-promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
+promote_eltypeof(v1, v2) = promote_type(eltypeof(v1), eltypeof(v2))
+promote_eltypeof(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltypeof(y)), promote_eltypeof(v1, v2), vs...))
 promote_eltypeof(v1::T, vs::T...) where {T} = eltypeof(v1)
 promote_eltypeof(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 promote_eltype() = error()
 promote_eltype(v1) = eltype(v1)
-promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+promote_eltype(v1, v2) = promote_type(eltype(v1), eltype(v2))
+promote_eltype(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltype(y)), promote_eltype(v1, v2), vs...))
 promote_eltype(v1::T, vs::T...) where {T} = eltype(T)
 promote_eltype(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
@@ -1965,23 +2020,90 @@ The keyword also accepts `Val(dims)`.
     For multiple dimensions `dims = Val(::Tuple)` was added in Julia 1.8.
 
 # Examples
+
+Concatenate two arrays in different dimensions:
+```jldoctest
+julia> a = [1 2 3]
+1×3 Matrix{Int64}:
+ 1  2  3
+
+julia> b = [4 5 6]
+1×3 Matrix{Int64}:
+ 4  5  6
+
+julia> cat(a, b; dims=1)
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+
+julia> cat(a, b; dims=2)
+1×6 Matrix{Int64}:
+ 1  2  3  4  5  6
+
+julia> cat(a, b; dims=(1, 2))
+2×6 Matrix{Int64}:
+ 1  2  3  0  0  0
+ 0  0  0  4  5  6
+```
+
+# Extended Help
+
+Concatenate 3D arrays:
+```jldoctest
+julia> a = ones(2, 2, 3);
+
+julia> b = ones(2, 2, 4);
+
+julia> c = cat(a, b; dims=3);
+
+julia> size(c) == (2, 2, 7)
+true
+```
+
+Concatenate arrays of different sizes:
 ```jldoctest
 julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 2×6×1 Array{Float64, 3}:
 [:, :, 1] =
  1.0  2.0  3.14159  10.0  10.0  10.0
  3.0  4.0  3.14159  10.0  10.0  10.0
+```
 
+Construct a block diagonal matrix:
+```
 julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
  0  1  1  0  0  0  0
  0  1  1  0  0  0  0
  0  0  0  1  1  1  1
+```
 
+```
 julia> cat(1, [2], [3;;]; dims=Val(2))
 1×3 Matrix{Int64}:
  1  2  3
+```
+
+!!! note
+    `cat` does not join two strings, you may want to use `*`.
+
+```jldoctest
+julia> a = "aaa";
+
+julia> b = "bbb";
+
+julia> cat(a, b; dims=1)
+2-element Vector{String}:
+ "aaa"
+ "bbb"
+
+julia> cat(a, b; dims=2)
+1×2 Matrix{String}:
+ "aaa"  "bbb"
+
+julia> a * b
+"aaabbb"
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
@@ -3087,9 +3209,8 @@ julia> foreach((x, y) -> println(x, " with ", y), tri, 'a':'z')
 7 with c
 ```
 """
-foreach(f) = (f(); nothing)
 foreach(f, itr) = (for x in itr; f(x); end; nothing)
-foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
+foreach(f, itr, itrs...) = (for z in zip(itr, itrs...); f(z...); end; nothing)
 
 ## map over arrays ##
 
@@ -3166,7 +3287,7 @@ one *without* a colon in the slice. This is `view(A,:,i,:)`, whereas
 `mapslices(f, A; dims=(1,3))` uses `A[:,i,:]`. The function `f` may mutate
 values in the slice without affecting `A`.
 """
-function mapslices(f, A::AbstractArray; dims)
+@constprop :aggressive function mapslices(f, A::AbstractArray; dims)
     isempty(dims) && return map(f, A)
 
     for d in dims
@@ -3261,10 +3382,6 @@ end
 concatenate_setindex!(R, v, I...) = (R[I...] .= (v,); R)
 concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
-## 0 arguments
-
-map(f) = f()
-
 ## 1 argument
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
@@ -3344,6 +3461,8 @@ end
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
 
+$(_DOCS_ALIASING_WARNING)
+
 See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 
 # Examples
@@ -3398,7 +3517,7 @@ julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is 
  102.0
 ```
 """
-map(f, iters...) = collect(Generator(f, iters...))
+map(f, it, iters...) = collect(Generator(f, it, iters...))
 
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
@@ -3530,9 +3649,9 @@ end
 ## 1-d circshift ##
 function circshift!(a::AbstractVector, shift::Integer)
     n = length(a)
-    n == 0 && return
+    n == 0 && return a
     shift = mod(shift, n)
-    shift == 0 && return
+    shift == 0 && return a
     l = lastindex(a)
     reverse!(a, firstindex(a), l-shift)
     reverse!(a, l-shift+1, lastindex(a))

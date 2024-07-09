@@ -76,7 +76,6 @@ floatmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(flo
 # NAG Ltd.
 function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
     onepar = one(T)
-    twopar = 2one(T)
     T0 = typeof(onepar) # dimensionless
     zeropar = T0(zero(T)) # must be dimensionless
 
@@ -105,7 +104,7 @@ function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
                 f1 *= safmn2
                 g1 *= safmn2
                 scalepar = max(abs(f1), abs(g1))
-                if scalepar < safmx2u break end
+                if scalepar < safmx2u || count >= 20 break end
             end
             r = sqrt(f1*f1 + g1*g1)
             cs = f1/r
@@ -149,7 +148,7 @@ end
 # Univ. of Colorado Denver
 # NAG Ltd.
 function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
-    twopar, onepar = 2one(T), one(T)
+    onepar = one(T)
     T0 = typeof(onepar) # dimensionless
     zeropar = T0(zero(T)) # must be dimensionless
     czero = complex(zeropar)
@@ -170,7 +169,7 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
             fs *= safmn2
             gs *= safmn2
             scalepar *= safmn2
-            if scalepar < safmx2u break end
+            if scalepar < safmx2u || count >= 20 break end
         end
     elseif scalepar <= safmn2u
         if g == 0
@@ -193,13 +192,13 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
         # This is a rare case: F is very small.
         if f == 0
             cs = zero(T)
-            r = complex(hypot(real(g), imag(g)))
+            r = complex(abs(g))
             # do complex/real division explicitly with two real divisions
-            d = hypot(real(gs), imag(gs))
+            d = abs(gs)
             sn = complex(real(gs)/d, -imag(gs)/d)
             return cs, sn, r
         end
-        f2s = hypot(real(fs), imag(fs))
+        f2s = abs(fs)
         # g2 and g2s are accurate
         # g2 is at least safmin, and g2s is at least safmn2
         g2s = sqrt(g2)
@@ -214,7 +213,7 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
         # make sure abs(ff) = 1
         # do complex/real division explicitly with 2 real divisions
         if abs1(f) > 1
-            d = hypot(real(f), imag(f))
+            d = abs(f)
             ff = complex(real(f)/d, imag(f)/d)
         else
             dr = safmx2*real(f)

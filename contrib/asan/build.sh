@@ -40,7 +40,7 @@ if [ ! -d "$TOOLCHAIN" ]; then
     cp "$HERE/Make.user.tools"  "$TOOLCHAIN/Make.user"
 fi
 
-make -C "$TOOLCHAIN/deps" install-clang install-llvm-tools
+make -C "$TOOLCHAIN/deps" install-clang install-llvm-tools install-patchelf
 
 echo
 echo "Building Julia..."

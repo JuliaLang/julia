@@ -32,7 +32,7 @@ static inline int lt_ptr(void *a, void *b)
     return (uintptr_t)a < (uintptr_t)b;
 }
 
-/* align pointer to full word if mis-aligned */
+/* align pointer to full word if misaligned */
 static inline void *align_ptr(void *p)
 {
     uintptr_t u = (uintptr_t)p;

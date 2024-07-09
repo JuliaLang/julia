@@ -14,7 +14,7 @@ $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/so
 	echo 1 > $@
 
 $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) --build $(dir $<)
 	echo 1 > $@
 
 define ITTAPI_INSTALL
@@ -40,4 +40,5 @@ fastcheck-ittapi: #none
 check-ittapi: #none
 
 clean-ittapi:
-	-rm -f $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled $(build_libdir)/libopenlibm.a
+	-rm -f $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled
+	-rm -f $(build_libdir)/libittnotify.a $(build_libdir)/libjitprofiling.a

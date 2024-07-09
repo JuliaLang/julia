@@ -4,7 +4,7 @@
 
 Julia Base contains a range of functions and macros appropriate for performing
 scientific and numerical computing, but is also as broad as those of many general purpose programming
-languages.  Additional functionality is available from a growing collection of
+languages. Additional functionality is available from a growing collection of
 [available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
 
@@ -30,7 +30,7 @@ Base.isinteractive
 Base.summarysize
 Base.__precompile__
 Base.include
-Base.MainInclude.include
+Main.include
 Base.include_string
 Base.include_dependency
 __init__
@@ -148,6 +148,7 @@ Base.setproperty!
 Base.replaceproperty!
 Base.swapproperty!
 Base.modifyproperty!
+Base.setpropertyonce!
 Base.propertynames
 Base.hasproperty
 Core.getfield
@@ -155,9 +156,8 @@ Core.setfield!
 Core.modifyfield!
 Core.replacefield!
 Core.swapfield!
+Core.setfieldonce!
 Core.isdefined
-Core.getglobal
-Core.setglobal!
 Base.@isdefined
 Base.convert
 Base.promote
@@ -285,7 +285,7 @@ Base.Fix2
 
 ```@docs
 Core.eval
-Base.MainInclude.eval
+Main.eval
 Base.@eval
 Base.evalfile
 Base.esc
@@ -338,6 +338,12 @@ Base.Cmd
 Base.setenv
 Base.addenv
 Base.withenv
+Base.shell_escape
+Base.shell_split
+Base.shell_escape_posixly
+Base.shell_escape_csh
+Base.shell_escape_wincmd
+Base.escape_microsoft_c_args
 Base.setcpuaffinity
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
@@ -352,6 +358,7 @@ Base.@timed
 Base.@elapsed
 Base.@allocated
 Base.@allocations
+Base.@lock_conflicts
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -373,6 +380,9 @@ Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
+Base.Sys.isreadable
+Base.Sys.iswritable
+Base.Sys.username
 Base.@static
 ```
 
@@ -404,6 +414,7 @@ Core.DivideError
 Core.DomainError
 Base.EOFError
 Core.ErrorException
+Core.FieldError
 Core.InexactError
 Core.InterruptException
 Base.KeyError
@@ -459,6 +470,22 @@ Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@locals
+Core.getglobal
+Core.setglobal!
+Core.modifyglobal!
+Core.swapglobal!
+Core.setglobalonce!
+Core.replaceglobal!
+```
+
+## Documentation
+(See also the [documentation](@ref man-documentation) chapter.)
+```@docs
+Base.@doc
+Docs.HTML
+Docs.Text
+Docs.hasdoc
+Docs.undocumented_names
 ```
 
 ## Code loading
@@ -480,6 +507,7 @@ Base.GC.enable
 Base.GC.@preserve
 Base.GC.safepoint
 Base.GC.enable_logging
+Base.GC.logging_enabled
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)

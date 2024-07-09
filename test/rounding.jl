@@ -441,7 +441,6 @@ const native_rounding_modes = (
         setprecision(BigFloat, pr) do
             exp = 500
             bf_samples = float_samples(BigFloat, (-exp):exp, 20) # about 40040 random values
-            @show length(bf_samples)
             for rm ∈ (mpfr_rounding_modes..., Base.MPFR.MPFRRoundFaithful,
                       native_rounding_modes...),
                 bf ∈ bf_samples,
@@ -458,4 +457,16 @@ end
     @test_throws InexactError round(Int64, -Inf16)
     @test_throws InexactError round(Int128, -Inf16)
     # More comprehensive testing is present in test/floatfuncs.jl
+end
+
+@testset "floor(<:AbstractFloat, large_number) (#52355)" begin
+    @test floor(Float32, 0xffff_ffff) == prevfloat(2f0^32) <= 0xffff_ffff
+    @test trunc(Float16, typemax(UInt128)) == floatmax(Float16)
+    @test round(Float16, typemax(UInt128)) == Inf16
+    for i in [-BigInt(floatmax(Float64)), -BigInt(floatmax(Float64))*100, BigInt(floatmax(Float64)), BigInt(floatmax(Float64))*100]
+        f = ceil(Float64, i)
+        @test f >= i
+        @test isinteger(f) || isinf(f)
+        @test prevfloat(f) < i
+    end
 end

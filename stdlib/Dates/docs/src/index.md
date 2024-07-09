@@ -1,7 +1,3 @@
-```@meta
-EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/docs/src/index.md"
-```
-
 # Dates
 
 ```@meta
@@ -22,7 +18,7 @@ represents a continuously increasing machine timeline based on the UT second [^1
 [`DateTime`](@ref) type is not aware of time zones (*naive*, in Python parlance),
 analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
 can be added through the [TimeZones.jl package](https://github.com/JuliaTime/TimeZones.jl/), which
-compiles the [IANA time zone database](http://www.iana.org/time-zones). Both [`Date`](@ref) and
+compiles the [IANA time zone database](https://www.iana.org/time-zones). Both [`Date`](@ref) and
 [`DateTime`](@ref) are based on the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) standard, which follows the proleptic Gregorian calendar.
 One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last
 day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists.
@@ -97,7 +93,7 @@ parser know which periods to parse in each slot.
 
 As in the case of constructors above such as `Date(2013)`, delimited `DateFormat`s allow for
 missing parts of dates and times so long as the preceding parts are given. The other parts are given the usual
-default values.  For example, `Date("1981-03", dateformat"y-m-d")` returns `1981-03-01`, whilst
+default values. For example, `Date("1981-03", dateformat"y-m-d")` returns `1981-03-01`, whilst
 `Date("31/12", dateformat"d/m/y")` gives `0001-12-31`.  (Note that the default year is
 1 AD/CE.)
 An empty string, however, always throws an `ArgumentError`.
@@ -343,12 +339,12 @@ First the mapping is loaded into the `LOCALES` variable:
 julia> french_months = ["janvier", "février", "mars", "avril", "mai", "juin",
                         "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 
-julia> french_monts_abbrev = ["janv","févr","mars","avril","mai","juin",
+julia> french_months_abbrev = ["janv","févr","mars","avril","mai","juin",
                               "juil","août","sept","oct","nov","déc"];
 
 julia> french_days = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
 
-julia> Dates.LOCALES["french"] = Dates.DateLocale(french_months, french_monts_abbrev, french_days, [""]);
+julia> Dates.LOCALES["french"] = Dates.DateLocale(french_months, french_months_abbrev, french_days, [""]);
 ```
 
  The above mentioned functions can then be used to perform the queries:
@@ -549,7 +545,7 @@ it could represent, in days, a value of 28, 29, 30, or 31 depending on the year 
 Or a year could represent 365 or 366 days in the case of a leap year. [`Period`](@ref) types are
 simple [`Int64`](@ref) wrappers and are constructed by wrapping any `Int64` convertible type, i.e. `Year(1)`
 or `Month(3.0)`. Arithmetic between [`Period`](@ref) of the same type behave like integers, and
-limited `Period-Real` arithmetic is available.  You can extract the underlying integer with
+limited `Period-Real` arithmetic is available. You can extract the underlying integer with
 [`Dates.value`](@ref).
 
 ```jldoctest

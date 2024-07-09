@@ -1,11 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+`Base.TOML` is an undocumented internal part of Julia's TOML parser
+implementation.  Users should call the documented interface in the
+TOML.jl standard library instead (by `import TOML` or `using TOML`).
+"""
 module TOML
 
 using Base: IdSet
 
-# In case we do not have the Dates stdlib available
 # we parse DateTime into these internal structs,
+# unless a different DateTime library is passed to the Parser constructor
 # note that these do not do any argument checking
 struct Date
     year::Int
@@ -80,11 +85,9 @@ mutable struct Parser
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
 
-    # Get's populated with the Dates stdlib if it exists
+    # Optionally populate with the Dates stdlib to change the type of Date types returned
     Dates::Union{Module, Nothing}
 end
-
-const DATES_PKGID = Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates")
 
 function Parser(str::String; filepath=nothing)
     root = TOMLDict()
@@ -104,7 +107,7 @@ function Parser(str::String; filepath=nothing)
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
-            isdefined(Base, :maybe_root_module) ? Base.maybe_root_module(DATES_PKGID) : nothing,
+            nothing
         )
     startup(l)
     return l
@@ -145,8 +148,6 @@ end
 ##########
 # Errors #
 ##########
-
-throw_internal_error(msg) = error("internal TOML parser error: $msg")
 
 # Many functions return a ParserError. We want this to bubble up
 # all the way and have this error be returned to the user
@@ -367,7 +368,7 @@ end
 @inline peek(l::Parser) = l.current_char
 
 # Return true if the character was accepted. When a character
-# is accepted it get's eaten and we move to the next character
+# is accepted it gets eaten and we move to the next character
 @inline function accept(l::Parser, f::Union{Function, Char})::Bool
     c = peek(l)
     c == EOF_CHAR && return false
@@ -611,7 +612,7 @@ function _parse_key(l::Parser)
     else
         set_marker!(l)
         if accept_batch(l, isvalid_barekey_char)
-            if !(peek(l) == '.' || peek(l) == ' ' || peek(l) == ']' || peek(l) == '=')
+            if !(peek(l) == '.' || iswhitespace(peek(l)) || peek(l) == ']' || peek(l) == '=')
                 c = eat_char(l)
                 return ParserError(ErrInvalidBareKeyCharacter, c)
             end
@@ -665,7 +666,7 @@ end
 #########
 
 function push!!(v::Vector, el)
-    # Since these types are typically non-inferrable, they are a big invalidation risk,
+    # Since these types are typically non-inferable, they are a big invalidation risk,
     # and since it's used by the package-loading infrastructure the cost of invalidation
     # is high. Therefore, this is written to reduce the "exposed surface area": e.g., rather
     # than writing `T[el]` we write it as `push!(Vector{T}(undef, 1), el)` so that there
@@ -849,7 +850,7 @@ function parse_number_or_date_start(l::Parser)
     ate, contains_underscore = @try accept_batch_underscore(l, isdigit, readed_zero)
     read_underscore |= contains_underscore
     if (read_digit || ate) && ok_end_value(peek(l))
-        return parse_int(l, contains_underscore)
+        return parse_integer(l, contains_underscore)
     end
     # Done with integers here
 
@@ -895,11 +896,22 @@ end
 function parse_float(l::Parser, contains_underscore)::Err{Float64}
     s = take_string_or_substring(l, contains_underscore)
     v = Base.tryparse(Float64, s)
-    v === nothing && return(ParserError(ErrGenericValueError))
+    v === nothing && return ParserError(ErrGenericValueError)
     return v
 end
 
-for (name, T1, T2, n1, n2) in (("int", Int64,  Int128,  17,  33),
+function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
+    s = take_string_or_substring(l, contains_underscore)
+    v = try
+        Base.parse(Int64, s; base=base)
+    catch e
+        e isa Base.OverflowError && return ParserError(ErrOverflowError)
+        rethrow()
+    end
+    return v
+end
+
+for (name, T1, T2, n1, n2) in (("integer", Int64,  Int128,  17,  33),
                                ("hex", UInt64, UInt128, 18,  34),
                                ("oct", UInt64, UInt128, 24,  45),
                                ("bin", UInt64, UInt128, 66, 130),
@@ -916,8 +928,8 @@ for (name, T1, T2, n1, n2) in (("int", Int64,  Int128,  17,  33),
                 Base.parse(BigInt, s; base)
             end
         catch e
-            e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-            error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+            e isa Base.OverflowError && return ParserError(ErrOverflowError)
+            rethrow()
         end
         return v
     end
@@ -1014,8 +1026,9 @@ function try_return_datetime(p, year, month, day, h, m, s, ms)
     if Dates !== nothing
         try
             return Dates.DateTime(year, month, day, h, m, s, ms)
-        catch
-            return ParserError(ErrParsingDateTime)
+        catch ex
+            ex isa ArgumentError && return ParserError(ErrParsingDateTime)
+            rethrow()
         end
     else
         return DateTime(year, month, day, h, m, s, ms)
@@ -1027,8 +1040,9 @@ function try_return_date(p, year, month, day)
     if Dates !== nothing
         try
             return Dates.Date(year, month, day)
-        catch
-            return ParserError(ErrParsingDateTime)
+        catch ex
+            ex isa ArgumentError && return ParserError(ErrParsingDateTime)
+            rethrow()
         end
     else
         return Date(year, month, day)
@@ -1049,8 +1063,9 @@ function try_return_time(p, h, m, s, ms)
     if Dates !== nothing
         try
             return Dates.Time(h, m, s, ms)
-        catch
-            return ParserError(ErrParsingDateTime)
+        catch ex
+            ex isa ArgumentError && return ParserError(ErrParsingDateTime)
+            rethrow()
         end
     else
         return Time(h, m, s, ms)
@@ -1098,7 +1113,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
         end
         # DateTime in base only manages 3 significant digits in fractional
         # second
-        fractional_second = parse_int(l, false)
+        fractional_second = parse_int(l, false)::Int64
         # Truncate off the rest eventual digits
         accept_batch(l, isdigit)
     end

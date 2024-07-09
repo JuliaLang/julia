@@ -34,7 +34,7 @@ Markdown.parse("""
 
 ## [Important Links](@id man-important-links)
 
-Below is a non-exhasutive list of links that will be useful as you learn and use the Julia programming language.
+Below is a non-exhaustive list of links that will be useful as you learn and use the Julia programming language.
 
 - [Julia Homepage](https://julialang.org)
 - [Download Julia](https://julialang.org/downloads/)

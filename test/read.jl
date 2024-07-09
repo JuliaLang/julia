@@ -170,6 +170,10 @@ for (name, f) in l
         local t, s, m, kept
         @test readuntil(io(t), s) == m
         @test readuntil(io(t), s, keep=true) == kept
+        if isone(length(s))
+            @test readuntil(io(t), first(s)) == m
+            @test readuntil(io(t), first(s), keep=true) == kept
+        end
         @test readuntil(io(t), SubString(s, firstindex(s))) == m
         @test readuntil(io(t), SubString(s, firstindex(s)), keep=true) == kept
         @test readuntil(io(t), GenericString(s)) == m
@@ -719,4 +723,22 @@ end
         @test Base.isdone(r)
         @test isempty(r) && isempty(collect(r))
     end
+end
+
+@testset "Ref API" begin
+    io = PipeBuffer()
+    @test write(io, Ref{Any}(0xabcd_1234)) === 4
+    @test read(io, UInt32) === 0xabcd_1234
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Cvoid}}, io, C_NULL)
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Int}}, io, Ptr{Int}(0))
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Any}}, io, Ptr{Any}(0))
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, C_NULL)
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, Ptr{Int}(0))
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, Ptr{Any}(0))
+    @test eof(io)
+    @test write(io, C_NULL) === sizeof(Int)
+    @test write(io, Ptr{Int}(4)) === sizeof(Int)
+    @test write(io, Ptr{Any}(5)) === sizeof(Int)
+    @test read!(io, Int[1, 2, 3]) == [0, 4, 5]
+    @test eof(io)
 end

@@ -303,7 +303,7 @@ static uint32_t peek(fl_context_t *fl_ctx)
             fl_ctx->readtokval = fixnum(x);
         }
         else if (c == '!') {
-            // #! single line comment for shbang script support
+            // #! single line comment for shebang script support
             do {
                 ch = ios_getc(readF(fl_ctx));
             } while (ch != IOS_EOF && (char)ch != '\n');

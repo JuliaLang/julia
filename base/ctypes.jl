@@ -113,3 +113,7 @@ const Cfloat = Float32
 Equivalent to the native `double` c-type ([`Float64`](@ref)).
 """
 const Cdouble = Float64
+
+
+# we have no `Float16` alias, because C does not define a standard fp16 type. Julia follows
+# the _Float16 C ABI; if that becomes standard, we can add an appropriate alias here.

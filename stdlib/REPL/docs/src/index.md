@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/REPL/docs/src/index.md"
+```
+
 # The Julia REPL
 
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into
@@ -7,8 +11,9 @@ shell modes. The REPL can be started by simply calling `julia` with no arguments
 on the executable:
 
 ```@eval
+using REPL
 io = IOBuffer()
-Base.banner(io)
+REPL.banner(io)
 banner = String(take!(io))
 import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia>\n```")
@@ -52,7 +57,9 @@ disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is ena
 out by pasting the code block above this paragraph straight into the REPL. This feature does not
 work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
 
-Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
+A non-[`nothing`](@ref) result of executing an expression is displayed by the REPL using the [`show`](@ref) function
+with a specific [`IOContext`](@ref) (via [`display`](@ref), which defaults to calling
+`show(io, MIME("text/plain"), ans)`, which in turn defaults to `show(io, ans)`).
 In particular, the `:limit` attribute is set to `true`.
 Other attributes can receive in certain `show` methods a default value if it's not already set,
 like `:compact`.
@@ -577,8 +584,9 @@ Main
 
 It is possible to change this contextual module via the function
 `REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
-and pressing the keybinding Alt-m (the cursor must be on the module name). The
-active module is shown in the prompt:
+and pressing the keybinding Alt-m with the cursor on the module name (Esc-m on MacOS).
+Pressing the keybinding on an empty prompt toggles the context between the previously active
+non-`Main` module and `Main`. The active module is shown in the prompt (unless it is `Main`):
 
 ```julia-repl
 julia> using REPL
@@ -598,9 +606,13 @@ julia> Core<Alt-m> # using the keybinding to change module
 
 (Core) julia>
 
-(Core) julia> Main<Alt-m> # going back to Main via keybinding
+(Core) julia> <Alt-m> # going back to Main via keybinding
 
 julia>
+
+julia> <Alt-m> # going back to previously-active Core via keybinding
+
+(Core) julia>
 ```
 
 Functions that take an optional module argument often defaults to the REPL

@@ -49,6 +49,15 @@ chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
 
         @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 1, src(), 2, 2)
     end
+
+    v = rand(Float32, 4)
+    a = Memory{Float32}(v)
+    b = similar(a)
+    copyto!(b, a)
+    @test a == b
+
+    c = Memory{Float32}(undef, 3)
+    @test_throws BoundsError copyto!(c, a)
 end
 
 @testset "with CartesianIndices" begin
@@ -213,11 +222,13 @@ end
 @testset "copying CodeInfo" begin
     _testfunc() = nothing
     ci,_ = code_typed(_testfunc, ())[1]
-    ci.edges = [_testfunc]
+    if isdefined(ci, :edges)
+        ci.edges = [_testfunc]
 
-    ci2 = copy(ci)
-    # Test that edges are not shared
-    @test ci2.edges !== ci.edges
+        ci2 = copy(ci)
+        # Test that edges are not shared
+        @test ci2.edges !== ci.edges
+    end
 end
 
 @testset "issue #34025" begin
@@ -246,6 +257,22 @@ end
     @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
 end
 
+@testset "deepcopy_internal inference" begin
+    @inferred Base.deepcopy_internal(1, IdDict())
+    @inferred Base.deepcopy_internal(1.0, IdDict())
+    @inferred Base.deepcopy_internal(big(1), IdDict())
+    @inferred Base.deepcopy_internal(big(1.0), IdDict())
+    @inferred Base.deepcopy_internal('a', IdDict())
+    @inferred Base.deepcopy_internal("abc", IdDict())
+    @inferred Base.deepcopy_internal([1,2,3], IdDict())
+
+    # structs without custom deepcopy_internal method
+    struct Immutable2; x::Int; end
+    mutable struct Mutable2; x::Int; end
+    @inferred Base.deepcopy_internal(Immutable2(1), IdDict())
+    @inferred Base.deepcopy_internal(Mutable2(1), IdDict())
+end
+
 @testset "`copyto!`'s unaliasing" begin
     a = view([1:3;], :)
     @test copyto!(a, 2, a, 1, 2) == [1;1:2;]
@@ -267,4 +294,6 @@ end
     @test a.lock !== b.lock
     @test islocked(a.lock)
     @test !islocked(b.lock)
+    @inferred deepcopy(a)
+    @inferred deepcopy(a.lock)
 end

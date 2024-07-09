@@ -79,7 +79,7 @@ end
 const VERBOSE = Ref{Bool}(false)
 
 function __init__()
-    VERBOSE[] = Base.get_bool_env("JULIA_VERBOSE_LINKING", false)
+    VERBOSE[] = something(Base.get_bool_env("JULIA_VERBOSE_LINKING", false), false)
 
     __init_lld_path()
     __init_dsymutil_path()
@@ -110,7 +110,7 @@ function ld()
         # LLD supports mingw style linking
         flavor = "gnu"
         m = Sys.ARCH == :x86_64 ? "i386pep" : "i386pe"
-        default_args = `-m $m -Bdynamic --enable-auto-image-base --allow-multiple-definition`
+        default_args = `-m $m -Bdynamic --enable-auto-image-base --allow-multiple-definition --disable-auto-import --disable-runtime-pseudo-reloc`
     elseif Sys.isapple()
         flavor = "darwin"
         arch = Sys.ARCH == :aarch64 ? :arm64 : Sys.ARCH
@@ -150,16 +150,16 @@ else
 end
 
 function link_image_cmd(path, out)
-    LIBDIR = "-L$(libdir())"
     PRIVATE_LIBDIR = "-L$(private_libdir())"
     SHLIBDIR = "-L$(shlibdir())"
-    LIBS = is_debug() ? ("-ljulia-debug", "-ljulia-internal-debug") : ("-ljulia", "-ljulia-internal")
+    LIBS = is_debug() ? ("-ljulia-debug", "-ljulia-internal-debug") :
+                        ("-ljulia", "-ljulia-internal")
     @static if Sys.iswindows()
         LIBS = (LIBS..., "-lopenlibm", "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")
     end
 
     V = VERBOSE[] ? "--verbose" : ""
-    `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $LIBDIR $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
+    `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
 end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)

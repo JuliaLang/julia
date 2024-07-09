@@ -214,12 +214,13 @@ using Test
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             # 3. attempting to register a hook after all hooks have finished (disallowed)
             """
-            const atexit_has_finished = Threads.Atomic{Bool}(false)
+            const atexit_has_finished = Threads.Atomic{Int}(0)
             atexit() do
                 Threads.@spawn begin
                     # Block until the atexit hooks have all finished. We use a manual "spin
                     # lock" because task switch is disallowed inside the finalizer, below.
-                    while !atexit_has_finished[] end
+                    atexit_has_finished[] = 1
+                    while atexit_has_finished[] == 1 end
                     try
                         # By the time this runs, all the atexit hooks will be done.
                         # So this will throw.
@@ -231,15 +232,16 @@ using Test
                         exit(22)
                     end
                 end
+                while atexit_has_finished[] == 0 end
             end
             # Finalizers run after the atexit hooks, so this blocks exit until the spawned
             # task above gets a chance to run.
             x = []
             finalizer(x) do x
                 # Allow the spawned task to finish
-                atexit_has_finished[] = true
+                atexit_has_finished[] = 2
                 # Then spin forever to prevent exit.
-                while atexit_has_finished[] end
+                while atexit_has_finished[] == 2 end
             end
             exit(0)
             """ => 22,

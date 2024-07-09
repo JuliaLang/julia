@@ -212,6 +212,28 @@ end
     @test split("α β γ", "β") == rsplit("α β γ", "β") == ["α "," γ"]
 end
 
+@testset "eachrsplit" begin
+    @test collect(eachrsplit("", 'a')) == [""]
+    @test collect(eachrsplit("", isspace; limit=3)) == [""]
+    @test collect(eachrsplit("b c  d"; limit=2)) == ["d", "b c "]
+    @test collect(eachrsplit("a.b.c", '.'; limit=1)) == ["a.b.c"]
+    @test collect(eachrsplit("a..b..c", '.')) == ["c", "", "b", "", "a"]
+    @test collect(eachrsplit("ax  b  c")) == ["c", "b", "ax"]
+    @test collect(eachrsplit(" a 12 4 v ", isnumeric)) == [" v ", " ", "", " a "]
+    @test collect(eachrsplit("ba", 'a')) == ["", "b"]
+    @test collect(eachrsplit("   ")) == []
+    @test collect(eachrsplit("aaaa", 'a'; keepempty=false)) == []
+    @test collect(eachrsplit("aaaa", 'a'; limit=2)) == ["", "aaa"]
+    @test collect(eachrsplit("abcdef", ['b', 'e'])) == ["f", "cd", "a"]
+    @test collect(eachrsplit("abc", isletter)) == ["", "", "", ""]
+
+    # This behaviour is quite surprising, but is consistent with split
+    # See issue 45916
+    @test collect(eachrsplit("a  b"; limit=2)) == ["b", "a "] # only one trailing space
+    @test collect(eachrsplit("a "; limit=1)) == ["a "]
+    @test collect(eachrsplit("  a  b  c  d"; limit=3)) == ["d", "c", "  a  b "]
+end
+
 @testset "replace" begin
     @test replace("\u2202", '*' => '\0') == "\u2202"
 

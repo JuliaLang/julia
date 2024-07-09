@@ -191,7 +191,7 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
     LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
     if (!simd && !ivdep)
         return false;
-
+    ++TotalMarkedLoops;
     LLVMContext &Context = L.getHeader()->getContext();
     LoopID = MDNode::get(Context, MDs);
     // Set operand 0 to refer to the loop id itself
@@ -231,7 +231,11 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
         }
 
         if (SE)
+#if JL_LLVM_VERSION >= 160000
+            SE->forgetLoopDispositions();
+#else
             SE->forgetLoopDispositions(&L);
+#endif
     }
 
 #ifdef JL_VERIFY_PASSES
