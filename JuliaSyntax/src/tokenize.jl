@@ -747,8 +747,8 @@ function lex_comment(l::Lexer)
     if peekchar(l) != '='
         valid = true
         while true
-            pc = peekchar(l)
-            if pc == '\n' || pc == EOF_CHAR
+            pc, ppc = dpeekchar(l)
+            if pc == '\n' || (pc == '\r' && ppc == '\n') || pc == EOF_CHAR
                 return emit(l, valid ? K"Comment" : K"ErrorInvalidUTF8")
             end
             valid &= isvalid(pc)
