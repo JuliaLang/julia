@@ -967,7 +967,7 @@ end
         @test rmul!(Array(D), B) ≈ D * B
     end
 end
-                  
+
 @testset "conversion to Tridiagonal for immutable bands" begin
     n = 4
     dv = FillArrays.Fill(3, n)
