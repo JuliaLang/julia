@@ -97,9 +97,10 @@ function printvalue(f::MbyFunc, io::IO, value::TOMLValue)
     value isa AbstractFloat  ? Base.print(io, isnan(value) ? "nan" :
                                               isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
                                               Float64(value)) :  # TOML specifies IEEE 754 binary64 for float
-    value isa AbstractString ? (Base.print(io, "\"");
+    value isa AbstractString ? (qmark = Base.contains(value, "\n") ? "\"\"\"" : "\"";
+                                Base.print(io, qmark);
                                 print_toml_escaped(io, value);
-                                Base.print(io, "\"")) :
+                                Base.print(io, qmark)) :
     value isa AbstractDict ? print_inline_table(f, io, value) :
     error("internal error in TOML printing, unhandled value")
 end
