@@ -163,6 +163,7 @@ end
 
 copy(a::T) where {T<:Memory} = ccall(:jl_genericmemory_copy, Ref{T}, (Any,), a)
 
+copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
 function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
     n < 0 && _throw_argerror("Number of elements to copy must be non-negative.")
     unsafe_copyto!(dest, doffs, src, soffs, n)
