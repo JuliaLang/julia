@@ -48,12 +48,12 @@ $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UN
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
-	$(CMAKE) --build $(dir $<)
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-checked: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(CMAKE) --build $(dir $@) check
+	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
 
