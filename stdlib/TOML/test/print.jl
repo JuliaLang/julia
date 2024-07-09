@@ -196,7 +196,7 @@ LocalPkg = {path = "LocalPkg"}
 @test toml_str(d; sorted=true, inline_tables) == s
 @test roundtrip(s)
 
-# multline strings (#55083)
+# multiline strings (#55083)
 s = """
 a = \"\"\"lorem ipsum
 
