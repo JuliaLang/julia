@@ -710,8 +710,8 @@ end
     `AbstractArray`.
 
 !!! note
-    `@inbounds` eleminates bounds checks that are syntactically within the given block,
-    as well as ones in methods that are called within the block.
+    `@inbounds` eleminates bounds checks in methods called within a given block, but not
+    those that are syntactically within the given block.
     However, keep in mind that the `@inbounds` context propagates only one function call
     layer deep. For example, if an `@inbounds` block includes a call to `f()`, which in turn
     calls `g()`, bounds checks that are syntactically within `f()` will be eliminated,
