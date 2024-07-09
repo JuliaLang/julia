@@ -31,6 +31,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
+    @test map(o->o.names, Base.Filesystem._readdirx(dirlink)) == map(o->o.names, Base.Filesystem._readdirx(subdir))
+    @test realpath.(Base.Filesystem._readdirx(dirlink)) == realpath.(Base.Filesystem._readdirx(subdir))
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -38,6 +40,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
+    @test Base.Filesystem._readdirx(relsubdirlink) == Base.Filesystem._readdirx(subdir2)
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
@@ -56,6 +59,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mkdir(new_dir)
     touch(foo_file)
     @test readdir(new_dir) == readdir(nedlink)
+    @test realpath.(Base.Filesystem._readdirx(new_dir)) == realpath.(Base.Filesystem._readdirx(nedlink))
 
     rm(foo_file)
     rm(new_dir)
@@ -123,6 +127,9 @@ end
         end
     end
     @test_throws ArgumentError tempname(randstring())
+end
+@testset "tempname with suffix" begin
+    @test !isfile(tempname(suffix = "_foo.txt"))
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -637,9 +644,11 @@ end
     MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:9
         local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
-        @test withenv(var => tmp) do
-            tempdir()
-        end == tmp
+        no_error_logging() do
+            @test withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        end
     end
 end
 
@@ -1436,6 +1445,10 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
+            @test issorted(Base.Filesystem._readdirx())
+            @test map(o->o.name, Base.Filesystem._readdirx()) == readdir()
+            @test map(o->o.path, Base.Filesystem._readdirx()) == readdir(join=true)
+            @test count(isfile, readdir(join=true)) == count(isfile, Base.Filesystem._readdirx())
         end
     end
 end
@@ -1658,23 +1671,44 @@ else
     )
 end
 
-@testset "chmod/isexecutable" begin
+@testset "chmod/isexecutable/isreadable/iswritable" begin
     mktempdir() do dir
-        mkdir(joinpath(dir, "subdir"))
+        subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
 
-        # Test that we can actually set the executable bit on all platforms.
+        @test !ispath(subdir)
+        mkdir(subdir)
+        @test ispath(subdir)
+
+        @test !ispath(fpath)
         touch(fpath)
+        @test ispath(fpath)
+
+        # Test that we can actually set the executable/readable/writeable bit on all platforms.
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
         chmod(fpath, 0o755)
         @test Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
+        chmod(fpath, 0o444)
+        @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test !Sys.iswritable(fpath)
+        chmod(fpath, 0o244)
+        @test !Sys.isexecutable(fpath)
+        @test !Sys.isreadable(fpath) skip=Sys.iswindows()
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
 
         # Ensure that, on Windows, where inheritance is default,
         # chmod still behaves as we expect.
         if Sys.iswindows()
-            chmod(joinpath(dir, "subdir"), 0o666)
-            @test Sys.isexecutable(fpath)
+            chmod(subdir, 0o666)
+            @test !Sys.isexecutable(fpath)
+            @test Sys.isreadable(fpath)
+            @test_skip Sys.iswritable(fpath)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.

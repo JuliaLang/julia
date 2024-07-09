@@ -3,6 +3,7 @@
 #include "llvm-version.h"
 #include "passes.h"
 
+#include "llvm/IR/DerivedTypes.h"
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -12,7 +13,8 @@
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SmallSet.h>
-#include "llvm/Analysis/CFG.h"
+#include <llvm/Analysis/CFG.h>
+#include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
@@ -455,7 +457,6 @@ SmallVector<SmallVector<unsigned, 0>, 0> TrackCompositeType(Type *T) {
 }
 
 
-
 // Walk through simple expressions to until we hit something that requires root numbering
 // If the input value is a scalar (pointer), we may return a composite value as base
 // in which case the second member of the pair is the index of the value in the vector.
@@ -510,7 +511,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                     // This could really be anything, but it's not loaded
                     // from a tracked pointer, so it doesn't matter what
                     // it is--just pick something simple.
-                    CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                    CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
                 }
                 continue;
             }
@@ -545,12 +546,12 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                         if (II->getIntrinsicID() == Intrinsic::masked_load) {
                             fld_idx = -1;
                             if (!isSpecialPtr(CurrentV->getType())) {
-                                CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                                CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
                             }
                         } else {
                             if (auto VTy2 = dyn_cast<VectorType>(CurrentV->getType())) {
                                 if (!isSpecialPtr(VTy2->getElementType())) {
-                                    CurrentV = ConstantPointerNull::get(Type::getInt8PtrTy(V->getContext()));
+                                    CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
                                     fld_idx = -1;
                                 }
                             }
@@ -616,12 +617,12 @@ Value *LateLowerGCFrame::MaybeExtractScalar(State &S, std::pair<Value*,int> ValE
                 V = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
             return V;
         }
+        IRBuilder<InstSimplifyFolder> foldbuilder(InsertBefore->getContext(), InstSimplifyFolder(InsertBefore->getModule()->getDataLayout()));
+        foldbuilder.SetInsertPoint(InsertBefore);
         if (Idxs.size() > IsVector)
-            V = ExtractValueInst::Create(V, IsVector ? IdxsNotVec : Idxs, "", InsertBefore);
+            V = foldbuilder.CreateExtractValue(V, IsVector ? IdxsNotVec : Idxs);
         if (IsVector)
-            V = ExtractElementInst::Create(V,
-                    ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()),
-                    "", InsertBefore);
+            V = foldbuilder.CreateExtractElement(V, ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()));
     }
     return V;
 }
@@ -706,11 +707,15 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
                     ConstantInt::get(Type::getInt32Ty(Cond->getContext()), i),
                     "", SI);
         }
+        #if JL_LLVM_VERSION >= 170000
+        assert(FalseElem->getType() == TrueElem->getType());
+        #else
         if (FalseElem->getType() != TrueElem->getType()) {
             // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
             assert(FalseElem->getContext().supportsTypedPointers());
             FalseElem = new BitCastInst(FalseElem, TrueElem->getType(), "", SI);
         }
+        #endif
         SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI);
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[SelectBase] = Number;
@@ -779,6 +784,9 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
                 BaseElem = Base;
             else
                 BaseElem = IncomingBases[i];
+            #if JL_LLVM_VERSION >= 170000
+            assert(BaseElem->getType() == T_prjlvalue);
+            #else
             if (BaseElem->getType() != T_prjlvalue) {
                 // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
                 assert(BaseElem->getContext().supportsTypedPointers());
@@ -802,6 +810,7 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
                 }
                 BaseElem = remap;
             }
+            #endif
             lift->addIncoming(BaseElem, IncomingBB);
         }
     }
@@ -1538,7 +1547,9 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 if (CI->hasStructRetAttr()) {
                     Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
+                    #if JL_LLVM_VERSION < 170000
                     assert(cast<PointerType>(CI->getArgOperand(0)->getType())->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
+                    #endif
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
                         AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
@@ -1621,7 +1632,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                         callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
-                        callee == write_barrier_func || callee == gc_loaded_func ||
+                        callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
                         callee->getName() == "memcmp") {
                         continue;
                     }
@@ -1817,11 +1828,13 @@ static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> 
         auto IdxsNotVec = Idxs.slice(0, Idxs.size() - 1);
         Type *FinalT = ExtractValueInst::getIndexedType(V->getType(), IdxsNotVec);
         bool IsVector = isa<VectorType>(FinalT);
+        IRBuilder<InstSimplifyFolder> foldbuilder(irbuilder.getContext(), InstSimplifyFolder(irbuilder.GetInsertBlock()->getModule()->getDataLayout()));
+        foldbuilder.restoreIP(irbuilder.saveIP());
+        foldbuilder.SetCurrentDebugLocation(irbuilder.getCurrentDebugLocation());
         if (Idxs.size() > IsVector)
-            V = irbuilder.Insert(ExtractValueInst::Create(V, IsVector ? IdxsNotVec : Idxs));
+            V = foldbuilder.CreateExtractValue(V, IsVector ? IdxsNotVec : Idxs);
         if (IsVector)
-            V = irbuilder.Insert(ExtractElementInst::Create(V,
-                    ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back())));
+            V = foldbuilder.CreateExtractElement(V, ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()));
     }
     return V;
 }
@@ -1877,7 +1890,9 @@ unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, Type *DT
     for (unsigned i = 0; i < Ptrs.size(); ++i) {
         Value *Elem = Ptrs[i];// Dst has type `[n x {}*]*`
         Value *Slot = irbuilder.CreateConstInBoundsGEP2_32(DTy, Dst, 0, i);
+        #if JL_LLVM_VERSION < 170000
         assert(cast<PointerType>(Dst->getType())->isOpaqueOrPointeeTypeMatches(DTy));
+        #endif
         StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
         shadowStore->setOrdering(AtomicOrdering::NotAtomic);
         // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -2242,9 +2257,7 @@ SmallVector<int, 0> LateLowerGCFrame::ColorRoots(const State &S) {
 Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
 {
     assert(T == T_size || isa<PointerType>(T));
-    auto TV = cast<PointerType>(V->getType());
-    auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
-    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
+    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
 }
 
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
@@ -2424,8 +2437,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 // the type tag. (Note that if the size is not a constant, it will call
                 // gc_alloc_obj, and will redundantly set the tag.)
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
-                auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
+                auto ptls = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
                 auto newI = builder.CreateCall(
                     allocBytesIntrinsic,
                     {
@@ -2506,7 +2518,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     // the julia.call signature is varargs, the optimizer is allowed
                     // to rewrite pointee types. It'll go away with opaque pointer
                     // types anyway.
-                    Builder.CreateAlignedStore(Builder.CreateBitCast(*arg_it, T_prjlvalue),
+                    Builder.CreateAlignedStore(*arg_it,
                             Builder.CreateInBoundsGEP(T_prjlvalue, Frame, ConstantInt::get(T_int32, slot++)),
                             Align(sizeof(void*)));
                 }
@@ -2659,11 +2671,15 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
+    #if JL_LLVM_VERSION >= 170000
+    assert(Val->getType() == T_prjlvalue);
+    #else
     if (Val->getType() != T_prjlvalue) {
         // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
         assert(Val->getContext().supportsTypedPointers());
         Val = new BitCastInst(Val, T_prjlvalue, "", InsertBefore);
     }
+    #endif
     new StoreInst(Val, slotAddress, InsertBefore);
 }
 
@@ -2743,6 +2759,9 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             for (CallInst *II : ToDelete) {
                 II->eraseFromParent();
             }
+            #if JL_LLVM_VERSION >= 170000
+            assert(slotAddress->getType() == AI->getType());
+            #else
             if (slotAddress->getType() != AI->getType()) {
                 // If we're replacing an ArrayAlloca, the pointer element type may need to be fixed up
                 // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
@@ -2751,6 +2770,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
                 BCI->insertAfter(slotAddress);
                 slotAddress = BCI;
             }
+            #endif
             AI->replaceAllUsesWith(slotAddress);
             AI->eraseFromParent();
             AI = NULL;
@@ -2775,11 +2795,15 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
                 slotAddress->insertAfter(gcframe);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
+                #if JL_LLVM_VERSION >= 170000
+                assert(Elem->getType() == T_prjlvalue);
+                #else
                 if (Elem->getType() != T_prjlvalue) {
                     // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
                     assert(Elem->getContext().supportsTypedPointers());
                     Elem = new BitCastInst(Elem, T_prjlvalue, "", SI);
                 }
+                #endif
                 //auto Idxs = ArrayRef<unsigned>(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI);

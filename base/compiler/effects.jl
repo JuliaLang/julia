@@ -43,15 +43,21 @@ following meanings:
     except that it may access or modify mutable memory pointed to by its call arguments.
     This may later be refined to `ALWAYS_TRUE` in a case when call arguments are known to be immutable.
     This state corresponds to LLVM's `inaccessiblemem_or_argmemonly` function attribute.
-- `noub::Bool`: indicates that the method will not execute any undefined behavior (for any input).
+- `noub::UInt8`:
+  * `ALWAYS_TRUE`: this method is guaranteed to not execute any undefined behavior (for any input).
+  * `ALWAYS_FALSE`: this method may execute undefined behavior.
+  * `NOUB_IF_NOINBOUNDS`: this method is guaranteed to not execute any undefined behavior
+    if the caller does not set nor propagate the `@inbounds` context.
   Note that undefined behavior may technically cause the method to violate any other effect
   assertions (such as `:consistent` or `:effect_free`) as well, but we do not model this,
   and they assume the absence of undefined behavior.
-- `nonoverlayed::Bool`: indicates that any methods that may be called within this method
-  are not defined in an [overlayed method table](@ref OverlayMethodTable).
-- `noinbounds::Bool`: If set, indicates that this method does not read the parent's `:inbounds`
-  state. In particular, it does not have any reached `:boundscheck` exprs, not propagates inbounds
-  to any children that do.
+- `nonoverlayed::UInt8`:
+  * `ALWAYS_TRUE`: this method is guaranteed to not invoke any methods that defined in an
+    [overlayed method table](@ref OverlayMethodTable).
+  * `CONSISTENT_OVERLAY`: this method may invoke overlayed methods, but all such overlayed
+    methods are `:consistent` with their non-overlayed original counterparts
+    (see [`Base.@assume_effects`](@ref) for the exact definition of `:consistenct`-cy).
+  * `ALWAYS_FALSE`: this method may invoke overlayed methods.
 
 Note that the representations above are just internal implementation details and thus likely
 to change in the future. See [`Base.@assume_effects`](@ref) for more detailed explanation
@@ -92,11 +98,11 @@ The output represents the state of different effect properties in the following 
 7. `noub` (`u`):
     - `+u` (green): `true`
     - `-u` (red): `false`
-8. `noinbounds` (`i`):
-    - `+i` (green): `true`
-    - `-i` (red): `false`
-
-Additionally, if the `nonoverlayed` property is false, a red prime symbol (′) is displayed after the tuple.
+    - `?u` (yellow): `NOUB_IF_NOINBOUNDS`
+8. `:nonoverlayed` (`o`):
+    - `+o` (green): `ALWAYS_TRUE`
+    - `-o` (red): `ALWAYS_FALSE`
+    - `?o` (yellow): `CONSISTENT_OVERLAY`
 """
 struct Effects
     consistent::UInt8
@@ -106,7 +112,7 @@ struct Effects
     notaskstate::Bool
     inaccessiblememonly::UInt8
     noub::UInt8
-    nonoverlayed::Bool
+    nonoverlayed::UInt8
     function Effects(
         consistent::UInt8,
         effect_free::UInt8,
@@ -115,7 +121,7 @@ struct Effects
         notaskstate::Bool,
         inaccessiblememonly::UInt8,
         noub::UInt8,
-        nonoverlayed::Bool)
+        nonoverlayed::UInt8)
         return new(
             consistent,
             effect_free,
@@ -151,10 +157,13 @@ const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1
 # :noub bits
 const NOUB_IF_NOINBOUNDS = 0x01 << 1
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  true)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  true)
-const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, true) # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
-const _EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, false) # unknown really
+# :nonoverlayed bits
+const CONSISTENT_OVERLAY = 0x01 << 1
+
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_TRUE) # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
+const _EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE) # unknown really
 
 function Effects(effects::Effects = _EFFECTS_UNKNOWN;
     consistent::UInt8 = effects.consistent,
@@ -164,7 +173,7 @@ function Effects(effects::Effects = _EFFECTS_UNKNOWN;
     notaskstate::Bool = effects.notaskstate,
     inaccessiblememonly::UInt8 = effects.inaccessiblememonly,
     noub::UInt8 = effects.noub,
-    nonoverlayed::Bool = effects.nonoverlayed)
+    nonoverlayed::UInt8 = effects.nonoverlayed)
     return Effects(
         consistent,
         effect_free,
@@ -230,8 +239,11 @@ function is_better_effects(new::Effects, old::Effects)
     elseif new.noub != old.noub
         return false
     end
-    if new.nonoverlayed
-        any_improved |= !old.nonoverlayed
+    if new.nonoverlayed == ALWAYS_TRUE
+        any_improved |= old.nonoverlayed != ALWAYS_TRUE
+    elseif new.nonoverlayed == CONSISTENT_OVERLAY
+        old.nonoverlayed == ALWAYS_TRUE && return false
+        any_improved |= old.nonoverlayed != CONSISTENT_OVERLAY
     elseif new.nonoverlayed != old.nonoverlayed
         return false
     end
@@ -266,7 +278,7 @@ is_notaskstate(effects::Effects)         = effects.notaskstate
 is_inaccessiblememonly(effects::Effects) = effects.inaccessiblememonly === ALWAYS_TRUE
 is_noub(effects::Effects)                = effects.noub === ALWAYS_TRUE
 is_noub_if_noinbounds(effects::Effects)  = effects.noub === NOUB_IF_NOINBOUNDS
-is_nonoverlayed(effects::Effects)        = effects.nonoverlayed
+is_nonoverlayed(effects::Effects)        = effects.nonoverlayed === ALWAYS_TRUE
 
 # implies `is_notaskstate` & `is_inaccessiblememonly`, but not explicitly checked here
 is_foldable(effects::Effects) =
@@ -296,6 +308,8 @@ is_effect_free_if_inaccessiblememonly(effects::Effects) = !iszero(effects.effect
 
 is_inaccessiblemem_or_argmemonly(effects::Effects) = effects.inaccessiblememonly === INACCESSIBLEMEM_OR_ARGMEMONLY
 
+is_consistent_overlay(effects::Effects) = effects.nonoverlayed === CONSISTENT_OVERLAY
+
 function encode_effects(e::Effects)
     return ((e.consistent          % UInt32) << 0)  |
            ((e.effect_free         % UInt32) << 3)  |
@@ -316,7 +330,7 @@ function decode_effects(e::UInt32)
         _Bool((e >> 7) & 0x01),
         UInt8((e >> 8) & 0x03),
         UInt8((e >> 10) & 0x03),
-        _Bool((e >> 12) & 0x01))
+        UInt8((e >> 12) & 0x03))
 end
 
 function encode_effects_override(eo::EffectsOverride)
@@ -330,6 +344,7 @@ function encode_effects_override(eo::EffectsOverride)
     eo.inaccessiblememonly && (e |= (0x0001 << 6))
     eo.noub                && (e |= (0x0001 << 7))
     eo.noub_if_noinbounds  && (e |= (0x0001 << 8))
+    eo.consistent_overlay  && (e |= (0x0001 << 9))
     return e
 end
 
@@ -343,7 +358,8 @@ function decode_effects_override(e::UInt16)
         !iszero(e & (0x0001 << 5)),
         !iszero(e & (0x0001 << 6)),
         !iszero(e & (0x0001 << 7)),
-        !iszero(e & (0x0001 << 8)))
+        !iszero(e & (0x0001 << 8)),
+        !iszero(e & (0x0001 << 9)))
 end
 
 decode_statement_effects_override(ssaflag::UInt32) =

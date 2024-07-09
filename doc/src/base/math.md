@@ -39,6 +39,8 @@ Base.:(:)
 Base.range
 Base.OneTo
 Base.StepRangeLen
+Base.logrange
+Base.LogRange
 Base.:(==)
 Base.:(!=)
 Base.:(!==)
@@ -72,6 +74,7 @@ Base.Math.tand
 Base.Math.sincosd
 Base.Math.sinpi
 Base.Math.cospi
+Base.Math.tanpi
 Base.Math.sincospi
 Base.sinh(::Number)
 Base.cosh(::Number)

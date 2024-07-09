@@ -22,58 +22,109 @@
 // number of stacks to always keep available per pool
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
+#if defined(_OS_WINDOWS_) || (!defined(_OS_OPENBSD_) && !defined(JL_HAVE_UCONTEXT) && !defined(JL_HAVE_SIGALTSTACK))
+#define JL_USE_GUARD_PAGE   1
 const size_t jl_guard_size = (4096 * 8);
+#else
+const size_t jl_guard_size = 0;
+#endif
+
 static _Atomic(uint32_t) num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
 static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
+    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
+    bufsz += guard_size;
+
     void *stk = VirtualAlloc(NULL, bufsz, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (stk == NULL)
         return MAP_FAILED;
+
+    // set up a guard page to detect stack overflow
     DWORD dwOldProtect;
     if (!VirtualProtect(stk, jl_guard_size, PAGE_READWRITE | PAGE_GUARD, &dwOldProtect)) {
         VirtualFree(stk, 0, MEM_RELEASE);
         return MAP_FAILED;
     }
-    jl_atomic_fetch_add(&num_stack_mappings, 1);
+    stk = (char *)stk + guard_size;
+
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
 
 
-static void free_stack(void *stkbuf, size_t bufsz)
+static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
+#ifdef JL_USE_GUARD_PAGE
+    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
+    bufsz += guard_size;
+    stkbuf = (char *)stkbuf - guard_size;
+#endif
+
     VirtualFree(stkbuf, 0, MEM_RELEASE);
-    jl_atomic_fetch_add(&num_stack_mappings, -1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
 }
 
 #else
 
+# ifdef _OS_OPENBSD_
 static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 {
+    void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+    if (stk == MAP_FAILED)
+        return MAP_FAILED;
+
+    // we don't set up a guard page to detect stack overflow: on OpenBSD, any
+    // mmap-ed region has guard page managed by the kernel, so there is no
+    // need for it. Additionally, a memory region used as stack (memory
+    // allocated with MAP_STACK option) has strict permission, and you can't
+    // "create" a guard page on such memory by using `mprotect` on it
+
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
+    return stk;
+}
+# else
+static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
+{
+#ifdef JL_USE_GUARD_PAGE
+    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
+    bufsz += guard_size;
+#endif
+
     void* stk = mmap(0, bufsz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (stk == MAP_FAILED)
         return MAP_FAILED;
-#if !defined(JL_HAVE_UCONTEXT) && !defined(JL_HAVE_SIGALTSTACK)
-    // setup a guard page to detect stack overflow
+
+#ifdef JL_USE_GUARD_PAGE
+    // set up a guard page to detect stack overflow
     if (mprotect(stk, jl_guard_size, PROT_NONE) == -1) {
         munmap(stk, bufsz);
         return MAP_FAILED;
     }
+    stk = (char *)stk + guard_size;
 #endif
-    jl_atomic_fetch_add(&num_stack_mappings, 1);
+
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
+# endif
 
-static void free_stack(void *stkbuf, size_t bufsz)
+static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
+#ifdef JL_USE_GUARD_PAGE
+    size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
+    bufsz += guard_size;
+    stkbuf = (char *)stkbuf - guard_size;
+#endif
+
     munmap(stkbuf, bufsz);
-    jl_atomic_fetch_add(&num_stack_mappings, -1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
 }
 #endif
 
-JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void)
+JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void) JL_NOTSAFEPOINT
 {
     return jl_atomic_load_relaxed(&num_stack_mappings);
 }
@@ -108,7 +159,7 @@ static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
 }
 
 
-static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
+static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
 #ifdef _COMPILER_ASAN_ENABLED_
     __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
@@ -187,7 +238,7 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     return stk;
 }
 
-void sweep_stack_pools(void)
+void sweep_stack_pools(void) JL_NOTSAFEPOINT
 {
     // Stack sweeping algorithm:
     //    // deallocate stacks if we have too many sitting around unused
@@ -203,6 +254,8 @@ void sweep_stack_pools(void)
     assert(gc_n_threads);
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
 
         // free half of stacks that remain unused since last sweep
         for (int p = 0; p < JL_N_STACK_POOLS; p++) {
@@ -223,6 +276,12 @@ void sweep_stack_pools(void)
                 void *stk = small_arraylist_pop(al);
                 free_stack(stk, pool_sizes[p]);
             }
+            if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                small_arraylist_free(al);
+            }
+        }
+        if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+            small_arraylist_free(ptls2->heap.free_stacks);
         }
 
         small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;

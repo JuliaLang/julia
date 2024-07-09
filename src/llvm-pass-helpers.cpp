@@ -8,6 +8,7 @@
 #include "llvm-version.h"
 
 #include "llvm/IR/Attributes.h"
+#include "llvm/IR/DerivedTypes.h"
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
@@ -27,7 +28,7 @@ JuliaPassContext::JuliaPassContext()
         pgcstack_getter(nullptr), adoptthread_func(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), gc_loaded_func(nullptr), alloc_obj_func(nullptr),
-        typeof_func(nullptr), write_barrier_func(nullptr),
+        typeof_func(nullptr), write_barrier_func(nullptr), pop_handler_noexcept_func(nullptr),
         call_func(nullptr), call2_func(nullptr), call3_func(nullptr), module(nullptr)
 {
 }
@@ -53,6 +54,7 @@ void JuliaPassContext::initFunctions(Module &M)
     typeof_func = M.getFunction("julia.typeof");
     write_barrier_func = M.getFunction("julia.write_barrier");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
+    pop_handler_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
     call_func = M.getFunction("julia.call");
     call2_func = M.getFunction("julia.call2");
     call3_func = M.getFunction("julia.call3");
@@ -161,7 +163,7 @@ namespace jl_intrinsics {
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx),
+                    { PointerType::get(ctx, 0),
                         T_size,
                         T_size }, // type
                     false),
@@ -271,7 +273,7 @@ namespace jl_well_known {
             auto bigAllocFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx), T_size , T_size},
+                    { PointerType::get(ctx, 0), T_size , T_size},
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
@@ -287,7 +289,7 @@ namespace jl_well_known {
             auto poolAllocFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx), T_size },
+                    { PointerType::get(ctx, 0), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx), T_size },
                     false),
                 Function::ExternalLinkage,
                 GC_POOL_ALLOC_NAME);
@@ -323,7 +325,7 @@ namespace jl_well_known {
             auto allocTypedFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx),
+                    { PointerType::get(ctx, 0),
                         T_size,
                         T_size }, // type
                     false),

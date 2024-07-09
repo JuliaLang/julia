@@ -210,6 +210,9 @@ LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
 LLVM_CMAKE += -DLLVM_SHLIB_SYMBOL_VERSION:STRING="JL_LLVM_$(LLVM_VER_SHORT)"
 
+# Change the default bug report URL to Julia's issue tracker
+LLVM_CMAKE += -DBUG_REPORT_URL="https://github.com/julialang/julia"
+
 # Apply version-specific LLVM patches sequentially
 LLVM_PATCH_PREV :=
 define LLVM_PATCH
@@ -265,9 +268,7 @@ $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-e
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured
 	cd $(LLVM_BUILDDIR_withtype) && \
-		$(if $(filter $(CMAKE_GENERATOR),make), \
-		  $(MAKE), \
-		  $(CMAKE) --build .)
+		$(CMAKE) --build .
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled

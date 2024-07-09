@@ -66,7 +66,7 @@ struct StatStruct
 end
 
 @eval function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
-  $(let ex = true
+    $(let ex = true
         for fld in fieldnames(StatStruct)[2:end]
             ex = :(getfield(x, $(QuoteNode(fld))) === getfield(y, $(QuoteNode(fld))) && $ex)
         end
@@ -74,7 +74,7 @@ end
     end)
 end
 @eval function Base.hash(obj::StatStruct, h::UInt)
-  $(quote
+    $(quote
         $(Any[:(h = hash(getfield(obj, $(QuoteNode(fld))), h)) for fld in fieldnames(StatStruct)[2:end]]...)
         return h
     end)
@@ -326,6 +326,16 @@ otherwise returns `false`.
 This is the generalization of [`isfile`](@ref), [`isdir`](@ref) etc.
 """
 ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
+function ispath(path::String)
+    # We use `access()` and `F_OK` to determine if a given path exists. `F_OK` comes from `unistd.h`.
+    F_OK = 0x00
+    r = ccall(:jl_fs_access, Cint, (Cstring, Cint), path, F_OK)
+    if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
+        uv_error(string("ispath(", repr(path), ")"), r)
+    end
+    return r == 0
+end
+ispath(path::AbstractString) = ispath(String(path))
 
 """
     isfifo(path) -> Bool

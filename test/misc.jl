@@ -129,6 +129,36 @@ let l = ReentrantLock()
     @test_throws ErrorException unlock(l)
 end
 
+# Lockable{T, L<:AbstractLock}
+using Base: Lockable
+let
+    @test_broken Base.isexported(Base, :Lockable)
+    lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
+    # note field access is non-public
+    @test lockable.value["foo"] == "hello"
+    @test @lock(lockable, lockable[]["foo"]) == "hello"
+    lock(lockable) do d
+        @test d["foo"] == "hello"
+    end
+    lock(lockable) do d
+        d["foo"] = "goodbye"
+    end
+    @test lockable.value["foo"] == "goodbye"
+    @lock lockable begin
+        @test lockable[]["foo"] == "goodbye"
+    end
+    l = trylock(lockable)
+    try
+        @test l
+    finally
+        unlock(lockable)
+    end
+    # Test 1-arg constructor
+    lockable2 = Lockable(Dict("foo" => "hello"))
+    @test lockable2.lock isa ReentrantLock
+    @test @lock(lockable2, lockable2[]["foo"]) == "hello"
+end
+
 for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 0
     @test lock(get_finalizers_inhibited, l) == 1
@@ -221,12 +251,14 @@ let c = Ref(0),
     @test c[] == 100
 end
 
-@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+@test_throws ConcurrencyViolationError("deadlock detected: cannot wait on current task") wait(current_task())
+
+@test_throws ConcurrencyViolationError("Cannot yield to currently running task!") yield(current_task())
 
 # issue #41347
 let t = @async 1
     wait(t)
-    @test_throws ErrorException yield(t)
+    @test_throws ConcurrencyViolationError yield(t)
 end
 
 let t = @async error(42)
@@ -540,6 +572,24 @@ end
 
 # issue #44780
 @test summarysize(BigInt(2)^1000) > summarysize(BigInt(2))
+
+# issue #53061
+mutable struct S53061
+    x::Union{Float64, Tuple{Float64, Float64}}
+    y::Union{Float64, Tuple{Float64, Float64}}
+end
+let s = S53061[S53061(rand(), (rand(),rand())) for _ in 1:10^4]
+    @test allequal(summarysize(s) for i in 1:10)
+end
+struct Z53061
+    x::S53061
+    y::Int64
+end
+let z = Z53061[Z53061(S53061(rand(), (rand(),rand())), 0) for _ in 1:10^4]
+    @test allequal(summarysize(z) for i in 1:10)
+    # broken on i868 linux. issue #54895
+    @test abs(summarysize(z) - 640000)/640000 <= 0.01 broken = Sys.WORD_SIZE == 32 && Sys.islinux()
+end
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -1287,10 +1337,56 @@ end
     end
 end
 
+module KwdefWithEsc
+    const Int1 = Int
+    const val1 = 42
+    macro define_struct()
+        quote
+            @kwdef struct $(esc(:Struct))
+                a
+                b = val1
+                c::Int1
+                d::Int1 = val1
+
+                $(esc(quote
+                    e
+                    f = val2
+                    g::Int2
+                    h::Int2 = val2
+                end))
+
+                $(esc(:(i = val2)))
+                $(esc(:(j::Int2)))
+                $(esc(:(k::Int2 = val2)))
+
+                l::$(esc(:Int2))
+                m::$(esc(:Int2)) = val1
+
+                n = $(esc(:val2))
+                o::Int1 = $(esc(:val2))
+
+                $(esc(:p))
+                $(esc(:q)) = val1
+                $(esc(:s))::Int1
+                $(esc(:t))::Int1 = val1
+            end
+        end
+    end
+end
+
+module KwdefWithEsc_TestModule
+    using ..KwdefWithEsc
+    const Int2 = Int
+    const val2 = 42
+    KwdefWithEsc.@define_struct()
+end
+@test isdefined(KwdefWithEsc_TestModule, :Struct)
+
 @testset "exports of modules" begin
-    for (_, mod) in Base.loaded_modules
+    @testset "$mod" for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything
-        for v in names(mod)
+        @testset "$v" for v in names(mod)
+            isdefined(mod, v) || @error "missing $v in $mod"
             @test isdefined(mod, v)
         end
     end
@@ -1446,7 +1542,7 @@ end
 @testset "Base docstrings" begin
     undoc = Docs.undocumented_names(Base)
     @test_broken isempty(undoc)
-    @test undoc == [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :Sort, :TTY]
+    @test undoc == [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY]
 end
 
 @testset "Base.Libc docstrings" begin

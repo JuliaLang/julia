@@ -4,8 +4,14 @@ module Precompile
 # Can't use this during incremental: `@eval Module() begin``
 
 import ..REPL
+# Prepare this staging area with all the loaded packages available
+for (_pkgid, _mod) in Base.loaded_modules
+    if !(_pkgid.name in ("Main", "Core", "Base", "REPL"))
+        eval(:(const $(Symbol(_mod)) = $_mod))
+    end
+end
 
-# Ugly hack for our cache file to not have a dependency edge on FakePTYs.
+# Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
 Base._track_dependencies[] = false
 try
     Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
@@ -52,6 +58,7 @@ $UP_ARROW$DOWN_ARROW$CTRL_C
 f(x) = x03
 f(1,2)
 [][1]
+Base.Iterators.minimum
 cd("complete_path\t\t$CTRL_C
 """
 
@@ -172,10 +179,10 @@ generate_precompile_statements() = try
         end
         close(precompile_copy)
         wait(buffer_reader)
-        close(statements_step)
         return :ok
     end
     !PARALLEL_PRECOMPILATION && wait(step)
+    bind(statements_step, step)
 
     # Make statements unique
     statements = Set{String}()
@@ -205,7 +212,7 @@ generate_precompile_statements() = try
         end
     end
 
-    fetch(step) == :ok || throw("Collecting precompiles failed.")
+    fetch(step) == :ok || throw("Collecting precompiles failed: $(c.excp)")
     return nothing
 finally
     GC.gc(true); GC.gc(false); # reduce memory footprint
@@ -214,4 +221,8 @@ end
 generate_precompile_statements()
 
 precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+precompile(Tuple{typeof(Base.take!), Base.Channel{Function}})
+precompile(Tuple{typeof(Base.put!), Base.Channel{Function}, Function})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{names, T} where T<:Tuple where names, typeof(REPL.LineEdit.complete_line), REPL.LineEdit.EmptyCompletionProvider, Any})
+
 end # Precompile

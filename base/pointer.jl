@@ -64,6 +64,7 @@ unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, 
 
 cconvert(::Type{<:Ptr}, a::Array) = getfield(a, :ref)
 unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
+unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = unsafe_convert(Ptr{T}, a.ref)
 unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
 # TODO: add this deprecation to give a better error:
 # cconvert(::Type{<:Ptr}, a::AbstractArray) = error("conversion to pointer not defined for $(typeof(a))")
@@ -117,7 +118,7 @@ end
 function unsafe_wrap(::Union{Type{GenericMemory{kind,<:Any,Core.CPU}},Type{GenericMemory{kind,T,Core.CPU}}},
                      p::Ptr{T}, dims::Tuple{Int}; own::Bool = false) where {kind,T}
     ccall(:jl_ptr_to_genericmemory, Ref{GenericMemory{kind,T,Core.CPU}},
-          (Any, Ptr{Cvoid}, Csize_t, Cint), GenericMemory{kind,T,Core.CPU}, p, dim[1], own)
+          (Any, Ptr{Cvoid}, Csize_t, Cint), GenericMemory{kind,T,Core.CPU}, p, dims[1], own)
 end
 function unsafe_wrap(::Union{Type{GenericMemory{kind,<:Any,Core.CPU}},Type{GenericMemory{kind,T,Core.CPU}}},
                      p::Ptr{T}, d::Integer; own::Bool = false) where {kind,T}
@@ -312,8 +313,8 @@ isless(x::Ptr{T}, y::Ptr{T}) where {T} = x < y
 <(x::Ptr,  y::Ptr) = UInt(x) < UInt(y)
 -(x::Ptr,  y::Ptr) = UInt(x) - UInt(y)
 
-+(x::Ptr, y::Integer) = oftype(x, add_ptr(UInt(x), (y % UInt) % UInt))
--(x::Ptr, y::Integer) = oftype(x, sub_ptr(UInt(x), (y % UInt) % UInt))
++(x::Ptr, y::Integer) = add_ptr(x, (y % UInt) % UInt)
+-(x::Ptr, y::Integer) = sub_ptr(x, (y % UInt) % UInt)
 +(x::Integer, y::Ptr) = y + x
 
 unsigned(x::Ptr) = UInt(x)

@@ -10,10 +10,10 @@ if `io` is not given) a canonical (un-decorated) text representation.
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
-`print` falls back to calling `show`, so most types should just define
-`show`. Define `print` if your type has a separate "plain" representation.
-For example, `show` displays strings with quotes, and `print` displays strings
-without quotes.
+`print` falls back to calling the 2-argument `show(io, x)` for each argument `x` in `xs`,
+so most types should just define `show`. Define `print` if your type has a separate
+"plain" representation.  For example, `show` displays strings with quotes, and `print`
+displays strings without quotes.
 
 See also [`println`](@ref), [`string`](@ref), [`printstyled`](@ref).
 
@@ -252,8 +252,8 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 """
     repr(x; context=nothing)
 
-Create a string from any value using the [`show`](@ref) function.
-You should not add methods to `repr`; define a `show` method instead.
+Create a string from any value using the 2-argument `show(io, x)` function.
+You should not add methods to `repr`; define a [`show`](@ref) method instead.
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
 tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
@@ -262,7 +262,7 @@ attributes are used for the I/O stream passed to `show`.
 Note that `repr(x)` is usually similar to how the value of `x` would
 be entered in Julia.  See also [`repr(MIME("text/plain"), x)`](@ref) to instead
 return a "pretty-printed" version of `x` designed more for human consumption,
-equivalent to the REPL display of `x`.
+equivalent to the REPL display of `x`, using the 3-argument `show(io, mime, x)`.
 
 !!! compat "Julia 1.7"
     Passing a tuple to keyword `context` requires Julia 1.7 or later.
@@ -353,28 +353,19 @@ function join(io::IO, iterator, delim="")
     end
 end
 
-# TODO: If/when we have `AnnotatedIO`, we can revisit this and
-# implement it more nicely.
-function join_annotated(iterator, delim="", last=delim)
-    xs = zip(iterator, Iterators.repeated(delim)) |> Iterators.flatten |> collect
-    xs = xs[1:end-1]
-    if length(xs) > 1
-        xs[end-1] = last
-    end
-    annotatedstring(xs...)::AnnotatedString{String}
-end
-
-function _join_maybe_annotated(args...)
-    if any(_isannotated ∘ eltype, args)
-        join_annotated(args...)
+function _join_preserve_annotations(iterator, args...)
+    if _isannotated(eltype(iterator)) || any(_isannotated, args)
+        io = AnnotatedIOBuffer()
+        join(io, iterator, args...)
+        read(seekstart(io), AnnotatedString{String})
     else
-        sprint(join, args...)
+        sprint(join, iterator, args...)
     end
 end
 
-join(iterator) = _join_maybe_annotated(iterator)
-join(iterator, delim) = _join_maybe_annotated(iterator, delim)
-join(iterator, delim, last) = _join_maybe_annotated(iterator, delim, last)
+join(iterator) = _join_preserve_annotations(iterator)
+join(iterator, delim) = _join_preserve_annotations(iterator, delim)
+join(iterator, delim, last) = _join_preserve_annotations(iterator, delim, last)
 
 ## string escaping & unescaping ##
 
@@ -624,7 +615,7 @@ string literals. (It also happens to be the escaping convention
 expected by the Microsoft C/C++ compiler runtime when it parses a
 command-line string into the argv[] array.)
 
-See also [`escape_string`](@ref).
+See also [`Base.escape_string()`](@ref).
 """
 function escape_raw_string(io::IO, str::AbstractString, delim::Char='"')
     total = 0

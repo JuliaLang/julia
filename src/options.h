@@ -74,9 +74,6 @@
 // GC_TIME prints time taken by each phase of GC
 // #define GC_TIME
 
-// OBJPROFILE counts objects by type
-// #define OBJPROFILE
-
 // pool allocator configuration options
 
 // GC_SMALL_PAGE allocates objects in 4k pages
@@ -109,12 +106,14 @@
 
 // When not using COPY_STACKS the task-system is less memory efficient so
 // you probably want to choose a smaller default stack size (factor of 8-10)
+#if !defined(JL_STACK_SIZE)
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
 #define JL_STACK_SIZE (64*1024*1024)
 #elif defined(_P64)
 #define JL_STACK_SIZE (4*1024*1024)
 #else
 #define JL_STACK_SIZE (2*1024*1024)
+#endif
 #endif
 
 // allow a suspended Task to restart on a different thread

@@ -434,10 +434,13 @@ Adds docstring `"..."` to the `@m(::Any)` macro definition.
 
 ```julia
 "..."
-:(@m)
+:(@m1)
+
+"..."
+macro m2 end
 ```
 
-Adds docstring `"..."` to the macro named `@m`.
+Adds docstring `"..."` to the macros named `@m1` and `@m2`.
 
 ### Types
 
@@ -457,6 +460,20 @@ end
 ```
 
 Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
+
+```
+"..."
+T1
+
+"..."
+T2
+
+"..."
+T3
+```
+
+Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
+The previous version is the preferred syntax, however both are equivalent.
 
 ```julia
 "..."
@@ -494,6 +511,20 @@ end
 Adds docstring `"..."` to the `Module` `M`. Adding the docstring above the `Module` is the preferred
 syntax, however both are equivalent.
 
+The module docstring is evaluated *inside* the scope of the module, allowing
+access to all the symbols defined in and imported into the module:
+
+```julia
+"The magic number is $(MAGIC)."
+module DocStringEval
+const MAGIC = 42
+end
+```
+
+Documenting a `baremodule` by placing a docstring above the expression automatically imports
+`@doc` into the module. These imports must be done manually when the module expression is not
+documented:
+
 ```julia
 "..."
 baremodule M
@@ -509,10 +540,6 @@ f(x) = x
 
 end
 ```
-
-Documenting a `baremodule` by placing a docstring above the expression automatically imports
-`@doc` into the module. These imports must be done manually when the module expression is not
-documented.
 
 ### Global Variables
 

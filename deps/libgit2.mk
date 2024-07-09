@@ -33,8 +33,12 @@ LIBGIT2_OPTS += -DBUILD_TESTS=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 endif
+ifeq ($(OS),OpenBSD)
+# iconv.h is third-party
+LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-I/usr/local/include"
+endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
@@ -47,12 +51,12 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extr
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) --build $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) test
+	$(CMAKE) --build $(dir $@) test
 endif
 	echo 1 > $@
 

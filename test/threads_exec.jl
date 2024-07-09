@@ -1122,23 +1122,25 @@ end
 
 # issue #41546, thread-safe package loading
 @testset "package loading" begin
-    ch = Channel{Bool}(threadpoolsize())
+    ntasks = max(threadpoolsize(), 4)
+    ch = Channel{Bool}(ntasks)
     barrier = Base.Event()
     old_act_proj = Base.ACTIVE_PROJECT[]
     try
         pushfirst!(LOAD_PATH, "@")
         Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
         @sync begin
-            for _ in 1:threadpoolsize()
+            for _ in 1:ntasks
                 Threads.@spawn begin
                     put!(ch, true)
                     wait(barrier)
                     @eval using TestPkg
                 end
             end
-            for _ in 1:threadpoolsize()
+            for _ in 1:ntasks
                 take!(ch)
             end
+            close(ch)
             notify(barrier)
         end
         @test Base.root_module(@__MODULE__, :TestPkg) isa Module
@@ -1185,5 +1187,128 @@ function threadcall_threads()
 end
 @testset "threadcall + threads" begin
     threadcall_threads() #Shouldn't crash!
+end
+
+@testset "Wait multiple tasks" begin
+    convert_tasks(t, x) = x
+    convert_tasks(::Set{Task}, x::Vector{Task}) = Set{Task}(x)
+    convert_tasks(::Tuple{Task}, x::Vector{Task}) = tuple(x...)
+
+    function create_tasks()
+        tasks = Task[]
+        event = Threads.Event()
+        push!(tasks,
+              Threads.@spawn begin
+                  sleep(0.01)
+              end)
+        push!(tasks,
+              Threads.@spawn begin
+                  sleep(0.02)
+              end)
+        push!(tasks,
+              Threads.@spawn begin
+                  wait(event)
+              end)
+        return tasks, event
+    end
+
+    function teardown(tasks, event)
+        notify(event)
+        waitall(resize!(tasks, 3), throw=true)
+    end
+
+    for tasks_type in (Vector{Task}, Set{Task}, Tuple{Task})
+        @testset "waitany" begin
+            @testset "throw=false" begin
+                tasks, event = create_tasks()
+                wait(tasks[1])
+                wait(tasks[2])
+                done,  pending = waitany(convert_tasks(tasks_type, tasks); throw=false)
+                @test length(done) == 2
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test length(pending) == 1
+                @test tasks[3] ∈ pending
+                teardown(tasks, event)
+            end
+
+            @testset "throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                @test_throws CompositeException begin
+                    waitany(convert_tasks(tasks_type, tasks); throw=true)
+                end
+
+                teardown(tasks, event)
+            end
+        end
+
+        @testset "waitall" begin
+            @testset "All tasks succeed" begin
+                tasks, event = create_tasks()
+
+                wait(tasks[1])
+                wait(tasks[2])
+                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks))
+                @test !istaskdone(waiter)
+
+                notify(event)
+                done, pending = fetch(waiter)
+                @test length(done) == 3
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test tasks[3] ∈ done
+                @test length(pending) == 0
+            end
+
+            @testset "failfast=true, throw=false" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                wait(tasks[1])
+                wait(tasks[2])
+                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks); failfast=true, throw=false)
+
+                done, pending = fetch(waiter)
+                @test length(done) == 3
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test tasks[4] ∈ done
+                @test length(pending) == 1
+                @test tasks[3] ∈ pending
+
+                teardown(tasks, event)
+            end
+
+            @testset "failfast=false, throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                notify(event)
+
+                @test_throws CompositeException begin
+                    waitall(convert_tasks(tasks_type, tasks); failfast=false, throw=true)
+                end
+
+                @test all(istaskdone.(tasks))
+
+                teardown(tasks, event)
+            end
+
+            @testset "failfast=true, throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                @test_throws CompositeException begin
+                    waitall(convert_tasks(tasks_type, tasks); failfast=true, throw=true)
+                end
+
+                @test !istaskdone(tasks[3])
+
+                teardown(tasks, event)
+            end
+        end
+    end
 end
 end # main testset

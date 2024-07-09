@@ -67,7 +67,7 @@ function _tpid_to_sym(tpid::Int8)
     elseif tpid == -1
         return :foreign
     else
-        throw(ArgumentError("Unrecognized threadpool id $tpid"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool id ", tpid)))
     end
 end
 
@@ -79,7 +79,7 @@ function _sym_to_tpid(tp::Symbol)
     elseif tp == :foreign
         return Int8(-1)
     else
-        throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool name `", tp, "`")))
     end
 end
 
@@ -158,7 +158,8 @@ function threading_run(fun, static)
         else
             # TODO: this should be the current pool (except interactive) if there
             # are ever more than two pools.
-            @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default)) == 1
+            _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+            @assert _result == 1
         end
         tasks[i] = t
         schedule(t)
@@ -345,7 +346,7 @@ thread other than 1.
     In newly written library functions, `:static` scheduling is discouraged because the
     functions using this option cannot be called from arbitrary worker threads.
 
-## Example
+## Examples
 
 To illustrate of the different scheduling strategies, consider the following function
 `busywait` containing a non-yielding timed loop that runs for a given number of seconds.
@@ -410,7 +411,8 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
     if tpid == -1 || _nthreads_in_pool(tpid) == 0
         tpid = _sym_to_tpid(:default)
     end
-    @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid) == 1
+    _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    @assert _result == 1
     nothing
 end
 
@@ -462,7 +464,7 @@ macro spawn(args...)
         if ttype isa QuoteNode
             ttype = ttype.value
             if ttype !== :interactive && ttype !== :default
-                throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+                throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
         else

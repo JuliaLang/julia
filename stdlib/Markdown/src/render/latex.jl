@@ -33,6 +33,9 @@ function latex(io::IO, header::Header{l}) where l
 end
 
 function latex(io::IO, code::Code)
+    if code.language == "styled"
+        code = Code("", String(styled(code.code)))
+    end
     occursin("\\end{verbatim}", code.code) && error("Cannot include \"\\end{verbatim}\" in a latex code block")
     wrapblock(io, "verbatim") do
         println(io, code.code)
@@ -175,7 +178,7 @@ writing to an (optional) `io` stream or returning a string.
 
 One can alternatively use `show(io, "text/latex", md)` or `repr("text/latex", md)`.
 
-# Example
+# Examples
 ```jldoctest
 julia> latex(md"hello _world_")
 "hello \\\\emph{world}\\n\\n"

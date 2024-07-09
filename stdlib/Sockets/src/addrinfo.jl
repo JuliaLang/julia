@@ -55,7 +55,7 @@ end
 Gets all of the IP addresses of the `host`.
 Uses the operating system's underlying `getaddrinfo` implementation, which may do a DNS lookup.
 
-# Example
+# Examples
 ```julia-repl
 julia> getalladdrinfo("google.com")
 2-element Array{IPAddr,1}:
@@ -362,7 +362,7 @@ are not guaranteed to be unique beyond their network segment,
 therefore routers do not forward them. Link-local addresses are from
 the address blocks `169.254.0.0/16` or `fe80::/10`.
 
-# Example
+# Examples
 ```julia
 filter(!islinklocaladdr, getipaddrs())
 ```

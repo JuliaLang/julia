@@ -28,13 +28,13 @@
 @test (x=4, y=5, z=6)[()] == NamedTuple()
 @test (x=4, y=5, z=6)[:] == (x=4, y=5, z=6)
 @test NamedTuple()[()] == NamedTuple()
-@test_throws ErrorException (x=4, y=5, z=6).a
+@test_throws FieldError (x=4, y=5, z=6).a
 @test_throws BoundsError (a=2,)[0]
 @test_throws BoundsError (a=2,)[2]
-@test_throws ErrorException (x=4, y=5, z=6)[(:a,)]
-@test_throws ErrorException (x=4, y=5, z=6)[(:x, :a)]
-@test_throws ErrorException (x=4, y=5, z=6)[[:a]]
-@test_throws ErrorException (x=4, y=5, z=6)[[:x, :a]]
+@test_throws FieldError (x=4, y=5, z=6)[(:a,)]
+@test_throws FieldError (x=4, y=5, z=6)[(:x, :a)]
+@test_throws FieldError (x=4, y=5, z=6)[[:a]]
+@test_throws FieldError (x=4, y=5, z=6)[[:x, :a]]
 @test_throws ErrorException (x=4, y=5, z=6)[(:x, :x)]
 
 @test length(NamedTuple()) == 0
@@ -94,6 +94,9 @@ end
 
     conv_res = @test_throws MethodError convert(NamedTuple{(:a,),Tuple{I}} where I<:AbstractString, (;a=1))
     @test conv_res.value.f === convert && conv_res.value.args === (AbstractString, 1)
+
+    conv6 = convert(NamedTuple{(:a,),Tuple{NamedTuple{(:b,), Tuple{Int}}}}, ((1,),))
+    @test conv6 === (a = (b = 1,),)
 end
 
 @test NamedTuple{(:a,:c)}((b=1,z=2,c=3,aa=4,a=5)) === (a=5, c=3)
@@ -252,7 +255,7 @@ function abstr_nt_22194_2()
     a = NamedTuple[(a=1,), (b=2,)]
     return a[1].b
 end
-@test_throws ErrorException abstr_nt_22194_2()
+@test_throws FieldError abstr_nt_22194_2()
 @test Base.return_types(abstr_nt_22194_2, ()) == Any[Any]
 
 mutable struct HasAbstractNamedTuples
@@ -395,14 +398,14 @@ for f in (Base.merge, Base.structdiff)
         fallback_func(a::NamedTuple, b::NamedTuple) = @invoke f(a::NamedTuple, b::NamedTuple)
         @testset let eff = Base.infer_effects(fallback_func)
             @test Core.Compiler.is_foldable(eff)
-            @test eff.nonoverlayed
+            @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(fallback_func)) == NamedTuple
         # test if `max_methods = 4` setting works as expected
         general_func(a::NamedTuple, b::NamedTuple) = f(a, b)
         @testset let eff = Base.infer_effects(general_func)
             @test Core.Compiler.is_foldable(eff)
-            @test eff.nonoverlayed
+            @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(general_func)) == NamedTuple
     end
@@ -433,4 +436,19 @@ end
 let c = (a=1, b=2),
     d = (b=3, c=(d=1,))
     @test @inferred(mergewith51009((x,y)->y, c, d)) === (a = 1, b = 3, c = (d = 1,))
+end
+
+@test_throws ErrorException NamedTuple{(), Union{}}
+for NT in (NamedTuple{(:a, :b), Union{}}, NamedTuple{(:a, :b), T} where T<:Union{})
+    @test fieldtype(NT, 1) == Union{}
+    @test fieldtype(NT, :b) == Union{}
+    @test_throws FieldError fieldtype(NT, :c)
+    @test_throws BoundsError fieldtype(NT, 0)
+    @test_throws BoundsError fieldtype(NT, 3)
+    @test Base.return_types((Type{NT},)) do NT; fieldtype(NT, :a); end == Any[Type{Union{}}]
+    @test fieldtype(NamedTuple{<:Any, Union{}}, 1) == Union{}
+end
+let NT = NamedTuple{<:Any, Union{}}
+    @test fieldtype(NT, 100) == Union{}
+    @test only(Base.return_types((Type{NT},)) do NT; fieldtype(NT, 100); end) >: Type{Union{}}
 end

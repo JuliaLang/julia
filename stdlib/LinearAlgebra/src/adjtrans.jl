@@ -465,7 +465,7 @@ tr(A::Transpose) = transpose(tr(parent(A)))
 function _dot_nonrecursive(u, v)
     lu = length(u)
     if lu != length(v)
-        throw(DimensionMismatch("first array has length $(lu) which does not match the length of the second, $(length(v))."))
+        throw(DimensionMismatch(lazy"first array has length $(lu) which does not match the length of the second, $(length(v))."))
     end
     if lu == 0
         zero(eltype(u)) * zero(eltype(v))

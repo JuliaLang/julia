@@ -9,7 +9,9 @@ using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, 
 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
-using Base: with_output_color, mapany
+using Base: with_output_color, mapany, isdeprecated, isexported
+
+using Base.Filesystem: _readdirx
 
 import REPL
 
@@ -379,9 +381,9 @@ function find_readme(m::Module)::Union{String, Nothing}
     path = dirname(mpath)
     top_path = pkgdir(m)
     while true
-        for file in readdir(path; join=true, sort=true)
-            isfile(file) && (basename(lowercase(file)) in ["readme.md", "readme"]) || continue
-            return file
+        for entry in _readdirx(path; sort=true)
+            isfile(entry) && (lowercase(entry.name) in ["readme.md", "readme"]) || continue
+            return entry.path
         end
         path == top_path && break # go no further than pkgdir
         path = dirname(path) # work up through nested modules
@@ -424,8 +426,31 @@ end
 
 # repl search and completions for help
 
+# This type is returned from `accessible` and denotes a binding that is accessible within
+# some context. It differs from `Base.Docs.Binding`, which is also used by the REPL, in
+# that it doesn't track the defining module for a symbol unless the symbol is public but
+# not exported, i.e. it's accessible but requires qualification. Using this type rather
+# than `Base.Docs.Binding` simplifies things considerably, partially because REPL searching
+# is based on `String`s, which this type stores, but `Base.Docs.Binding` stores a module
+# and symbol and does not have any notion of the context from which the binding is accessed.
+struct AccessibleBinding
+    source::Union{String,Nothing}
+    name::String
+end
+
+function AccessibleBinding(mod::Module, name::Symbol)
+    m = isexported(mod, name) ? nothing : String(nameof(mod))
+    return AccessibleBinding(m, String(name))
+end
+AccessibleBinding(name::Symbol) = AccessibleBinding(nothing, String(name))
+
+function Base.show(io::IO, b::AccessibleBinding)
+    b.source === nothing || print(io, b.source, '.')
+    print(io, b.name)
+end
 
 quote_spaces(x) = any(isspace, x) ? "'" * x * "'" : x
+quote_spaces(x::AccessibleBinding) = AccessibleBinding(x.source, quote_spaces(x.name))
 
 function repl_search(io::IO, s::Union{Symbol,String}, mod::Module)
     pre = "search:"
@@ -669,6 +694,9 @@ function matchinds(needle, haystack; acronym::Bool = false)
     return is
 end
 
+matchinds(needle, (; name)::AccessibleBinding; acronym::Bool=false) =
+    matchinds(needle, name; acronym)
+
 longer(x, y) = length(x) ≥ length(y) ? (x, true) : (y, false)
 
 bestmatch(needle, haystack) =
@@ -728,7 +756,17 @@ function fuzzyscore(needle::AbstractString, haystack::AbstractString)
     1 - (string_distance(needle, lena, haystack, lenb) / max(lena, lenb))
 end
 
-function fuzzysort(search::String, candidates::Vector{String})
+function fuzzyscore(needle::AbstractString, haystack::AccessibleBinding)
+    score = fuzzyscore(needle, haystack.name)
+    haystack.source === nothing && return score
+    # Apply a "penalty" of half an edit if the comparator binding is public but not
+    # exported so that exported/local names that exactly match the search query are
+    # listed first
+    penalty = 1 / (2 * max(length(needle), length(haystack.name)))
+    return max(score - penalty, 0)
+end
+
+function fuzzysort(search::String, candidates::Vector{AccessibleBinding})
     scores = map(cand -> fuzzyscore(search, cand), candidates)
     candidates[sortperm(scores)] |> reverse
 end
@@ -753,12 +791,14 @@ function levenshtein(s1, s2)
     return d[m+1, n+1]
 end
 
-function levsort(search::String, candidates::Vector{String})
-    scores = map(cand -> (Float64(levenshtein(search, cand)), -fuzzyscore(search, cand)), candidates)
+function levsort(search::String, candidates::Vector{AccessibleBinding})
+    scores = map(candidates) do cand
+        (Float64(levenshtein(search, cand.name)), -fuzzyscore(search, cand))
+    end
     candidates = candidates[sortperm(scores)]
     i = 0
     for outer i = 1:length(candidates)
-        levenshtein(search, candidates[i]) > 3 && break
+        levenshtein(search, candidates[i].name) > 3 && break
     end
     return candidates[1:i]
 end
@@ -776,24 +816,39 @@ function printmatch(io::IO, word, match)
     end
 end
 
+function printmatch(io::IO, word, match::AccessibleBinding)
+    match.source === nothing || print(io, match.source, '.')
+    printmatch(io, word, match.name)
+end
+
+function matchlength(x::AccessibleBinding)
+    n = length(x.name)
+    if x.source !== nothing
+        n += length(x.source) + 1  # the +1 is for the `.` separator
+    end
+    return n
+end
+matchlength(x) = length(x)
+
 function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
-        total + length(match) + 1 > cols && break
+        ml = matchlength(match)
+        total + ml + 1 > cols && break
         fuzzyscore(word, match) < 0.5 && break
         print(io, " ")
         printmatch(io, word, match)
-        total += length(match) + 1
+        total += ml + 1
     end
 end
 
 printmatches(args...; cols::Int = _displaysize(stdout)[2]) = printmatches(stdout, args..., cols = cols)
 
-function print_joined_cols(io::IO, ss::Vector{String}, delim = "", last = delim; cols::Int = _displaysize(io)[2])
+function print_joined_cols(io::IO, ss::Vector{AccessibleBinding}, delim = "", last = delim; cols::Int = _displaysize(io)[2])
     i = 0
     total = 0
     for outer i = 1:length(ss)
-        total += length(ss[i])
+        total += matchlength(ss[i])
         total + max(i-2,0)*length(delim) + (i>1 ? 1 : 0)*length(last) > cols && (i-=1; break)
     end
     join(io, ss[1:i], delim, last)
@@ -815,27 +870,31 @@ print_correction(word, mod::Module) = print_correction(stdout, word, mod)
 
 # Completion data
 
-
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
-
-accessible(mod::Module) =
-    Symbol[filter!(s -> !Base.isdeprecated(mod, s), names(mod, all=true, imported=true));
-           map(names, moduleusings(mod))...;
-           collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
+function accessible(mod::Module)
+    bindings = Set(AccessibleBinding(s) for s in names(mod; all=true, imported=true)
+                   if !isdeprecated(mod, s))
+    for used in moduleusings(mod)
+        union!(bindings, (AccessibleBinding(used, s) for s in names(used)
+                          if !isdeprecated(used, s)))
+    end
+    union!(bindings, (AccessibleBinding(k) for k in keys(Base.Docs.keywords)))
+    filter!(b -> !occursin('#', b.name), bindings)
+    return collect(bindings)
+end
 
 function doc_completions(name, mod::Module=Main)
     res = fuzzysort(name, accessible(mod))
 
     # to insert an entry like `raw""` for `"@raw_str"` in `res`
-    ms = match.(r"^@(.*?)_str$", res)
+    ms = map(c -> match(r"^@(.*?)_str$", c.name), res)
     idxs = findall(!isnothing, ms)
 
     # avoid messing up the order while inserting
     for i in reverse!(idxs)
         c = only((ms[i]::AbstractMatch).captures)
-        insert!(res, i, "$(c)\"\"")
+        insert!(res, i, AccessibleBinding(res[i].source, "$(c)\"\""))
     end
     res
 end

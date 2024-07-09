@@ -606,7 +606,9 @@ void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx,
 void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &snapshot, char all_one)
 {
     // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2567-L2567
+    // also https://github.com/microsoft/vscode-v8-heap-tools/blob/c5b34396392397925ecbb4ecb904a27a2754f2c1/v8-heap-parser/src/decoder.rs#L43-L51
     ios_printf(json, "{\"snapshot\":{");
+
     ios_printf(json, "\"meta\":{");
     ios_printf(json, "\"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"],");
     ios_printf(json, "\"node_types\":[");
@@ -617,10 +619,26 @@ void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &sn
     ios_printf(json, "\"edge_types\":[");
     snapshot.edge_types.print_json_array(json, false);
     ios_printf(json, ",");
-    ios_printf(json, "\"string_or_number\",\"from_node\"]");
+    ios_printf(json, "\"string_or_number\",\"from_node\"],");
+    // not used. Required by microsoft/vscode-v8-heap-tools
+    ios_printf(json, "\"trace_function_info_fields\":[\"function_id\",\"name\",\"script_name\",\"script_id\",\"line\",\"column\"],");
+    ios_printf(json, "\"trace_node_fields\":[\"id\",\"function_info_index\",\"count\",\"size\",\"children\"],");
+    ios_printf(json, "\"sample_fields\":[\"timestamp_us\",\"last_assigned_id\"],");
+    ios_printf(json, "\"location_fields\":[\"object_index\",\"script_id\",\"line\",\"column\"]");
+    // end not used
     ios_printf(json, "},\n"); // end "meta"
+
     ios_printf(json, "\"node_count\":%zu,", snapshot.num_nodes);
-    ios_printf(json, "\"edge_count\":%zu", snapshot.num_edges);
-    ios_printf(json, "}\n"); // end "snapshot"
+    ios_printf(json, "\"edge_count\":%zu,", snapshot.num_edges);
+    ios_printf(json, "\"trace_function_count\":0"); // not used. Required by microsoft/vscode-v8-heap-tools
+    ios_printf(json, "},\n"); // end "snapshot"
+
+    // not used. Required by microsoft/vscode-v8-heap-tools
+    ios_printf(json, "\"trace_function_infos\":[],");
+    ios_printf(json, "\"trace_tree\":[],");
+    ios_printf(json, "\"samples\":[],");
+    ios_printf(json, "\"locations\":[]");
+    // end not used
+
     ios_printf(json, "}");
 }

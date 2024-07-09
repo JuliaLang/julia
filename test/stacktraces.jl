@@ -92,15 +92,9 @@ can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
     @test frame.func === typeof(func).name.mt.name
     # broken until #50082 can be addressed
-    if inlined
-        @test frame.linfo.def.module === which(func, (Any,)).module broken=true
-        @test frame.linfo.def === which(func, (Any,)) broken=true
-        @test frame.linfo.specTypes === Tuple{typeof(func), Int} broken=true
-    else
-        @test frame.linfo.def.module === which(func, (Any,)).module
-        @test frame.linfo.def === which(func, (Any,))
-        @test frame.linfo.specTypes === Tuple{typeof(func), Int}
-    end
+    @test frame.linfo.def.module === which(func, (Any,)).module broken=inlined
+    @test frame.linfo.def === which(func, (Any,)) broken=inlined
+    @test frame.linfo.specTypes === Tuple{typeof(func), Int} broken=inlined
     # line
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c
@@ -108,11 +102,9 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo,
-    li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
-    sf
-
-    setfield!(li, :uninferred, src, :monotonic)
+let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo
+    li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
+    @atomic li.cache = ccall(:jl_new_codeinst_for_uninferred, Ref{Core.CodeInstance}, (Any, Any), li, src)
     li.specTypes = Tuple{}
     li.def = @__MODULE__
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
