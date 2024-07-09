@@ -221,6 +221,8 @@ end
     @test toks("#=   #=   =#") == ["#=   #=   =#"=>K"ErrorEofMultiComment"]
     @test toks("#=#==#=#") == ["#=#==#=#"=>K"Comment"]
     @test toks("#=#==#=")  == ["#=#==#="=>K"ErrorEofMultiComment"]
+    # comment terminated by \r\n
+    @test toks("#\r\n") == ["#" => K"Comment", "\r\n" => K"NewlineWs"]
 end
 
 
