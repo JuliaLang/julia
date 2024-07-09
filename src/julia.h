@@ -1105,8 +1105,6 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
 }
 
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
-JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
-                                         int isaligned, jl_value_t *owner);
 JL_DLLEXPORT void jl_gc_safepoint(void);
 JL_DLLEXPORT int jl_safepoint_suspend_thread(int tid, int waitstate);
 JL_DLLEXPORT int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT;
@@ -1939,7 +1937,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
-JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
+JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import);
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);

@@ -38,20 +38,23 @@ Memory
     AtomicMemory{T} == GenericMemory{:atomic, T, Core.CPU}
 
 Fixed-size [`DenseVector{T}`](@ref DenseVector).
-Access to its any of its elements is performed atomically (with `:monotonic` ordering).
-Setting any of the elements must be accomplished using the `@atomic` macro and explicitly specifying ordering.
+Fetching of any of its individual elements is performed atomically
+(with `:monotonic` ordering by default).
 
 !!! warning
-    Each element is independently atomic when accessed, and cannot be set non-atomically.
-    Currently the `@atomic` macro and higher level interface have not been completed,
-    but the building blocks for a future implementation are the internal intrinsics
-    `Core.memoryrefget`, `Core.memoryrefset!`, `Core.memoryref_isassigned`, `Core.memoryrefswap!`,
-    `Core.memoryrefmodify!`, and `Core.memoryrefreplace!`.
+    The access to `AtomicMemory` must be done by either using the [`@atomic`](@ref)
+    macro or the lower level interface functions: `Base.getindex_atomic`,
+    `Base.setindex_atomic!`, `Base.setindexonce_atomic!`,
+    `Base.swapindex_atomic!`, `Base.modifyindex_atomic!`, and `Base.replaceindex_atomic!`.
 
-For details, see [Atomic Operations](@ref man-atomic-operations)
+For details, see [Atomic Operations](@ref man-atomic-operations) as well as macros
+[`@atomic`](@ref), [`@atomiconce`](@ref), [`@atomicswap`](@ref), and [`@atomicreplace`](@ref).
 
 !!! compat "Julia 1.11"
     This type requires Julia 1.11 or later.
+
+!!! compat "Julia 1.12"
+    Lower level interface functions or `@atomic` macro requires Julia 1.12 or later.
 """
 AtomicMemory
 
@@ -235,6 +238,7 @@ function setindex!(A::Memory{T}, x, i1::Int) where {T}
     memoryrefset!(ref, val, :not_atomic, @_boundscheck)
     return A
 end
+
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, (i1, i2, I...))
@@ -335,3 +339,74 @@ end
     end
 end
 view(m::GenericMemory, inds::Colon) = view(m, eachindex(m))
+
+# get, set(once), modify, swap and replace at index, atomically
+function getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)
+    memref = memoryref(mem, i)
+    return memoryrefget(memref, order, @_boundscheck)
+end
+
+function setindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    T = eltype(mem)
+    memref = memoryref(mem, i)
+    return memoryrefset!(
+        memref,
+        val isa T ? val : convert(T, val)::T,
+        order,
+        @_boundscheck
+    )
+end
+
+function setindexonce_atomic!(
+    mem::GenericMemory,
+    success_order::Symbol,
+    fail_order::Symbol,
+    val,
+    i::Int,
+)
+    T = eltype(mem)
+    memref = memoryref(mem, i)
+    return Core.memoryrefsetonce!(
+        memref,
+        val isa T ? val : convert(T, val)::T,
+        success_order,
+        fail_order,
+        @_boundscheck
+    )
+end
+
+function modifyindex_atomic!(mem::GenericMemory, order::Symbol, op, val, i::Int)
+    memref = memoryref(mem, i)
+    return Core.memoryrefmodify!(memref, op, val, order, @_boundscheck)
+end
+
+function swapindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)
+    T = eltype(mem)
+    memref = memoryref(mem, i)
+    return Core.memoryrefswap!(
+        memref,
+        val isa T ? val : convert(T, val)::T,
+        order,
+        @_boundscheck
+    )
+end
+
+function replaceindex_atomic!(
+    mem::GenericMemory,
+    success_order::Symbol,
+    fail_order::Symbol,
+    expected,
+    desired,
+    i::Int,
+)
+    T = eltype(mem)
+    memref = memoryref(mem, i)
+    return Core.memoryrefreplace!(
+        memref,
+        expected,
+        desired isa T ? desired : convert(T, desired)::T,
+        success_order,
+        fail_order,
+        @_boundscheck,
+    )
+end

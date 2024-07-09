@@ -232,12 +232,6 @@ STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
 {
     return _aligned_malloc(sz ? sz : 1, align);
 }
-STATIC_INLINE void *jl_realloc_aligned(void *p, size_t sz, size_t oldsz,
-                                       size_t align)
-{
-    (void)oldsz;
-    return _aligned_realloc(p, sz ? sz : 1, align);
-}
 STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 {
     _aligned_free(p);
@@ -254,27 +248,12 @@ STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
         return NULL;
     return ptr;
 }
-STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
-                                       size_t align)
-{
-#if defined(_P64) || defined(__APPLE__)
-    if (align <= 16)
-        return realloc(d, sz);
-#endif
-    void *b = jl_malloc_aligned(sz, align);
-    if (b != NULL) {
-        memcpy(b, d, oldsz > sz ? sz : oldsz);
-        free(d);
-    }
-    return b;
-}
 STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 {
     free(p);
 }
 #endif
 #define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
-#define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
 
 static void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
 {
@@ -4230,62 +4209,6 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     // jl_gc_managed_malloc is currently always used for allocating array buffers.
     maybe_record_alloc_to_profile((jl_value_t*)b, sz, (jl_datatype_t*)jl_buff_tag);
     return b;
-}
-
-static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t oldsz,
-                                 int isaligned, jl_value_t *owner, int8_t can_collect)
-{
-    if (can_collect)
-        maybe_collect(ptls);
-    int is_old_marked = jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED;
-    size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
-    if (allocsz < sz)  // overflow in adding offs, size was "negative"
-        jl_throw(jl_memory_exception);
-
-    int last_errno = errno;
-#ifdef _OS_WINDOWS_
-    DWORD last_error = GetLastError();
-#endif
-    void *b;
-    if (isaligned)
-        b = realloc_cache_align(d, allocsz, oldsz);
-    else
-        b = realloc(d, allocsz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-#ifdef _OS_WINDOWS_
-    SetLastError(last_error);
-#endif
-    errno = last_errno;
-    // gc_managed_realloc_ is currently used exclusively for resizing array buffers.
-    if (is_old_marked) {
-        ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
-        inc_live_bytes(allocsz - oldsz);
-    }
-    else if (!(allocsz < oldsz))
-        jl_atomic_store_relaxed(&ptls->gc_num.allocd,
-            jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (allocsz - oldsz));
-    jl_atomic_store_relaxed(&ptls->gc_num.realloc,
-        jl_atomic_load_relaxed(&ptls->gc_num.realloc) + 1);
-
-    int64_t diff = allocsz - oldsz;
-    if (diff < 0) {
-        jl_batch_accum_free_size(ptls, -diff);
-    }
-    else {
-        jl_batch_accum_heap_size(ptls, diff);
-    }
-    if (allocsz > oldsz) {
-        maybe_record_alloc_to_profile((jl_value_t*)b, allocsz - oldsz, (jl_datatype_t*)jl_buff_tag);
-    }
-    return b;
-}
-
-JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
-                                         int isaligned, jl_value_t *owner)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    return gc_managed_realloc_(ptls, d, sz, oldsz, isaligned, owner, 1);
 }
 
 // Perm gen allocator
