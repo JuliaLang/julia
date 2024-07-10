@@ -264,7 +264,7 @@ end
 Generate a sequence of `if ... elseif ... else ... end` statements.
 
 # Arguments
-- `condition`: A function that takes an integer between `1` and `N` and
+- `condition`: A function that takes an integer between `1` and `N-1` and
     returns a boolean condition.
 - `expression`: A function that takes an integer between `1` and `N` (or,
     only up to `N-1`, if `else_expression` is provided) and is called if
