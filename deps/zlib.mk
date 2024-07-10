@@ -14,7 +14,7 @@ $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured: $(SRCCACHE)/$(ZLIB_SRC_DIR)/source
 	echo 1 > $@
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured
-	$(CMAKE) --build $(dir $<) $(MAKE_COMMON)
+	$(CMAKE) --build $(dir $<)
 	echo 1 > $@
 
 $(eval $(call staged-install, \
