@@ -940,6 +940,11 @@ function workqueue_for(tid::Int)
     end
 end
 
+const task_counter_lock = ReentrantLock()
+const task_counters::Vector{Int} = Int[]
+
+const task_counter_enabled = Ref{Bool}(false)
+
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
 
@@ -977,6 +982,17 @@ function enq_work(t::Task)
             Partr.multiq_insert(t, t.priority)
             tid = 0
         end
+    end
+    if task_counter_enabled[]
+        if Threads.maxthreadid() > length(task_counters)
+            @lock task_counter_lock begin
+                while Threads.maxthreadid() > length(task_counters)
+                    push!(task_counters, 0)
+                end
+            end
+        end
+        # use Threads.threadid() because we want the tid schedule was called from
+        task_counters[Threads.threadid()] += 1
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
     return t

@@ -169,8 +169,8 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
-                    msg::Union{String,Nothing}=nothing)
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false,
+                    tasks_scheduled::Int = 0; msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
         if msg isa String
@@ -199,6 +199,10 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
         if lock_conflicts > 0
             plural = lock_conflicts == 1 ? "" : "s"
             print(io, ", ", lock_conflicts, " lock conflict$plural")
+        end
+        if tasks_scheduled > 0
+            plural = tasks_scheduled == 1 ? "" : "s"
+            print(io, ", ", tasks_scheduled, " task$plural scheduled")
         end
         if compile_time > 0
             if bytes != 0 || allocs != 0 || gctime > 0
@@ -315,7 +319,7 @@ macro time(msg, ex)
     quote
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true, ret.tasks_scheduled; msg=_msg)
         ret.value
     end
 end
@@ -569,17 +573,22 @@ macro timed(ex)
     quote
         Experimental.@force_compile
         Threads.lock_profiling(true)
+        task_counter_enabled[] = true
         local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
         local stats = gc_num()
         local elapsedtime = time_ns()
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
+        local tasks_scheduled = sum(task_counters)
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
             cumulative_compile_timing(false);
             compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
             lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
-            Threads.lock_profiling(false))
+            Threads.lock_profiling(false);
+            task_counter_enabled[] = false;
+            tasks_scheduled = sum(task_counters) - tasks_scheduled;
+            )
         )
         local diff = GC_Diff(gc_num(), stats)
         (
@@ -590,7 +599,8 @@ macro timed(ex)
             gcstats=diff,
             lock_conflicts=lock_conflicts,
             compile_time=compile_elapsedtimes[1]/1e9,
-            recompile_time=compile_elapsedtimes[2]/1e9
+            recompile_time=compile_elapsedtimes[2]/1e9,
+            tasks_scheduled=tasks_scheduled
         )
     end
 end
