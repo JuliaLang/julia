@@ -15,9 +15,11 @@ Diagonal(A::Bidiagonal) = Diagonal(A.dv)
 SymTridiagonal(A::Bidiagonal) =
     iszero(A.ev) ? SymTridiagonal(A.dv, A.ev) :
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
-Tridiagonal(A::Bidiagonal) =
-    Tridiagonal(A.uplo == 'U' ? fill!(similar(A.ev), 0) : A.ev, A.dv,
-                A.uplo == 'U' ? A.ev : fill!(similar(A.ev), 0))
+function Tridiagonal(A::Bidiagonal)
+    # ensure that the types are identical, even if zero returns a different type
+    z = oftype(A.ev, zero(A.ev))
+    Tridiagonal(A.uplo == 'U' ? z : A.ev, A.dv, A.uplo == 'U' ? A.ev : z)
+end
 
 # conversions from SymTridiagonal to other special matrix types
 Diagonal(A::SymTridiagonal) = Diagonal(A.dv)
@@ -532,7 +534,7 @@ end
 
 # factorizations
 function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot = NoPivot(); check::Bool = true)
-    T = choltype(eltype(S))
+    T = choltype(S)
     B = Bidiagonal{T}(diag(S, 0), diag(S, S.uplo == 'U' ? 1 : -1), sym_uplo(S.uplo))
     cholesky!(Hermitian(B, sym_uplo(S.uplo)), NoPivot(); check = check)
 end

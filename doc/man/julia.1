@@ -135,7 +135,7 @@ configured, and sets M to 1.
 .TP
 --gcthreads=N[,M]
 Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC.
-N is set to half of the number of compute threads and M is set to 0 if unspecified.
+N is set to the number of compute threads and M is set to 0 if unspecified.
 
 .TP
 -p, --procs {N|auto}
@@ -284,6 +284,10 @@ Generate an incremental output file (rather than complete)
 .TP
 --trace-compile={stderr|name}
 Print precompile statements for methods compiled during execution or save to a path
+
+.TP
+--trace-compile-timing=
+If --trace-compile is enabled show how long each took to compile in ms
 
 .TP
 -image-codegen

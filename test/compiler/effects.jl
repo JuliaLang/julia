@@ -89,13 +89,13 @@ Base.@assume_effects :terminates_globally function recur_termination1(x)
     0 ≤ x < 20 || error("bad fact")
     return x * recur_termination1(x-1)
 end
-@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
 @test Core.Compiler.is_terminates(Base.infer_effects(recur_termination1, (Int,)))
 function recur_termination2()
     Base.@assume_effects :total !:terminates_globally
     recur_termination1(12)
 end
-@test_broken fully_eliminated(recur_termination2)
+@test fully_eliminated(recur_termination2)
 @test fully_eliminated() do; recur_termination2(); end
 
 Base.@assume_effects :terminates_globally function recur_termination21(x)
@@ -104,15 +104,15 @@ Base.@assume_effects :terminates_globally function recur_termination21(x)
     return recur_termination22(x)
 end
 recur_termination22(x) = x * recur_termination21(x-1)
-@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
-@test_broken Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
 @test Core.Compiler.is_terminates(Base.infer_effects(recur_termination21, (Int,)))
 @test Core.Compiler.is_terminates(Base.infer_effects(recur_termination22, (Int,)))
 function recur_termination2x()
     Base.@assume_effects :total !:terminates_globally
     recur_termination21(12) + recur_termination22(12)
 end
-@test_broken fully_eliminated(recur_termination2x)
+@test fully_eliminated(recur_termination2x)
 @test fully_eliminated() do; recur_termination2x(); end
 
 # anonymous function support for `@assume_effects`
@@ -921,7 +921,7 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 abstractly_recursive1() = abstractly_recursive2()
 abstractly_recursive2() = (Core.Compiler._return_type(abstractly_recursive1, Tuple{}); 1)
 abstractly_recursive3() = abstractly_recursive2()
-@test Core.Compiler.is_terminates(Base.infer_effects(abstractly_recursive3, ()))
+@test_broken Core.Compiler.is_terminates(Base.infer_effects(abstractly_recursive3, ()))
 actually_recursive1(x) = actually_recursive2(x)
 actually_recursive2(x) = (x <= 0) ? 1 : actually_recursive1(x - 1)
 actually_recursive3(x) = actually_recursive2(x)
@@ -1168,22 +1168,22 @@ callgetfield_inbounds(x, f) = @inbounds callgetfield2(x, f)
       Core.Compiler.ALWAYS_FALSE
 
 # noub modeling for memory ops
-let (memoryref, memoryrefget, memoryref_isassigned, memoryrefset!) =
-        (Core.memoryref, Core.memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
+let (memoryrefnew, memoryrefget, memoryref_isassigned, memoryrefset!) =
+        (Core.memoryrefnew, Core.memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
     function builtin_effects(@nospecialize xs...)
         interp = Core.Compiler.NativeInterpreter()
         𝕃 = Core.Compiler.typeinf_lattice(interp)
         rt = Core.Compiler.builtin_tfunction(interp, xs..., nothing)
         return Core.Compiler.builtin_effects(𝕃, xs..., rt)
     end
-    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[Memory,]))
-    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int]))
-    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Core.Const(true)]))
-    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Core.Const(false)]))
-    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Bool]))
-    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Int]))
-    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Vararg{Bool}]))
-    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Vararg{Any}]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[Memory,]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Int,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefnew, Any[MemoryRef,Vararg{Any}]))
     @test Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Core.Const(true)]))
     @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Core.Const(false)]))
     @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Bool]))
@@ -1204,7 +1204,7 @@ let (memoryref, memoryrefget, memoryref_isassigned, memoryrefset!) =
     @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Vararg{Any}]))
     # `:boundscheck` taint should be refined by post-opt analysis
     @test Base.infer_effects() do xs::Vector{Any}, i::Int
-        memoryrefget(memoryref(getfield(xs, :ref), i, Base.@_boundscheck), :not_atomic, Base.@_boundscheck)
+        memoryrefget(memoryrefnew(getfield(xs, :ref), i, Base.@_boundscheck), :not_atomic, Base.@_boundscheck)
     end |> Core.Compiler.is_noub_if_noinbounds
 end
 

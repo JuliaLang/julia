@@ -1736,7 +1736,7 @@ JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
         }
     }
     if (err)
-        jl_has_no_field_error(t->name->name, fld);
+        jl_has_no_field_error(t, fld);
     return -1;
 }
 
@@ -2251,6 +2251,39 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
     if (!jl_struct_try_layout(ty) || field > jl_datatype_nfields(ty) || field < 1)
         jl_bounds_error_int((jl_value_t*)ty, field);
     return jl_field_offset(ty, field - 1);
+}
+
+jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
+{
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
+    const jl_datatype_layout_t *ly = dt->layout;
+    uint32_t npointers = ly->npointers;
+    if (i >= npointers)
+        jl_bounds_error_int(v, i);
+    const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
+    const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
+    const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
+    uint32_t fld;
+    if (ly->flags.fielddesc_type == 0)
+        fld = ptrs8[i];
+    else if (ly->flags.fielddesc_type == 1)
+        fld = ptrs16[i];
+    else
+        fld = ptrs32[i];
+    return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)(&((jl_value_t**)v)[fld]));
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_nth_pointer(jl_value_t *v, size_t i)
+{
+    jl_value_t *ptrf = get_nth_pointer(v, i);
+    if (__unlikely(ptrf == NULL))
+        jl_throw(jl_undefref_exception);
+    return ptrf;
+}
+
+JL_DLLEXPORT int jl_nth_pointer_isdefined(jl_value_t *v, size_t i)
+{
+    return get_nth_pointer(v, i) != NULL;
 }
 
 #ifdef __cplusplus

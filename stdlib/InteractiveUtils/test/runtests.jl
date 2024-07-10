@@ -139,7 +139,7 @@ tag = "ANY"
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
 @testset "code_warntype OpaqueClosure" begin
-    g = Base.Experimental.@opaque Tuple{Float64} x -> 0.0
+    g = Base.Experimental.@opaque Tuple{Float64}->_ x -> 0.0
     @test warntype_hastag(g, Tuple{Float64}, "::Float64")
 end
 
@@ -393,23 +393,24 @@ let errf = tempname(),
     new_stderr = open(errf, "w")
     try
         redirect_stderr(new_stderr)
+        @test occursin("f_broken_code", sprint(code_native, h_broken_code, ()))
         println(new_stderr, "start")
         flush(new_stderr)
-        @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        @test_throws "could not compile the specified method" sprint(code_native, f_broken_code, ())
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
-        @eval @test g_broken_code() == 0
+        @test invokelatest(g_broken_code) == 0
     finally
+        Libc.flush_cstdio()
         redirect_stderr(old_stderr)
         close(new_stderr)
         let errstr = read(errf, String)
             @test startswith(errstr, """start
-                end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
-            @test !endswith(errstr, "\nend\n") || errstr
+            @test endswith(errstr, "\nend\n") || errstr
         end
         rm(errf)
     end
