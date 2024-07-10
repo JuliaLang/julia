@@ -97,7 +97,7 @@ static arraylist_t bits_save[4];
 static void gc_clear_mark_page(jl_gc_pagemeta_t *pg, int bits)
 {
     jl_ptls_t ptls2 = gc_all_tls_states[pg->thread_n];
-    jl_gc_pool_t *pool = &ptls2->heap.norm_pools[pg->pool_n];
+    jl_gc_pool_t *pool = &ptls2->gc_tls.heap.norm_pools[pg->pool_n];
     jl_taggedvalue_t *pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
     while ((char*)pv <= lim) {
@@ -112,7 +112,7 @@ static void gc_clear_mark_outer(int bits)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
         while (pg != NULL) {
             gc_clear_mark_page(pg, bits);
             pg = pg->next;
@@ -132,7 +132,7 @@ static void clear_mark(int bits)
     }
     bigval_t *v;
     for (int i = 0; i < gc_n_threads; i++) {
-        v = gc_all_tls_states[i]->heap.big_objects;
+        v = gc_all_tls_states[i]->gc_tls.heap.big_objects;
         while (v != NULL) {
             void *gcv = &v->header;
             if (!gc_verifying)
@@ -170,7 +170,7 @@ static void gc_verify_track(jl_ptls_t ptls)
         return;
     do {
         jl_gc_markqueue_t mq;
-        jl_gc_markqueue_t *mq2 = &ptls->mark_queue;
+        jl_gc_markqueue_t *mq2 = &ptls->gc_tls.mark_queue;
         ws_queue_t *cq = &mq.chunk_queue;
         ws_queue_t *q = &mq.ptr_queue;
         jl_atomic_store_relaxed(&cq->top, 0);
@@ -230,7 +230,7 @@ void gc_verify(jl_ptls_t ptls)
         return;
     }
     jl_gc_markqueue_t mq;
-    jl_gc_markqueue_t *mq2 = &ptls->mark_queue;
+    jl_gc_markqueue_t *mq2 = &ptls->gc_tls.mark_queue;
     ws_queue_t *cq = &mq.chunk_queue;
     ws_queue_t *q = &mq.ptr_queue;
     jl_atomic_store_relaxed(&cq->top, 0);
@@ -289,7 +289,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
     int p_n = pg->pool_n;
     int t_n = pg->thread_n;
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
-    jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
+    jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[p_n];
     int osize = pg->osize;
     char *data = pg->data;
     char *page_begin = data + GC_PAGE_OFFSET;
@@ -349,42 +349,13 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
 
 static void gc_verify_tags_pagetable0(pagetable0_t *pagetable0)
 {
-    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable0->allocmap[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_verify_tags_page(pagetable0->meta[pg_i * 32 + j]);
-                }
-            }
-        }
-    }
-}
-
-static void gc_verify_tags_pagetable1(pagetable1_t *pagetable1)
-{
-    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable1->allocmap0[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_verify_tags_pagetable0(pagetable1->meta0[pg_i * 32 + j]);
-                }
-            }
-        }
-    }
-}
-
-static void gc_verify_tags_pagetable(void)
-{
-    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
-        uint32_t line = memory_map.allocmap1[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_verify_tags_pagetable1(memory_map.meta1[pg_i * 32 + j]);
-                }
-            }
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        jl_gc_page_stack_t *pgstk = &ptls2->gc_tls.page_metadata_allocd;
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&pgstk->bottom);
+        while (pg != NULL) {
+            gc_verify_tags_page(pg);
+            pg = pg->next;
         }
     }
 }
@@ -396,7 +367,7 @@ void gc_verify_tags(void)
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
             // for all pools, iterate its freelist
-            jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
+            jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[i];
             jl_taggedvalue_t *next = p->freelist;
             jl_taggedvalue_t *last = NULL;
             char *allocating = gc_page_data(next);
@@ -837,8 +808,8 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
     int64_t remset_nptr = 0;
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        last_remset_len += ptls2->heap.last_remset->len;
-        remset_nptr = ptls2->heap.remset_nptr;
+        last_remset_len += ptls2->gc_tls.heap.last_remset->len;
+        remset_nptr = ptls2->gc_tls.heap.remset_nptr;
     }
     jl_safe_printf("GC mark pause %.2f ms | "
                    "scanned %" PRId64 " kB = %" PRId64 " + %" PRId64 " | "
@@ -969,13 +940,13 @@ void gc_stats_all_pool(void)
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
         for (int t_i = 0; t_i < gc_n_threads; t_i++) {
             jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-            size_t b = pool_stats(&ptls2->heap.norm_pools[i], &w, &np, &nol);
+            size_t b = pool_stats(&ptls2->gc_tls.heap.norm_pools[i], &w, &np, &nol);
             nb += b;
-            no += (b / ptls2->heap.norm_pools[i].osize);
+            no += (b / ptls2->gc_tls.heap.norm_pools[i].osize);
             tw += w;
             tp += np;
             nold += nol;
-            noldbytes += nol * ptls2->heap.norm_pools[i].osize;
+            noldbytes += nol * ptls2->gc_tls.heap.norm_pools[i].osize;
         }
     }
     jl_safe_printf("%lld objects (%lld%% old), %lld kB (%lld%% old) total allocated, "
@@ -994,7 +965,7 @@ void gc_stats_big_obj(void)
     size_t nused=0, nbytes=0, nused_old=0, nbytes_old=0;
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        bigval_t *v = ptls2->heap.big_objects;
+        bigval_t *v = ptls2->gc_tls.heap.big_objects;
         while (v != NULL) {
             if (gc_marked(v->bits.gc)) {
                 nused++;
@@ -1011,7 +982,7 @@ void gc_stats_big_obj(void)
             v = v->next;
         }
 
-        mallocarray_t *ma = ptls2->heap.mallocarrays;
+        mallocarray_t *ma = ptls2->gc_tls.heap.mallocarrays;
         while (ma != NULL) {
             if (gc_marked(jl_astaggedvalue(ma->a)->bits.gc)) {
                 nused++;
@@ -1057,7 +1028,7 @@ static void gc_count_pool_pagetable(void)
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
         while (pg != NULL) {
             if (gc_alloc_map_is_set(pg->data)) {
                 gc_count_pool_page(pg);
