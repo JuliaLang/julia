@@ -17,7 +17,7 @@ end
 macro get_warn(map, key)
     return quote
         if !haskey($(esc(map)), $(esc(key)))
-            @warn(string("[LBT] Unknown key into ", $(string(map)), ": ", $(esc(key)), ", defaulting to :unknown"))
+            #@warn(string("[LBT] Unknown key into ", $(string(map)), ": ", $(esc(key)), ", defaulting to :unknown"))
             # All the unknown values share a common value: `-1`
             $(esc(map))[$(esc(LBT_INTERFACE_UNKNOWN))]
         else
@@ -132,7 +132,7 @@ struct LBTConfig
             if str_ptr != C_NULL
                 push!(exported_symbols, unsafe_string(str_ptr))
             else
-                @error("NULL string in lbt_config.exported_symbols[$(sym_idx)]")
+                error("NULL string in lbt_config.exported_symbols[$(sym_idx)]")
             end
         end
 
