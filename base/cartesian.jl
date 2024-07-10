@@ -285,7 +285,7 @@ fixed-size tuple using `nif`:
 julia> x = (0, -1, 1, 0)
 (0, -1, 1, 0)
 
-julia> nif(d -> x[d] > 0, d -> d, Val(4))
+julia> Base.Cartesian.nif(d -> x[d] > 0, d -> d, Val(4))
 3
 ```
 """
