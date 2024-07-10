@@ -1974,7 +1974,7 @@ if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarc
         targets = Base.parse_image_targets(Base.parse_cache_header(cachefiles[idx])[7])
         @test length(targets) > 1
     end
-end 
+end
 
 precompile_test_harness("No backedge precompile") do load_path
     # Test that the system doesn't accidentally forget to revalidate a method without backedges
