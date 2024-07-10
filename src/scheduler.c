@@ -88,6 +88,7 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 // parallel task runtime
 // ---
 
+// TODO: Delete
 JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
