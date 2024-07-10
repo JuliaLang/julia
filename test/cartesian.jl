@@ -614,7 +614,7 @@ end
         # not been able to infer that the return type never includes
         # the first element. But since we used an `nif`, the compiler
         # knows all possible branches and can infer the correct type.
-        @test @inferred extract_from_tuple(t, 3) == 3
+        @test @inferred(extract_from_tuple(t, 3)) == 3
 
     end
 end
