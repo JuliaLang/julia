@@ -1,10 +1,14 @@
 #!/usr/bin/env -S julia --project=@scriptdir
 
 module Main2
-using OrdinaryDiffEq
 using OpenBLAS_jll
 using LinearAlgebra
-using PrecompileTools
+using OrdinaryDiffEq
+#using PrecompileTools
+
+#OpenBLAS_jll.__init__()
+#LinearAlgebra.libblastrampoline_jll.__init__()
+#LinearAlgebra.__init__()
 
 f(u,p,t) = 1.01*u
 const u0=1/2
@@ -16,10 +20,10 @@ Base.@ccallable function main() :: Cvoid
     for i in eachindex(sol)
         ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i])
     end
-    take_heap_snapshot()
+#    take_heap_snapshot()
     return nothing
 end
-
+#=
 @setup_workload begin
     # Putting some things in `@setup_workload` instead of `@compile_workload` can reduce the size of the
     # precompile file and potentially make loading faster.
@@ -44,4 +48,5 @@ precompile(join , (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
 precompile(Base.showerror_nostdio, (Core.MissingCodeError, String))
 precompile(Base.VersionNumber, (UInt32, UInt32, UInt32, Tuple{}, Tuple{}))
 precompile(! ,(Bool,))
+=#
 end
