@@ -165,8 +165,8 @@ end
     elseif A.uplo == 'L' && (i == j + 1)
         @inbounds A.ev[j] = x
     elseif !iszero(x)
-        throw(ArgumentError(string("cannot set entry ($i, $j) off the ",
-            "$(istriu(A) ? "upper" : "lower") bidiagonal band to a nonzero value ($x)")))
+        throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off the ",
+            istriu(A) ? "upper" : "lower", " bidiagonal band to a nonzero value ", x)))
     end
     return x
 end
@@ -337,8 +337,8 @@ isdiag(M::Bidiagonal) = iszero(M.ev)
 function tril!(M::Bidiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'U' && k < 0
         fill!(M.dv, zero(T))
         fill!(M.ev, zero(T))
@@ -356,8 +356,8 @@ end
 function triu!(M::Bidiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least",
+            lazy"$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'L' && k > 0
         fill!(M.dv, zero(T))
         fill!(M.ev, zero(T))
@@ -382,8 +382,8 @@ function diag(M::Bidiagonal{T}, n::Integer=0) where T
     elseif -size(M,1) <= n <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-abs(n)), zero(T))
     else
-        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+        throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 
