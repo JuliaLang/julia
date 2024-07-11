@@ -4,3 +4,4 @@
 /tools/logs.txt
 /docs/build
 *.cov
+/.vscode/settings.json
