@@ -293,19 +293,20 @@ julia> Base.Cartesian.nif(d -> x[d] > 0, d -> d, Val(4))
     nif(condition, expression, expression, Val(N))
 end
 @inline function nif(condition::F, expression::G, else_expression::H, ::Val{N}) where {F,G,H,N}
-    N::Int
-    (N >= 0) || throw(ArgumentError(LazyString("if statement length should be ≥ 0, got ", N)))
+    n = N::Int  # Can improve inference; see #54544
+    (n >= 0) || throw(ArgumentError(LazyString("if statement length should be ≥ 0, got ", n)))
     if @generated
-        return :(@nif $N d -> condition(d) d -> expression(d) d -> else_expression(d))
+        return :(@nif $n d -> condition(d) d -> expression(d) d -> else_expression(d))
     else
-        for d = 1:(N - 1)
+        for d = 1:(n - 1)
             if condition(d)
                 return expression(d)
             end
         end
-        return else_expression(N)
+        return else_expression(n)
     end
 end
+typeof(function nif end).name.max_methods = UInt8(5)
 
 ## Utilities
 
