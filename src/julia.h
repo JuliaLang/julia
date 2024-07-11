@@ -1107,6 +1107,8 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void jl_gc_safepoint(void);
 JL_DLLEXPORT int jl_safepoint_suspend_thread(int tid, int waitstate);
+JL_DLLEXPORT void jl_safepoint_suspend_all_threads(struct _jl_task_t *ct);
+JL_DLLEXPORT void jl_safepoint_resume_all_threads(struct _jl_task_t *ct);
 JL_DLLEXPORT int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT;
 
 void *mtarraylist_get(small_arraylist_t *_a, size_t idx) JL_NOTSAFEPOINT;

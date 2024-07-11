@@ -334,15 +334,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                          // we would like to guarantee this, but cannot currently, so there is still a small race window
                          // that needs to be fixed in libuv
     }
-    if (ct)
-        (void)jl_gc_safe_enter(ct->ptls); // park in gc-safe
     if (loop != NULL) {
         // TODO: consider uv_loop_close(loop) here, before shutdown?
         uv_library_shutdown();
         // no JL_UV_UNLOCK(), since it is now torn down
     }
-
-    // TODO: Destroy threads?
+    if (ct)
+        jl_safepoint_suspend_all_threads(ct); // Destroy other threads, so that they don't segfault
+    if (ct)
+        (void)jl_gc_safe_enter(ct->ptls); // park in gc-safe
 
     jl_destroy_timing(); // cleans up the current timing_stack for noreturn
 #ifdef USE_TIMING_COUNTS

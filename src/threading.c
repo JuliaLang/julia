@@ -432,6 +432,30 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
+
+void jl_safepoint_suspend_all_threads(jl_task_t *ct)
+{
+    // TODO: prevent jl_n_threads changing or jl_safepoint_resume_thread calls on another thread
+    //uv_mutex_lock(&tls_lock);
+    //disallow_resume = ct->tid;
+    //uv_mutex_unlock(&tls_lock);
+    for (int16_t tid = 0; tid < jl_atomic_load_relaxed(&jl_n_threads); tid++) {
+        if (tid != jl_atomic_load_relaxed(&ct->tid))
+            jl_safepoint_suspend_thread(tid, 1);
+    };
+}
+
+void jl_safepoint_resume_all_threads(jl_task_t *ct)
+{
+    //uv_mutex_lock(&tls_lock);
+    //if (disallow_resume != ct->tid) return;
+    //uv_mutex_unlock(&tls_lock);
+    for (int16_t tid = 0; tid < jl_atomic_load_relaxed(&jl_n_threads); tid++) {
+        if (tid != jl_atomic_load_relaxed(&ct->tid))
+            jl_safepoint_resume_thread(tid);
+    };
+}
+
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
