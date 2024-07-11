@@ -289,7 +289,7 @@ julia> Base.Cartesian.nif(d -> x[d] > 0, d -> d, Val(4))
 3
 ```
 """
-@inline function nif(condition, expression, ::Val{N}) where {N}
+@inline function nif(condition::F, expression::G, ::Val{N}) where {F,G,N}
     nif(condition, expression, expression, Val(N))
 end
 @inline function nif(condition::F, expression::G, else_expression::H, ::Val{N}) where {F,G,H,N}
