@@ -1792,10 +1792,7 @@ end
 # search for a precompile cache file to load, after some various checks
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
-    loaded = maybe_root_module(modkey)
-    if loaded === nothing
-        loaded = start_loading(modkey)
-    end
+    loaded = start_loading(modkey, build_id, false)
     if loaded === nothing
         try
             modpath = locate_package(modkey)
@@ -1898,7 +1895,7 @@ end
             continue
         end
         try
-            staledeps, ocachefile, build_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
+            staledeps, ocachefile, newbuild_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
             # finish checking staledeps module graph
             for i in 1:length(staledeps)
                 dep = staledeps[i]
@@ -1918,7 +1915,7 @@ end
                 @goto check_next_path
                 @label check_next_dep
             end
-            M = get(loaded_precompiles, pkg => build_id, nothing)
+            M = get(loaded_precompiles, pkg => newbuild_id, nothing)
             if isa(M, Module)
                 stalecheck && register_root_module(M)
                 return M
@@ -1931,15 +1928,12 @@ end
                 end
             end
             # finish loading module graph into staledeps
+            # TODO: call all start_loading calls (in reverse order) before calling any _include_from_serialized, since start_loading will drop the loading lock
             for i in 1:length(staledeps)
                 dep = staledeps[i]
                 dep isa Module && continue
                 modpath, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
-                if stalecheck
-                    dep = maybe_root_module(modkey)
-                else
-                    dep = get(loaded_precompiles, modkey => modbuild_id, nothing)
-                end
+                dep = start_loading(modkey, modbuild_id, stalecheck)
                 while true
                     if dep isa Module
                         if PkgId(dep) == modkey && module_build_id(dep) === modbuild_id
@@ -1949,7 +1943,6 @@ end
                             @goto check_next_path
                         end
                     end
-                    dep = start_loading(modkey)
                     if dep === nothing
                         try
                             set_pkgorigin_version_path(modkey, modpath)
@@ -1968,7 +1961,7 @@ end
                 end
                 staledeps[i] = dep
             end
-            restored = get(loaded_precompiles, pkg => build_id, nothing)
+            restored = get(loaded_precompiles, pkg => newbuild_id, nothing)
             if !isa(restored, Module)
                 restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps)
             end
@@ -1992,11 +1985,17 @@ const package_locks = Dict{PkgId,Pair{Task,Threads.Condition}}()
 
 debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but more complete algorithm that can handle simultaneous tasks.
                                # This only triggers if you have multiple tasks trying to load the same package at the same time,
-                               # so it is unlikely to make a difference normally.
-function start_loading(modkey::PkgId)
-    # handle recursive calls to require
+                               # so it is unlikely to make a performance difference normally.
+function start_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
+    # handle recursive and concurrent calls to require
     assert_havelock(require_lock)
     while true
+        loaded = stalecheck ? maybe_root_module(modkey) : nothing
+        loaded isa Module && return loaded
+        if build_id != UInt128(0)
+            loaded = get(loaded_precompiles, modkey => build_id, nothing)
+            loaded isa Module && return loaded
+        end
         loading = get(package_locks, modkey, nothing)
         if loading === nothing
             package_locks[modkey] = current_task() => Threads.Condition(require_lock)
@@ -2040,8 +2039,8 @@ function start_loading(modkey::PkgId)
             end
             throw(ConcurrencyViolationError(msg))
         end
-        loading = wait(cond)
-        loading isa Module && return loading
+        loaded = wait(cond)
+        loaded isa Module && return loaded
     end
 end
 
@@ -2138,6 +2137,7 @@ order to throw an error if Julia attempts to precompile it.
 end
 
 # require always works in Main scope and loads files from node 1
+# XXX: (this is deprecated, but still used by Distributed)
 const toplevel_load = Ref(true)
 
 const _require_world_age = Ref{UInt}(typemax(UInt))
@@ -2284,24 +2284,28 @@ end
 
 function __require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
-    if !root_module_exists(uuidkey)
-        newm = _require(uuidkey, env)
-        if newm === nothing
-            error("package `$(uuidkey.name)` did not define the expected \
-                  module `$(uuidkey.name)`, check for typos in package module name")
+    m = start_loading(uuidkey, UInt128(0), true)
+    if m === nothing
+        last = toplevel_load[]
+        try
+            toplevel_load[] = false
+            m = _require(uuidkey, env)
+            if m === nothing
+                error("package `$(uuidkey.name)` did not define the expected \
+                      module `$(uuidkey.name)`, check for typos in package module name")
+            end
+        finally
+            toplevel_load[] = last
+            end_loading(uuidkey, m)
         end
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
-    else
-        m = get(loaded_modules, uuidkey, nothing)
-        if m !== nothing && !haskey(explicit_loaded_modules, uuidkey)
-            explicit_loaded_modules[uuidkey] = m
-            run_package_callbacks(uuidkey)
-        end
-        newm = root_module(uuidkey)
+    elseif !haskey(explicit_loaded_modules, uuidkey)
+        explicit_loaded_modules[uuidkey] = m
+        run_package_callbacks(uuidkey)
     end
-    return newm
+    return m
 end
 
 mutable struct PkgOrigin
@@ -2371,6 +2375,8 @@ maybe_root_module(key::PkgId) = @lock require_lock get(loaded_modules, key, noth
 root_module_exists(key::PkgId) = @lock require_lock haskey(loaded_modules, key)
 loaded_modules_array() = @lock require_lock copy(loaded_modules_order)
 
+# after unreference_module, a subsequent require call will try to load a new copy of it, if stale
+# reload(m) = (unreference_module(m); require(m))
 function unreference_module(key::PkgId)
     if haskey(explicit_loaded_modules, key)
         m = pop!(explicit_loaded_modules, key)
@@ -2401,119 +2407,110 @@ disable_parallel_precompile::Bool = false
 # Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId, env=nothing)
     assert_havelock(require_lock)
-    loaded = start_loading(pkg)
-    loaded === nothing || return loaded
 
-    last = toplevel_load[]
-    try
-        toplevel_load[] = false
-        # perform the search operation to select the module file require intends to load
-        path = locate_package(pkg, env)
-        if path === nothing
-            throw(ArgumentError("""
-                Package $(repr("text/plain", pkg)) is required but does not seem to be installed:
-                 - Run `Pkg.instantiate()` to install all recorded dependencies.
-                """))
+    # perform the search operation to select the module file require intends to load
+    path = locate_package(pkg, env)
+    if path === nothing
+        throw(ArgumentError("""
+            Package $(repr("text/plain", pkg)) is required but does not seem to be installed:
+             - Run `Pkg.instantiate()` to install all recorded dependencies.
+            """))
+    end
+    set_pkgorigin_version_path(pkg, path)
+
+    parallel_precompile_attempted = false # being safe to avoid getting stuck in a precompilepkgs loop
+    reasons = Dict{String,Int}()
+    # attempt to load the module file via the precompile cache locations
+    if JLOptions().use_compiled_modules != 0
+        @label load_from_cache
+        loaded = _require_search_from_serialized(pkg, path, UInt128(0), true; reasons)
+        if loaded isa Module
+            return loaded
         end
-        set_pkgorigin_version_path(pkg, path)
+    end
 
-        parallel_precompile_attempted = false # being safe to avoid getting stuck in a precompilepkgs loop
-        reasons = Dict{String,Int}()
-        # attempt to load the module file via the precompile cache locations
-        if JLOptions().use_compiled_modules != 0
-            @label load_from_cache
-            loaded = _require_search_from_serialized(pkg, path, UInt128(0), true; reasons)
-            if loaded isa Module
-                return loaded
+    if JLOptions().use_compiled_modules == 3
+        error("Precompiled image $pkg not available with flags $(CacheFlags())")
+    end
+
+    # if the module being required was supposed to have a particular version
+    # but it was not handled by the precompile loader, complain
+    for (concrete_pkg, concrete_build_id) in _concrete_dependencies
+        if pkg == concrete_pkg
+            @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
+                 This may mean $(repr("text/plain", pkg)) does not support precompilation but is imported by a module that does."""
+            if JLOptions().incremental != 0
+                # during incremental precompilation, this should be fail-fast
+                throw(PrecompilableError())
             end
         end
+    end
 
-        if JLOptions().use_compiled_modules == 3
-            error("Precompiled image $pkg not available with flags $(CacheFlags())")
-        end
-
-        # if the module being required was supposed to have a particular version
-        # but it was not handled by the precompile loader, complain
-        for (concrete_pkg, concrete_build_id) in _concrete_dependencies
-            if pkg == concrete_pkg
-                @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
-                     This may mean $(repr("text/plain", pkg)) does not support precompilation but is imported by a module that does."""
-                if JLOptions().incremental != 0
-                    # during incremental precompilation, this should be fail-fast
-                    throw(PrecompilableError())
+    if JLOptions().use_compiled_modules == 1
+        if !generating_output(#=incremental=#false)
+            project = active_project()
+            if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation) && project !== nothing &&
+                    isfile(project) && project_file_manifest_path(project) !== nothing
+                parallel_precompile_attempted = true
+                unlock(require_lock)
+                try
+                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true)
+                finally
+                    lock(require_lock)
                 end
+                @goto load_from_cache
             end
-        end
-
-        if JLOptions().use_compiled_modules == 1
-            if !generating_output(#=incremental=#false)
-                project = active_project()
-                if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation) && project !== nothing &&
-                        isfile(project) && project_file_manifest_path(project) !== nothing
-                    parallel_precompile_attempted = true
-                    unlock(require_lock)
-                    try
-                        Precompilation.precompilepkgs([pkg.name]; _from_loading=true)
-                    finally
-                        lock(require_lock)
-                    end
-                    @goto load_from_cache
-                end
-                # spawn off a new incremental pre-compile task for recursive `require` calls
-                loaded = maybe_cachefile_lock(pkg, path) do
-                    # double-check the search now that we have lock
-                    m = _require_search_from_serialized(pkg, path, UInt128(0), true)
-                    m isa Module && return m
-                    return compilecache(pkg, path; reasons)
-                end
-                loaded isa Module && return loaded
-                if isnothing(loaded) # maybe_cachefile_lock returns nothing if it had to wait for another process
-                    @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
-                elseif isa(loaded, Exception)
-                    if precompilableerror(loaded)
-                        verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                        @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
-                    else
-                        @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
-                    end
-                    # fall-through to loading the file locally if not incremental
+            # spawn off a new incremental pre-compile task for recursive `require` calls
+            loaded = maybe_cachefile_lock(pkg, path) do
+                # double-check the search now that we have lock
+                m = _require_search_from_serialized(pkg, path, UInt128(0), true)
+                m isa Module && return m
+                return compilecache(pkg, path; reasons)
+            end
+            loaded isa Module && return loaded
+            if isnothing(loaded) # maybe_cachefile_lock returns nothing if it had to wait for another process
+                @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
+            elseif isa(loaded, Exception)
+                if precompilableerror(loaded)
+                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
                 else
-                    cachefile, ocachefile = loaded::Tuple{String, Union{Nothing, String}}
-                    loaded = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
-                    if !isa(loaded, Module)
-                        @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
-                    else
-                        return loaded
-                    end
+                    @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
                 end
-                if JLOptions().incremental != 0
-                    # during incremental precompilation, this should be fail-fast
-                    throw(PrecompilableError())
+                # fall-through to loading the file locally if not incremental
+            else
+                cachefile, ocachefile = loaded::Tuple{String, Union{Nothing, String}}
+                loaded = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
+                if !isa(loaded, Module)
+                    @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
+                else
+                    return loaded
                 end
             end
+            if JLOptions().incremental != 0
+                # during incremental precompilation, this should be fail-fast
+                throw(PrecompilableError())
+            end
         end
+    end
 
-        # just load the file normally via include
-        # for unknown dependencies
-        uuid = pkg.uuid
-        uuid = (uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, uuid))
-        old_uuid = ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), __toplevel__)
-        if uuid !== old_uuid
-            ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
-        end
-        unlock(require_lock)
-        try
-            include(__toplevel__, path)
-            loaded = get(loaded_modules, pkg, nothing)
-        finally
-            lock(require_lock)
-            if uuid !== old_uuid
-                ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
-            end
-        end
+    # just load the file normally via include
+    # for unknown dependencies
+    uuid = pkg.uuid
+    uuid = (uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, uuid))
+    old_uuid = ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), __toplevel__)
+    if uuid !== old_uuid
+        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
+    end
+    unlock(require_lock)
+    try
+        include(__toplevel__, path)
+        loaded = get(loaded_modules, pkg, nothing)
     finally
-        toplevel_load[] = last
-        end_loading(pkg, loaded)
+        lock(require_lock)
+        if uuid !== old_uuid
+            ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
+        end
     end
     return loaded
 end
@@ -2536,8 +2533,9 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=noth
     @lock require_lock begin
     # the PkgId of the ext, or package if not an ext
     this_uuidkey = ext isa String ? PkgId(uuid5(package_uuidkey.uuid, ext), ext) : package_uuidkey
-    if root_module_exists(this_uuidkey)
-        return loaded_modules[this_uuidkey]
+    newm = maybe_root_module(this_uuidkey)
+    if newm isa Module
+        return newm
     end
     # first since this is a stdlib, try to look there directly first
     env = Sys.STDLIB
@@ -2564,7 +2562,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=noth
     #end
     set_pkgorigin_version_path(this_uuidkey, sourcepath)
     depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
-    newm = start_loading(this_uuidkey)
+    newm = start_loading(this_uuidkey, UInt128(0), true)
     newm === nothing || return newm
     try
         newm = _require_search_from_serialized(this_uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
