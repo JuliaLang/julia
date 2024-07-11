@@ -1,6 +1,7 @@
 #include <stdio.h>
 
-double* linsolve10(double *A, double *b);
+double* linsolve10(double * A, double * b, size_t N);
+
 int main() {
     // Declare a 10x10 matrix
     double A[10][10] = {
@@ -27,7 +28,7 @@ int main() {
  -10.107200370651855,
    0.8478731362967014};
 
-    linsolve10(A, b);
+    linsolve10((double*)A, (double*)b, 10);
     for (int i = 0; i < 10; i++) {
         printf("%f\n", b[i]);
     }

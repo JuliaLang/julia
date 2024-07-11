@@ -1,0 +1,9 @@
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+OpenBLAS_jll = "4536629a-c528-5b80-bd46-f80d51c5b363"
+PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+RecursiveFactorization = "f2c3362d-daeb-58d1-803e-2bc74f2840b4"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+Static = "aedffcd0-7271-4cad-89d0-dc628f76c6d3"
+StrideArraysCore = "7792a7ef-975c-4747-a70f-980b88e8d1da"
