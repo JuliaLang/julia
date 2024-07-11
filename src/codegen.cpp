@@ -5704,8 +5704,9 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             tup = jl_apply_tuple_type_v(argtypes.data(), argtypes.size());
             matches = (jl_array_t*)jl_matching_methods((jl_tupletype_t*)tup, jl_nothing, 10 /*TODO: make global*/, 1,
                                                 latest_world, &min_valid, &max_valid, NULL);
-            if ((jl_value_t*)matches == jl_nothing)
+            if ((jl_value_t*)matches == jl_nothing || jl_array_len(matches) == 0) {
                 failed_dispatch = 1;
+            }
         }
 
         // Expand each matching method to its unique specialization, if it has exactly one
