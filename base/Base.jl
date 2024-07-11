@@ -424,6 +424,9 @@ include("weakkeydict.jl")
 # ScopedValues
 include("scopedvalues.jl")
 
+# used by task.jl
+const Workqueue_sched_times = ScopedValues.ScopedValue{Vector{UInt}}()
+
 # metaprogramming
 include("meta.jl")
 

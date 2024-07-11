@@ -196,9 +196,11 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
-                    msg::Union{String,Nothing}=nothing)
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, wall_time_sched=0,
+                    newline=false; msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
+    wall_time_sched_perc = wall_time_sched / (elapsedtime / 1e9)
+    sched_thresh = 0.1
     str = sprint() do io
         if msg isa String
             print(io, msg, ": ")
@@ -206,7 +208,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         end
         print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0 || compile_time > 0
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || wall_time_sched_perc > sched_thresh || lock_conflicts > 0 || compile_time > 0
         parens && print(io, " (")
         if bytes != 0 || allocs != 0
             allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -223,15 +225,21 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             end
             print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
-        if lock_conflicts > 0
+        if wall_time_sched_perc > sched_thresh
             if bytes != 0 || allocs != 0 || gctime > 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*wall_time_sched_perc), 2), "% scheduling time")
+        end
+        if lock_conflicts > 0
+            if bytes != 0 || allocs != 0 || gctime > 0 || wall_time_sched_perc > sched_thresh
                 print(io, ", ")
             end
             plural = lock_conflicts == 1 ? "" : "s"
             print(io, lock_conflicts, " lock conflict$plural")
         end
         if compile_time > 0
-            if bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0
+            if bytes != 0 || allocs != 0 || gctime > 0 || wall_time_sched_perc > sched_thresh || lock_conflicts > 0
                 print(io, ", ")
             end
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
@@ -346,7 +354,7 @@ macro time(msg, ex)
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local _msg_str = _msg === nothing ? _msg : string(_msg)
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, ret.wall_time_sched, true; msg=_msg_str)
         ret.value
     end
 end
@@ -600,29 +608,37 @@ julia> stats.recompile_time
 macro timed(ex)
     quote
         Experimental.@force_compile
-        Threads.lock_profiling(true)
-        local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
-            lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
-            Threads.lock_profiling(false))
-        )
-        local diff = GC_Diff(gc_num(), stats)
-        (
-            value=val,
-            time=elapsedtime/1e9,
-            bytes=diff.allocd,
-            gctime=diff.total_time/1e9,
-            gcstats=diff,
-            lock_conflicts=lock_conflicts,
-            compile_time=compile_elapsedtimes[1]/1e9,
-            recompile_time=compile_elapsedtimes[2]/1e9
-        )
+        ScopedValues.@with Workqueue_sched_times => zeros(UInt, Threads.maxthreadid()) begin
+            Experimental.@force_compile
+            Threads.lock_profiling(true)
+            local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
+            local stats = gc_num()
+            local elapsedtime = time_ns()
+            cumulative_compile_timing(true)
+            local compile_elapsedtimes = cumulative_compile_time_ns()
+            local val = @__tryfinally($(esc(ex)),
+                (elapsedtime = time_ns() - elapsedtime;
+                cumulative_compile_timing(false);
+                compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
+                lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
+                Threads.lock_profiling(false))
+            )
+            local diff = GC_Diff(gc_num(), stats)
+            # filter out zeros which can only happen if nothing was scheduled
+            local sched_times = Int.(filter(>(0), Workqueue_sched_times[]))
+            local wall_time_sched = isempty(sched_times) ? 0 : sum(Int(elapsedtime) .- sched_times) / length(sched_times)
+
+            (
+                value=val,
+                time=elapsedtime/1e9,
+                bytes=diff.allocd,
+                gctime=diff.total_time/1e9,
+                gcstats=diff,
+                lock_conflicts=lock_conflicts,
+                compile_time=compile_elapsedtimes[1]/1e9,
+                recompile_time=compile_elapsedtimes[2]/1e9,
+                wall_time_sched=wall_time_sched/1e9
+            )
+        end
     end
 end
