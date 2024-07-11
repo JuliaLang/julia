@@ -258,8 +258,7 @@ macro nif(N, condition, operation...)
 end
 
 """
-    nif(condition, expression, ::Val{N}) where {N}
-    nif(condition, expression, else_expression, ::Val{N}) where {N}
+    nif(condition, expression, [else_expression,] ::Val{N}) where {N}
 
 Generate a sequence of `if ... elseif ... else ... end` statements.
 
@@ -271,7 +270,7 @@ Generate a sequence of `if ... elseif ... else ... end` statements.
     the condition is true.
 - `else_expression`: (optional) A function that takes `N` as input
     returns an expression to be evaluated if all conditions are false.
-- `N`: The number of conditions to check, passed as a `Val{N}` type.
+- `N`: The number of conditions to check, passed as a `Val{N}` instance.
 
 This function is similar to the `@nif` macro but can be used in cases
 where `N` is not known at parse time.
