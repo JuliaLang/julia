@@ -288,8 +288,118 @@ let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
     end
     if :StyledStrings in loaded
         using StyledStrings
+        setfield!(typeof(Base.annotatedstring).name.mt, :max_args, 10, :monotonic)
         @eval StyledStrings begin
             __init__() = rand()
+            function _ansi_writer(io::IO, s::Union{<:AnnotatedString, SubString{<:AnnotatedString}},
+                                  string_writer::F) where {F <: Function}
+                if get(io, :color, false)::Bool
+                    buf = IOBuffer() # Avoid the overhead in repeatadly printing to `stdout`
+                    lastface::Face = FACES.default[:default]
+                    for (str, styles) in eachregion(s)
+                        face = getface(styles)
+                        link = let idx=findfirst(==(:link) ∘ first, styles)
+                            if !isnothing(idx)
+                                last(styles[idx])::String
+                                # string(last(styles[idx]))::String
+                            end end
+                        !isnothing(link) && write(buf, "\e]8;;", link, "\e\\")
+                        termstyle(buf, face, lastface)
+                        string_writer(buf, str)
+                        !isnothing(link) && write(buf, "\e]8;;\e\\")
+                        lastface = face
+                    end
+                    termstyle(buf, FACES.default[:default], lastface)
+                    write(io, take!(buf))
+                elseif s isa AnnotatedString
+                    string_writer(io, s.string)
+                elseif s isa SubString
+                    string_writer(
+                        io, SubString(s.string.string, s.offset, s.ncodeunits, Val(:noshift)))
+                end
+            end
+            _mergedface(face::Face) = face
+            _mergedface(face::Symbol) = get(FACES.current[], face, Face())
+            _mergedface(faces::Vector{Union{Face,Symbol}}) = mapfoldl(_mergedface, merge, Iterators.reverse(faces))
+            function getface(faces::Vector{Face})
+                isempty(faces) && return FACES.current[][:default]
+                combined = faces[1]
+                for face in faces[2:end]
+                    combined = merge(combined, face)
+                end
+                if !isempty(combined.inherit)
+                    combined = merge(Face(), combined)
+                end
+                merge(FACES.current[][:default], combined)
+            end
+            function getface(annotations::Vector{Pair{Symbol, Any}})
+                faces = Face[]
+                for (key, annot) in annotations
+                    if key === :face
+                        if annot isa Face
+                            push!(faces, annot)
+                        elseif annot isa Symbol
+                            push!(faces, get(FACES.current[], annot, Face()))
+                        elseif annot isa Vector{Union{Face,Symbol}}
+                            push!(faces, _mergedface(annot))
+                        else @assert false end
+                    end
+                end
+                getface(faces)
+            end
+            function merge(a::Face, b::Face)
+                if isempty(b.inherit)
+                    Face(ifelse(isnothing(b.font),          a.font,          b.font),
+                         if isnothing(b.height)      a.height
+                         elseif isnothing(a.height)  b.height
+                         elseif b.height isa Int     b.height
+                         elseif a.height isa Int     round(Int, a.height::Int * b.height::Float64)
+                         else a.height::Float64 * b.height::Float64 end,
+                         ifelse(isnothing(b.weight),        a.weight,        b.weight),
+                         ifelse(isnothing(b.slant),         a.slant,         b.slant),
+                         ifelse(isnothing(b.foreground),    a.foreground,    b.foreground),
+                         ifelse(isnothing(b.background),    a.background,    b.background),
+                         ifelse(isnothing(b.underline),     a.underline,     b.underline),
+                         ifelse(isnothing(b.strikethrough), a.strikethrough, b.strikethrough),
+                         ifelse(isnothing(b.inverse),       a.inverse,       b.inverse),
+                         a.inherit)
+                else
+                    b_noinherit = Face(
+                        b.font, b.height, b.weight, b.slant, b.foreground, b.background,
+                        b.underline, b.strikethrough, b.inverse, Symbol[])
+                    b_inherit = getface(Face[
+                        get(FACES.current[], face, Face())
+                        # TODO: remove reverse after fixing getface()
+                        for face in Iterators.reverse(b.inherit)
+                    ])
+                    b_resolved = merge(b_inherit, b_noinherit)
+                    merge(a, b_resolved)
+                end
+            end
+            function annotatedstring_optimize!(s::AnnotatedString)
+                last_seen = IdDict{Pair{Symbol, Any}, Int}()
+                i = 1
+                while i <= length(s.annotations)
+                    region, keyval = s.annotations[i]
+                    prev = get(last_seen, keyval, 0)
+                    if prev > 0
+                        lregion, _ = s.annotations[prev]
+                        if last(lregion) + 1 == first(region)
+                            s.annotations[prev] =
+                                Base.setindex(s.annotations[prev],
+                                              first(lregion):last(region),
+                                              1)
+                            deleteat!(s.annotations, i)
+                        else
+                            delete!(last_seen, keyval)
+                        end
+                    else
+                        last_seen[keyval] = i
+                        i += 1
+                    end
+                end
+                s
+            end
         end
     end
 end
