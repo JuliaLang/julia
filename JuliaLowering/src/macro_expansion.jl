@@ -162,9 +162,9 @@ function expand_macro(ctx, ex)
         if exc isa MacroExpansionError
             # Add context to the error.
             # TODO: Using rethrow() is kinda ugh. Is there a way to avoid it?
-            rethrow(MacroExpansionError(mctx, ex, exc.msg))
+            rethrow(MacroExpansionError(mctx, exc.ex, exc.msg, exc.position))
         else
-            throw(MacroExpansionError(mctx, ex, "Error expanding macro"))
+            throw(MacroExpansionError(mctx, ex, "Error expanding macro", :all))
         end
     end
 
