@@ -7438,8 +7438,11 @@ static Function* gen_cfun_wrapper(
     ctx.builder.ClearInsertionPoint();
 
     if (aliasname) {
-        GlobalAlias::create(cw->getValueType(), cw->getType()->getAddressSpace(),
+        auto alias = GlobalAlias::create(cw->getValueType(), cw->getType()->getAddressSpace(),
                             GlobalValue::ExternalLinkage, aliasname, cw, M);
+        if(ctx.emission_context.TargetTriple.isOSBinFormatCOFF()) {
+            alias->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLExportStorageClass);
+        }
     }
 
     if (nest) {
