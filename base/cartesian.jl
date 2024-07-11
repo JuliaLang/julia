@@ -306,7 +306,7 @@ end
         return else_expression(n)
     end
 end
-typeof(function nif end).name.max_methods = UInt8(5)
+typeof(function nif end).name.max_methods = UInt8(2)
 
 ## Utilities
 
