@@ -761,7 +761,7 @@ void jl_init_threading(void)
     gc_first_tid = nthreads + nthreadsi;
 }
 
-static uv_barrier_t thread_init_done;
+uv_barrier_t thread_init_done;
 
 void jl_start_threads(void)
 {
@@ -800,13 +800,13 @@ void jl_start_threads(void)
     uv_barrier_init(&thread_init_done, nthreads);
 
     // GC/System threads need to be after the worker threads.
-    int nworker_threads = nthreads - ngcthreads;
+    int nmutator_threads = nthreads - ngcthreads;
 
     for (i = 1; i < nthreads; ++i) {
-        jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
-        t->tid = i;
-        t->barrier = &thread_init_done;
-        if (i < nworker_threads) {
+        if (i < nmutator_threads) {
+            jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
+            t->tid = i;
+            t->barrier = &thread_init_done;
             uv_thread_create(&uvtid, jl_threadfun, t);
             if (exclusive) {
                 mask[i] = 1;
@@ -814,14 +814,9 @@ void jl_start_threads(void)
                 mask[i] = 0;
             }
         }
-        else if (i == nthreads - 1 && jl_n_sweepthreads == 1) {
-            uv_thread_create(&uvtid, jl_concurrent_gc_threadfun, t);
-        }
-        else {
-            uv_thread_create(&uvtid, jl_parallel_gc_threadfun, t);
-        }
         uv_thread_detach(&uvtid);
     }
+    jl_spawn_gc_threads();
 
     uv_barrier_wait(&thread_init_done);
 }
