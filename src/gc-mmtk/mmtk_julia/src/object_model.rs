@@ -157,21 +157,11 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
     }
 
     #[inline(always)]
-    fn ref_to_address(object: ObjectReference) -> Address {
-        object.to_raw_address()
-    }
-
-    #[inline(always)]
-    fn address_to_ref(address: Address) -> ObjectReference {
-        // `address` is a result of `ref_to_address(object)`, where `object` cannot be NULL.
-        debug_assert!(!address.is_zero());
-        unsafe { ObjectReference::from_raw_address_unchecked(address) }
-    }
-
-    #[inline(always)]
     fn ref_to_header(object: ObjectReference) -> Address {
         object.to_raw_address()
     }
+
+    const IN_OBJECT_ADDRESS_OFFSET: isize = 0;
 
     fn dump_object(_object: ObjectReference) {
         unimplemented!()
