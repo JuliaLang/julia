@@ -2205,11 +2205,12 @@ static void push_frames(jl_codectx_t &ctx, jl_method_instance_t *caller, jl_meth
 
 static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT
 {
-    jl_method_instance_t *caller = (jl_method_instance_t*)jl_nothing; //nothing serves as a sentinel for the bottom for the stack
-    push_frames(ctx, ctx.linfo, (jl_method_instance_t*)jl_nothing);
+    static intptr_t counter = 5;
+    jl_method_instance_t *caller = (jl_method_instance_t*)counter; //nothing serves as a sentinel for the bottom for the stack
+    push_frames(ctx, ctx.linfo, (jl_method_instance_t*)caller);
+    counter++;
     jl_array_t *out = jl_alloc_array_1d(jl_array_any_type, 0);
     JL_GC_PUSH1(&out);
-
     while (true) {
         auto it = ctx.emission_context.enqueuers.find(caller);
         if (it != ctx.emission_context.enqueuers.end()) {
@@ -2218,6 +2219,7 @@ static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT
             break;
         }
         if (caller) {
+            assert(ctx.emission_context.enqueuers.count(caller) == 1);
             if (jl_is_method_instance(caller)) {
                 //TODO: Use a subrange when C++20 is a thing
                 for (auto it2 = std::get<CallFrames>(it->second).begin(); it2 != (std::prev(std::get<CallFrames>(it->second).end())); ++it2) {
