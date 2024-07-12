@@ -1354,8 +1354,8 @@ function setup_interface(
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
-    jl_prompt_regex = r"^In \[[0-9]+\]: |^(?:\(.+\) )?julia> "
-    pkg_prompt_regex = r"^(?:\(.+\) )?pkg> "
+    jl_prompt_regex = Regex("^In \\[[0-9]+\\]: |^(?:\\(.+\\) )?$JULIA_PROMPT")
+    pkg_prompt_regex = Regex("^(?:\\(.+\\) )?$PKG_PROMPT")
 
     # Canonicalize user keymap input
     if isa(extra_repl_keymap, Dict)
