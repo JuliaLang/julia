@@ -681,16 +681,16 @@ static int64_t last_gc_total_bytes = 0;
 // max_total_memory is a suggestion.  We try very hard to stay
 // under this limit, but we will go above it rather than halting.
 #ifdef _P64
-typedef uint64_t memsize_t;
-static const size_t default_collect_interval = 5600 * 1024 * sizeof(void*);
-static const size_t max_collect_interval = 1250000000UL;
-static size_t total_mem;
+typedef int64_t memsize_t;
+static const int64_t default_collect_interval = 5600 * 1024 * sizeof(void*);
+static const int64_t max_collect_interval = 1250000000UL;
+static int64_t total_mem;
 // We expose this to the user/ci as jl_gc_set_max_memory
 static memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
 #else
-typedef uint32_t memsize_t;
-static const size_t default_collect_interval = 3200 * 1024 * sizeof(void*);
-static const size_t max_collect_interval =  500000000UL;
+typedef int32_t memsize_t;
+static const int32_t default_collect_interval = 3200 * 1024 * sizeof(void*);
+static const int32_t max_collect_interval =  500000000UL;
 // Work really hard to stay within 2GB
 // Alternative is to risk running out of address space
 // on 32 bit architectures.
@@ -3948,13 +3948,17 @@ void jl_gc_init(void)
 
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
 {
-    if (max_mem > 0
-        && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
+#ifdef _P64
+    const int64_t max_allowed_value = INT64_MAX;
+#else
+    const int32_t max_allowed_value = INT32_MAX;
+#endif
+    if (max_mem > 0 && max_mem < max_allowed_value) {
         max_total_memory = max_mem;
     }
 }
 
-JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
+JL_DLLEXPORT int64_t jl_gc_get_max_memory(void)
 {
     return max_total_memory;
 }

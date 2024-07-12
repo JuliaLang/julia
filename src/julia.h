@@ -1004,7 +1004,7 @@ JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz);
 JL_DLLEXPORT void jl_gc_use(jl_value_t *a);
 // Set GC memory trigger in bytes for greedy memory collecting
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
-JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void);
+JL_DLLEXPORT int64_t jl_gc_get_max_memory(void);
 
 JL_DLLEXPORT void jl_clear_malloc_data(void);
 
