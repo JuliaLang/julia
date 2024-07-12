@@ -4015,14 +4015,10 @@ void jl_gc_init(void)
 
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
 {
-    if (max_mem > 0
-        && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
-        #ifdef _P64
-        max_total_memory = max_mem;
-        #else
-        max_total_memory = max_mem < MAX32HEAP ? max_mem : MAX32HEAP;
-        #endif
-    }
+#ifdef _P32
+    max_mem = max_mem < MAX32HEAP ? max_mem : MAX32HEAP;
+#endif
+    max_total_memory = max_mem;
 }
 
 JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
