@@ -51,11 +51,11 @@ version = "1.4.0"
 
 [[deps.DocumenterVitepress]]
 deps = ["ANSIColoredPrinters", "Base64", "DocStringExtensions", "Documenter", "IOCapture", "Markdown", "NodeJS_20_jll", "REPL"]
-git-tree-sha1 = "1aa3811379e0b3bc6d097d476fe3248532b47914"
+git-tree-sha1 = "2a1474c0f28828869216f610413f28a668918467"
 repo-rev = "master"
 repo-url = "https://github.com/LuxDL/DocumenterVitepress.jl"
 uuid = "4710194d-e776-4893-9690-8d956a29c365"
-version = "0.0.21"
+version = "0.1.2"
 
     [deps.DocumenterVitepress.extensions]
     DocumenterVitepressDocumenterCitationsExt = "DocumenterCitations"
