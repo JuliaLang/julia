@@ -832,9 +832,17 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
             }
             if (jl_options.static_call_graph) {
                 jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
-                if ((b != NULL) && (b->value != NULL) && (jl_is_module(jl_atomic_load_relaxed(&b->value))
-                        || (strcmp(jl_symbol_name(b->globalref->name), "__init__") == 0)))
+                // keep binding objects that are defined and ...
+                if (b != NULL && b->value != NULL &&
+                    // ... point to modules ...
+                    (jl_is_module(jl_atomic_load_relaxed(&b->value)) ||
+                     // ... or point to __init__ methods ...
+                     !strcmp(jl_symbol_name(b->globalref->name), "__init__") ||
+                     // ... or point to Base functions accessed by the runtime
+                     (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
+                                              !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
                     jl_queue_for_serialization(s, b, m);
+                }
             }
         }
     }
