@@ -34,6 +34,7 @@ end
     init_active_project() = ACTIVE_PROJECT[] = nothing
     set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
     disable_library_threading() = nothing
+    start_profile_listener() = nothing
     @inline function invokelatest(f::F, args...; kwargs...) where F
         return f(args...; kwargs...)
     end
@@ -198,6 +199,10 @@ let mod = Base.include(Base.__toplevel__, inputfile)
     end
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
+    entrypoint(Base.task_done_hook, (Task,))
+    entrypoint(Base.wait, ())
+    entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
+    entrypoint(Base.checktaskempty, ())
     if add_ccallables
         ccall(:jl_add_ccallable_entrypoints, Cvoid, ())
     end

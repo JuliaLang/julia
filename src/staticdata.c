@@ -848,9 +848,15 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
             }
             if (jl_options.static_call_graph) {
                 jl_value_t *val = jl_get_binding_value(b);
-                if (jl_is_module(val) || !strcmp(jl_symbol_name(b->globalref->name), "__init__")) {
-                    if (jl_options.verbose_compilation)
-                        jl_(val);
+                // keep binding objects that are defined and ...
+                if (val &&
+                    // ... point to modules ...
+                    (jl_is_module(val) ||
+                     // ... or point to __init__ methods ...
+                     !strcmp(jl_symbol_name(b->globalref->name), "__init__") ||
+                     // ... or point to Base functions accessed by the runtime
+                     (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
+                                              !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
                     jl_queue_for_serialization(s, b, m);
                 }
             }
