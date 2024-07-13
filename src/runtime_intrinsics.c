@@ -1271,24 +1271,6 @@ static inline jl_value_t *jl_intrinsiclambda_checkeddiv(jl_value_t *ty, void *pa
 
 // floating point
 
-static int is_ntuple_type(jl_value_t *tt)
-{
-    if (!jl_is_tuple_type(tt))
-    {
-        return 0;
-    }
-    size_t i, nfields = jl_nparams(tt);
-    if(!nfields)
-        return 1;
-    jl_value_t *t1 = jl_tparam0(tt);
-    for (i = 1; i < nfields; i++) {
-        if (jl_tparam(tt, i) != t1) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
 #define bi_fintrinsic(OP, op_name) \
     bi_intrinsic_bfloat(OP, op_name) \
     bi_intrinsic_half(OP, op_name) \
