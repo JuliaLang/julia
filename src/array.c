@@ -307,7 +307,7 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (sz <= GC_MAX_SZCLASS) {
         int pool_id = jl_gc_szclass_align8(allocsz);
-        jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
+        jl_gc_pool_t *p = &ptls->gc_tls.heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
         // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
         // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)

@@ -254,8 +254,8 @@ end
 function tril!(D::Diagonal{T}, k::Integer=0) where T
     n = size(D,1)
     if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
         fill!(D.diag, zero(T))
     end
@@ -327,8 +327,49 @@ function (*)(D::Diagonal, V::AbstractVector)
     return D.diag .* V
 end
 
-rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
-lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
+function rmul!(A::AbstractMatrix, D::Diagonal)
+    _muldiag_size_check(A, D)
+    for I in CartesianIndices(A)
+        row, col = Tuple(I)
+        @inbounds A[row, col] *= D.diag[col]
+    end
+    return A
+end
+# T .= T * D
+function rmul!(T::Tridiagonal, D::Diagonal)
+    _muldiag_size_check(T, D)
+    (; dl, d, du) = T
+    d[1] *= D.diag[1]
+    for i in axes(dl,1)
+        dl[i] *= D.diag[i]
+        du[i] *= D.diag[i+1]
+        d[i+1] *= D.diag[i+1]
+    end
+    return T
+end
+
+function lmul!(D::Diagonal, B::AbstractVecOrMat)
+    _muldiag_size_check(D, B)
+    for I in CartesianIndices(B)
+        row = I[1]
+        @inbounds B[I] = D.diag[row] * B[I]
+    end
+    return B
+end
+
+# in-place multiplication with a diagonal
+# T .= D * T
+function lmul!(D::Diagonal, T::Tridiagonal)
+    _muldiag_size_check(D, T)
+    (; dl, d, du) = T
+    d[1] = D.diag[1] * d[1]
+    for i in axes(dl,1)
+        dl[i] = D.diag[i+1] * dl[i]
+        du[i] = D.diag[i] * du[i]
+        d[i+1] = D.diag[i+1] * d[i+1]
+    end
+    return T
+end
 
 function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
     require_one_based_indexing(out, B)
@@ -820,7 +861,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
             evecs[p[i],i] = one(Td)
         end
     else
-        evecs = Matrix{Td}(I, size(D))
+        evecs = Diagonal(ones(Td, length(λ)))
     end
     Eigen(λ, evecs)
 end

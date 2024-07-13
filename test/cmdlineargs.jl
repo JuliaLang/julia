@@ -793,6 +793,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # tested in test/parallel.jl)
     @test errors_not_signals(`$exename --worker=true`)
 
+    # --trace-compile-timing
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-compile=stderr --trace-compile-timing -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
+
     # test passing arguments
     mktempdir() do dir
         testfile, io = mktemp(dir)

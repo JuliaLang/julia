@@ -201,7 +201,8 @@ macro _total_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
@@ -214,7 +215,8 @@ macro _foldable_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
 macro _terminates_locally_meta()
@@ -227,7 +229,8 @@ macro _terminates_locally_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally` (supposed to be used for bootstrapping)
 macro _terminates_globally_meta()
@@ -240,7 +243,8 @@ macro _terminates_globally_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally :notaskstate` (supposed to be used for bootstrapping)
 macro _terminates_globally_notaskstate_meta()
@@ -253,7 +257,8 @@ macro _terminates_globally_notaskstate_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally :noub` (supposed to be used for bootstrapping)
 macro _terminates_globally_noub_meta()
@@ -266,7 +271,8 @@ macro _terminates_globally_noub_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
 macro _effect_free_terminates_locally_meta()
@@ -279,7 +285,8 @@ macro _effect_free_terminates_locally_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :nothrow :noub` (supposed to be used for bootstrapping)
 macro _nothrow_noub_meta()
@@ -292,7 +299,8 @@ macro _nothrow_noub_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _nothrow_meta()
@@ -305,7 +313,8 @@ macro _nothrow_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _noub_meta()
@@ -318,7 +327,8 @@ macro _noub_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :notaskstate` (supposed to be used for bootstrapping)
 macro _notaskstate_meta()
@@ -331,7 +341,8 @@ macro _notaskstate_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 # can be used in place of `@assume_effects :noub_if_noinbounds` (supposed to be used for bootstrapping)
 macro _noub_if_noinbounds_meta()
@@ -344,7 +355,8 @@ macro _noub_if_noinbounds_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
-        #=:noub_if_noinbounds=#true))
+        #=:noub_if_noinbounds=#true,
+        #=:consistent_overlay=#false))
 end
 
 # another version of inlining that propagates an inbounds context
@@ -852,11 +864,11 @@ end
 
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
-    Only use `@inbounds` when it is certain from the information locally available
-    that all accesses are in bounds. In particular, using `1:length(A)` instead of
-    `eachindex(A)` in a function like the one above is _not_ safely inbounds because
-    the first index of `A` may not be `1` for all user defined types that subtype
-    `AbstractArray`.
+    Only use `@inbounds` when you are certain that all accesses are in bounds (as
+    undefined behavior, e.g. crashes, might occur if this assertion is violated). For
+    example, using `1:length(A)` instead of `eachindex(A)` in a function like
+    the one above is _not_ safely inbounds because the first index of `A` may not
+    be `1` for all user defined types that subtype `AbstractArray`.
 """
 macro inbounds(blk)
     return Expr(:block,
@@ -1069,6 +1081,12 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 
+"""
+    inferencebarrier(x)
+
+A shorthand for `compilerbarrier(:type, x)` causes the type of this statement to be inferred as `Any`.
+See [`Base.compilerbarrier`](@ref) for more info.
+"""
 inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """

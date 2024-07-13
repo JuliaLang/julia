@@ -283,7 +283,8 @@ macro _foldable_meta()
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
-        #=:noub_if_noinbounds=#false))
+        #=:noub_if_noinbounds=#false,
+        #=:consistent_overlay=#false))
 end
 
 macro inline()   Expr(:meta, :inline)   end
@@ -508,12 +509,12 @@ end
 function CodeInstance(
     mi::MethodInstance, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-    ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
-    relocatability::UInt8, edges::DebugInfo)
+    effects::UInt32, @nospecialize(analysis_results),
+    relocatability::UInt8, edges::Union{DebugInfo,Nothing})
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8, Any),
+        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any),
         mi, owner, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
-        ipo_effects, effects, analysis_results, relocatability, edges)
+        effects, analysis_results, relocatability, edges)
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
@@ -748,6 +749,13 @@ function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospec
         return Expr(Symbol("with-static-parameters"), lam, spnames...)
     end
 end
+
+# If the generator is a subtype of this trait, inference caches the generated unoptimized
+# code, sacrificing memory space to improve the performance of subsequent inferences.
+# This tradeoff is not appropriate in general cases (e.g., for `GeneratedFunctionStub`s
+# generated from the front end), but it can be justified for generators involving complex
+# code transformations, such as a Cassette-like system.
+abstract type CachedGenerator end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 

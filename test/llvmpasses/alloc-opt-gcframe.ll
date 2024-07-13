@@ -12,7 +12,7 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 ; OPAQUE: %current_task = getelementptr inbounds ptr, ptr %gcstack, i64 -12
 ; OPAQUE: [[ptls_field:%.*]] = getelementptr inbounds ptr, ptr %current_task, i64 16
 ; OPAQUE-NEXT: [[ptls_load:%.*]] = load ptr, ptr [[ptls_field]], align 8, !tbaa !0
-; OPAQUE-NEXT: %v = call noalias nonnull align {{[0-9]+}} dereferenceable({{[0-9]+}}) ptr addrspace(10) @ijl_gc_pool_alloc_instrumented(ptr [[ptls_load]], i32 [[SIZE_T:[0-9]+]], i32 16, i64 {{.*}} @tag {{.*}})
+; OPAQUE-NEXT: %v = call noalias nonnull align {{[0-9]+}} dereferenceable({{[0-9]+}}) ptr addrspace(10) @ijl_gc_pool_alloc(ptr [[ptls_load]], i32 [[SIZE_T:[0-9]+]], i32 16, i64 {{.*}} @tag {{.*}})
 ; OPAQUE: store atomic ptr addrspace(10) @tag, ptr addrspace(10) {{.*}} unordered, align 8, !tbaa !4
 
 define {} addrspace(10)* @return_obj() {
@@ -238,8 +238,8 @@ L3:
 }
 ; CHECK-LABEL: }{{$}}
 
-; OPAQUE: declare noalias nonnull ptr addrspace(10) @ijl_gc_pool_alloc_instrumented(ptr,
-; OPAQUE: declare noalias nonnull ptr addrspace(10) @ijl_gc_big_alloc_instrumented(ptr,
+; OPAQUE: declare noalias nonnull ptr addrspace(10) @ijl_gc_pool_alloc(ptr,
+; OPAQUE: declare noalias nonnull ptr addrspace(10) @ijl_gc_big_alloc(ptr,
 declare void @external_function()
 declare {}*** @julia.get_pgcstack()
 declare noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}**, i64, {} addrspace(10)*)
