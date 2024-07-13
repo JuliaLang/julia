@@ -4263,7 +4263,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
         }
 #endif
         boffset = ctx.builder.CreateMul(offset, elsz);
-        newdata = ctx.builder.CreateInboundsGEP(getInt8Ty(ctx.builder.getContext()), data, boffset);
+        newdata = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), data, boffset);
         (void)boffset; // LLVM is very bad at handling GEP with types different from the load
         if (bc) {
             BasicBlock *failBB, *endBB;
