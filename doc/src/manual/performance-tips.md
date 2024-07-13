@@ -1046,6 +1046,36 @@ or thousands of variants compiled for it. Each of these increases the size of th
 code, the length of internal lists of methods, etc. Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.
 
+### Beware of suboptimal type assertion patterns
+
+Due to [limitations](https://github.com/JuliaLang/julia/issues/38274) in current versions
+of Julia, some [type assertion](@ref "Type Declarations") patterns do not help refine type
+inference, even though, intuitively, they should. An example:
+
+```julia
+function suboptimal_inference_example(x)
+    x::Integer
+    # `x isa Integer` is *not* known to be true in the rest of the method body
+    # ...
+end
+```
+
+Some possible workarounds:
+
+```julia
+function good_inference_example_1(x)
+    (x isa Integer) || error("not integer")
+    # `x isa Integer` is known to be true in the rest of the method body
+    # ...
+end
+
+function good_inference_example_2(x)
+    x = x::Integer
+    # `x isa Integer` is known to be true in the rest of the method body
+    # ...
+end
+```
+
 ## Memory management and arrays
 
 ### Pre-allocate outputs
