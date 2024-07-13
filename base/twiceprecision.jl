@@ -243,13 +243,15 @@ function twiceprecision(val::T, nb::Integer) where {T<:IEEEFloat}
     TwicePrecision{T}(hi, val - hi)
 end
 
-function twiceprecision(val::TwicePrecision{T}, nb::Integer) where {T<:IEEEFloat}
+function twiceprecision(val::TwicePrecision{T}, nb::Integer) where {T<:Union{IEEEFloat,Complex{<:IEEEFloat}}}
     hi = truncbits(val.hi, nb)
     TwicePrecision{T}(hi, (val.hi - hi) + val.lo)
 end
 
 nbitslen(r::StepRangeLen) = nbitslen(eltype(r), length(r), r.offset)
 nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
+    min(cld(precision(T), 2), nbitslen(len, offset))
+nbitslen(::Type{Complex{T}}, len, offset) where {T<:IEEEFloat} =
     min(cld(precision(T), 2), nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
 # is 1 bit higher than the number that are explicitly stored.

@@ -2727,6 +2727,17 @@ end
     @test Base._log_twice64_unchecked(Inf).lo isa Float64
 end
 
+@testset "Complex ranges" begin
+    r = 0:.1:1
+    for f in (collect, identity)
+        @test collect(r .+ r .* im) ≈ [v + v*im for v in r]
+        @test collect(r.*im .+ r.*im) ≈ [v*im + v*im for v in r]
+        @test collect(r.+0im .+ r.+0im) ≈ [v + v for v in r]
+        @test collect(r.+0im .+ r.*im) ≈ [v + v*im for v in r]
+        @test collect(r.*im .+ r.+0im) ≈ [v*im + v for v in r]
+    end
+end
+
 @testset "OneTo promotion" begin
     struct MyUnitRange{T} <: AbstractUnitRange{T}
         range::UnitRange{T}
