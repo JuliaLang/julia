@@ -309,12 +309,20 @@ function summarize(binding::Binding, sig)
         end
         summarize(io, binding_res, binding)
     else
-        println(io, "No documentation found.\n")
-        quot = any(isspace, sprint(print, binding)) ? "'" : ""
-        if Base.isbindingresolved(binding.mod, binding.var)
-            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
+        # we try to recover from this by checking if the binding is an alias in Main
+        if ccall(:jl_binding_owner, Ptr{Cvoid}, (Any,Any), Main, binding.var) == C_NULL
+            println(io, "No documentation found.\n")
+            quot = any(isspace, sprint(print, binding)) ? "'" : ""
+            if Base.isbindingresolved(binding.mod, binding.var)
+                println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
+            else
+                println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+            end
         else
-            println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+            b = ccall(:jl_binding_owner, Any, (Any,Any), Main, binding.var)
+            recovered_binding = Binding(b.globalref.mod, b.globalref.name)
+            binding_res = resolve(recovered_binding)
+            summarize(io, binding_res, recovered_binding)
         end
     end
     md = Markdown.parse(seekstart(io))
