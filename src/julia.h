@@ -733,6 +733,7 @@ typedef struct {
     jl_genericmemory_t *ht;
     size_t count;
     size_t ndel;
+    ssize_t age;
 } jl_id_dict_t;
 
 // constants and type objects -------------------------------------------------
