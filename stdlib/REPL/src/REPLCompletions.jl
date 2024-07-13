@@ -2,13 +2,15 @@
 
 module REPLCompletions
 
-export completions, shell_completions, bslash_completions, completion_text
+export completions, shell_completions, bslash_completions, named_completion
 
 using Core: Const
 const CC = Core.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
 using Base.Filesystem: _readdirx
+
+using ..REPL.LineEdit: NamedCompletion
 
 abstract type Completion end
 
@@ -54,8 +56,10 @@ struct MethodCompletion <: Completion
 end
 
 struct BslashCompletion <: Completion
-    bslash::String
+    completion::String # what is actually completed, for example "\trianglecdot"
+    name::String # what is displayed, for example "◬ \trianglecdot"
 end
+BslashCompletion(completion::String) = BslashCompletion(completion, completion)
 
 struct ShellCompletion <: Completion
     text::String
@@ -102,21 +106,23 @@ function Base.getproperty(c::Completion, name::Symbol)
     return getfield(c, name)
 end
 
-_completion_text(c::TextCompletion) = c.text
-_completion_text(c::KeywordCompletion) = c.keyword
-_completion_text(c::KeyvalCompletion) = c.keyval
-_completion_text(c::PathCompletion) = c.path
-_completion_text(c::ModuleCompletion) = c.mod
-_completion_text(c::PackageCompletion) = c.package
-_completion_text(c::PropertyCompletion) = sprint(Base.show_sym, c.property)
-_completion_text(c::FieldCompletion) = sprint(Base.show_sym, c.field)
-_completion_text(c::MethodCompletion) = repr(c.method)
-_completion_text(c::BslashCompletion) = c.bslash
-_completion_text(c::ShellCompletion) = c.text
-_completion_text(c::DictCompletion) = c.key
-_completion_text(c::KeywordArgumentCompletion) = c.kwarg*'='
+_named_completion(c::TextCompletion) = NamedCompletion(c.text)
+_named_completion(c::KeywordCompletion) = NamedCompletion(c.keyword)
+_named_completion(c::KeyvalCompletion) = NamedCompletion(c.keyval)
+_named_completion(c::PathCompletion) = NamedCompletion(c.path)
+_named_completion(c::ModuleCompletion) = NamedCompletion(c.mod)
+_named_completion(c::PackageCompletion) = NamedCompletion(c.package)
+_named_completion(c::PropertyCompletion) = NamedCompletion(sprint(Base.show_sym, c.property))
+_named_completion(c::FieldCompletion) = NamedCompletion(sprint(Base.show_sym, c.field))
+_named_completion(c::MethodCompletion) = NamedCompletion(repr(c.method))
+_named_completion(c::BslashCompletion) = NamedCompletion(c.completion, c.name)
+_named_completion(c::ShellCompletion) = NamedCompletion(c.text)
+_named_completion(c::DictCompletion) = NamedCompletion(c.key)
+_named_completion(c::KeywordArgumentCompletion) = NamedCompletion(c.kwarg*'=')
 
-completion_text(c) = _completion_text(c)::String
+named_completion(c) = _named_completion(c)::NamedCompletion
+
+named_completion_completion(c) = named_completion(c).completion::String
 
 const Completions = Tuple{Vector{Completion}, UnitRange{Int}, Bool}
 
@@ -962,7 +968,7 @@ function bslash_completions(string::String, pos::Int, hint::Bool=false)
         # Julian completions as only latex / emoji symbols contain the leading \
         symbol_dict = startswith(s, "\\:") ? emoji_symbols : latex_symbols
         namelist = Iterators.filter(k -> startswith(k, s), keys(symbol_dict))
-        completions = Completion[BslashCompletion("$(symbol_dict[name]) $name") for name in sort!(collect(namelist))]
+        completions = Completion[BslashCompletion(name, "$(symbol_dict[name]) $name") for name in sort!(collect(namelist))]
         return (true, (completions, slashpos:pos, true))
     end
     return (false, (Completion[], 0:-1, false))
@@ -1072,7 +1078,7 @@ function complete_keyword_argument(partial, last_idx, context_module)
         complete_keyval!(suggestions, last_word)
     end
 
-    return sort!(suggestions, by=completion_text), wordrange
+    return sort!(suggestions, by=named_completion_completion), wordrange
 end
 
 function get_loading_candidates(pkgstarts::String, project_file::String)
@@ -1264,7 +1270,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         name = string[startpos:pos]
         complete_identifiers!(suggestions, context_module, string, name,
                               pos, separatorpos, startpos)
-        return sort!(unique!(completion_text, suggestions), by=completion_text), (separatorpos+1):pos, true
+        return sort!(unique!(named_completion, suggestions), by=named_completion_completion), (separatorpos+1):pos, true
     elseif inc_tag === :cmd
         # TODO: should this call shell_completions instead of partially reimplementing it?
         let m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial)) # fuzzy shell_parse in reverse
@@ -1460,7 +1466,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     complete_identifiers!(suggestions, context_module, string, name,
                           pos, separatorpos, startpos;
                           comp_keywords, complete_modules_only)
-    return sort!(unique!(completion_text, suggestions), by=completion_text), namepos:pos, true
+    return sort!(unique!(named_completion, suggestions), by=named_completion_completion), namepos:pos, true
 end
 
 function shell_completions(string, pos, hint::Bool=false)
