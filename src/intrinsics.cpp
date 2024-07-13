@@ -144,6 +144,13 @@ static Type *FLOATT(Type *t)
 {
     if (t->isFloatingPointTy())
         return t;
+    if (auto *tv = dyn_cast<VectorType>(t))
+    {
+        Type *st = FLOATT(tv->getElementType());
+        if (!st)
+            return NULL;
+        return VectorType::get(st, tv->getElementCount());
+    }
     unsigned nb = (t->isPointerTy() ? sizeof(void*) * 8 : t->getPrimitiveSizeInBits());
     auto &ctxt = t->getContext();
     if (nb == 64)
@@ -165,6 +172,13 @@ static Type *INTT(Type *t, const DataLayout &DL)
         return t;
     if (t->isPointerTy())
         return DL.getIntPtrType(t);
+    if (auto *tv = dyn_cast<VectorType>(t))
+    {
+        Type *st = INTT(tv->getElementType(), DL);
+        if (!st)
+            return NULL;
+        return VectorType::get(st, tv->getElementCount());
+    }
     if (t == getDoubleTy(ctxt))
         return getInt64Ty(ctxt);
     if (t == getFloatTy(ctxt))
@@ -1423,6 +1437,12 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
             return emit_runtime_call(ctx, f, argv, nargs);
         bool isboxed=true;
         Type *xtyp = julia_type_to_llvm(ctx, xinfo.typ, &(isboxed));
+        if (float_func()[f])
+            xtyp = FLOATT(xtyp);
+        else
+            xtyp = INTT(xtyp, DL);
+        if (!xtyp)
+             return emit_runtime_call(ctx, f, argv, nargs);
         ////Bool are required to be in the range [0,1]
         ////so while they are represented as i8,
         ////the operations need to be done in mod 1
