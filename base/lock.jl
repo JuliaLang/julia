@@ -134,6 +134,8 @@ end
     return false
 end
 
+const TRACE_LOCK_CONFLICTS = Ref{Bool}(false)
+
 """
     lock(lock)
 
@@ -159,6 +161,13 @@ Each `lock` must be matched by an [`unlock`](@ref).
             end
         finally
             unlock(c.lock)
+        end
+        if TRACE_LOCK_CONFLICTS[]
+            try
+                error()
+            catch
+                println("lock conflict", sprint(show_backtrace, catch_backtrace()))
+            end
         end
     end)(rl)
     return
