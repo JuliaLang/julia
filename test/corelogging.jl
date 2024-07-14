@@ -467,3 +467,15 @@ end
 for (k, v) in pairs(original_env)
     ENV[k] = v
 end
+
+# @save
+module AtSaveTestModule
+    using Test
+    @test !isdefined(Main, :xc44f6e16f91ba48824afec66744d3faf)
+    xc44f6e16f91ba48824afec66744d3faf = rand(3,3)
+    @test !isdefined(Main, :xc44f6e16f91ba48824afec66744d3faf)
+    @save xc44f6e16f91ba48824afec66744d3faf
+    @test isdefined(Main, :xc44f6e16f91ba48824afec66744d3faf)
+    @test getglobal(Main, :xc44f6e16f91ba48824afec66744d3faf) == xc44f6e16f91ba48824afec66744d3faf
+    @test getglobal(Main, :xc44f6e16f91ba48824afec66744d3faf) === xc44f6e16f91ba48824afec66744d3faf
+end
