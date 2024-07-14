@@ -314,8 +314,9 @@ end
 macro time(msg, ex)
     quote
         local ret = @timed $(esc(ex))
-        local _msg = string($(esc(msg)))
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg)
+        local _msg = $(esc(msg))
+        local _msg_str = _msg isa Nothing ? _msg : string(_msg)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg_str)
         ret.value
     end
 end
@@ -386,8 +387,9 @@ end
 macro timev(msg, ex)
     quote
         local ret = @timed $(esc(ex))
-        local _msg = string($(esc(msg)))
-        timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg)
+        local _msg = $(esc(msg))
+        local _msg_str = _msg isa Nothing ? _msg : string(_msg)
+        timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg_str)
         ret.value
     end
 end
