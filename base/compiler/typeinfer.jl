@@ -536,6 +536,12 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
         append!(s_edges, edges)
         empty!(edges)
     end
+        #s_edges_new = compute_edges(me)
+        #println(Any[z isa MethodTable ? z.name : z for z in s_edges_new])
+        #if length(s_edges) != length(s_edges_new) || !all(i -> isassigned(s_edges, i) ? isassigned(s_edges_new, i) && s_edges_new[i] === s_edges[i] : !isassigned(s_edges_new, i), length(s_edges))
+        #    println(sizehint!(s_edges, length(s_edges)))
+        #    println(sizehint!(s_edges_new, length(s_edges_new)))
+        #end
     if me.src.edges !== nothing && me.src.edges !== Core.svec()
         append!(s_edges, me.src.edges::Vector)
     end
@@ -652,6 +658,92 @@ function store_backedges(caller::MethodInstance, edges::Vector{Any})
     end
     return nothing
 end
+
+add_edges!(edges::Vector{Any}, info::MethodResultPure) = add_edges!(edges, info.info)
+add_edges!(edges::Vector{Any}, info::ConstCallInfo) = add_edges!(edges, info.call)
+add_edges!(edges::Vector{Any}, info::OpaqueClosureCreateInfo) = nothing # TODO(jwn)
+add_edges!(edges::Vector{Any}, info::ReturnTypeCallInfo) = add_edges!(edges, info.info)
+function add_edges!(edges::Vector{Any}, info::ApplyCallInfo)
+    add_edges!(edges, info.call)
+    for arg in info.arginfo
+        arg === nothing && continue
+        for edge in arg.each
+            add_edges!(edges, edge.info)
+        end
+    end
+end
+add_edges!(edges::Vector{Any}, info::ModifyOpInfo) = add_edges!(edges, info.call)
+add_edges!(edges::Vector{Any}, info::UnionSplitInfo) = for split in info.matches; add_edges!(edges, split); end
+add_edges!(edges::Vector{Any}, info::UnionSplitApplyCallInfo) = for split in info.infos; add_edges!(edges, split); end
+add_edges!(edges::Vector{Any}, info::FinalizerInfo) = nothing
+add_edges!(edges::Vector{Any}, info::NoCallInfo) = nothing
+function add_edges!(edges::Vector{Any}, info::MethodMatchInfo)
+    matches = info.results.matches
+    #if length(matches) == 1 && !info.results.ambig && (matches[end]::Core.MethodMatch).fully_covers
+    #    push!(edges, specialize_method(matches[1]))
+    #elseif isempty(matches) || info.results.ambig || !(matches[end]::Core.MethodMatch).fully_covers
+    #else
+    #    push!(edges, length(matches))
+    #    for m in matches
+    #        push!(edges, specialize_method(m))
+    #    end
+    #end
+    if isempty(matches) || !(matches[end]::Core.MethodMatch).fully_covers
+        exists = false
+        for i in 1:length(edges)
+            if edges[i] === info.mt && edges[i + 1] == info.atype
+                exists = true
+                break
+            end
+        end
+        if !exists
+            push!(edges, info.mt)
+            push!(edges, info.atype)
+        end
+    end
+    for m in matches
+        mi = specialize_method(m)
+        exists = false
+        for i in 1:length(edges)
+            if edges[i] === mi && !(i > 1 && edges[i - 1] isa Type)
+                exists = true
+                break
+            end
+        end
+        exists || push!(edges, mi)
+    end
+end
+function add_edges!(edges::Vector{Any}, info::InvokeCallInfo)
+    #push!(edges, 1)
+    mi = specialize_method(info.match)
+    exists = false
+    for i in 2:length(edges)
+        if edges[i] === mi && edges[i - 1] isa Type && edges[i - 1] == info.atype
+            exists = true
+            break
+        end
+    end
+    if !exists
+        push!(edges, info.atype)
+        push!(edges, mi)
+    end
+    nothing
+end
+
+function compute_edges(sv::InferenceState)
+    edges = []
+    for i in 1:length(sv.stmt_info)
+        info = sv.stmt_info[i]
+        #rt = sv.ssavaluetypes[i]
+        #effects = EFFECTS_TOTAL # sv.stmt_effects[i]
+        #if rt === Any && effects === Effects()
+        #    continue
+        #end
+        add_edges!(edges, info)
+    end
+    return edges
+end
+
 
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots

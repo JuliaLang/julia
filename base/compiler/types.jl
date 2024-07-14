@@ -403,7 +403,6 @@ function add_remark! end
 may_optimize(::AbstractInterpreter) = true
 may_compress(::AbstractInterpreter) = true
 may_discard_trees(::AbstractInterpreter) = true
-verbose_stmt_info(::AbstractInterpreter) = false
 
 """
     method_table(interp::AbstractInterpreter) -> MethodTableView

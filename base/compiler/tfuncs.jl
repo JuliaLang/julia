@@ -2940,7 +2940,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     else
         call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
     end
-    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
+    info = MethodResultPure(ReturnTypeCallInfo(call.info))
     rt = widenslotwrapper(call.rt)
     if isa(rt, Const)
         # output was computed to be constant
