@@ -25,7 +25,6 @@ IdDict{Any, String} with 3 entries:
 ```
 """
 mutable struct IdDict{K,V} <: AbstractDict{K,V}
-    # NOTE make sure to sync the struct definition with `jl_id_dict_t` in julia.h
     ht::Memory{Any}
     count::Int
     ndel::Int
@@ -61,9 +60,7 @@ IdDict(kv) = dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
 function rehash!(d::IdDict, newsz = length(d.ht)%UInt)
-    age0 = d.age
     d.ht = ccall(:jl_idtable_rehash, Memory{Any}, (Any, Csize_t), d.ht, newsz)
-    @assert d.age == age0 "Multiple concurrent writes to Dict detected!"
     d.age += 1
     d
 end
@@ -83,7 +80,9 @@ end
 #             and was inserted at pos
 function ht_keyindex2!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(KeyTypeError(K, key))
-    return ccall(:jl_eqtable_keyindex, Cssize_t, (Any, Any), d, key)
+    keyindex = RefValue{Cssize_t}(0)
+    d.ht = ccall(:jl_eqtable_keyindex, Memory{Any}, (Memory{Any}, Any, Ptr{Cssize_t}), d.ht, key, keyindex)
+    return keyindex[]
 end
 
 @propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, keyindex::Int) where {K, V}
@@ -98,17 +97,19 @@ end
     return nothing
 end
 
-function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
+@inline function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
+    !isa(key, K) && throw(KeyTypeError(K, key))
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)::V
     end
-    keyindex = ht_keyindex2!(d, key)
-    if keyindex >= 0
-        d.age += 1
-        @inbounds d.ht[keyindex+1] = val
-    else
-        @inbounds _setindex!(d, val, -keyindex)
+    if d.ndel >= ((3*length(d.ht))>>2)
+        rehash!(d, max((length(d.ht)%UInt)>>1, 32))
+        d.ndel = 0
     end
+    inserted = RefValue{Cint}(0)
+    d.ht = ccall(:jl_eqtable_put, Memory{Any}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
+    d.count += inserted[]
+    d.age += 1
     return d
 end
 
@@ -174,24 +175,7 @@ isempty(d::IdDict) = length(d) == 0
 copy(d::IdDict) = typeof(d)(d)
 
 function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    keyindex = ht_keyindex2!(d, key)
-
-    if keyindex < 0
-        # If convert call fails we need the key to be deleted
-        d.ndel += 1
-        age0 = d.age
-        val = isa(default, V) ? default : convert(V, default)::V
-        d.ndel -= 1
-        if d.age != age0
-            @inline setindex!(d, val, key)
-        else
-            @inbounds _setindex!(d, val, -keyindex)
-        end
-        return val::V
-    else
-        d.age += 1
-        return @inbounds d.ht[keyindex+1]::V
-    end
+    get!(()->default, d, key)
 end
 
 function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}

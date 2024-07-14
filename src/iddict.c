@@ -198,15 +198,10 @@ size_t jl_eqtable_nextind(jl_genericmemory_t *t, size_t i)
 }
 
 JL_DLLEXPORT
-ssize_t jl_eqtable_keyindex(jl_id_dict_t *d, jl_value_t *key)
+jl_genericmemory_t *jl_eqtable_keyindex(jl_genericmemory_t *h, jl_value_t *key, ssize_t* keyindex)
 {
-    jl_genericmemory_t *h = d->ht;
-
-    ssize_t index = jl_table_assign_bp(&h, key, NULL, 0);
-    jl_atomic_store_release((_Atomic(jl_genericmemory_t*)*)&d->ht, h);
-    jl_gc_wb(d, h);
-
-    return index;
+    *keyindex = jl_table_assign_bp(&h, key, NULL, 0);
+    return h;
 }
 
 #undef hash_size

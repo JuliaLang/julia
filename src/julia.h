@@ -727,15 +727,6 @@ typedef struct {
     uint8_t fully_covers;
 } jl_method_match_t;
 
-// The following mirrors IdDict in "base/iddict.jl"
-typedef struct {
-    JL_DATA_TYPE
-    jl_genericmemory_t *ht;
-    size_t count;
-    size_t ndel;
-    ssize_t age;
-} jl_id_dict_t;
-
 // constants and type objects -------------------------------------------------
 
 #define JL_SMALL_TYPEOF(XX) \
@@ -1954,7 +1945,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_eqtable_put(jl_genericmemory_t *h JL_ROOTING
 JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_genericmemory_t *h JL_PROPAGATES_ROOT, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_eqtable_pop(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *deflt, int *found);
 jl_value_t *jl_eqtable_getkey(jl_genericmemory_t *h JL_PROPAGATES_ROOT, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
-JL_DLLEXPORT ssize_t jl_eqtable_keyindex(jl_id_dict_t *d, jl_value_t *key);
+JL_DLLEXPORT jl_genericmemory_t *jl_eqtable_keyindex(jl_genericmemory_t *h, jl_value_t *key, ssize_t* keyindex);
 
 // system information
 JL_DLLEXPORT int jl_errno(void) JL_NOTSAFEPOINT;
