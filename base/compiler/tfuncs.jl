@@ -2949,7 +2949,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         if isa(sv, InferenceState)
             sv.restrict_abstract_call_sites = old_restrict
         end
-        info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
+        info = MethodResultPure(ReturnTypeCallInfo(call.info))
         rt = widenslotwrapper(call.rt)
         if isa(rt, Const)
             # output was computed to be constant

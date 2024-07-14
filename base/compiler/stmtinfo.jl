@@ -26,14 +26,15 @@ struct NoCallInfo <: CallInfo end
 """
     info::MethodMatchInfo <: CallInfo
 
-Captures the result of a `:jl_matching_methods` lookup for the given call (`info.results`).
-This info may then be used by the optimizer to inline the matches, without having
-to re-consult the method table. This info is illegal on any statement that is
-not a call to a generic function.
+Captures the essential arguments and result of a `:jl_matching_methods` lookup
+for the given call (`info.results`). This info may then be used by the
+optimizer, without having to re-consult the method table.
+This info is illegal on any statement that is not a call to a generic function.
 """
 struct MethodMatchInfo <: CallInfo
     results::MethodLookupResult
     mt::MethodTable
+    atype
     fullmatch::Bool
 end
 nsplit_impl(info::MethodMatchInfo) = 1
@@ -186,6 +187,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 struct InvokeCallInfo <: CallInfo
     match::MethodMatch
     result::Union{Nothing,ConstResult}
+    atype # ::Type
 end
 
 """

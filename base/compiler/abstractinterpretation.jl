@@ -339,7 +339,7 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         end
         valid_worlds = intersect(valid_worlds, thismatches.valid_worlds)
         thisfullmatch = any(match::MethodMatch->match.fully_covers, thismatches)
-        thisinfo = MethodMatchInfo(thismatches, mt, thisfullmatch)
+        thisinfo = MethodMatchInfo(thismatches, mt, sig_n, thisfullmatch)
         push!(infos, thisinfo)
     end
     info = UnionSplitInfo(infos)
@@ -360,7 +360,7 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
         return FailedMethodMatch("Too many methods matched")
     end
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
-    info = MethodMatchInfo(matches, mt, fullmatch)
+    info = MethodMatchInfo(matches, mt, atype, fullmatch)
     return MethodMatches(matches.matches, info, matches.valid_worlds)
 end
 
@@ -2257,7 +2257,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             end
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
-        info = InvokeCallInfo(match, const_result)
+        info = InvokeCallInfo(match, const_result, lookupsig)
         edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
