@@ -624,6 +624,7 @@ STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt)
             temp[j] = NULL;
             min_elements--;
  inner_loop:
+            continue;
         }
 
         if (min_elements == nfields-1) continue;
@@ -635,6 +636,7 @@ STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt)
         temp[i] = jl_apply_type((jl_value_t*)jl_tuple_type, params, min_elements+1);
         JL_GC_POP();
  outer_loop:
+        continue;
     }
 }
 
