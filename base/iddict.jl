@@ -153,7 +153,7 @@ isempty(d::IdDict) = length(d) == 0
 copy(d::IdDict) = typeof(d)(d)
 
 function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    get!(()->default, d, key)
+    @inline get!(()->default, d, key)
 end
 
 function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
