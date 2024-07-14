@@ -75,28 +75,6 @@ function sizehint!(d::IdDict, newsz)
     rehash!(d, newsz)
 end
 
-# get (index) for the key
-#     index - where a key is stored, or -pos if not present
-#             and was inserted at pos
-function ht_keyindex2!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    !isa(key, K) && throw(KeyTypeError(K, key))
-    keyindex = RefValue{Cssize_t}(0)
-    d.ht = ccall(:jl_eqtable_keyindex, Memory{Any}, (Memory{Any}, Any, Ptr{Cssize_t}), d.ht, key, keyindex)
-    return keyindex[]
-end
-
-@propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, keyindex::Int) where {K, V}
-    d.ht[keyindex+1] = val
-    d.count += 1
-    d.age += 1
-
-    if d.ndel >= ((3*length(d.ht))>>2)
-        rehash!(d, max((length(d.ht)%UInt)>>1, 32))
-        d.ndel = 0
-    end
-    return nothing
-end
-
 @inline function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(KeyTypeError(K, key))
     if !(val isa V) # avoid a dynamic call
@@ -185,6 +163,28 @@ function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     else
         return val::V
     end
+end
+
+# get (index) for the key
+#     index - where a key is stored, or -pos if not present
+#             and was inserted at pos
+function ht_keyindex2!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    !isa(key, K) && throw(KeyTypeError(K, key))
+    keyindex = RefValue{Cssize_t}(0)
+    d.ht = ccall(:jl_eqtable_keyindex, Memory{Any}, (Memory{Any}, Any, Ptr{Cssize_t}), d.ht, key, keyindex)
+    return keyindex[]
+end
+
+@propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, keyindex::Int) where {K, V}
+    d.ht[keyindex+1] = val
+    d.count += 1
+    d.age += 1
+
+    if d.ndel >= ((3*length(d.ht))>>2)
+        rehash!(d, max((length(d.ht)%UInt)>>1, 32))
+        d.ndel = 0
+    end
+    return nothing
 end
 
 function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
