@@ -122,9 +122,11 @@ typedef struct _jl_gc_chunk_t {
 
 // layout for big (>2k) objects
 
+extern uintptr_t gc_bigval_sentinel_tag;
+
 JL_EXTENSION typedef struct _bigval_t {
     struct _bigval_t *next;
-    struct _bigval_t **prev; // pointer to the next field of the prev entry
+    struct _bigval_t *prev;
     size_t sz;
 #ifdef _P64 // Add padding so that the value is 64-byte aligned
     // (8 pointers of 8 bytes each) - (4 other pointers in struct)
@@ -440,7 +442,7 @@ STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 #endif
 
 extern jl_gc_num_t gc_num;
-extern bigval_t *big_objects_marked;
+extern bigval_t *oldest_generation_of_bigvals;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t buffered_pages;
@@ -539,21 +541,30 @@ STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
-STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr) JL_NOTSAFEPOINT
+FORCE_INLINE void gc_big_object_unlink(const bigval_t *node) JL_NOTSAFEPOINT
 {
-    *hdr->prev = hdr->next;
-    if (hdr->next) {
-        hdr->next->prev = hdr->prev;
+    assert(node != oldest_generation_of_bigvals);
+    assert(node->header != gc_bigval_sentinel_tag);
+    assert(node->prev != NULL);
+    if (node->next != NULL) {
+        node->next->prev = node->prev;
     }
+    node->prev->next = node->next;
 }
 
-STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFEPOINT
+FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL_NOTSAFEPOINT
 {
-    hdr->next = *list;
-    hdr->prev = list;
-    if (*list)
-        (*list)->prev = &hdr->next;
-    *list = hdr;
+    assert(sentinel_node != NULL);
+    assert(sentinel_node->header == gc_bigval_sentinel_tag);
+    assert(sentinel_node->prev == NULL);
+    assert(node->header != gc_bigval_sentinel_tag);
+    // a new node gets linked in at the head of the list
+    node->next = sentinel_node->next;
+    node->prev = sentinel_node;
+    if (sentinel_node->next != NULL) {
+        sentinel_node->next->prev = node;
+    }
+    sentinel_node->next = node;
 }
 
 extern uv_mutex_t gc_threads_lock;

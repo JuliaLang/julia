@@ -134,7 +134,7 @@ static void clear_mark(int bits)
     }
     bigval_t *v;
     for (int i = 0; i < gc_n_threads; i++) {
-        v = gc_all_tls_states[i]->gc_tls.heap.big_objects;
+        v = gc_all_tls_states[i]->gc_tls.heap.young_generation_of_bigvals;
         while (v != NULL) {
             void *gcv = &v->header;
             if (!gc_verifying)
@@ -144,7 +144,7 @@ static void clear_mark(int bits)
         }
     }
 
-    v = big_objects_marked;
+    v = oldest_generation_of_bigvals;
     while (v != NULL) {
         void *gcv = &v->header;
         if (!gc_verifying)
@@ -992,7 +992,7 @@ void gc_stats_big_obj(void)
     size_t nused=0, nbytes=0, nused_old=0, nbytes_old=0;
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        bigval_t *v = ptls2->gc_tls.heap.big_objects;
+        bigval_t *v = ptls2->gc_tls.heap.young_generation_of_bigvals;
         while (v != NULL) {
             if (gc_marked(v->bits.gc)) {
                 nused++;
@@ -1000,7 +1000,7 @@ void gc_stats_big_obj(void)
             }
             v = v->next;
         }
-        v = big_objects_marked;
+        v = oldest_generation_of_bigvals;
         while (v != NULL) {
             if (gc_marked(v->bits.gc)) {
                 nused_old++;

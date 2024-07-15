@@ -35,6 +35,8 @@ uv_cond_t gc_threads_cond;
 uv_sem_t gc_sweep_assists_needed;
 // Mutex used to coordinate entry of GC threads in the mark loop
 uv_mutex_t gc_queue_observer_lock;
+// Tag for sentinel nodes in bigval list
+uintptr_t gc_bigval_sentinel_tag;
 
 // Linked list of callback functions
 
@@ -151,7 +153,6 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t 
 // is going to realloc the buffer (of its own list) or accessing the
 // list of another thread
 static jl_mutex_t finalizers_lock;
-static uv_mutex_t gc_cache_lock;
 
 // mutex for gc-heap-snapshot.
 jl_mutex_t heapsnapshot_lock;
@@ -204,8 +205,8 @@ JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT
     return jl_buff_tag;
 }
 
-// List of marked big objects.  Not per-thread.  Accessed only by master thread.
-bigval_t *big_objects_marked = NULL;
+// List of big objects in oldest generation (`GC_OLD_MARKED`).  Not per-thread.  Accessed only by master thread.
+bigval_t *oldest_generation_of_bigvals = NULL;
 
 // -- Finalization --
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
@@ -722,58 +723,23 @@ static int64_t t_start = 0; // Time GC starts;
 static int64_t last_trim_maxrss = 0;
 #endif
 
-static void gc_sync_cache_nolock(jl_ptls_t ptls, jl_gc_mark_cache_t *gc_cache) JL_NOTSAFEPOINT
+static void gc_sync_cache(jl_ptls_t ptls, jl_gc_mark_cache_t *gc_cache) JL_NOTSAFEPOINT
 {
-    const int nbig = gc_cache->nbig_obj;
-    for (int i = 0; i < nbig; i++) {
-        void *ptr = gc_cache->big_obj[i];
-        bigval_t *hdr = (bigval_t*)gc_ptr_clear_tag(ptr, 1);
-        gc_big_object_unlink(hdr);
-        if (gc_ptr_tag(ptr, 1)) {
-            gc_big_object_link(hdr, &ptls->gc_tls.heap.big_objects);
-        }
-        else {
-            // Move hdr from `big_objects` list to `big_objects_marked list`
-            gc_big_object_link(hdr, &big_objects_marked);
-        }
-    }
-    gc_cache->nbig_obj = 0;
     perm_scanned_bytes += gc_cache->perm_scanned_bytes;
     scanned_bytes += gc_cache->scanned_bytes;
     gc_cache->perm_scanned_bytes = 0;
     gc_cache->scanned_bytes = 0;
 }
 
-static void gc_sync_cache(jl_ptls_t ptls) JL_NOTSAFEPOINT
-{
-    uv_mutex_lock(&gc_cache_lock);
-    gc_sync_cache_nolock(ptls, &ptls->gc_tls.gc_cache);
-    uv_mutex_unlock(&gc_cache_lock);
-}
-
 // No other threads can be running marking at the same time
-static void gc_sync_all_caches_nolock(jl_ptls_t ptls)
+static void gc_sync_all_caches(jl_ptls_t ptls)
 {
     assert(gc_n_threads);
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 != NULL)
-            gc_sync_cache_nolock(ptls, &ptls2->gc_tls.gc_cache);
+            gc_sync_cache(ptls, &ptls2->gc_tls.gc_cache);
     }
-}
-
-STATIC_INLINE void gc_queue_big_marked(jl_ptls_t ptls, bigval_t *hdr,
-                                       int toyoung) JL_NOTSAFEPOINT
-{
-    const int nentry = sizeof(ptls->gc_tls.gc_cache.big_obj) / sizeof(void*);
-    size_t nobj = ptls->gc_tls.gc_cache.nbig_obj;
-    if (__unlikely(nobj >= nentry)) {
-        gc_sync_cache(ptls);
-        nobj = 0;
-    }
-    uintptr_t v = (uintptr_t)hdr;
-    ptls->gc_tls.gc_cache.big_obj[nobj] = (void*)(toyoung ? (v | 1) : v);
-    ptls->gc_tls.gc_cache.nbig_obj = nobj + 1;
 }
 
 // Atomically set the mark bit for object and return whether it was previously unmarked
@@ -812,16 +778,14 @@ STATIC_INLINE void gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
     bigval_t *hdr = bigval_header(o);
     if (mark_mode == GC_OLD_MARKED) {
         ptls->gc_tls.gc_cache.perm_scanned_bytes += hdr->sz;
-        gc_queue_big_marked(ptls, hdr, 0);
     }
     else {
         ptls->gc_tls.gc_cache.scanned_bytes += hdr->sz;
-        // We can't easily tell if the object is old or being promoted
-        // from the gc bits but if the `age` is `0` then the object
-        // must be already on a young list.
         if (mark_reset_age) {
+            assert(jl_atomic_load(&gc_n_threads_marking) == 0); // `mark_reset_age` is only used during single-threaded marking
             // Reset the object as if it was just allocated
-            gc_queue_big_marked(ptls, hdr, 1);
+            gc_big_object_unlink(hdr);
+            gc_big_object_link(ptls->gc_tls.heap.young_generation_of_bigvals, hdr);
         }
     }
 }
@@ -1003,7 +967,7 @@ STATIC_INLINE jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz)
     memset(v, 0xee, allocsz);
 #endif
     v->sz = allocsz;
-    gc_big_object_link(v, &ptls->gc_tls.heap.big_objects);
+    gc_big_object_link(ptls->gc_tls.heap.young_generation_of_bigvals, v);
     return jl_valueof(&v->header);
 }
 
@@ -1023,62 +987,86 @@ jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t sz) {
     return jl_gc_big_alloc_inner(ptls, sz);
 }
 
-// Sweep list rooted at *pv, removing and freeing any unmarked objects.
-// Return pointer to last `next` field in the culled list.
-static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv) JL_NOTSAFEPOINT
+FORCE_INLINE void sweep_unlink_and_free(bigval_t *v) JL_NOTSAFEPOINT
 {
-    bigval_t *v = *pv;
+    gc_big_object_unlink(v);
+    gc_num.freed += v->sz;
+    jl_atomic_store_relaxed(&gc_heap_stats.heap_size, jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - v->sz);
+#ifdef MEMDEBUG
+    memset(v, 0xbb, v->sz);
+#endif
+    gc_invoke_callbacks(jl_gc_cb_notify_external_free_t, gc_cblist_notify_external_free, (v));
+    jl_free_aligned(v);
+}
+
+static bigval_t *sweep_list_of_young_bigvals(bigval_t *young) JL_NOTSAFEPOINT
+{
+    bigval_t *last_node = young;
+    bigval_t *v = young->next; // skip the sentinel
+    bigval_t *old = oldest_generation_of_bigvals;
+    int sweep_full = current_sweep_full; // don't load the global in the hot loop
     while (v != NULL) {
         bigval_t *nxt = v->next;
         int bits = v->bits.gc;
         int old_bits = bits;
         if (gc_marked(bits)) {
-            pv = &v->next;
             if (sweep_full || bits == GC_MARKED) {
                 bits = GC_OLD;
+                last_node = v;
+            }
+            else { // `bits == GC_OLD_MARKED`
+                assert(bits == GC_OLD_MARKED);
+                // reached oldest generation, move from young list to old list
+                gc_big_object_unlink(v);
+                gc_big_object_link(old, v);
             }
             v->bits.gc = bits;
         }
         else {
-            // Remove v from list and free it
-            *pv = nxt;
-            if (nxt)
-                nxt->prev = pv;
-            gc_num.freed += v->sz;
-            jl_atomic_store_relaxed(&gc_heap_stats.heap_size,
-                jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - (v->sz));
-#ifdef MEMDEBUG
-            memset(v, 0xbb, v->sz);
-#endif
-            gc_invoke_callbacks(jl_gc_cb_notify_external_free_t,
-                gc_cblist_notify_external_free, (v));
-            jl_free_aligned(v);
+            sweep_unlink_and_free(v);
         }
         gc_time_count_big(old_bits, bits);
         v = nxt;
     }
-    return pv;
+    return last_node;
 }
 
-static void sweep_big(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
+static void sweep_list_of_oldest_bigvals(bigval_t *young) JL_NOTSAFEPOINT
+{
+    bigval_t *v = oldest_generation_of_bigvals->next; // skip the sentinel
+    while (v != NULL) {
+        bigval_t *nxt = v->next;
+        assert(v->bits.gc == GC_OLD_MARKED);
+        v->bits.gc = GC_OLD;
+        gc_time_count_big(GC_OLD_MARKED, GC_OLD);
+        v = nxt;
+    }
+}
+
+static void sweep_big(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     gc_time_big_start();
     assert(gc_n_threads);
+    bigval_t *last_node_in_my_list = NULL;
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL)
-            sweep_big_list(sweep_full, &ptls2->gc_tls.heap.big_objects);
+        if (ptls2 != NULL) {
+            bigval_t *last_node = sweep_list_of_young_bigvals(ptls2->gc_tls.heap.young_generation_of_bigvals);
+            if (ptls == ptls2) {
+                last_node_in_my_list = last_node;
+            }
+        }
     }
-    if (sweep_full) {
-        bigval_t **last_next = sweep_big_list(sweep_full, &big_objects_marked);
-        // Move all survivors from big_objects_marked list to the big_objects list of this thread.
-        if (ptls->gc_tls.heap.big_objects)
-            ptls->gc_tls.heap.big_objects->prev = last_next;
-        *last_next = ptls->gc_tls.heap.big_objects;
-        ptls->gc_tls.heap.big_objects = big_objects_marked;
-        if (ptls->gc_tls.heap.big_objects)
-            ptls->gc_tls.heap.big_objects->prev = &ptls->gc_tls.heap.big_objects;
-        big_objects_marked = NULL;
+    if (current_sweep_full) {
+        sweep_list_of_oldest_bigvals(ptls->gc_tls.heap.young_generation_of_bigvals);
+        // move all nodes in `oldest_generation_of_bigvals` to my list of bigvals
+        assert(last_node_in_my_list != NULL);
+        assert(last_node_in_my_list->next == NULL);
+        last_node_in_my_list->next = oldest_generation_of_bigvals->next; // skip the sentinel
+        if (oldest_generation_of_bigvals->next != NULL) {
+            oldest_generation_of_bigvals->next->prev = last_node_in_my_list;
+        }
+        oldest_generation_of_bigvals->next = NULL;
     }
     gc_time_big_end();
 }
@@ -1527,7 +1515,7 @@ static void gc_sweep_other(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
     sweep_stack_pools();
     gc_sweep_foreign_objs();
     sweep_malloced_memory();
-    sweep_big(ptls, sweep_full);
+    sweep_big(ptls);
     jl_engine_sweep(gc_all_tls_states);
 }
 
@@ -3536,7 +3524,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // marking is over
 
     // Flush everything in mark cache
-    gc_sync_all_caches_nolock(ptls);
+    gc_sync_all_caches(ptls);
 
 
     gc_verify(ptls);
@@ -3928,7 +3916,9 @@ void jl_init_thread_heap(jl_ptls_t ptls)
         small_arraylist_new(&heap->free_stacks[i], 0);
     heap->mallocarrays = NULL;
     heap->mafreelist = NULL;
-    heap->big_objects = NULL;
+    heap->young_generation_of_bigvals = (bigval_t*)calloc_s(sizeof(bigval_t)); // sentinel
+    assert(gc_bigval_sentinel_tag != 0); // make sure the sentinel is initialized
+    heap->young_generation_of_bigvals->header = gc_bigval_sentinel_tag;
     arraylist_new(&heap->remset, 0);
     arraylist_new(&ptls->finalizers, 0);
     arraylist_new(&ptls->gc_tls.sweep_objs, 0);
@@ -3936,7 +3926,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_tls.gc_cache;
     gc_cache->perm_scanned_bytes = 0;
     gc_cache->scanned_bytes = 0;
-    gc_cache->nbig_obj = 0;
 
     // Initialize GC mark-queue
     jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
@@ -3974,12 +3963,16 @@ void jl_gc_init(void)
     JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&page_profile_lock);
-    uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
     uv_mutex_init(&gc_threads_lock);
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
     uv_mutex_init(&gc_queue_observer_lock);
+    void *_addr = (void*)calloc_s(1); // dummy allocation to get the sentinel tag
+    uintptr_t addr = (uintptr_t)_addr;
+    gc_bigval_sentinel_tag = addr;
+    oldest_generation_of_bigvals = (bigval_t*)calloc_s(sizeof(bigval_t)); // sentinel
+    oldest_generation_of_bigvals->header = gc_bigval_sentinel_tag;
 
     jl_gc_init_page();
     jl_gc_debug_init();
