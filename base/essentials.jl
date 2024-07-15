@@ -503,7 +503,7 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 """
 function tail(x::Tuple{Any,Vararg})
     y = argtail(x...)::Tuple
-    if x isa NTuple
+    if x isa NTuple  # help the type inference
         y = y::NTuple
     end
     y

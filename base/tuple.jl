@@ -344,7 +344,7 @@ function front(t::Tuple)
         throw(ArgumentError("Cannot call front on an empty tuple."))
     end
     r = _front(t...)::Tuple
-    if t isa NTuple
+    if t isa NTuple  # help the type inference
         r = r::NTuple
     end
     r
@@ -706,7 +706,7 @@ function circshift(x::Tuple{Any,Any,Any,Vararg{Any,N}}, shift::Integer) where {N
     len = N + 3
     j = mod1(shift, len)
     y = ntuple(k -> getindex(x, k-j+ifelse(k>j,0,len)), Val(len))::Tuple
-    if x isa NTuple
+    if x isa NTuple  # help the type inference
         y = y::NTuple
     end
     y
