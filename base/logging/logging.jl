@@ -195,16 +195,13 @@ _logmsg_docs = """
     @warn  message  [key=value | value ...]
     @error message  [key=value | value ...]
 
-    @save  value    [key=value | value ...]
-
     @logmsg level message [key=value | value ...]
 
 Create a log record with an informational `message`.  For convenience, four
 logging macros `@debug`, `@info`, `@warn` and `@error` are defined which log
-at the standard severity levels `Debug`, `Info`, `Warn` and `Error`.
-[`@save`](@ref) logs at the `Info` security level and sets the key `save`
-to `:variable`. `@logmsg` allows `level` to be set programmatically to any
-`LogLevel` or custom log level types.
+at the standard severity levels `Debug`, `Info`, `Warn` and `Error`. `@logmsg`
+allows `level` to be set programmatically to any `LogLevel` or custom log level
+types.
 
 `message` is an expression which is evaluated at log time and should evaluate
 to a human readable object. By convention, this object will be converted to a
@@ -288,17 +285,48 @@ macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 
 """
     @save variable
+    @save (variable | variable=expression)...
 
 Save `variable` for manual user inspection.
 
-When using the default [`ConsoleLogger`](@ref), Sets `Main.varaible` equal to the value of
-`variable` at the callsite.
+When using the default [`ConsoleLogger`](@ref), Sets `Main.varaible` equal to the result
+of `expression`, or the value of `variable` if `expression` is not provided.
 
 Behavior may be overridden by a custom logging backend. See [`@logmsg`](@ref) for more info.
+
+# Examples
+
+```jldoctest
+julia> function f(x)
+           x -= 1
+           @save x
+           1/x
+       end
+f (generic function with 1 method)
+
+julia> f(1)
+Inf
+
+julia> x
+0
+```
 """
-macro  save(exs...)
+macro save(exs...)
     save_arg = Expr(:(=), :save, QuoteNode(Symbol(first(exs))))
-    logmsg_code((@_sourceinfo)..., :Info,  exs..., save_arg)
+    Base.exprarray(:block, Any[
+            logmsg_code((@_sourceinfo)..., :Info,  get_save_args(ex)...)
+        for ex in exs])
+end
+get_key_value(arg::Symbol) = arg, arg
+function get_key_value(arg)
+    Base.isexpr(arg, :(=), 2) || throw(ArgumentError("Invalid @save argument: `$arg`. Try `@save x = $arg`."))
+    k = arg.args[1]
+    k isa Symbol || throw(ArgumentError("Invalid @save argument: `$arg`. The left hand side of assignment opperator must be a symbol. Try `@save x = $(arg.args[2])`."))
+    NTuple{2, Any}(arg.args)
+end
+function get_save_args(arg)
+    k, v = get_key_value(arg)
+    v, Expr(:(=), :save, QuoteNode(k::Symbol))
 end
 
 _log_record_ids = Set{Symbol}()
