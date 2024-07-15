@@ -489,7 +489,7 @@ module AtSaveTestModule
     for (expr_str, hint) in [
         ("@save 1+1",     "Invalid @save argument: `1 + 1`. Try `@save x = 1 + 1`."),
         ("@save a,b,c",   "Invalid @save argument: `(a, b, c)`. Try `@save x = (a, b, c)`."),
-        ("@save a,b=1,2", "Invalid @save argument: `(a, b) = (1, 2)`. The left hand side of assignment opperator must be a symbol. Try `@save x = (1, 2)`."),
+        ("@save a,b=1,2", "Invalid @save argument: `(a, b) = (1, 2)`. The left hand side of assignment operator must be a symbol. Try `@save x = (1, 2)`."),
     ]
         # Using Meta.parse instead of quoted exprs discards line numbers, which are out
         # of scope for this testset and would make the LoadError equality check fail
