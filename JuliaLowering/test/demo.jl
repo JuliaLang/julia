@@ -3,17 +3,26 @@
 using JuliaSyntax
 using JuliaLowering
 
-using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode, sourcetext, showprov
+using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode, sourcetext, showprov, lookup_binding
 
 using JuliaSyntaxFormatter
 
 # Extract variable kind for highlighting purposes
-function var_kind(ex)
+function var_kind(ctx, ex)
     id = get(ex, :var_id, nothing)
     if isnothing(id)
         return nothing
     end
-    return lookup_binding(ctx3, id).kind
+    return lookup_binding(ctx, id).kind
+end
+
+# Extract module of globals for highlighting
+function var_mod(ctx, ex)
+    id = get(ex, :var_id, nothing)
+    if isnothing(id)
+        return nothing
+    end
+    return lookup_binding(ctx, id).mod
 end
 
 function formatsrc(ex; kws...)
