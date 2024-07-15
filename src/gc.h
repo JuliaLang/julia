@@ -558,6 +558,7 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
     assert(sentinel_node->header == gc_bigval_sentinel_tag);
     assert(sentinel_node->prev == NULL);
     assert(node->header != gc_bigval_sentinel_tag);
+    // a new node gets linked in at the head of the list
     node->next = sentinel_node->next;
     node->prev = sentinel_node;
     if (sentinel_node->next != NULL) {
