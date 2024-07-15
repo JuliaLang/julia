@@ -1500,6 +1500,7 @@ mktempdir() do dir
     @test isdir(namepath)
     @test mkpath(namepath) == namepath
     @test isdir(namepath)
+    # issue 54826
     namepath_dirpath = joinpath(dir, "x", "y", "z", "")
     @test mkpath(namepath_dirpath) == namepath_dirpath
 end
