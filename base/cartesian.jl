@@ -295,7 +295,7 @@ end
     n = N::Int  # Can improve inference; see #54544
     (n >= 0) || throw(ArgumentError(LazyString("if statement length should be ≥ 0, got ", n)))
     if @generated
-        return :(@nif $N d -> condition(d) d -> expression(d) d -> else_expression(d))
+        :(@nif $N d -> condition(d) d -> expression(d) d -> else_expression(d))
     else
         for d = 1:(n - 1)
             if condition(d)
