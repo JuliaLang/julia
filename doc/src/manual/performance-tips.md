@@ -577,6 +577,45 @@ c = (b + 1.0f0)::Complex{T}
 does not hinder performance (but does not help either) since the compiler can determine the type of `c`
 at the time `k` is compiled.
 
+### Beware of suboptimal type assertion patterns
+
+Due to [limitations](https://github.com/JuliaLang/julia/issues/38274) in current versions
+of Julia, some [type assertion](@ref "Type Declarations") patterns do not help refine type
+inference, even though, intuitively, they should. An example:
+
+```julia
+function suboptimal_inference_example(v::Vector{Any})
+    x = first(v)
+    x::Int
+    # `x isa Int` is *not* known to be true in the rest of the method body
+    # ...
+end
+```
+
+Some possible workarounds:
+
+```julia
+function good_inference_example_1(v::Vector{Any})
+    x = first(v)::Int
+    # `x isa Int` is known to be true in the rest of the method body
+    # ...
+end
+
+function good_inference_example_2(v::Vector{Any})
+    x = first(v)
+    x = x::Int
+    # `x isa Int` is known to be true in the rest of the method body
+    # ...
+end
+
+function good_inference_example_3(v::Vector{Any})
+    x = first(v)
+    (x isa Int) || error("not `Int`")
+    # `x isa Int` is known to be true in the rest of the method body
+    # ...
+end
+```
+
 ### Be aware of when Julia avoids specializing
 
 As a heuristic, Julia avoids automatically [specializing](@ref man-method-specializations) on argument type parameters in three
@@ -1045,45 +1084,6 @@ you might write yourself, to the generic `push!` function in Julia Base) will ha
 or thousands of variants compiled for it. Each of these increases the size of the cache of compiled
 code, the length of internal lists of methods, etc. Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.
-
-### Beware of suboptimal type assertion patterns
-
-Due to [limitations](https://github.com/JuliaLang/julia/issues/38274) in current versions
-of Julia, some [type assertion](@ref "Type Declarations") patterns do not help refine type
-inference, even though, intuitively, they should. An example:
-
-```julia
-function suboptimal_inference_example(v::Vector{Any})
-    x = first(v)
-    x::Int
-    # `x isa Int` is *not* known to be true in the rest of the method body
-    # ...
-end
-```
-
-Some possible workarounds:
-
-```julia
-function good_inference_example_1(v::Vector{Any})
-    x = first(v)::Int
-    # `x isa Int` is known to be true in the rest of the method body
-    # ...
-end
-
-function good_inference_example_2(v::Vector{Any})
-    x = first(v)
-    x = x::Int
-    # `x isa Int` is known to be true in the rest of the method body
-    # ...
-end
-
-function good_inference_example_3(v::Vector{Any})
-    x = first(v)
-    (x isa Int) || error("not `Int`")
-    # `x isa Int` is known to be true in the rest of the method body
-    # ...
-end
-```
 
 ## Memory management and arrays
 
