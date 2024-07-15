@@ -3610,8 +3610,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
 
-    // TODO: Shouldn't some of these fields be atomic?
-    const static uint32_t task_constfields[1] = {0x00000080}; // Set fields 7 as constant
+    const static uint32_t task_constfields[1] = {0x00000040}; // Set fields 7 as constant
     jl_task_type->name->constfields = task_constfields;
 
     tv = jl_svec2(tvar("A"), tvar("R"));
