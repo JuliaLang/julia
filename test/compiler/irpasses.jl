@@ -1490,7 +1490,7 @@ let code = Any[
     slottypes = Any[Any, Union{Bool, Nothing}, Bool, Union{Bool, Nothing}]
     src = make_codeinfo(code; slottypes)
 
-    mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
+    mi = Core.MethodInstance()
     mi.specTypes = Tuple{}
     mi.def = Module()
 
