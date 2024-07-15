@@ -1674,7 +1674,7 @@ function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) wh
     length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
     isperm(perm) || throw(ArgumentError("input is not a permutation"))
     indsP = axes(P)
-    for i = 1:length(perm)
+    for i in eachindex(perm)
         indsP[i] == indsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
     nothing

@@ -503,7 +503,7 @@ end
 _findfirst_rec(f, i::Int, ::Tuple{}) = nothing
 _findfirst_rec(f, i::Int, t::Tuple) = (@inline; f(first(t)) ? i : _findfirst_rec(f, i+1, tail(t)))
 function _findfirst_loop(f::Function, t)
-    for i in 1:length(t)
+    for i in eachindex(t)
         f(t[i]) && return i
     end
     return nothing
@@ -537,7 +537,7 @@ function _isequal(t1::Tuple{Any,Vararg{Any}}, t2::Tuple{Any,Vararg{Any}})
     return isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
 end
 function _isequal(t1::Any32, t2::Any32)
-    for i = 1:length(t1)
+    for i in eachindex(t1, t2)
         if !isequal(t1[i], t2[i])
             return false
         end
@@ -568,7 +568,7 @@ function _eq_missing(t1::Tuple, t2::Tuple)
 end
 function _eq(t1::Any32, t2::Any32)
     anymissing = false
-    for i = 1:length(t1)
+    for i in eachindex(t1, t2)
         eq = (t1[i] == t2[i])
         if ismissing(eq)
             anymissing = true
