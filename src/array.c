@@ -39,6 +39,7 @@ JL_DLLEXPORT int jl_array_validate_dims(size_t *nel, uint32_t ndims, size_t *dim
     return 0;
 }
 
+#ifndef JL_NDEBUG
 static inline int is_ntuple_long(jl_value_t *v)
 {
     if (!jl_is_tuple(v))
@@ -52,6 +53,7 @@ static inline int is_ntuple_long(jl_value_t *v)
     }
     return 1;
 }
+#endif
 
 #define jl_array_elsize(a) (((jl_datatype_t*)jl_typetagof((a)->ref.mem))->layout->size)
 
