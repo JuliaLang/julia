@@ -514,6 +514,23 @@ function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::JuliaSyntax.ParseStr
     SyntaxTree(JuliaSyntax.build_tree(SyntaxNode, stream; kws...))
 end
 
+#-------------------------------------------------------------------------------
+function JuliaSyntax.expr_leaf_val(ex::SyntaxTree)
+    name = get(ex, :name_val, nothing)
+    if !isnothing(name)
+        Symbol(name)
+    else
+        ex.value
+    end
+end
+
+function JuliaSyntax.sourcefile(ex::SyntaxTree)
+    sourceref(ex).file
+end
+
+function Base.Expr(ex::SyntaxTree)
+    JuliaSyntax.to_expr(ex)
+end
 
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
