@@ -289,7 +289,7 @@ macro error(exs...) logmsg_code((@_sourceinfo)..., :Error, exs...) end
 
 Save `variable` for manual user inspection.
 
-When using the default [`ConsoleLogger`](@ref), Sets `Main.varaible` equal to the result
+When using the default [`ConsoleLogger`](@ref), Sets `Main.variable` equal to the result
 of `expression`, or the value of `variable` if `expression` is not provided.
 
 Behavior may be overridden by a custom logging backend. See [`@logmsg`](@ref) for more info.
@@ -321,7 +321,7 @@ get_key_value(arg::Symbol) = arg, arg
 function get_key_value(arg)
     Base.isexpr(arg, :(=), 2) || throw(ArgumentError("Invalid @save argument: `$arg`. Try `@save x = $arg`."))
     k = arg.args[1]
-    k isa Symbol || throw(ArgumentError("Invalid @save argument: `$arg`. The left hand side of assignment opperator must be a symbol. Try `@save x = $(arg.args[2])`."))
+    k isa Symbol || throw(ArgumentError("Invalid @save argument: `$arg`. The left hand side of assignment operator must be a symbol. Try `@save x = $(arg.args[2])`."))
     NTuple{2, Any}(arg.args)
 end
 function get_save_args(arg)
