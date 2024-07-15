@@ -31,8 +31,8 @@ typedef struct {
     struct _mallocarray_t *mallocarrays;
     struct _mallocarray_t *mafreelist;
 
-    // variables for tracking big objects
-    struct _bigval_t *big_objects;
+    // variable for tracking young (i.e. not in `GC_OLD_MARKED`/last generation) large objects
+    struct _bigval_t *young_generation_of_bigvals;
 
     // lower bound of the number of pointers inside remembered values
     int remset_nptr;
