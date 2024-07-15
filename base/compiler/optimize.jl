@@ -1410,9 +1410,9 @@ end
 
 function inline_cost(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
     bodycost = 0
-    for i = 1:length(ir.stmts)
-        stmt = ir[SSAValue(i)][:stmt]
-        thiscost = statement_or_branch_cost(stmt, i, ir, ir.sptypes, params)
+    for i in eachindex(ir)
+        stmt = ir[i][:stmt]
+        thiscost = statement_or_branch_cost(stmt, i.id, ir, ir.sptypes, params)
         bodycost = plus_saturate(bodycost, thiscost)
         if bodycost > cost_threshold
             return MAX_INLINE_COST

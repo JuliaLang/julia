@@ -497,6 +497,8 @@ function setindex!(x::IRCode, repl::Union{Instruction, Nothing, AnySSAValue}, s:
     return x
 end
 
+eachindex(ir::IRCode) = (SSAValue(i) for i in 1:length(ir.stmts))
+
 mutable struct UseRefIterator
     stmt::Any
     relevant::Bool
