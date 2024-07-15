@@ -34,7 +34,6 @@ function _cong(max::UInt64, seed::UInt64)
         return UInt64(0), seed
     end
     mask = typemax(UInt64)
-
     max -= 1
     mask >>= leading_zeros(max | 1)
 
@@ -42,7 +41,7 @@ function _cong(max::UInt64, seed::UInt64)
     while true
         seed = UInt64(69069) * seed + UInt64(362437)
         x = seed & mask
-        x > mask || break
+        x > max || break
     end
     return x, seed
 end
