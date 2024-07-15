@@ -1053,9 +1053,10 @@ of Julia, some [type assertion](@ref "Type Declarations") patterns do not help r
 inference, even though, intuitively, they should. An example:
 
 ```julia
-function suboptimal_inference_example(x)
-    x::Integer
-    # `x isa Integer` is *not* known to be true in the rest of the method body
+function suboptimal_inference_example(v::Vector{Any})
+    x = first(v)
+    x::Int
+    # `x isa Int` is *not* known to be true in the rest of the method body
     # ...
 end
 ```
@@ -1063,15 +1064,23 @@ end
 Some possible workarounds:
 
 ```julia
-function good_inference_example_1(x)
-    (x isa Integer) || error("not integer")
-    # `x isa Integer` is known to be true in the rest of the method body
+function good_inference_example_1(v::Vector{Any})
+    x = first(v)::Int
+    # `x isa Int` is known to be true in the rest of the method body
     # ...
 end
 
-function good_inference_example_2(x)
-    x = x::Integer
-    # `x isa Integer` is known to be true in the rest of the method body
+function good_inference_example_2(v::Vector{Any})
+    x = first(v)
+    x = x::Int
+    # `x isa Int` is known to be true in the rest of the method body
+    # ...
+end
+
+function good_inference_example_3(v::Vector{Any})
+    x = first(v)
+    (x isa Int) || error("not `Int`")
+    # `x isa Int` is known to be true in the rest of the method body
     # ...
 end
 ```
