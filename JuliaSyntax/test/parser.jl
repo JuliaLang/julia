@@ -212,6 +212,7 @@ tests = [
         "-0b10010" => "(call-pre - 0x12)"
         "-0o22"    => "(call-pre - 0x12)"
         "-0x12"    => "(call-pre - 0x12)"
+        "-1::T"    => "(::-i -1 T)"
         # Standalone dotted operators are parsed as (|.| op)
         ".+"   =>  "(. +)"
         ".+\n" =>  "(. +)"

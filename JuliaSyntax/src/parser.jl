@@ -1211,6 +1211,7 @@ function parse_unary(ps::ParseState)
                 # -2*x    ==>  (call-i -2 * x)
                 # +0xff   ==>  0xff
                 bump_glue(ps, kind(t2), EMPTY_FLAGS)
+                parse_factor_with_initial_ex(ps, mark)
             end
             return
         end
