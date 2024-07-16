@@ -221,6 +221,28 @@ if !test_relocated_depot
         end
     end
 
+    @testset "@__RELOCDIR__" begin
+        @test Base.resolve_relocdir(missing, @__DIR__) == @__DIR__
+        # substitute for @__RELOCDIR__ which resolves at parse time where DEPOT_PATH is fixed
+        __relocdir__() = Base.resolve_relocdir("", @__DIR__)
+        test_harness() do
+            # we are outside a depot
+            empty!(DEPOT_PATH)
+            @test __relocdir__() == @__DIR__
+            # we are inside a depot
+            push!(DEPOT_PATH, @__DIR__)
+            @test __relocdir__() == @__DIR__
+            # we moved to a new depot
+            dir = mktempdir() do dir
+                pushfirst!(DEPOT_PATH, dir)
+                @test __relocdir__() == dir
+                @test __relocdir__() != @__DIR__
+            end
+            # dir no longer exists
+            @test __relocdir__() != dir
+            @test __relocdir__() == @__DIR__
+        end
+    end
 
 else
 
