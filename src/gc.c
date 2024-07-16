@@ -3957,16 +3957,13 @@ void jl_free_thread_gc_state(jl_ptls_t ptls)
     arraylist_free(&mq->reclaim_set);
 }
 
-void jl_spawn_gc_threads(void)
+void jl_start_gc_threads(void)
 {
     int nthreads = jl_atomic_load_relaxed(&jl_n_threads);
     int ngcthreads = jl_n_gcthreads;
     int nmutator_threads = nthreads - ngcthreads;
     uv_thread_t uvtid;
-    for (int i = 1; i < nthreads; ++i) {
-        if (i < nmutator_threads) {
-            continue;
-        }
+    for (int i = nmutator_threads; i < nthreads; ++i) {
         jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;

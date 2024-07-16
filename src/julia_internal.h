@@ -960,7 +960,7 @@ extern JL_DLLEXPORT ssize_t jl_tls_offset;
 extern JL_DLLEXPORT const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
-void jl_spawn_gc_threads(void);
+void jl_start_gc_threads(void);
 
 // Whether the GC is running
 extern uv_mutex_t safepoint_lock;
