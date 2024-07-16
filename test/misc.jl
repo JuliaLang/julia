@@ -321,23 +321,32 @@ v11801, t11801 = @timed sin(1)
 @test names(@__MODULE__, all = true) == names_before_timing
 
 redirect_stdout(devnull) do # suppress time prints
+
 # Accepted @time argument formats
 @test @time true
 @test @time "message" true
+@test @time 1 true
 let msg = "message"
     @test @time msg true
 end
 let foo() = "message"
     @test @time foo() true
 end
+let foo() = 1
+    @test @time foo() true
+end
 
 # Accepted @timev argument formats
 @test @timev true
 @test @timev "message" true
+@test @timev 1 true
 let msg = "message"
     @test @timev msg true
 end
 let foo() = "message"
+    @test @timev foo() true
+end
+let foo() = 1
     @test @timev foo() true
 end
 
