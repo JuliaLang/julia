@@ -1230,7 +1230,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 # by `stmt.args`. Which have :scope set. In practice, the frontend
                 # does emit these in order, so we could simply go to the last one,
                 # but we want to avoid making that semantic assumption.
-                for scope in stmt.args
+                for i in eachindex(stmt.args)
+                    scope = stmt.args[i]
                     scope === nothing && continue
                     enter = compact[scope][:inst]
                     @assert isa(enter, EnterNode)
