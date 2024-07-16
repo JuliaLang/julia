@@ -1082,7 +1082,7 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
             ensure_initialized()
-            ccall(($(string(cname, :_free)), libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
+            ccall(($(string(cname, :_free)), libgit2), Cvoid, (Ptr{Cvoid},), obj)
             obj.ptr = C_NULL
             if Threads.atomic_sub!(REFCOUNT, 1) == 1
                 # will the last finalizer please turn out the lights?
