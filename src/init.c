@@ -899,6 +899,8 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_n_threads_per_pool[1] = 0;
     }
     jl_start_threads();
+    jl_start_gc_threads();
+    uv_barrier_wait(&thread_init_done);
 
     jl_init_heartbeat();
 
