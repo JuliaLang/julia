@@ -224,13 +224,16 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
     if isdefined(result, :ci)
         ci = result.ci
         inferred_result = nothing
+        edges = Core.svec() # This should be a computed input, for now it is approximated (badly) here
         relocatability = 0x1
         const_flag = is_result_constabi_eligible(result)
         if !can_discard_trees || (is_cached(caller) && !const_flag)
             inferred_result = transform_result_for_cache(interp, result.linfo, result.valid_worlds, result, can_discard_trees)
             relocatability = 0x0
             if inferred_result isa CodeInfo
-                edges = inferred_result.debuginfo
+                edges = ccall(:jl_ir_edges_legacy, Any, (Any,), inferred_result.code)
+                inferred_result.edges = edges
+                di = inferred_result.debuginfo
                 uncompressed = inferred_result
                 inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, can_discard_trees)
                 result.is_src_volatile |= uncompressed !== inferred_result
@@ -245,14 +248,14 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState;
             end
         end
         # n.b. relocatability = isa(inferred_result, String) && inferred_result[end]
-        if !@isdefined edges
-            edges = DebugInfo(result.linfo)
+        if !@isdefined di
+            di = DebugInfo(result.linfo)
         end
-        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any),
+        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, UInt8, Any, Any),
                 ci, inferred_result, const_flag,
                 first(result.valid_worlds), last(result.valid_worlds),
                 encode_effects(result.ipo_effects), result.analysis_results,
-                relocatability, edges)
+                relocatability, di, edges)
         engine_reject(interp, ci)
     end
     return nothing
@@ -338,7 +341,6 @@ function is_result_constabi_eligible(result::InferenceResult)
     result_type = result.result
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
-
 
 function transform_result_for_cache(interp::AbstractInterpreter,
         ::MethodInstance, valid_worlds::WorldRange, result::InferenceResult,
@@ -534,7 +536,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
         append!(s_edges, edges)
         empty!(edges)
     end
-    if me.src.edges !== nothing
+    if me.src.edges !== nothing && me.src.edges !== Core.svec()
         append!(s_edges, me.src.edges::Vector)
     end
     # inspect whether our inference had a limited result accuracy,
@@ -619,11 +621,12 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
             const_flags = 0x00
         end
         relocatability = 0x0
-        edges = nothing
-        ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any),
+        di = nothing
+        edges = Core.svec()
+        ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
                 result.ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, const_flags,
                 first(result.valid_worlds), last(result.valid_worlds),
-                encode_effects(result.ipo_effects), result.analysis_results, edges)
+                encode_effects(result.ipo_effects), result.analysis_results, di, edges)
         if is_cached(me)
             cached_results = cache_result!(me.interp, me.result)
             if !cached_results
@@ -974,6 +977,7 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.debuginfo = DebugInfo(mi)
     tree.ssaflags = UInt32[0]
     tree.rettype = Core.Typeof(val)
+    tree.edges = Core.svec()
     set_inlineable!(tree, true)
     tree.parent = mi
     return tree
@@ -991,7 +995,7 @@ function codeinstance_for_const_with_code(interp::AbstractInterpreter, code::Cod
     return CodeInstance(code.def, cache_owner(interp), code.rettype, code.exctype, code.rettype_const, src,
         Int32(0x3), code.min_world, code.max_world,
         code.ipo_purity_bits, code.analysis_results,
-        code.relocatability, src.debuginfo)
+        code.relocatability, src.debuginfo, src.edges)
 end
 
 result_is_constabi(interp::AbstractInterpreter, result::InferenceResult) =
@@ -1153,7 +1157,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
             src isa CodeInfo || return nothing
             return CodeInstance(mi, cache_owner(interp), Any, Any, nothing, src, Int32(0),
                 get_inference_world(interp), get_inference_world(interp),
-                UInt32(0), nothing, UInt8(0), src.debuginfo)
+                UInt32(0), nothing, UInt8(0), src.debuginfo, src.edges)
         end
     end
     ci = engine_reserve(interp, mi)

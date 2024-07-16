@@ -446,6 +446,7 @@ typedef struct _jl_code_instance_t {
     // - null, indicating that inference was not yet completed or did not succeed
     _Atomic(jl_value_t *) inferred;
     _Atomic(jl_debuginfo_t *) debuginfo; // stored information about edges from this object (set once, with a happens-before both source and invoke)
+    _Atomic(jl_svec_t *) edges; // forward edge info
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results

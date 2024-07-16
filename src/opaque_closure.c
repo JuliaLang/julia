@@ -112,8 +112,8 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         sigtype = jl_argtype_with_function_type((jl_value_t*)oc_type, (jl_value_t*)argt);
         jl_method_instance_t *mi_generic = jl_specializations_get_linfo(jl_opaque_closure_method, sigtype, jl_emptysvec);
 
-        // OC wrapper methods are not world dependent
-        ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL);
+        // OC wrapper methods are not world dependent and have no edges or other info
+        ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL, NULL);
         if (!jl_atomic_load_acquire(&ci->invoke))
             jl_compile_codeinst(ci);
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
@@ -144,7 +144,8 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
 {
     jl_value_t *root = NULL, *sigtype = NULL;
     jl_code_instance_t *inst = NULL;
-    JL_GC_PUSH3(&root, &sigtype, &inst);
+    jl_svec_t *edges = NULL;
+    JL_GC_PUSH4(&root, &sigtype, &inst, &edges);
     root = jl_box_long(lineno);
     root = jl_new_struct(jl_linenumbernode_type, root, file);
     jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, ci, isva, isinferred);
@@ -158,8 +159,11 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
         jl_value_t *argslotty = jl_array_ptr_ref(ci->slottypes, 0);
         sigtype = jl_argtype_with_function_type(argslotty, (jl_value_t*)argt);
         jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)root, sigtype, jl_emptysvec);
+        edges = (jl_svec_t*)ci->edges;
+        if (!jl_is_svec(edges))
+            edges = jl_emptysvec; // OC doesn't really have edges, so just drop them for now
         inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
-            0, world, world, 0, jl_nothing, 0, ci->debuginfo);
+            0, world, world, 0, jl_nothing, 0, ci->debuginfo, edges);
         jl_mi_cache_insert(mi, inst);
     }
 
