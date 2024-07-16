@@ -65,11 +65,11 @@ struct InliningEdgeTracker
         new(state.edges, invokesig)
 end
 
-function add_inlining_backedge!((; edges, invokesig)::InliningEdgeTracker, mi::MethodInstance)
+function add_inlining_edge!((; edges, invokesig)::InliningEdgeTracker, mi::MethodInstance)
     if invokesig === nothing
-        push!(edges, mi)
+        add_one_edge!(edges, mi)
     else # invoke backedge
-        push!(edges, invoke_signature(invokesig), mi)
+        add_invoke_edge!(edges, invoke_signature(invokesig), mi)
     end
     return nothing
 end
@@ -794,8 +794,8 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
             return nothing
         end
     end
-    add_inlining_backedge!(et, mi) # to the dispatch lookup
-    mi_invoke !== mi && push!(et.edges, method.sig, mi_invoke) # add_inlining_backedge to the invoke call, if that is different
+    add_inlining_edge!(et, mi) # to the dispatch lookup
+    mi_invoke !== mi && add_invoke_edge!(et.edges, method.sig, mi_invoke) # add_inlining_edge to the invoke call, if that is different
     return InvokeCase(mi_invoke, effects, info)
 end
 
@@ -850,7 +850,7 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
         inferred_result = get_cached_result(state, mi)
     end
     if inferred_result isa ConstantCase
-        add_inlining_backedge!(et, mi)
+        add_inlining_edge!(et, mi)
         return inferred_result
     end
     if inferred_result isa InferredResult
@@ -874,7 +874,7 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
         return compileable_specialization(mi, effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
-    add_inlining_backedge!(et, mi)
+    add_inlining_edge!(et, mi)
     ir = inferred_result isa CodeInstance  ? retrieve_ir_for_inlining(inferred_result, src) :
                                              retrieve_ir_for_inlining(mi, src, preserve_local_sources)
     return InliningTodo(mi, ir, effects)
@@ -891,7 +891,7 @@ function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::U
 
     cached_result = get_cached_result(state, mi)
     if cached_result isa ConstantCase
-        add_inlining_backedge!(et, mi)
+        add_inlining_edge!(et, mi)
         return cached_result
     end
     if cached_result isa InferredResult
@@ -908,7 +908,7 @@ function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::U
     src_inlining_policy(state.interp, src, info, flag) || return nothing
     ir = cached_result isa CodeInstance  ? retrieve_ir_for_inlining(cached_result, src) :
                                            retrieve_ir_for_inlining(mi, src, preserve_local_sources)
-    add_inlining_backedge!(et, mi)
+    add_inlining_edge!(et, mi)
     return InliningTodo(mi, ir, effects)
 end
 
@@ -1456,7 +1456,7 @@ function semiconcrete_result_item(result::SemiConcreteResult,
         return compileable_specialization(mi, result.effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
-    add_inlining_backedge!(et, mi)
+    add_inlining_edge!(et, mi)
     preserve_local_sources = OptimizationParams(state.interp).preserve_local_sources
     ir = retrieve_ir_for_inlining(mi, result.ir, preserve_local_sources)
     return InliningTodo(mi, ir, result.effects)

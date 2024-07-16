@@ -2979,30 +2979,14 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     else
         (; valid_worlds, applicable) = matches
         update_valid_age!(sv, valid_worlds)
-
-        # also need an edge to the method table in case something gets
-        # added that did not intersect with any existing method
-        if isa(matches, MethodMatches)
-            matches.fullmatch || add_mt_backedge!(sv, matches.mt, atype)
-        else
-            for (thisfullmatch, mt) in zip(matches.fullmatches, matches.mts)
-                thisfullmatch || add_mt_backedge!(sv, mt, atype)
-            end
-        end
+        add_edges!(sv.edges, matches.info)
 
         napplicable = length(applicable)
         if napplicable == 0
             rt = Const(false) # never any matches
         else
             rt = Const(true) # has applicable matches
-            for i in 1:napplicable
-                match = applicable[i]::MethodMatch
-                edge = specialize_method(match)::MethodInstance
-                add_backedge!(sv, edge)
-            end
-
-            if isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
-                    (!all(matches.fullmatches) || any_ambig(matches))
+            if !matches.fullmatch || any_ambig(matches)
                 # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
                 rt = Bool
             end
@@ -3042,11 +3026,10 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     update_valid_age!(sv, valid_worlds)
     if match === nothing
         rt = Const(false)
-        add_mt_backedge!(sv, mt, types) # this should actually be an invoke-type backedge
+        add_edges!(sv.edges, MethodMatchInfo(MethodLookupResult(Any[], valid_worlds, true), types, mt)) # XXX: this should actually be an invoke-type backedge
     else
         rt = Const(true)
-        edge = specialize_method(match)::MethodInstance
-        add_invoke_backedge!(sv, types, edge)
+        add_edges!(sv.edges, InvokeCallInfo(match, nothing, types))
     end
     return CallMeta(rt, Any, EFFECTS_TOTAL, NoCallInfo())
 end

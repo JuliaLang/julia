@@ -868,37 +868,6 @@ typedef enum {
 #define checked_size(data, macro_size) \
     (declaration_context(static_assert(sizeof(data) == macro_size, #macro_size " does not match written size")), data)
 
-// n.b. this does not compute edges correctly, but is just a temporary legacy helper while porting
-JL_DLLEXPORT jl_value_t *jl_ir_edges_legacy(jl_array_t *src)
-{
-    arraylist_t edges;
-    arraylist_new(&edges, 0);
-    for (size_t i = 0; i < jl_array_dim0(src); i++) {
-        jl_value_t *v = jl_array_ptr_ref(src, i);
-        if (jl_is_expr(v)) {
-            jl_expr_t *e = (jl_expr_t*)v;
-            if (e->head == jl_assign_sym && jl_expr_nargs(e) == 2 && jl_is_expr(jl_exprarg(e, 1))) {
-                e = (jl_expr_t*)jl_exprarg(e, 1);
-            }
-            if (e->head == jl_invoke_sym) {
-                jl_value_t *target = jl_array_ptr_ref(e->args, 0);
-                if (jl_is_code_instance(target) || jl_is_method_instance(target)) {
-                    size_t j;
-                    for (j = 0; j < edges.len; j++)
-                        if (edges.items[j] == (void*)target)
-                            break;
-                    if (j == edges.len)
-                        arraylist_push(&edges, target);
-                }
-            }
-        }
-    }
-    jl_value_t *e = jl_f_svec(NULL, (jl_value_t**)edges.items, edges.len);
-    arraylist_free(&edges);
-    return e;
-}
-
-
 JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 {
     JL_TIMING(AST_COMPRESS, AST_COMPRESS);

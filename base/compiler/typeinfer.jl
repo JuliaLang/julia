@@ -211,28 +211,28 @@ end
 function finish!(interp::AbstractInterpreter, caller::InferenceState;
                  can_discard_trees::Bool=may_discard_trees(interp))
     result = caller.result
-    valid_worlds = result.valid_worlds
-    if last(valid_worlds) >= get_world_counter()
-        # if we aren't cached, we don't need this edge
-        # but our caller might, so let's just make it anyways
-        store_backedges(result, caller.stmt_edges[1])
-    end
     opt = result.src
     if opt isa OptimizationState
         result.src = opt = ir_to_codeinf!(opt)
     end
+    valid_worlds = result.valid_worlds
+    if last(valid_worlds) >= get_world_counter()
+        # if we aren't cached, we don't need this edge
+        # but our caller might, so let's just make it anyways
+        store_backedges(result, caller.edges)
+    end
+    isa(caller.linfo.def, Method) || empty!(caller.edges) # don't add backedges to toplevel method instance
     if isdefined(result, :ci)
         ci = result.ci
         inferred_result = nothing
-        edges = Core.svec() # This should be a computed input, for now it is approximated (badly) here
+        edges = Core.svec(caller.edges...)
         relocatability = 0x1
         const_flag = is_result_constabi_eligible(result)
         if !can_discard_trees || (is_cached(caller) && !const_flag)
             inferred_result = transform_result_for_cache(interp, result.linfo, result.valid_worlds, result, can_discard_trees)
+            # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
             relocatability = 0x0
             if inferred_result isa CodeInfo
-                edges = ccall(:jl_ir_edges_legacy, Any, (Any,), inferred_result.code)
-                inferred_result.edges = edges
                 di = inferred_result.debuginfo
                 uncompressed = inferred_result
                 inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, can_discard_trees)
@@ -529,22 +529,6 @@ end
 function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
     @assert isempty(me.ip)
-    s_edges = get_stmt_edges!(me, 1)
-    for i = 2:length(me.stmt_edges)
-        isassigned(me.stmt_edges, i) || continue
-        edges = me.stmt_edges[i]
-        append!(s_edges, edges)
-        empty!(edges)
-    end
-        #s_edges_new = compute_edges(me)
-        #println(Any[z isa MethodTable ? z.name : z for z in s_edges_new])
-        #if length(s_edges) != length(s_edges_new) || !all(i -> isassigned(s_edges, i) ? isassigned(s_edges_new, i) && s_edges_new[i] === s_edges[i] : !isassigned(s_edges_new, i), length(s_edges))
-        #    println(sizehint!(s_edges, length(s_edges)))
-        #    println(sizehint!(s_edges_new, length(s_edges_new)))
-        #end
-    if me.src.edges !== nothing && me.src.edges !== Core.svec()
-        append!(s_edges, me.src.edges::Vector)
-    end
     # inspect whether our inference had a limited result accuracy,
     # else it may be suitable to cache
     bestguess = me.bestguess = cycle_fix_limited(me.bestguess, me)
@@ -569,6 +553,9 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
     me.src.rettype = widenconst(ignorelimited(bestguess))
     me.src.min_world = first(me.valid_worlds)
     me.src.max_world = last(me.valid_worlds)
+    if isa(me.linfo.def, Method) # don't add backedges to toplevel method instance
+        compute_edges!(me)
+    end
 
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
@@ -599,6 +586,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
     end
 
     maybe_validate_code(me.linfo, me.src, "inferred")
+    isa(me.linfo.def, Method) || empty!(me.edges) # don't add backedges to toplevel method instance
 
     # finish populating inference results into the CodeInstance if possible, and maybe cache that globally for use elsewhere
     if isdefined(result, :ci) && !limited_ret
@@ -628,7 +616,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
         end
         relocatability = 0x0
         di = nothing
-        edges = Core.svec()
+        edges = Core.svec(me.edges...)
         ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
                 result.ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, const_flags,
                 first(result.valid_worlds), last(result.valid_worlds),
@@ -661,7 +649,8 @@ end
 
 add_edges!(edges::Vector{Any}, info::MethodResultPure) = add_edges!(edges, info.info)
 add_edges!(edges::Vector{Any}, info::ConstCallInfo) = add_edges!(edges, info.call)
-add_edges!(edges::Vector{Any}, info::OpaqueClosureCreateInfo) = nothing # TODO(jwn)
+add_edges!(edges::Vector{Any}, info::OpaqueClosureCreateInfo) = nothing # merely creating the object does not imply edges
+add_edges!(edges::Vector{Any}, info::OpaqueClosureCallInfo) = nothing # TODO: inference appears to have always mis-accounted for these backedges
 add_edges!(edges::Vector{Any}, info::ReturnTypeCallInfo) = add_edges!(edges, info.info)
 function add_edges!(edges::Vector{Any}, info::ApplyCallInfo)
     add_edges!(edges, info.call)
@@ -672,23 +661,24 @@ function add_edges!(edges::Vector{Any}, info::ApplyCallInfo)
         end
     end
 end
-add_edges!(edges::Vector{Any}, info::ModifyOpInfo) = add_edges!(edges, info.call)
+add_edges!(edges::Vector{Any}, info::ModifyOpInfo) = add_edges!(edges, info.info)
 add_edges!(edges::Vector{Any}, info::UnionSplitInfo) = for split in info.matches; add_edges!(edges, split); end
 add_edges!(edges::Vector{Any}, info::UnionSplitApplyCallInfo) = for split in info.infos; add_edges!(edges, split); end
-add_edges!(edges::Vector{Any}, info::FinalizerInfo) = nothing
+add_edges!(edges::Vector{Any}, info::FinalizerInfo) = nothing # merely allocating a finalizer does not imply edges (unless it gets inlined later)
 add_edges!(edges::Vector{Any}, info::NoCallInfo) = nothing
 function add_edges!(edges::Vector{Any}, info::MethodMatchInfo)
     matches = info.results.matches
-    #if length(matches) == 1 && !info.results.ambig && (matches[end]::Core.MethodMatch).fully_covers
-    #    push!(edges, specialize_method(matches[1]))
-    #elseif isempty(matches) || info.results.ambig || !(matches[end]::Core.MethodMatch).fully_covers
-    #else
-    #    push!(edges, length(matches))
-    #    for m in matches
-    #        push!(edges, specialize_method(m))
-    #    end
-    #end
+    if length(matches) != 1
+        # TODO: add check for whether this info already exists in the edges
+        push!(edges, length(matches))
+        push!(edges, info.atype)
+    end
+    for m in matches
+        mi = specialize_method(m)
+        length(matches) == 1 ? add_one_edge!(edges, mi) : push!(edges, mi)
+    end
     if isempty(matches) || !(matches[end]::Core.MethodMatch).fully_covers
+        # add legacy-style missing backedge info also
         exists = false
         for i in 1:length(edges)
             if edges[i] === info.mt && edges[i + 1] == info.atype
@@ -701,37 +691,34 @@ function add_edges!(edges::Vector{Any}, info::MethodMatchInfo)
             push!(edges, info.atype)
         end
     end
-    for m in matches
-        mi = specialize_method(m)
-        exists = false
-        for i in 1:length(edges)
-            if edges[i] === mi && !(i > 1 && edges[i - 1] isa Type)
-                exists = true
-                break
-            end
-        end
-        exists || push!(edges, mi)
-    end
+    nothing
 end
-function add_edges!(edges::Vector{Any}, info::InvokeCallInfo)
-    #push!(edges, 1)
-    mi = specialize_method(info.match)
-    exists = false
+add_edges!(edges::Vector{Any}, info::InvokeCallInfo) = add_invoke_edge!(edges, info.atype, specialize_method(info.match))
+
+function add_invoke_edge!(edges::Vector{Any}, @nospecialize(atype), mi::MethodInstance)
     for i in 2:length(edges)
-        if edges[i] === mi && edges[i - 1] isa Type && edges[i - 1] == info.atype
-            exists = true
-            break
+        if edges[i] === mi && edges[i - 1] isa Type && edges[i - 1] == atype
+            return
         end
     end
-    if !exists
-        push!(edges, info.atype)
-        push!(edges, mi)
-    end
+    push!(edges, atype)
+    push!(edges, mi)
     nothing
 end
 
-function compute_edges(sv::InferenceState)
-    edges = []
+function add_one_edge!(edges::Vector{Any}, mi::MethodInstance)
+    for i in 1:length(edges)
+        if edges[i] === mi && !(i > 1 && edges[i - 1] isa Type)
+            return
+        end
+    end
+    push!(edges, mi)
+    nothing
+end
+
+
+function compute_edges!(sv::InferenceState)
+    edges = sv.edges
     for i in 1:length(sv.stmt_info)
         info = sv.stmt_info[i]
         #rt = sv.ssavaluetypes[i]
@@ -741,7 +728,10 @@ function compute_edges(sv::InferenceState)
         #end
         add_edges!(edges, info)
     end
-    return edges
+    if sv.src.edges !== nothing && sv.src.edges !== Core.svec()
+        append!(edges, sv.src.edges)
+    end
+    nothing
 end
 
 
