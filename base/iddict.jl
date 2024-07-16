@@ -175,7 +175,7 @@ function ht_keyindex2!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     return keyindex[]
 end
 
-@propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, key:K, keyindex::Int) where {K, V}
+@propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, key::K, keyindex::Int) where {K, V}
     d.ht[keyindex] = key
     d.ht[keyindex+1] = val
     d.count += 1
