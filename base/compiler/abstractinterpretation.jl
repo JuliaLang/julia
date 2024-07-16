@@ -2705,6 +2705,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :gc_preserve_end || ehead === :leave || ehead === :pop_exception ||
            ehead === :global || ehead === :popaliasscope
         return RTEffects(Nothing, Union{}, Effects(EFFECTS_TOTAL; effect_free=EFFECT_FREE_GLOBALLY))
+    elseif ehead === :globaldecl
+        return RTEffects(Nothing, Any, EFFECTS_UNKNOWN)
     elseif ehead === :thunk
         return RTEffects(Any, Any, EFFECTS_UNKNOWN)
     end
