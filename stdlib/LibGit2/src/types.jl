@@ -1115,10 +1115,11 @@ end
 function Base.close(obj::GitSignature)
     if obj.ptr != C_NULL
         ensure_initialized()
-        ccall((:git_signature_free, libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
+        ccall((:git_signature_free, libgit2), Cvoid, (Ptr{SignatureStruct},), obj)
         obj.ptr = C_NULL
     end
 end
+Base.unsafe_convert(::Type{Ptr{SignatureStruct}}, obj::GitSignature) = obj.ptr
 
 # Structure has the same layout as SignatureStruct
 mutable struct Signature
