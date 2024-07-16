@@ -483,7 +483,7 @@ Modifying the key-space of the underlying data may invalidate this object.
 """
 Pairs
 
-argtail(x, rest...) = rest
+argtail((@nospecialize x), rest...) = rest
 
 """
     tail(x::Tuple)::Tuple
