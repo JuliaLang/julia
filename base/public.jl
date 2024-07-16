@@ -66,7 +66,7 @@ public
     ispublic,
     remove_linenums!,
 
-# Opperators
+# Operators
     operator_associativity,
     operator_precedence,
     isbinaryoperator,
