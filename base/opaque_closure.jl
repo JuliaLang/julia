@@ -43,7 +43,7 @@ using Core: CodeInfo
 
 function compute_ir_rettype(ir::IRCode)
     rt = Union{}
-    for i in eachindex(ir)
+    for i in Core.Compiler.eachindex(ir)
         stmt = ir[i][:stmt]
         if isa(stmt, Core.Compiler.ReturnNode) && isdefined(stmt, :val)
             rt = Core.Compiler.tmerge(Core.Compiler.argextype(stmt.val, ir), rt)
