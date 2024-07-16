@@ -198,7 +198,7 @@ function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V
             val = convert(V, val)::V
         end
         if d.age != age0
-            @inline setindex!(d, val, key)
+            setindex!(d, val, key)
         else
             @inbounds _setindex!(d, val, key, -keyindex)
         end
