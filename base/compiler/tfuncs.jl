@@ -2998,14 +2998,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
         else
             rt = Const(true) # has applicable matches
         end
-        for i in 1:napplicable
-            match = applicable[i]::MethodMatch
-            edge = specialize_method(match)::MethodInstance
-            add_backedge!(sv, edge)
-        end
-        # also need an edge to the method table in case something gets
-        # added that did not intersect with any existing method
-        add_uncovered_edges!(sv, matches, atype)
+        add_edges!(sv.edges, matches.info)
     end
     return Future(CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo()))
 end
@@ -3041,11 +3034,10 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     update_valid_age!(sv, valid_worlds)
     if match === nothing
         rt = Const(false)
-        add_mt_backedge!(sv, mt, types) # this should actually be an invoke-type backedge
+        add_edges!(sv.edges, MethodMatchInfo(MethodLookupResult(Any[], valid_worlds, true), types, mt)) # XXX: this should actually be an invoke-type backedge
     else
         rt = Const(true)
-        edge = specialize_method(match)::MethodInstance
-        add_invoke_backedge!(sv, types, edge)
+        add_edges!(sv.edges, InvokeCallInfo(match, nothing, types))
     end
     return CallMeta(rt, Any, EFFECTS_TOTAL, NoCallInfo())
 end

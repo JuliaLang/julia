@@ -231,7 +231,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             rettype = Any
         end
         any_slot_refined = slotrefinements !== nothing
-        add_call_backedges!(interp, rettype, all_effects, any_slot_refined, edges, matches, atype.contents, sv)
         if isa(sv, InferenceState)
             # TODO (#48913) implement a proper recursion handling for irinterp:
             # This works just because currently the `:terminate` condition guarantees that
@@ -558,31 +557,6 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{A
         end
     end
     return slotrefinements
-end
-
-function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype),
-    all_effects::Effects, any_slot_refined::Bool, edges::Vector{MethodInstance},
-    matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
-    sv::AbsIntState)
-    # don't bother to add backedges when both type and effects information are already
-    # maximized to the top since a new method couldn't refine or widen them anyway
-    if rettype === Any
-        # ignore the `:nonoverlayed` property if `interp` doesn't use overlayed method table
-        # since it will never be tainted anyway
-        if !isoverlayed(method_table(interp))
-            all_effects = Effects(all_effects; nonoverlayed=ALWAYS_FALSE)
-        end
-        if all_effects === Effects() && !any_slot_refined
-            return nothing
-        end
-    end
-    for edge in edges
-        add_backedge!(sv, edge)
-    end
-    # also need an edge to the method table in case something gets
-    # added that did not intersect with any existing method
-    add_uncovered_edges!(sv, matches, atype)
-    return nothing
 end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
@@ -2258,7 +2232,6 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
         info = InvokeCallInfo(match, const_result, lookupsig)
-        edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
         if !match.fully_covers
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError
@@ -2481,7 +2454,6 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)
         info = OpaqueClosureCallInfo(match, const_result)
-        edge !== nothing && add_backedge!(sv, edge)
         return CallMeta(rt, exct, effects, info)
     end
 end
@@ -3430,7 +3402,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
         while currpc < bbend
             currpc += 1
             frame.currpc = currpc
-            empty_backedges!(frame, currpc)
             stmt = frame.src.code[currpc]
             # If we're at the end of the basic block ...
             if currpc == bbend
