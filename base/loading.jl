@@ -1228,7 +1228,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         t_comp_before = cumulative_compile_time_ns()
     end
 
-    for i in 1:length(depmods)
+    for i in eachindex(depmods)
         dep = depmods[i]
         dep isa Module && continue
         _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
@@ -1781,8 +1781,7 @@ function compilecache_path(pkg::PkgId;
         end
         staledeps, _, _ = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
         # finish checking staledeps module graph
-        for i in 1:length(staledeps)
-            dep = staledeps[i]
+        for dep in staledeps
             dep isa Module && continue
             modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
             modpaths = find_all_in_cache_path(modkey)
@@ -1971,7 +1970,7 @@ end
         try
             staledeps, ocachefile, newbuild_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
             # finish checking staledeps module graph
-            for i in 1:length(staledeps)
+            for i in eachindex(staledeps)
                 dep = staledeps[i]
                 dep isa Module && continue
                 modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
@@ -2003,7 +2002,7 @@ end
             end
             # finish loading module graph into staledeps
             # TODO: call all start_loading calls (in reverse order) before calling any _include_from_serialized, since start_loading will drop the loading lock
-            for i in 1:length(staledeps)
+            for i in eachindex(staledeps)
                 dep = staledeps[i]
                 dep isa Module && continue
                 modpath, modkey, modbuild_id, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
