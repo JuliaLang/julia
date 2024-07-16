@@ -8,7 +8,7 @@
 #define keyhash(k) jl_object_id_(jl_typetagof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert_val);
+static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert);
 
 JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz)
 {
@@ -31,7 +31,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t
 
 // returns where a key is stored, or -pos if the key was not present and was inserted at pos
 // result is 1-indexed
-static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert_val)
+static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert)
 {
     // pa points to a **un**rooted address
     uint_t hv;
@@ -63,7 +63,7 @@ static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *ke
             }
             if (jl_egal(key, k2)) {
                 if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL) {
-                    if (insert_val == 1) {
+                    if (insert == 1) {
                         jl_atomic_store_release(&tab[index + 1], val);
                         jl_gc_wb(a, val);
                     }
@@ -84,9 +84,9 @@ static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *ke
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            jl_atomic_store_release(&tab[empty_slot], key);
-            jl_gc_wb(a, key);
-            if (insert_val == 1) {
+            if (insert == 1) {
+                jl_atomic_store_release(&tab[empty_slot], key);
+                jl_gc_wb(a, key);
                 jl_atomic_store_release(&tab[empty_slot + 1], val);
                 jl_gc_wb(a, val);
             }

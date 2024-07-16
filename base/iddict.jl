@@ -175,7 +175,8 @@ function ht_keyindex2!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     return keyindex[]
 end
 
-@propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, keyindex::Int) where {K, V}
+@propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, key::k, keyindex::Int) where {K, V}
+    d.ht[keyindex] = key
     d.ht[keyindex+1] = val
     d.count += 1
     d.age += 1
@@ -191,18 +192,15 @@ function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V
     keyindex = ht_keyindex2!(d, key)
 
     if keyindex < 0
-        # If convert call fails we need the key to be deleted
-        d.ndel += 1
         age0 = d.age
         val = default()
         if !isa(val, V)
             val = convert(V, val)::V
         end
-        d.ndel -= 1
         if d.age != age0
             @inline setindex!(d, val, key)
         else
-            @inbounds _setindex!(d, val, -keyindex)
+            @inbounds _setindex!(d, val, key, -keyindex)
         end
         return val::V
     else
