@@ -52,7 +52,7 @@ julia> Base.setindex((1, 2, 6), 2, 3) == (1, 2, 2)
 true
 ```
 """
-public function setindex(x::Tuple, v, i::Integer)
+function setindex(x::Tuple, v, i::Integer)
     @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
     @inline
     _setindex(v, i, x...)
