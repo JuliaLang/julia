@@ -69,17 +69,6 @@ typedef struct {
     size_t perm_scanned_bytes;
     // thread local increment of `scanned_bytes`
     size_t scanned_bytes;
-    // Number of queued big objects (<= 1024)
-    size_t nbig_obj;
-    // Array of queued big objects to be moved between the young list
-    // and the old list.
-    // A set low bit means that the object should be moved from the old list
-    // to the young list (`mark_reset_age`).
-    // Objects can only be put into this list when the mark bit is flipped to
-    // `1` (atomically). Combining with the sync after marking,
-    // this makes sure that a single objects can only appear once in
-    // the lists (the mark bit cannot be flipped to `0` without sweeping)
-    void *big_obj[1024];
 } jl_gc_mark_cache_t;
 
 typedef struct {
