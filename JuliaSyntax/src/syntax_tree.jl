@@ -108,6 +108,7 @@ end
 
 haschildren(node::TreeNode) = node.children !== nothing
 children(node::TreeNode) = (c = node.children; return c === nothing ? () : c)
+numchildren(node::TreeNode) = (isnothing(node.children) ? 0 : length(node.children))
 
 
 """
