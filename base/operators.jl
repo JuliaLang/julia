@@ -112,8 +112,8 @@ New numeric types should implement this function for two arguments of the new ty
 handle comparison to other types via promotion rules where possible.
 
 Equality and hashing are intimately related; two values that are considered [`isequal`](@ref) **must**
-have the same [`hash`](@ref). If a type customizes the behavior of `==` and/or [`isequal`](@ref),
-then [`hash`](@ref) must be similarly implemented. `Set`s, `Dict`s, and many other internal
+have the same [`hash`](@ref) and by default `isequal` falls back to `==`. If a type customizes the behavior of `==` and/or [`isequal`](@ref),
+then [`hash`](@ref) must be similarly implemented to ensure `isequal` and `hash` agree. `Set`s, `Dict`s, and many other internal
 implementations assume that this invariant holds.
 
 If some type defines `==`, [`isequal`](@ref), and [`isless`](@ref) then it should
