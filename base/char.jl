@@ -76,9 +76,18 @@ end
 
 Return the Unicode codepoint (an unsigned integer) corresponding
 to the character `c` (or throw an exception if `c` does not represent
-a valid character). For `Char`, this is a `UInt32` value, but
+a well-formed character). For `Char`, this is a `UInt32` value, but
 `AbstractChar` types that represent only a subset of Unicode may
 return a different-sized integer (e.g. `UInt8`).
+
+Should succeed for any non-malformed character, i.e. when
+[`Base.ismalformed(c)`](@ref) returns `false`.   This includes
+invalid Unicode characters (such as unpaired surrogates)
+and overlong encodings.
+
+!!! compat "Julia 1.12"
+    Prior to Julia 1.12, `codepoint(c)` fails for overlong encodings (when
+    [`Base.isoverlong(c)`](@ref) is `true`), and `Base.decode_overlong(c)` was needed.
 """
 function codepoint end
 
@@ -112,24 +121,35 @@ end
 #           not to support malformed or overlong encodings.
 
 """
-    ismalformed(c::AbstractChar) -> Bool
+    Base.ismalformed(c::AbstractChar) -> Bool
 
 Return `true` if `c` represents malformed (non-Unicode) data according to the
 encoding used by `c`. Defaults to `false` for non-`Char` types.
 
-See also [`show_invalid`](@ref).
+Any *non*-malformed `c` can be mapped to an integer codepoint
+by [`codepoint(c)`](@ref); this includes codepoints that are
+not valid Unicode characters ([`isvalid(c)`](@ref) is `false`).
+For example, well-formed characters can include invalid Unicode
+codepoints like `'\\U110000'`, unpaired surrogates such as `'\\ud800'`,
+and can also include overlong encodings ([`Base.isoverlong`](@ref)).
+Malformed data, in contrast, cannot be decoded to a codepoint
+(`codepoint` will throw an exception).
+
+See also [`Base.show_invalid`](@ref).
 """
 ismalformed(c::AbstractChar) = false
+public ismalformed
 
 """
-    isoverlong(c::AbstractChar) -> Bool
+    Base.isoverlong(c::AbstractChar) -> Bool
 
 Return `true` if `c` represents an overlong UTF-8 sequence. Defaults
 to `false` for non-`Char` types.
 
-See also [`decode_overlong`](@ref) and [`show_invalid`](@ref).
+See also [`Base.show_invalid`](@ref).
 """
 isoverlong(c::AbstractChar) = false
+public isoverlong
 
 @constprop :aggressive function UInt32(c::Char)
     # TODO: use optimized inline LLVM
@@ -138,7 +158,7 @@ isoverlong(c::AbstractChar) = false
     l1 = leading_ones(u)
     t0 = trailing_zeros(u) & 56
     (l1 == 1) | (8l1 + t0 > 32) |
-    ((((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0) | is_overlong_enc(u)) &&
+    (((u & 0x00c0c0c0) ⊻ 0x00808080) >> t0 != 0) &&
         throw_invalid_char(c)
     u &= 0xffffffff >> l1
     u >>= t0
@@ -150,20 +170,18 @@ end
     decode_overlong(c::AbstractChar) -> Integer
 
 When [`isoverlong(c)`](@ref) is `true`, `decode_overlong(c)` returns
-the Unicode codepoint value of `c`. `AbstractChar` implementations
-that support overlong encodings should implement `Base.decode_overlong`.
+the Unicode codepoint value of `c`.   Deprecated in favor of
+`codepoint(c)`.
+
+!!! compat "Julia 1.12"
+    In Julia 1.12 or later, `decode_overlong(c)` simply calls
+    `codepoint(c)`, which should now work for overlong encodings.
+    `AbstractChar` implementations that support overlong encodings
+    should implement `Base.decode_overlong` on older releases.
 """
 function decode_overlong end
 
-@constprop :aggressive function decode_overlong(c::Char)
-    u = bitcast(UInt32, c)
-    l1 = leading_ones(u)
-    t0 = trailing_zeros(u) & 56
-    u &= 0xffffffff >> l1
-    u >>= t0
-    ((u & 0x0000007f) >> 0) | ((u & 0x00007f00) >> 2) |
-    ((u & 0x007f0000) >> 4) | ((u & 0x7f000000) >> 6)
-end
+@constprop :aggressive decode_overlong(c::AbstractChar) = codepoint(c)
 
 @constprop :aggressive function Char(u::UInt32)
     u < 0x80 && return bitcast(Char, u << 24)
@@ -277,7 +295,7 @@ function show_invalid(io::IO, c::Char)
 end
 
 """
-    show_invalid(io::IO, c::AbstractChar)
+    Base.show_invalid(io::IO, c::AbstractChar)
 
 Called by `show(io, c)` when [`isoverlong(c)`](@ref) or
 [`ismalformed(c)`](@ref) return `true`.   Subclasses
@@ -285,6 +303,7 @@ of `AbstractChar` should define `Base.show_invalid` methods
 if they support storing invalid character data.
 """
 show_invalid
+public show_invalid
 
 # show c to io, assuming UTF-8 encoded output
 function show(io::IO, c::AbstractChar)
@@ -330,7 +349,7 @@ function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
         print(io, ": ")
         if isoverlong(c)
             print(io, "[overlong] ")
-            u = decode_overlong(c)
+            u = decode_overlong(c) # backwards compat Julia < 1.12
             c = T(u)
         else
             u = codepoint(c)
