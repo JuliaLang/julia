@@ -100,7 +100,7 @@ Standard library changes
 
 * `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
-  `Base.show_invalid` are now `public` and documented (but not exported) ([#xxxxx]).
+  `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 
 #### StyledStrings
 
