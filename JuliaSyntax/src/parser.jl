@@ -526,9 +526,9 @@ end
 # Parse docstrings attached by a space or single newline
 #
 # flisp: parse-docstring
-function parse_docstring(ps::ParseState, down=parse_eq)
+function parse_docstring(ps::ParseState)
     mark = position(ps)
-    down(ps)
+    parse_eq(ps)
     if peek_behind(ps).kind == K"string"
         is_doc = true
         k = peek(ps)
@@ -553,7 +553,7 @@ function parse_docstring(ps::ParseState, down=parse_eq)
             # """\n doc\n """ foo ==> (doc (string-s "doc\n") foo)
         end
         if is_doc
-            down(ps)
+            parse_eq(ps)
             emit(ps, mark, K"doc")
         end
     end
