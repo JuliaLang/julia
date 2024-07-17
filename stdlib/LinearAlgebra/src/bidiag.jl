@@ -620,7 +620,6 @@ function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
-    n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     _rmul_or_fill!(C, _add.beta)  # see the same use above
     iszero(_add.alpha) && return C
     Al = _diag(A, -1)
@@ -629,24 +628,32 @@ function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     Bd = B.diag
     @inbounds begin
         # first row of C
-        C[1,1] += _add(A[1,1]*B[1,1])
-        C[1,2] += _add(A[1,2]*B[2,2])
+        for j in 1:min(2, n)
+            C[1,j] += _add(A[1,j]*B[j,j])
+        end
         # second row of C
-        C[2,1] += _add(A[2,1]*B[1,1])
-        C[2,2] += _add(A[2,2]*B[2,2])
-        C[2,3] += _add(A[2,3]*B[3,3])
+        if n > 1
+            for j in 1:min(3, n)
+                C[2,j] += _add(A[2,j]*B[j,j])
+            end
+        end
         for j in 3:n-2
             C[j, j-1] += _add(Al[j-1]*Bd[j-1])
             C[j, j  ] += _add(Ad[j  ]*Bd[j  ])
             C[j, j+1] += _add(Au[j  ]*Bd[j+1])
         end
-        # row before last of C
-        C[n-1,n-2] += _add(A[n-1,n-2]*B[n-2,n-2])
-        C[n-1,n-1] += _add(A[n-1,n-1]*B[n-1,n-1])
-        C[n-1,n  ] += _add(A[n-1,  n]*B[n  ,n  ])
+        if n > 3
+            # row before last of C
+            for j in n-2:n
+                C[n-1,j] += _add(A[n-1,j]*B[j,j])
+            end
+        end
         # last row of C
-        C[n,n-1] += _add(A[n,n-1]*B[n-1,n-1])
-        C[n,n  ] += _add(A[n,n  ]*B[n,  n  ])
+        if n > 2
+            for j in n-1:n
+                C[n,j] += _add(A[n,j]*B[j,j])
+            end
+        end
     end # inbounds
     C
 end
