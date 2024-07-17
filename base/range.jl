@@ -1432,6 +1432,7 @@ in(x::Real, r::AbstractRange{<:Real}) = _in_range(x, r)
 # This method needs to be defined separately since -(::T, ::T) can be implemented
 # even if -(::T, ::Real) is not
 in(x::T, r::AbstractRange{T}) where {T} = _in_range(x, r)
+in(x::Real, ::Type{T}) where {T<:Real} = x in typemin(T):typemax(T)
 
 in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r))
 
