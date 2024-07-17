@@ -461,7 +461,7 @@ odd mixture of imperative and declarative lowered code.
 
 People look at [Racket](https://racket-lang.org/) as an example of a very
 complete system of hygienic macros. We should learn from them, but keeping in
-mind that Racket's macro system is more inherently more complicated. Racket's
+mind that Racket's macro system is inherently more complicated. Racket's
 current approach to hygiene is described in an [accessible talk](https://www.youtube.com/watch?v=Or_yKiI3Ha4)
 and in more depth in [a paper](https://www-old.cs.utah.edu/plt/publications/popl16-f.pdf).
 
