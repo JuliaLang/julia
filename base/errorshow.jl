@@ -1093,7 +1093,7 @@ end
 Experimental.register_error_hint(methods_on_iterable, MethodError)
 
 # Display a hint in case the user tries to access non-member fields of container type datastructures
-function fielderror_hint_handler(io, exc)
+function fielderror_dict_hint_handler(io, exc)
     @nospecialize
     field = exc.field
     type = exc.type
@@ -1104,7 +1104,23 @@ function fielderror_hint_handler(io, exc)
     end
 end
 
-Experimental.register_error_hint(fielderror_hint_handler, FieldError)
+Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
+
+function fielderror_listfields_hint_handler(io, exc)
+    fields = fieldnames(exc.type)
+    println(io, "\nFields of $(nameof(exc.type)):\n$(join(fields, ", "))")
+    props = _propertynames_bytype(exc.type)
+    isnothing(props) && return
+    props = setdiff(props, fields)
+    isempty(props) && return
+    println(io, "\nAlso, properties of $(nameof(exc.type)):\n$(join(props, ", "))")
+end
+
+_extract_val(::Type{Val{V}}) where {V} = V
+_extract_val(::Type{Val}) = nothing
+_propertynames_bytype(::Type{T}) where {T} = promote_op(Val∘propertynames, T) |> _extract_val
+
+Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)
