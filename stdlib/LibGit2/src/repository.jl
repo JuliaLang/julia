@@ -141,12 +141,29 @@ function (::Type{T})(repo::GitRepo, spec::AbstractString) where T<:GitObject
     @assert repo.ptr != C_NULL
     @check ccall((:git_revparse_single, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring), obj_ptr_ptr, repo, spec)
+    obj_ptr = obj_ptr_ptr[]
     # check object is of correct type
-    if T != GitObject && T != GitUnknownObject # FIXME free result on error?
-        t = Consts.OBJECT(obj_ptr_ptr[])
-        t == Consts.OBJECT(T) || throw(GitError(Error.Object, Error.ERROR, "Expected object of type $T, received object of type $(objtype(t))"))
+    if T != GitObject && T != GitUnknownObject
+        t = Consts.OBJECT(obj_ptr)
+        if t != Consts.OBJECT(T)
+            if obj_ptr != C_NULL
+                # free result
+                if t ==  Consts.OBJ_COMMIT
+                    ccall((:git_commit_free, libgit2), Cvoid, (Ptr{Cvoid},), obj_ptr)
+                elseif t == Consts.OBJ_TREE
+                    ccall((:git_tree_free, libgit2), Cvoid, (Ptr{Cvoid},), obj_ptr)
+                elseif t == Consts.OBJ_BLOB
+                    ccall((:git_blob_free, libgit2), Cvoid, (Ptr{Cvoid},), obj_ptr)
+                elseif t == Consts.OBJ_TAG
+                    ccall((:git_tag_free, libgit2), Cvoid, (Ptr{Cvoid},), obj_ptr)
+                else
+                    @error "Don't know how to free unknown Git object"
+                end
+            end
+            throw(GitError(Error.Object, Error.ERROR, "Expected object of type $T, received object of type $(objtype(t))"))
+        end
     end
-    return T(repo, obj_ptr_ptr[])
+    return T(repo, obj_ptr)
 end
 
 function (::Type{T})(repo::GitRepo, oid::GitHash) where T<:GitObject
