@@ -12,6 +12,7 @@ include("test_utils_tests.jl")
 include("fuzz_test.jl")
 
 include("utils.jl")
+include("kinds.jl")
 
 @testset "Tokenize" begin
     include("tokenize.jl")
