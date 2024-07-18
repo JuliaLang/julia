@@ -804,7 +804,7 @@ precompile_test_harness("code caching") do dir
     mi = mispecs[2]::Core.MethodInstance
     mi.specTypes == Tuple{typeof(M.getelsize),Vector{M.X2}}
     ci = mi.cache
-    @test ci.relocatability == 0x01
+    @test ci.relocatability == 0
     # PkgA loads PkgB, and both add roots to the same `push!` method (both before and after loading B)
     Cache_module2 = :Cachea1544c83560f0c99
     write(joinpath(dir, "$Cache_module2.jl"),
