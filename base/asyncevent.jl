@@ -266,8 +266,8 @@ end
 
 Block the current task for at least specified number of seconds.
 The resolution of sleep is around 2 microsecond (2e-6 seconds), but
-as the amount of time decreases, the likelyhood of the sleep exceeding the
-given ammount of time increases (since the OS or julia scheduler might not
+as the amount of time decreases, the likelihood of the sleep exceeding the
+given amount of time increases (since the OS or julia scheduler might not
 wake up the thread/task at exactly the right time).
 
 Note that using sleep for small increments of time usually implies that you are
