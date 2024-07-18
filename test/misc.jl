@@ -1557,3 +1557,23 @@ end
 @testset "Base.Libc docstrings" begin
     @test isempty(Docs.undocumented_names(Libc))
 end
+
+@testset "Silenced missed transformations" begin
+    # Ensure the WarnMissedTransformationsPass is not on by default
+    src = """
+        @noinline iteration(i) = (@show(i); return nothing)
+        @eval function loop_unroll_full_fail(N)
+            for i in 1:N
+              iteration(i)
+              \$(Expr(:loopinfo, (Symbol("llvm.loop.unroll.full"), 1)))
+          end
+       end
+       loop_unroll_full_fail(3)
+    """
+    out_err = mktemp() do _, f
+        run(`$(Base.julia_cmd()) -e "$src"`, devnull, devnull, f)
+        seekstart(f)
+        read(f, String)
+    end
+    @test !occursin("loop not unrolled", out_err)
+end
