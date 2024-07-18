@@ -478,6 +478,16 @@ STATIC_INLINE int gc_is_parallel_collector_thread(int tid) JL_NOTSAFEPOINT
     return tid >= gc_first_tid && tid <= gc_last_parallel_collector_thread_id();
 }
 
+STATIC_INLINE int gc_is_concurrent_collector_thread(int tid) JL_NOTSAFEPOINT
+{
+    if (jl_n_sweepthreads == 0) {
+        return 0;
+    }
+    int last_parallel_collector_thread_id = gc_last_parallel_collector_thread_id();
+    int concurrent_collector_thread_id = last_parallel_collector_thread_id + 1;
+    return tid == concurrent_collector_thread_id;
+}
+
 STATIC_INLINE int gc_random_parallel_collector_thread_id(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     assert(jl_n_markthreads > 0);

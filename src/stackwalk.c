@@ -5,6 +5,7 @@
   utilities for walking the stack and looking up information about code addresses
 */
 #include <inttypes.h>
+#include "gc.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"
@@ -1215,11 +1216,15 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (size_t i = 0; i < nthreads; i++) {
-        // skip GC threads since they don't have tasks
-        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
+        jl_ptls_t ptls2 = allstates[i];
+        if (gc_is_parallel_collector_thread(i)) {
+            jl_safe_printf("==== Skipping backtrace for parallel GC thread %zu\n", i + 1);
             continue;
         }
-        jl_ptls_t ptls2 = allstates[i];
+        if (gc_is_concurrent_collector_thread(i)) {
+            jl_safe_printf("==== Skipping backtrace for concurrent GC thread %zu\n", i + 1);
+            continue;
+        }
         if (ptls2 == NULL) {
             continue;
         }
