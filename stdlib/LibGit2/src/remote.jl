@@ -133,8 +133,8 @@ julia> LibGit2.url(remote)
 """
 function url(rmt::GitRemote)
     ensure_initialized()
-    GC.@preserve rmt begin
-        url_ptr = ccall((:git_remote_url, libgit2), Cstring, (Ptr{Cvoid},), rmt.ptr)
+    GC.@preserve rmt begin # preserve `rmt` object until return of `unsafe_string`
+        url_ptr = ccall((:git_remote_url, libgit2), Cstring, (Ptr{Cvoid},), rmt)
         url_ptr == C_NULL && return ""
         return unsafe_string(url_ptr)
     end
@@ -159,8 +159,8 @@ julia> LibGit2.push_url(LibGit2.get(LibGit2.GitRemote, repo, "origin"))
 """
 function push_url(rmt::GitRemote)
     ensure_initialized()
-    GC.@preserve rmt begin
-        url_ptr = ccall((:git_remote_pushurl, libgit2), Cstring, (Ptr{Cvoid},), rmt.ptr)
+    GC.@preserve rmt begin # preserve `rmt` object until return of `unsafe_string`
+        url_ptr = ccall((:git_remote_pushurl, libgit2), Cstring, (Ptr{Cvoid},), rmt)
         url_ptr == C_NULL && return ""
         return unsafe_string(url_ptr)
     end
@@ -187,8 +187,8 @@ julia> name(remote)
 """
 function name(rmt::GitRemote)
     ensure_initialized()
-    GC.@preserve rmt begin
-        name_ptr = ccall((:git_remote_name, libgit2), Cstring, (Ptr{Cvoid},), rmt.ptr)
+    GC.@preserve rmt begin # preserve `rmt` object until return of `unsafe_string`
+        name_ptr = ccall((:git_remote_name, libgit2), Cstring, (Ptr{Cvoid},), rmt)
         name_ptr == C_NULL && return ""
         return unsafe_string(name_ptr)
     end

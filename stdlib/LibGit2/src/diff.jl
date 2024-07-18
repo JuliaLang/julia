@@ -122,10 +122,10 @@ function Base.getindex(diff::GitDiff, i::Integer)
         throw(BoundsError(diff, (i,)))
     end
     ensure_initialized()
-    GC.@preserve diff begin
+    GC.@preserve diff begin # preserve `diff` object until return of `unsafe_load`
         delta_ptr = ccall((:git_diff_get_delta, libgit2),
                           Ptr{DiffDelta},
-                          (Ptr{Cvoid}, Csize_t), diff.ptr, i-1)
+                          (Ptr{Cvoid}, Csize_t), diff, i-1)
         return unsafe_load(delta_ptr)
     end
 end
