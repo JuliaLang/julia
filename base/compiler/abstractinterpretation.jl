@@ -110,7 +110,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     end
                     const_results[i] = const_result
                 end
-                edge === nothing || push!(edges, edge)
                 this_rt = this_rt ⊔ₚ rt
                 this_exct = this_exct ⊔ₚ exct
                 if bail_out_call(interp, this_rt, sv)
@@ -167,7 +166,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
                 const_results[i] = const_result
             end
-            edge === nothing || push!(edges, edge)
         end
         @assert !(this_conditional isa Conditional || this_rt isa MustAlias) "invalid lattice element returned from inter-procedural context"
         seen += 1

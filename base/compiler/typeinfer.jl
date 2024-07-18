@@ -649,8 +649,8 @@ end
 
 add_edges!(edges::Vector{Any}, info::MethodResultPure) = add_edges!(edges, info.info)
 add_edges!(edges::Vector{Any}, info::ConstCallInfo) = add_edges!(edges, info.call)
-add_edges!(edges::Vector{Any}, info::OpaqueClosureCreateInfo) = nothing # merely creating the object does not imply edges
-add_edges!(edges::Vector{Any}, info::OpaqueClosureCallInfo) = nothing # TODO: inference appears to have always mis-accounted for these backedges
+add_edges!(edges::Vector{Any}, info::OpaqueClosureCreateInfo) = add_edges!(edges, info.unspec.info) # merely creating the object implies edges for OC, unlike normal objects, since calling them doesn't normally have edges in contrast
+add_edges!(edges::Vector{Any}, info::OpaqueClosureCallInfo) = add_one_edge!(edges, specialize_method(info.match))
 add_edges!(edges::Vector{Any}, info::ReturnTypeCallInfo) = add_edges!(edges, info.info)
 function add_edges!(edges::Vector{Any}, info::ApplyCallInfo)
     add_edges!(edges, info.call)
@@ -668,15 +668,6 @@ add_edges!(edges::Vector{Any}, info::FinalizerInfo) = nothing # merely allocatin
 add_edges!(edges::Vector{Any}, info::NoCallInfo) = nothing
 function add_edges!(edges::Vector{Any}, info::MethodMatchInfo)
     matches = info.results.matches
-    if length(matches) != 1
-        # TODO: add check for whether this info already exists in the edges
-        push!(edges, length(matches))
-        push!(edges, info.atype)
-    end
-    for m in matches
-        mi = specialize_method(m)
-        length(matches) == 1 ? add_one_edge!(edges, mi) : push!(edges, mi)
-    end
     if isempty(matches) || !(matches[end]::Core.MethodMatch).fully_covers
         # add legacy-style missing backedge info also
         exists = false
@@ -690,6 +681,29 @@ function add_edges!(edges::Vector{Any}, info::MethodMatchInfo)
             push!(edges, info.mt)
             push!(edges, info.atype)
         end
+    end
+    if length(matches) == 1
+        # try the optimized format for the representation, if possible and applicable
+        # if this doesn't succeed, the backedge will be less precise,
+        # but the forward edge will maintain the precision
+        m = matches[1]::Core.MethodMatch
+        mi = specialize_method(m)
+        if mi.specTypes === m.spec_types
+            add_one_edge!(edges, mi)
+            return
+        end
+    end
+    # add check for whether this lookup already existed in the edges list
+    for i in 1:length(edges)
+        if edges[i] === length(matches) && edges[i + 1] == info.atype
+            return
+        end
+    end
+    push!(edges, length(matches))
+    push!(edges, info.atype)
+    for m in matches
+        mi = specialize_method(m::Core.MethodMatch)
+        push!(edges, mi)
     end
     nothing
 end
@@ -716,14 +730,14 @@ function add_one_edge!(edges::Vector{Any}, mi::MethodInstance)
     nothing
 end
 
-
 function compute_edges!(sv::InferenceState)
     edges = sv.edges
     for i in 1:length(sv.stmt_info)
         info = sv.stmt_info[i]
         #rt = sv.ssavaluetypes[i]
-        #effects = EFFECTS_TOTAL # sv.stmt_effects[i]
-        #if rt === Any && effects === Effects()
+        #et = sv.exectiontypes[i]
+        #effects = EFFECTS_TOTAL # TODO: sv.stmt_effects[i]
+        #if rt === Any && et === Any && effects === Effects()
         #    continue
         #end
         add_edges!(edges, info)

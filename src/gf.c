@@ -1821,9 +1821,12 @@ static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_w
 // add a backedge from callee to caller
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_method_instance_t *caller)
 {
-    JL_LOCK(&callee->def.method->writelock);
     if (invokesig == jl_nothing)
         invokesig = NULL;      // julia uses `nothing` but C uses NULL (#undef)
+    assert(jl_is_method_instance(callee));
+    assert(jl_is_method_instance(caller));
+    assert(invokesig == NULL || jl_is_type(invokesig));
+    JL_LOCK(&callee->def.method->writelock);
     int found = 0;
     // TODO: use jl_cache_type_(invokesig) like cache_method does to save memory
     if (!callee->backedges) {
