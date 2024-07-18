@@ -942,9 +942,6 @@ end
             @test_throws ArgumentError rmul!(B, A)
             @test_throws ArgumentError lmul!(A, B)
         end
-        D = Diagonal(dv)
-        @test rmul!(copy(A), D) ≈ A * D
-        @test lmul!(D, copy(A)) ≈ D * A
     end
     @testset "non-commutative" begin
         S32 = SizedArrays.SizedArray{(3,2)}(rand(3,2))
@@ -963,6 +960,21 @@ end
         @test lmul!(B, Array(D)) ≈ B * D
         B = Bidiagonal(fill(S22, 4), fill(S22, 3), :U)
         @test rmul!(Array(D), B) ≈ D * B
+    end
+end
+
+@testset "mul with Diagonal" begin
+    for n in 0:4
+        dv, ev = rand(n), rand(max(n-1,0))
+        d = rand(n)
+        for uplo in (:U, :L)
+            A = Bidiagonal(dv, ev, uplo)
+            D = Diagonal(d)
+            M = Matrix(A)
+            S = similar(A, size(A))
+            @test A * D ≈ mul!(S, A, D) ≈ M * D
+            @test D * A ≈ mul!(S, D, A) ≈ D * M
+        end
     end
 end
 

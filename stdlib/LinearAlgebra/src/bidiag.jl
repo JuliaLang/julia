@@ -615,7 +615,7 @@ function _bibimul!(C, A, B, _add)
     C
 end
 
-function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
+function _mul!(C::AbstractMatrix, A::TriSym, B::Diagonal, _add::MulAddMul)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
@@ -653,6 +653,58 @@ function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
             for j in n-1:n
                 C[n,j] += _add(A[n,j]*B[j,j])
             end
+        end
+    end # inbounds
+    C
+end
+
+function _mul!(C::AbstractMatrix, A::Bidiagonal, B::Diagonal, _add::MulAddMul)
+    require_one_based_indexing(C)
+    check_A_mul_B!_sizes(C, A, B)
+    n = size(A,1)
+    iszero(n) && return C
+    _rmul_or_fill!(C, _add.beta)  # see the same use above
+    iszero(_add.alpha) && return C
+    (; dv, ev) = A
+    Bd = B.diag
+    rowshift = A.uplo == 'U' ? -1 : 1
+    evshift = Int(A.uplo == 'U')
+    @inbounds begin
+        # first row of C
+        C[1,1] += _add(dv[1]*Bd[1])
+        if n > 1
+            if A.uplo == 'L'
+                C[2,1] += _add(ev[1]*Bd[1])
+            end
+            for col in 2:n-1
+                C[col+rowshift, col] += _add(ev[col - evshift]*Bd[col])
+                C[col, col] += _add(dv[col]*Bd[col])
+            end
+            if A.uplo == 'U'
+                C[n-1,n] += _add(ev[n-1]*Bd[n])
+            end
+            C[n, n] += _add(dv[n]*Bd[n])
+        end
+    end # inbounds
+    C
+end
+
+function _mul!(C::Bidiagonal, A::Bidiagonal, B::Diagonal, _add::MulAddMul)
+    check_A_mul_B!_sizes(C, A, B)
+    n = size(A,1)
+    iszero(n) && return C
+    # _rmul_or_fill!(C, _add.beta)  # see the same use above
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    Adv, Aev = A.dv, A.ev
+    Cdv, Cev = C.dv, C.ev
+    Bd = B.diag
+    shift = Int(A.uplo == 'U')
+    @inbounds begin
+        # first row of C
+        _modify!(_add, Adv[1]*Bd[1], Cdv, 1)
+        for j in eachindex(IndexLinear(), Aev, Cev)
+            _modify!(_add, Aev[j]*Bd[j+shift], Cev, j)
+            _modify!(_add, Adv[j+1]*Bd[j+1], Cdv, j+1)
         end
     end # inbounds
     C
