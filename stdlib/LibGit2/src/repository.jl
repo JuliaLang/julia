@@ -148,17 +148,7 @@ function (::Type{T})(repo::GitRepo, spec::AbstractString) where T<:GitObject
         if t != Consts.OBJECT(T)
             if obj_ptr != C_NULL
                 # free result
-                if t ==  Consts.OBJ_COMMIT
-                    ccall((:git_commit_free, libgit2), Cvoid, (Ptr{Cvoid},), obj_ptr)
-                elseif t == Consts.OBJ_TREE
-                    ccall((:git_tree_free, libgit2), Cvoid, (Ptr{Cvoid},), obj_ptr)
-                elseif t == Consts.OBJ_BLOB
-                    ccall((:git_blob_free, libgit2), Cvoid, (Ptr{Cvoid},), obj_ptr)
-                elseif t == Consts.OBJ_TAG
-                    ccall((:git_tag_free, libgit2), Cvoid, (Ptr{Cvoid},), obj_ptr)
-                else
-                    @error "Don't know how to free unknown Git object"
-                end
+                ccall((:git_object_free, libgit2), Cvoid, (Ptr{Cvoid},), obj_ptr)
             end
             throw(GitError(Error.Object, Error.ERROR, "Expected object of type $T, received object of type $(objtype(t))"))
         end
