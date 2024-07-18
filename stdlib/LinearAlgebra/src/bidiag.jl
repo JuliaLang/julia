@@ -693,14 +693,12 @@ function _mul!(C::Bidiagonal, A::Bidiagonal, B::Diagonal, _add::MulAddMul)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
     iszero(n) && return C
-    # _rmul_or_fill!(C, _add.beta)  # see the same use above
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     Adv, Aev = A.dv, A.ev
     Cdv, Cev = C.dv, C.ev
     Bd = B.diag
     shift = Int(A.uplo == 'U')
     @inbounds begin
-        # first row of C
         _modify!(_add, Adv[1]*Bd[1], Cdv, 1)
         for j in eachindex(IndexLinear(), Aev, Cev)
             _modify!(_add, Aev[j]*Bd[j+shift], Cev, j)
@@ -837,6 +835,24 @@ function _dibimul!(C, A, B, _add)
         # last row of C
         C[n,n-1] += _add(A[n,n]*B[n,n-1])
         C[n,n  ] += _add(A[n,n]*B[n,n  ])
+    end # inbounds
+    C
+end
+function _dibimul!(C::Bidiagonal, A::Diagonal, B::Bidiagonal, _add)
+    check_A_mul_B!_sizes(C, A, B)
+    n = size(A,1)
+    n == 0 && return C
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    Ad = A.diag
+    Bdv, Bev = B.dv, B.ev
+    Cdv, Cev = C.dv, C.ev
+    shift = Int(B.uplo == 'L')
+    @inbounds begin
+        _modify!(_add, Ad[1]*Bdv[1], Cdv, 1)
+        for j in eachindex(IndexLinear(), Bev, Cev)
+            _modify!(_add, Ad[j+shift]*Bev[j], Cev, j)
+            _modify!(_add, Ad[j+1]*Bdv[j+1], Cdv, j+1)
+        end
     end # inbounds
     C
 end
