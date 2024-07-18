@@ -335,8 +335,8 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
+    auto ObjectCopy = new LazyObjectInfo{MemoryBuffer::getMemBufferCopy(Object.getData())}; // intentionally leaked so that we don't need to ref-count it
     auto symbols = object::computeSymbolSizes(Object);
-    bool first = true;
     for (const auto &sym_size : symbols) {
         const object::SymbolRef &sym_iter = sym_size.first;
         object::SymbolRef::Type SymbolType = cantFail(sym_iter.getType());
@@ -385,15 +385,12 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (mi)
                 linfomap[Addr] = std::make_pair(Size, mi);
-            if (first) {
-                objectmap[SectionLoadAddr] = {&Object,
-                    (size_t)SectionSize,
-                    (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-                    *Section,
-                    nullptr,
-                    };
-                first = false;
-            }
+            objectmap.insert(std::pair{SectionLoadAddr, SectionInfo{
+                ObjectCopy,
+                (size_t)SectionSize,
+                (ptrdiff_t)(SectionAddr - SectionLoadAddr),
+                Section->getIndex()
+                }});
         });
     }
 }
@@ -1213,11 +1210,14 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
     auto fit = objmap.lower_bound(fptr);
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
         *slide = fit->second.slide;
-        *Section = fit->second.Section;
+        auto lazyobject = fit->second.object;
+        if (!lazyobject->object)
+            lazyobject->object = cantFail(object::ObjectFile::createObjectFile(lazyobject->data->getMemBufferRef()));
+        *Section = *std::next(lazyobject->object->section_begin(), fit->second.SectionIndex);
         if (context) {
-            if (fit->second.context == nullptr)
-                fit->second.context = DWARFContext::create(*fit->second.object).release();
-            *context = fit->second.context;
+            if (lazyobject->context == nullptr)
+                lazyobject->context = DWARFContext::create(*lazyobject->object);
+            *context = lazyobject->context.get();
         }
         found = 1;
     }
