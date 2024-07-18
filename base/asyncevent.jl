@@ -264,13 +264,26 @@ end
 """
     sleep(seconds)
 
-Block the current task for a specified number of seconds. The minimum sleep time is 1
-millisecond or input of `0.001`.
+Block the current task for at least specified number of seconds.
+The resolution of sleep is around 2 microsecond (2e-6 seconds), but
+as the amount of time decreases, the likelyhood of the sleep exceeding the
+given ammount of time increases (since the OS or julia scheduler might not
+wake up the thread/task at exactly the right time).
+
+Note that using sleep for small increments of time usually implies that you are
+doing something weird and should consider using some form of notification system.
 """
 function sleep(sec::Real)
     sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
+    if sec < 2e-3
+        t1 = time()
+        while time() - sec <= t1
+            yield()
+        end
+        return nothing
+    end
     wait(Timer(sec))
-    nothing
+    return nothing
 end
 
 # timer with repeated callback
