@@ -89,18 +89,15 @@ function addfile(cfg::GitConfig, path::AbstractString,
                  repo::Union{GitRepo, Nothing} = nothing,
                  force::Bool=false)
     ensure_initialized()
-    GC.@preserve cfg repo begin
-        # FIXME Check first argument, cfg.ptr, in the ccall's below.
-        @static if LibGit2.VERSION >= v"0.27.0"
-            @check ccall((:git_config_add_file_ondisk, libgit2), Cint,
-                         (Ptr{Ptr{Cvoid}}, Cstring, Cint, Ptr{Cvoid}, Cint),
-                         cfg.ptr, path, Cint(level), isa(repo, GitRepo) ? repo.ptr : C_NULL, Cint(force))
-        else
-            repo === nothing || error("repo argument is not supported in this version of LibGit2")
-            @check ccall((:git_config_add_file_ondisk, libgit2), Cint,
-                         (Ptr{Ptr{Cvoid}}, Cstring, Cint, Cint),
-                         cfg.ptr, path, Cint(level), Cint(force))
-        end
+    @static if LibGit2.VERSION >= v"0.27.0"
+        @check ccall((:git_config_add_file_ondisk, libgit2), Cint,
+                     (Ptr{Cvoid}, Cstring, Cint, Ptr{Cvoid}, Cint),
+                     cfg, path, Cint(level), isa(repo, GitRepo) ? repo : C_NULL, Cint(force))
+    else
+        repo === nothing || error("repo argument is not supported in this version of LibGit2")
+        @check ccall((:git_config_add_file_ondisk, libgit2), Cint,
+                     (Ptr{Cvoid}, Cstring, Cint, Cint),
+                     cfg, path, Cint(level), Cint(force))
     end
 end
 

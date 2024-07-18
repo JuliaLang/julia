@@ -20,11 +20,8 @@ end
 
 function Base.length(status::GitStatus)
     ensure_initialized()
-    GC.@preserve status begin
-        # FIXME Argument is `git_status_list*` in  Ptr{} in `git2/status.h`.
-        return Int(ccall((:git_status_list_entrycount, libgit2), Csize_t,
-                         (Ptr{Ptr{Cvoid}},), status.ptr))
-    end
+    return Int(ccall((:git_status_list_entrycount, libgit2), Csize_t,
+                         (Ptr{Cvoid},), status))
 end
 
 function Base.getindex(status::GitStatus, i::Integer)
