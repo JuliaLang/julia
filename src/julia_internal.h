@@ -960,9 +960,10 @@ extern JL_DLLEXPORT ssize_t jl_tls_offset;
 extern JL_DLLEXPORT const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
-extern uv_mutex_t safepoint_lock;
+void jl_start_gc_threads(void);
 
 // Whether the GC is running
+extern uv_mutex_t safepoint_lock;
 extern char *jl_safepoint_pages;
 STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
 {
