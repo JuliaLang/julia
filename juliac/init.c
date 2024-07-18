@@ -6,4 +6,3 @@ __attribute__((constructor)) void static_init(void) {
     julia_init(JL_IMAGE_IN_MEMORY);
     jl_exception_clear();
 }
-
