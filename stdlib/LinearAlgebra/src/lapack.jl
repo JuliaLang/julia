@@ -61,9 +61,13 @@ macro chkvalidparam(position::Int, param, validvalues)
     :(chkvalidparam($position, $(string(param)), $(esc(param)), $validvalues))
 end
 function chkvalidparam(position::Int, var::String, val, validvals)
+    # mimic `repr` for chars without explicitly calling it
+    # This is because `repr` introduces dynamic dispatch
+    _repr(c::AbstractChar) = "'$c'"
+    _repr(c) = c
     if val ∉ validvals
         throw(ArgumentError(
-            lazy"argument #$position: $var must be one of $validvals, but $(repr(val)) was passed"))
+            lazy"argument #$position: $var must be one of $validvals, but $(_repr(val)) was passed"))
     end
     return val
 end
@@ -3701,7 +3705,7 @@ for (trcon, trevc, trrfs, elty) in
         # LOGICAL            SELECT( * )
         # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
-        function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
+        Base.@constprop :aggressive function trevc!(side::AbstractChar, howmny::AbstractChar, select::AbstractVector{BlasInt}, T::AbstractMatrix{$elty},
                         VL::AbstractMatrix{$elty} = similar(T),
                         VR::AbstractMatrix{$elty} = similar(T))
             require_one_based_indexing(select, T, VL, VR)
@@ -5762,11 +5766,6 @@ syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractM
 Finds the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
 (`jobz = V`) of a symmetric matrix `A`. If `uplo = U`, the upper triangle
 of `A` is used. If `uplo = L`, the lower triangle of `A` is used.
-
-Use the divide-and-conquer method, instead of the QR iteration used by
-`syev!` or multiple relatively robust representations used by `syevr!`.
-See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
-a comparison of the accuracy and performatce of different methods.
 """
 syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix)
 
@@ -6274,8 +6273,7 @@ for (hetrd, elty) in
             require_one_based_indexing(A)
             chkstride1(A)
             n = checksquare(A)
-            chkuplo(uplo)
-            chkfinite(A) # balancing routines don't support NaNs and Infs
+            chkuplofinite(A, uplo) # balancing routines don't support NaNs and Infs
             tau = similar(A, $elty, max(0,n - 1))
             d = Vector{$relty}(undef, n)
             e = Vector{$relty}(undef, max(0,n - 1))
@@ -7163,9 +7161,15 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         function lacpy!(B::AbstractMatrix{$elty}, A::AbstractMatrix{$elty}, uplo::AbstractChar)
             require_one_based_indexing(A, B)
             chkstride1(A, B)
-            m,n = size(A)
-            m1,n1 = size(B)
-            (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+            m, n = size(A)
+            m1, n1 = size(B)
+            if uplo == 'U'
+                lacpy_size_check((m1, n1), (n < m ? n : m, n))
+            elseif uplo == 'L'
+                lacpy_size_check((m1, n1), (m, m < n ? m : n))
+            else
+                lacpy_size_check((m1, n1), (m, n))
+            end
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             ccall((@blasfunc($fn), libblastrampoline), Cvoid,
@@ -7176,6 +7180,9 @@ for (fn, elty) in ((:dlacpy_, :Float64),
         end
     end
 end
+
+# The noinline annotation reduces latency
+@noinline lacpy_size_check((m1, n1), (m, n)) = (m1 < m || n1 < n) && throw(DimensionMismatch(lazy"B of size ($m1,$n1) should have at least size ($m,$n)"))
 
 """
     lacpy!(B, A, uplo) -> B

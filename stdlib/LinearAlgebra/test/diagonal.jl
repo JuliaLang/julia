@@ -61,6 +61,16 @@ Random.seed!(1)
         @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
         @test_throws InexactError convert(Diagonal, ones(2,2))
+
+        # Test reversing
+        # Test reversing along rows
+        @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
+
+        # Test reversing along columns
+        @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
+
+        # Test reversing the entire matrix
+        @test reverse(D)::Diagonal == reverse(Matrix(D)) == reverse!(copy(D))
     end
 
     @testset "Basic properties" begin
@@ -607,6 +617,13 @@ end
             @test_throws ArgumentError D[i, j] = 1
         end
     end
+end
+
+@testset "Test reverse" begin
+    D = Diagonal(randn(5))
+    @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
+    @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
+    @test reverse(D)::Diagonal == reverse(Matrix(D))
 end
 
 @testset "inverse" begin
@@ -1296,6 +1313,26 @@ end
     yadj = Diagonal(A) * x'
     @test typeof(yadj) == typeof(x')
     @test yadj == x'
+end
+
+@testset "Matrix conversion for non-numeric" begin
+    D = Diagonal(fill(Diagonal([1,3]), 2))
+    M = Matrix{eltype(D)}(D)
+    @test M isa Matrix{eltype(D)}
+    @test M == D
+end
+
+@testset "rmul!/lmul! with banded matrices" begin
+    @testset "$(nameof(typeof(B)))" for B in (
+                            Bidiagonal(rand(4), rand(3), :L),
+                            Tridiagonal(rand(3), rand(4), rand(3))
+                    )
+        BA = Array(B)
+        D = Diagonal(rand(size(B,1)))
+        DA = Array(D)
+        @test rmul!(copy(B), D) ≈ B * D ≈ BA * DA
+        @test lmul!(D, copy(B)) ≈ D * B ≈ DA * BA
+    end
 end
 
 end # module TestDiagonal

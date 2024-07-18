@@ -14,6 +14,7 @@ const setproperty! = Core.setfield!
 const swapproperty! = Core.swapfield!
 const modifyproperty! = Core.modifyfield!
 const replaceproperty! = Core.replacefield!
+const _DOCS_ALIASING_WARNING = ""
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
@@ -47,10 +48,11 @@ struct EffectsOverride
     inaccessiblememonly::Bool
     noub::Bool
     noub_if_noinbounds::Bool
+    consistent_overlay::Bool
 end
 function EffectsOverride(
     override::EffectsOverride =
-        EffectsOverride(false, false, false, false, false, false, false, false, false);
+        EffectsOverride(false, false, false, false, false, false, false, false, false, false);
     consistent::Bool = override.consistent,
     effect_free::Bool = override.effect_free,
     nothrow::Bool = override.nothrow,
@@ -59,7 +61,8 @@ function EffectsOverride(
     notaskstate::Bool = override.notaskstate,
     inaccessiblememonly::Bool = override.inaccessiblememonly,
     noub::Bool = override.noub,
-    noub_if_noinbounds::Bool = override.noub_if_noinbounds)
+    noub_if_noinbounds::Bool = override.noub_if_noinbounds,
+    consistent_overlay::Bool = override.consistent_overlay)
     return EffectsOverride(
         consistent,
         effect_free,
@@ -69,9 +72,10 @@ function EffectsOverride(
         notaskstate,
         inaccessiblememonly,
         noub,
-        noub_if_noinbounds)
+        noub_if_noinbounds,
+        consistent_overlay)
 end
-const NUM_EFFECTS_OVERRIDES = 9 # sync with julia.h
+const NUM_EFFECTS_OVERRIDES = 10 # sync with julia.h
 
 # essential files and libraries
 include("essentials.jl")
@@ -175,6 +179,18 @@ something(x::Any, y...) = x
 ############
 # compiler #
 ############
+
+baremodule BuildSettings
+using Core: ARGS, include
+using Core.Compiler: >, getindex, length
+
+MAX_METHODS::Int = 3
+UNOPTIMIZE_THROW_BLOCKS::Bool = true
+
+if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
+    include(BuildSettings, ARGS[3])
+end
+end
 
 if false
     import Base: Base, @show

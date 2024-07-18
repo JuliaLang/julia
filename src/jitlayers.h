@@ -261,9 +261,7 @@ jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &M,
         jl_method_instance_t *mi,
         jl_code_info_t *src,
-        jl_value_t *jlrettype,
-        jl_codegen_params_t &params,
-        size_t min_world, size_t max_world);
+        jl_codegen_params_t &params);
 
 jl_llvm_functions_t jl_emit_codeinst(
         orc::ThreadSafeModule &M,
@@ -537,7 +535,7 @@ public:
     #endif
     uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
-    StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
+    StringRef getFunctionAtAddress(uint64_t Addr, jl_callptr_t invoke, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
     auto getContext() JL_NOTSAFEPOINT {
         return *ContextPool;
     }
@@ -575,6 +573,8 @@ public:
 
     // Note that this is a safepoint due to jl_get_library_ and jl_dlsym calls
     void optimizeDLSyms(Module &M);
+
+    jl_mutex_t jitlock;
 
 private:
 

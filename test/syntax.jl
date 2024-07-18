@@ -2542,19 +2542,19 @@ end
                                                               3 4 5]
 
 @test Meta.parse("for x in 1:10 g(x) end") ==
-  Meta.parse("for#==#x#==#in#==#1:10#==#g(x)#==#end")
+    Meta.parse("for#==#x#==#in#==#1:10#==#g(x)#==#end")
 @test Meta.parse("(f->f(1))() do x x+1 end") ==
-  Meta.parse("(f->f(1))()#==#do#==#x#==#x+1#==#end")
+    Meta.parse("(f->f(1))()#==#do#==#x#==#x+1#==#end")
 @test Meta.parse("while i < 10 i += 1 end") ==
-  Meta.parse("while#==#i#==#<#==#10#==#i#==#+=#==#1#==#end")
+    Meta.parse("while#==#i#==#<#==#10#==#i#==#+=#==#1#==#end")
 @test Meta.parse("begin x=1 end") == Meta.parse("begin#==#x=1#==#end")
 @test Meta.parse("if x<y x+1 elseif y>0 y+1 else z end") ==
-  Meta.parse("if#==#x<y#==#x+1#==#elseif#==#y>0#==#y+1#==#else#==#z#==#end")
+    Meta.parse("if#==#x<y#==#x+1#==#elseif#==#y>0#==#y+1#==#else#==#z#==#end")
 @test Meta.parse("function(x) x end") == Meta.parse("function(x)#==#x#==#end")
 @test Meta.parse("a ? b : c") == Meta.parse("a#==#?#==#b#==#:#==#c")
 @test_parseerror("f#==#(x)=x", "space before \"(\" not allowed in \"f (\" at none:1")
 @test Meta.parse("try f() catch e g() finally h() end") ==
-  Meta.parse("try#==#f()#==#catch#==#e#==#g()#==#finally#==#h()#==#end")
+    Meta.parse("try#==#f()#==#catch#==#e#==#g()#==#finally#==#h()#==#end")
 @test Meta.parse("@m a b") == Meta.parse("@m#==#a#==#b")
 
 # issue #37540
@@ -2831,7 +2831,7 @@ end
     @test a == 5
     @test b == 6
 
-    @test_throws ErrorException (; a, b) = (x=1,)
+    @test_throws FieldError (; a, b) = (x=1,)
 
     @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x end), :error)
     @test Meta.isexpr(Meta.@lower(begin (a, b; c) = x, y end), :error)
@@ -2840,7 +2840,7 @@ end
     f((; a, b)) = a, b
     @test f((b=3, a=4)) == (4, 3)
     @test f((b=3, c=2, a=4)) == (4, 3)
-    @test_throws ErrorException f((;))
+    @test_throws FieldError f((;))
 
     # with type annotation
     let num, den, a, b
@@ -3683,3 +3683,224 @@ end
 # Issue #53729 - Lowering recursion into Expr(:toplevel)
 @test eval(Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(f53729(x) = x)), :(x=1)))) == 1
 @test f53729(2) == 2
+
+# Issue #54701 - Macro hygiene of argument destructuring
+macro makef54701()
+    quote
+        call(f) = f((1, 2))
+        function $(esc(:f54701))()
+            call() do (a54701, b54701)
+                return a54701+b54701
+            end
+        end
+    end
+end
+@makef54701
+@test f54701() == 3
+@test !@isdefined(a54701)
+@test !@isdefined(b54701)
+
+# Issue #54607 - binding creation in foreign modules should not be permitted
+module Foreign54607
+    # Syntactic, not dynamic
+    try_to_create_binding1() = (Foreign54607.foo = 2)
+    @eval try_to_create_binding2() = ($(GlobalRef(Foreign54607, :foo)) = 2)
+    function global_create_binding()
+        global bar
+        bar = 3
+    end
+    baz = 4
+    begin;
+        @Base.Experimental.force_compile
+        compiled_assign = 5
+    end
+    @eval $(GlobalRef(Foreign54607, :gr_assign)) = 6
+end
+@test_throws ErrorException (Foreign54607.foo = 1)
+@test_throws ErrorException Foreign54607.try_to_create_binding1()
+@test_throws ErrorException Foreign54607.try_to_create_binding2()
+@test_throws ErrorException begin
+    @Base.Experimental.force_compile
+    (Foreign54607.foo = 1)
+end
+@test_throws ErrorException @eval (GlobalRef(Foreign54607, :gr_assign2)) = 7
+Foreign54607.global_create_binding()
+@test isdefined(Foreign54607, :bar)
+@test isdefined(Foreign54607, :baz)
+@test isdefined(Foreign54607, :compiled_assign)
+@test isdefined(Foreign54607, :gr_assign)
+Foreign54607.bar = 8
+@test Foreign54607.bar == 8
+begin
+    @Base.Experimental.force_compile
+    Foreign54607.bar = 9
+end
+@test Foreign54607.bar == 9
+
+# Issue #54805 - export mislowering
+module Export54805
+let
+    local b54805=1
+    export b54805
+end
+b54805 = 2
+end
+using .Export54805
+@test b54805 == 2
+
+# F{T} = ... has special syntax semantics, not found anywhere else in the language
+# that make `F` `const` iff an assignment to `F` is global in the relevant scope.
+# We implicitly test this elsewhere, but there's some tricky interactions with
+# explicit declarations that we test here.
+module ImplicitCurlies
+    using ..Test
+    let
+        ImplicitCurly1{T} = Ref{T}
+    end
+    @test !@isdefined(ImplicitCurly1)
+    let
+        global ImplicitCurly2
+        ImplicitCurly2{T} = Ref{T}
+    end
+    @test @isdefined(ImplicitCurly2) && isconst(@__MODULE__, :ImplicitCurly2)
+    begin
+        ImplicitCurly3{T} = Ref{T}
+    end
+    @test @isdefined(ImplicitCurly3) && isconst(@__MODULE__, :ImplicitCurly3)
+    begin
+        local ImplicitCurly4
+        ImplicitCurly4{T} = Ref{T}
+    end
+    @test !@isdefined(ImplicitCurly4)
+    @test_throws "syntax: `global const` declaration not allowed inside function" Core.eval(@__MODULE__, :(function implicit5()
+        global ImplicitCurly5
+        ImplicitCurly5{T} = Ref{T}
+    end))
+    @test !@isdefined(ImplicitCurly5)
+    function implicit6()
+        ImplicitCurly6{T} = Ref{T}
+        return ImplicitCurly6
+    end
+    @test !@isdefined(ImplicitCurly6)
+    # Check return value of assignment expr
+    @test isa((const ImplicitCurly7{T} = Ref{T}), UnionAll)
+    @test isa(begin; ImplicitCurly8{T} = Ref{T}; end, UnionAll)
+end
+
+# `const` does not distribute over assignments
+const aconstassign = bconstassign = 2
+@test isconst(@__MODULE__, :aconstassign)
+@test !isconst(@__MODULE__, :bconstassign)
+@test aconstassign == bconstassign
+
+const afunc_constassign() = bfunc_constassign() = 2
+@test afunc_constassign()() == 2
+@test !@isdefined(bfunc_constassign)
+
+# `const` RHS is regular toplevel scope (not `let`)
+const arhs_toplevel = begin
+    athis_should_be_a_global = 1
+    2
+end
+@test isconst(@__MODULE__, :arhs_toplevel)
+@test !isconst(@__MODULE__, :athis_should_be_a_global)
+@test arhs_toplevel == 2
+@test athis_should_be_a_global == 1
+
+# `const` is permitted before function assignment for legacy reasons
+const fconst_assign() = 1
+const (gconst_assign(), hconst_assign()) = (2, 3)
+@test (fconst_assign(), gconst_assign(), hconst_assign()) == (1, 2, 3)
+@test isconst(@__MODULE__, :fconst_assign)
+@test isconst(@__MODULE__, :gconst_assign)
+@test isconst(@__MODULE__, :hconst_assign)
+
+# `const` assignment to `_` drops the assignment effect,
+# and the conversion, but not the rhs.
+struct CantConvert; end
+Base.convert(::Type{CantConvert}, x) = error()
+@test (const _::CantConvert = 1) == 1
+@test !isconst(@__MODULE__, :_)
+@test_throws ErrorException("expected") (const _ = error("expected"))
+
+# Issue #54787
+const (destruct_const54787...,) = (1,2,3)
+@test destruct_const54787 == (1,2,3)
+@test isconst(@__MODULE__, :destruct_const54787)
+const a54787, b54787, c54787 = destruct_const54787
+@test (a54787, b54787, c54787) == (1,2,3)
+@test isconst(@__MODULE__, :a54787)
+@test isconst(@__MODULE__, :b54787)
+@test isconst(@__MODULE__, :c54787)
+
+# Same number of statements on lhs and rhs, but non-atom
+const c54787_1,c54787_2 = 1,(2*1)
+@test isconst(@__MODULE__, :c54787_1)
+@test isconst(@__MODULE__, :c54787_2)
+@test c54787_1 == 1
+@test c54787_2 == 2
+
+# Methods can be added to any singleton not just generic functions
+struct SingletonMaker; end
+const no_really_this_is_a_function_i_promise = Val{SingletonMaker()}()
+no_really_this_is_a_function_i_promise(a) = 2 + a
+@test Val{SingletonMaker()}()(2) == 4
+
+# Test that lowering doesn't accidentally put a `Module` in the Method name slot
+let src = @Meta.lower let capture=1
+    global foo_lower_block
+    foo_lower_block() = capture
+end
+    code = src.args[1].code
+    for i = length(code):-1:1
+        expr = code[i]
+        Meta.isexpr(expr, :method) || continue
+        @test isa(expr.args[1], Union{GlobalRef, Symbol})
+    end
+end
+
+# Test that globals can be `using`'d even if they are not yet defined
+module UndefGlobal54954
+    global theglobal54954::Int
+end
+using .UndefGlobal54954: theglobal54954
+@test Core.get_binding_type(@__MODULE__, :theglobal54954) === Int
+
+# Extended isdefined
+module ExtendedIsDefined
+    using Test
+    module Import
+        export x2, x3
+        x2 = 2
+        x3 = 3
+        x4 = 4
+    end
+    const x1 = 1
+    using .Import
+    import .Import.x4
+    @test x2 == 2 # Resolve the binding
+    @eval begin
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+    end
+
+    @eval begin
+        @Base.Experimental.force_compile
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+
+        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
+        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+    end
+end

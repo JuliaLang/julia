@@ -149,8 +149,9 @@ and `V` is ``N \\times N``, while in the thin factorization `U` is ``M
 \\times K`` and `V` is ``N \\times K``, where ``K = \\min(M,N)`` is the
 number of singular values.
 
-If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.
-Another (typically slower but more accurate) option is `alg = QRIteration()`.
+`alg` specifies which algorithm and LAPACK method to use for SVD:
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.gesdd!`.
+- `alg = QRIteration()`: Calls `LAPACK.gesvd!` (typically slower but more accurate) .
 
 !!! compat "Julia 1.3"
     The `alg` keyword argument requires Julia 1.3 or later.

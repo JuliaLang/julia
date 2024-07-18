@@ -282,6 +282,9 @@ end
         @testset "Idempotent tests" begin
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
+                if func ∈ (transpose, adjoint)
+                    @test func(func(A)) === A
+                end
             end
         end
         @testset "permutedims(::[Sym]Tridiagonal)" begin
@@ -857,6 +860,55 @@ end
     @test axes(B) === (ax, ax)
     B = SymTridiagonal(dv, uv)
     @test axes(B) === (ax, ax)
+end
+
+@testset "Reverse operation on Tridiagonal" begin
+    for n in 5:6
+        d = randn(n)
+        dl = randn(n - 1)
+        du = randn(n - 1)
+        T = Tridiagonal(dl, d, du)
+        @test reverse(T, dims=1) == reverse(Matrix(T), dims=1)
+        @test reverse(T, dims=2) == reverse(Matrix(T), dims=2)
+        @test reverse(T)::Tridiagonal == reverse(Matrix(T)) == reverse!(copy(T))
+    end
+end
+
+@testset "Reverse operation on SymTridiagonal" begin
+    n = 5
+    d = randn(n)
+    dl = randn(n - 1)
+    ST = SymTridiagonal(d, dl)
+    @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
+    @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
+    @test reverse(ST)::SymTridiagonal == reverse(Matrix(ST))
+end
+
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    for S in (Tridiagonal(ev, dv, ev), SymTridiagonal(dv, ev))
+        @test_throws "invalid index" S[3, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
+end
+
+@testset "rmul!/lmul! with banded matrices" begin
+    dl, d, du = rand(3), rand(4), rand(3)
+    A = Tridiagonal(dl, d, du)
+    D = Diagonal(d)
+    @test rmul!(copy(A), D) ≈ A * D
+    @test lmul!(D, copy(A)) ≈ D * A
+
+    @testset "non-commutative" begin
+        S32 = SizedArrays.SizedArray{(3,2)}(rand(3,2))
+        S33 = SizedArrays.SizedArray{(3,3)}(rand(3,3))
+        S22 = SizedArrays.SizedArray{(2,2)}(rand(2,2))
+        T = Tridiagonal(fill(S32,3), fill(S32, 4), fill(S32, 3))
+        D = Diagonal(fill(S22, size(T,2)))
+        @test rmul!(copy(T), D) ≈ T * D
+        D = Diagonal(fill(S33, size(T,1)))
+        @test lmul!(D, copy(T)) ≈ D * T
+    end
 end
 
 end # module TestTridiagonal

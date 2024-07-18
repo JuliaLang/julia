@@ -307,7 +307,7 @@ jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
         }
         else {
-            codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_ABI);
+            codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI);
             /* Even if this codeinst is ordinarily not cacheable, we need to force
              * it into the cache here, since it was explicitly requested and is
              * otherwise not reachable from anywhere in the system image.
@@ -360,7 +360,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 
     // compile all methods for the current world and type-inference world
 
-    JL_LOCK(&jl_codegen_lock);
     auto target_info = clone.withModuleDo([&](Module &M) {
         return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
     });
@@ -412,7 +411,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         // finally, make sure all referenced methods also get compiled or fixed up
         jl_compile_workqueue(params, policy);
     }
-    JL_UNLOCK(&jl_codegen_lock); // Might GC
     JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
@@ -1242,6 +1240,8 @@ static void materializePreserved(Module &M, Partition &partition) {
         GV.setInitializer(nullptr);
         GV.setLinkage(GlobalValue::ExternalLinkage);
         GV.setVisibility(GlobalValue::HiddenVisibility);
+        if (GV.getDLLStorageClass() != GlobalValue::DLLStorageClassTypes::DefaultStorageClass)
+            continue; // Don't mess with exported or imported globals
         GV.setDSOLocal(true);
     }
 
@@ -1778,6 +1778,7 @@ void jl_dump_native_impl(void *native_code,
             if (jl_small_typeof_copy) {
                 jl_small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
                 jl_small_typeof_copy->setDSOLocal(true);
+                jl_small_typeof_copy->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DefaultStorageClass);
             }
         }
 
@@ -1811,18 +1812,17 @@ void jl_dump_native_impl(void *native_code,
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
         GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(&metadataM);
-        if (TheTriple.isOSBinFormatCOFF()) {
-            jlRTLD_DEFAULT_var->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-        }
-        addComdat(new GlobalVariable(metadataM,
-                                    jlRTLD_DEFAULT_var->getType(),
-                                    true,
-                                    GlobalVariable::ExternalLinkage,
-                                    jlRTLD_DEFAULT_var,
-                                    "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
 
         Type *T_size = DL.getIntPtrType(Context);
         Type *T_psize = T_size->getPointerTo();
+
+        auto FT = FunctionType::get(Type::getInt8Ty(Context)->getPointerTo()->getPointerTo(), {}, false);
+        auto F = Function::Create(FT, Function::ExternalLinkage, "get_jl_RTLD_DEFAULT_handle_addr", metadataM);
+        llvm::IRBuilder<> builder(BasicBlock::Create(Context, "top", F));
+        builder.CreateRet(jlRTLD_DEFAULT_var);
+        F->setLinkage(GlobalValue::ExternalLinkage);
+        if (TheTriple.isOSBinFormatCOFF())
+            F->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLExportStorageClass);
 
         if (TheTriple.isOSWindows()) {
             // Windows expect that the function `_DllMainStartup` is present in an dll.
@@ -1927,104 +1927,68 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
     PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }
 
-// sometimes in GDB you want to find out what code was created from a mi
+// sometimes in GDB you want to find out what code would be created from a mi
 extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instance_t *mi)
 {
     jl_llvmf_dump_t llvmf_dump;
     size_t world = jl_current_task->world_age;
     JL_STREAM *stream = (JL_STREAM*)STDERR_FILENO;
 
+    jl_code_info_t *src = jl_gdbcodetyped1(mi, world);
+    JL_GC_PUSH1(&src);
+
     jl_printf(stream, "---- dumping IR for ----\n");
     jl_static_show(stream, (jl_value_t*)mi);
     jl_printf(stream, "\n----\n");
 
-    jl_printf(stream, "\n---- unoptimized IR ----");
-    jl_get_llvmf_defn(&llvmf_dump, mi, world, 0, false, jl_default_cgparams);
+    jl_printf(stream, "\n---- unoptimized IR ----\n");
+    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, false, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
-        jl_static_show(stream, ir);
+        if (ir != NULL && jl_is_string(ir))
+            jl_printf(stream, "%s", jl_string_data(ir));
     }
-    jl_printf(stream, "----\n");
+    jl_printf(stream, "\n----\n");
 
-    jl_printf(stream, "\n---- optimized IR ----");
-    jl_get_llvmf_defn(&llvmf_dump, mi, world, 0, true, jl_default_cgparams);
+    jl_printf(stream, "\n---- optimized IR ----\n");
+    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
-        jl_static_show(stream, ir);
+        if (ir != NULL && jl_is_string(ir))
+            jl_printf(stream, "%s", jl_string_data(ir));
     }
-    jl_printf(stream, "----\n");
+    jl_printf(stream, "\n----\n");
 
-    jl_printf(stream, "\n---- assembly ----");
-    jl_get_llvmf_defn(&llvmf_dump, mi, world, 0, true, jl_default_cgparams);
+    jl_printf(stream, "\n---- assembly ----\n");
+    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_asm(&llvmf_dump, 0, "", "source", 0, true);
-        jl_static_show(stream, ir);
+        if (ir != NULL && jl_is_string(ir))
+            jl_printf(stream, "%s", jl_string_data(ir));
     }
-    jl_printf(stream, "----\n");
+    jl_printf(stream, "\n----\n");
+    JL_GC_POP();
 
-    jl_code_info_t *src = NULL;
-    jl_value_t *ci = jl_default_cgparams.lookup(mi, world, world);
-    if (ci == jl_nothing) {
-        ci = (jl_value_t*)jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE_UNCACHED);
-    } else {
-        ci = NULL;
-    }
-    if (ci) {
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
-        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method)) {
-            JL_GC_PUSH2(&codeinst, &src);
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
-            JL_GC_POP();
-        }
-    }
     return src;
 }
 
 // --- native code info, and dump function to IR and ASM ---
 // Get pointer to llvm::Function instance, compiling if necessary
 // for use in reflection from Julia.
-// This is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
-// misuse will leak memory or cause read-after-free
+// This is paired with jl_dump_function_ir and jl_dump_function_asm, either of which will free all memory allocated here
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params)
 {
-    if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
-            mi->def.method->generator == NULL && !mi->def.method->is_for_opaque_closure) {
-        // not a generic function
-        dump->F = NULL;
-        return;
-    }
-
-    // get the source code for this function
-    jl_code_info_t *src = NULL;
-    jl_code_instance_t *codeinst = NULL;
-    JL_GC_PUSH2(&src, &codeinst);
-    jl_value_t *ci = params.lookup(mi, world, world);
-    if (ci && ci != jl_nothing) {
-        codeinst = (jl_code_instance_t*)ci;
-        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
-    }
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE_UNCACHED);
-        if (codeinst) {
-            src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
-        }
-    }
-    if (src) {
-        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
-    }
-
     // emit this function into a new llvm module
-    if (codeinst && src && jl_is_code_info(src)) {
+    dump->F = nullptr;
+    dump->TSM = nullptr;
+    if (src && jl_is_code_info(src)) {
         auto ctx = jl_ExecutionEngine->getContext();
         orc::ThreadSafeModule m = jl_create_ts_module(name_from_method_instance(mi), *ctx);
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
-        JL_LOCK(&jl_codegen_lock);
         auto target_info = m.withModuleDo([&](Module &M) {
             return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
         });
@@ -2038,8 +2002,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         // This would also be nice, but it seems to cause OOMs on the windows32 builder
         // To get correct names in the IR this needs to be at least 2
         output.debug_level = params.debug_info_level;
-        auto decls = jl_emit_code(m, mi, src, codeinst->rettype, output, jl_atomic_load_relaxed(&codeinst->min_world),  jl_atomic_load_relaxed(&codeinst->max_world));
-        JL_UNLOCK(&jl_codegen_lock); // Might GC
+        auto decls = jl_emit_code(m, mi, src, output);
 
         Function *F = NULL;
         if (m) {
@@ -2089,7 +2052,6 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                 fname = &decls.functionObject;
             F = cast<Function>(m.getModuleUnlocked()->getNamedValue(*fname));
         }
-        JL_GC_POP();
         if (measure_compile_time_enabled) {
             auto end = jl_hrtime();
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
@@ -2100,7 +2062,4 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             return;
         }
     }
-
-    const char *mname = name_from_method_instance(mi);
-    jl_errorf("unable to compile source for function %s", mname);
 }

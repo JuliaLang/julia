@@ -8,6 +8,7 @@
 #include "llvm-version.h"
 
 #include "llvm/IR/Attributes.h"
+#include "llvm/IR/DerivedTypes.h"
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
@@ -162,7 +163,7 @@ namespace jl_intrinsics {
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx),
+                    { PointerType::get(ctx, 0),
                         T_size,
                         T_size }, // type
                     false),
@@ -257,8 +258,8 @@ namespace jl_intrinsics {
 }
 
 namespace jl_well_known {
-    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc_instrumented);
-    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc_instrumented);
+    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
+    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
 
@@ -272,7 +273,7 @@ namespace jl_well_known {
             auto bigAllocFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx), T_size , T_size},
+                    { PointerType::get(ctx, 0), T_size , T_size},
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
@@ -288,7 +289,7 @@ namespace jl_well_known {
             auto poolAllocFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx), T_size },
+                    { PointerType::get(ctx, 0), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx), T_size },
                     false),
                 Function::ExternalLinkage,
                 GC_POOL_ALLOC_NAME);
@@ -324,7 +325,7 @@ namespace jl_well_known {
             auto allocTypedFunc = Function::Create(
                 FunctionType::get(
                     T_prjlvalue,
-                    { Type::getInt8PtrTy(ctx),
+                    { PointerType::get(ctx, 0),
                         T_size,
                         T_size }, // type
                     false),

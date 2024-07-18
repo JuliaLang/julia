@@ -122,9 +122,11 @@ typedef struct _jl_gc_chunk_t {
 
 // layout for big (>2k) objects
 
+extern uintptr_t gc_bigval_sentinel_tag;
+
 JL_EXTENSION typedef struct _bigval_t {
     struct _bigval_t *next;
-    struct _bigval_t **prev; // pointer to the next field of the prev entry
+    struct _bigval_t *prev;
     size_t sz;
 #ifdef _P64 // Add padding so that the value is 64-byte aligned
     // (8 pointers of 8 bytes each) - (4 other pointers in struct)
@@ -153,7 +155,7 @@ typedef struct _mallocarray_t {
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
     // next metadata structure in per-thread list
-    // or in one of the `jl_gc_global_page_pool_t`
+    // or in one of the `jl_gc_page_stack_t`
     struct _jl_gc_pagemeta_t *next;
     // index of pool that owns this page
     uint8_t pool_n;
@@ -440,7 +442,7 @@ STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 #endif
 
 extern jl_gc_num_t gc_num;
-extern bigval_t *big_objects_marked;
+extern bigval_t *oldest_generation_of_bigvals;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t buffered_pages;
@@ -448,6 +450,54 @@ extern int gc_first_tid;
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
 extern gc_heapstatus_t gc_heap_stats;
+
+STATIC_INLINE int gc_first_parallel_collector_thread_id(void) JL_NOTSAFEPOINT
+{
+    if (jl_n_markthreads == 0) {
+        return 0;
+    }
+    return gc_first_tid;
+}
+
+STATIC_INLINE int gc_last_parallel_collector_thread_id(void) JL_NOTSAFEPOINT
+{
+    if (jl_n_markthreads == 0) {
+        return -1;
+    }
+    return gc_first_tid + jl_n_markthreads - 1;
+}
+
+STATIC_INLINE int gc_ith_parallel_collector_thread_id(int i) JL_NOTSAFEPOINT
+{
+    assert(i >= 0 && i < jl_n_markthreads);
+    return gc_first_tid + i;
+}
+
+STATIC_INLINE int gc_is_parallel_collector_thread(int tid) JL_NOTSAFEPOINT
+{
+    return tid >= gc_first_tid && tid <= gc_last_parallel_collector_thread_id();
+}
+
+STATIC_INLINE int gc_random_parallel_collector_thread_id(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    assert(jl_n_markthreads > 0);
+    int v = gc_first_tid + (int)cong(jl_n_markthreads - 1, &ptls->rngseed);
+    assert(v >= gc_first_tid && v <= gc_last_parallel_collector_thread_id());
+    return v;
+}
+
+STATIC_INLINE int gc_parallel_collector_threads_enabled(void) JL_NOTSAFEPOINT
+{
+    return jl_n_markthreads > 0;
+}
+
+STATIC_INLINE void gc_check_ptls_of_parallel_collector_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    (void)ptls;
+    assert(gc_parallel_collector_threads_enabled());
+    assert(ptls != NULL);
+    assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
+}
 
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
@@ -491,21 +541,30 @@ STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
-STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr) JL_NOTSAFEPOINT
+FORCE_INLINE void gc_big_object_unlink(const bigval_t *node) JL_NOTSAFEPOINT
 {
-    *hdr->prev = hdr->next;
-    if (hdr->next) {
-        hdr->next->prev = hdr->prev;
+    assert(node != oldest_generation_of_bigvals);
+    assert(node->header != gc_bigval_sentinel_tag);
+    assert(node->prev != NULL);
+    if (node->next != NULL) {
+        node->next->prev = node->prev;
     }
+    node->prev->next = node->next;
 }
 
-STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFEPOINT
+FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL_NOTSAFEPOINT
 {
-    hdr->next = *list;
-    hdr->prev = list;
-    if (*list)
-        (*list)->prev = &hdr->next;
-    *list = hdr;
+    assert(sentinel_node != NULL);
+    assert(sentinel_node->header == gc_bigval_sentinel_tag);
+    assert(sentinel_node->prev == NULL);
+    assert(node->header != gc_bigval_sentinel_tag);
+    // a new node gets linked in at the head of the list
+    node->next = sentinel_node->next;
+    node->prev = sentinel_node;
+    if (sentinel_node->next != NULL) {
+        sentinel_node->next->prev = node;
+    }
+    sentinel_node->next = node;
 }
 
 extern uv_mutex_t gc_threads_lock;
@@ -513,6 +572,7 @@ extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
 extern _Atomic(int) gc_n_threads_sweeping;
+extern uv_barrier_t thread_init_done;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
@@ -521,7 +581,7 @@ void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
 void gc_sweep_pool_parallel(jl_ptls_t ptls);
 void gc_free_pages(void);
-void sweep_stack_pools(void);
+void sweep_stack_pools(void) JL_NOTSAFEPOINT;
 void jl_gc_debug_init(void);
 
 // GC pages
@@ -692,24 +752,6 @@ static inline void gc_scrub_record_task(jl_task_t *ta) JL_NOTSAFEPOINT
     (void)ta;
 }
 static inline void gc_scrub(void)
-{
-}
-#endif
-
-#ifdef OBJPROFILE
-void objprofile_count(void *ty, int old, int sz) JL_NOTSAFEPOINT;
-void objprofile_printall(void);
-void objprofile_reset(void);
-#else
-static inline void objprofile_count(void *ty, int old, int sz) JL_NOTSAFEPOINT
-{
-}
-
-static inline void objprofile_printall(void)
-{
-}
-
-static inline void objprofile_reset(void)
 {
 }
 #endif

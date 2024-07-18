@@ -969,10 +969,12 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         c.R15 = mctx->R15;
         c.Rip = mctx->Rip;
         memcpy(&c.Xmm6, &mctx->Xmm6, 10 * sizeof(mctx->Xmm6)); // Xmm6-Xmm15
-#else
+#elif defined(_CPU_X86_)
         c.Eip = mctx->Eip;
         c.Esp = mctx->Esp;
         c.Ebp = mctx->Ebp;
+#else
+        #error Windows is currently only supported on x86 and x86_64
 #endif
         context = &c;
 #elif defined(JL_HAVE_UNW_CONTEXT)
@@ -1151,8 +1153,6 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
       (void)c;
      #endif
-#elif defined(JL_HAVE_SIGALTSTACK)
-     #pragma message("jl_rec_backtrace not defined for SIGALTSTACK")
 #else
      #pragma message("jl_rec_backtrace not defined for unknown task system")
 #endif
@@ -1223,7 +1223,7 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
         if (ptls2 == NULL) {
             continue;
         }
-        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
         int t_state = JL_TASK_STATE_DONE;
         jl_task_t *t = ptls2->root_task;

@@ -980,7 +980,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     if (R && ans && e->envidx < e->envsz) {
         jl_value_t *val;
         if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
-            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0); // special token result that represents N::Int in the envout
+            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
         else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
             val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
         else if (vb.lb == vb.ub)
@@ -2784,12 +2784,9 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
                 res = jl_bottom_type;
             }
             else if (obviously_egal(var->lb, ub)) {
-                JL_TRY {
-                    res = jl_substitute_var(body, var, ub);
-                }
-                JL_CATCH {
+                res = jl_substitute_var_nothrow(body, var, ub, 2);
+                if (res == NULL)
                     res = jl_bottom_type;
-                }
             }
             else {
                 if (ub != var->ub) {
@@ -2815,6 +2812,50 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
     }
     assert(res != NULL);
     return res;
+}
+
+// TODO: fuse with reachable_var?
+static int has_typevar_via_flatten_env(jl_value_t *x, jl_tvar_t *t, jl_ivarbinding_t *allvars, int8_t *checked) {
+    if (jl_is_unionall(x)) {
+        jl_tvar_t *var = ((jl_unionall_t *)x)->var;
+        if (has_typevar_via_flatten_env(var->lb, t, allvars, checked) ||
+            has_typevar_via_flatten_env(var->ub, t, allvars, checked))
+            return 1;
+        return has_typevar_via_flatten_env(((jl_unionall_t *)x)->body, t, allvars, checked);
+    }
+    else if (jl_is_uniontype(x)) {
+        return has_typevar_via_flatten_env(((jl_uniontype_t *)x)->a, t, allvars, checked) ||
+            has_typevar_via_flatten_env(((jl_uniontype_t *)x)->b, t, allvars, checked);
+    }
+    else if (jl_is_vararg(x)) {
+        jl_vararg_t *v = (jl_vararg_t *)x;
+        return (v->T && has_typevar_via_flatten_env(v->T, t, allvars, checked)) ||
+            (v->N && has_typevar_via_flatten_env(v->N, t, allvars, checked));
+    }
+    else if (jl_is_datatype(x)) {
+        for (size_t i = 0; i < jl_nparams(x); i++) {
+            if (has_typevar_via_flatten_env(jl_tparam(x, i), t, allvars, checked))
+                return 1;
+        }
+        return 0;
+    }
+    else if (jl_is_typevar(x)) {
+        if (t == (jl_tvar_t *)x)
+            return 1;
+        size_t ind = 0;
+        jl_ivarbinding_t *itemp = allvars;
+        while (itemp && *itemp->var != (jl_tvar_t *)x)
+        {
+            ind++;
+            itemp = itemp->next;
+        }
+        if (itemp == NULL || checked[ind])
+            return 0;
+        checked[ind] = 1;
+        return has_typevar_via_flatten_env(*itemp->lb, t, allvars, checked) ||
+            has_typevar_via_flatten_env(*itemp->ub, t, allvars, checked);
+    }
+    return 0;
 }
 
 // Caller might not have rooted `res`
@@ -2914,8 +2955,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     // remove/replace/rewrap free occurrences of this var in the environment
     int wrapped = 0;
     jl_ivarbinding_t *pwrap = NULL;
+    int vcount = icount + current_env_length(e);
+    int8_t *checked = (int8_t *)alloca(vcount);
     for (jl_ivarbinding_t *btemp = allvars, *pbtemp = NULL; btemp != NULL; btemp = btemp->next) {
         int bdepth0 = btemp->root->depth0;
+        int innerflag = 0;
         ivar = *btemp->var;
         ilb = *btemp->lb;
         iub = *btemp->ub;
@@ -2937,18 +2981,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             else if (ilb == (jl_value_t*)vb->var) {
                 *btemp->lb = vb->lb;
             }
-            else if (bdepth0 == vb->depth0 && !jl_has_typevar(vb->lb, ivar) && !jl_has_typevar(vb->ub, ivar)) {
-                // if our variable is T, and some outer variable has constraint S = Ref{T},
-                // move the `where T` outside `where S` instead of putting it here. issue #21243.
-                if (newvar != vb->var)
-                    *btemp->lb = jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar);
-                if (!wrapped) pwrap = pbtemp;
-                wrapped = 1;
-            }
             else {
-                *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                innerflag |= 1;
             }
-            assert((jl_value_t*)ivar != *btemp->lb);
         }
         if (jl_has_typevar(iub, vb->var)) {
             assert(btemp->root->var == ivar || bdepth0 == vb->depth0);
@@ -2961,12 +2996,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 }
             }
             if (varval) {
-                JL_TRY {
-                    *btemp->ub = jl_substitute_var(iub, vb->var, varval);
-                }
-                JL_CATCH {
+                iub = jl_substitute_var_nothrow(iub, vb->var, varval, 2);
+                if (iub == NULL)
                     res = jl_bottom_type;
-                }
+                else
+                    *btemp->ub = iub;
             }
             else if (iub == (jl_value_t*)vb->var) {
                 // TODO: this loses some constraints, such as in this test, where we replace T4<:S3 (e.g. T4==S3 since T4 only appears covariantly once) with T4<:Any
@@ -2975,14 +3009,35 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 // Tuple{Float64, T3, T4} where {S3, T3<:Tuple{S3}, T4<:S3}
                 *btemp->ub = vb->ub;
             }
-            else if (bdepth0 == vb->depth0 && !jl_has_typevar(vb->lb, ivar) && !jl_has_typevar(vb->ub, ivar)) {
-                if (newvar != vb->var)
-                    *btemp->ub = jl_substitute_var(iub, vb->var, (jl_value_t*)newvar);
-                if (!wrapped) pwrap = pbtemp;
-                wrapped = 1;
+            else {
+                innerflag |= 2;
             }
-            else
-                *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+            if (innerflag) {
+                memset(checked, 0, vcount);
+                if (bdepth0 != vb->depth0 ||
+                    has_typevar_via_flatten_env(vb->lb, ivar, allvars, checked) ||
+                    has_typevar_via_flatten_env(vb->ub, ivar, allvars, checked)) {
+                    if (innerflag & 1)
+                        *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                    if (innerflag & 2)
+                        *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+                }
+                else {
+                    assert(btemp->root != vb);
+                    // if our variable is T, and some outer variable has constraint S = Ref{T},
+                    // move the `where T` outside `where S` instead of putting it here. issue #21243.
+                    if (newvar != vb->var) {
+                        if (innerflag & 1)
+                            *btemp->lb = jl_substitute_var(ilb, vb->var, (jl_value_t*)newvar);
+                        if (innerflag & 2)
+                            *btemp->ub = jl_substitute_var(iub, vb->var, (jl_value_t*)newvar);
+                    }
+                    if (!wrapped)
+                        pwrap = pbtemp;
+                    wrapped = 1;
+                }
+            }
+            assert((jl_value_t*)ivar != *btemp->lb);
             assert((jl_value_t*)ivar != *btemp->ub);
         }
         pbtemp = btemp;
@@ -3001,6 +3056,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             pwrap->next = inew;
         else
             allvars = inew;
+        vcount++;
     }
 
     // Re-sort the innervar inside the (reversed) var list.
@@ -3008,17 +3064,23 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     // If this is slow, we could possibly switch to a simpler graph sort, such as Tarjan's SCC.
     if (icount > 0) {
         jl_ivarbinding_t *pib1 = NULL;
+#ifndef NDEBUG
+        size_t sort_count = 0;
+#endif
         while (1) {
             jl_ivarbinding_t *ib1 = pib1 == NULL ? allvars : pib1->next;
             if (ib1 == NULL) break;
-            if (jl_has_free_typevars(*ib1->lb) || jl_has_free_typevars(*ib1->ub)) {
+            assert((++sort_count) <= (vcount * (vcount + 1)) >> 1);
+            int lbfree = jl_has_free_typevars(*ib1->lb);
+            int ubfree = jl_has_free_typevars(*ib1->ub);
+            if (lbfree || ubfree) {
                 int changed = 0;
                 jl_ivarbinding_t *pib2 = ib1, *ib2 = ib1->next;
                 while (ib2 != NULL) {
                     int isinnervar = ib2->root->var != *ib2->var;
                     if (isinnervar && ib1->root->depth0 == ib2->root->depth0 &&
-                        (jl_has_typevar(*ib1->lb, *ib2->var) ||
-                        jl_has_typevar(*ib1->ub, *ib2->var))) {
+                        ((lbfree && jl_has_typevar(*ib1->lb, *ib2->var)) ||
+                         (ubfree && jl_has_typevar(*ib1->ub, *ib2->var)))) {
                         pib2->next = ib2->next;
                         ib2->next = ib1;
                         ib2->root = ib1->root;
@@ -3056,6 +3118,13 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 if (jl_has_typevar(iub, ivar))
                     *btemp2->ub = jl_substitute_var(iub, ivar, nivar);
             }
+            if (!wrapped && !varval) {
+                // newvar also needs bounds substitution.
+                if (jl_has_typevar(vb->lb, ivar))
+                    vb->lb = jl_substitute_var(vb->lb, ivar, nivar);
+                if (jl_has_typevar(vb->ub, ivar))
+                    vb->ub = jl_substitute_var(vb->ub, ivar, nivar);
+            }
             *btemp1->var = (jl_tvar_t *)nivar;
         }
     }
@@ -3071,11 +3140,13 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
         if (root != vb) icount--;
         if (root->innervars != NULL) {
-            size_t len = jl_array_nrows(root->innervars);
+            jl_array_t *rinnervars = root->innervars;
+            JL_GC_PROMISE_ROOTED(rinnervars);
+            size_t len = jl_array_nrows(rinnervars);
             if (icount > len)
-                jl_array_grow_end(root->innervars, icount - len);
+                jl_array_grow_end(rinnervars, icount - len);
             if (icount < len)
-                jl_array_del_end(root->innervars, len - icount);
+                jl_array_del_end(rinnervars, len - icount);
         }
         else if (icount > 0) {
             root->innervars = jl_alloc_array_1d(jl_array_any_type, icount);
@@ -3095,20 +3166,22 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     // if `v` still occurs, re-wrap body in `UnionAll v` or eliminate the UnionAll
     if (jl_has_typevar(res, vb->var)) {
         if (varval) {
-            JL_TRY {
-                // you can construct `T{x} where x` even if T's parameter is actually
-                // limited. in that case we might get an invalid instantiation here.
-                res = jl_substitute_var(res, vb->var, varval);
-                // simplify chains of UnionAlls where bounds become equal
-                while (jl_is_unionall(res) && obviously_egal(((jl_unionall_t*)res)->var->lb,
-                                                             ((jl_unionall_t*)res)->var->ub))
-                    res = jl_instantiate_unionall((jl_unionall_t*)res, ((jl_unionall_t*)res)->var->lb);
+            // you can construct `T{x} where x` even if T's parameter is actually
+            // limited. in that case we might get an invalid instantiation here.
+            res = jl_substitute_var_nothrow(res, vb->var, varval, 2);
+            // simplify chains of UnionAlls where bounds become equal
+            while (res != NULL && jl_is_unionall(res) && obviously_egal(((jl_unionall_t*)res)->var->lb,
+                                                         ((jl_unionall_t*)res)->var->ub)) {
+                jl_unionall_t * ures = (jl_unionall_t *)res;
+                res = jl_substitute_var_nothrow(ures->body, ures->var, ures->var->lb, 2);
             }
-            JL_CATCH {
+            if (res == NULL)
                 res = jl_bottom_type;
-            }
         }
         else {
+            // re-fresh newvar if bounds changed.
+            if (vb->lb != newvar->lb || vb->ub != newvar->ub)
+                newvar = jl_new_typevar(newvar->name, vb->lb, vb->ub);
             if (newvar != vb->var)
                 res = jl_substitute_var(res, vb->var, (jl_value_t*)newvar);
             varval = (jl_value_t*)newvar;
@@ -3315,7 +3388,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
             ii = (jl_value_t*)vmy;
         else {
             JL_GC_PUSH1(&ii);
-            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL, 1);
+            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL, 1, 0);
             JL_GC_POP();
         }
         return ii;
@@ -3371,7 +3444,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
         else if (yp2 && obviously_egal(yp1, ii) && obviously_egal(yp2, i2))
             ii = (jl_value_t*)vmy;
         else
-            ii = (jl_value_t*)jl_wrap_vararg(ii, i2, 1);
+            ii = (jl_value_t*)jl_wrap_vararg(ii, i2, 1, 0);
     }
     JL_GC_POP();
     return ii;
@@ -4597,7 +4670,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         JL_GC_PUSH2(&newt, &n);
         newt = insert_nondiagonal(t, troot, widen2ub);
         if (t != newt)
-            type = (jl_value_t *)jl_wrap_vararg(newt, n, 0);
+            type = (jl_value_t *)jl_wrap_vararg(newt, n, 0, 0);
         JL_GC_POP();
     }
     else if (jl_is_datatype(type)) {

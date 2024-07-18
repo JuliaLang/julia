@@ -131,7 +131,7 @@ struct InliningState{Interp<:AbstractInterpreter}
     interp::Interp
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    edges = sv.stmt_edges[1]::Vector{Any}
+    edges = sv.stmt_edges[1]
     return InliningState(edges, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
@@ -347,7 +347,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             ⊑(𝕃ₒ, typ, Tuple) || return (false, false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
-            source = argextype(args[4], src)
+            source = argextype(args[5], src)
             if !(⊑(𝕃ₒ, rt_lb, Type) && ⊑(𝕃ₒ, rt_ub, Type) && ⊑(𝕃ₒ, source, Method))
                 return (false, false, false)
             end
@@ -666,7 +666,7 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
     f === nothing && return false
     if f === getfield
         nargs = 4
-    elseif f === memoryref || f === memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefnew || f === memoryrefget || f === memoryref_isassigned
         nargs = 4
     elseif f === memoryrefset!
         nargs = 5
@@ -1178,20 +1178,19 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 # Any statements from here to the end of the block have been wrapped in Core.Const(...)
                 # by type inference (effectively deleting them). Only task left is to replace the block
                 # terminator with an explicit `unreachable` marker.
+
                 if block_end > idx
+                    if is_asserts()
+                        # Verify that type-inference did its job
+                        for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
+                            @assert i in sv.unreachable
+                        end
+                    end
                     code[block_end] = ReturnNode()
                     codelocs[3block_end-2], codelocs[3block_end-1], codelocs[3block_end-0] = (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0])
                     ssavaluetypes[block_end] = Union{}
                     stmtinfo[block_end] = NoCallInfo()
                     ssaflags[block_end] = IR_FLAG_NOTHROW
-
-                    # Verify that type-inference did its job
-                    if is_asserts()
-                        for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
-                            @assert i in sv.unreachable
-                        end
-                    end
-
                     idx += block_end - idx
                 else
                     insert!(code, idx + 1, ReturnNode())
@@ -1221,6 +1220,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         idx += 1
         oldidx += 1
     end
+    empty!(sv.unreachable)
 
     if ssachangemap !== nothing && labelchangemap !== nothing
         renumber_ir_elements!(code, ssachangemap, labelchangemap)
@@ -1254,7 +1254,7 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
     @timeit "domtree 1" domtree = construct_domtree(ir)
-    defuse_insts = scan_slot_def_use(ci.nargs, ci, ir.stmts.stmt)
+    defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots

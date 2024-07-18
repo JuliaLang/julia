@@ -2,6 +2,9 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
+# check that @doc can work before REPL is loaded
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc sin'`, String), "nothing")
+
 using Markdown
 using REPL
 
@@ -120,7 +123,7 @@ module NoDocStrings end
 # General tests for docstrings.
 
 const LINE_NUMBER = @__LINE__() + 1
-"DocsTest"
+"DocsTest, evaluating $(K)"     # test that module docstring is evaluated within module
 module DocsTest
 
 using Markdown
@@ -265,7 +268,7 @@ fnospecialize(@nospecialize(x::AbstractArray)) = 2
 end
 
 let md = meta(DocsTest)[@var(DocsTest)]
-    @test docstrings_equal(md.docs[Union{}], doc"DocsTest")
+    @test docstrings_equal(md.docs[Union{}], doc"DocsTest, evaluating K")
     # Check that plain docstrings store a module reference.
     # https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
     @test md.docs[Union{}].data[:module] == DocsTest

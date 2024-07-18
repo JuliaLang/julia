@@ -956,7 +956,7 @@ julia> bitstring(2.2)
 ```
 """
 function bitstring(x::T) where {T}
-    isprimitivetype(T) || throw(ArgumentError("$T not a primitive type"))
+    isprimitivetype(T) || throw(ArgumentError(LazyString(T, " not a primitive type")))
     sz = sizeof(T) * 8
     str = StringMemory(sz)
     i = sz
@@ -978,7 +978,7 @@ end
 
 Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indices, such that `n == sum(digits[k]*base^(k-1) for k=1:length(digits))`.
+higher indices, such that `n == sum(digits[k]*base^(k-1) for k in eachindex(digits))`.
 
 See also [`ndigits`](@ref), [`digits!`](@ref),
 and for base 2 also [`bitstring`](@ref), [`count_ones`](@ref).
@@ -1056,7 +1056,7 @@ julia> digits!([2, 2, 2, 2, 2, 2], 10, base = 2)
 function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
     2 <= abs(base) || throw(DomainError(base, "base must be ≥ 2 or ≤ -2"))
     hastypemax(T) && abs(base) - 1 > typemax(T) &&
-        throw(ArgumentError("type $T too small for base $base"))
+        throw(ArgumentError(LazyString("type ", T, " too small for base ", base)))
     isempty(a) && return a
 
     if base > 0

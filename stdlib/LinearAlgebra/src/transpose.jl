@@ -74,27 +74,32 @@ julia> A
 ```
 """
 adjoint!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(adjoint, B, A)
+
+@noinline function check_transpose_axes(axesA, axesB)
+    axesB == reverse(axesA) || throw(DimensionMismatch("axes of the destination are incompatible with that of the source"))
+end
+
 function transpose!(B::AbstractVector, A::AbstractMatrix)
-    axes(B,1) == axes(A,2) && axes(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    check_transpose_axes((axes(B,1), axes(B,2)), axes(A))
     copyto!(B, A)
 end
 function transpose!(B::AbstractMatrix, A::AbstractVector)
-    axes(B,2) == axes(A,1) && axes(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    check_transpose_axes(axes(B), (axes(A,1), axes(A,2)))
     copyto!(B, A)
 end
 function adjoint!(B::AbstractVector, A::AbstractMatrix)
-    axes(B,1) == axes(A,2) && axes(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    check_transpose_axes((axes(B,1), axes(B,2)), axes(A))
     ccopy!(B, A)
 end
 function adjoint!(B::AbstractMatrix, A::AbstractVector)
-    axes(B,2) == axes(A,1) && axes(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
+    check_transpose_axes(axes(B), (axes(A,1), axes(A,2)))
     ccopy!(B, A)
 end
 
 const transposebaselength=64
 function transpose_f!(f, B::AbstractMatrix, A::AbstractMatrix)
     inds = axes(A)
-    axes(B,1) == inds[2] && axes(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
+    check_transpose_axes(axes(B), inds)
 
     m, n = length(inds[1]), length(inds[2])
     if m*n<=4*transposebaselength

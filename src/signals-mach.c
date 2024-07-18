@@ -45,7 +45,6 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
-extern uv_mutex_t safepoint_lock;
 extern uv_cond_t safepoint_cond_begin;
 
 #define GC_STATE_SHIFT 8*sizeof(int16_t)
@@ -353,7 +352,7 @@ kern_return_t catch_mach_exception_raise(
     // XXX: jl_throw_in_thread or segv_handler will eventually check this, but
     //      we would like to avoid some of this work if we could detect this earlier
     // if (jl_has_safe_restore(ptls2)) {
-    //     jl_throw_in_thread(ptls2, thread, jl_stackovf_exception);
+    //     jl_throw_in_thread(ptls2, thread, NULL);
     //     return KERN_SUCCESS;
     // }
     if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING)
@@ -385,6 +384,7 @@ kern_return_t catch_mach_exception_raise(
         return KERN_FAILURE;
     jl_value_t *excpt;
     if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {
+        stack_overflow_warning();
         excpt = jl_stackovf_exception;
     }
     else if (is_write_fault(exc_state)) // false for alignment errors

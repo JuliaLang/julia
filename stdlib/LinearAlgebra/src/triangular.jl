@@ -51,16 +51,6 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
     end
 end
 
-similar(A::UpperTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}) where {T,Ti} =
-    UpperTriangular(similar(parent(parent(A)), T))
-similar(A::UnitUpperTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}) where {T,Ti} =
-    UnitUpperTriangular(similar(parent(parent(A)), T))
-similar(A::LowerTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}) where {T,Ti} =
-    LowerTriangular(similar(parent(parent(A)), T))
-similar(A::UnitLowerTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}) where {T,Ti} =
-    UnitLowerTriangular(similar(parent(parent(A)), T))
-
-
 """
     LowerTriangular(A::AbstractMatrix)
 
@@ -185,44 +175,12 @@ function imag(A::UnitUpperTriangular)
     return Uim
 end
 
-Array(A::AbstractTriangular) = Matrix(A)
 parent(A::UpperOrLowerTriangular) = A.data
 
 # For strided matrices, we may only loop over the filled triangle
 copy(A::UpperOrLowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = copyto!(similar(A), A)
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
-
-function Matrix{T}(A::LowerTriangular) where T
-    B = Matrix{T}(undef, size(A, 1), size(A, 1))
-    copyto!(B, A.data)
-    tril!(B)
-    B
-end
-function Matrix{T}(A::UnitLowerTriangular) where T
-    B = Matrix{T}(undef, size(A, 1), size(A, 1))
-    copyto!(B, A.data)
-    tril!(B)
-    for i = 1:size(B,1)
-        B[i,i] = oneunit(T)
-    end
-    B
-end
-function Matrix{T}(A::UpperTriangular) where T
-    B = Matrix{T}(undef, size(A, 1), size(A, 1))
-    copyto!(B, A.data)
-    triu!(B)
-    B
-end
-function Matrix{T}(A::UnitUpperTriangular) where T
-    B = Matrix{T}(undef, size(A, 1), size(A, 1))
-    copyto!(B, A.data)
-    triu!(B)
-    for i = 1:size(B,1)
-        B[i,i] = oneunit(T)
-    end
-    B
-end
 
 function full!(A::LowerTriangular)
     B = A.data
@@ -269,19 +227,33 @@ Base.isstored(A::UnitUpperTriangular, i::Int, j::Int) =
 Base.isstored(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? Base.isstored(A.data, i, j) : false
 
-@propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
+@propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Int, j::Int) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-@propagate_inbounds getindex(A::LowerTriangular, i::Integer, j::Integer) =
+@propagate_inbounds getindex(A::LowerTriangular, i::Int, j::Int) =
     i >= j ? A.data[i,j] : _zero(A.data,j,i)
-@propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
+@propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Int, j::Int) where {T} =
     i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-@propagate_inbounds getindex(A::UpperTriangular, i::Integer, j::Integer) =
+@propagate_inbounds getindex(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? A.data[i,j] : _zero(A.data,j,i)
+
+_zero_triangular_half_str(::Type{<:UpperOrUnitUpperTriangular}) = "lower"
+_zero_triangular_half_str(::Type{<:LowerOrUnitLowerTriangular}) = "upper"
+
+@noinline function throw_nonzeroerror(T, @nospecialize(x), i, j)
+    Ts = _zero_triangular_half_str(T)
+    Tn = nameof(T)
+    throw(ArgumentError(
+        lazy"cannot set index in the $Ts triangular part ($i, $j) of an $Tn matrix to a nonzero value ($x)"))
+end
+@noinline function throw_nononeerror(T, @nospecialize(x), i, j)
+    Tn = nameof(T)
+    throw(ArgumentError(
+        lazy"cannot set index on the diagonal ($i, $j) of an $Tn matrix to a non-unit value ($x)"))
+end
 
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
-            lazy"($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
+        iszero(x) || throw_nonzeroerror(typeof(A), x, i, j)
     else
         A.data[i,j] = x
     end
@@ -290,11 +262,9 @@ end
 
 @propagate_inbounds function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
-            lazy"($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
+        iszero(x) || throw_nonzeroerror(typeof(A), x, i, j)
     elseif i == j
-        x == oneunit(x) || throw(ArgumentError(lazy"cannot set index on the diagonal ($i, $j) " *
-            lazy"of a UnitUpperTriangular matrix to a non-unit value ($x)"))
+        x == oneunit(x) || throw_nononeerror(typeof(A), x, i, j)
     else
         A.data[i,j] = x
     end
@@ -303,8 +273,7 @@ end
 
 @propagate_inbounds function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
-            lazy"($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
+        iszero(x) || throw_nonzeroerror(typeof(A), x, i, j)
     else
         A.data[i,j] = x
     end
@@ -313,33 +282,43 @@ end
 
 @propagate_inbounds function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
-            lazy"($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
+        iszero(x) || throw_nonzeroerror(typeof(A), x, i, j)
     elseif i == j
-        x == oneunit(x) || throw(ArgumentError(lazy"cannot set index on the diagonal ($i, $j) " *
-            lazy"of a UnitLowerTriangular matrix to a non-unit value ($x)"))
+        x == oneunit(x) || throw_nononeerror(typeof(A), x, i, j)
     else
         A.data[i,j] = x
     end
     return A
 end
 
+@noinline function throw_setindex_structuralzero_error(T, @nospecialize(x))
+    Ts = _zero_triangular_half_str(T)
+    Tn = nameof(T)
+    throw(ArgumentError(
+        lazy"cannot set indices in the $Ts triangular part of an $Tn matrix to a nonzero value ($x)"))
+end
+
 @inline function fill!(A::UpperTriangular, x)
-    iszero(x) || throw(ArgumentError("cannot set indices in the lower triangular part " *
-            lazy"of an UpperTriangular matrix to a nonzero value ($x)"))
+    iszero(x) || throw_setindex_structuralzero_error(typeof(A), x)
     for col in axes(A,2), row in firstindex(A,1):col
         @inbounds A.data[row, col] = x
     end
     A
 end
 @inline function fill!(A::LowerTriangular, x)
-    iszero(x) || throw(ArgumentError("cannot set indices in the upper triangular part " *
-            lazy"of a LowerTriangular matrix to a nonzero value ($x)"))
+    iszero(x) || throw_setindex_structuralzero_error(typeof(A), x)
     for col in axes(A,2), row in col:lastindex(A,1)
         @inbounds A.data[row, col] = x
     end
     A
 end
+
+Base._reverse(A::UpperOrUnitUpperTriangular, dims::Integer) = reverse!(Matrix(A); dims)
+Base._reverse(A::UpperTriangular, ::Colon) = LowerTriangular(reverse(A.data))
+Base._reverse(A::UnitUpperTriangular, ::Colon) = UnitLowerTriangular(reverse(A.data))
+Base._reverse(A::LowerOrUnitLowerTriangular, dims) = reverse!(Matrix(A); dims)
+Base._reverse(A::LowerTriangular, ::Colon) = UpperTriangular(reverse(A.data))
+Base._reverse(A::UnitLowerTriangular, ::Colon) = UnitUpperTriangular(reverse(A.data))
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::Union{UpperTriangular,UnitUpperTriangular},
@@ -520,28 +499,111 @@ tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
 tr(A::UpperTriangular) = tr(A.data)
 tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
+for T in (:UpperOrUnitUpperTriangular, :LowerOrUnitLowerTriangular)
+    @eval @propagate_inbounds function copyto!(dest::$T, U::$T)
+        if axes(dest) != axes(U)
+            @invoke copyto!(dest::AbstractArray, U::AbstractArray)
+        else
+            _copyto!(dest, U)
+        end
+        return dest
+    end
+end
+
 # copy and scale
-function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular}}
+for (T, UT) in ((:UpperTriangular, :UnitUpperTriangular), (:LowerTriangular, :UnitLowerTriangular))
+    @eval @inline function _copyto!(A::$T, B::$T)
+        @boundscheck checkbounds(A, axes(B)...)
+        copytrito!(parent(A), parent(B), uplo_char(A))
+        return A
+    end
+    @eval @inline function _copyto!(A::$UT, B::$T)
+        for dind in diagind(A, IndexStyle(A))
+            if A[dind] != B[dind]
+                throw_nononeerror(typeof(A), B[dind], Tuple(dind)...)
+            end
+        end
+        _copyto!($T(parent(A)), B)
+        return A
+    end
+end
+@inline function _copyto!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular)
     @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
     B2 = Base.unalias(A, B)
     for j = 1:n
-        for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
-            @inbounds A[i,j] = B2[i,j]
+        for i = 1:j-1
+            @inbounds parent(A)[i,j] = parent(B2)[i,j]
+        end
+        if A isa UpperTriangular # copy diagonal
+            @inbounds parent(A)[j,j] = B2[j,j]
         end
     end
     return A
 end
-function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular}}
+@inline function _copyto!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular)
     @boundscheck checkbounds(A, axes(B)...)
     n = size(B,1)
     B2 = Base.unalias(A, B)
     for j = 1:n
-        for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
-            @inbounds A[i,j] = B2[i,j]
+        if A isa LowerTriangular # copy diagonal
+            @inbounds parent(A)[j,j] = B2[j,j]
+        end
+        for i = j+1:n
+            @inbounds parent(A)[i,j] = parent(B2)[i,j]
         end
     end
     return A
+end
+
+_triangularize!(::UpperOrUnitUpperTriangular) = triu!
+_triangularize!(::LowerOrUnitLowerTriangular) = tril!
+
+@propagate_inbounds function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
+    if axes(dest) != axes(U)
+        @invoke copyto!(dest::StridedMatrix, U::AbstractArray)
+    else
+        _copyto!(dest, U)
+    end
+    return dest
+end
+@propagate_inbounds function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
+    copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
+    copytrito!(dest, U, U isa UpperOrUnitUpperTriangular ? 'L' : 'U')
+    return dest
+end
+@propagate_inbounds function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular{<:Any, <:StridedMatrix})
+    U2 = Base.unalias(dest, U)
+    copyto_unaliased!(dest, U2)
+    return dest
+end
+# for strided matrices, we explicitly loop over the arrays to improve cache locality
+# This fuses the copytrito! for the two halves
+@inline function copyto_unaliased!(dest::StridedMatrix, U::UpperOrUnitUpperTriangular{<:Any, <:StridedMatrix})
+    @boundscheck checkbounds(dest, axes(U)...)
+    isunit = U isa UnitUpperTriangular
+    for col in axes(dest,2)
+        for row in 1:col-isunit
+            @inbounds dest[row,col] = U.data[row,col]
+        end
+        for row in col+!isunit:size(U,1)
+            @inbounds dest[row,col] = U[row,col]
+        end
+    end
+    return dest
+end
+@inline function copyto_unaliased!(dest::StridedMatrix, L::LowerOrUnitLowerTriangular{<:Any, <:StridedMatrix})
+    @boundscheck checkbounds(dest, axes(L)...)
+    isunit = L isa UnitLowerTriangular
+    for col in axes(dest,2)
+        for row in 1:col-!isunit
+            @inbounds dest[row,col] = L[row,col]
+        end
+        for row in col+isunit:size(L,1)
+            @inbounds dest[row,col] = L.data[row,col]
+        end
+    end
+    return dest
 end
 
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
@@ -763,23 +825,21 @@ for op in (:+, :-)
     end
 end
 
-function kron(A::UpperTriangular{T}, B::UpperTriangular{S}) where {T<:Number,S<:Number}
-    C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
+function kron(A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+    C = UpperTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
+    return kron!(C, A, B)
+end
+function kron(A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+    C = LowerTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
 
-function kron(A::LowerTriangular{T}, B::LowerTriangular{S}) where {T<:Number,S<:Number}
-    C = LowerTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
-    return kron!(C, A, B)
-end
-
-function kron!(C::UpperTriangular{<:Number}, A::UpperTriangular{<:Number}, B::UpperTriangular{<:Number})
+function kron!(C::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _triukron!(C.data, A.data, B.data)
     return C
 end
-
-function kron!(C::LowerTriangular{<:Number}, A::LowerTriangular{<:Number}, B::LowerTriangular{<:Number})
+function kron!(C::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _trilkron!(C.data, A.data, B.data)
     return C

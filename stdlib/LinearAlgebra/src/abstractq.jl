@@ -78,6 +78,14 @@ axes(Q::AbstractQ, d::Integer) = d in (1, 2) ? axes(Q)[d] : Base.OneTo(1)
 copymutable(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
 copy(Q::AbstractQ) = copymutable(Q)
 
+# legacy compatibility
+similar(Q::AbstractQ) = similar(Q, eltype(Q), size(Q))
+similar(Q::AbstractQ, ::Type{T}) where {T} = similar(Q, T, size(Q))
+similar(Q::AbstractQ, size::DimOrInd...) = similar(Q, eltype(Q), size...)
+similar(Q::AbstractQ, ::Type{T}, size::DimOrInd...) where {T} = similar(Q, T, Base.to_shape(size))
+similar(Q::AbstractQ, size::Tuple{Vararg{DimOrInd}}) = similar(Q, eltype(Q), Base.to_shape(size))
+similar(Q::AbstractQ, ::Type{T}, size::NTuple{N,Integer}) where {T,N} = Array{T,N}(undef, size)
+
 # getindex
 @inline function getindex(Q::AbstractQ, inds...)
     @boundscheck Base.checkbounds_indices(Bool, axes(Q), inds) || Base.throw_boundserror(Q, inds)
@@ -235,6 +243,7 @@ end
 ### division
 \(Q::AbstractQ, A::AbstractVecOrMat) = Q'*A
 /(A::AbstractVecOrMat, Q::AbstractQ) = A*Q'
+/(Q::AbstractQ, A::AbstractVecOrMat) = Matrix(Q) / A
 ldiv!(Q::AbstractQ, A::AbstractVecOrMat) = lmul!(Q', A)
 ldiv!(C::AbstractVecOrMat, Q::AbstractQ, A::AbstractVecOrMat) = mul!(C, Q', A)
 rdiv!(A::AbstractVecOrMat, Q::AbstractQ) = rmul!(A, Q')
@@ -522,6 +531,27 @@ rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, Q::HessenbergQ{T}) where {T} = lmul!(Q
 lmul!(adjQ::AdjointQ{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T}  = rmul!(X', adjQ')'
 rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, adjQ::AdjointQ{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
 
+# division by a matrix
+function /(Q::Union{QRPackedQ,QRCompactWYQ,HessenbergQ}, B::AbstractVecOrMat)
+    size(B, 2) in size(Q.factors) ||
+            throw(DimensionMismatch(lazy"second dimension of B, $(size(B,2)), must equal one of the dimensions of Q, $(size(Q.factors))"))
+    if size(B, 2) == size(Q.factors, 2)
+        return Matrix(Q) / B
+    else
+        return collect(Q) / B
+    end
+end
+function \(A::AbstractVecOrMat, adjQ::AdjointQ{<:Any,<:Union{QRPackedQ,QRCompactWYQ,HessenbergQ}})
+    Q = adjQ.Q
+    size(A, 1) in size(Q.factors) ||
+            throw(DimensionMismatch(lazy"first dimension of A, $(size(A,1)), must equal one of the dimensions of Q, $(size(Q.factors))"))
+    if size(A, 1) == size(Q.factors, 2)
+        return A \ Matrix(Q)'
+    else
+        return A \ collect(Q)'
+    end
+end
+
 # flexible left-multiplication (and adjoint right-multiplication)
 qsize_check(Q::Union{QRPackedQ,QRCompactWYQ,HessenbergQ}, B::AbstractVecOrMat) =
     size(B, 1) in size(Q.factors) ||
@@ -587,6 +617,27 @@ lmul!(adjA::AdjointQ{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:Bla
     (A = adjA.Q; LAPACK.ormlq!('L', 'T', A.factors, A.τ, B))
 lmul!(adjA::AdjointQ{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     (A = adjA.Q; LAPACK.ormlq!('L', 'C', A.factors, A.τ, B))
+
+# division by a matrix
+function /(adjQ::AdjointQ{<:Any,<:LQPackedQ}, B::AbstractVecOrMat)
+    Q = adjQ.Q
+    size(B, 2) in size(Q.factors) ||
+            throw(DimensionMismatch(lazy"second dimension of B, $(size(B,2)), must equal one of the dimensions of Q, $(size(Q.factors))"))
+    if size(B, 2) == size(Q.factors, 1)
+        return Matrix(Q)' / B
+    else
+        return collect(Q)' / B
+    end
+end
+function \(A::AbstractVecOrMat, Q::LQPackedQ)
+    size(A, 1) in size(Q.factors) ||
+            throw(DimensionMismatch(lazy"first dimension of A, $(size(A,1)), must equal one of the dimensions of Q, $(size(Q.factors))"))
+    if size(A, 1) == size(Q.factors, 1)
+        return A \ Matrix(Q)
+    else
+        return A \ collect(Q)
+    end
+end
 
 # In LQ factorization, `Q` is expressed as the product of the adjoint of the
 # reflectors.  Thus, `det` has to be conjugated.
