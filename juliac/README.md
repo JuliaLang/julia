@@ -16,4 +16,3 @@ or for shared libraries `@ccallable` entry points for the desired symbols
 ```shell
     julia driver.jl lib.jl
 ```
-
