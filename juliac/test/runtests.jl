@@ -14,4 +14,3 @@ tmp = mktempdir()
     @test success(`$(cmd) --project=$(root)/../. $(root)/../juliac.jl --output-exe $(tmp)/lu --trim $(root)/../exe_examples/simple_lu.jl`)
     @test success(`$(tmp)/lu`)
 end
-

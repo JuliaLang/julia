@@ -29,7 +29,7 @@ end
 
     # This one can't be supported (yet) since the dispatch it will
     # eventually trigger is unknown at compile-time:
-    z = rand(Bool) ? Foo() : Bar() 
+    z = rand(Bool) ? Foo() : Bar()
     # finalizer(cleanup!, z) # broken
 
 
