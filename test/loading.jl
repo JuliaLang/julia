@@ -266,6 +266,7 @@ end
         ("Bar",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0", "project/deps/Bar/src/Bar.jl"        ),
         ("Foo.Baz", "6801f525-dc68-44e8-a4e8-cabd286279e7", "depot/packages/Baz/81oLe/src/Baz.jl"),
         ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"                ),
+        ("Renamed", "b93c0545-2f14-404a-a207-11bc71528a7e", "project/deps/RenameMe/src/RenameMe.jl")
     ]
         n = map(String, split(names, '.'))
         pkg = recurse_package(n...)

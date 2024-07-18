@@ -4,3 +4,4 @@ uuid = "84c38c17-0c6f-4d12-a694-d20b69c16777"
 [deps]
 Foo = "767738be-2f1f-45a9-b806-0234f3164144"
 Bar = "2a550a13-6bab-4a91-a4ee-dff34d6b99d0"
+Renamed = "b93c0545-2f14-404a-a207-11bc71528a7e"

@@ -691,7 +691,9 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
     if project_file isa String
         proj = project_file_name_uuid(project_file, pkg.name)
         if proj == pkg
-            # if `pkg` matches the project, return the project itself
+            # if `pkg` matches the project (by {UUID, name} if specified
+            # in the Project.toml, otherwise by (dummy) UUID only).
+            # Return the project itself.
             return project_file_path(project_file, pkg.name)
         end
         mby_ext = project_file_ext_path(project_file, pkg)
@@ -737,7 +739,8 @@ function project_file_ext_path(project_file::String, ext::PkgId)
     return nothing
 end
 
-# find project file's top-level UUID entry (or nothing)
+# find project file's top-level UUID entry or return a assign a temporary dummy UUID
+# by file path if not set.
 function project_file_name_uuid(project_file::String, name::String)::PkgId
     d = parsed_toml(project_file)
     uuid′ = get(d, "uuid", nothing)::Union{String, Nothing}
@@ -753,7 +756,7 @@ function project_file_path(project_file::String, name::String)
     if entryfile === nothing
         entryfile = get(d, "entryfile", nothing)::Union{String, Nothing}
     end
-    return entry_path(dirname(project_file), name, entryfile)
+    return entry_path(dirname(project_file), get(d, "name", name)::String, entryfile)
 end
 
 function workspace_manifest(project_file)
@@ -1021,8 +1024,9 @@ end
 function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::Dict{String,Any})
     path = get(entry, "path", nothing)::Union{Nothing, String}
     entryfile = get(entry, "entryfile", nothing)::Union{Nothing, String}
+    name = get(entry, "name", pkg.name)::String
     if path !== nothing
-        path = entry_path(normpath(abspath(dirname(manifest_file), path)), pkg.name, entryfile)
+        path = entry_path(normpath(abspath(dirname(manifest_file), path)), name, entryfile)
         return path
     end
     hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
@@ -1038,8 +1042,8 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
     uuid = pkg.uuid::UUID # checked within `explicit_manifest_uuid_path`
     for slug in (version_slug(uuid, hash), version_slug(uuid, hash, 4))
         for depot in DEPOT_PATH
-            path = joinpath(depot, "packages", pkg.name, slug)
-            ispath(path) && return entry_path(abspath(path), pkg.name, entryfile)
+            path = joinpath(depot, "packages", name, slug)
+            ispath(path) && return entry_path(abspath(path), name, entryfile)
         end
     end
     # no depot contains the package, return missing to stop looking
