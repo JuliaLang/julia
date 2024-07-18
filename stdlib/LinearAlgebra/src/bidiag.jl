@@ -838,6 +838,37 @@ function _dibimul!(C, A, B, _add)
     end # inbounds
     C
 end
+function _dibimul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add)
+    require_one_based_indexing(C)
+    check_A_mul_B!_sizes(C, A, B)
+    n = size(A,1)
+    iszero(n) && return C
+    _rmul_or_fill!(C, _add.beta)  # see the same use above
+    iszero(_add.alpha) && return C
+    Ad = A.diag
+    Bdv, Bev = B.dv, B.ev
+    rowshift = B.uplo == 'U' ? -1 : 1
+    evshift = Int(B.uplo == 'U')
+    @inbounds begin
+        # first row of C
+        C[1,1] += _add(Ad[1]*Bdv[1])
+        if n > 1
+            if B.uplo == 'L'
+                C[2,1] += _add(Ad[2]*Bev[1])
+            end
+            for col in 2:n-1
+                evrow = col+rowshift
+                C[evrow, col] += _add(Ad[evrow]*Bev[col - evshift])
+                C[col, col] += _add(Ad[col]*Bdv[col])
+            end
+            if B.uplo == 'U'
+                C[n-1,n] += _add(Ad[n-1]*Bev[n-1])
+            end
+            C[n, n] += _add(Ad[n]*Bdv[n])
+        end
+    end # inbounds
+    C
+end
 function _dibimul!(C::Bidiagonal, A::Diagonal, B::Bidiagonal, _add)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
