@@ -541,10 +541,12 @@ function rmul!(B::Bidiagonal, D::Diagonal)
     return B
 end
 
-function check_A_mul_B!_sizes(C, A, B)
-    mA, nA = size(A)
-    mB, nB = size(B)
-    mC, nC = size(C)
+function check_A_mul_B!_sizes(@nospecialize(C::AbstractMatrix),
+                                @nospecialize(A::AbstractMatrix),
+                                @nospecialize(B::AbstractMatrix))
+    _check_A_mul_B!_sizes(size(C), size(A), size(B))
+end
+@noinline function _check_A_mul_B!_sizes((mC, nC), (mA, nA), (mB, nB))
     if mA != mC
         throw(DimensionMismatch(lazy"first dimension of A, $mA, and first dimension of output C, $mC, must match"))
     elseif nA != mB
