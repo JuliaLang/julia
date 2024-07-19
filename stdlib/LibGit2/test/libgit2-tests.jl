@@ -8,8 +8,8 @@ using Test
 using Random, Serialization, Sockets
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
-using .Main.FakePTYs: challenge_prompt as basic_challenge_prompt
+isdefined(Main, :ChallengePrompts) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ChallengePrompts.jl"))
+using .Main.ChallengePrompts: challenge_prompt as basic_challenge_prompt
 
 challenge_prompt(code::Expr, challenges) = basic_challenge_prompt(code, challenges; pkgs=["LibGit2"])
 challenge_prompt(cmd::Cmd, challenges) = basic_challenge_prompt(cmd, challenges)

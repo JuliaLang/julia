@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
-using .Main.FakePTYs: challenge_prompt
+isdefined(Main, :ChallengePrompts) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ChallengePrompts.jl"))
+using .Main.ChallengePrompts: challenge_prompt
 
 using Base: SecretBuffer, SecretBuffer!, shred!, isshredded
 using Test, Random
@@ -176,21 +176,21 @@ using Test, Random
     end
 
     @testset "getpass" begin
-        v1, s1 = challenge_prompt(:(s=Base.getpass("test"); (read(s), Base.shred!(s))), ["test: " => "too many secrets\n"])
+        v1, s1 = challenge_prompt(:(s=Base.getpass("LPAwVZM8D4I"); (read(s), Base.shred!(s))), ["LPAwVZM8D4I: " => "too many secrets\n"])
         s2 = SecretBuffer("too many secrets")
         @test s1 isa SecretBuffer
         @test isshredded(s1)
         @test v1 == read(s2) == codeunits("too many secrets")
         shred!(s1); shred!(s2)
 
-        v3, s3 = challenge_prompt(:(s=Base.getpass("test>", with_suffix=false); (read(s), Base.shred!(s))), ["test>" => "frperg\n"])
+        v3, s3 = challenge_prompt(:(s=Base.getpass("LPAwVZM8D4I> ", with_suffix=false); (read(s), Base.shred!(s))), ["LPAwVZM8D4I> " => "frperg\n"])
         s4 = SecretBuffer("frperg")
         @test s3 isa SecretBuffer
         @test isshredded(s3)
         @test v3 == read(s4) == codeunits("frperg")
         shred!(s3); shred!(s4)
 
-        v5, s5 = challenge_prompt(:(s=Base.getpass("test> ", with_suffix=true); (read(s), Base.shred!(s))), ["test> : " => "frperg\n"])
+        v5, s5 = challenge_prompt(:(s=Base.getpass("LPAwVZM8D4I> ", with_suffix=true); (read(s), Base.shred!(s))), ["LPAwVZM8D4I> : " => "frperg\n"])
         s6 = SecretBuffer("frperg")
         @test s5 isa SecretBuffer
         @test isshredded(s5)
