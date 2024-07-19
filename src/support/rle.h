@@ -10,6 +10,7 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 #include <assert.h>
+#include "analyzer_annotations.h"
 
 /* Run-length encoding (RLE) utilities */
 /* In the RLE table, even indexes encode the key (the item classification), odd indexes encode the item index */
@@ -28,8 +29,8 @@ typedef struct _rle_iter_state_t {
     uint64_t key;  // current identifier
 } rle_iter_state;
 
-rle_iter_state rle_iter_init(/* implicit value of key for indexes prior to first explicit rle pair */ uint64_t key0);
-int rle_iter_increment(rle_iter_state *state, /* number of items */ size_t len, uint64_t *rletable, /*length of rletable */ size_t npairs);
+rle_iter_state rle_iter_init(/* implicit value of key for indexes prior to first explicit rle pair */ uint64_t key0) JL_NOTSAFEPOINT;
+int rle_iter_increment(rle_iter_state *state, /* number of items */ size_t len, uint64_t *rletable, /*length of rletable */ size_t npairs) JL_NOTSAFEPOINT;
 
 /* indexing */
 typedef struct {
@@ -37,8 +38,8 @@ typedef struct {
     int index;     // number of preceding items in the list with the same key
 } rle_reference;
 
-void rle_index_to_reference(rle_reference *rr, /* item index */ size_t i, uint64_t *rletable, size_t npairs, uint64_t key0);
-size_t rle_reference_to_index(rle_reference *rr, uint64_t *rletable, size_t npairs, uint64_t key0);
+void rle_index_to_reference(rle_reference *rr, /* item index */ size_t i, uint64_t *rletable, size_t npairs, uint64_t key0) JL_NOTSAFEPOINT;
+size_t rle_reference_to_index(rle_reference *rr, uint64_t *rletable, size_t npairs, uint64_t key0) JL_NOTSAFEPOINT;
 
 
 #ifdef __cplusplus

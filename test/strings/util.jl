@@ -89,6 +89,10 @@ end
     @test rstrip(isnumeric, "abc0123") == "abc"
     @test lstrip("ello", ['e','o']) == "llo"
     @test rstrip("ello", ['e','o']) == "ell"
+
+    @test_throws ArgumentError strip("", "")
+    @test_throws ArgumentError lstrip("", "")
+    @test_throws ArgumentError rstrip("", "")
 end
 
 @testset "partition" begin
@@ -206,6 +210,28 @@ end
           split("α β γ", isspace) == rsplit("α β γ", isspace) == ["α","β","γ"]
     @test split("ö.", ".") == rsplit("ö.", ".") == ["ö",""]
     @test split("α β γ", "β") == rsplit("α β γ", "β") == ["α "," γ"]
+end
+
+@testset "eachrsplit" begin
+    @test collect(eachrsplit("", 'a')) == [""]
+    @test collect(eachrsplit("", isspace; limit=3)) == [""]
+    @test collect(eachrsplit("b c  d"; limit=2)) == ["d", "b c "]
+    @test collect(eachrsplit("a.b.c", '.'; limit=1)) == ["a.b.c"]
+    @test collect(eachrsplit("a..b..c", '.')) == ["c", "", "b", "", "a"]
+    @test collect(eachrsplit("ax  b  c")) == ["c", "b", "ax"]
+    @test collect(eachrsplit(" a 12 4 v ", isnumeric)) == [" v ", " ", "", " a "]
+    @test collect(eachrsplit("ba", 'a')) == ["", "b"]
+    @test collect(eachrsplit("   ")) == []
+    @test collect(eachrsplit("aaaa", 'a'; keepempty=false)) == []
+    @test collect(eachrsplit("aaaa", 'a'; limit=2)) == ["", "aaa"]
+    @test collect(eachrsplit("abcdef", ['b', 'e'])) == ["f", "cd", "a"]
+    @test collect(eachrsplit("abc", isletter)) == ["", "", "", ""]
+
+    # This behaviour is quite surprising, but is consistent with split
+    # See issue 45916
+    @test collect(eachrsplit("a  b"; limit=2)) == ["b", "a "] # only one trailing space
+    @test collect(eachrsplit("a "; limit=1)) == ["a "]
+    @test collect(eachrsplit("  a  b  c  d"; limit=3)) == ["d", "c", "  a  b "]
 end
 
 @testset "replace" begin
@@ -333,6 +359,28 @@ end
     # Issue 36953
     @test replace("abc", "" => "_", count=1) == "_abc"
 
+    # tests for io::IO API (in addition to internals exercised above):
+    let buf = IOBuffer()
+        replace(buf, "aaa", 'a' => 'z', count=0)
+        replace(buf, "aaa", 'a' => 'z', count=1)
+        replace(buf, "bbb", 'a' => 'z')
+        replace(buf, "aaa", 'a' => 'z')
+        @test String(take!(buf)) == "aaazaabbbzzz"
+    end
+    let tempfile = tempname()
+        try
+            open(tempfile, "w") do f
+                replace(f, "aaa", 'a' => 'z', count=0)
+                replace(f, "aaa", 'a' => 'z', count=1)
+                replace(f, "bbb", 'a' => 'z')
+                replace(f, "aaa", 'a' => 'z')
+                print(f, "\n")
+            end
+            @test read(tempfile, String) == "aaazaabbbzzz\n"
+        finally
+            rm(tempfile, force=true)
+        end
+    end
 end
 
 @testset "replace many" begin

@@ -21,7 +21,8 @@ export # not exported by Base
 """
     Base.Order.Ordering
 
-Abstract type which represents a total order on some set of elements.
+Abstract type which represents a strict weak order on some set of elements. See
+[`sort!`](@ref) for more.
 
 Use [`Base.Order.lt`](@ref) to compare two elements according to the ordering.
 """
@@ -87,8 +88,8 @@ By(by) = By(by, Forward)
 """
     Lt(lt)
 
-`Ordering` which calls `lt(a, b)` to compare elements. `lt` should
-obey the same rules as implementations of [`isless`](@ref).
+`Ordering` that calls `lt(a, b)` to compare elements. `lt` must
+obey the same rules as the `lt` parameter of [`sort!`](@ref).
 """
 struct Lt{T} <: Ordering
     lt::T
@@ -110,7 +111,7 @@ ReverseOrdering(by::By) = By(by.by, ReverseOrdering(by.order))
 ReverseOrdering(perm::Perm) = Perm(ReverseOrdering(perm.order), perm.data)
 
 """
-    lt(o::Ordering, a, b)
+    lt(o::Ordering, a, b) -> Bool
 
 Test whether `a` is less than `b` according to the ordering `o`.
 """
@@ -125,18 +126,15 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
     (lt(p.order, da, db)::Bool) | (!(lt(p.order, db, da)::Bool) & (a < b))
 end
 
-_ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order
-_ord(lt::typeof(isless), by,                   order::Ordering) = By(by, order)
 
-function _ord(lt, by, order::Ordering)
-    if order === Forward
-        return Lt((x, y) -> lt(by(x), by(y)))
-    elseif order === Reverse
-        return Lt((x, y) -> lt(by(y), by(x)))
-    else
-        error("Passing both lt= and order= arguments is ambiguous; please pass order=Forward or order=Reverse (or leave default)")
-    end
-end
+_ord(lt::typeof(isless), by, order::Ordering)                         = _by(by, order)
+_ord(lt::typeof(isless), by, order::ForwardOrdering)                  = _by(by, order)  # disambiguation
+_ord(lt::typeof(isless), by, order::ReverseOrdering{ForwardOrdering}) = _by(by, order)  # disambiguation
+_ord(lt,                 by, order::ForwardOrdering)                  = _by(by, Lt(lt))
+_ord(lt,                 by, order::ReverseOrdering{ForwardOrdering}) = reverse(_by(by, Lt(lt)))
+_ord(lt,                 by, order::Ordering) = error("Passing both lt= and order= arguments is ambiguous; please pass order=Forward or order=Reverse (or leave default)")
+_by(by, order::Ordering) = By(by, order)
+_by(::typeof(identity), order::Ordering) = order
 
 """
     ord(lt, by, rev::Union{Bool, Nothing}, order::Ordering=Forward)
@@ -146,8 +144,8 @@ Construct an [`Ordering`](@ref) object from the same arguments used by
 Elements are first transformed by the function `by` (which may be
 [`identity`](@ref)) and are then compared according to either the function `lt`
 or an existing ordering `order`. `lt` should be [`isless`](@ref) or a function
-which obeys similar rules. Finally, the resulting order is reversed if
-`rev=true`.
+that obeys the same rules as the `lt` parameter of [`sort!`](@ref). Finally,
+the resulting order is reversed if `rev=true`.
 
 Passing an `lt` other than `isless` along with an `order` other than
 [`Base.Order.Forward`](@ref) or [`Base.Order.Reverse`](@ref) is not permitted,

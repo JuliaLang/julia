@@ -165,6 +165,7 @@ constructor.
 Such a definition might look like this:
 
 ```julia
+import Base: convert
 convert(::Type{MyType}, x) = MyType(x)
 ```
 
@@ -194,6 +195,8 @@ convert(::Type{T}, x::T) where {T<:Number} = x
 ```
 
 Similar definitions exist for `AbstractString`, [`AbstractArray`](@ref), and [`AbstractDict`](@ref).
+
+
 
 ## Promotion
 
@@ -233,11 +236,11 @@ julia> promote(1 + 2im, 3//4)
 ```
 
 Floating-point values are promoted to the largest of the floating-point argument types. Integer
-values are promoted to the larger of either the native machine word size or the largest integer
-argument type. Mixtures of integers and floating-point values are promoted to a floating-point
-type big enough to hold all the values. Integers mixed with rationals are promoted to rationals.
-Rationals mixed with floats are promoted to floats. Complex values mixed with real values are
-promoted to the appropriate kind of complex value.
+values are promoted to the largest of the integer argument types. If the types are the same size
+but differ in signedness, the unsigned type is chosen. Mixtures of integers and floating-point
+values are promoted to a floating-point type big enough to hold all the values. Integers mixed
+with rationals are promoted to rationals. Rationals mixed with floats are promoted to floats.
+Complex values mixed with real values are promoted to the appropriate kind of complex value.
 
 That is really all there is to using promotions. The rest is just a matter of clever application,
 the most typical "clever" application being the definition of catch-all methods for numeric operations
@@ -291,6 +294,7 @@ another type object, such that instances of the argument types will be promoted 
 type. Thus, by defining the rule:
 
 ```julia
+import Base: promote_rule
 promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 ```
 
@@ -336,6 +340,7 @@ Finally, we finish off our ongoing case study of Julia's rational number type, w
 sophisticated use of the promotion mechanism with the following promotion rules:
 
 ```julia
+import Base: promote_rule
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)

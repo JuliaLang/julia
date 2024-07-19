@@ -10,7 +10,7 @@ using Random
 
 import SHA
 
-export UUID, uuid1, uuid4, uuid5, uuid_version
+export UUID, uuid1, uuid4, uuid5, uuid7, uuid_version
 
 import Base: UUID
 
@@ -42,17 +42,19 @@ Generates a version 1 (time-based) universally unique identifier (UUID), as spec
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
 according to section 4.5 of the RFC.
 
-The default rng used by `uuid1` is not `GLOBAL_RNG` and every invocation of `uuid1()` without
+The default rng used by `uuid1` is not `Random.default_rng()` and every invocation of `uuid1()` without
 an argument should be expected to return a unique identifier. Importantly, the outputs of
 `uuid1` do not repeat even when `Random.seed!(seed)` is called. Currently (as of Julia 1.6),
 `uuid1` uses `Random.RandomDevice` as the default rng. However, this is an implementation
 detail that may change in the future.
 
 !!! compat "Julia 1.6"
-    The output of `uuid1` does not depend on `GLOBAL_RNG` as of Julia 1.6.
+    The output of `uuid1` does not depend on `Random.default_rng()` as of Julia 1.6.
 
 # Examples
 ```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
+julia> using Random
+
 julia> rng = MersenneTwister(1234);
 
 julia> uuid1(rng)
@@ -88,21 +90,23 @@ end
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by RFC 4122.
 
-The default rng used by `uuid4` is not `GLOBAL_RNG` and every invocation of `uuid4()` without
+The default rng used by `uuid4` is not `Random.default_rng()` and every invocation of `uuid4()` without
 an argument should be expected to return a unique identifier. Importantly, the outputs of
 `uuid4` do not repeat even when `Random.seed!(seed)` is called. Currently (as of Julia 1.6),
 `uuid4` uses `Random.RandomDevice` as the default rng. However, this is an implementation
 detail that may change in the future.
 
 !!! compat "Julia 1.6"
-    The output of `uuid4` does not depend on `GLOBAL_RNG` as of Julia 1.6.
+    The output of `uuid4` does not depend on `Random.default_rng()` as of Julia 1.6.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
+julia> using Random
+
+julia> rng = Xoshiro(123);
 
 julia> uuid4(rng)
-UUID("7a052949-c101-4ca3-9a7e-43a2532b2fa8")
+UUID("856e446e-0c6a-472a-9638-f7b8557cd282")
 ```
 """
 function uuid4(rng::AbstractRNG=Random.RandomDevice())
@@ -123,13 +127,15 @@ as specified by RFC 4122.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
+julia> using Random
+
+julia> rng = Xoshiro(123);
 
 julia> u4 = uuid4(rng)
-UUID("7a052949-c101-4ca3-9a7e-43a2532b2fa8")
+UUID("856e446e-0c6a-472a-9638-f7b8557cd282")
 
 julia> u5 = uuid5(u4, "julia")
-UUID("086cc5bb-2461-57d8-8068-0aed7f5b5cd1")
+UUID("2df91e3f-da06-5362-a6fe-03772f2e14c9")
 ```
 """
 function uuid5(ns::UUID, name::String)
@@ -149,6 +155,45 @@ function uuid5(ns::UUID, name::String)
         v = (v << 0x08) | hash_result[idx]
     end
     return UUID(v)
+end
+
+"""
+    uuid7([rng::AbstractRNG]) -> UUID
+
+Generates a version 7 (random or pseudo-random) universally unique identifier (UUID),
+as specified by RFC 9652.
+
+The default rng used by `uuid7` is not `Random.default_rng()` and every invocation of `uuid7()` without
+an argument should be expected to return a unique identifier. Importantly, the outputs of
+`uuid7` do not repeat even when `Random.seed!(seed)` is called. Currently (as of Julia 1.12),
+`uuid7` uses `Random.RandomDevice` as the default rng. However, this is an implementation
+detail that may change in the future.
+
+!!! compat "Julia 1.12"
+    `uuid7()` is available as of Julia 1.12.
+
+# Examples
+```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
+julia> using Random
+
+julia> rng = Xoshiro(123);
+
+julia> uuid7(rng)
+UUID("019026ca-e086-772a-9638-f7b8557cd282")
+```
+"""
+function uuid7(rng::AbstractRNG=Random.RandomDevice())
+    bytes = rand(rng, UInt128)
+    # make space for the timestamp
+    bytes &= 0x0000000000000fff3fffffffffffffff
+    # version & variant
+    bytes |= 0x00000000000070008000000000000000
+
+    # current time in ms, rounded to an Integer
+    timestamp = round(UInt128, time() * 1e3)
+    bytes |= timestamp << UInt128(80)
+
+    return UUID(bytes)
 end
 
 end

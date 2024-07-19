@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/FileWatching/docs/src/index.md"
+```
+
 # [File Events](@id lib-filewatching)
 
 ```@docs
@@ -20,6 +24,7 @@ A simple utility tool for creating advisory pidfiles (lock files).
 
 ```@docs
 mkpidlock
+trymkpidlock
 close(lock::LockMonitor)
 ```
 

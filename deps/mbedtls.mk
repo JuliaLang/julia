@@ -3,7 +3,7 @@ include $(SRCDIR)/mbedtls.version
 
 ifneq ($(USE_BINARYBUILDER_MBEDTLS), 1)
 MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)
-MBEDTLS_URL = https://github.com/ARMmbed/mbedtls/archive/v$(MBEDTLS_VER).tar.gz
+MBEDTLS_URL = https://github.com/Mbed-TLS/mbedtls/archive/v$(MBEDTLS_VER).tar.gz
 
 MBEDTLS_OPTS := $(CMAKE_COMMON) -DUSE_SHARED_MBEDTLS_LIBRARY=ON \
     -DUSE_STATIC_MBEDTLS_LIBRARY=OFF -DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release
@@ -13,7 +13,7 @@ ifeq ($(BUILD_OS),WINNT)
 MBEDTLS_OPTS += -G"MSYS Makefiles"
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
@@ -39,12 +39,12 @@ $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-e
 	echo 1 > $@
 
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled: $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) --build $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) test
+	$(CMAKE) --build $(dir $@) test
 endif
 	echo 1 > $@
 

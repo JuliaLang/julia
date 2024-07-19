@@ -3,7 +3,7 @@
 module TestSpecial
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: rmul!
+using LinearAlgebra: rmul!, BandIndex
 
 n= 10 #Size of matrix to test
 Random.seed!(1)
@@ -111,8 +111,11 @@ Random.seed!(1)
         struct TypeWithZero end
         Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
         Base.convert(::Type{TypeWithZero}, ::TypeWithoutZero) = TypeWithZero()
+        Base.zero(x::Union{TypeWithoutZero, TypeWithZero}) = zero(typeof(x))
         Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
         LinearAlgebra.symmetric(::TypeWithoutZero, ::Symbol) = TypeWithoutZero()
+        LinearAlgebra.symmetric_type(::Type{TypeWithoutZero}) = TypeWithoutZero
+        Base.copy(A::TypeWithoutZero) = A
         Base.transpose(::TypeWithoutZero) = TypeWithoutZero()
         d  = fill(TypeWithoutZero(), 3)
         du = fill(TypeWithoutZero(), 2)
@@ -125,6 +128,15 @@ Random.seed!(1)
         for M in (D, Bu, Bl, Tri, Sym)
             @test Matrix(M) == zeros(TypeWithZero, 3, 3)
         end
+
+        mutable struct MTypeWithZero end
+        Base.convert(::Type{MTypeWithZero}, ::TypeWithoutZero) = MTypeWithZero()
+        Base.convert(::Type{MTypeWithZero}, ::TypeWithZero) = MTypeWithZero()
+        Base.zero(x::MTypeWithZero) = zero(typeof(x))
+        Base.zero(::Type{MTypeWithZero}) = MTypeWithZero()
+        U = UpperTriangular(Symmetric(fill(TypeWithoutZero(), 2, 2)))
+        M = Matrix{MTypeWithZero}(U)
+        @test all(x -> x isa MTypeWithZero, M)
     end
 end
 
@@ -191,7 +203,7 @@ end
         push!(mats, SymTridiagonal(Vector{T}(diag), Vector{T}(offdiag)))
     end
 
-    for op in (+,*) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
+    for op in (+,-,*)
         for A in mats
             for B in mats
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
@@ -206,6 +218,17 @@ end
             end
         end
     end
+    diag = [randn(ComplexF64, 2, 2) for _ in 1:3]
+    odiag = [randn(ComplexF64, 2, 2) for _ in 1:2]
+    for A in (Diagonal(diag),
+                Bidiagonal(diag, odiag, :U),
+                Bidiagonal(diag, odiag, :L),
+                Tridiagonal(odiag, diag, odiag),
+                SymTridiagonal(diag, odiag)), B in uniformscalingmats
+        @test (A + B)::typeof(A) == (B + A)::typeof(A)
+        @test (A - B)::typeof(A) == ((A + (-B))::typeof(A))
+        @test (B - A)::typeof(A) == ((B + (-A))::typeof(A))
+    end
 end
 
 
@@ -217,10 +240,10 @@ end
         b = rand(n,n)
         for pivot in (ColumnNorm(), NoPivot())
             qrb = qr(b, pivot)
-            @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
-            @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
-            @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
-            @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
+            @test atri * qrb.Q ≈ matri * qrb.Q
+            @test atri * qrb.Q' ≈ matri * qrb.Q'
+            @test qrb.Q * atri ≈ qrb.Q * matri
+            @test qrb.Q' * atri ≈ qrb.Q' * matri
         end
     end
 end
@@ -248,9 +271,10 @@ end
     bidiagmat = Bidiagonal(1:N, 1:(N-1), :U)
     tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
     symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
-    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat)
+    abstractq = qr(tridiagmat).Q
+    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq, zeros(Int,N,N))
     for specialmata in specialmats, specialmatb in specialmats
-        MA = Matrix(specialmata); MB = Matrix(specialmatb)
+        MA = collect(specialmata); MB = collect(specialmatb)
         @test hcat(specialmata, specialmatb) == hcat(MA, MB)
         @test vcat(specialmata, specialmatb) == vcat(MA, MB)
         @test hvcat((1,1), specialmata, specialmatb) == hvcat((1,1), MA, MB)
@@ -280,7 +304,7 @@ end
 @testset "concatenations of annotated types" begin
     N = 4
     # The tested annotation types
-    testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    testfull = Base.get_bool_env("JULIA_TESTFULL", false)
     utriannotations = (UpperTriangular, UnitUpperTriangular)
     ltriannotations = (LowerTriangular, UnitLowerTriangular)
     triannotations = (utriannotations..., ltriannotations...)
@@ -522,6 +546,243 @@ end
     @test m * S isa Matrix
     @test v * T isa Matrix
     @test v * S isa Matrix
+end
+
+@testset "copyto! between matrix types" begin
+    dl, d, du = zeros(Int,4), [1:5;], zeros(Int,4)
+    d_ones = ones(Int,size(du))
+
+    @testset "from Diagonal" begin
+        D = Diagonal(d)
+        @testset "to Bidiagonal" begin
+            BU = Bidiagonal(zero(d), oneunit.(du), :U)
+            BL = Bidiagonal(zero(d), oneunit.(dl), :L)
+            for B in (BL, BU)
+                copyto!(B, D)
+                @test B == D
+            end
+
+            @testset "mismatched size" begin
+                for B in (BU, BL)
+                    B .= 0
+                    copyto!(B, Diagonal(Int[1]))
+                    @test B[1,1] == 1
+                    B[1,1] = 0
+                    @test iszero(B)
+                end
+            end
+        end
+        @testset "to Tridiagonal" begin
+            T = Tridiagonal(oneunit.(dl), zero(d), oneunit.(du))
+            copyto!(T, D)
+            @test T == D
+
+            @testset "mismatched size" begin
+                T .= 0
+                copyto!(T, Diagonal([1]))
+                @test T[1,1] == 1
+                T[1,1] = 0
+                @test iszero(T)
+            end
+        end
+        @testset "to SymTridiagonal" begin
+            for du2 in (oneunit.(du), oneunit.(d))
+                S = SymTridiagonal(zero(d), du2)
+                copyto!(S, D)
+                @test S == D
+            end
+
+            @testset "mismatched size" begin
+                S = SymTridiagonal(zero(d), zero(du))
+                copyto!(S, Diagonal([1]))
+                @test S[1,1] == 1
+                S[1,1] = 0
+                @test iszero(S)
+            end
+        end
+    end
+
+    @testset "from Bidiagonal" begin
+        BU = Bidiagonal(d, du, :U)
+        BUones = Bidiagonal(d, oneunit.(du), :U)
+        BL = Bidiagonal(d, dl, :L)
+        BLones = Bidiagonal(d, oneunit.(dl), :L)
+        @testset "to Diagonal" begin
+            D = Diagonal(zero(d))
+            for B in (BL, BU)
+                @test copyto!(D, B) == B
+                D .= 0
+            end
+            for B in (BLones, BUones)
+                errmsg = "cannot copy a Bidiagonal with a non-zero off-diagonal band to a Diagonal"
+                @test_throws errmsg copyto!(D, B)
+                @test iszero(D)
+            end
+
+            @testset "mismatched size" begin
+                for uplo in (:L, :U)
+                    D .= 0
+                    copyto!(D, Bidiagonal(Int[1], Int[], uplo))
+                    @test D[1,1] == 1
+                    D[1,1] = 0
+                    @test iszero(D)
+                end
+            end
+        end
+        @testset "to Tridiagonal" begin
+            T = Tridiagonal(oneunit.(dl), zero(d), oneunit.(du))
+            for B in (BL, BU, BLones, BUones)
+                copyto!(T, B)
+                @test T == B
+            end
+
+            @testset "mismatched size" begin
+                for uplo in (:L, :U)
+                    T .= 0
+                    copyto!(T, Bidiagonal([1], Int[], uplo))
+                    @test T[1,1] == 1
+                    T[1,1] = 0
+                    @test iszero(T)
+                end
+            end
+        end
+        @testset "to SymTridiagonal" begin
+            for du2 in (oneunit.(du), oneunit.(d))
+                S = SymTridiagonal(zero(d), du2)
+                for B in (BL, BU)
+                    copyto!(S, B)
+                    @test S == B
+                end
+                errmsg = "cannot copy a non-symmetric Bidiagonal matrix to a SymTridiagonal"
+                @test_throws errmsg copyto!(S, BUones)
+                @test_throws errmsg copyto!(S, BLones)
+            end
+
+            @testset "mismatched size" begin
+                S = SymTridiagonal(zero(d), zero(du))
+                for uplo in (:L, :U)
+                    copyto!(S, Bidiagonal([1], Int[], uplo))
+                    @test S[1,1] == 1
+                    S[1,1] = 0
+                    @test iszero(S)
+                end
+            end
+        end
+    end
+
+    @testset "from Tridiagonal" begin
+        T = Tridiagonal(dl, d, du)
+        TU = Tridiagonal(dl, d, d_ones)
+        TL = Tridiagonal(d_ones, d, dl)
+        @testset "to Diagonal" begin
+            D = Diagonal(zero(d))
+            @test copyto!(D, T) == Diagonal(d)
+            errmsg = "cannot copy a Tridiagonal with a non-zero off-diagonal band to a Diagonal"
+            D .= 0
+            @test_throws errmsg copyto!(D, TU)
+            @test iszero(D)
+            errmsg = "cannot copy a Tridiagonal with a non-zero off-diagonal band to a Diagonal"
+            @test_throws errmsg copyto!(D, TL)
+            @test iszero(D)
+
+            @testset "mismatched size" begin
+                D .= 0
+                copyto!(D, Tridiagonal(Int[], Int[1], Int[]))
+                @test D[1,1] == 1
+                D[1,1] = 0
+                @test iszero(D)
+            end
+        end
+        @testset "to Bidiagonal" begin
+            BU = Bidiagonal(zero(d), zero(du), :U)
+            BL = Bidiagonal(zero(d), zero(du), :L)
+            @test copyto!(BU, T) == Bidiagonal(d, du, :U)
+            @test copyto!(BL, T) == Bidiagonal(d, du, :L)
+
+            BU .= 0
+            BL .= 0
+            errmsg = "cannot copy a Tridiagonal with a non-zero superdiagonal to a Bidiagonal with uplo=:L"
+            @test_throws errmsg copyto!(BL, TU)
+            @test iszero(BL)
+            @test copyto!(BU, TU) == Bidiagonal(d, d_ones, :U)
+
+            BU .= 0
+            BL .= 0
+            @test copyto!(BL, TL) == Bidiagonal(d, d_ones, :L)
+            errmsg = "cannot copy a Tridiagonal with a non-zero subdiagonal to a Bidiagonal with uplo=:U"
+            @test_throws errmsg copyto!(BU, TL)
+            @test iszero(BU)
+
+            @testset "mismatched size" begin
+                for B in (BU, BL)
+                    B .= 0
+                    copyto!(B, Tridiagonal(Int[], Int[1], Int[]))
+                    @test B[1,1] == 1
+                    B[1,1] = 0
+                    @test iszero(B)
+                end
+            end
+        end
+    end
+
+    @testset "from SymTridiagonal" begin
+        S2 = SymTridiagonal(d, ones(Int,size(d)))
+        for S in (SymTridiagonal(d, du), SymTridiagonal(d, zero(d)))
+            @testset "to Diagonal" begin
+                D = Diagonal(zero(d))
+                @test copyto!(D, S) == Diagonal(d)
+                D .= 0
+                errmsg = "cannot copy a SymTridiagonal with a non-zero off-diagonal band to a Diagonal"
+                @test_throws errmsg copyto!(D, S2)
+                @test iszero(D)
+
+                @testset "mismatched size" begin
+                    D .= 0
+                    copyto!(D, SymTridiagonal(Int[1], Int[]))
+                    @test D[1,1] == 1
+                    D[1,1] = 0
+                    @test iszero(D)
+                end
+            end
+            @testset "to Bidiagonal" begin
+                BU = Bidiagonal(zero(d), zero(du), :U)
+                BL = Bidiagonal(zero(d), zero(du), :L)
+                @test copyto!(BU, S) == Bidiagonal(d, du, :U)
+                @test copyto!(BL, S) == Bidiagonal(d, du, :L)
+
+                BU .= 0
+                BL .= 0
+                errmsg = "cannot copy a SymTridiagonal with a non-zero off-diagonal band to a Bidiagonal"
+                @test_throws errmsg copyto!(BU, S2)
+                @test iszero(BU)
+                @test_throws errmsg copyto!(BL, S2)
+                @test iszero(BL)
+
+                @testset "mismatched size" begin
+                    for B in (BU, BL)
+                        B .= 0
+                        copyto!(B, SymTridiagonal(Int[1], Int[]))
+                        @test B[1,1] == 1
+                        B[1,1] = 0
+                        @test iszero(B)
+                    end
+                end
+            end
+        end
+    end
+end
+
+@testset "BandIndex indexing" begin
+    for D in (Diagonal(1:3), Bidiagonal(1:3, 2:3, :U), Bidiagonal(1:3, 2:3, :L),
+                Tridiagonal(2:3, 1:3, 1:2), SymTridiagonal(1:3, 2:3))
+        M = Matrix(D)
+        for band in -size(D,1)+1:size(D,1)-1
+            for idx in 1:size(D,1)-abs(band)
+                @test D[BandIndex(band, idx)] == M[BandIndex(band, idx)]
+            end
+        end
+        @test_throws BoundsError D[BandIndex(size(D,1),1)]
+    end
 end
 
 end # module TestSpecial

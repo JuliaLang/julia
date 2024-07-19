@@ -41,7 +41,7 @@ hello
 ```
 
 The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). If the external command fails to run
-successfully, the run method throws an [`ErrorException`](@ref).
+successfully, the run method throws an [`ProcessFailedException`](@ref).
 
 If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
 can be used instead:
@@ -77,6 +77,18 @@ julia> collect(`echo "foo bar"`)
 
 julia> `echo "foo bar"`[2]
 "foo bar"
+```
+
+You can also pass a `IOBuffer`, and later read from it:
+
+```jldoctest
+julia> io = PipeBuffer(); # PipeBuffer is a type of IOBuffer
+
+julia> run(`echo world`, devnull, io, stderr);
+
+julia> readlines(io)
+1-element Vector{String}:
+ "world"
 ```
 
 ## [Interpolation](@id command-interpolation)

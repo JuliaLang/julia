@@ -12,8 +12,18 @@ abstract type AbstractPattern end
 
 nothing_sentinel(i) = i == 0 ? nothing : i
 
+function last_utf8_byte(c::Char)
+    u = reinterpret(UInt32, c)
+    shift = ((4 - ncodeunits(c)) * 8) & 31
+    (u >> shift) % UInt8
+end
+
+# Whether the given byte is guaranteed to be the only byte in a Char
+# This holds even in the presence of invalid UTF8
+is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
+
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-                  s::String, i::Integer)
+                  s::Union{String, SubString{String}}, i::Integer)
     if i < 1 || i > sizeof(s)
         i == sizeof(s) + 1 && return nothing
         throw(BoundsError(s, i))
@@ -29,6 +39,16 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
     end
 end
 
+# Note: Currently, CodeUnits <: DenseVector, which makes this union redundant w.r.t
+# DenseArrayType{UInt8}, but this is a bug, and may be removed in future versions
+# of Julia. See #54002
+const DenseBytes = Union{
+    <:DenseArrayType{UInt8},
+    CodeUnits{UInt8, <:Union{String, SubString{String}}},
+}
+
+const ByteArray = Union{DenseBytes, DenseArrayType{Int8}}
+
 findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
     nothing_sentinel(_search(a, pred.x))
 
@@ -38,7 +58,7 @@ findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a:
 findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
 findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
 
-function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
+function _search(a::Union{String,SubString{String},<:ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
         throw(BoundsError(a, i))
     end
@@ -55,7 +75,7 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
     if isascii(b)
         _search(a,UInt8(b),i)
     else
-        _search(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
+        _search(a,codeunits(string(b)),i).start
     end
 end
 
@@ -98,7 +118,36 @@ function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
     if isascii(b)
         _rsearch(a,UInt8(b),i)
     else
-        _rsearch(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
+        _rsearch(a,codeunits(string(b)),i).start
+    end
+end
+
+function findall(
+    pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+    s::Union{String, SubString{String}}
+)
+    c = Char(pred.x)::Char
+    byte = last_utf8_byte(c)
+    ncu = ncodeunits(c)
+
+    # If only one byte, and can't be part of another Char: Forward to memchr.
+    is_standalone_byte(byte) && return findall(==(byte), codeunits(s))
+    result = Int[]
+    i = firstindex(s)
+    while true
+        i = _search(s, byte, i)
+        iszero(i) && return result
+        i += 1
+        index = i - ncu
+        # If the char is invalid, it's possible that its first byte is
+        # inside another char. If so, indexing into the string will throw an
+        # error, so we need to check for valid indices.
+        isvalid(s, index) || continue
+        # We use iterate here instead of indexing, because indexing wastefully
+        # checks for valid index. It would be better if there was something like
+        # try_getindex(::String, ::Int) we could use.
+        char = first(something(iterate(s, index)))
+        pred(char) && push!(result, index)
     end
 end
 
@@ -189,7 +238,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
         if i === nothing return 0 end
         ii = nextind(s, i)::Int
         a = Iterators.Stateful(trest)
-        matched = all(Splat(==), zip(SubString(s, ii), a))
+        matched = all(splat(==), zip(SubString(s, ii), a))
         (isempty(a) && matched) && return i
         i = ii
     end
@@ -201,13 +250,13 @@ function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
 end
 
-_nthbyte(s::String, i) = codeunit(s, i)
+_nthbyte(s::Union{String, SubString{String}}, i) = codeunit(s, i)
 _nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 
-function _searchindex(s::String, t::String, i::Integer)
+function _searchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)
     # Check for fast case of a single byte
     lastindex(t) == 1 && return something(findnext(isequal(t[1]), s, i), 0)
-    _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
+    _searchindex(codeunits(s), codeunits(t), i)
 end
 
 function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
@@ -506,7 +555,7 @@ function _rsearchindex(s::AbstractString,
         a = Iterators.Stateful(trest)
         b = Iterators.Stateful(Iterators.reverse(
             pairs(SubString(s, 1, ii))))
-        matched = all(Splat(==), zip(a, (x[2] for x in b)))
+        matched = all(splat(==), zip(a, (x[2] for x in b)))
         if matched && isempty(a)
             isempty(b) && return firstindex(s)
             return nextind(s, popfirst!(b)[1])::Int
@@ -521,7 +570,7 @@ function _rsearchindex(s::String, t::String, i::Integer)
         return something(findprev(isequal(t[1]), s, i), 0)
     elseif lastindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
-        return _rsearchindex(unsafe_wrap(Vector{UInt8}, s), unsafe_wrap(Vector{UInt8}, t), j)
+        return _rsearchindex(codeunits(s), codeunits(t), j)
     elseif i > sizeof(s)
         return 0
     elseif i == 0
@@ -709,6 +758,17 @@ The returned function is of type `Base.Fix2{typeof(occursin)}`.
 
 !!! compat "Julia 1.6"
     This method requires Julia 1.6 or later.
+
+# Examples
+```jldoctest
+julia> search_f = occursin("JuliaLang is a programming language");
+
+julia> search_f("JuliaLang")
+true
+
+julia> search_f("Python")
+false
+```
 """
 occursin(haystack) = Base.Fix2(occursin, haystack)
 

@@ -139,9 +139,10 @@ end
 end
 
 @testset "literal pow matches runtime pow matches optimized pow" begin
-    two = 2
-    @test 1.0000000105367122^2 == 1.0000000105367122^two
-    @test 1.0041504f0^2 == 1.0041504f0^two
+    let two = 2
+        @test 1.0000000105367122^2 == 1.0000000105367122^two
+        @test 1.0041504f0^2 == 1.0041504f0^two
+    end
 
     function g2(start, two, N)
         x = start
@@ -192,11 +193,13 @@ end
     finv(x) = f(x, -1)
     f2(x) = f(x, 2)
     f3(x) = f(x, 3)
-    x = 1.0000000105367122
-    @test x^2 == f(x, 2) == f2(x) == x*x == Float64(big(x)*big(x))
-    @test x^3 == f(x, 3) == f3(x) == x*x*x == Float64(big(x)*big(x)*big(x))
-    x = 1.000000007393669
-    @test x^-1 == f(x, -1) == finv(x) == 1/x == inv(x) == Float64(1/big(x)) == Float64(inv(big(x)))
+    let x = 1.0000000105367122
+        @test x^2 == f(x, 2) == f2(x) == x*x == Float64(big(x)*big(x))
+        @test x^3 == f(x, 3) == f3(x) == x*x*x == Float64(big(x)*big(x)*big(x))
+    end
+    let x = 1.000000007393669
+        @test x^-1 == f(x, -1) == finv(x) == 1/x == inv(x) == Float64(1/big(x)) == Float64(inv(big(x)))
+    end
 end
 
 @testset "curried approximation" begin
@@ -208,4 +211,79 @@ end
 @testset "isnan for Number" begin
     struct CustomNumber <: Number end
     @test !isnan(CustomNumber())
+end
+
+@testset "isapprox and integer overflow" begin
+    for T in (Int8, Int16, Int32)
+        T === Int && continue
+        @test !isapprox(typemin(T), T(0))
+        @test !isapprox(typemin(T), unsigned(T)(0))
+        @test !isapprox(typemin(T), 0)
+        @test !isapprox(typemin(T), T(0), atol=0.99)
+        @test !isapprox(typemin(T), unsigned(T)(0), atol=0.99)
+        @test !isapprox(typemin(T), 0, atol=0.99)
+        @test_broken !isapprox(typemin(T), T(0), atol=1)
+        @test_broken !isapprox(typemin(T), unsigned(T)(0), atol=1)
+        @test !isapprox(typemin(T), 0, atol=1)
+
+        @test !isapprox(typemin(T)+T(10), T(10))
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10))
+        @test !isapprox(typemin(T)+T(10), 10)
+        @test !isapprox(typemin(T)+T(10), T(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), 10, atol=0.99)
+        @test_broken !isapprox(typemin(T)+T(10), T(10), atol=1)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=1)
+        @test !isapprox(typemin(T)+T(10), 10, atol=1)
+
+        @test isapprox(typemin(T), 0.0, rtol=1)
+    end
+    for T in (Int, Int64, Int128)
+        @test !isapprox(typemin(T), T(0))
+        @test !isapprox(typemin(T), unsigned(T)(0))
+        @test !isapprox(typemin(T), T(0), atol=0.99)
+        @test !isapprox(typemin(T), unsigned(T)(0), atol=0.99)
+        @test_broken !isapprox(typemin(T), T(0), atol=1)
+        @test_broken !isapprox(typemin(T), unsigned(T)(0), atol=1)
+
+        @test !isapprox(typemin(T)+T(10), T(10))
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10))
+        @test !isapprox(typemin(T)+T(10), T(10), atol=0.99)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=0.99)
+        @test_broken !isapprox(typemin(T)+T(10), T(10), atol=1)
+        @test !isapprox(typemin(T)+T(10), unsigned(T)(10), atol=1)
+
+        @test isapprox(typemin(T), 0.0, rtol=1)
+    end
+end
+
+@testset "Conversion from floating point to unsigned integer near extremes (#51063)" begin
+    @test_throws InexactError UInt32(4.2949673f9)
+    @test_throws InexactError UInt64(1.8446744f19)
+    @test_throws InexactError UInt64(1.8446744073709552e19)
+    @test_throws InexactError UInt128(3.402823669209385e38)
+end
+
+@testset "Conversion from floating point to integer near extremes (exhaustive)" begin
+    for Ti in Base.BitInteger_types, Tf in (Float16, Float32, Float64), x in (typemin(Ti), typemax(Ti))
+        y = Tf(x)
+        for i in -3:3
+            z = nextfloat(y, i)
+
+            result = isfinite(z) ? round(BigInt, z) : error
+            result = result !== error && typemin(Ti) <= result <= typemax(Ti) ? result : error
+
+            if result === error
+                @test_throws InexactError round(Ti, z)
+                @test_throws InexactError Ti(z)
+            else
+                @test result == round(Ti, z)
+                if isinteger(z)
+                    @test result == Ti(z)
+                else
+                    @test_throws InexactError Ti(z)
+                end
+            end
+        end
+    end
 end

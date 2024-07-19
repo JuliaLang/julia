@@ -15,11 +15,12 @@ CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLA
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" LD="$(LD)"
 
-CMAKE_CC_ARG := $(CC_ARG)
-CMAKE_CXX_ARG := $(CXX_ARG)
-
 CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
 CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
+ifneq ($(OS),WINNT)
+CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir)
+endif
+
 ifeq ($(OS), Darwin)
 CMAKE_COMMON += -DCMAKE_MACOSX_RPATH=1
 endif
@@ -27,12 +28,27 @@ endif
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
-# The call to which here is to work around https://cmake.org/Bug/view.php?id=14366
-CMAKE_COMMON += -DCMAKE_C_COMPILER="$$(which $(CC_BASE))"
+
+# The calls to `which` are to work around https://cmake.org/Bug/view.php?id=14366
+ifeq ($(USECCACHE), 1)
+# `ccache` must be used as compiler launcher, not compiler itself.
+CMAKE_COMMON += -DCMAKE_C_COMPILER_LAUNCHER=ccache
+CMAKE_COMMON += -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+CMAKE_CC := "$$(which $(shell echo $(CC_ARG) | cut -d' ' -f1))"
+CMAKE_CXX := "$$(which $(shell echo $(CXX_ARG) | cut -d' ' -f1))"
+CMAKE_CC_ARG := $(shell echo $(CC_ARG) | cut -d' ' -f2-)
+CMAKE_CXX_ARG := $(shell echo $(CXX_ARG) | cut -d' ' -f2-)
+else
+CMAKE_CC := "$$(which $(CC_BASE))"
+CMAKE_CXX := "$$(which $(CXX_BASE))"
+CMAKE_CC_ARG := $(CC_ARG)
+CMAKE_CXX_ARG := $(CXX_ARG)
+endif
+CMAKE_COMMON += -DCMAKE_C_COMPILER=$(CMAKE_CC)
 ifneq ($(strip $(CMAKE_CC_ARG)),)
 CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CMAKE_CC_ARG) $(SANITIZE_OPTS)"
 endif
-CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
+CMAKE_COMMON += -DCMAKE_CXX_COMPILER=$(CMAKE_CXX)
 ifneq ($(strip $(CMAKE_CXX_ARG)),)
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG) $(SANITIZE_OPTS)"
 endif
@@ -107,8 +123,8 @@ endif
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_includedir) $(build_sysconfdir) $(build_datarootdir) $(build_staging) $(build_prefix)/manifest)
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-
 $(build_prefix): | $(DIRS)
+
 $(eval $(call dir_target,$(SRCCACHE)))
 
 
@@ -174,6 +190,7 @@ $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tar | $(build_prefix
 	$(UNTAR) $$< -C $$(build_prefix)
 	$6
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
+.PHONY: $(addsuffix -$(strip $1),stage install distclean uninstall reinstall)
 endef
 
 define staged-uninstaller
@@ -192,14 +209,18 @@ endef
 define symlink_install # (target-name, rel-from, abs-to)
 clean-$1: uninstall-$1
 install-$1: $$(build_prefix)/manifest/$1
-reinstall-$1: install-$1
+reinstall-$1:
+	+$$(MAKE) uninstall-$1
+	+$$(MAKE) stage-$1
+	+$$(MAKE) install-$1
+.PHONY: $(addsuffix -$1,clean install reinstall)
 
 UNINSTALL_$(strip $1) := $2 symlink-uninstaller $3
 
-$$(build_prefix)/manifest/$1: $$(BUILDDIR)/$2/build-compiled | $3 $$(build_prefix)/manifest
+$$(build_prefix)/manifest/$1: $$(BUILDDIR)/$2/build-compiled | $$(abspath $$(dir $3/$1)) $$(abspath $$(dir $$(build_prefix)/manifest/$1))
 	-+[ ! \( -e $3/$1 -o -h $3/$1 \) ] || $$(MAKE) uninstall-$1
 ifeq ($$(BUILD_OS), WINNT)
-	cmd //C mklink //J $$(call mingw_to_dos,$3/$1,cd $3 &&) $$(call mingw_to_dos,$$(BUILDDIR)/$2,)
+	cmd //C mklink //J $$(call mingw_to_dos,$3/$1,cd $3/$(dir $1) &&) $$(call mingw_to_dos,$$(BUILDDIR)/$2,)
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	cmd /C mklink /J $$(call cygpath_w,$3/$1) $$(call cygpath_w,$$(BUILDDIR)/$2)
 else ifdef JULIA_VAGRANT_BUILD
@@ -213,7 +234,7 @@ endef
 define symlink-uninstaller
 uninstall-$1:
 ifeq ($$(BUILD_OS), WINNT)
-	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3 &&)
+	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3/$(dir $1) &&)
 else
 	rm -rf $3/$1
 endif

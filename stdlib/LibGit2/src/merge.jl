@@ -16,7 +16,7 @@ branch head described using `GitReference`.
 function GitAnnotated(repo::GitRepo, commit_id::GitHash)
     ensure_initialized()
     ann_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_annotated_commit_lookup, :libgit2), Cint,
+    @check ccall((:git_annotated_commit_lookup, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{GitHash}),
                    ann_ptr_ptr, repo.ptr, Ref(commit_id))
     return GitAnnotated(repo, ann_ptr_ptr[])
@@ -25,7 +25,7 @@ end
 function GitAnnotated(repo::GitRepo, ref::GitReference)
     ensure_initialized()
     ann_ref_ref = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_annotated_commit_from_ref, :libgit2), Cint,
+    @check ccall((:git_annotated_commit_from_ref, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}),
                    ann_ref_ref, repo.ptr, ref.ptr)
     return GitAnnotated(repo, ann_ref_ref[])
@@ -34,7 +34,7 @@ end
 function GitAnnotated(repo::GitRepo, fh::FetchHead)
     ensure_initialized()
     ann_ref_ref = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_annotated_commit_from_fetchhead, :libgit2), Cint,
+    @check ccall((:git_annotated_commit_from_fetchhead, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{GitHash}),
                    ann_ref_ref, repo.ptr, fh.name, fh.url, Ref(fh.oid))
     return GitAnnotated(repo, ann_ref_ref[])
@@ -49,7 +49,7 @@ end
 function GitHash(ann::GitAnnotated)
     ensure_initialized()
     GC.@preserve ann begin
-        oid = unsafe_load(ccall((:git_annotated_commit_id, :libgit2), Ptr{GitHash}, (Ptr{Cvoid},), ann.ptr))
+        oid = unsafe_load(ccall((:git_annotated_commit_id, libgit2), Ptr{GitHash}, (Ptr{Cvoid},), ann.ptr))
     end
     return oid
 end
@@ -88,7 +88,7 @@ function merge_analysis(repo::GitRepo, anns::Vector{GitAnnotated})
     preference = Ref{Cint}(0)
     anns_ref = Ref(Base.map(a->a.ptr, anns), 1)
     anns_size = Csize_t(length(anns))
-    @check ccall((:git_merge_analysis, :libgit2), Cint,
+    @check ccall((:git_merge_analysis, libgit2), Cint,
                   (Ptr{Cint}, Ptr{Cint}, Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t),
                    analysis, preference, repo.ptr, anns_ref, anns_size)
     return analysis[], preference[]
@@ -147,7 +147,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated};
                 checkout_opts::CheckoutOptions = CheckoutOptions())
     ensure_initialized()
     anns_size = Csize_t(length(anns))
-    @check ccall((:git_merge, :libgit2), Cint,
+    @check ccall((:git_merge, libgit2), Cint,
                   (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Csize_t,
                    Ptr{MergeOptions}, Ptr{CheckoutOptions}),
                    repo.ptr, Base.map(x->x.ptr, anns), anns_size,
@@ -261,7 +261,7 @@ function merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)
     oid2_ptr = Ref(GitHash(two))
     moid_ptr = Ref(GitHash())
     moid = try
-        @check ccall((:git_merge_base, :libgit2), Cint,
+        @check ccall((:git_merge_base, libgit2), Cint,
                 (Ptr{GitHash}, Ptr{Cvoid}, Ptr{GitHash}, Ptr{GitHash}),
                 moid_ptr, repo.ptr, oid1_ptr, oid2_ptr)
         moid_ptr[]

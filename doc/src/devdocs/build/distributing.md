@@ -2,9 +2,9 @@ Binary distributions
 =======================================
 
 These notes are for those wishing to compile a binary distribution of Julia
-for distribution on various platforms.  We love users spreading Julia as
+for distribution on various platforms. We love users spreading Julia as
 far and wide as they can, trying it out on as wide an array of
-operating systems and hardware configurations as possible.  As each
+operating systems and hardware configurations as possible. As each
 platform has specific gotchas and processes that must be followed in
 order to create a portable, working Julia distribution, we have
 separated most of the notes by OS.
@@ -53,7 +53,7 @@ as it will make Julia fail at startup on any machine with incompatible CPUs
 We therefore recommend that you pass the `MARCH` variable when calling `make`,
 setting it to the baseline target you intend to support. This will determine
 the target CPU for both the Julia executable and libraries, and the system
-image (the latter can also be set using `JULIA_CPU_TARGET`). Typically useful
+image (the latter can also be set using [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET)). Typically useful
 values for x86 CPUs are `x86-64` and `core2` (for 64-bit builds) and
 `pentium4` (for 32-bit builds). Unfortunately, CPUs older than Pentium 4
 are currently not supported (see
@@ -86,8 +86,8 @@ installation-wide initialization file. This file can be used by
 distribution managers to set up custom paths or initialization code.
 For Linux distribution packages, if `$prefix` is
 set to `/usr`, there is no `/usr/etc` to look into. This requires
-the path to Julia's private `etc` directory to be changed.  This can
-be done via the `sysconfdir` make variable when building.  Simply
+the path to Julia's private `etc` directory to be changed. This can
+be done via the `sysconfdir` make variable when building. Simply
 pass `sysconfdir=/etc` to `make` when building and Julia will first
 check `/etc/julia/startup.jl` before trying
 `$prefix/etc/julia/startup.jl`.
@@ -97,12 +97,12 @@ OS X
 
 To create a binary distribution on OSX, build Julia first, then cd to
 `contrib/mac/app`, and run `make` with the same makevars that were used
-with `make` when building Julia proper.  This will then
+with `make` when building Julia proper. This will then
 create a `.dmg` file in the `contrib/mac/app` directory holding a
 completely self-contained Julia.app.
 
 Alternatively, Julia may be built as a framework by invoking `make` with the
-`darwinframework` target and `DARWIN_FRAMEWORK=1` set.  For example,
+`darwinframework` target and `DARWIN_FRAMEWORK=1` set. For example,
 `make DARWIN_FRAMEWORK=1 darwinframework`.
 
 Windows

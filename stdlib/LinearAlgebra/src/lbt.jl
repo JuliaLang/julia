@@ -13,6 +13,19 @@ struct lbt_library_info_t
     f2c::Int32
     cblas::Int32
 end
+
+macro get_warn(map, key)
+    return quote
+        if !haskey($(esc(map)), $(esc(key)))
+            @warn(string("[LBT] Unknown key into ", $(string(map)), ": ", $(esc(key)), ", defaulting to :unknown"))
+            # All the unknown values share a common value: `-1`
+            $(esc(map))[$(esc(LBT_INTERFACE_UNKNOWN))]
+        else
+            $(esc(map))[$(esc(key))]
+        end
+    end
+end
+
 const LBT_INTERFACE_LP64    = 32
 const LBT_INTERFACE_ILP64   = 64
 const LBT_INTERFACE_UNKNOWN = -1
@@ -35,10 +48,12 @@ const LBT_INV_F2C_MAP = Dict(v => k for (k, v) in LBT_F2C_MAP)
 
 const LBT_COMPLEX_RETSTYLE_NORMAL   =  0
 const LBT_COMPLEX_RETSTYLE_ARGUMENT =  1
+const LBT_COMPLEX_RETSTYLE_FNDA     =  2
 const LBT_COMPLEX_RETSTYLE_UNKNOWN  = -1
 const LBT_COMPLEX_RETSTYLE_MAP = Dict(
     LBT_COMPLEX_RETSTYLE_NORMAL   => :normal,
     LBT_COMPLEX_RETSTYLE_ARGUMENT => :argument,
+    LBT_COMPLEX_RETSTYLE_FNDA     => :float_normal_double_argument,
     LBT_COMPLEX_RETSTYLE_UNKNOWN  => :unknown,
 )
 const LBT_INV_COMPLEX_RETSTYLE_MAP = Dict(v => k for (k, v) in LBT_COMPLEX_RETSTYLE_MAP)
@@ -69,10 +84,10 @@ struct LBTLibraryInfo
             lib_info.handle,
             unsafe_string(lib_info.suffix),
             unsafe_wrap(Vector{UInt8}, lib_info.active_forwards, div(num_exported_symbols,8)+1),
-            LBT_INTERFACE_MAP[lib_info.interface],
-            LBT_COMPLEX_RETSTYLE_MAP[lib_info.complex_retstyle],
-            LBT_F2C_MAP[lib_info.f2c],
-            LBT_CBLAS_MAP[lib_info.cblas],
+            @get_warn(LBT_INTERFACE_MAP, lib_info.interface),
+            @get_warn(LBT_COMPLEX_RETSTYLE_MAP, lib_info.complex_retstyle),
+            @get_warn(LBT_F2C_MAP, lib_info.f2c),
+            @get_warn(LBT_CBLAS_MAP, lib_info.cblas),
         )
     end
 end
@@ -83,11 +98,17 @@ struct lbt_config_t
     exported_symbols::Ptr{Cstring}
     num_exported_symbols::UInt32
 end
-const LBT_BUILDFLAGS_DEEPBINDLESS = 0x01
-const LBT_BUILDFLAGS_F2C_CAPABLE  = 0x02
+const LBT_BUILDFLAGS_DEEPBINDLESS     = 0x01
+const LBT_BUILDFLAGS_F2C_CAPABLE      = 0x02
+const LBT_BUILDFLAGS_CBLAS_DIVERGENCE = 0x04
+const LBT_BUILDFLAGS_COMPLEX_RETSTYLE = 0x08
+const LBT_BUILDFLAGS_SYMBOL_TRIMMING  = 0x10
 const LBT_BUILDFLAGS_MAP = Dict(
     LBT_BUILDFLAGS_DEEPBINDLESS => :deepbindless,
     LBT_BUILDFLAGS_F2C_CAPABLE => :f2c_capable,
+    LBT_BUILDFLAGS_CBLAS_DIVERGENCE => :cblas_divergence,
+    LBT_BUILDFLAGS_COMPLEX_RETSTYLE => :complex_retstyle,
+    LBT_BUILDFLAGS_SYMBOL_TRIMMING  => :symbol_trimming,
 )
 
 struct LBTConfig
@@ -207,9 +228,10 @@ function lbt_set_num_threads(nthreads)
     return ccall((:lbt_set_num_threads, libblastrampoline), Cvoid, (Int32,), nthreads)
 end
 
-function lbt_forward(path; clear::Bool = false, verbose::Bool = false, suffix_hint::Union{String,Nothing} = nothing)
+function lbt_forward(path::AbstractString; clear::Bool = false, verbose::Bool = false, suffix_hint::Union{String,Nothing} = nothing)
     _clear_config_with() do
-        return ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32, Cstring), path, clear ? 1 : 0, verbose ? 1 : 0, something(suffix_hint, C_NULL))
+        return ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32, Cstring),
+                     path, clear ? 1 : 0, verbose ? 1 : 0, something(suffix_hint, C_NULL))
     end
 end
 
@@ -240,11 +262,11 @@ If the given `symbol_name` is not contained within the list of exported symbols,
 function lbt_find_backing_library(symbol_name, interface::Symbol;
                                   config::LBTConfig = lbt_get_config())
     if interface ∉ (:ilp64, :lp64)
-        throw(Argument("Invalid interface specification: '$(interface)'"))
+        throw(ArgumentError(lazy"Invalid interface specification: '$(interface)'"))
     end
     symbol_idx = findfirst(s -> s == symbol_name, config.exported_symbols)
     if symbol_idx === nothing
-        throw(ArgumentError("Invalid exported symbol name '$(symbol_name)'"))
+        throw(ArgumentError(lazy"Invalid exported symbol name '$(symbol_name)'"))
     end
     # Convert to zero-indexed
     symbol_idx -= 1

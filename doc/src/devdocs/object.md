@@ -163,11 +163,8 @@ Arrays:
 
 ```c
 jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims);
-jl_array_t *jl_new_arrayv(jl_value_t *atype, ...);
 jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr);
-jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc);
-jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc, size_t z);
-jl_array_t *jl_alloc_vec_any(size_t n);
+jl_array_t *jl_alloc_array_nd(jl_value_t *atype, size_t *dims, size_t ndims);
 ```
 
 Note that many of these have alternative allocation functions for various special-purposes. The
@@ -189,6 +186,8 @@ then tagged with its type:
 jl_value_t *jl_gc_allocobj(size_t nbytes);
 void jl_set_typeof(jl_value_t *v, jl_datatype_t *type);
 ```
+!!! note "Out of date Warning"
+    The documentation and usage for the function `jl_gc_allocobj` may be out of date
 
 Note that all objects are allocated in multiples of 4 bytes and aligned to the platform pointer
 size. Memory is allocated from a pool for smaller objects, or directly with `malloc()` for large

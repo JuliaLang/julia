@@ -14,7 +14,7 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp
 endif
 
 ifneq ($(USE_BINARYBUILDER_CURL),1)
-CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
+CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN) -Wl,-rpath,$(build_shlibdir)
 
 # On older Linuces (those that use OpenSSL < 1.1) we include `libpthread` explicitly.
 # It doesn't hurt to include it explicitly elsewhere, so we do so.
@@ -36,13 +36,13 @@ checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 ## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
 # Disable....almost everything
 CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
-	--without-ssl --without-gnutls --without-libidn2 --without-librtmp \
+	--without-gnutls --without-libidn2 --without-librtmp \
 	--without-nss --without-libpsl --without-libgsasl --without-fish-functions-dir \
-	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static
+	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static \
+	--without-gssapi --without-brotli
 # A few things we actually enable
 CURL_CONFIGURE_FLAGS += --enable-versioned-symbols \
 	--with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}
-CURL_CONFIGURE_FLAGS += --without-gssapi
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
