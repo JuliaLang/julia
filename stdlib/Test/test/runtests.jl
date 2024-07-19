@@ -1725,4 +1725,14 @@ end
         result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
         @test occursin(expected, result)
     end
+
+end
+
+@testset "Deprecated multiple arguments" begin
+    msg1 = """Multiple descriptions provided to @testset. \
+        This may be disallowed in the future."""
+    @test_logs (:warn, msg1) @macroexpand @testset "name1" "name2" begin end
+    msg2 = """Multiple testset types provided to @testset. \
+        This may be disallowed in the future."""
+    @test_logs (:warn, msg2) @macroexpand @testset DefaultTestSet DefaultTestSet begin end
 end
