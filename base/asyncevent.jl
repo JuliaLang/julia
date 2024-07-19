@@ -270,8 +270,8 @@ as the amount of time decreases, the likelihood of the sleep exceeding the
 given amount of time increases (since the OS or julia scheduler might not
 wake up the thread/task at exactly the right time).
 
-Note that using sleep for small increments of time usually implies that you are
-doing something weird and should consider using some form of notification system.
+Note that using sleep for small increments of time is usually sub-optimal
+and should consider either using yield, or some form of event notification system.
 """
 function sleep(sec::Real)
     sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
