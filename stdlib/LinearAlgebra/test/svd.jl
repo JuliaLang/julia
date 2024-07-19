@@ -78,7 +78,8 @@ aimg  = randn(n,n)/2
             @test_throws FieldError usv.Z
             b = rand(eltya,n)
             @test usv\b ≈ a\b
-            @test Base.propertynames(usv) == (:U, :S, :V, :Vt)
+            @test Base.propertynames(usv) == (:U, :S, :Vt)
+            @test Base.propertynames(usv, true) == (:V, :U, :S, :Vt)
             @test size(usv) == size(a)
             if eltya <: BlasFloat
                 svdz = svd!(Matrix{eltya}(undef,0,0))
