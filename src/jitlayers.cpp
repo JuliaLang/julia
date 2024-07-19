@@ -798,12 +798,12 @@ public:
 
 class JLMemoryUsagePlugin : public ObjectLinkingLayer::Plugin {
 private:
-    std::atomic<size_t> &total_size;
+    std::atomic<size_t> &jit_bytes_size;
 
 public:
 
-    JLMemoryUsagePlugin(std::atomic<size_t> &total_size)
-        : total_size(total_size) {}
+    JLMemoryUsagePlugin(std::atomic<size_t> &jit_bytes_size)
+        : jit_bytes_size(jit_bytes_size) {}
 
     Error notifyFailed(orc::MaterializationResponsibility &MR) override {
         return Error::success();
@@ -852,7 +852,7 @@ public:
             }
             (void) code_size;
             (void) data_size;
-            this->total_size.fetch_add(graph_size, std::memory_order_relaxed);
+            this->jit_bytes_size.fetch_add(graph_size, std::memory_order_relaxed);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, graph_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, code_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITDataSize, data_size);
@@ -1598,7 +1598,7 @@ JuliaOJIT::JuliaOJIT()
         ES, std::move(ehRegistrar)));
 
     ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
-    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(total_size));
+    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(jit_bytes_size));
 #else
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
@@ -2010,19 +2010,20 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
     return getMangledName(GV->getName());
 }
 
-#ifdef JL_USE_JITLINK
 size_t JuliaOJIT::getTotalBytes() const
 {
-    return total_size.load(std::memory_order_relaxed);
-}
-#else
-size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm) JL_NOTSAFEPOINT;
-
-size_t JuliaOJIT::getTotalBytes() const
-{
-    return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
-}
+    auto bytes = jit_bytes_size.load(std::memory_order_relaxed);
+#ifndef JL_USE_JITLINK
+    size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm) JL_NOTSAFEPOINT;
+    bytes += getRTDyldMemoryManagerTotalBytes(MemMgr.get());
 #endif
+    return bytes;
+}
+
+void JuliaOJIT::addBytes(size_t bytes)
+{
+    jit_bytes_size.fetch_add(bytes, std::memory_order_relaxed);
+}
 
 void JuliaOJIT::printTimers()
 {
@@ -2306,4 +2307,10 @@ extern "C" JL_DLLEXPORT_CODEGEN
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
+}
+
+// API for adding bytes to record being owned by the JIT
+void jl_jit_add_bytes(size_t bytes)
+{
+    jl_ExecutionEngine->addBytes(bytes);
 }

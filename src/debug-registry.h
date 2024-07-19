@@ -100,7 +100,8 @@ public:
 private:
 
     struct LazyObjectInfo {
-        std::unique_ptr<MemoryBuffer> data;
+        SmallVector<uint8_t, 0> data;
+        size_t uncompressedsize;
         std::unique_ptr<const llvm::object::ObjectFile> object;
         std::unique_ptr<llvm::DIContext> context;
         LazyObjectInfo() = delete;
