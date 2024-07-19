@@ -7,7 +7,7 @@ module PCRE
 import ..RefValue
 
 # include($BUILDROOT/base/pcre_h.jl)
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))
+include(string(Base.BUILDROOT, "pcre_h.jl"))
 
 const PCRE_LIB = "libpcre2-8"
 

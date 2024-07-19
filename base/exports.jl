@@ -460,7 +460,6 @@ export
     vcat,
     vec,
     view,
-    wrap,
     zeros,
 
 # search, find, match and related functions
@@ -550,6 +549,7 @@ export
     mapfoldl,
     mapfoldr,
     mapreduce,
+    memoryref,
     merge!,
     mergewith!,
     merge,

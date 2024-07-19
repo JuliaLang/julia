@@ -110,7 +110,7 @@ Operators like `+` are also valid identifiers, but are parsed specially. In some
 can be used just like variables; for example `(+)` refers to the addition function, and `(+) = f`
 will reassign it. Most of the Unicode infix operators (in category Sm), such as `⊕`, are parsed
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
-to define `⊗` as an infix Kronecker product).  Operators can also be suffixed with modifying marks,
+to define `⊗` as an infix Kronecker product). Operators can also be suffixed with modifying marks,
 primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator with the same precedence as `+`.
 A space is required between an operator that ends with a subscript/superscript letter and a subsequent
 variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
@@ -156,7 +156,7 @@ The minus sign `−` (U+2212) is treated as equivalent to the hyphen-minus sign 
 
 An assignment `variable = value` "binds" the name `variable` to the `value` computed
 on the right-hand side, and the whole assignment is treated by Julia as an expression
-equal to the right-hand-side `value`.  This means that assignments can be *chained*
+equal to the right-hand-side `value`. This means that assignments can be *chained*
 (the same `value` assigned to multiple variables with `variable1 = variable2 = value`)
 or used in other expressions, and is also why their result is shown in the REPL as
 the value of the right-hand side.  (In general, the REPL displays the value of whatever
@@ -175,7 +175,7 @@ julia> b
 ```
 
 A common confusion is the distinction between *assignment* (giving a new "name" to a value)
-and *mutation* (changing a value).  If you run `a = 2` followed by `a = 3`, you have changed
+and *mutation* (changing a value). If you run `a = 2` followed by `a = 3`, you have changed
 the "name" `a` to refer to a new value `3` … you haven't changed the number `2`, so `2+2`
 will still give `4` and not `6`!   This distinction becomes more clear when dealing with
 *mutable* types like [arrays](@ref lib-arrays), whose contents *can* be changed:
@@ -213,11 +213,11 @@ julia> b   # b refers to the original array object, which has been mutated
   3
 ```
 That is, `a[i] = value` (an alias for [`setindex!`](@ref)) *mutates* an existing array object
-in memory, accessible via either `a` or `b`.  Subsequently setting `a = 3.14159`
+in memory, accessible via either `a` or `b`. Subsequently setting `a = 3.14159`
 does not change this array, it simply binds `a` to a different object; the array is still
 accessible via `b`. Another common syntax to mutate an existing object is
 `a.field = value` (an alias for [`setproperty!`](@ref)), which can be used to change
-a [`mutable struct`](@ref).  There is also mutation via dot assignment, for example
+a [`mutable struct`](@ref). There is also mutation via dot assignment, for example
 `b .= 5:7` (which mutates our array `b` in-place to contain `[5,6,7]`), as part of Julia's
 [vectorized "dot" syntax](@ref man-dot-operators).
 

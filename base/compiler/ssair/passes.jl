@@ -443,8 +443,8 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
                     ocleaf = simple_walk(compact, ocleaf)
                 end
                 ocdef, _ = walk_to_def(compact, ocleaf)
-                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-4
-                    lift_arg!(compact, leaf, cache_key, ocdef, 4+field, lifted_leaves)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-5
+                    lift_arg!(compact, leaf, cache_key, ocdef, 5+field, lifted_leaves)
                     continue
                 end
                 return nothing
@@ -1614,6 +1614,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     end
     all(check_defuse, defuse.uses) || return nothing
     all(check_defuse, defuse.defs) || return nothing
+    bb_insert_block != 0 || return nothing # verify post-dominator of all uses exists
 
     # Check #3
     dominates(domtree, finalizer_bb, bb_insert_block) || return nothing
@@ -2009,8 +2010,13 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     unionphis = Pair{Int,Any}[] # sorted
     compact = IncrementalCompact(ir, true)
     made_changes = false
-    for ((_, idx), stmt) in compact
+    for ((old_idx, idx), stmt) in compact
         if isa(stmt, PhiNode)
+            if reprocess_phi_node!(𝕃ₒ, compact, stmt, old_idx)
+                # Phi node has a single predecessor and was deleted
+                made_changes = true
+                continue
+            end
             push!(all_phis, idx)
             if is_some_union(compact.result[idx][:type])
                 push!(unionphis, Pair{Int,Any}(idx, Union{}))
@@ -2269,6 +2275,15 @@ function cfg_simplify!(ir::IRCode)
             elseif merge_into[idx] == 0 && is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
                 # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
                 # reference our predecessors.
+                #
+                # This is for situations like:
+                #   #1 - ...
+                #        goto #3 if not ...
+                #   #2 - (empty)
+                #   #3 - ϕ(#2 => true, #1 => false)
+                #
+                # where we rely on the empty basic block to disambiguate the ϕ-node's value
+
                 found_interference = false
                 preds = Int[ascend_eliminated_preds(bbs, pred) for pred in bb.preds]
                 for idx in bbs[succ].stmts
@@ -2326,10 +2341,9 @@ function cfg_simplify!(ir::IRCode)
                     end
                     curr = merged_succ[curr]
                 end
-                terminator = ir[SSAValue(ir.cfg.blocks[curr].stmts[end])][:stmt]
-                if isa(terminator, GotoNode) || isa(terminator, ReturnNode)
-                    break
-                elseif isa(terminator, GotoIfNot)
+                terminator = ir[SSAValue(bbs[curr].stmts[end])][:stmt]
+
+                if isa(terminator, GotoIfNot)
                     if bb_rename_succ[terminator.dest] == 0
                         push!(worklist, terminator.dest)
                     end
@@ -2337,6 +2351,20 @@ function cfg_simplify!(ir::IRCode)
                     catchbb = terminator.catch_dest
                     if bb_rename_succ[catchbb] == 0
                         push!(worklist, catchbb)
+                    end
+                elseif isa(terminator, GotoNode) || isa(terminator, ReturnNode)
+                    # No implicit fall through. Schedule from work list.
+                    break
+                else
+                    is_bottom = ir[SSAValue(bbs[curr].stmts[end])][:type] === Union{}
+                    if is_bottom && !isa(terminator, PhiNode) && terminator !== nothing
+                        # If this is a regular statement (not PhiNode/GotoNode/GotoIfNot
+                        # or the `nothing` special case deletion marker),
+                        # and the type is Union{}, then this may be a terminator.
+                        # Ordinarily we normalize with ReturnNode(), but this is not
+                        # required. In any case, we do not fall through, so we
+                        # do not need to schedule the fall-through block.
+                        break
                     end
                 end
                 ncurr = curr + 1

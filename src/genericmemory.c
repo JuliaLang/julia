@@ -161,9 +161,9 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tsz, mtype);
     m->ptr = data;
     m->length = nel;
-    jl_genericmemory_data_owner_field(m) = NULL;
-    int isaligned = 0;  // TODO: allow passing memalign'd buffers
+    jl_genericmemory_data_owner_field(m) = own_buffer ? (jl_value_t*)m : NULL;
     if (own_buffer) {
+        int isaligned = 0;  // TODO: allow passing memalign'd buffers
         jl_gc_track_malloced_genericmemory(ct->ptls, m, isaligned);
         jl_gc_count_allocd(nel*elsz);
     }
@@ -208,8 +208,11 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
         JL_GC_PUSH1(&o);
         jl_value_t *str = jl_pchar_to_string((const char*)m->ptr, len);
         JL_GC_POP();
+        if (how == 1) // TODO: we might like to early-call jl_gc_free_memory here instead actually, but hopefully `m` will die soon
+            jl_gc_count_freed(mlength);
         return str;
     }
+    // n.b. how == 0 is always pool-allocated, so the freed bytes are computed from the pool not the object
     return jl_pchar_to_string((const char*)m->ptr, len);
 }
 

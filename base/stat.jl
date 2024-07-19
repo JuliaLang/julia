@@ -66,7 +66,7 @@ struct StatStruct
 end
 
 @eval function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
-  $(let ex = true
+    $(let ex = true
         for fld in fieldnames(StatStruct)[2:end]
             ex = :(getfield(x, $(QuoteNode(fld))) === getfield(y, $(QuoteNode(fld))) && $ex)
         end
@@ -74,7 +74,7 @@ end
     end)
 end
 @eval function Base.hash(obj::StatStruct, h::UInt)
-  $(quote
+    $(quote
         $(Any[:(h = hash(getfield(obj, $(QuoteNode(fld))), h)) for fld in fieldnames(StatStruct)[2:end]]...)
         return h
     end)

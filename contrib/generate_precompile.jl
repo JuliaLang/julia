@@ -171,7 +171,7 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
         println(k)
     end
 
-    # interactive statup uses this
+    # interactive startup uses this
     write(IOBuffer(), "")
 
     break   # only actually need to do this once

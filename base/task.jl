@@ -53,7 +53,6 @@ push!(c::CompositeException, ex) = push!(c.exceptions, ex)
 pushfirst!(c::CompositeException, ex) = pushfirst!(c.exceptions, ex)
 isempty(c::CompositeException) = isempty(c.exceptions)
 iterate(c::CompositeException, state...) = iterate(c.exceptions, state...)
-eltype(::Type{CompositeException}) = Any
 
 function showerror(io::IO, ex::CompositeException)
     if !isempty(ex)
@@ -114,6 +113,13 @@ end
 
 Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
+
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
 
 # Examples
 ```jldoctest
@@ -180,7 +186,9 @@ end
         # TODO: this field name should be deprecated in 2.0
         return t._isexception ? t.result : nothing
     elseif field === :scope
-        error("Querying `scope` is disallowed. Use `current_scope` instead.")
+        error("""
+            Querying a Task's `scope` field is disallowed.
+            The private `Core.current_scope()` function is better, though still an implementation detail.""")
     else
         return getfield(t, field)
     end
@@ -355,8 +363,18 @@ function _wait2(t::Task, waiter::Task)
     nothing
 end
 
+"""
+    wait(t::Task; throw=true)
+
+Wait for a `Task` to finish.
+
+The keyword `throw` (defaults to `true`) controls whether a failed task results
+in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed task.
+
+Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
+"""
 function wait(t::Task; throw=true)
-    t === current_task() && error("deadlock detected: cannot wait on current task")
+    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     _wait(t)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
@@ -717,7 +735,7 @@ Print an error log to `stderr` if task `t` fails.
 
 # Examples
 ```julia-repl
-julia> Base._wait(errormonitor(Threads.@spawn error("task failed")))
+julia> wait(errormonitor(Threads.@spawn error("task failed")); throw = false)
 Unhandled Task ERROR: task failed
 Stacktrace:
 [...]
@@ -980,6 +998,13 @@ the woken task.
     It is incorrect to use `schedule` on an arbitrary `Task` that has already been started.
     See [the API reference](@ref low-level-schedule-wait) for more information.
 
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
+
 # Examples
 ```jldoctest
 julia> a5() = sum(i for i in 1:1000);
@@ -1040,11 +1065,15 @@ end
 
 A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
+
+Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 """
 function yield(t::Task, @nospecialize(x=nothing))
-    (t._state === task_state_runnable && t.queue === nothing) || error("yield: Task not runnable")
+    current = current_task()
+    t === current && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
+    (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
     t.result = x
-    enq_work(current_task())
+    enq_work(current)
     set_next_task(t)
     return try_yieldto(ensure_rescheduled)
 end
