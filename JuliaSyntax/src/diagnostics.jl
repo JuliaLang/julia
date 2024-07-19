@@ -40,7 +40,6 @@ end
 first_byte(d::Diagnostic) = d.first_byte
 last_byte(d::Diagnostic)  = d.last_byte
 is_error(d::Diagnostic)   = d.level === :error
-Base.range(d::Diagnostic) = first_byte(d):last_byte(d)
 
 # Make relative path into a file URL
 function _file_url(filename)
@@ -89,7 +88,7 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
     _printstyled(io, "# $prefix @ ", fgcolor=:light_black)
     _printstyled(io, "$locstr", fgcolor=:light_black, href=file_href)
     print(io, "\n")
-    highlight(io, source, range(diagnostic),
+    highlight(io, source, byte_range(diagnostic),
               note=diagnostic.message, notecolor=color,
               context_lines_before=1, context_lines_after=0)
 end

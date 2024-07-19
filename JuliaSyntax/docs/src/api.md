@@ -54,9 +54,18 @@ JuliaSyntax.flags
 
 see also predicates related to `flags`.
 
-## Syntax tree types
+## Syntax trees
+
+Syntax tree types:
 
 ```@docs
 JuliaSyntax.SyntaxNode
 JuliaSyntax.GreenNode
+```
+
+Functions applicable to syntax trees include everything in the sections on
+heads/kinds, and source file handling.
+
+```@docs
+JuliaSyntax.byte_range
 ```

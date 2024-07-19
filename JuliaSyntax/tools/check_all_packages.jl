@@ -39,7 +39,7 @@ Logging.with_logger(TerminalLogger()) do
                 mismatch_count += 1
                 failing_source = sprint(context=:color=>true) do io
                     for c in reduce_tree(parseall(SyntaxNode, text))
-                        JuliaSyntax.highlight(io, c.source, range(c), context_lines_inner=5)
+                        JuliaSyntax.highlight(io, c.source, JuliaSyntax.byte_range(c), context_lines_inner=5)
                         println(io, "\n")
                     end
                 end
