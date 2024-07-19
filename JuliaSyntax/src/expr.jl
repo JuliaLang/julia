@@ -522,16 +522,16 @@ end
 function _to_expr(node::SyntaxNode)
     if !haschildren(node)
         offset, txtbuf = _unsafe_wrap_substring(sourcetext(node.source))
-        return _leaf_to_Expr(node.source, txtbuf, head(node), range(node) .+ offset, node)
+        return _leaf_to_Expr(node.source, txtbuf, head(node), byte_range(node) .+ offset, node)
     end
     cs = children(node)
     args = Any[_to_expr(c) for c in cs]
-    _internal_node_to_Expr(node.source, range(node), head(node), range.(cs), head.(cs), args)
+    _internal_node_to_Expr(node.source, byte_range(node), head(node), byte_range.(cs), head.(cs), args)
 end
 
 function Base.Expr(node::SyntaxNode)
     ex = _to_expr(node)
-    loc = source_location(LineNumberNode, node.source, first(range(node)))
+    loc = source_location(LineNumberNode, node.source, first(byte_range(node)))
     only(_fixup_Expr_children!(SyntaxHead(K"None",EMPTY_FLAGS), loc, Any[ex]))
 end
 

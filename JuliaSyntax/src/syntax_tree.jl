@@ -125,16 +125,19 @@ first_byte(node::AbstractSyntaxNode) = node.position
 last_byte(node::AbstractSyntaxNode)  = node.position + span(node) - 1
 
 """
+    byte_range(ex)
+
+Return the range of bytes which `ex` covers in the source text.
+"""
+byte_range(ex) = first_byte(ex):last_byte(ex)
+
+"""
     sourcetext(node)
 
 Get the full source text of a node.
 """
 function sourcetext(node::AbstractSyntaxNode)
-    view(node.source, range(node))
-end
-
-function Base.range(node::AbstractSyntaxNode)
-    (node.position-1) .+ (1:span(node))
+    view(node.source, byte_range(node))
 end
 
 source_line(node::AbstractSyntaxNode) = source_line(node.source, node.position)
@@ -299,7 +302,7 @@ function child_position_span(node::SyntaxNode, path::Int...)
 end
 
 function highlight(io::IO, node::SyntaxNode; kws...)
-    highlight(io, node.source, range(node); kws...)
+    highlight(io, node.source, byte_range(node); kws...)
 end
 
 function highlight(io::IO, source::SourceFile, node::GreenNode, path::Int...; kws...)
