@@ -614,6 +614,25 @@ function profile_printing_listener(cond::Base.AsyncCondition)
     nothing
 end
 
+function start_profile_listener()
+    cond = Base.AsyncCondition()
+    Base.uv_unref(cond.handle)
+    t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+    atexit() do
+        # destroy this callback when exiting
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        # this will prompt any ongoing or pending event to flush also
+        close(cond)
+        # error-propagation is not needed, since the errormonitor will handle printing that better
+        _wait(t)
+    end
+    finalizer(cond) do c
+        # if something goes south, still make sure we aren't keeping a reference in C to this
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+    ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+end
+
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
@@ -636,22 +655,7 @@ function __init__()
     # Profiling helper
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
-        cond = Base.AsyncCondition()
-        Base.uv_unref(cond.handle)
-        t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
-        atexit() do
-            # destroy this callback when exiting
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-            # this will prompt any ongoing or pending event to flush also
-            close(cond)
-            # error-propagation is not needed, since the errormonitor will handle printing that better
-            _wait(t)
-        end
-        finalizer(cond) do c
-            # if something goes south, still make sure we aren't keeping a reference in C to this
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-        end
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+        start_profile_listener()
     end
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
