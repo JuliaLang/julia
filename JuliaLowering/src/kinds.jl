@@ -1,8 +1,8 @@
 
 # The following kinds are used in intermediate forms by lowering but are not
 # part of the surface syntax
-function _insert_kinds()
-    JuliaSyntax.insert_kinds!(JuliaLowering, 1, [
+function _register_kinds()
+    JuliaSyntax.register_kinds!(JuliaLowering, 1, [
         "BEGIN_LOWERING_KINDS"
             # Compiler metadata hints
             "meta"

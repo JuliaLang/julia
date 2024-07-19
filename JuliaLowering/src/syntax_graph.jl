@@ -515,7 +515,7 @@ function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::JuliaSyntax.ParseStr
 end
 
 #-------------------------------------------------------------------------------
-function JuliaSyntax.expr_leaf_val(ex::SyntaxTree)
+function JuliaSyntax._expr_leaf_val(ex::SyntaxTree)
     name = get(ex, :name_val, nothing)
     if !isnothing(name)
         Symbol(name)
@@ -524,7 +524,7 @@ function JuliaSyntax.expr_leaf_val(ex::SyntaxTree)
     end
 end
 
-function JuliaSyntax.sourcefile(ex::SyntaxTree)
+function JuliaSyntax._sourcefile(ex::SyntaxTree)
     sourceref(ex).file
 end
 

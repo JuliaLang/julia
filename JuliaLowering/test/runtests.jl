@@ -4,6 +4,8 @@ include("utils.jl")
 
 @testset "JuliaLowering.jl" begin
 
+include("syntax_graph.jl")
+
 # Basic end-to-end / smoke tests
 
 test_mod = Module()

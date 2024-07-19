@@ -16,7 +16,7 @@ using JuliaSyntax: filename, first_byte, last_byte, source_location, span, sourc
 using JuliaSyntax: is_literal, is_number, is_operator, is_prec_assignment, is_infix_op_call, is_postfix_op_call, is_error
 
 _include("kinds.jl")
-_insert_kinds()
+_register_kinds()
 
 _include("syntax_graph.jl")
 _include("ast.jl")
@@ -31,7 +31,7 @@ _include("runtime.jl")
 _include("eval.jl")
 
 function __init__()
-    _insert_kinds()
+    _register_kinds()
 end
 
 end
