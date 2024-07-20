@@ -541,12 +541,7 @@ function rmul!(B::Bidiagonal, D::Diagonal)
     return B
 end
 
-function check_A_mul_B!_sizes(@nospecialize(C::AbstractMatrix),
-                                @nospecialize(A::AbstractMatrix),
-                                @nospecialize(B::AbstractMatrix))
-    _check_A_mul_B!_sizes(size(C), size(A), size(B))
-end
-@noinline function _check_A_mul_B!_sizes((mC, nC), (mA, nA), (mB, nB))
+@noinline function check_A_mul_B!_sizes((mC, nC)::NTuple{2,Integer}, (mA, nA)::NTuple{2,Integer}, (mB, nB)::NTuple{2,Integer})
     if mA != mC
         throw(DimensionMismatch(lazy"first dimension of A, $mA, and first dimension of output C, $mC, must match"))
     elseif nA != mB
@@ -575,7 +570,7 @@ _mul!(C::AbstractMatrix, A::BiTriSym, B::TriSym, _add::MulAddMul) =
 _mul!(C::AbstractMatrix, A::BiTriSym, B::Bidiagonal, _add::MulAddMul) =
     _bibimul!(C, A, B, _add)
 function _bibimul!(C, A, B, _add)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     # We use `_rmul_or_fill!` instead of `_modify!` here since using
@@ -633,7 +628,7 @@ end
 
 function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     require_one_based_indexing(C)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
@@ -699,7 +694,7 @@ end
 
 function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul)
     require_one_based_indexing(C, A)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     n = size(A,1)
     m = size(B,2)
@@ -734,7 +729,7 @@ end
 
 function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAddMul)
     require_one_based_indexing(C, A)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     if size(A, 1) <= 3 || size(B, 2) <= 1
         return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
@@ -764,7 +759,7 @@ _mul!(C::AbstractMatrix, A::Diagonal, B::TriSym, _add::MulAddMul) =
     _dibimul!(C, A, B, _add)
 function _dibimul!(C, A, B, _add)
     require_one_based_indexing(C)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     _rmul_or_fill!(C, _add.beta)  # see the same use above
