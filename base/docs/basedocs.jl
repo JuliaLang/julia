@@ -1050,6 +1050,17 @@ exception object to the given variable within the `catch` block.
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 
+A `try/catch` block can also have an `else` clause that executes only if no exception occurred:
+```julia
+try
+    a_dangerous_operation()
+catch
+    @warn "The operation failed."
+else
+    @info "The operation succeeded."
+end
+```
+
 A `try` or `try`/`catch` block can also have a [`finally`](@ref) clause that executes
 at the end, regardless of whether an exception occurred.  For example, this can be
 used to guarantee that an opened file is closed:
@@ -1064,6 +1075,9 @@ finally
 end
 ```
 (`finally` can also be used without a `catch` block.)
+
+!!! compat "Julia 1.8"
+    Else clauses require at least Julia 1.8.
 """
 kw"try", kw"catch"
 

@@ -1381,7 +1381,9 @@ static jl_method_instance_t *cache_method(
                 return entry->func.linfo;
         }
         struct jl_typemap_assoc search = {(jl_value_t*)tt, world, NULL};
-        jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(cache), &search, offs, /*subtype*/1);
+        jl_typemap_t *cacheentry = jl_atomic_load_relaxed(cache);
+        assert(cacheentry != NULL);
+        jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(cacheentry, &search, offs, /*subtype*/1);
         if (entry && entry->func.value)
             return entry->func.linfo;
     }
@@ -2550,6 +2552,45 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
     JL_UNLOCK(&precomp_statement_out_lock);
 }
 
+// If waitcompile is 0, this will return NULL if compiling is on-going in the JIT. This is
+// useful for the JIT itself, since it just doesn't cause redundant work or missed updates,
+// but merely causes it to look into the current JIT worklist.
+void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile)
+{
+    uint8_t flags = jl_atomic_load_acquire(&ci->specsigflags); // happens-before for subsequent read of fptr
+    while (1) {
+        jl_callptr_t initial_invoke = jl_atomic_load_acquire(&ci->invoke); // happens-before for subsequent read of fptr
+        while (initial_invoke == jl_fptr_wait_for_compiled_addr) {
+            if (!waitcompile) {
+                *invoke = NULL;
+                *specptr = NULL;
+                *specsigflags = 0b00;
+                return;
+            }
+            jl_cpu_pause();
+            initial_invoke = jl_atomic_load_acquire(&ci->invoke);
+        }
+        void *fptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
+        if (initial_invoke == NULL || fptr == NULL) {
+            *invoke = initial_invoke;
+            *specptr = NULL;
+            *specsigflags = 0b00;
+            return;
+        }
+        while (!(flags & 0b10)) {
+            jl_cpu_pause();
+            flags = jl_atomic_load_acquire(&ci->specsigflags);
+        }
+        jl_callptr_t final_invoke = jl_atomic_load_relaxed(&ci->invoke);
+        if (final_invoke == initial_invoke) {
+            *invoke = final_invoke;
+            *specptr = fptr;
+            *specsigflags = flags;
+            return;
+        }
+    }
+}
+
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
@@ -2571,15 +2612,11 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
             codeinst->rettype_const = codeinst2->rettype_const;
             jl_gc_wb(codeinst, codeinst->rettype_const);
-            uint8_t specsigflags = jl_atomic_load_acquire(&codeinst2->specsigflags);
-            jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst2->invoke);
-            void *fptr = jl_atomic_load_relaxed(&codeinst2->specptr.fptr);
+            uint8_t specsigflags;
+            jl_callptr_t invoke;
+            void *fptr;
+            jl_read_codeinst_invoke(codeinst2, &specsigflags, &invoke, &fptr, 1);
             if (fptr != NULL) {
-                while (!(specsigflags & 0b10)) {
-                    jl_cpu_pause();
-                    specsigflags = jl_atomic_load_acquire(&codeinst2->specsigflags);
-                }
-                invoke = jl_atomic_load_relaxed(&codeinst2->invoke);
                 void *prev_fptr = NULL;
                 // see jitlayers.cpp for the ordering restrictions here
                 if (jl_atomic_cmpswap_acqrel(&codeinst->specptr.fptr, &prev_fptr, fptr)) {
@@ -2587,14 +2624,16 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     jl_atomic_store_release(&codeinst->invoke, invoke);
                     // unspec is probably not specsig, but might be using specptr
                     jl_atomic_store_release(&codeinst->specsigflags, specsigflags & ~0b1); // clear specsig flag
-                } else {
+                }
+                else {
                     // someone else already compiled it
                     while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
                         jl_cpu_pause();
                     }
                     // codeinst is now set up fully, safe to return
                 }
-            } else {
+            }
+            else {
                 jl_callptr_t prev = NULL;
                 jl_atomic_cmpswap_acqrel(&codeinst->invoke, &prev, invoke);
             }
@@ -2627,17 +2666,15 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     jl_code_instance_t *codeinst = jl_new_codeinst(mi, jl_nothing,
                         (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, NULL, NULL,
                         0, 1, ~(size_t)0, 0, jl_nothing, 0, NULL);
-                    void *unspec_fptr = jl_atomic_load_relaxed(&unspec->specptr.fptr);
-                    if (unspec_fptr) {
-                        // wait until invoke and specsigflags are properly set
-                        while (!(jl_atomic_load_acquire(&unspec->specsigflags) & 0b10)) {
-                            jl_cpu_pause();
-                        }
-                        unspec_invoke = jl_atomic_load_relaxed(&unspec->invoke);
-                    }
-                    jl_atomic_store_release(&codeinst->specptr.fptr, unspec_fptr);
                     codeinst->rettype_const = unspec->rettype_const;
-                    jl_atomic_store_release(&codeinst->invoke, unspec_invoke);
+                    uint8_t specsigflags;
+                    jl_callptr_t invoke;
+                    void *fptr;
+                    jl_read_codeinst_invoke(unspec, &specsigflags, &invoke, &fptr, 1);
+                    jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
+                    jl_atomic_store_relaxed(&codeinst->invoke, invoke);
+                    // unspec is probably not specsig, but might be using specptr
+                    jl_atomic_store_relaxed(&codeinst->specsigflags, specsigflags & ~0b1); // clear specsig flag
                     jl_mi_cache_insert(mi, codeinst);
                     record_precompile_statement(mi, 0);
                     return codeinst;
@@ -2734,19 +2771,15 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         codeinst = jl_new_codeinst(mi, jl_nothing,
             (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, NULL, NULL,
             0, 1, ~(size_t)0, 0, jl_nothing, 0, NULL);
-        void *unspec_fptr = jl_atomic_load_relaxed(&ucache->specptr.fptr);
-        if (unspec_fptr) {
-            // wait until invoke and specsigflags are properly set
-            while (!(jl_atomic_load_acquire(&ucache->specsigflags) & 0b10)) {
-                jl_cpu_pause();
-            }
-            ucache_invoke = jl_atomic_load_relaxed(&ucache->invoke);
-        }
-        // unspec is always not specsig, but might use specptr
-        jl_atomic_store_relaxed(&codeinst->specsigflags, jl_atomic_load_relaxed(&ucache->specsigflags) & 0b10);
-        jl_atomic_store_relaxed(&codeinst->specptr.fptr, unspec_fptr);
         codeinst->rettype_const = ucache->rettype_const;
-        jl_atomic_store_release(&codeinst->invoke, ucache_invoke);
+        uint8_t specsigflags;
+        jl_callptr_t invoke;
+        void *fptr;
+        jl_read_codeinst_invoke(ucache, &specsigflags, &invoke, &fptr, 1);
+        // unspec is always not specsig, but might use specptr
+        jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
+        jl_atomic_store_relaxed(&codeinst->invoke, invoke);
+        jl_atomic_store_relaxed(&codeinst->specsigflags, specsigflags & ~0b1); // clear specsig flag
         jl_mi_cache_insert(mi, codeinst);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);
@@ -2775,6 +2808,23 @@ jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_
     return invoke(f, args, nargs, sparams);
 }
 
+jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+{
+    // This relies on the invariant that the JIT will set the invoke ptr immediately upon adding `m` to itself.
+    size_t nthreads = jl_atomic_load_relaxed(&jl_n_threads);
+    // This should only be possible if there's more than one thread. If not, either there's a bug somewhere
+    // that resulted in this not getting cleared, or we're about to deadlock. Either way, that's bad.
+    if (nthreads == 1) {
+        jl_error("Internal error: Reached jl_fptr_wait_for_compiled in single-threaded execution.");
+    }
+    jl_callptr_t invoke = jl_atomic_load_acquire(&m->invoke);
+    while (invoke == &jl_fptr_wait_for_compiled) {
+        jl_cpu_pause();
+        invoke = jl_atomic_load_acquire(&m->invoke);
+    }
+    return invoke(f, args, nargs, m);
+}
+
 JL_DLLEXPORT const jl_callptr_t jl_fptr_args_addr = &jl_fptr_args;
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_const_return_addr = &jl_fptr_const_return;
@@ -2782,6 +2832,8 @@ JL_DLLEXPORT const jl_callptr_t jl_fptr_const_return_addr = &jl_fptr_const_retur
 JL_DLLEXPORT const jl_callptr_t jl_fptr_sparam_addr = &jl_fptr_sparam;
 
 JL_DLLEXPORT const jl_callptr_t jl_f_opaque_closure_call_addr = (jl_callptr_t)&jl_f_opaque_closure_call;
+
+JL_DLLEXPORT const jl_callptr_t jl_fptr_wait_for_compiled_addr = &jl_fptr_wait_for_compiled;
 
 // Return the index of the invoke api, if known
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *codeinst)
@@ -2857,6 +2909,7 @@ jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *match, size_t wor
     jl_method_instance_t *mi = NULL;
     if (jl_is_datatype(ti)) {
         jl_methtable_t *mt = jl_method_get_table(m);
+        assert(mt != NULL);
         if ((jl_value_t*)mt != jl_nothing) {
             // get the specialization, possibly also caching it
             if (mt_cache && ((jl_datatype_t*)ti)->isdispatchtuple) {

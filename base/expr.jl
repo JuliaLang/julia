@@ -65,7 +65,7 @@ function copy_exprs(@nospecialize(x))
     end
     return x
 end
-copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(@inbounds x[i]) for i in 1:length(x)]
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(@inbounds x[i]) for i in eachindex(x)]
 
 @eval exprarray(head::Symbol, arg::Array{Any,1}) = $(Expr(:new, :Expr, :head, :arg))
 
@@ -850,6 +850,9 @@ while it can not infer the concrete return type of it.
 Without the `@nospecializeinfer`, `f([1.0])` would infer the return type of `g` as `Float64`,
 indicating that inference ran for `g(::Vector{Float64})` despite the prohibition on
 specialized code generation.
+
+!!! compat "Julia 1.10"
+    Using `Base.@nospecializeinfer` requires Julia version 1.10.
 """
 macro nospecializeinfer(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :nospecializeinfer) : ex)

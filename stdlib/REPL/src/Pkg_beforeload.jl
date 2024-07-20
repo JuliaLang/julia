@@ -125,5 +125,5 @@ function Pkg_promptf()
         end
     end
     # Note no handling of Pkg.offline, as the Pkg version does here
-    return "$(prefix)pkg> "
+    return "$(prefix)$(PKG_PROMPT)"
 end
