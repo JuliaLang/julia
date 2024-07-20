@@ -3581,8 +3581,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_emptysvec, 0, 0, 4);
 
     // all Kinds share the Type method table (not the nonfunction one)
-    jl_unionall_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
-        jl_type_type_mt;
+    jl_unionall_type->name->mt =
+        jl_uniontype_type->name->mt =
+        jl_datatype_type->name->mt =
+        jl_typeofbottom_type->name->mt =
+            jl_type_type_mt;
 
     jl_intrinsic_type = jl_new_primitivetype((jl_value_t*)jl_symbol("IntrinsicFunction"), core,
                                              jl_builtin_type, jl_emptysvec, 32);
