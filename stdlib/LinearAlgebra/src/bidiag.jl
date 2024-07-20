@@ -615,7 +615,7 @@ function _bibimul!(C, A, B, _add)
     C
 end
 
-function _mul!(C::AbstractMatrix, A::TriSym, B::Diagonal, _add::MulAddMul)
+function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
