@@ -57,10 +57,8 @@ New developers may find the notes in
 [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md)
 helpful to start contributing to the Julia codebase.
 
-### External Resources
+### Learning Julia
 
-- [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
-- [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
