@@ -795,6 +795,9 @@ while it can not infer the concrete return type of it.
 Without the `@nospecializeinfer`, `f([1.0])` would infer the return type of `g` as `Float64`,
 indicating that inference ran for `g(::Vector{Float64})` despite the prohibition on
 specialized code generation.
+
+!!! compat "Julia 1.10"
+    Using `Base.@nospecializeinfer` requires Julia version 1.10.
 """
 macro nospecializeinfer(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :nospecializeinfer) : ex)
