@@ -23,6 +23,9 @@ Base.first(::SOneTo) = 1
 Base.last(r::SOneTo) = length(r)
 Base.show(io::IO, r::SOneTo) = print(io, "SOneTo(", length(r), ")")
 
+Broadcast.axistype(a::Base.OneTo, s::SOneTo) = s
+Broadcast.axistype(s::SOneTo, a::Base.OneTo) = s
+
 struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
     function SizedArray{SZ}(data::AbstractArray{T,N}) where {SZ,T,N}

@@ -242,6 +242,8 @@ JL_DLLEXPORT extern const jl_callptr_t jl_fptr_interpret_call_addr;
 
 JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
+JL_DLLEXPORT extern const jl_callptr_t jl_fptr_wait_for_compiled_addr;
+
 typedef struct _jl_line_info_node_t {
     struct _jl_module_t *module;
     jl_value_t *method; // may contain a jl_symbol, jl_method_t, or jl_method_instance_t
@@ -1107,6 +1109,8 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void jl_gc_safepoint(void);
 JL_DLLEXPORT int jl_safepoint_suspend_thread(int tid, int waitstate);
+JL_DLLEXPORT void jl_safepoint_suspend_all_threads(struct _jl_task_t *ct);
+JL_DLLEXPORT void jl_safepoint_resume_all_threads(struct _jl_task_t *ct);
 JL_DLLEXPORT int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT;
 
 void *mtarraylist_get(small_arraylist_t *_a, size_t idx) JL_NOTSAFEPOINT;
