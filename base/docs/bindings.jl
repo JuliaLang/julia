@@ -10,7 +10,12 @@ struct Binding
         # Normalise the binding module for module symbols so that:
         #   Binding(Base, :Base) === Binding(Main, :Base)
         m = nameof(m) === v ? parentmodule(m) : m
-        new(Base.binding_module(m, v), v)
+        if ccall(:jl_binding_owner, Ptr{Cvoid}, (Any,Any), m, v) == C_NULL
+            new(Base.binding_module(m, v), v)
+        else
+            b = ccall(:jl_binding_owner, Any, (Any,Any), m, v)::Core.Binding
+            new(b.globalref.mod, b.globalref.name)
+        end
     end
 end
 
