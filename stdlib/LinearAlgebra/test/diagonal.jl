@@ -1235,7 +1235,7 @@ end
     @test repr(Diagonal([1,2])) == "Diagonal([1, 2])"  # 2-arg show
     @test contains(repr(MIME"text/plain"(), Diagonal([1,2])), "⋅  2")  # 3-arg show
 end
-                            
+
 @testset "copyto! with UniformScaling" begin
     @testset "Fill" begin
         for len in (4, InfiniteArrays.Infinity())
