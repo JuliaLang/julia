@@ -2258,7 +2258,7 @@ static void jl_decorate_module(Module &M) {
         // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
         // TODO: The data is set in debuginfo.cpp but it should be okay to actually emit it here.
         M.appendModuleInlineAsm("\
-    .section .text                  \n\
+    .section .ltext,\"ax\",@progbits \n\
     .type   __UnwindData,@object    \n\
     .p2align        2, 0x90         \n\
     __UnwindData:                   \n\
