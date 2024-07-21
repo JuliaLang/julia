@@ -466,7 +466,7 @@ macro spawn(args...)
     reserved_stack = default_stack
     1 <= length(args) <= 3 || throw(ArgumentError("wrong number of arguments in @spawn"))
     ex = last(args)
-    for arg in args
+    for arg in args[1:end-1]
         if arg isa QuoteNode
             @assert tp == default_tp "cannot set threadpool multiple times"
             ttype = arg.value
@@ -483,7 +483,7 @@ macro spawn(args...)
             end
         else
             @assert tp == default_tp "cannot set threadpool multiple times"
-            tp = ttype
+            tp = arg
         end
     end
 
