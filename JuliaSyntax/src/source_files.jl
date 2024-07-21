@@ -193,9 +193,26 @@ function _print_marker_line(io, prefix_str, str, underline, singleline, color,
     end
 end
 
+function highlight(io::IO, x; kws...)
+    highlight(io, sourcefile(x), byte_range(x); kws...)
+end
+
 """
-Print the lines of source code surrounding the given byte `range`, which is
-highlighted with background `color` and markers in the text.
+    highlight(io::IO, source::SourceFile, range::UnitRange;
+              color, note, notecolor,
+              context_lines_before, context_lines_inner, context_lines_after,
+    highlight(io, x; kws...)
+
+Print the lines of source code `source` surrounding the given byte `range`
+which is highlighted with background `color` and underlined with markers in the
+text. A `note` in `notecolor` may be provided as annotation.
+
+In the second form, `x` is an object with `sourcefile(x)` and `byte_range(x)`
+implemented.
+
+The context arguments `context_lines_before`, etc, refer to the number of
+lines of code which will be printed as context before and after, with `inner`
+referring to context lines inside a multiline region.
 """
 function highlight(io::IO, source::SourceFile, range::UnitRange;
                    color=(120,70,70), context_lines_before=2,

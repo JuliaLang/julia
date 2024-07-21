@@ -137,21 +137,16 @@ byte_range(ex) = first_byte(ex):last_byte(ex)
 Get the full source text of a node.
 """
 function sourcetext(node::AbstractSyntaxNode)
-    view(node.source, byte_range(node))
+    view(sourcefile(node), byte_range(node))
 end
 
-source_line(node::AbstractSyntaxNode) = source_line(node.source, node.position)
-source_location(node::AbstractSyntaxNode) = source_location(node.source, node.position)
-
-function interpolate_literal(node::SyntaxNode, val)
-    @assert kind(node) == K"$"
-    SyntaxNode(node.source, node.raw, node.position, node.parent, true, val)
-end
+source_line(node::AbstractSyntaxNode) = source_line(sourcefile(node), node.position)
+source_location(node::AbstractSyntaxNode) = source_location(sourcefile(node), node.position)
 
 function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
                            indent, show_byte_offsets)
-    fname = node.source.filename
-    line, col = source_location(node.source, node.position)
+    fname = sourcefile(node).filename
+    line, col = source_location(node)
     posstr = "$(lpad(line, 4)):$(rpad(col,3))│"
     if show_byte_offsets
         posstr *= "$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
@@ -299,10 +294,6 @@ end
 function child_position_span(node::SyntaxNode, path::Int...)
     n = child(node, path...)
     n, n.position, span(n)
-end
-
-function highlight(io::IO, node::SyntaxNode; kws...)
-    highlight(io, node.source, byte_range(node); kws...)
 end
 
 function highlight(io::IO, source::SourceFile, node::GreenNode, path::Int...; kws...)
