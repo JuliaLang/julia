@@ -417,13 +417,16 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
 end
 
 """
-    Threads.@spawn [:default|:interactive] expr
+    Threads.@spawn [:default|:interactive] [reserved_stack=0] expr
 
 Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available
 thread in the specified threadpool (`:default` if unspecified). The task is
 allocated to a thread once one becomes available. To wait for the task to
 finish, call [`wait`](@ref) on the result of this macro, or call
 [`fetch`](@ref) to wait and then obtain its return value.
+
+The optional argument `reserved_stack` requests a stack size in bytes
+for the task. See [`Task`](@ref) for details.
 
 Values can be interpolated into `@spawn` via `\$`, which copies the value
 directly into the constructed underlying closure. This allows you to insert
@@ -457,23 +460,33 @@ Hello from 4
 ```
 """
 macro spawn(args...)
-    tp = QuoteNode(:default)
-    na = length(args)
-    if na == 2
-        ttype, ex = args
-        if ttype isa QuoteNode
-            ttype = ttype.value
+    default_tp = gensym("unset")  # guard against setting threadpool multiple times
+    tp = default_tp
+    reserved_stack = 0
+    1 <= length(args) <= 3 || throw(ArgumentError("wrong number of arguments in @spawn"))
+    ex = last(args)
+    for arg in args
+        if arg isa QuoteNode
+            @assert tp == default_tp "cannot set threadpool multiple times"
+            ttype = arg.value
             if ttype !== :interactive && ttype !== :default
                 throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
+        elseif arg isa Expr && arg.head == :(=)
+            if arg.args[1] == :reserved_stack
+                reserved_stack = arg.args[2]
+            else
+                throw(ArgumentError(LazyString("unknown argument in @spawn: ", arg.args[1])))
+            end
         else
+            @assert tp == default_tp "cannot set threadpool multiple times"
             tp = ttype
         end
-    elseif na == 1
-        ex = args[1]
-    else
-        throw(ArgumentError("wrong number of arguments in @spawn"))
+    end
+
+    if tp == default_tp
+        tp = QuoteNode(:default)
     end
 
     letargs = Base._lift_one_interp!(ex)
@@ -482,7 +495,7 @@ macro spawn(args...)
     var = esc(Base.sync_varname)
     quote
         let $(letargs...)
-            local task = Task($thunk)
+            local task = Task($thunk, $(esc(reserved_stack)))
             task.sticky = false
             _spawn_set_thrpool(task, $(esc(tp)))
             if $(Expr(:islocal, var))
