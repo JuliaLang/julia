@@ -3,7 +3,7 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include <stdint.h>
-#include <sstream>
+#include <string>
 
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/Statistic.h>
@@ -2257,8 +2257,15 @@ static void jl_decorate_module(Module &M) {
         // Add special values used by debuginfo to build the UnwindData table registration for Win64
         // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
         // TODO: The data is set in debuginfo.cpp but it should be okay to actually emit it here.
-        M.appendModuleInlineAsm("\
-    .section .ltext,\"ax\",@progbits \n\
+        std::string inline_asm = "\
+    .section ";
+        inline_asm +=
+#if JL_LLVM_VERSION >= 180000
+    ".ltext,\"ax\",@progbits";
+#else
+    ".text";
+#endif
+        inline_asm +=              "\n\
     .type   __UnwindData,@object    \n\
     .p2align        2, 0x90         \n\
     __UnwindData:                   \n\
@@ -2269,7 +2276,9 @@ static void jl_decorate_module(Module &M) {
         .p2align        2, 0x90     \n\
     __catchjmp:                     \n\
         .zero   12                  \n\
-        .size   __catchjmp, 12");
+        .size   __catchjmp, 12";
+
+        M.appendModuleInlineAsm(inline_asm);
     }
 }
 
