@@ -37,8 +37,7 @@ function Diagnostic(first_byte, last_byte; error=nothing, warning=nothing)
     Diagnostic(first_byte, last_byte, level, message)
 end
 
-first_byte(d::Diagnostic) = d.first_byte
-last_byte(d::Diagnostic)  = d.last_byte
+byte_range(d::Diagnostic) = d.first_byte:d.last_byte
 is_error(d::Diagnostic)   = d.level === :error
 
 # Make relative path into a file URL
@@ -72,12 +71,12 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
                    (:normal, "Info")
     line, col = source_location(source, first_byte(diagnostic))
     linecol = "$line:$col"
-    filename = source.filename
+    fname = filename(source)
     file_href = nothing
-    if !isnothing(filename)
-        locstr = "$filename:$linecol"
-        if !startswith(filename, "REPL[") && get(io, :color, false)
-            url = _file_url(filename)
+    if !isempty(fname)
+        locstr = "$fname:$linecol"
+        if !startswith(fname, "REPL[") && get(io, :color, false)
+            url = _file_url(fname)
             if !isnothing(url)
                 file_href = url*"#$linecol"
             end

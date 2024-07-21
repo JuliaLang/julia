@@ -35,13 +35,13 @@ end
             JuliaSyntax.core_parser_hook("[x)", "f1", 1, 0, :statement)
         )
         @test err isa JuliaSyntax.ParseError
-        @test err.source.filename == "f1"
+        @test filename(err) == "f1"
         @test err.source.first_line == 1
         err = _unwrap_parse_error(
             JuliaSyntax.core_parser_hook("[x)", "f2", 2, 0, :statement)
         )
         @test err isa JuliaSyntax.ParseError
-        @test err.source.filename == "f2"
+        @test filename(err) == "f2"
         @test err.source.first_line == 2
 
         # Errors including nontrivial offset indices

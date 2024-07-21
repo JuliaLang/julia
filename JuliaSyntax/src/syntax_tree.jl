@@ -121,31 +121,13 @@ head(node::AbstractSyntaxNode) = head(node.raw)
 
 span(node::AbstractSyntaxNode) = span(node.raw)
 
-first_byte(node::AbstractSyntaxNode) = node.position
-last_byte(node::AbstractSyntaxNode)  = node.position + span(node) - 1
+byte_range(node::AbstractSyntaxNode) = node.position:(node.position + span(node) - 1)
 
-"""
-    byte_range(ex)
-
-Return the range of bytes which `ex` covers in the source text.
-"""
-byte_range(ex) = first_byte(ex):last_byte(ex)
-
-"""
-    sourcetext(node)
-
-Get the full source text of a node.
-"""
-function sourcetext(node::AbstractSyntaxNode)
-    view(sourcefile(node), byte_range(node))
-end
-
-source_line(node::AbstractSyntaxNode) = source_line(sourcefile(node), node.position)
-source_location(node::AbstractSyntaxNode) = source_location(sourcefile(node), node.position)
+sourcefile(node::AbstractSyntaxNode) = node.source
 
 function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
                            indent, show_byte_offsets)
-    fname = sourcefile(node).filename
+    fname = filename(node)
     line, col = source_location(node)
     posstr = "$(lpad(line, 4)):$(rpad(col,3))│"
     if show_byte_offsets
@@ -192,7 +174,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", node::AbstractSyntaxNode; show_byte_offsets=false)
     println(io, "line:col│$(show_byte_offsets ? " byte_range  │" : "") tree                                   │ file_name")
-    _show_syntax_node(io, Ref{Union{Nothing,String}}(nothing), node, "", show_byte_offsets)
+    _show_syntax_node(io, Ref(""), node, "", show_byte_offsets)
 end
 
 function Base.show(io::IO, ::MIME"text/x.sexpression", node::AbstractSyntaxNode)

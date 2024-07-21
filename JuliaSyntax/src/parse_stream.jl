@@ -514,8 +514,7 @@ struct FullToken
 end
 
 head(t::FullToken) = t.head
-first_byte(t::FullToken) = t.first_byte
-last_byte(t::FullToken) = t.last_byte
+byte_range(t::FullToken) = t.first_byte:t.last_byte
 span(t::FullToken) = 1 + last_byte(t) - first_byte(t)
 
 function peek_full_token(stream::ParseStream, n::Integer=1;
