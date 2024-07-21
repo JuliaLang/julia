@@ -519,19 +519,27 @@ function build_tree(::Type{Expr}, stream::ParseStream;
     only(_fixup_Expr_children!(SyntaxHead(K"None",EMPTY_FLAGS), loc, Any[entry.ex]))
 end
 
+"""
+Get the source file for a given syntax object
+"""
+function sourcefile(node::SyntaxNode)
+    node.source
+end
+
 function _to_expr(node::SyntaxNode)
+    file = sourcefile(node)
     if !haschildren(node)
-        offset, txtbuf = _unsafe_wrap_substring(sourcetext(node.source))
-        return _leaf_to_Expr(node.source, txtbuf, head(node), byte_range(node) .+ offset, node)
+        offset, txtbuf = _unsafe_wrap_substring(sourcetext(file))
+        return _leaf_to_Expr(file, txtbuf, head(node), byte_range(node) .+ offset, node)
     end
     cs = children(node)
     args = Any[_to_expr(c) for c in cs]
-    _internal_node_to_Expr(node.source, byte_range(node), head(node), byte_range.(cs), head.(cs), args)
+    _internal_node_to_Expr(file, byte_range(node), head(node), byte_range.(cs), head.(cs), args)
 end
 
 function Base.Expr(node::SyntaxNode)
     ex = _to_expr(node)
-    loc = source_location(LineNumberNode, node.source, first(byte_range(node)))
+    loc = source_location(LineNumberNode, sourcefile(node), first_byte(node))
     only(_fixup_Expr_children!(SyntaxHead(K"None",EMPTY_FLAGS), loc, Any[ex]))
 end
 
