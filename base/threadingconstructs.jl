@@ -461,8 +461,9 @@ Hello from 4
 """
 macro spawn(args...)
     default_tp = gensym("unset")  # guard against setting threadpool multiple times
+    default_stack = gensym("unset")
     tp = default_tp
-    reserved_stack = 0
+    reserved_stack = default_stack
     1 <= length(args) <= 3 || throw(ArgumentError("wrong number of arguments in @spawn"))
     ex = last(args)
     for arg in args
@@ -475,6 +476,7 @@ macro spawn(args...)
             tp = QuoteNode(ttype)
         elseif arg isa Expr && arg.head == :(=)
             if arg.args[1] == :reserved_stack
+                @assert reserved_stack == default_stack "cannot set reserved_stack multiple times"
                 reserved_stack = arg.args[2]
             else
                 throw(ArgumentError(LazyString("unknown argument in @spawn: ", arg.args[1])))
@@ -487,6 +489,9 @@ macro spawn(args...)
 
     if tp == default_tp
         tp = QuoteNode(:default)
+    end
+    if reserved_stack == default_stack
+        reserved_stack = 0
     end
 
     letargs = Base._lift_one_interp!(ex)
