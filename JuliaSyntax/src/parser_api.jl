@@ -26,6 +26,8 @@ function Base.showerror(io::IO, err::ParseError)
     show_diagnostics(io, err.diagnostics[1:i], err.source)
 end
 
+sourcefile(err::ParseError) = err.source
+
 """
     parse!(stream::ParseStream; rule=:all)
 

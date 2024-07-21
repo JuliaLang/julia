@@ -30,14 +30,36 @@ JuliaSyntax.untokenize
 JuliaSyntax.Token
 ```
 
-## Source file handling
+## Source code handling
+
+This section describes the generic functions for source text, source location
+computation and formatting functions.
+
+Contiguous syntax objects like nodes in the syntax tree should implement the
+following where possible:
+
+```@docs
+JuliaSyntax.sourcefile
+JuliaSyntax.byte_range
+```
+
+This will provide implementations of the following which include range
+information, line numbers, and fancy highlighting of source ranges:
+
+```@docs
+JuliaSyntax.first_byte
+JuliaSyntax.last_byte
+JuliaSyntax.filename
+JuliaSyntax.source_line
+JuliaSyntax.source_location
+JuliaSyntax.sourcetext
+JuliaSyntax.highlight
+```
+
+`SourceFile`-specific functions:
 
 ```@docs
 JuliaSyntax.SourceFile
-JuliaSyntax.highlight
-JuliaSyntax.sourcetext
-JuliaSyntax.source_line
-JuliaSyntax.source_location
 JuliaSyntax.source_line_range
 ```
 
@@ -64,8 +86,5 @@ JuliaSyntax.GreenNode
 ```
 
 Functions applicable to syntax trees include everything in the sections on
-heads/kinds, and source file handling.
-
-```@docs
-JuliaSyntax.byte_range
-```
+heads/kinds as well as the accessor functions in the source code handling
+section.

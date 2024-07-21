@@ -1,3 +1,110 @@
+#-------------------------------------------------------------------------------
+# Generic functions for source text, source location computation and formatting
+# functions
+
+"""
+    sourcefile(x)
+
+Get the source file object (usually `SourceFile`) for a given syntax object
+`x`. The source file along with a byte range may be used to compute
+`source_line()`, `source_location()`, `filename()`, etc.
+"""
+function sourcefile
+end
+
+"""
+    byte_range(x)
+
+Return the range of bytes which `x` covers in the source text.
+"""
+function byte_range
+end
+
+"""
+    first_byte(x)
+
+Return the first byte of `x` in the source text.
+"""
+first_byte(x) = first(byte_range(x))
+
+"""
+    first_byte(x)
+
+Return the last byte of `x` in the source text.
+"""
+last_byte(x) = last(byte_range(x))
+
+"""
+    filename(x)
+
+Get file name associated with `source`, or an empty string if one didn't exist.
+
+For objects `x` such as syntax trees, defers to `filename(sourcefile(x))` by
+default.
+"""
+function filename(x)
+    source = sourcefile(x)
+    isnothing(source) ? "" : filename(source)
+end
+
+"""
+    source_line(x)
+    source_line(source::SourceFile, byte_index::Integer)
+
+Get the line number of the first line on which object `x` appears. In the
+second form, get the line number at the given `byte_index` within `source`.
+"""
+source_line(x) = source_line(sourcefile(x), first_byte(x))
+
+"""
+    souce_location(x)
+    souce_location(source::SourceFile, byte_index::Integer)
+
+    souce_location(LineNumberNode, x)
+    souce_location(LineNumberNode, source, byte_index)
+
+Get `(line,column)` of the first byte where object `x` appears in the source.
+The second form allows one to be more precise with the `byte_index`, given the
+source file.
+
+Providing `LineNumberNode` as the first agrument will return the line and file
+name in a line number node object.
+"""
+source_location(x) = source_location(sourcefile(x), first_byte(x))
+
+"""
+    sourcetext(x)
+
+Get the full source text syntax object `x`
+"""
+function sourcetext(x)
+    view(sourcefile(x), byte_range(x))
+end
+
+"""
+    highlight(io, x; color, note, notecolor,
+              context_lines_before, context_lines_inner, context_lines_after)
+
+    highlight(io::IO, source::SourceFile, range::UnitRange; kws...)
+
+Print the lines of source code surrounding `x` which is highlighted with
+background `color` and underlined with markers in the text. A `note` in
+`notecolor` may be provided as annotation. By default, `x` should be an object
+with `sourcefile(x)` and `byte_range(x)` implemented.
+
+The context arguments `context_lines_before`, etc, refer to the number of
+lines of code which will be printed as context before and after, with `inner`
+referring to context lines inside a multiline region.
+
+The second form shares the keywords of the first but allows an explicit source
+file and byte range to be supplied.
+"""
+function highlight(io::IO, x; kws...)
+    highlight(io, sourcefile(x), byte_range(x); kws...)
+end
+
+
+#-------------------------------------------------------------------------------
 """
     SourceFile(code [; filename=nothing, first_line=1, first_index=1])
 
@@ -53,16 +160,19 @@ function _source_line_index(source::SourceFile, byte_index)
 end
 _source_line(source::SourceFile, lineidx) = lineidx + source.first_line - 1
 
-"""
-Get the line number at the given byte index.
-"""
-source_line(source::SourceFile, byte_index) =
+function source_location(::Type{LineNumberNode}, x)
+    source_location(LineNumberNode, sourcefile(x), first_byte(x))
+end
+
+source_line(source::SourceFile, byte_index::Integer) =
     _source_line(source, _source_line_index(source, byte_index))
 
-"""
-Get line number and character within the line at the given byte index.
-"""
-function source_location(source::SourceFile, byte_index)
+function filename(source::SourceFile)
+    f = source.filename
+    !isnothing(f) ? f : ""
+end
+
+function source_location(source::SourceFile, byte_index::Integer)
     lineidx = _source_line_index(source, byte_index)
     i = source.line_starts[lineidx]
     column = 1
@@ -77,7 +187,7 @@ end
 Get byte range of the source line at byte_index, buffered by
 `context_lines_before` and `context_lines_after` before and after.
 """
-function source_line_range(source::SourceFile, byte_index;
+function source_line_range(source::SourceFile, byte_index::Integer;
                            context_lines_before=0, context_lines_after=0)
     lineidx = _source_line_index(source, byte_index)
     fbyte = source.line_starts[max(lineidx-context_lines_before, 1)]
@@ -86,14 +196,14 @@ function source_line_range(source::SourceFile, byte_index;
             lbyte + source.byte_offset)
 end
 
-function source_location(::Type{LineNumberNode}, source::SourceFile, byte_index)
-    LineNumberNode(source_line(source, byte_index),
-                   isnothing(source.filename) ? nothing : Symbol(source.filename))
+function source_location(::Type{LineNumberNode}, source::SourceFile, byte_index::Integer)
+    fn = filename(source)
+    LineNumberNode(source_line(source, byte_index), isempty(fn) ? nothing : Symbol(fn))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", source::SourceFile)
-    fn = isnothing(source.filename) ? "" : " $(source.filename)"
-    header = "## SourceFile$fn ##"
+    fn = filename(source)
+    header = "## SourceFile$(isempty(fn) ? "" : " ")$fn ##"
     print(io, header, "\n")
     heightlim = displaysize(io)[1] ÷ 2
     if !get(io, :limit, false) || length(source.line_starts) <= heightlim
@@ -193,27 +303,6 @@ function _print_marker_line(io, prefix_str, str, underline, singleline, color,
     end
 end
 
-function highlight(io::IO, x; kws...)
-    highlight(io, sourcefile(x), byte_range(x); kws...)
-end
-
-"""
-    highlight(io::IO, source::SourceFile, range::UnitRange;
-              color, note, notecolor,
-              context_lines_before, context_lines_inner, context_lines_after,
-    highlight(io, x; kws...)
-
-Print the lines of source code `source` surrounding the given byte `range`
-which is highlighted with background `color` and underlined with markers in the
-text. A `note` in `notecolor` may be provided as annotation.
-
-In the second form, `x` is an object with `sourcefile(x)` and `byte_range(x)`
-implemented.
-
-The context arguments `context_lines_before`, etc, refer to the number of
-lines of code which will be printed as context before and after, with `inner`
-referring to context lines inside a multiline region.
-"""
 function highlight(io::IO, source::SourceFile, range::UnitRange;
                    color=(120,70,70), context_lines_before=2,
                    context_lines_inner=1, context_lines_after=2,
