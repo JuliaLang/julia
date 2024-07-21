@@ -1386,7 +1386,11 @@ Usually `begin` will not be necessary, since keywords such as [`function`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 
 `begin` may also be used when indexing to represent the first index of a
-collection or the first index of a dimension of an array.
+collection or the first index of a dimension of an array. For example,
+`a[begin]` is the first element of an array `a`.
+
+!!! compat "Julia 1.6"
+    Use of `begin` as an index requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
