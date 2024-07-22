@@ -869,7 +869,6 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_load(jl_core_module, "boot.jl");
         post_boot_hooks();
     }
-    jl_main_module->counter_table = NULL;
 
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base

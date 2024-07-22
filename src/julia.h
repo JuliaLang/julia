@@ -715,7 +715,6 @@ typedef struct _jl_module_t {
     int8_t max_methods;
     jl_mutex_t lock;
     intptr_t hash;
-    htable_t *counter_table;
 } jl_module_t;
 
 struct _jl_globalref_t {

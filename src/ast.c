@@ -8,8 +8,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "support/strhash.h"
-
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
@@ -218,55 +216,17 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
         decode_restriction_value(pku) : jl_atomic_load_relaxed(&b->value)) != NULL ? fl_ctx->T : fl_ctx->F;
 }
 
-static htable_t *rebuild_counter_table(jl_module_t *m) JL_NOTSAFEPOINT
-{
-    htable_t *counter_table = m->counter_table = htable_new((htable_t *)malloc_s(sizeof(htable_t)), 0);
-    jl_svec_t *t = jl_atomic_load_relaxed(&m->bindings);
-    for (size_t i = 0; i < jl_svec_len(t); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svecref(t, i);
-        if ((void*)b == jl_nothing) {
-            continue;
-        }
-        char *globalref_name = jl_symbol_name(b->globalref->name);
-        if (is_canonicalized_anonfn_typename(globalref_name)) {
-            int should_free = 1;
-            // copy globalref_name into the buffer until we hit a `#` character
-            char *delim = strchr(&globalref_name[1], '#');
-            assert(delim != NULL);
-            size_t len = delim - globalref_name - 1;
-            assert(len > 0);
-            char *enclosing_function_name = (char*)calloc_s(len + 1);
-            memcpy(enclosing_function_name, &globalref_name[1], len);
-            // check if the enclosing function name is already in the counter table
-            if (strhash_get(counter_table, enclosing_function_name) == HT_NOTFOUND) {
-                strhash_put(counter_table, enclosing_function_name, (void*)((uintptr_t)HT_NOTFOUND + 1));
-                should_free = 0;
-            }
-            char *pint = strrchr(globalref_name, '#');
-            assert(pint != NULL);
-            int counter = atoi(pint + 1);
-            int max_seen_so_far = ((uint32_t)(uintptr_t)strhash_get(counter_table, enclosing_function_name) - (uintptr_t)HT_NOTFOUND - 1);
-            if (counter >= max_seen_so_far) {
-                strhash_put(counter_table, enclosing_function_name, (void*)((uintptr_t)counter + 1 + (uintptr_t)HT_NOTFOUND + 1));
-            }
-            if (should_free) {
-                free(enclosing_function_name);
-            }
-        }
-    }
-    return counter_table;
-}
-
-// used to generate a unique suffix for a given symbol (e.g. variable or type name)
+// Used to generate a unique suffix for a given symbol (e.g. variable or type name)
 // first argument contains a stack of method definitions seen so far by `closure-convert` in flisp.
 // if the top of the stack is non-NIL, we use it to augment the suffix so that it becomes
-// of the form $top_level_method_name##$counter, where counter is stored in a per-module
-// side table indexed by top-level method name.
-// this ensures that precompile statements are a bit more stable across different versions
+// of the form $top_level_method_name##$counter, where `counter` is the smallest integer
+// such that the resulting name is not already defined in the current module's bindings.
+// If the top of the stack is NIL, we simply return the current module's counter.
+// This ensures that precompile statements are a bit more stable across different versions
 // of a codebase. see #53719
-static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
+static value_t fl_module_unique_name(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount(fl_ctx, "current-julia-module-counter", nargs, 1);
+    argcount(fl_ctx, "julia-module-unique-name", nargs, 1);
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_module_t *m = ctx->module;
     assert(m != NULL);
@@ -275,26 +235,25 @@ static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, ui
     value_t parsed_method_stack = args[0];
     if (parsed_method_stack != fl_ctx->NIL) {
         value_t bottom_stack_symbol = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "last")), parsed_method_stack);
-        funcname = symbol_name(fl_ctx, bottom_stack_symbol);
+        funcname = tosymbol(fl_ctx, bottom_stack_symbol, "julia-module-unique-name")->name;
     }
-    char buf[(funcname != NULL ? strlen(funcname) : 0) + 20];
+    size_t sz = funcname != NULL ? strlen(funcname) + 32 : 32; // 32 is enough for the suffix
+    char *buf = (char*)alloca(sz);
     if (funcname != NULL && strchr(funcname, '#') == NULL) {
-        jl_mutex_lock_nogc(&m->lock);
-        htable_t *counter_table = m->counter_table;
-        if (counter_table == NULL) {
-            counter_table = rebuild_counter_table(m);
+        for (int i = 0; ; i++) {
+            snprintf(buf, sz, "%s##%d", funcname, i);
+            jl_sym_t *sym = jl_symbol(buf);
+            JL_LOCK(&m->lock);
+            if (jl_get_module_binding(m, sym, 0) == NULL) { // make sure this name is not already taken
+                jl_get_module_binding(m, sym, 1); // create the binding
+                JL_UNLOCK(&m->lock);
+                return symbol(fl_ctx, buf);
+            }
+            JL_UNLOCK(&m->lock);
         }
-        // try to find the function name in the module's counter table, if it's not found, add it
-        if (strhash_get(counter_table, funcname) == HT_NOTFOUND) {
-            strhash_put(counter_table, funcname, (void*)((uintptr_t)HT_NOTFOUND + 1));
-        }
-        uint32_t nxt = ((uint32_t)(uintptr_t)strhash_get(counter_table, funcname) - (uintptr_t)HT_NOTFOUND - 1);
-        snprintf(buf, sizeof(buf), "%s##%d", funcname, nxt);
-        strhash_put(counter_table, funcname, (void*)(nxt + 1 + (uintptr_t)HT_NOTFOUND + 1));
-        jl_mutex_unlock_nogc(&m->lock);
     }
     else {
-        snprintf(buf, sizeof(buf), "%d", jl_module_next_counter(ctx->module));
+        snprintf(buf, sz, "%d", jl_module_next_counter(m));
     }
     return symbol(fl_ctx, buf);
 }
@@ -329,7 +288,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
     { "nothrow-julia-global", fl_nothrow_julia_global },
-    { "current-julia-module-counter", fl_current_module_counter },
+    { "current-julia-module-counter", fl_module_unique_name },
     { "julia-scalar?", fl_julia_scalar },
     { NULL, NULL }
 };
