@@ -10,7 +10,7 @@ using JuliaLowering:
     Kind, SourceRef, SyntaxTree, NodeId,
     makenode, makeleaf, setattr!, sethead!,
     haschildren, numchildren, children,
-    @ast, flattened_provenance, showprov
+    @ast, flattened_provenance, showprov, LoweringError
 
 function _ast_test_graph()
     graph = SyntaxGraph()

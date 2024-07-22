@@ -45,11 +45,11 @@ let
 end
 """) == [2,4]
 
-@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
 break
 """)
 
-@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
 continue
 """)
 

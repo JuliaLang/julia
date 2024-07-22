@@ -260,7 +260,11 @@ src = """
 """
 
 src = """
-x = :hi
+begin
+    a = 1
+    xs = [:(a),]
+    x = :(:(\$(\$(xs...))))
+end
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")

@@ -62,9 +62,6 @@ function _interpolate_ast(ctx::InterpolationContext, ex, depth)
 end
 
 function interpolate_ast(ex, values...)
-    if kind(ex) == K"$"
-        TODO(ex, "\$ in interpolate_ast")
-    end
     # Construct graph for interpolation context. We inherit this from the macro
     # context where possible by detecting it using __macro_ctx__. This feels
     # hacky though.
@@ -88,7 +85,17 @@ function interpolate_ast(ex, values...)
     # We must copy the AST into our context to use it as the source reference
     # of generated expressions.
     ex1 = copy_ast(ctx, ex)
-    _interpolate_ast(ctx, ex1, 0)
+    if kind(ex1) == K"$"
+        @assert length(values) == 1
+        vs = values[1]
+        if length(vs) > 1
+            # :($($(xs...))) where xs is more than length 1
+            throw(LoweringError(ex1, "More than one value in bare `\$` expression"))
+        end
+        _interpolated_value(ctx, ex1, only(vs))
+    else
+        _interpolate_ast(ctx, ex1, 0)
+    end
 end
 
 # Construct new bare module including only the "default names"

@@ -292,12 +292,12 @@ end == [
 ]
 
 
-@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
 macro mmm(a; b=2)
 end
 """)
 
-@test_throws JuliaLowering.LoweringError JuliaLowering.include_string(test_mod, """
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
 macro A.b(ex)
 end
 """)

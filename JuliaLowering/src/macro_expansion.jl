@@ -25,6 +25,9 @@ end
 # Expansion of quoted expressions
 function collect_unquoted!(ctx, unquoted, ex, depth)
     if kind(ex) == K"$" && depth == 0
+        # children(ex) is usually length 1, but for double interpolation it may
+        # be longer and the children may contain K"..." expressions. Wrapping
+        # in a tuple groups the arguments together correctly in those cases.
         push!(unquoted, @ast ctx ex [K"tuple" children(ex)...])
     else
         inner_depth = kind(ex) == K"quote" ? depth + 1 :

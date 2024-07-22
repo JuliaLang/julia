@@ -57,6 +57,16 @@ let
 end
 """))
 
+# Test that trivial interpolation without any nesting works.
+ex = JuliaLowering.include_string(test_mod, """
+let
+    x = 123
+    :(\$x)
+end
+""")
+@test kind(ex) == K"Value"
+@test ex.value == 123
+
 # interpolations at multiple depths
 ex = JuliaLowering.include_string(test_mod, """
 let
@@ -101,5 +111,25 @@ ex2 = JuliaLowering.eval(test_mod, ex)
 
 @test JuliaLowering.include_string(test_mod, ":x") isa Symbol
 @test JuliaLowering.include_string(test_mod, ":(x)") isa SyntaxTree
+
+# Double interpolation
+ex = JuliaLowering.include_string(test_mod, """
+let
+    args = (:(xxx),)
+    :(:(\$\$(args...)))
+end
+""")
+Base.eval(test_mod, :(xxx = 111))
+ex2 = JuliaLowering.eval(test_mod, ex)
+@test kind(ex2) == K"Value"
+@test ex2.value == 111
+
+double_interp_ex = JuliaLowering.include_string(test_mod, """
+let
+    args = (:(x), :(y))
+    :(:(\$\$(args...)))
+end
+""")
+@test_throws LoweringError JuliaLowering.eval(test_mod, double_interp_ex)
 
 end
