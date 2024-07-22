@@ -13,8 +13,6 @@ using Base: with_output_color, mapany, isdeprecated, isexported
 
 using Base.Filesystem: _readdirx
 
-import REPL
-
 using InteractiveUtils: subtypes
 
 using Unicode: normalize

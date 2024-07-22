@@ -3,7 +3,7 @@
 module LineEdit
 
 import ..REPL
-using REPL: AbstractREPL, Options
+using ..REPL: AbstractREPL, Options
 
 using ..Terminals
 import ..Terminals: raw!, width, height, clear_line, beep

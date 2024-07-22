@@ -416,6 +416,7 @@ function load_REPL()
 end
 
 global active_repl
+global active_repl_backend = nothing
 
 function run_fallback_repl(interactive::Bool)
     let input = stdin
@@ -455,6 +456,37 @@ function run_fallback_repl(interactive::Bool)
             end
         end
     end
+    nothing
+end
+
+function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::Bool)
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
+    banner == :no || REPL.banner(term, short=banner==:short)
+    if term.term_type == "dumb"
+        repl = REPL.BasicREPL(term)
+        quiet || @warn "Terminal not fully functional"
+    else
+        repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
+        repl.history_file = history_file
+    end
+    # Make sure any displays pushed in .julia/config/startup.jl ends up above the
+    # REPLDisplay
+    d = REPL.REPLDisplay(repl)
+    last_active_repl = @isdefined(active_repl) ? active_repl : nothing
+    last_active_repl_backend = active_repl_backend
+    global active_repl = repl
+    pushdisplay(d)
+    try
+        global active_repl = repl
+        _atreplinit(repl)
+        REPL.run_repl(repl, backend->(global active_repl_backend = backend))
+    finally
+        popdisplay(d)
+        active_repl = last_active_repl
+        active_repl_backend = last_active_repl_backend
+    end
+    nothing
 end
 
 # run the requested sort of evaluation loop on stdio
@@ -469,24 +501,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     end
     REPL = REPL_MODULE_REF[]
     if !fallback_repl && interactive && REPL !== Base
-        invokelatest(REPL) do REPL
-            term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-            term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            banner == :no || REPL.banner(term, short=banner==:short)
-            if term.term_type == "dumb"
-                repl = REPL.BasicREPL(term)
-                quiet || @warn "Terminal not fully functional"
-            else
-                repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
-                repl.history_file = history_file
-            end
-            global active_repl = repl
-            # Make sure any displays pushed in .julia/config/startup.jl ends up above the
-            # REPLDisplay
-            pushdisplay(REPL.REPLDisplay(repl))
-            _atreplinit(repl)
-            REPL.run_repl(repl, backend->(global active_repl_backend = backend))
-        end
+        invokelatest(run_std_repl, REPL, quiet, banner, history_file)
     else
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
