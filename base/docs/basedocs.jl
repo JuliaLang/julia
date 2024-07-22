@@ -1338,8 +1338,8 @@ implicitly begin blocks of code. See also [`;`](@ref).
 collection or the first index of a dimension of an array. For example,
 `a[begin]` is the first element of an array `a`.
 
-!!! compat "Julia 1.6"
-    Use of `begin` as an index requires Julia 1.6 or later.
+!!! compat "Julia 1.4"
+    Use of `begin` as an index requires Julia 1.4 or later.
 
 # Examples
 ```jldoctest
