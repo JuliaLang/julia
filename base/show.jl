@@ -514,8 +514,8 @@ function _show_default(io::IO, @nospecialize(x))
 end
 
 function active_module()
-    isassigned(REPL_MODULE_REF) || return Main
     REPL = REPL_MODULE_REF[]
+    REPL === Base && return Main
     return invokelatest(REPL.active_module)::Module
 end
 

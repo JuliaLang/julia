@@ -417,18 +417,59 @@ end
 
 global active_repl
 
+function run_fallback_repl(interactive::Bool)
+    let input = stdin
+        if isa(input, File) || isa(input, IOStream)
+            # for files, we can slurp in the whole thing at once
+            ex = parse_input_line(read(input, String))
+            if Meta.isexpr(ex, :toplevel)
+                # if we get back a list of statements, eval them sequentially
+                # as if we had parsed them sequentially
+                for stmt in ex.args
+                    eval_user_input(stderr, stmt, true)
+                end
+                body = ex.args
+            else
+                eval_user_input(stderr, ex, true)
+            end
+        else
+            while !eof(input)
+                if interactive
+                    print("julia> ")
+                    flush(stdout)
+                end
+                try
+                    line = ""
+                    ex = nothing
+                    while !eof(input)
+                        line *= readline(input, keep=true)
+                        ex = parse_input_line(line)
+                        if !(isa(ex, Expr) && ex.head === :incomplete)
+                            break
+                        end
+                    end
+                    eval_user_input(stderr, ex, true)
+                catch err
+                    isa(err, InterruptException) ? print("\n\n") : rethrow()
+                end
+            end
+        end
+    end
+end
+
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool)
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
     if !fallback_repl && interactive
         load_InteractiveUtils()
-        if !isassigned(REPL_MODULE_REF)
+        REPL = REPL_MODULE_REF[]
+        if REPL === Base
             load_REPL()
         end
     end
-    # TODO cleanup REPL_MODULE_REF
-    if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
-        invokelatest(REPL_MODULE_REF[]) do REPL
+    REPL = REPL_MODULE_REF[]
+    if !fallback_repl && interactive && REPL !== Base
+        invokelatest(REPL) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             banner == :no || REPL.banner(term, short=banner==:short)
@@ -447,47 +488,10 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
             REPL.run_repl(repl, backend->(global active_repl_backend = backend))
         end
     else
-        # otherwise provide a simple fallback
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
-        let input = stdin
-            if isa(input, File) || isa(input, IOStream)
-                # for files, we can slurp in the whole thing at once
-                ex = parse_input_line(read(input, String))
-                if Meta.isexpr(ex, :toplevel)
-                    # if we get back a list of statements, eval them sequentially
-                    # as if we had parsed them sequentially
-                    for stmt in ex.args
-                        eval_user_input(stderr, stmt, true)
-                    end
-                    body = ex.args
-                else
-                    eval_user_input(stderr, ex, true)
-                end
-            else
-                while !eof(input)
-                    if interactive
-                        print("julia> ")
-                        flush(stdout)
-                    end
-                    try
-                        line = ""
-                        ex = nothing
-                        while !eof(input)
-                            line *= readline(input, keep=true)
-                            ex = parse_input_line(line)
-                            if !(isa(ex, Expr) && ex.head === :incomplete)
-                                break
-                            end
-                        end
-                        eval_user_input(stderr, ex, true)
-                    catch err
-                        isa(err, InterruptException) ? print("\n\n") : rethrow()
-                    end
-                end
-            end
-        end
+        run_fallback_repl(interactive)
     end
     nothing
 end
