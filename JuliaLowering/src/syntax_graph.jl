@@ -276,21 +276,22 @@ struct SourceRef
     green_tree::JuliaSyntax.GreenNode
 end
 
-JuliaSyntax.first_byte(src::SourceRef) = src.first_byte
-JuliaSyntax.last_byte(src::SourceRef) = src.first_byte + span(src.green_tree) - 1
-JuliaSyntax.filename(src::SourceRef) = filename(src.file)
-JuliaSyntax.source_location(::Type{LineNumberNode}, src::SourceRef) = source_location(LineNumberNode, src.file, src.first_byte)
-JuliaSyntax.source_location(src::SourceRef) = source_location(src.file, src.first_byte)
-JuliaSyntax.sourcetext(src::SourceRef) = src.file[first_byte(src):last_byte(src)]
+JuliaSyntax.sourcefile(src::SourceRef) = src.file
+JuliaSyntax.byte_range(src::SourceRef) = src.first_byte:(src.first_byte + span(src.green_tree) - 1)
 
 # TODO: Adding these methods to support LineNumberNode is kind of hacky but we
 # can remove these after JuliaLowering becomes self-bootstrapping for macros
 # and we a proper SourceRef for @ast's @HERE form.
-JuliaSyntax.first_byte(src::LineNumberNode) = 0
-JuliaSyntax.last_byte(src::LineNumberNode) = 0
-JuliaSyntax.filename(src::LineNumberNode) = string(src.file)
-JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
+JuliaSyntax.byte_range(src::LineNumberNode) = 0:0
 JuliaSyntax.source_location(src::LineNumberNode) = (src.line, 0)
+JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
+JuliaSyntax.source_line(src::LineNumberNode) = src.line
+# The follow somewhat strange cases are for where LineNumberNode is standing in
+# for SourceFile because we've only got Expr-based provenance info
+JuliaSyntax.sourcefile(src::LineNumberNode) = src
+JuliaSyntax.source_location(src::LineNumberNode, byte_index::Integer) = (src.line, 0)
+JuliaSyntax.source_location(::Type{LineNumberNode}, src::LineNumberNode, byte_index::Integer) = src
+JuliaSyntax.filename(src::LineNumberNode) = string(src.file)
 
 function JuliaSyntax.highlight(io::IO, src::LineNumberNode; note="")
     print(io, src, " - ", note, "\n")
@@ -383,13 +384,6 @@ function is_ancestor(ex, ancestor)
         end
     end
 end
-
-JuliaSyntax.filename(ex::SyntaxTree) = filename(sourceref(ex))
-JuliaSyntax.source_location(::Type{LineNumberNode}, ex::SyntaxTree) = source_location(LineNumberNode, sourceref(ex))
-JuliaSyntax.source_location(ex::SyntaxTree) = source_location(sourceref(ex))
-JuliaSyntax.first_byte(ex::SyntaxTree) = first_byte(sourceref(ex))
-JuliaSyntax.last_byte(ex::SyntaxTree) = last_byte(sourceref(ex))
-JuliaSyntax.sourcetext(ex::SyntaxTree) = sourcetext(sourceref(ex))
 
 const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple}
 
@@ -514,7 +508,9 @@ function JuliaSyntax.build_tree(::Type{SyntaxTree}, stream::JuliaSyntax.ParseStr
     SyntaxTree(JuliaSyntax.build_tree(SyntaxNode, stream; kws...))
 end
 
-#-------------------------------------------------------------------------------
+JuliaSyntax.sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
+JuliaSyntax.byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
+
 function JuliaSyntax._expr_leaf_val(ex::SyntaxTree)
     name = get(ex, :name_val, nothing)
     if !isnothing(name)
@@ -524,13 +520,7 @@ function JuliaSyntax._expr_leaf_val(ex::SyntaxTree)
     end
 end
 
-function JuliaSyntax._sourcefile(ex::SyntaxTree)
-    sourceref(ex).file
-end
-
-function Base.Expr(ex::SyntaxTree)
-    JuliaSyntax.to_expr(ex)
-end
+Base.Expr(ex::SyntaxTree) = JuliaSyntax.to_expr(ex)
 
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
