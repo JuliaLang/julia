@@ -24,25 +24,43 @@ const POSTFIX_OP_FLAG  = RawFlags(3<<3)
 
 # The following flags are quite head-specific and may overlap
 
-# Set when K"string" or K"cmdstring" was triple-delimited as with """ or ```
+"""
+Set when K"string" or K"cmdstring" was triple-delimited as with \"\"\" or ```
+"""
 const TRIPLE_STRING_FLAG = RawFlags(1<<5)
-# Set when a K"string", K"cmdstring" or K"Identifier" needs raw string unescaping
+
+"""
+Set when a K"string", K"cmdstring" or K"Identifier" needs raw string unescaping
+"""
 const RAW_STRING_FLAG = RawFlags(1<<6)
 
-# Set for K"tuple", K"block" or K"macrocall" which are delimited by parentheses
+"""
+Set for K"tuple", K"block" or K"macrocall" which are delimited by parentheses
+"""
 const PARENS_FLAG = RawFlags(1<<5)
-# Set for K"quote" for the short form `:x` as oppsed to long form `quote x end`
+
+"""
+Set for K"quote" for the short form `:x` as oppsed to long form `quote x end`
+"""
 const COLON_QUOTE = RawFlags(1<<5)
-# Set for K"toplevel" which is delimited by parentheses
+
+"""
+Set for K"toplevel" which is delimited by parentheses
+"""
 const TOPLEVEL_SEMICOLONS_FLAG = RawFlags(1<<5)
 
-# Set for K"struct" when mutable
+"""
+Set for K"struct" when mutable
+"""
 const MUTABLE_FLAG = RawFlags(1<<5)
 
-# Set for K"module" when it's not bare (`module`, not `baremodule`)
+"""
+Set for K"module" when it's not bare (`module`, not `baremodule`)
+"""
 const BARE_MODULE_FLAG = RawFlags(1<<5)
 
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
+# TODO: Given this is only used for nrow/ncat, we could actually use all the flags?
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
 
 function set_numeric_flags(n::Integer)
@@ -65,7 +83,11 @@ function remove_flags(n::RawFlags, fs...)
     RawFlags(n & ~(RawFlags((|)(fs...))))
 end
 
-# Return true if any of `test_flags` are set
+"""
+    has_flags(x, test_flags)
+
+Return true if any of `test_flags` are set.
+"""
 has_flags(flags::RawFlags, test_flags) = (flags & test_flags) != 0
 
 #-------------------------------------------------------------------------------
@@ -145,14 +167,72 @@ flags(x) = flags(head(x))
 has_flags(x, test_flags) = has_flags(flags(x), test_flags)
 call_type_flags(x) = call_type_flags(flags(x))
 
+"""
+    is_trivia(x)
+
+Return true for "syntax trivia": tokens in the tree which are either largely
+invisible to the parser (eg, whitespace) or implied by the structure of the AST
+(eg, reserved words).
+"""
 is_trivia(x) = has_flags(x, TRIVIA_FLAG)
+
+"""
+    is_prefix_call(x)
+
+Return true for normal prefix function call syntax such as the `f` call node
+parsed from `f(x)`.
+"""
 is_prefix_call(x)     = call_type_flags(x) == PREFIX_CALL_FLAG
+
+"""
+    is_infix_op_call(x)
+
+Return true for infix operator calls such as the `+` call node parsed from
+`x + y`.
+"""
 is_infix_op_call(x)   = call_type_flags(x) == INFIX_FLAG
+
+"""
+    is_prefix_op_call(x)
+
+Return true for prefix operator calls such as the `+` call node parsed from `+x`.
+"""
 is_prefix_op_call(x)  = call_type_flags(x) == PREFIX_OP_FLAG
+
+"""
+    is_postfix_op_call(x)
+
+Return true for postfix operator calls such as the `'ᵀ` call node parsed from `x'ᵀ`.
+"""
 is_postfix_op_call(x) = call_type_flags(x) == POSTFIX_OP_FLAG
+
+"""
+    is_dotted(x)
+
+Return true for dotted syntax tokens
+"""
 is_dotted(x) = has_flags(x, DOTOP_FLAG)
+
+"""
+    is_suffixed(x)
+
+Return true for operators which have sufficies, such as `+₁`
+"""
 is_suffixed(x) = has_flags(x, SUFFIXED_FLAG)
+
+"""
+    is_decorated(x)
+
+Return true for operators which are decorated with a dot or suffix.
+"""
 is_decorated(x) = is_dotted(x) || is_suffixed(x)
+
+"""
+    numeric_flags(x)
+
+Return the number attached to a `SyntaxHead`. This is only for kinds `K"nrow"`
+and `K"ncat"`, for now.
+"""
 numeric_flags(x) = numeric_flags(flags(x))
 
 #-------------------------------------------------------------------------------
