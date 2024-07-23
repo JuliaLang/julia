@@ -4367,22 +4367,6 @@ static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const
     return data;
 }
 
-jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
-{
-    // This relies on the invariant that the JIT will have set the invoke ptr
-    // by the time it releases the codegen lock. If the code is refactored to make the
-    // codegen lock more fine-grained, this will have to be replaced by a per-codeinstance futex.
-    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    // This should only be possible if there's more than one thread. If not, either there's a bug somewhere
-    // that resulted in this not getting cleared, or we're about to deadlock. Either way, that's bad.
-    if (nthreads == 1) {
-        jl_error("Internal error: Reached jl_fptr_wait_for_compiled in single-threaded execution.");
-    }
-    JL_LOCK(&jl_codegen_lock);
-    JL_UNLOCK(&jl_codegen_lock);
-    return jl_atomic_load_acquire(&m->invoke)(f, args, nargs, m);
-}
-
 // Reset us back to codegen debug type
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "julia_irgen_codegen"

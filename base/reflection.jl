@@ -2425,7 +2425,7 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     for kw in kws
         endswith(String(kw), "...") && return true
     end
-    kwnames = Symbol[kwnames[i] for i in 1:length(kwnames)]
+    kwnames = collect(kwnames)
     return issubset(kwnames, kws)
 end
 

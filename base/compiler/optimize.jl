@@ -1178,20 +1178,19 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 # Any statements from here to the end of the block have been wrapped in Core.Const(...)
                 # by type inference (effectively deleting them). Only task left is to replace the block
                 # terminator with an explicit `unreachable` marker.
+
                 if block_end > idx
+                    if is_asserts()
+                        # Verify that type-inference did its job
+                        for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
+                            @assert i in sv.unreachable
+                        end
+                    end
                     code[block_end] = ReturnNode()
                     codelocs[3block_end-2], codelocs[3block_end-1], codelocs[3block_end-0] = (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0])
                     ssavaluetypes[block_end] = Union{}
                     stmtinfo[block_end] = NoCallInfo()
                     ssaflags[block_end] = IR_FLAG_NOTHROW
-
-                    # Verify that type-inference did its job
-                    if is_asserts()
-                        for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
-                            @assert i in sv.unreachable
-                        end
-                    end
-
                     idx += block_end - idx
                 else
                     insert!(code, idx + 1, ReturnNode())
@@ -1221,6 +1220,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         idx += 1
         oldidx += 1
     end
+    empty!(sv.unreachable)
 
     if ssachangemap !== nothing && labelchangemap !== nothing
         renumber_ir_elements!(code, ssachangemap, labelchangemap)

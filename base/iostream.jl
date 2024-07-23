@@ -52,6 +52,8 @@ end
 Return the file descriptor backing the stream or file. Note that this function only applies
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 
+`RawFD` objects can be passed directly to other languages via the `ccall` interface.
+
 !!! compat "Julia 1.12"
     Prior to 1.12, this function returned an Int instead of a RawFD. You may use
     `RawFD(fd(x))` for compatability with earlier Julia versions.
