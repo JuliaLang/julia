@@ -1673,7 +1673,7 @@ ErrorException
 """
     FieldError(type::DataType, field::Symbol)
 
-An operation tried to access invalid `field` of `type`.
+An operation tried to access invalid field `field` on an object of type `type`.
 
 !!! compat "Julia 1.12"
     Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
