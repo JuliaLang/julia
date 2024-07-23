@@ -9,6 +9,7 @@
 #include "julia_internal.h"
 #include "builtin_proto.h"
 #include "julia_assert.h"
+#include "ffi.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -176,6 +177,9 @@ static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
 }
 
+// Forward declaration.
+static jl_value_t *eval_foreigncall(jl_value_t **args, size_t nargs, interpreter_state *s);
+
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
 {
     jl_code_info_t *src = s->src;
@@ -342,7 +346,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return eval_methoddef(ex, s);
     }
     else if (head == jl_foreigncall_sym) {
-        jl_error("`ccall` requires the compiler");
+        return eval_foreigncall(args, nargs, s);
     }
     else if (head == jl_cfunction_sym) {
         jl_error("`cfunction` requires the compiler");
@@ -703,6 +707,67 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         ip = eval_phi(stmts, s, ns, next_ip);
     }
     abort();
+}
+
+static jl_value_t *eval_foreigncall(jl_value_t **args, size_t nargs, interpreter_state *s)
+{
+    jl_value_t *symarg = eval_value(args[0], s);
+    jl_value_t *rt     = eval_value(args[1], s);
+    jl_value_t *at     = eval_value(args[2], s);
+    size_t nccallargs = jl_svec_len(at);
+    size_t nreqargs = jl_unbox_long(args[3]); // if vararg
+
+    assert(jl_is_quotenode(args[4]));
+    jl_value_t *jlcc = jl_quotenode_value(args[4]);
+    jl_sym_t *cc_sym = NULL;
+    if (jl_is_symbol(jlcc)) {
+        cc_sym = (jl_sym_t*)jlcc;
+    } else if (jl_is_tuple(jlcc)) {
+        cc_sym = (jl_sym_t*)jl_get_nth_field_noalloc(jlcc, 0);
+    }
+    assert(jl_is_symbol(cc_sym));
+    JL_GC_PUSH3(&rt, &at, &symarg);
+ 
+    ffi_abi abi;
+    if (jlcc == jl_symbol("ccall") || jlcc == jl_symbol("cdecl")) {
+        abi = FFI_DEFAULT_ABI;
+    } else {
+        jl_errorf(":foreigncall with calling convention %s requires the compiler", jl_symbol_name(jlcc));
+    }
+
+    void *handle = NULL;
+    char* fname;
+    if (jl_is_tuple(symarg))
+        jl_errorf("CCALL NOT YET SUPPORTED");
+    
+    if (jl_is_symbol(symarg))
+        fname = jl_symbol_name(symarg);
+    else
+        jl_errorf("CCALL NOT YET SUPPORTED");
+
+    void* addr;
+    jl_dlsym(handle, fname, &addr, 1);
+
+    ffi_cif cif;
+    ffi_type *ffi_args[1];
+    void *ffi_values[1];
+
+    nargs = 1;
+
+    ffi_args[0] = &ffi_type_pointer;
+    // args[5] value
+    // args[6] root
+
+    ffi_values[0] = (void*)eval_value(args[5], s);
+
+    ffi_arg rc;
+    ffi_type ffi_rt = ffi_type_sint;
+    if (ffi_prep_cif(&cif, abi, nargs, &ffi_rt, ffi_args) == FFI_OK)
+        ffi_call(&cif, addr, &rc, ffi_values);
+    else
+        jl_errorf("libffi failed");
+
+    return jl_box_int32(rc);
 }
 
 // preparing method IR for interpreter

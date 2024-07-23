@@ -974,6 +974,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     }
     body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
 
+    has_ccall = 0;
+
     jl_value_t *result;
     if (has_ccall ||
             ((forced_compile || (!has_defs && fast && has_loops)) &&
