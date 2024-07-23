@@ -5,7 +5,7 @@ export tokenize, untokenize
 using ..JuliaSyntax: JuliaSyntax, Kind, @K_str, @KSet_str
 
 import ..JuliaSyntax: kind,
-    is_literal, is_error, is_contextual_keyword, is_word_operator
+    is_literal, is_contextual_keyword, is_word_operator
 
 #-------------------------------------------------------------------------------
 # Character-based predicates for tokenization
