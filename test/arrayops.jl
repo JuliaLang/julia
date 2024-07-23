@@ -2335,7 +2335,7 @@ end
     # Simple ones
     M = [1 2 3; 4 5 6; 7 8 9]
     @test eachrow(M) == eachslice(M, dims = 1) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    @test eachcol(M) == eachslice(M, dims = 2) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test eachcol(M) == eachslice(M, dims = 2) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]] == eachslice(M)
     @test_throws DimensionMismatch eachslice(M, dims = 4)
 
     SR = @inferred eachrow(M)
@@ -2349,6 +2349,8 @@ end
     SC[3] = [23,26,29]
     @test SC[3] == M[:,3] == [23,26,29]
     @test parent(SC) === M
+
+    @test SC === @inferred eachslice(M)  # default dims
 
     # Higher-dimensional cases
     M = reshape(collect(1:16), (2,2,2,2))
@@ -2384,6 +2386,11 @@ end
     @test S32K isa AbstractSlices{<:AbstractArray{Int, 2}, 4}
     @test size(S32K) == (1,2,2,1)
     @test S32K[1,2,1,1] == M[:,2,1,:]
+
+    S3 = eachslice(M)
+    @test S3 isa AbstractSlices{<:AbstractArray{Int, 3}, 1}
+    @test size(S3) == (2,)
+    @test S3[1] == M[:,:,:,1]
 
     @testset "eachslice inference (#45923)" begin
         a = [1 2; 3 4]
