@@ -684,22 +684,19 @@ struct JITObjectInfo {
 class JLDebuginfoPlugin : public ObjectLinkingLayer::Plugin {
     std::mutex PluginMutex;
     std::map<MaterializationResponsibility *, std::unique_ptr<JITObjectInfo>> PendingObjs;
-    // Resources from distinct `MaterializationResponsibility`s can get merged
-    // after emission, so we can have multiple debug objects per resource key.
-    std::map<ResourceKey, SmallVector<std::unique_ptr<JITObjectInfo>, 0>> RegisteredObjs;
 
 public:
     void notifyMaterializing(MaterializationResponsibility &MR, jitlink::LinkGraph &G,
                              jitlink::JITLinkContext &Ctx,
                              MemoryBufferRef InputObject) override
     {
-        // Keeping around a full copy of the input object file (and re-parsing it) is
-        // wasteful, but for now, this lets us reuse the existing debuginfo.cpp code.
-        // Should look into just directly pulling out all the information required in
-        // a JITLink pass and just keeping the required tables/DWARF sections around
-        // (perhaps using the LLVM DebuggerSupportPlugin as a reference).
         auto NewBuffer =
             MemoryBuffer::getMemBufferCopy(InputObject.getBuffer(), G.getName());
+        // Re-parsing the InputObject is wasteful, but for now, this lets us
+        // reuse the existing debuginfo.cpp code. Should look into just
+        // directly pulling out all the information required in a JITLink pass
+        // and just keeping the required tables/DWARF sections around (perhaps
+        // using the LLVM DebuggerSupportPlugin as a reference).
         auto NewObj =
             cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
 
@@ -733,13 +730,8 @@ public:
             };
 
             jl_register_jit_object(*NewInfo->Object, getLoadAddress, nullptr);
-        }
-
-        cantFail(MR.withResourceKeyDo([&](ResourceKey K) {
-            std::lock_guard<std::mutex> lock(PluginMutex);
-            RegisteredObjs[K].push_back(std::move(PendingObjs[&MR]));
             PendingObjs.erase(&MR);
-        }));
+        }
 
         return Error::success();
     }
@@ -750,32 +742,23 @@ public:
         PendingObjs.erase(&MR);
         return Error::success();
     }
+
 #if JL_LLVM_VERSION >= 160000
     Error notifyRemovingResources(JITDylib &JD, orc::ResourceKey K) override
 #else
-    Error notifyRemovingResources(ResourceKey K) override
+    Error notifyRemovingResources(orc::ResourceKey K) override
 #endif
     {
-        std::lock_guard<std::mutex> lock(PluginMutex);
-        RegisteredObjs.erase(K);
-        // TODO: If we ever unload code, need to notify debuginfo registry.
         return Error::success();
     }
 
 #if JL_LLVM_VERSION >= 160000
-    void notifyTransferringResources(JITDylib &JD, ResourceKey DstKey, ResourceKey SrcKey) override
+    void notifyTransferringResources(JITDylib &JD, orc::ResourceKey DstKey,
+                                     orc::ResourceKey SrcKey) override {}
 #else
-    void notifyTransferringResources(ResourceKey DstKey, ResourceKey SrcKey) override
+    void notifyTransferringResources(orc::ResourceKey DstKey,
+                                     orc::ResourceKey SrcKey) override {}
 #endif
-    {
-        std::lock_guard<std::mutex> lock(PluginMutex);
-        auto SrcIt = RegisteredObjs.find(SrcKey);
-        if (SrcIt != RegisteredObjs.end()) {
-            for (std::unique_ptr<JITObjectInfo> &Info : SrcIt->second)
-                RegisteredObjs[DstKey].push_back(std::move(Info));
-            RegisteredObjs.erase(SrcIt);
-        }
-    }
 
     void modifyPassConfig(MaterializationResponsibility &MR, jitlink::LinkGraph &,
                           jitlink::PassConfiguration &PassConfig) override
@@ -815,12 +798,12 @@ public:
 
 class JLMemoryUsagePlugin : public ObjectLinkingLayer::Plugin {
 private:
-    std::atomic<size_t> &total_size;
+    std::atomic<size_t> &jit_bytes_size;
 
 public:
 
-    JLMemoryUsagePlugin(std::atomic<size_t> &total_size)
-        : total_size(total_size) {}
+    JLMemoryUsagePlugin(std::atomic<size_t> &jit_bytes_size)
+        : jit_bytes_size(jit_bytes_size) {}
 
     Error notifyFailed(orc::MaterializationResponsibility &MR) override {
         return Error::success();
@@ -869,7 +852,7 @@ public:
             }
             (void) code_size;
             (void) data_size;
-            this->total_size.fetch_add(graph_size, std::memory_order_relaxed);
+            this->jit_bytes_size.fetch_add(graph_size, std::memory_order_relaxed);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, graph_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, code_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITDataSize, data_size);
@@ -985,24 +968,7 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
                              const RuntimeDyld::LoadedObjectInfo &L,
                              const std::shared_ptr<RTDyldMemoryManager> &MemMgr)
 {
-    auto SavedObject = L.getObjectForDebug(Object).takeBinary();
-    // If the debug object is unavailable, save (a copy of) the original object
-    // for our backtraces.
-    // This copy seems unfortunate, but there doesn't seem to be a way to take
-    // ownership of the original buffer.
-    if (!SavedObject.first) {
-        auto NewBuffer =
-            MemoryBuffer::getMemBufferCopy(Object.getData(), Object.getFileName());
-        auto NewObj =
-            cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
-        SavedObject = std::make_pair(std::move(NewObj), std::move(NewBuffer));
-    }
-    const object::ObjectFile *DebugObj = SavedObject.first.release();
-    SavedObject.second.release();
-
     StringMap<object::SectionRef> loadedSections;
-    // Use the original Object, not the DebugObject, as this is used for the
-    // RuntimeDyld::LoadedObjectInfo lookup.
     for (const object::SectionRef &lSection : Object.sections()) {
         auto sName = lSection.getName();
         if (sName) {
@@ -1019,7 +985,9 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
         return L.getSectionLoadAddress(search->second);
     };
 
-    jl_register_jit_object(*DebugObj, getLoadAddress,
+    auto DebugObject = L.getObjectForDebug(Object); // ELF requires us to make a copy to mutate the header with the section load addresses. On other platforms this is a no-op.
+    jl_register_jit_object(DebugObject.getBinary() ? *DebugObject.getBinary() : Object,
+        getLoadAddress,
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
         [MemMgr](void *p) { return lookupWriteAddressFor(MemMgr.get(), p); }
 #else
@@ -1630,7 +1598,7 @@ JuliaOJIT::JuliaOJIT()
         ES, std::move(ehRegistrar)));
 
     ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
-    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(total_size));
+    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(jit_bytes_size));
 #else
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
@@ -2042,19 +2010,20 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
     return getMangledName(GV->getName());
 }
 
-#ifdef JL_USE_JITLINK
 size_t JuliaOJIT::getTotalBytes() const
 {
-    return total_size.load(std::memory_order_relaxed);
-}
-#else
-size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm) JL_NOTSAFEPOINT;
-
-size_t JuliaOJIT::getTotalBytes() const
-{
-    return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
-}
+    auto bytes = jit_bytes_size.load(std::memory_order_relaxed);
+#ifndef JL_USE_JITLINK
+    size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm) JL_NOTSAFEPOINT;
+    bytes += getRTDyldMemoryManagerTotalBytes(MemMgr.get());
 #endif
+    return bytes;
+}
+
+void JuliaOJIT::addBytes(size_t bytes)
+{
+    jit_bytes_size.fetch_add(bytes, std::memory_order_relaxed);
+}
 
 void JuliaOJIT::printTimers()
 {
@@ -2338,4 +2307,10 @@ extern "C" JL_DLLEXPORT_CODEGEN
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
+}
+
+// API for adding bytes to record being owned by the JIT
+void jl_jit_add_bytes(size_t bytes)
+{
+    jl_ExecutionEngine->addBytes(bytes);
 }
