@@ -77,6 +77,15 @@ mktempdir() do dir
             @test Base.isfile_casesensitive(true_filename)
             @test !Base.isfile_casesensitive(lowered_filename)
 
+            # check that case-sensitivity is preserved for relative paths with ghost directories:
+            @test Base.isfile_casesensitive(joinpath("nonexistent", "..", true_filename))
+            @test !Base.isfile_casesensitive(joinpath("nonexistent", "..", lowered_filename))
+
+            # check that case-sensitivity is preserved for relative paths with real directories:
+            mkdir("realdir")
+            @test Base.isfile_casesensitive(joinpath("realdir", "..", true_filename))
+            @test !Base.isfile_casesensitive(joinpath("realdir", "..", lowered_filename))
+
             # check that case-sensitivity only applies to basename of a path:
             if isfile(lowered_filename) # case-insensitive filesystem
                 mkdir("cAsEtEsT")
