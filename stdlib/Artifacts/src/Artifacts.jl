@@ -545,7 +545,8 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, @nospecialize(lazyartifacts))
-    pkg = Base.PkgId(__module__)
+    moduleroot = Base.moduleroot(__module__)
+    pkg = Base.PkgId(moduleroot)
     if pkg.uuid !== nothing
         # Process overrides for this UUID, if we know what it is
         process_overrides(artifact_dict, pkg.uuid)
