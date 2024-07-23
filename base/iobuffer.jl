@@ -828,7 +828,11 @@ true
     This function requires at least Julia 1.12.
 """
 function takestring!(io::IOBuffer)
-    # Note: Currently, `IOBuffer`s (as opposed to `GenericIOBuffer`) is always seekable, since all
+    # If the buffer has been used up and needs to be replaced, there are no bytes, and
+    # we can return an empty string without interacting with the buffer at all.
+    io.reinit && return ""
+
+    # Currently, `IOBuffer`s (as opposed to `GenericIOBuffer`) is always seekable, since all
     # IOBuffer constructors return seekable buffers, and GenericIOBuffer is internal.
     # This makes `unsafe_takestring!` valid.
     s = unsafe_takestring!(io)
