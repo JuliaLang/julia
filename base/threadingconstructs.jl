@@ -105,7 +105,7 @@ function threadpooldescription(tid = threadid())
         n_others = nthreads(:interactive) + nthreads(:default)
         # Assumes GC threads come first in the foreign thread pool
         if tid > n_others && tid <= n_others + ngcthreads()
-            return "foreign (GC)"
+            return "foreign: gc"
         end
     end
     return string(threadpool_name)
