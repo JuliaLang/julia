@@ -7,7 +7,7 @@
 #if defined(_OS_WINDOWS_)
 #include <sys/timeb.h>
 #else
-#include <sys/time.h>
+#include <time.h>
 #include <sys/select.h>
 #endif
 
@@ -23,12 +23,13 @@ JL_DLLEXPORT int jl_gettimeofday(struct jl_timeval *jtv)
     struct __timeb64 tb;
     errno_t code = _ftime64_s(&tb);
     jtv->sec = tb.time;
-    jtv->usec = tb.millitm * 1000;
+    jtv->nsec = tb.millitm * 1000000;
 #else
-    struct timeval tv;
-    int code = gettimeofday(&tv, NULL);
-    jtv->sec = tv.tv_sec;
-    jtv->usec = tv.tv_usec;
+    struct timespec ts;
+    int code = clock_gettime(CLOCK_REALTIME, &ts);
+    // TODO: warn/error on EINVAL/EOVERFLOW?
+    jtv->sec = ts.tv_sec;
+    jtv->nsec = ts.tv_nsec;
 #endif
     return code;
 }
@@ -37,7 +38,7 @@ JL_DLLEXPORT double jl_clock_now(void)
 {
     struct jl_timeval now;
     jl_gettimeofday(&now);
-    return now.sec + now.usec * 1e-6;
+    return now.sec + now.nsec * 1e-9;
 }
 
 void sleep_ms(int ms)

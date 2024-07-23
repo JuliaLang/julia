@@ -94,6 +94,7 @@ New library features
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
+* `time()` now has up to nanosecond resolution on Unix based platforms. ([#45023])
 
 Standard library changes
 ------------------------
@@ -153,6 +154,9 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
+
+* `Libc.TimeVal` is deprecated in favor of `Libc.TimeSpec`, which (generally) has higher resolution.
+  This deprecation follows the deprecation of `gettimeofday` in libc. ([#45023])
 
 External dependencies
 ---------------------
