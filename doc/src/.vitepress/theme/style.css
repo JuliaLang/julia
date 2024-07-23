@@ -191,3 +191,37 @@ mjx-container > svg {
   --vp-c-sponsor: var(--julia-purple);
   --vitest-c-sponsor-hover: #e51370;
 }
+
+
+.VPDoc.has-aside .content-container {
+  max-width: 100% !important;
+}
+.aside {
+  max-width: 200px !important;
+  padding-left: 0 !important;
+}
+.VPDoc {
+  padding-top: 15px !important;
+  padding-left: 5px !important;
+
+}
+/* This one does the right menu */
+
+.VPDocOutlineItem li {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.VPNavBar .title {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .VPDoc {
+    padding-left: 25px !important;  
+  }
+}

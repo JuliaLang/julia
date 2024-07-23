@@ -5,7 +5,8 @@ import footnote from "markdown-it-footnote";
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  base: '/docs.julialang.org.git/',// TODO: replace this in makedocs!
+  // base: '/docs.julialang.org.git/', // TODO: replace this in makedocs!
+  base: '/JuliaDocs/',
   title: 'Programming',
   description: "The Julia Programming Language",
   lastUpdated: true,
@@ -139,11 +140,6 @@ export default defineConfig({
 { text: 'UUIDs', link: '/stdlib/UUIDs' },
 { text: 'Unicode', link: '/stdlib/Unicode' }]
  },
-{ text: 'Tutorials', items: [
-{ text: 'Creating Packages', link: '/tutorials/creating-packages' },
-{ text: 'Profiling', link: '/tutorials/profile' },
-{ text: 'External Tutorials', link: '/tutorials/external' }]
- },
 { text: 'Developer Documentation', items: [
 { text: 'Documentation of Julia s Internals', items: [
 { text: 'Initialization of the Julia runtime', link: '/devdocs/init' },
@@ -197,9 +193,9 @@ export default defineConfig({
  }
 ]
 ,
-    sidebar: [
-      { text: 'Home', link: '/index' },
-      { text: 'Manual', collapsed: true, items: [
+    sidebar: {
+      '/manual/': [
+      { text: 'Manual', items: [
       { text: 'Getting Started', link: '/manual/getting-started' },
       { text: 'Installation', link: '/manual/installation' },
       { text: 'Variables', link: '/manual/variables' },
@@ -239,8 +235,10 @@ export default defineConfig({
       { text: 'Noteworthy Differences from other Languages', link: '/manual/noteworthy-differences' },
       { text: 'Unicode Input', link: '/manual/unicode-input' },
       { text: 'Command-line Interface', link: '/manual/command-line-interface' }]
-      },
-      { text: 'Base', collapsed: true, items: [
+      }
+    ],
+    '/base/': [
+      { text: 'Base', items: [
       { text: 'Essentials', link: '/base/base' },
       { text: 'Collections and Data Structures', link: '/base/collections' },
       { text: 'Mathematics', link: '/base/math' },
@@ -262,7 +260,9 @@ export default defineConfig({
       { text: 'StackTraces', link: '/base/stacktraces' },
       { text: 'SIMD Support', link: '/base/simd-types' }]
       },
-      { text: 'Standard Library', collapsed: true, items: [
+      ],
+      '/stdlib/': [
+      { text: 'Standard Library', items: [
       { text: 'ArgTools', link: '/stdlib/ArgTools' },
       { text: 'Artifacts', link: '/stdlib/Artifacts' },
       { text: 'Base64', link: '/stdlib/Base64' },
@@ -302,63 +302,61 @@ export default defineConfig({
       { text: 'UUIDs', link: '/stdlib/UUIDs' },
       { text: 'Unicode', link: '/stdlib/Unicode' }]
       },
-      { text: 'Tutorials', collapsed: false, items: [
-      { text: 'Creating Packages', link: '/tutorials/creating-packages' },
-      { text: 'Profiling', link: '/tutorials/profile' },
-      { text: 'External Tutorials', link: '/tutorials/external' }]
-      },
-      { text: 'Developer Documentation', collapsed: false, items: [
-      { text: 'Documentation of Julia s Internals', collapsed: true, items: [
-      { text: 'Initialization of the Julia runtime', link: '/devdocs/init' },
-      { text: 'Julia ASTs', link: '/devdocs/ast' },
-      { text: 'More about types', link: '/devdocs/types' },
-      { text: 'Memory layout of Julia Objects', link: '/devdocs/object' },
-      { text: 'Eval of Julia code', link: '/devdocs/eval' },
-      { text: 'Calling Conventions', link: '/devdocs/callconv' },
-      { text: 'High-level Overview of the Native-Code Generation Process', link: '/devdocs/compiler' },
-      { text: 'Julia Functions', link: '/devdocs/functions' },
-      { text: 'Base.Cartesian', link: '/devdocs/cartesian' },
-      { text: 'Talking to the compiler', link: '/devdocs/meta' },
-      { text: 'SubArrays', link: '/devdocs/subarrays' },
-      { text: 'isbits Union Optimizations', link: '/devdocs/isbitsunionarrays' },
-      { text: 'System Image Building', link: '/devdocs/sysimg' },
-      { text: 'Package Images', link: '/devdocs/pkgimg' },
-      { text: 'Custom LLVM Passes', link: '/devdocs/llvm-passes' },
-      { text: 'Working with LLVM', link: '/devdocs/llvm' },
-      { text: 'printf() and stdio in the Julia runtime', link: '/devdocs/stdio' },
-      { text: 'Bounds checking', link: '/devdocs/boundscheck' },
-      { text: 'Proper maintenance and care of multi-threading locks', link: '/devdocs/locks' },
-      { text: 'Arrays with custom indices', link: '/devdocs/offset-arrays' },
-      { text: 'Module loading', link: '/devdocs/require' },
-      { text: 'Inference', link: '/devdocs/inference' },
-      { text: 'Julia SSA-form IR', link: '/devdocs/ssair' },
-      { text: 'EscapeAnalysis', link: '/devdocs/EscapeAnalysis' },
-      { text: 'Ahead of Time Compilation', link: '/devdocs/aot' },
-      { text: 'Static analyzer annotations for GC correctness in C code', link: '/devdocs/gc-sa' },
-      { text: 'Garbage Collection in Julia', link: '/devdocs/gc' },
-      { text: 'JIT Design and Implementation', link: '/devdocs/jit' },
-      { text: 'Core.Builtins', link: '/devdocs/builtins' },
-      { text: 'Fixing precompilation hangs due to open tasks or IO', link: '/devdocs/precompile_hang' }]
-      },
-      { text: 'Developing/debugging Julia s C code', collapsed: true, items: [
-      { text: 'Reporting and analyzing crashes (segfaults)', link: '/devdocs/backtraces' },
-      { text: 'gdb debugging tips', link: '/devdocs/debuggingtips' },
-      { text: 'Using Valgrind with Julia', link: '/devdocs/valgrind' },
-      { text: 'External Profiler Support', link: '/devdocs/external_profilers' },
-      { text: 'Sanitizer support', link: '/devdocs/sanitizers' },
-      { text: 'Instrumenting Julia with DTrace, and bpftrace', link: '/devdocs/probes' }]
-      },
-      { text: 'Building Julia', collapsed: true, items: [
-      { text: 'Building Julia (Detailed)', link: '/devdocs/build/build' },
-      { text: 'Linux', link: '/devdocs/build/linux' },
-      { text: 'macOS', link: '/devdocs/build/macos' },
-      { text: 'Windows', link: '/devdocs/build/windows' },
-      { text: 'FreeBSD', link: '/devdocs/build/freebsd' },
-      { text: 'ARM (Linux)', link: '/devdocs/build/arm' },
-      { text: 'Binary distributions', link: '/devdocs/build/distributing' }]
-      }]
-      }
-    ]
+      ],
+      '/devdocs/': [
+        { text: 'Developer Documentation', items: [
+        { text: 'Documentation of Julia s Internals', collapsed: true, items: [
+        { text: 'Initialization of the Julia runtime', link: '/devdocs/init' },
+        { text: 'Julia ASTs', link: '/devdocs/ast' },
+        { text: 'More about types', link: '/devdocs/types' },
+        { text: 'Memory layout of Julia Objects', link: '/devdocs/object' },
+        { text: 'Eval of Julia code', link: '/devdocs/eval' },
+        { text: 'Calling Conventions', link: '/devdocs/callconv' },
+        { text: 'High-level Overview of the Native-Code Generation Process', link: '/devdocs/compiler' },
+        { text: 'Julia Functions', link: '/devdocs/functions' },
+        { text: 'Base.Cartesian', link: '/devdocs/cartesian' },
+        { text: 'Talking to the compiler', link: '/devdocs/meta' },
+        { text: 'SubArrays', link: '/devdocs/subarrays' },
+        { text: 'isbits Union Optimizations', link: '/devdocs/isbitsunionarrays' },
+        { text: 'System Image Building', link: '/devdocs/sysimg' },
+        { text: 'Package Images', link: '/devdocs/pkgimg' },
+        { text: 'Custom LLVM Passes', link: '/devdocs/llvm-passes' },
+        { text: 'Working with LLVM', link: '/devdocs/llvm' },
+        { text: 'printf() and stdio in the Julia runtime', link: '/devdocs/stdio' },
+        { text: 'Bounds checking', link: '/devdocs/boundscheck' },
+        { text: 'Proper maintenance and care of multi-threading locks', link: '/devdocs/locks' },
+        { text: 'Arrays with custom indices', link: '/devdocs/offset-arrays' },
+        { text: 'Module loading', link: '/devdocs/require' },
+        { text: 'Inference', link: '/devdocs/inference' },
+        { text: 'Julia SSA-form IR', link: '/devdocs/ssair' },
+        { text: 'EscapeAnalysis', link: '/devdocs/EscapeAnalysis' },
+        { text: 'Ahead of Time Compilation', link: '/devdocs/aot' },
+        { text: 'Static analyzer annotations for GC correctness in C code', link: '/devdocs/gc-sa' },
+        { text: 'Garbage Collection in Julia', link: '/devdocs/gc' },
+        { text: 'JIT Design and Implementation', link: '/devdocs/jit' },
+        { text: 'Core.Builtins', link: '/devdocs/builtins' },
+        { text: 'Fixing precompilation hangs due to open tasks or IO', link: '/devdocs/precompile_hang' }]
+        },
+        { text: 'Developing/debugging Julia s C code', collapsed: true, items: [
+        { text: 'Reporting and analyzing crashes (segfaults)', link: '/devdocs/backtraces' },
+        { text: 'gdb debugging tips', link: '/devdocs/debuggingtips' },
+        { text: 'Using Valgrind with Julia', link: '/devdocs/valgrind' },
+        { text: 'External Profiler Support', link: '/devdocs/external_profilers' },
+        { text: 'Sanitizer support', link: '/devdocs/sanitizers' },
+        { text: 'Instrumenting Julia with DTrace, and bpftrace', link: '/devdocs/probes' }]
+        },
+        { text: 'Building Julia', collapsed: true, items: [
+        { text: 'Building Julia (Detailed)', link: '/devdocs/build/build' },
+        { text: 'Linux', link: '/devdocs/build/linux' },
+        { text: 'macOS', link: '/devdocs/build/macos' },
+        { text: 'Windows', link: '/devdocs/build/windows' },
+        { text: 'FreeBSD', link: '/devdocs/build/freebsd' },
+        { text: 'ARM (Linux)', link: '/devdocs/build/arm' },
+        { text: 'Binary distributions', link: '/devdocs/build/distributing' }]
+        }]
+        }
+      ]
+  }
 ,
     editLink: { pattern: "https://github.com/JuliaLang/docs.julialang.org.git/edit/master/docs/src/:path" },
     socialLinks: [
