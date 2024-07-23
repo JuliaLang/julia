@@ -324,6 +324,7 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
 cconvert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = cconvert(Ptr{T}, parent(a))
+unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, cconvert(Ptr{T}, a))
 
 # Add a few handy specializations to further speed up views of reshaped ranges
 const ReshapedUnitRange{T,N,A<:AbstractUnitRange} = ReshapedArray{T,N,A,Tuple{}}
