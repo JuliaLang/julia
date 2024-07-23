@@ -470,7 +470,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 if Sys.iswindows()
 
 function longpath(path::AbstractString)
-    p = cwstring(path)
+    p = cwstring(abspath(path)) # GetLongPathNameW requires absolute paths
     buf = zeros(UInt16, length(p))
     while true
         n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
