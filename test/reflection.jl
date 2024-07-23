@@ -1193,3 +1193,5 @@ end
 @test Base.isexported(Mod52812, :b)
 @test Base.ispublic(Mod52812, :a)
 @test Base.ispublic(Mod52812, :b)
+
+@test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187
