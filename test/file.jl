@@ -1908,6 +1908,19 @@ end
     end
 end
 
+@testset "pwd tests" begin
+    mktempdir() do dir
+        cd(dir) do
+            @test pwd() == dir
+            rm(dir)
+            @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
+            io = IOBuffer()
+            # pwd() throwing was causing this to error
+            Base.repl_cmd(@cmd("cd ~"), io)
+        end
+    end
+end
+
 @testset "readdir tests" begin
     ≛(a, b) = sort(a) == sort(b)
     mktempdir() do dir
