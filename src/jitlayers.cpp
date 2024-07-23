@@ -190,8 +190,6 @@ static orc::ThreadSafeModule jl_get_globals_module(orc::ThreadSafeContext &ctx, 
     return GTSM;
 }
 
-extern jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m);
-
 // this generates llvm code for the lambda info
 // and adds the result to the jitlayers
 // (and the shadow module),
@@ -328,7 +326,7 @@ static jl_callptr_t _jl_compile_codeinst(
             jl_callptr_t prev_invoke = NULL;
             // Allow replacing addr if it is either NULL or our special waiting placeholder.
             if (!jl_atomic_cmpswap_acqrel(&this_code->invoke, &prev_invoke, addr)) {
-                if (prev_invoke == &jl_fptr_wait_for_compiled && !jl_atomic_cmpswap_acqrel(&this_code->invoke, &prev_invoke, addr)) {
+                if (prev_invoke == jl_fptr_wait_for_compiled_addr && !jl_atomic_cmpswap_acqrel(&this_code->invoke, &prev_invoke, addr)) {
                     addr = prev_invoke;
                     //TODO do we want to potentially promote invoke anyways? (e.g. invoke is jl_interpret_call or some other
                     //known lesser function)
@@ -385,7 +383,6 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         backing = jl_create_ts_module("cextern", pparams ? pparams->tsctx : ctx,  pparams ? pparams->DL : jl_ExecutionEngine->getDataLayout(), pparams ? pparams->TargetTriple : jl_ExecutionEngine->getTargetTriple());
         into = &backing;
     }
-    JL_LOCK(&jl_codegen_lock);
     auto target_info = into->withModuleDo([&](Module &M) {
         return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
     });
@@ -398,6 +395,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     const char *name = jl_generate_ccallable(wrap(into), sysimg, declrt, sigt, *pparams);
     bool success = true;
     if (!sysimg) {
+        JL_LOCK(&jl_ExecutionEngine->jitlock);
         if (jl_ExecutionEngine->getGlobalValueAddress(name)) {
             success = false;
         }
@@ -415,8 +413,8 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             });
             jl_ExecutionEngine->addModule(std::move(*into));
         }
+        JL_UNLOCK(&jl_ExecutionEngine->jitlock); // Might GC
     }
-    JL_UNLOCK(&jl_codegen_lock);
     if (timed) {
         if (measure_compile_time_enabled) {
             auto end = jl_hrtime();
@@ -480,7 +478,7 @@ int jl_compile_codeinst_impl(jl_code_instance_t *ci)
     if (jl_atomic_load_relaxed(&ci->invoke) != NULL) {
         return newly_compiled;
     }
-    JL_LOCK(&jl_codegen_lock);
+    JL_LOCK(&jl_ExecutionEngine->jitlock);
     if (jl_atomic_load_relaxed(&ci->invoke) == NULL) {
         ++SpecFPtrCount;
         uint64_t start = jl_typeinf_timing_begin();
@@ -488,7 +486,7 @@ int jl_compile_codeinst_impl(jl_code_instance_t *ci)
         jl_typeinf_timing_end(start, 0);
         newly_compiled = 1;
     }
-    JL_UNLOCK(&jl_codegen_lock); // Might GC
+    JL_UNLOCK(&jl_ExecutionEngine->jitlock); // Might GC
     return newly_compiled;
 }
 
@@ -506,7 +504,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
-    JL_LOCK(&jl_codegen_lock);
+    JL_LOCK(&jl_ExecutionEngine->jitlock);
     if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
         jl_code_info_t *src = NULL;
         JL_GC_PUSH1(&src);
@@ -537,7 +535,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         jl_atomic_cmpswap(&unspec->invoke, &null, jl_fptr_interpret_call_addr);
         JL_GC_POP();
     }
-    JL_UNLOCK(&jl_codegen_lock); // Might GC
+    JL_UNLOCK(&jl_ExecutionEngine->jitlock); // Might GC
     if (timed) {
         if (measure_compile_time_enabled) {
             auto end = jl_hrtime();
@@ -1619,6 +1617,7 @@ JuliaOJIT::JuliaOJIT()
     ExternalCompileLayer(ES, LockLayer,
         std::make_unique<CompilerT<N_optlevels>>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM))
 {
+    JL_MUTEX_INIT(&this->jitlock, "JuliaOJIT");
 #ifdef JL_USE_JITLINK
 # if defined(LLVM_SHLIB)
     // When dynamically linking against LLVM, use our custom EH frame registration code
@@ -1959,16 +1958,15 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 }
 #endif
 
-StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
+StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_callptr_t invoke, jl_code_instance_t *codeinst)
 {
     std::lock_guard<std::mutex> lock(RLST_mutex);
-    assert(Addr != (uint64_t)&jl_fptr_wait_for_compiled);
+    assert(Addr != (uint64_t)jl_fptr_wait_for_compiled_addr);
     std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
     if (fname->empty()) {
         std::string string_fname;
         raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
-        jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
         if (Addr == (uintptr_t)invoke) {
             stream_fname << "jsysw_";
         }

@@ -405,7 +405,7 @@ static const int jl_gc_sizeclasses[] = {
 #ifdef GC_SMALL_PAGE
 #ifdef _P64
 #  define JL_GC_N_POOLS 39
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
 #  define JL_GC_N_POOLS 40
 #else
 #  define JL_GC_N_POOLS 41
@@ -413,7 +413,7 @@ static const int jl_gc_sizeclasses[] = {
 #else
 #ifdef _P64
 #  define JL_GC_N_POOLS 49
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
 #  define JL_GC_N_POOLS 50
 #else
 #  define JL_GC_N_POOLS 51
@@ -428,7 +428,7 @@ STATIC_INLINE int jl_gc_alignment(size_t sz) JL_NOTSAFEPOINT
 #ifdef _P64
     (void)sz;
     return 16;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
     return sz <= 4 ? 8 : 16;
 #else
     // szclass 8
@@ -460,7 +460,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz) JL_NOTSAFEPOINT
     if (sz <= 8)
         return 0;
     const int N = 0;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
     if (sz <= 8)
         return (sz >= 4 ? 1 : 0);
     const int N = 1;
@@ -478,7 +478,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
     if (sz >= 16 && sz <= 152) {
 #ifdef _P64
         const int N = 0;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
         const int N = 1;
 #else
         const int N = 2;
@@ -502,7 +502,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (sz <= GC_MAX_SZCLASS) {
         int pool_id = jl_gc_szclass(allocsz);
-        jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
+        jl_gc_pool_t *p = &ptls->gc_tls.heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
         // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
         // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
@@ -665,6 +665,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world, jl_debuginfo_t *edges);
 jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT);
+JL_DLLEXPORT void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_callptr_t *invoke, void **specptr, int waitcompile) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_uninit(jl_method_instance_t *mi, jl_value_t *owner);
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
@@ -959,8 +960,10 @@ extern JL_DLLEXPORT ssize_t jl_tls_offset;
 extern JL_DLLEXPORT const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
+void jl_start_gc_threads(void);
 
 // Whether the GC is running
+extern uv_mutex_t safepoint_lock;
 extern char *jl_safepoint_pages;
 STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
 {
@@ -1465,7 +1468,6 @@ JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 // -- synchronization utilities -- //
 
 extern jl_mutex_t typecache_lock;
-extern JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 
 #if defined(__APPLE__)
 void jl_mach_gc_end(void) JL_NOTSAFEPOINT;

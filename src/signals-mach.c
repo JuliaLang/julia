@@ -45,7 +45,6 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
-extern uv_mutex_t safepoint_lock;
 extern uv_cond_t safepoint_cond_begin;
 
 #define GC_STATE_SHIFT 8*sizeof(int16_t)
@@ -295,10 +294,13 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_task_t *ct = jl_get_current_task();
         jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
         jl_call_in_state(ptls, (host_thread_state_t*)jl_to_bt_context(context), &jl_sig_throw);
+        return;
     }
-    else {
-        sigdie_handler(sig, info, context);
+    jl_task_t *ct = jl_get_current_task();
+    if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+        stack_overflow_warning();
     }
+    sigdie_handler(sig, info, context);
 }
 
 // n.b. mach_exc_server expects us to define this symbol locally
