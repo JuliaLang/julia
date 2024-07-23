@@ -2,7 +2,6 @@
 
 using Test, UUIDs, Random
 
-
 # results similar to Python builtin uuid
 # To reproduce the sequence
 #=
@@ -56,9 +55,18 @@ end
     @test u7 == UUID(UInt128(u7))
 end
 
-@testset "uuid4 & uuid7 RNG stability" begin
-    @test uuid4(Xoshiro(0)) == uuid4(Xoshiro(0))
-    @test uuid7(Xoshiro(0)) == uuid7(Xoshiro(0))
+@testset "no-timestamp API compatibility" begin
+    rng = Xoshiro(0)
+    @test uuid1(rng) isa UUID
+    @test uuid4(rng) isa UUID
+    @test uuid7(rng) isa UUID
+end
+
+@testset "uuid1, uuid4 & uuid7 RNG stability" begin
+    timestamp = time()
+    @test uuid1(Xoshiro(0), timestamp) == uuid1(Xoshiro(0), timestamp)
+    @test uuid4(Xoshiro(0))            == uuid4(Xoshiro(0))
+    @test uuid7(Xoshiro(0), timestamp) == uuid7(Xoshiro(0), timestamp)
 end
 
 @testset "Rejection of invalid UUID strings" begin
