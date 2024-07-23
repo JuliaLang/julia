@@ -350,6 +350,16 @@ end
 const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{Base.PkgId,Config}
 
+function num_precompile_tasks()
+    # Windows sometimes hits a ReadOnlyMemoryError, so we halve the default number of tasks. Issue #2323
+    # TODO: Investigate why this happens in windows and restore the full task limit
+    default_num_tasks = Sys.iswindows() ? div(Sys.CPU_THREADS::Int, 2) + 1 : Sys.CPU_THREADS::Int + 1
+    default_num_tasks = min(default_num_tasks, 16) # limit for better stability on shared resource systems
+
+    num_tasks = parse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks)))
+    return num_tasks
+end
+
 function precompilepkgs(pkgs::Vector{String}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -369,12 +379,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
 
     env = ExplicitEnv()
 
-    # Windows sometimes hits a ReadOnlyMemoryError, so we halve the default number of tasks. Issue #2323
-    # TODO: Investigate why this happens in windows and restore the full task limit
-    default_num_tasks = Sys.iswindows() ? div(Sys.CPU_THREADS::Int, 2) + 1 : Sys.CPU_THREADS::Int + 1
-    default_num_tasks = min(default_num_tasks, 16) # limit for better stability on shared resource systems
-
-    num_tasks = parse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks)))
+    num_tasks = num_parallel_tasks()
     parallel_limiter = Base.Semaphore(num_tasks)
 
     if _from_loading && !Sys.isinteractive() && Base.get_bool_env("JULIA_TESTS", false)
