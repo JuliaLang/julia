@@ -784,9 +784,8 @@ function take!(io::IOBuffer)
 end
 
 "Internal method. This method can be faster than takestring!, because it assumes
-the buffer is writable and seekable, and because it does not reset the buffer
-to a usable state.
-Using the buffer after calling unsafe_takestring! may cause illegal behaviour.
+the buffer is seekable, and because it does not reset the buffer to a usable state.
+Using the buffer after calling unsafe_takestring! may cause undefined behaviour.
 This function is meant to be used when the buffer is only used as a temporary
 string builder, which is discarded after the string is built."
 function unsafe_takestring!(io::IOBuffer)
@@ -829,38 +828,24 @@ true
     This function requires at least Julia 1.12.
 """
 function takestring!(io::IOBuffer)
-    nbytes = filesize(io)
+    # Note: Currently, `IOBuffer`s (as opposed to `GenericIOBuffer`) is always seekable, since all
+    # IOBuffer constructors return seekable buffers, and GenericIOBuffer is internal.
+    # This makes `unsafe_takestring!` valid.
+    s = unsafe_takestring!(io)
 
-    # If the memory is invalidated (and hence unused), or no bytes, return empty string
-    return if (iszero(nbytes) || io.reinit)
-        ""
-    else
-        start = io.seekable ? io.offset + 1 : io.ptr
-        # The C function can only copy from the start of the memory.
-        # Fortunately, in most cases, start will be 1.
-        s = if isone(start)
-            ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), io.data, nbytes)
-        else
-            mem = StringMemory(nbytes)
-            unsafe_copyto!(mem, 1, io.data, start, nbytes)
-            unsafe_takestring!(mem)
-        end
-
-        # Empty the IOBuffer, resetting it, if the buffer is writable.
-        # By setting io.reinit and setting its size to zero, we ensure the memory
-        # is written.
-        # If the buffer is not writable, the assumption is that the memory will
-        # never be mutated, and as such, it's okay that a string shares memory
-        # with this object.
-        if io.writable
-            io.reinit = true
-            io.mark = -1
-            io.ptr = 1
-            io.size = 0
-            io.offset = 0
-        end
-        s
+    # Restore the buffer to a usable state, making it no longer undefined behaviour to
+    # use the buffer after the `unsafe_takestring!` call.
+    # Note that if the buffer is not writable, there is no need to reinitialize the buffer,
+    # since it doesn't matter that the returned string looks into the same memory -
+    # this is because the buffer is not mutable through either the string nor the buffer.
+    if io.writable
+        io.reinit = true
+        io.mark = -1
+        io.ptr = 1
+        io.size = 0
+        io.offset = 0
     end
+    s
 end
 
 """
