@@ -67,6 +67,17 @@ end
 @test kind(ex) == K"Value"
 @test ex.value == 123
 
+# Test that interpolation with field access works
+# (the field name can be interpolated into
+ex = JuliaLowering.include_string(test_mod, """
+let
+    field_name = :(a)
+    :(a.\$field_name)
+end
+""")
+@test kind(ex[2]) == K"Identifier"
+@test ex[2].name_val == "a"
+
 # interpolations at multiple depths
 ex = JuliaLowering.include_string(test_mod, """
 let

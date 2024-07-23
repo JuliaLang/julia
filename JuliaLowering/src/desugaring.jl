@@ -757,7 +757,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             children(ex)...
         ])
     elseif k == K"$"
-        throw(LoweringError(ex, "`\$` expression outside quote"))
+        throw(LoweringError(ex, "`\$` expression outside string or quote block"))
     elseif k == K"module"
         # TODO: check-toplevel
         expand_module(ctx, ex)
