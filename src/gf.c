@@ -2393,6 +2393,8 @@ static void record_precompile_statement(jl_method_instance_t *mi)
         return;
     if (!jl_is_method(def))
         return;
+    if (def->is_for_opaque_closure)
+        return; // OpaqueClosure methods cannot be looked up by their types, so are incompatible with `precompile(...)`
 
     JL_LOCK(&precomp_statement_out_lock);
     if (s_precompile == NULL) {
@@ -2569,7 +2571,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_atomic_store_release(&codeinst->invoke, ucache_invoke);
         jl_mi_cache_insert(mi, codeinst);
     }
-    else if (did_compile) {
+    else if (did_compile && codeinst->owner == jl_nothing) {
         record_precompile_statement(mi);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);
