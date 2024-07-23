@@ -36,13 +36,11 @@ const namespace_oid  = UUID(0x6ba7b8129dad11d180b400c04fd430c8) # 6ba7b812-9dad-
 const namespace_x500 = UUID(0x6ba7b8149dad11d180b400c04fd430c8) # 6ba7b814-9dad-11d1-80b4-00c04fd430c8
 
 """
-    uuid1([rng::AbstractRNG], [timestamp::Float64=time()]) -> UUID
+    uuid1([rng::AbstractRNG]) -> UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
 by [RFC 4122](https://www.ietf.org/rfc/rfc4122). Note that the Node ID is randomly generated (does not identify the host)
 according to section 4.5 of the RFC.
-
-The optionally passed timestamp is expected to be seconds since the UNIX epoch.
 
 The default rng used by `uuid1` is not `Random.default_rng()` and every invocation of `uuid1()` without
 an argument should be expected to return a unique identifier. Importantly, the outputs of
@@ -52,9 +50,6 @@ detail that may change in the future.
 
 !!! compat "Julia 1.6"
     The output of `uuid1` does not depend on `Random.default_rng()` as of Julia 1.6.
-
-!!! compat "Julia 1.12"
-    Passing a timestamp directly is available as of Julia 1.12.
 
 # Examples
 ```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
@@ -66,7 +61,14 @@ julia> uuid1(rng)
 UUID("cfc395e8-590f-11e8-1f13-43a2532b2fa8")
 ```
 """
-function uuid1(rng::AbstractRNG=Random.RandomDevice(), t::Float64=time())
+function uuid1(rng::AbstractRNG=Random.RandomDevice())
+    # 0x01b21dd213814000 is the number of 100 nanosecond intervals
+    # between the UUID epoch and Unix epoch
+    timestamp = round(UInt64, time() * 1e7) + 0x01b21dd213814000
+    _build_uuid1(rng, timestamp)
+end
+
+function _build_uuid1(rng::AbstractRNG, timestamp::UInt64)
     u = rand(rng, UInt128)
 
     # mask off clock sequence and node
@@ -75,9 +77,6 @@ function uuid1(rng::AbstractRNG=Random.RandomDevice(), t::Float64=time())
     # set the unicast/multicast bit and version
     u |= 0x00000000000010000000010000000000
 
-    # 0x01b21dd213814000 is the number of 100 nanosecond intervals
-    # between the UUID epoch and Unix epoch
-    timestamp = round(UInt64, t * 1e7) + 0x01b21dd213814000
     ts_low = timestamp & typemax(UInt32)
     ts_mid = (timestamp >> 32) & typemax(UInt16)
     ts_hi = (timestamp >> 48) & 0x0fff
@@ -163,12 +162,10 @@ function uuid5(ns::UUID, name::String)
 end
 
 """
-    uuid7([rng::AbstractRNG], [timestamp::Float64]) -> UUID
+    uuid7([rng::AbstractRNG]) -> UUID
 
 Generates a version 7 (random or pseudo-random) universally unique identifier (UUID),
 as specified by [RFC 9652](https://www.rfc-editor.org/rfc/rfc9562).
-
-The optionally passed timestamp is expected to be seconds since the UNIX epoch.
 
 The default rng used by `uuid7` is not `Random.default_rng()` and every invocation of `uuid7()` without
 an argument should be expected to return a unique identifier. Importantly, the outputs of
@@ -189,15 +186,19 @@ julia> uuid7(rng)
 UUID("019026ca-e086-772a-9638-f7b8557cd282")
 ```
 """
-function uuid7(rng::AbstractRNG=Random.RandomDevice(), t::Float64=time())
+function uuid7(rng::AbstractRNG=Random.RandomDevice())
+    # current time in ms, rounded to an Integer
+    timestamp = round(UInt128, time() * 1e3)
+    _build_uuid7(rng, timestamp)
+end
+
+function _build_uuid7(rng::AbstractRNG, timestamp::UInt128)
     bytes = rand(rng, UInt128)
     # make space for the timestamp
     bytes &= 0x0000000000000fff3fffffffffffffff
     # version & variant
     bytes |= 0x00000000000070008000000000000000
 
-    # current time in ms, rounded to an Integer
-    timestamp = round(UInt128, t * 1e3)
     bytes |= timestamp << UInt128(80)
 
     return UUID(bytes)
