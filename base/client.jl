@@ -53,7 +53,9 @@ function repl_cmd(cmd, out)
             end
             try
                 ENV["OLDPWD"] = pwd()
-                catch # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
+            catch ex
+                ex isa IOError || rethrow()
+                # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
                 delete!(ENV, "OLDPWD")
             end
             cd(dir)
