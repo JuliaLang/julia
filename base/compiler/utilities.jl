@@ -138,13 +138,25 @@ use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
 function get_staged(mi::MethodInstance, world::UInt)
     may_invoke_generator(mi) || return nothing
+    cache_ci = (mi.def::Method).generator isa Core.CachedGenerator ?
+        RefValue{CodeInstance}() : nothing
     try
-        # user code might throw errors – ignore them
-        ci = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), mi, world, C_NULL)::CodeInfo
-        return ci
-    catch
+        return call_get_staged(mi, world, cache_ci)
+    catch # user code might throw errors – ignore them
         return nothing
     end
+end
+
+# enable caching of unoptimized generated code if the generator is `CachedGenerator`
+function call_get_staged(mi::MethodInstance, world::UInt, cache_ci::RefValue{CodeInstance})
+    token = @_gc_preserve_begin cache_ci
+    cache_ci_ptr = pointer_from_objref(cache_ci)
+    src = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{CodeInstance}), mi, world, cache_ci_ptr)
+    @_gc_preserve_end token
+    return src
+end
+function call_get_staged(mi::MethodInstance, world::UInt, ::Nothing)
+    return ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), mi, world, C_NULL)
 end
 
 function get_cached_uninferred(mi::MethodInstance, world::UInt)
@@ -162,7 +174,7 @@ function retrieve_code_info(mi::MethodInstance, world::UInt)
         # @atomic ci.inferred = C_NULL
         return src
     end
-    c = isdefined(def, :generator) ? get_staged(mi, world) : nothing
+    c = hasgenerator(def) ? get_staged(mi, world) : nothing
     if c === nothing && isdefined(def, :source)
         src = def.source
         if src === nothing

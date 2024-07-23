@@ -254,8 +254,8 @@ end
 function tril!(D::Diagonal{T}, k::Integer=0) where T
     n = size(D,1)
     if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif k < 0
         fill!(D.diag, zero(T))
     end
@@ -327,8 +327,49 @@ function (*)(D::Diagonal, V::AbstractVector)
     return D.diag .* V
 end
 
-rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
-lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
+function rmul!(A::AbstractMatrix, D::Diagonal)
+    _muldiag_size_check(A, D)
+    for I in CartesianIndices(A)
+        row, col = Tuple(I)
+        @inbounds A[row, col] *= D.diag[col]
+    end
+    return A
+end
+# T .= T * D
+function rmul!(T::Tridiagonal, D::Diagonal)
+    _muldiag_size_check(T, D)
+    (; dl, d, du) = T
+    d[1] *= D.diag[1]
+    for i in axes(dl,1)
+        dl[i] *= D.diag[i]
+        du[i] *= D.diag[i+1]
+        d[i+1] *= D.diag[i+1]
+    end
+    return T
+end
+
+function lmul!(D::Diagonal, B::AbstractVecOrMat)
+    _muldiag_size_check(D, B)
+    for I in CartesianIndices(B)
+        row = I[1]
+        @inbounds B[I] = D.diag[row] * B[I]
+    end
+    return B
+end
+
+# in-place multiplication with a diagonal
+# T .= D * T
+function lmul!(D::Diagonal, T::Tridiagonal)
+    _muldiag_size_check(D, T)
+    (; dl, d, du) = T
+    d[1] = D.diag[1] * d[1]
+    for i in axes(dl,1)
+        dl[i] = D.diag[i+1] * dl[i]
+        du[i] = D.diag[i] * du[i]
+        d[i+1] = D.diag[i+1] * d[i+1]
+    end
+    return T
+end
 
 function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
     require_one_based_indexing(out, B)
@@ -820,7 +861,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
             evecs[p[i],i] = one(Td)
         end
     else
-        evecs = Matrix{Td}(I, size(D))
+        evecs = Diagonal(ones(Td, length(λ)))
     end
     Eigen(λ, evecs)
 end
@@ -924,6 +965,36 @@ function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
 end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
+
+function cholesky!(A::Diagonal, ::RowMaximum; tol=0.0, check=true)
+    if !ishermitian(A)
+        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
+                            tol, convert(BlasInt, -1))
+        check && checkpositivedefinite(convert(BlasInt, -1))
+    else
+        d = A.diag
+        n = length(d)
+        info = 0
+        rank = n
+        p = sortperm(d, rev = true, by = real)
+        tol = tol < 0 ? n*eps(eltype(A))*real(d[p[1]]) : tol # LAPACK behavior
+        permute!(d, p)
+        @inbounds for i in eachindex(d)
+            di = d[i]
+            rootdi, j = _cholpivoted!(di, tol)
+            if j == 0
+                d[i] = rootdi
+            else
+                rank = i - 1
+                info = 1
+                break
+            end
+        end
+        C = CholeskyPivoted(A, 'U', p, convert(BlasInt, rank), tol, convert(BlasInt, info))
+        check && chkfullrank(C)
+    end
+    return C
+end
 
 inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
 

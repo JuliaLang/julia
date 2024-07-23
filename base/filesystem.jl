@@ -141,7 +141,7 @@ import .Base:
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
     setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize,
-    isexecutable, isreadable, iswritable
+    isexecutable, isreadable, iswritable, MutableDenseArrayType
 
 import .Base.RefValue
 
@@ -159,7 +159,7 @@ uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
 include("path.jl")
 include("stat.jl")
 include("file.jl")
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
+include(string(Base.BUILDROOT, "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
 
 ## Operations with File (fd) objects ##
 
@@ -309,7 +309,7 @@ bytesavailable(f::File) = max(0, filesize(f) - position(f)) # position can be > 
 
 eof(f::File) = bytesavailable(f) == 0
 
-function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
+function readbytes!(f::File, b::MutableDenseArrayType{UInt8}, nb=length(b))
     nr = min(nb, bytesavailable(f))
     if length(b) < nr
         resize!(b, nr)

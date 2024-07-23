@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
+using Test
+
 using Random
 using InteractiveUtils: code_llvm, code_native
 
@@ -200,7 +203,7 @@ let gf_err2
     @test_throws Expected gf_err2(code_typed)
     @test_throws Expected gf_err2(code_llvm)
     @test_throws Expected gf_err2(code_native)
-    @test gf_err_ref[] == 88
+    @test gf_err_ref[] < 1000
 end
 
 # issue #15043
@@ -377,3 +380,61 @@ let
     ir, _ = Base.code_ircode(f_unreachable, ()) |> only
     @test length(ir.cfg.blocks) == 1
 end
+
+# Test that `Core.CachedGenerator` works as expected
+struct Generator54916 <: Core.CachedGenerator end
+function (::Generator54916)(world::UInt, source::LineNumberNode, args...)
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(:doit54916, :func, :arg), Core.svec())
+    return stub(world, source, :(func(arg)))
+end
+@eval function doit54916(func, arg)
+    $(Expr(:meta, :generated, Generator54916()))
+    $(Expr(:meta, :generated_only))
+end
+@test doit54916(sin, 1) == sin(1)
+let mi = only(methods(doit54916)).specializations
+    ci = mi.cache::Core.CodeInstance
+    found = false
+    while true
+        if ci.owner === :uninferred && ci.inferred isa Core.CodeInfo
+            found = true
+            break
+        end
+        isdefined(ci, :next) || break
+        ci = ci.next
+    end
+    @test found
+end
+
+# Test that writing a bad cassette-style pass gives the expected error (#49715)
+function generator49715(world, source, self, f, tt)
+    tt = tt.parameters[1]
+    sig = Tuple{f, tt.parameters...}
+    mi = Base._which(sig; world)
+    error("oh no")
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(:methodinstance, :ctx, :x, :f), Core.svec())
+    stub(world, source, :(nothing))
+end
+@eval function doit49715(f, tt)
+    $(Expr(:meta, :generated, generator49715))
+    $(Expr(:meta, :generated_only))
+end
+@test_throws "oh no" doit49715(sin, Tuple{Int})
+
+# Test that the CodeInfo returned from generated function need not match the generator.
+function overdubbee54341(a, b)
+    a + b
+end
+const overdubee_codeinfo54341 = code_lowered(overdubbee54341, Tuple{Any, Any})[1]
+function overdub_generator54341(world::UInt, source::LineNumberNode, args...)
+    if length(args) != 2
+        :(error("Wrong number of arguments"))
+    else
+        return copy(overdubee_codeinfo54341)
+    end
+end
+@eval function overdub54341(args...)
+    $(Expr(:meta, :generated, overdub_generator54341))
+    $(Expr(:meta, :generated_only))
+end
+@test overdub54341(1, 2) == 3

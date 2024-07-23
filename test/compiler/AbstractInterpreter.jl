@@ -21,7 +21,7 @@ CC.transform_result_for_cache(::AbsIntOnlyInterp2, ::Core.MethodInstance, ::CC.W
 # OverlayMethodTable
 # ==================
 
-using Base.Experimental: @MethodTable, @overlay
+using Base.Experimental: @MethodTable, @overlay, @consistent_overlay
 
 # @overlay method with return type annotation
 @MethodTable RT_METHOD_DEF
@@ -31,8 +31,8 @@ using Base.Experimental: @MethodTable, @overlay
 end
 
 @newinterp MTOverlayInterp
-@MethodTable OverlayedMT
-CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OverlayedMT)
+@MethodTable OVERLAY_MT
+CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OVERLAY_MT)
 
 function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
     if interp.meta !== nothing
@@ -44,7 +44,7 @@ end
 
 struct StrangeSinError end
 strangesin(x) = sin(x)
-@overlay OverlayedMT strangesin(x::Float64) =
+@overlay OVERLAY_MT strangesin(x::Float64) =
     iszero(x) ? throw(StrangeSinError()) : x < 0 ? nothing : cos(x)
 
 # inference should use the overlayed method table
@@ -102,7 +102,7 @@ end |> only === Float64
 
 # not fully covered overlay method match
 overlay_match(::Any) = nothing
-@overlay OverlayedMT overlay_match(::Int) = missing
+@overlay OVERLAY_MT overlay_match(::Int) = missing
 @test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
@@ -134,11 +134,48 @@ Base.@assume_effects :total totalcall(f, args...) = f(args...)
     end
 end |> only === Nothing
 
+# override `:native_executable` to allow concrete-eval for overlay-ed methods
+function myfactorial(x::Int, raise)
+    res = 1
+    0 ≤ x < 20 || raise("x is too big")
+    Base.@assume_effects :terminates_locally while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+raise_on_gpu1(x) = error(x)
+@overlay OVERLAY_MT @noinline raise_on_gpu1(x) = #=do something with GPU=# error(x)
+raise_on_gpu2(x) = error(x)
+@consistent_overlay OVERLAY_MT @noinline raise_on_gpu2(x) = #=do something with GPU=# error(x)
+raise_on_gpu3(x) = error(x)
+@consistent_overlay OVERLAY_MT @noinline Base.@assume_effects :foldable raise_on_gpu3(x) = #=do something with GPU=# error_on_gpu(x)
+cpu_factorial(x::Int) = myfactorial(x, error)
+gpu_factorial1(x::Int) = myfactorial(x, raise_on_gpu1)
+gpu_factorial2(x::Int) = myfactorial(x, raise_on_gpu2)
+gpu_factorial3(x::Int) = myfactorial(x, raise_on_gpu3)
+
+@test Base.infer_effects(cpu_factorial, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_nonoverlayed
+@test Base.infer_effects(gpu_factorial1, (Int,); interp=MTOverlayInterp()) |> !Core.Compiler.is_nonoverlayed
+@test Base.infer_effects(gpu_factorial2, (Int,); interp=MTOverlayInterp()) |> Core.Compiler.is_consistent_overlay
+let effects = Base.infer_effects(gpu_factorial3, (Int,); interp=MTOverlayInterp())
+    # check if `@consistent_overlay` together works with `@assume_effects`
+    # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intetionally) undefined.
+    @test Core.Compiler.is_consistent_overlay(effects)
+    @test Core.Compiler.is_foldable(effects)
+end
+@test Base.infer_return_type(; interp=MTOverlayInterp()) do
+    Val(gpu_factorial2(3))
+end == Val{6}
+@test Base.infer_return_type(; interp=MTOverlayInterp()) do
+    Val(gpu_factorial3(3))
+end == Val{6}
+
 # GPUCompiler needs accurate inference through kwfunc with the overlay of `Core.throw_inexacterror`
 # https://github.com/JuliaLang/julia/issues/48097
 @newinterp Issue48097Interp
-@MethodTable Issue48097MT
-CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), Issue48097MT)
+@MethodTable ISSUE_48097_MT
+CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), ISSUE_48097_MT)
 CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
 function CC.concrete_eval_eligible(interp::Issue48097Interp,
     @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
@@ -150,19 +187,44 @@ function CC.concrete_eval_eligible(interp::Issue48097Interp,
     end
     return ret
 end
-@overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
+@overlay ISSUE_48097_MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
 issue48097(; kwargs...) = return 42
-@test_broken fully_eliminated(; interp=Issue48097Interp(), retval=42) do
+@test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
     issue48097(; a=1f0, b=1.0)
 end
 
+# https://github.com/JuliaLang/julia/issues/52938
+@newinterp Issue52938Interp
+@MethodTable ISSUE_52938_MT
+CC.method_table(interp::Issue52938Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), ISSUE_52938_MT)
+inner52938(x, types::Type, args...; kwargs...) = x
+outer52938(x) = @inline inner52938(x, Tuple{}; foo=Ref(42), bar=1)
+@test fully_eliminated(outer52938, (Any,); interp=Issue52938Interp(), retval=Argument(2))
+
+# https://github.com/JuliaGPU/CUDA.jl/issues/2241
+@newinterp Cuda2241Interp
+@MethodTable CUDA_2241_MT
+CC.method_table(interp::Cuda2241Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), CUDA_2241_MT)
+inner2241(f, types::Type, args...; kwargs...) = nothing
+function outer2241(f)
+    @inline inner2241(f, Tuple{}; foo=Ref(42), bar=1)
+    return nothing
+end
+# NOTE CUDA.jl overlays `throw_boundserror` in a way that causes effects, but these effects
+#      are ignored for this call graph at the `@assume_effects` annotation on `typejoin`.
+#      Here it's important to use `@consistent_overlay` to avoid tainting the `:nonoverlayed` bit.
+const cuda_kernel_state = Ref{Any}()
+@consistent_overlay CUDA_2241_MT @inline Base.throw_boundserror(A, I) =
+    (cuda_kernel_state[] = (A, I); error())
+@test fully_eliminated(outer2241, (Nothing,); interp=Cuda2241Interp(), retval=nothing)
+
 # Should not concrete-eval overlayed methods in semi-concrete interpretation
 @newinterp OverlaySinInterp
-@MethodTable OverlaySinMT
-CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OverlaySinMT)
+@MethodTable OVERLAY_SIN_MT
+CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OVERLAY_SIN_MT)
 overlay_sin1(x) = error("Not supposed to be called.")
-@overlay OverlaySinMT overlay_sin1(x) = cos(x)
-@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
+@overlay OVERLAY_SIN_MT overlay_sin1(x) = cos(x)
+@overlay OVERLAY_SIN_MT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
 let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
     end |> only |> first
@@ -170,7 +232,7 @@ let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
     oc = Core.OpaqueClosure(ir)
     @test oc() == cos(0.)
 end
-@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin1(x)
+@overlay OVERLAY_SIN_MT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin1(x)
 let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
     end |> only |> first
@@ -179,9 +241,9 @@ let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
     @test oc() == cos(0.)
 end
 _overlay_sin2(x) = error("Not supposed to be called.")
-@overlay OverlaySinMT _overlay_sin2(x) = cos(x)
+@overlay OVERLAY_SIN_MT _overlay_sin2(x) = cos(x)
 overlay_sin2(x) = _overlay_sin2(x)
-@overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin2(x)
+@overlay OVERLAY_SIN_MT Base.sin(x::Union{Float32,Float64}) = @noinline overlay_sin2(x)
 let ir = Base.code_ircode(; interp=OverlaySinInterp()) do
         sin(0.)
     end |> only |> first
@@ -418,75 +480,6 @@ end
 # to properly give error messages for basic kwargs...
 Core.eval(Core.Compiler, quote f(;a=1) = a end)
 @test_throws MethodError Core.Compiler.f(;b=2)
-
-# Custom lookup function
-# ======================
-
-# In the following test with `ConstInvokeInterp`, we use a custom lookup function that
-# uses const-prop'ed source if available, and check if LLVM emits code using it.
-
-using Core: MethodInstance, CodeInstance
-using Base: CodegenParams
-using InteractiveUtils
-
-@newinterp ConstInvokeInterp
-function CC.concrete_eval_eligible(interp::ConstInvokeInterp,
-    @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
-    ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter,
-        f::Any, result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
-    if ret === :semi_concrete_eval
-        return :none # disable semi-concrete interpretation
-    end
-    return ret
-end
-Base.@constprop :aggressive @noinline function custom_lookup_target(c::Bool, x::Int)
-    if c
-        y = sin(x)
-        z = nothing
-    else
-        y = cos(x)
-        z = missing
-    end
-    return y, z
-end
-custom_lookup_context(x::Int) = custom_lookup_target(true, x)
-
-const CONST_INVOKE_INTERP_WORLD = Base.get_world_counter()
-const CONST_INVOKE_INTERP = ConstInvokeInterp(; world=CONST_INVOKE_INTERP_WORLD)
-function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
-    for inf_result in CONST_INVOKE_INTERP.inf_cache
-        if inf_result.linfo === mi
-            if CC.any(inf_result.overridden_by_const)
-                return CodeInstance(CONST_INVOKE_INTERP, inf_result)
-            end
-        end
-    end
-    # XXX: This seems buggy, custom_lookup should probably construct the absint on demand.
-    return CC.getindex(CC.code_cache(CONST_INVOKE_INTERP), mi)
-end
-
-let # generate cache
-    code_typed(custom_lookup_context; world=CONST_INVOKE_INTERP_WORLD, interp=CONST_INVOKE_INTERP)
-
-    # check if the lookup function works as expected
-    target_mi = CC.specialize_method(only(methods(custom_lookup_target)), Tuple{typeof(custom_lookup_target),Bool,Int}, Core.svec())
-    target_ci = custom_lookup(target_mi, CONST_INVOKE_INTERP_WORLD, CONST_INVOKE_INTERP_WORLD)
-    @test target_ci.rettype == Tuple{Float64,Nothing} # constprop'ed source
-
-    raw = false
-    lookup = @cfunction(custom_lookup, Any, (Any,Csize_t,Csize_t))
-    params = CodegenParams(;
-        debug_info_kind=Cint(0),
-        debug_info_level=Cint(2),
-        safepoint_on_entry=raw,
-        gcstack_arg=raw,
-        lookup)
-    io = IOBuffer()
-    code_llvm(io, custom_lookup_target, (Bool,Int,); params)
-    s = String(take!(io))
-    @test  occursin("j_sin_", s)
-    @test !occursin("j_cos_", s)
-end
 
 # custom inferred data
 # ====================

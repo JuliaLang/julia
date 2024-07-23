@@ -1,6 +1,6 @@
-From 7ae19a08467254f0b3d7a513ef82651b283f38a9 Mon Sep 17 00:00:00 2001
+From 3af39d34f576890e7f1f3e97cc1cb45b4b76aa47 Mon Sep 17 00:00:00 2001
 From: Tim Besard <tim.besard@gmail.com>
-Date: Wed, 27 Sep 2023 12:51:59 +0000
+Date: Tue, 16 Jan 2024 09:49:21 -0800
 Subject: [PATCH] Revert "Fix unwinding of pre-linked libraries"
 
 This reverts commit a4014f33775321b4106a1134b89020a7774902dd,
@@ -13,7 +13,7 @@ which regresses unwinding on FreeBSD (JuliaLang/julia#51467).
  4 files changed, 8 insertions(+), 38 deletions(-)
 
 diff --git a/include/dwarf.h b/include/dwarf.h
-index dd9014b7..312166cd 100644
+index 4fd1dba0..3fc6bce2 100644
 --- a/include/dwarf.h
 +++ b/include/dwarf.h
 @@ -371,8 +371,6 @@ struct unw_debug_frame_list
@@ -38,7 +38,7 @@ index a26f2c99..c902ccd9 100644
        {
          unw_dyn_proc_info_t pi;
 diff --git a/src/dwarf/Gfind_proc_info-lsb.c b/src/dwarf/Gfind_proc_info-lsb.c
-index 8ead48f0..154e9b5a 100644
+index c11345e8..c701ccfb 100644
 --- a/src/dwarf/Gfind_proc_info-lsb.c
 +++ b/src/dwarf/Gfind_proc_info-lsb.c
 @@ -108,17 +108,13 @@ linear_search (unw_addr_space_t as, unw_word_t ip,
@@ -58,7 +58,7 @@ index 8ead48f0..154e9b5a 100644
    ei.image = NULL;
 -  *load_offset = 0;
  
-   ret = elf_w (load_debuglink) (file, &ei, is_local);
+   ret = elf_w (load_debuginfo) (file, &ei, is_local);
    if (ret != 0)
 @@ -193,20 +189,6 @@ load_debug_frame (const char *file, char **buf, size_t *bufsize, int is_local,
  #if defined(SHF_COMPRESSED)
@@ -78,7 +78,7 @@ index 8ead48f0..154e9b5a 100644
 -        break;
 -      }
 -
-   munmap(ei.image, ei.size);
+   mi_munmap(ei.image, ei.size);
    return 0;
  }
 @@ -259,7 +241,6 @@ locate_debug_info (unw_addr_space_t as, unw_word_t addr, unw_word_t segbase,
@@ -125,7 +125,7 @@ index 8ead48f0..154e9b5a 100644
      {
 -      e = lookup (table, table_len, ip - ip_base - di->load_offset);
 +      e = lookup (table, table_len, ip - ip_base);
-       if (e && &e[1] < &table[table_len / sizeof (unw_word_t)])
+       if (e && &e[1] < &table[table_len / sizeof (struct table_entry)])
 -	last_ip = e[1].start_ip_offset + ip_base + di->load_offset;
 +	last_ip = e[1].start_ip_offset + ip_base;
        else
@@ -171,10 +171,10 @@ index 8ead48f0..154e9b5a 100644
    pi->last_ip = last_ip;
  #else
 diff --git a/src/dwarf/Gfind_unwind_table.c b/src/dwarf/Gfind_unwind_table.c
-index fb20fea0..62feb26c 100644
+index a7c4dfd3..2b503ea9 100644
 --- a/src/dwarf/Gfind_unwind_table.c
 +++ b/src/dwarf/Gfind_unwind_table.c
-@@ -193,7 +193,6 @@ dwarf_find_unwind_table (struct elf_dyn_info *edi, unw_addr_space_t as,
+@@ -197,7 +197,6 @@ dwarf_find_unwind_table (struct elf_dyn_info *edi,
  
        edi->di_cache.start_ip = start_ip;
        edi->di_cache.end_ip = end_ip;
@@ -183,5 +183,5 @@ index fb20fea0..62feb26c 100644
        edi->di_cache.u.rti.name_ptr = 0;
        /* two 32-bit values (ip_offset/fde_offset) per table-entry: */
 -- 
-2.41.0
+2.43.0
 

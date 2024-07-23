@@ -1278,7 +1278,7 @@ JL_CALLABLE(jl_f_isdefined)
             order = jl_memory_order_unordered;
         if (order < jl_memory_order_unordered)
             jl_atomic_error("isdefined: module binding cannot be accessed non-atomically");
-        int bound = jl_boundp(m, s); // seq_cst always
+        int bound = jl_boundp(m, s, 1); // seq_cst always
         return bound ? jl_true : jl_false;
     }
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
@@ -1355,7 +1355,7 @@ JL_CALLABLE(jl_f_setglobal)
         jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
     else if (order >= jl_memory_order_seq_cst)
         jl_fence();
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
     jl_checked_assignment(b, mod, var, args[2]); // release store
     if (order >= jl_memory_order_seq_cst)
         jl_fence();
@@ -1384,27 +1384,6 @@ JL_CALLABLE(jl_f_get_binding_type)
     return ty;
 }
 
-JL_CALLABLE(jl_f_set_binding_type)
-{
-    JL_NARGS(set_binding_type!, 2, 3);
-    jl_module_t *m = (jl_module_t*)args[0];
-    jl_sym_t *s = (jl_sym_t*)args[1];
-    JL_TYPECHK(set_binding_type!, module, (jl_value_t*)m);
-    JL_TYPECHK(set_binding_type!, symbol, (jl_value_t*)s);
-    jl_value_t *ty = nargs == 2 ? (jl_value_t*)jl_any_type : args[2];
-    JL_TYPECHK(set_binding_type!, type, ty);
-    jl_binding_t *b = jl_get_binding_wr(m, s);
-    jl_value_t *old_ty = NULL;
-    if (jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty)) {
-        jl_gc_wb(b, ty);
-    }
-    else if (nargs != 2 && !jl_types_equal(ty, old_ty)) {
-        jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
-                  jl_symbol_name(m->name), jl_symbol_name(s));
-    }
-    return jl_nothing;
-}
-
 JL_CALLABLE(jl_f_swapglobal)
 {
     enum jl_memory_order order = jl_memory_order_release;
@@ -1420,7 +1399,7 @@ JL_CALLABLE(jl_f_swapglobal)
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("swapglobal!: module binding cannot be written non-atomically");
     // is seq_cst already, no fence needed
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
     return jl_checked_swap(b, mod, var, args[2]);
 }
 
@@ -1438,7 +1417,7 @@ JL_CALLABLE(jl_f_modifyglobal)
     JL_TYPECHK(modifyglobal!, symbol, (jl_value_t*)var);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("modifyglobal!: module binding cannot be written non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
     // is seq_cst already, no fence needed
     return jl_checked_modify(b, mod, var, args[2], args[3]);
 }
@@ -1467,7 +1446,7 @@ JL_CALLABLE(jl_f_replaceglobal)
         jl_atomic_error("replaceglobal!: module binding cannot be written non-atomically");
     if (failure_order == jl_memory_order_notatomic)
         jl_atomic_error("replaceglobal!: module binding cannot be accessed non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
     // is seq_cst already, no fence needed
     return jl_checked_replace(b, mod, var, args[2], args[3]);
 }
@@ -1496,7 +1475,7 @@ JL_CALLABLE(jl_f_setglobalonce)
         jl_atomic_error("setglobalonce!: module binding cannot be written non-atomically");
     if (failure_order == jl_memory_order_notatomic)
         jl_atomic_error("setglobalonce!: module binding cannot be accessed non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
     // is seq_cst already, no fence needed
     jl_value_t *old = jl_checked_assignonce(b, mod, var, args[2]);
     return old == NULL ? jl_true : jl_false;
@@ -2416,14 +2395,13 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_getglobal = add_builtin_func("getglobal", jl_f_getglobal);
     jl_builtin_setglobal = add_builtin_func("setglobal!", jl_f_setglobal);
     add_builtin_func("get_binding_type", jl_f_get_binding_type);
-    add_builtin_func("set_binding_type!", jl_f_set_binding_type);
     jl_builtin_swapglobal = add_builtin_func("swapglobal!", jl_f_swapglobal);
     jl_builtin_replaceglobal = add_builtin_func("replaceglobal!", jl_f_replaceglobal);
     jl_builtin_modifyglobal = add_builtin_func("modifyglobal!", jl_f_modifyglobal);
     jl_builtin_setglobalonce = add_builtin_func("setglobalonce!", jl_f_setglobalonce);
 
     // memory primitives
-    jl_builtin_memoryref = add_builtin_func("memoryref", jl_f_memoryref);
+    jl_builtin_memoryref = add_builtin_func("memoryrefnew", jl_f_memoryref);
     jl_builtin_memoryrefoffset = add_builtin_func("memoryrefoffset", jl_f_memoryrefoffset);
     jl_builtin_memoryrefget = add_builtin_func("memoryrefget", jl_f_memoryrefget);
     jl_builtin_memoryrefset = add_builtin_func("memoryrefset!", jl_f_memoryrefset);

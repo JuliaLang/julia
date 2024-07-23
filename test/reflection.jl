@@ -1296,3 +1296,5 @@ end
 
 @test Base.infer_return_type(code_lowered, (Any,)) == Vector{Core.CodeInfo}
 @test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
+
+@test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187
