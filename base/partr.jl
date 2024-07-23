@@ -22,10 +22,11 @@ const heaps_lock = [SpinLock(), SpinLock()]
 cong(max::UInt32) = iszero(max) ? UInt32(0) : jl_rand_ptls(max) + UInt32(1)
 
 function jl_rand_ptls(max::UInt32)
-    rngseed = Base.unsafe_load(Base.unsafe_convert(Ptr{UInt64}, Core.getptls()), 2) # TODO, less horrid
+    ptls = Base.unsafe_convert(Ptr{UInt64}, Core.getptls())
+    rngseed = Base.unsafe_load(ptls, 2)
     # one-extend unbias back to 64-bits
     val, seed = _cong(UInt64(max), rngseed)
-    Base.unsafe_store!(Base.unsafe_convert(Ptr{UInt64}, Core.getptls()), seed, 2)
+    Base.unsafe_store!(ptls, seed, 2)
     return val % UInt32
 end
 
