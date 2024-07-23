@@ -2198,7 +2198,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     // These will become MethodInstance references, but they start out as a list of
     // offsets into `s` for CodeInstances
-    jl_method_instance_t **linfos = (jl_method_instance_t**)&s->fptr_record->buf[0];
+    jl_code_instance_t **linfos = (jl_code_instance_t**)&s->fptr_record->buf[0];
     uint32_t clone_idx = 0;
     for (i = 0; i < img_fvars_max; i++) {
         reloc_t offset = *(reloc_t*)&linfos[i];
@@ -2213,7 +2213,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
             assert(jl_is_method(codeinst->def->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
-            linfos[i] = codeinst->def;     // now it's a MethodInstance
+            linfos[i] = codeinst;     // now it's a MethodInstance
             void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;

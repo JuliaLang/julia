@@ -1185,7 +1185,7 @@ typedef struct {
     char *func_name;
     char *file_name;
     int line;
-    jl_method_instance_t *linfo;
+    jl_code_instance_t *linfo;
     int fromC;
     int inlined;
 } jl_frame_t;
@@ -1780,7 +1780,7 @@ JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, arraylist_t *gvs);
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
-                                    jl_method_instance_t **linfos, size_t n);
+                                    jl_code_instance_t **linfos, size_t n);
 
 JL_DLLIMPORT void jl_init_codegen(void);
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
