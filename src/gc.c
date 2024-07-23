@@ -1248,7 +1248,7 @@ pagetable_t alloc_map;
 static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 {
     // Do not pass in `ptls` as argument. This slows down the fast path
-    // in pool_alloc significantly
+    // in small_alloc significantly
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
     pg->osize = p->osize;
@@ -1262,13 +1262,13 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 }
 
 // Size includes the tag and the tag is not cleared!!
-STATIC_INLINE jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset,
+STATIC_INLINE jl_value_t *jl_gc_small_alloc_inner(jl_ptls_t ptls, int offset,
                                           int osize)
 {
     // Use the pool offset instead of the pool address as the argument
     // to workaround a llvm bug.
     // Ref https://llvm.org/bugs/show_bug.cgi?id=27190
-    jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + pool_offset);
+    jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + offset);
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 #ifdef MEMDEBUG
     return jl_gc_big_alloc(ptls, osize, NULL);
@@ -1319,19 +1319,19 @@ STATIC_INLINE jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
     return jl_valueof(v);
 }
 
-// Instrumented version of jl_gc_pool_alloc_inner, called into by LLVM-generated code.
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset, int osize, jl_value_t* type)
+// Instrumented version of jl_gc_small_alloc_inner, called into by LLVM-generated code.
+JL_DLLEXPORT jl_value_t *jl_gc_small_alloc(jl_ptls_t ptls, int offset, int osize, jl_value_t* type)
 {
-    jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
+    jl_value_t *val = jl_gc_small_alloc_inner(ptls, offset, osize);
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);
     return val;
 }
 
-// This wrapper exists only to prevent `jl_gc_pool_alloc_inner` from being inlined into
-// its callers. We provide an external-facing interface for callers, and inline `jl_gc_pool_alloc_inner`
+// This wrapper exists only to prevent `jl_gc_small_alloc_inner` from being inlined into
+// its callers. We provide an external-facing interface for callers, and inline `jl_gc_small_alloc_inner`
 // into this. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset, int osize) {
-    return jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
+jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset, int osize) {
+    return jl_gc_small_alloc_inner(ptls, offset, osize);
 }
 
 int jl_gc_classify_pools(size_t sz, int *osize)
