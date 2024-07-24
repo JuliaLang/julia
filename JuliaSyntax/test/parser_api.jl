@@ -163,7 +163,7 @@ end
     catch exc
         @test exc isa JuliaSyntax.ParseError
         @test sprint(showerror, exc) == """
-            ParseError:
+            ParseError: some warnings detected:
             # Warning @ somefile.jl:1:2
             @(a)
             #└─┘ ── parenthesizing macro names is unnecessary"""
