@@ -3067,7 +3067,7 @@ end
 @inline function abstract_eval_basic_statement(interp::AbstractInterpreter,
     @nospecialize(stmt), pc_vartable::VarTable, frame::InferenceState)
     if isa(stmt, NewvarNode)
-        changes = StateUpdate(stmt.slot, VarState(Bottom, true), pc_vartable, false)
+        changes = StateUpdate(stmt.slot, VarState(Bottom, true), false)
         return BasicStmtChange(changes, nothing, Union{})
     elseif !isa(stmt, Expr)
         (; rt, exct) = abstract_eval_statement(interp, stmt, pc_vartable, frame)
@@ -3082,7 +3082,7 @@ end
         end
         lhs = stmt.args[1]
         if isa(lhs, SlotNumber)
-            changes = StateUpdate(lhs, VarState(rt, false), pc_vartable, false)
+            changes = StateUpdate(lhs, VarState(rt, false), false)
         elseif isa(lhs, GlobalRef)
             handle_global_assignment!(interp, frame, lhs, rt)
         elseif !isa(lhs, SSAValue)
@@ -3092,7 +3092,7 @@ end
     elseif hd === :method
         fname = stmt.args[1]
         if isa(fname, SlotNumber)
-            changes = StateUpdate(fname, VarState(Any, false), pc_vartable, false)
+            changes = StateUpdate(fname, VarState(Any, false), false)
         end
         return BasicStmtChange(changes, nothing, Union{})
     elseif (hd === :code_coverage_effect || (
@@ -3242,7 +3242,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     @goto branch
                 elseif isa(stmt, GotoIfNot)
                     condx = stmt.cond
-                    condxslot = ssa_def_slot(condx, frame)
+                    condslot = ssa_def_slot(condx, frame)
                     condt = abstract_eval_value(interp, condx, currstate, frame)
                     if condt === Bottom
                         ssavaluetypes[currpc] = Bottom
@@ -3250,10 +3250,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         @goto find_next_bb
                     end
                     orig_condt = condt
-                    if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condxslot, SlotNumber)
+                    if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condslot, SlotNumber)
                         # if this non-`Conditional` object is a slot, we form and propagate
                         # the conditional constraint on it
-                        condt = Conditional(condxslot, Const(true), Const(false))
+                        condt = Conditional(condslot, Const(true), Const(false))
                     end
                     condval = maybe_extract_const_bool(condt)
                     nothrow = (condval !== nothing) || ⊑(𝕃ᵢ, orig_condt, Bool)
@@ -3299,21 +3299,31 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         # We continue with the true branch, but process the false
                         # branch here.
                         if isa(condt, Conditional)
-                            else_change = conditional_change(𝕃ᵢ, currstate, condt.elsetype, condt.slot)
+                            else_change = conditional_change(𝕃ᵢ, currstate, condt, #=then_or_else=#false)
                             if else_change !== nothing
-                                false_vartable = stoverwrite1!(copy(currstate), else_change)
+                                elsestate = copy(currstate)
+                                stoverwrite1!(elsestate, else_change)
+                            elseif condslot isa SlotNumber
+                                elsestate = copy(currstate)
                             else
-                                false_vartable = currstate
+                                elsestate = currstate
                             end
-                            changed = update_bbstate!(𝕃ᵢ, frame, falsebb, false_vartable)
-                            then_change = conditional_change(𝕃ᵢ, currstate, condt.thentype, condt.slot)
+                            if condslot isa SlotNumber # refine the type of this conditional object itself for this else branch
+                                stoverwrite1!(elsestate, condition_object_change(currstate, condt, condslot, #=then_or_else=#false))
+                            end
+                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, elsestate)
+                            then_change = conditional_change(𝕃ᵢ, currstate, condt, #=then_or_else=#true)
+                            thenstate = currstate
                             if then_change !== nothing
-                                stoverwrite1!(currstate, then_change)
+                                stoverwrite1!(thenstate, then_change)
+                            end
+                            if condslot isa SlotNumber # refine the type of this conditional object itself for this then branch
+                                stoverwrite1!(thenstate, condition_object_change(currstate, condt, condslot, #=then_or_else=#true))
                             end
                         else
-                            changed = update_bbstate!(𝕃ᵢ, frame, falsebb, currstate)
+                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, currstate)
                         end
-                        if changed
+                        if else_changed
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             push!(W, falsebb)
                         end
@@ -3412,13 +3422,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     nothing
 end
 
-function conditional_change(𝕃ᵢ::AbstractLattice, state::VarTable, @nospecialize(typ), slot::Int)
-    vtype = state[slot]
+function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt::Conditional, then_or_else::Bool)
+    vtype = currstate[condt.slot]
     oldtyp = vtype.typ
-    if iskindtype(typ)
+    newtyp = then_or_else ? condt.thentype : condt.elsetype
+    if iskindtype(newtyp)
         # this code path corresponds to the special handling for `isa(x, iskindtype)` check
         # implemented within `abstract_call_builtin`
-    elseif ⊑(𝕃ᵢ, ignorelimited(typ), ignorelimited(oldtyp))
+    elseif ⊑(𝕃ᵢ, ignorelimited(newtyp), ignorelimited(oldtyp))
         # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
         # since we probably formed these types with `typesubstract`,
         # the comparison is likely simple
@@ -3428,9 +3439,18 @@ function conditional_change(𝕃ᵢ::AbstractLattice, state::VarTable, @nospecia
     if oldtyp isa LimitedAccuracy
         # typ is better unlimited, but we may still need to compute the tmeet with the limit
         # "causes" since we ignored those in the comparison
-        typ = tmerge(𝕃ᵢ, typ, LimitedAccuracy(Bottom, oldtyp.causes))
+        newtyp = tmerge(𝕃ᵢ, newtyp, LimitedAccuracy(Bottom, oldtyp.causes))
     end
-    return StateUpdate(SlotNumber(slot), VarState(typ, vtype.undef), state, true)
+    return StateUpdate(SlotNumber(condt.slot), VarState(newtyp, vtype.undef), true)
+end
+
+function condition_object_change(currstate::VarTable, condt::Conditional,
+                                 condslot::SlotNumber, then_or_else::Bool)
+    vtype = currstate[slot_id(condslot)]
+    newcondt = Conditional(condt.slot,
+        then_or_else ? condt.thentype : Union{},
+        then_or_else ? Union{} : condt.elsetype)
+    return StateUpdate(condslot, VarState(newcondt, vtype.undef), false)
 end
 
 # make as much progress on `frame` as possible (by handling cycles)
