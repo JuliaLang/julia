@@ -59,7 +59,7 @@ dimg  = randn(n)/2
     κ  = cond(a,1)
     @testset "(Automatic) Square LU decomposition" begin
         lua   = factorize(a)
-        @test_throws ErrorException lua.Z
+        @test_throws FieldError lua.Z
         l,u,p = lua.L, lua.U, lua.p
         ll,ul,pl = @inferred lu(a)
         @test ll * ul ≈ a[pl,:]
@@ -88,7 +88,7 @@ dimg  = randn(n)/2
         lud = @inferred lu(d)
         @test LinearAlgebra.issuccess(lud)
         @test @inferred(lu(lud)) == lud
-        @test_throws ErrorException lud.Z
+        @test_throws FieldError lud.Z
         @test lud.L*lud.U ≈ lud.P*Array(d)
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d
@@ -484,6 +484,19 @@ end
     lu(fill(Inf, 2, 2), check=false)
     LinearAlgebra.generic_lufact!(fill(NaN, 2, 2), check=false)
     LinearAlgebra.generic_lufact!(fill(Inf, 2, 2), check=false)
+end
+
+@testset "lu for empty matrices" begin
+    for T in (Float64, BigFloat)
+        A = fill(T(0.0), 0, 0)
+        v = fill(T(1.0), 0, 10)
+        @test A \ v ≈ lu(A) \ v
+        vt = permutedims(v)
+        @test vt / A ≈ vt / lu(A)
+        B = UpperTriangular(transpose(fill(complex(T(0.0)), 0, 0)'))
+        @test B \ v ≈ v
+        @test vt / B ≈ vt
+    end
 end
 
 end # module TestLU

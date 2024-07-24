@@ -43,7 +43,7 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 Some of the `.cpp` files form a group that compile to a single object.
 
 The difference between an intrinsic and a builtin is that a builtin is a first class function
-that can be used like any other Julia function.  An intrinsic can operate only on unboxed data,
+that can be used like any other Julia function. An intrinsic can operate only on unboxed data,
 and therefore its arguments must be statically typed.
 
 ### [Alias Analysis](@id LLVM-Alias-Analysis)
@@ -188,7 +188,7 @@ study it and the pass of interest in isolation.
 3. Pick out the IR at the point just before the pass of interest runs.
 4. Strip the debug metadata and fix up the TBAA metadata by hand.
 
-The last step is labor intensive.  Suggestions on a better way would be appreciated.
+The last step is labor intensive. Suggestions on a better way would be appreciated.
 
 ## The jlcall calling convention
 

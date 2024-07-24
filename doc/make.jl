@@ -3,7 +3,8 @@ Base.ACTIVE_PROJECT[] = nothing
 empty!(LOAD_PATH)
 push!(LOAD_PATH, @__DIR__, "@stdlib")
 empty!(DEPOT_PATH)
-pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
+push!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
+push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
 using Pkg
 Pkg.instantiate()
 
@@ -102,7 +103,14 @@ documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "
         isdir(package_root_dir) || mkpath(package_root_dir)
         package_root_dir => (remote, package_sha)
     end
-    Dict(remotes_list)
+    Dict(
+        # We also add the root of the repository to `remotes`, because we do not always build the docs in a
+        # checked out JuliaLang/julia repository. In particular, when building Julia from tarballs, there is no
+        # Git information available. And also the way the BuildKite CI is configured to check out the code means
+        # that in some circumstances the Git repository information is incorrect / no available via Git.
+        dirname(@__DIR__) => (Documenter.Remotes.GitHub("JuliaLang", "julia"), Base.GIT_VERSION_INFO.commit),
+        remotes_list...
+    )
 end
 
 # Check if we are building a PDF
@@ -156,6 +164,7 @@ Manual = [
     "manual/environment-variables.md",
     "manual/embedding.md",
     "manual/code-loading.md",
+    "manual/profile.md",
     "manual/stacktraces.md",
     "manual/performance-tips.md",
     "manual/workflow-tips.md",
@@ -190,12 +199,6 @@ BaseDocs = [
 ]
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
-
-Tutorials = [
-    "tutorials/creating-packages.md",
-    "tutorials/profile.md",
-    "tutorials/external.md",
-]
 
 DevDocs = [
     "Documentation of Julia's Internals" => [
@@ -255,7 +258,6 @@ const PAGES = [
     "Manual" => ["index.md", Manual...],
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Tutorials" => Tutorials,
     # Add "Release Notes" to devdocs
     "Developer Documentation" => [DevDocs..., hide("NEWS.md")],
 ]
@@ -266,7 +268,6 @@ const PAGES = [
     "Manual" => Manual,
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Tutorials" => Tutorials,
     "Developer Documentation" => DevDocs,
 ]
 end
@@ -365,6 +366,7 @@ else
         ansicolor = true,
         size_threshold = 800 * 2^10, # 800 KiB
         size_threshold_warn = 200 * 2^10, # the manual has quite a few large pages, so we warn at 200+ KiB only
+        inventory_version = VERSION,
     )
 end
 

@@ -95,7 +95,7 @@ function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
         bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
         # remove REPL-related frames from interactive printing
-        eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
+        eval_ind = findlast(frame -> !frame.from_c && startswith(String(frame.func), "__repl_entry"), bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
@@ -226,10 +226,9 @@ function incomplete_tag(ex::Expr)
 end
 incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 
-cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
     startup               = (opts.startupfile != 2)
-    global have_color     = (opts.color != 0) ? (opts.color == 1) : nothing # --color=on
+    global have_color     = colored_text(opts)
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -240,7 +239,7 @@ function exec_options(opts)
         if cmd_suppresses_program(cmd)
             arg_is_program = false
             repl = false
-        elseif cmd == 'L'
+        elseif cmd == 'L' || cmd == 'm'
             # nothing
         elseif cmd == 'B' # --bug-report
             # If we're doing a bug report, don't load anything else. We will
@@ -260,7 +259,7 @@ function exec_options(opts)
     # Load Distributed module only if any of the Distributed options have been specified.
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
-        let Distributed = require_stdlib(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
+        let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             Core.eval(MainInclude, :(const Distributed = $Distributed))
             Core.eval(Main, :(using Base.MainInclude.Distributed))
         end
@@ -292,6 +291,13 @@ function exec_options(opts)
         elseif cmd == 'E'
             invokelatest(show, Core.eval(Main, parse_input_line(arg)))
             println()
+        elseif cmd == 'm'
+            @eval Main import $(Symbol(arg)).main
+            if !should_use_main_entrypoint()
+                error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
+            end
+            return false
+
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode
@@ -412,7 +418,7 @@ end
 global active_repl
 
 # run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool)
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
     if !fallback_repl && interactive
         load_InteractiveUtils()
@@ -558,8 +564,7 @@ function repl_main(_)
 
     quiet                 = (opts.quiet != 0)
     history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    return run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
+    return run_main_repl(interactiveinput, quiet, banner, history_file)
 end
 
 """
@@ -575,13 +580,13 @@ The `@main` macro may be used standalone or as part of the function definition, 
 case, parentheses are required. In particular, the following are equivalent:
 
 ```
-function (@main)(ARGS)
+function (@main)(args)
     println("Hello World")
 end
 ```
 
 ```
-function main(ARGS)
+function main(args)
 end
 @main
 ```
@@ -594,7 +599,7 @@ imported into `Main`, it will be treated as an entrypoint in `Main`:
 ```
 module MyApp
     export main
-    (@main)(ARGS) = println("Hello World")
+    (@main)(args) = println("Hello World")
 end
 using .MyApp
 # `julia` Will execute MyApp.main at the conclusion of script execution
@@ -604,7 +609,7 @@ Note that in particular, the semantics do not attach to the method
 or the name:
 ```
 module MyApp
-    (@main)(ARGS) = println("Hello World")
+    (@main)(args) = println("Hello World")
 end
 const main = MyApp.main
 # `julia` Will *NOT* execute MyApp.main unless there is a separate `@main` annotation in `Main`
@@ -615,11 +620,11 @@ const main = MyApp.main
 """
 macro main(args...)
     if !isempty(args)
-        error("USAGE: `@main` is expected to be used as `(@main)` without macro arguments.")
+        error("`@main` is expected to be used as `(@main)` without macro arguments.")
     end
     if isdefined(__module__, :main)
         if Base.binding_module(__module__, :main) !== __module__
-            error("USAGE: Symbol `main` is already a resolved import in module $(__module__). `@main` must be used in the defining module.")
+            error("Symbol `main` is already a resolved import in module $(__module__). `@main` must be used in the defining module.")
         end
     end
     Core.eval(__module__, quote

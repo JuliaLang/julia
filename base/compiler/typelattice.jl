@@ -159,7 +159,6 @@ end
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
-    state::VarTable
     conditional::Bool
 end
 
@@ -722,28 +721,6 @@ function invalidate_slotwrapper(vt::VarState, changeid::Int, ignore_conditional:
         return VarState(newtyp, vt.undef)
     end
     return nothing
-end
-
-function stupdate!(lattice::AbstractLattice, state::VarTable, changes::StateUpdate)
-    changed = false
-    changeid = slot_id(changes.var)
-    for i = 1:length(state)
-        if i == changeid
-            newtype = changes.vtype
-        else
-            newtype = changes.state[i]
-        end
-        invalidated = invalidate_slotwrapper(newtype, changeid, changes.conditional)
-        if invalidated !== nothing
-            newtype = invalidated
-        end
-        oldtype = state[i]
-        if schanged(lattice, newtype, oldtype)
-            state[i] = smerge(lattice, oldtype, newtype)
-            changed = true
-        end
-    end
-    return changed
 end
 
 function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable)

@@ -18,11 +18,23 @@ the argument type may be fixed length even if the function is variadic.
     This interface is experimental and subject to change or removal without notice.
 """
 macro opaque(ex)
-    esc(Expr(:opaque_closure, ex))
+    esc(Expr(:opaque_closure, nothing, nothing, nothing, ex))
 end
 
 macro opaque(ty, ex)
-    esc(Expr(:opaque_closure, ty, ex))
+    if Base.isexpr(ty, :->)
+        (AT, body) = ty.args
+        filter!((n)->!isa(n, Core.LineNumberNode), body.args)
+        if !Base.isexpr(body, :block) || length(body.args) != 1
+            error("Opaque closure type must be specified in the form Tuple{T,U...}->RT")
+        end
+        RT = only(body.args)
+    else
+        error("Opaque closure type must be specified in the form Tuple{T,U...}->RT")
+    end
+    AT = (AT !== :_) ? AT : nothing
+    RT = (RT !== :_) ? RT : nothing
+    return esc(Expr(:opaque_closure, AT, RT, RT, ex))
 end
 
 # OpaqueClosure construction from pre-inferred CodeInfo/IRCode
@@ -58,22 +70,34 @@ end
 
 function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
                             isva::Bool = false,
-                            do_compile::Bool = true)
+                            slotnames::Union{Nothing,Vector{Symbol}}=nothing,
+                            kwargs...)
     # NOTE: we need ir.argtypes[1] == typeof(env)
     ir = Core.Compiler.copy(ir)
-    nargs = length(ir.argtypes)-1
+    # if the user didn't specify a definition MethodInstance or filename Symbol to use for the debuginfo, set a filename now
+    ir.debuginfo.def === nothing && (ir.debuginfo.def = :var"generated IR for OpaqueClosure")
+    nargtypes = length(ir.argtypes)
+    nargs = nargtypes-1
     sig = compute_oc_signature(ir, nargs, isva)
     rt = compute_ir_rettype(ir)
     src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-    src.slotnames = fill(:none, nargs+1)
-    src.slotflags = fill(zero(UInt8), length(ir.argtypes))
+    if slotnames === nothing
+        src.slotnames = fill(:none, nargtypes)
+    else
+        length(slotnames) == nargtypes || error("mismatched `argtypes` and `slotnames`")
+        src.slotnames = slotnames
+    end
+    src.slotflags = fill(zero(UInt8), nargtypes)
     src.slottypes = copy(ir.argtypes)
+    src.isva = isva
+    src.nargs = nargtypes
     src = Core.Compiler.ir_to_codeinf!(src, ir)
-    return generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; do_compile)
+    src.rettype = rt
+    return generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; kwargs...)
 end
 
-function Core.OpaqueClosure(src::CodeInfo, @nospecialize env...; rettype, sig, nargs, isva=false)
-    return generate_opaque_closure(sig, Union{}, rettype, src, nargs, isva, env...)
+function Core.OpaqueClosure(src::CodeInfo, @nospecialize env...; rettype, sig, nargs, isva=false, kwargs...)
+    return generate_opaque_closure(sig, Union{}, rettype, src, nargs, isva, env...; kwargs...)
 end
 
 function generate_opaque_closure(@nospecialize(sig), @nospecialize(rt_lb), @nospecialize(rt_ub),
@@ -81,8 +105,8 @@ function generate_opaque_closure(@nospecialize(sig), @nospecialize(rt_lb), @nosp
                                  mod::Module=@__MODULE__,
                                  lineno::Int=0,
                                  file::Union{Nothing,Symbol}=nothing,
-                                 isinferred::Bool=true,
-                                 do_compile::Bool=true)
+                                 do_compile::Bool=true,
+                                 isinferred::Bool=true)
     return ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint, Cint),
         sig, rt_lb, rt_ub, mod, src, lineno, file, nargs, isva, env, do_compile, isinferred)
 end

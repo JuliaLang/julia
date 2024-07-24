@@ -51,6 +51,11 @@ end
 
 Return the file descriptor backing the stream or file. Note that this function only applies
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+
+File descriptors should typically be represented as [`RawFD`](@ref) objects, rather
+than as `Int`s, to ensure that they are properly interpreted by Julia functions.
+
+Note that `RawFD` objects can be passed directly to other languages via the `ccall` interface.
 """
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
@@ -292,12 +297,15 @@ function open(fname::String; lock = true,
     if !lock
         s._dolock = false
     end
-    systemerror("opening file $(repr(fname))",
-                ccall(:ios_file, Ptr{Cvoid},
-                      (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
+    if ccall(:ios_file, Ptr{Cvoid},
+             (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+             s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL
+        systemerror("opening file $(repr(fname))")
+    end
     if flags.append
-        systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
+        if ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
+            systemerror("seeking to end of file $fname")
+        end
     end
     return s
 end
@@ -446,8 +454,8 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
-    delim ≤ '\x7f' ? readuntil_string(s, delim % UInt8, keep) :
-    String(unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
+    isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
+    String(_unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
@@ -483,9 +491,7 @@ function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
     return out
 end
 
-function readbytes_all!(s::IOStream,
-                        b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                        nb::Integer)
+function readbytes_all!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = lb = length(b)
     nr = 0
     let l = s._dolock, slock = s.lock
@@ -513,9 +519,7 @@ function readbytes_all!(s::IOStream,
     return nr
 end
 
-function readbytes_some!(s::IOStream,
-                         b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                         nb::Integer)
+function readbytes_some!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = length(b)
     if nb > olb
         resize!(b, nb)
@@ -544,10 +548,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 `read` call is performed, and the amount of data returned is device-dependent. Note that not
 all stream types support the `all` option.
 """
-function readbytes!(s::IOStream,
-                    b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                    nb=length(b);
-                    all::Bool=true)
+function readbytes!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 

@@ -43,7 +43,7 @@ struct FinalLowerGC: private JuliaPassContext {
 
 private:
     Function *queueRootFunc;
-    Function *poolAllocFunc;
+    Function *smallAllocFunc;
     Function *bigAllocFunc;
     Function *allocTypedFunc;
     Instruction *pgcstack;
@@ -103,9 +103,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     IRBuilder<> builder(target);
     StoreInst *inst = builder.CreateAlignedStore(
                 ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
-                builder.CreateBitCast(
-                        builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0, "frame.nroots"),
-                        T_size->getPointerTo(), "frame.nroots"), // GEP of 0 becomes a noop and eats the name
+                builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0, "frame.nroots"),// GEP of 0 becomes a noop and eats the name
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(F.getContext());
@@ -118,7 +116,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     builder.CreateAlignedStore(
             gcframe,
-            builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
+            pgcstack,
             Align(sizeof(void*)));
     target->eraseFromParent();
 }
@@ -136,8 +134,7 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
         inst,
-        builder.CreateBitCast(pgcstack,
-            PointerType::get(T_prjlvalue, 0)),
+        pgcstack,
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     target->eraseFromParent();
@@ -205,13 +202,13 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         else {
             auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
             auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-            newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize, type });
+            newI = builder.CreateCall(smallAllocFunc, { ptls, pool_offs, pool_osize, type });
             if (sz > 0)
                 derefBytes = sz;
         }
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
-        size = builder.CreateAdd(size, ConstantInt::get(T_size, sizeof(void*)));
+        // allocTypedFunc does not include the type tag in the allocation size!
         newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
         derefBytes = sizeof(void*);
     }
@@ -241,7 +238,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     }
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
-    poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
+    smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
     T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());

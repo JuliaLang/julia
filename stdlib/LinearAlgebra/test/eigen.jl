@@ -80,7 +80,7 @@ aimg  = randn(n,n)/2
             @test eigvecs(asym_sg, ASG2) == f.vectors
             @test eigvals(f) === f.values
             @test eigvecs(f) === f.vectors
-            @test_throws ErrorException f.Z
+            @test_throws FieldError f.Z
 
             d,v = eigen(asym_sg, ASG2)
             @test d == f.values
@@ -141,7 +141,7 @@ aimg  = randn(n,n)/2
             @test f.values ≈ eigvals(a1_nsg, a2_nsg; sortby = sortfunc)
             @test prod(f.values) ≈ prod(eigvals(a1_nsg/a2_nsg, sortby = sortfunc)) atol=50000ε
             @test eigvecs(a1_nsg, a2_nsg; sortby = sortfunc) == f.vectors
-            @test_throws ErrorException f.Z
+            @test_throws FieldError f.Z
 
             g = eigen(a1_nsg, Diagonal(1:n1))
             @test a1_nsg*g.vectors ≈ (Diagonal(1:n1)*g.vectors) * Diagonal(g.values)
@@ -212,10 +212,22 @@ end
 end
 
 @testset "equality of eigen factorizations" begin
-    A = randn(3, 3)
-    @test eigen(A) == eigen(A)
-    @test hash(eigen(A)) == hash(eigen(A))
-    @test isequal(eigen(A), eigen(A))
+    A1 = Float32[1 0; 0 2]
+    A2 = Float64[1 0; 0 2]
+    EA1 = eigen(A1)
+    EA2 = eigen(A2)
+    @test EA1 == EA2
+    @test hash(EA1) == hash(EA2)
+    @test isequal(EA1, EA2)
+
+    # trivial RHS to ensure that values match exactly
+    B1 = Float32[1 0; 0 1]
+    B2 = Float64[1 0; 0 1]
+    EA1B1 = eigen(A1, B1)
+    EA2B2 = eigen(A2, B2)
+    @test EA1B1 == EA2B2
+    @test hash(EA1B1) == hash(EA2B2)
+    @test isequal(EA1B1, EA2B2)
 end
 
 @testset "Float16" begin

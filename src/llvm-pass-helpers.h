@@ -60,6 +60,7 @@ struct JuliaPassContext {
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
+    llvm::Function *pop_handler_noexcept_func;
     llvm::Function *call_func;
     llvm::Function *call2_func;
     llvm::Function *call3_func;
@@ -146,8 +147,8 @@ namespace jl_well_known {
     // `jl_gc_big_alloc`: allocates bytes.
     extern const WellKnownFunctionDescription GCBigAlloc;
 
-    // `jl_gc_pool_alloc`: allocates bytes.
-    extern const WellKnownFunctionDescription GCPoolAlloc;
+    // `jl_gc_small_alloc`: allocates bytes.
+    extern const WellKnownFunctionDescription GCSmallAlloc;
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;

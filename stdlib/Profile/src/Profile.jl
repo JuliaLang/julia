@@ -23,8 +23,8 @@ Profiling support.
 module Profile
 
 global print
-public @profile,
-    clear,
+export @profile
+public clear,
     print,
     fetch,
     retrieve,
@@ -43,8 +43,6 @@ const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cyc
 
 # deprecated functions: use `getdict` instead
 lookup(ip::UInt) = lookup(convert(Ptr{Cvoid}, ip))
-
-export @profile
 
 """
     @profile
@@ -282,7 +280,7 @@ function print(io::IO,
                     nl = length(threadids) > 1 ? "\n" : ""
                     printstyled(io, "Task $(Base.repr(taskid))$nl"; bold=true, color=Base.debug_color())
                     for threadid in threadids
-                        printstyled(io, " Thread $threadid "; bold=true, color=Base.info_color())
+                        printstyled(io, " Thread $threadid ($(Threads.threadpooldescription(threadid))) "; bold=true, color=Base.info_color())
                         nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
@@ -298,7 +296,7 @@ function print(io::IO,
                     any_nosamples = true
                 else
                     nl = length(taskids) > 1 ? "\n" : ""
-                    printstyled(io, "Thread $threadid$nl"; bold=true, color=Base.info_color())
+                    printstyled(io, "Thread $threadid ($(Threads.threadpooldescription(threadid)))$nl"; bold=true, color=Base.info_color())
                     for taskid in taskids
                         printstyled(io, " Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
                         nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
@@ -322,7 +320,7 @@ function print(io::IO,
             threadids = intersect(get_thread_ids(data), threads)
             isempty(threadids) && (any_nosamples = true)
             for threadid in threadids
-                printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
+                printstyled(io, "Thread $threadid ($(Threads.threadpooldescription(threadid))) "; bold=true, color=Base.info_color())
                 nosamples = print_group(io, data, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
                 println(io)
@@ -1288,6 +1286,7 @@ function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; strea
         prefix = filepath
         _stream_heap_snapshot(prefix, all_one)
         Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
+        Profile.HeapSnapshot.cleanup_streamed_files(prefix)
     end
     return filepath
 end

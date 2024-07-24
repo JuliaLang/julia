@@ -12,8 +12,6 @@ Sys.__init_build()
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
-Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
-import .FakePTYs: open_fake_pty
 using Base.Meta
 
 ## Debugging options
@@ -39,6 +37,17 @@ precompile(Base.unsafe_string, (Ptr{Int8},))
 # loading.jl
 precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
 precompile(Base._require, (Base.PkgId, Nothing))
+precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
+precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+
+# Pkg loading
+precompile(Tuple{typeof(Base.Filesystem.normpath), String, String, Vararg{String}})
+precompile(Tuple{typeof(Base.append!), Array{String, 1}, Array{String, 1}})
+precompile(Tuple{typeof(Base.join), Array{String, 1}, Char})
+precompile(Tuple{typeof(Base.getindex), Base.Dict{Any, Any}, Char})
+precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, Char})
+precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Base.Dict{String, String}}}, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Array{String, 1}}}, Base.Dict{String, Any}})
 
 # REPL
 precompile(isequal, (String, String))
@@ -67,6 +76,10 @@ precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
 precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
 precompile(Tuple{typeof(push!), Vector{Function}, Function})
 
+# preferences
+precompile(Base.get_preferences, (Base.UUID,))
+precompile(Base.record_compiletime_preference, (Base.UUID, String))
+
 # miscellaneous
 precompile(Tuple{typeof(Base.exit)})
 precompile(Tuple{typeof(Base.require), Base.PkgId})
@@ -84,6 +97,23 @@ precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, 
 precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
 precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 precompile(Tuple{typeof(Base.run_module_init), Module, Int})
+
+# precompilepkgs
+precompile(Tuple{typeof(Base.get), Type{Array{String, 1}}, Base.Dict{String, Any}, String})
+precompile(Tuple{typeof(Base.get), Type{Base.Dict{String, Any}}, Base.Dict{String, Any}, String})
+precompile(Tuple{typeof(Base.haskey), Base.Dict{String, Any}, String})
+precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Base.TTY, Bool}, Int, Int})
+precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Base.TTY, Bool}, Int})
+precompile(Tuple{typeof(Base.open), Base.CmdRedirect, String, Base.TTY})
+precompile(Tuple{typeof(Base.Precompilation.precompilepkgs)})
+precompile(Tuple{typeof(Base.Precompilation.printpkgstyle), Base.TTY, Symbol, String})
+precompile(Tuple{typeof(Base.rawhandle), Base.TTY})
+precompile(Tuple{typeof(Base.setindex!), Base.Dict{String, Array{String, 1}}, Array{String, 1}, String})
+precompile(Tuple{typeof(Base.setindex!), GenericMemory{:not_atomic, Union{Base.Libc.RawFD, Base.SyncCloseFD, IO}, Core.AddrSpace{Core}(0x00)}, Base.TTY, Int})
+precompile(Tuple{typeof(Base.setup_stdio), Base.TTY, Bool})
+precompile(Tuple{typeof(Base.spawn_opts_inherit), Base.DevNull, Base.TTY, Base.TTY})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:context,), Tuple{Base.TTY}}, typeof(Base.sprint), Function})
+precompile(Tuple{Type{Base.UUID}, Base.UUID})
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
@@ -91,39 +121,59 @@ for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base
     hardcoded_precompile_statements *= "precompile(Tuple{typeof(show), $IO, $T})\n"
 end
 
+# Precompiles for Revise and other packages
 precompile_script = """
-# NOTE: these were moved to the end of Base.jl. TODO: move back here.
-# # Used by Revise & its dependencies
-# while true  # force inference
-# delete!(push!(Set{Module}(), Base), Main)
-# m = first(methods(+))
-# delete!(push!(Set{Method}(), m), m)
-# empty!(Set())
-# push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
-# (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
-# (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
-# (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
-# (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
-# (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
-# Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
-# Dict(Base => [:(1+1)])[Base]
-# Dict(:one => [1])[:one]
-# Dict("abc" => Set())["abc"]
-# pushfirst!([], sum)
-# get(Base.pkgorigins, Base.PkgId(Base), nothing)
-# sort!([1,2,3])
-# unique!([1,2,3])
-# cumsum([1,2,3])
-# append!(Int[], BitSet())
-# isempty(BitSet())
-# delete!(BitSet([1,2]), 3)
-# deleteat!(Int32[1,2,3], [1,3])
-# deleteat!(Any[1,2,3], [1,3])
-# Core.svec(1, 2) == Core.svec(3, 4)
-# # copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(which(+, (Int, Int)), [Int, Int], Core.svec())))
-# any(t->t[1].line > 1, [(LineNumberNode(2,:none),:(1+1))])
-# break   # end force inference
-# end
+for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
+    m = match.method
+    delete!(push!(Set{Method}(), m), m)
+    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
+
+    empty!(Set())
+    push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
+    (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
+    (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
+    (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
+    (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
+    (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
+    Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
+    Dict(Base => [:(1+1)])[Base]
+    Dict(:one => [1])[:one]
+    Dict("abc" => Set())["abc"]
+    pushfirst!([], sum)
+    get(Base.pkgorigins, Base.PkgId(Base), nothing)
+    sort!([1,2,3])
+    unique!([1,2,3])
+    cumsum([1,2,3])
+    append!(Int[], BitSet())
+    isempty(BitSet())
+    delete!(BitSet([1,2]), 3)
+    deleteat!(Int32[1,2,3], [1,3])
+    deleteat!(Any[1,2,3], [1,3])
+    Core.svec(1, 2) == Core.svec(3, 4)
+    any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
+
+    # Code loading uses this
+    sortperm(mtime.(readdir(".")), rev=true)
+    # JLLWrappers uses these
+    Dict{Base.UUID,Set{String}}()[Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
+    get!(Set{String}, Dict{Base.UUID,Set{String}}(), Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
+    eachindex(IndexLinear(), Expr[])
+    push!(Expr[], Expr(:return, false))
+    vcat(String[], String[])
+    k, v = (:hello => nothing)
+
+    # Preferences uses these
+    get(Dict{String,Any}(), "missing", nothing)
+    delete!(Dict{String,Any}(), "missing")
+    for (k, v) in Dict{String,Any}()
+        println(k)
+    end
+
+    # interactive startup uses this
+    write(IOBuffer(), "")
+
+    break   # only actually need to do this once
+end
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -203,10 +253,10 @@ ansi_disablecursor = "\e[?25l"
 blackhole = Sys.isunix() ? "/dev/null" : "nul"
 procenv = Dict{String,Any}(
         "JULIA_HISTORY" => blackhole,
-        "JULIA_PROJECT" => nothing, # remove from environment
-        "JULIA_LOAD_PATH" => "@stdlib",
+        "JULIA_LOAD_PATH" => "@$(Sys.iswindows() ? ";" : ":")@stdlib",
         "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
         "TERM" => "",
+        # "JULIA_DEBUG" => "precompilation",
         "JULIA_FALLBACK_REPL" => "true")
 
 generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
@@ -243,24 +293,32 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         print_state("step1" => "R")
         # Also precompile a package here
         pkgname = "__PackagePrecompilationStatementModule"
-        mkpath(joinpath(prec_path, pkgname, "src"))
-        path = joinpath(prec_path, pkgname, "src", "$pkgname.jl")
-        write(path,
-              """
-              module $pkgname
-              end
-              """)
+        pkguuid = "824efdaf-a0e9-431c-8ee7-3d356b2531c2"
+        pkgpath = joinpath(prec_path, pkgname)
+        mkpath(joinpath(pkgpath, "src"))
+        write(joinpath(pkgpath, "src", "$pkgname.jl"),
+            """
+            module $pkgname
+            println("Precompiling $pkgname")
+            end
+            """)
+        write(joinpath(pkgpath, "Project.toml"),
+            """
+            name = "$pkgname"
+            uuid = "$pkguuid"
+            """)
+        touch(joinpath(pkgpath, "Manifest.toml"))
         tmp_prec = tempname(prec_path)
         tmp_proc = tempname(prec_path)
         s = """
-            pushfirst!(DEPOT_PATH, $(repr(prec_path)));
+            pushfirst!(DEPOT_PATH, $(repr(joinpath(prec_path,"depot"))));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
-            Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
+            Base.Precompilation.precompilepkgs(;fancyprint=true);
             $precompile_script
             """
         p = run(pipeline(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_proc --sysimage $sysimg
-                --cpu-target=native --startup-file=no --color=yes`, procenv),
-                 stdin=IOBuffer(s), stdout=debug_output))
+                --cpu-target=native --startup-file=no --color=yes --project=$(pkgpath)`, procenv),
+                 stdin=IOBuffer(s), stderr=debug_output, stdout=debug_output))
         n_step1 = 0
         for f in (tmp_prec, tmp_proc)
             isfile(f) || continue
@@ -314,9 +372,8 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             yield() # Make clock spinning
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
-            @show backtrace()
             # See #28808
-            @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
+            @warn "Failed to precompile expression" form=statement exception=(ex,catch_backtrace()) _module=nothing _file=nothing _line=0
         end
     end
     wait(clock) # Stop asynchronous printing
