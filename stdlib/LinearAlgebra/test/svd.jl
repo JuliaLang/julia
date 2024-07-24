@@ -75,7 +75,7 @@ aimg  = randn(n,n)/2
             @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ a
             @test convert(Array, usv) ≈ a
             @test usv.Vt' ≈ usv.V
-            @test_throws ErrorException usv.Z
+            @test_throws FieldError usv.Z
             b = rand(eltya,n)
             @test usv\b ≈ a\b
             @test Base.propertynames(usv) == (:U, :S, :V, :Vt)
@@ -94,7 +94,7 @@ aimg  = randn(n,n)/2
                 @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ transform(a)
                 @test convert(Array, usv) ≈ transform(a)
                 @test usv.Vt' ≈ usv.V
-                @test_throws ErrorException usv.Z
+                @test_throws FieldError usv.Z
                 b = rand(eltya,n)
                 @test usv\b ≈ transform(a)\b
             end
@@ -106,8 +106,8 @@ aimg  = randn(n,n)/2
             @test gsvd.U*gsvd.D1*gsvd.R*gsvd.Q' ≈ a
             @test gsvd.V*gsvd.D2*gsvd.R*gsvd.Q' ≈ a_svd
             @test usv.Vt' ≈ usv.V
-            @test_throws ErrorException usv.Z
-            @test_throws ErrorException gsvd.Z
+            @test_throws FieldError usv.Z
+            @test_throws FieldError gsvd.Z
             @test gsvd.vals ≈ svdvals(a,a_svd)
             α = eltya == Int ? -1 : rand(eltya)
             β = svd(α)
@@ -148,7 +148,7 @@ aimg  = randn(n,n)/2
             @test usv.U * (Diagonal(usv.S) * usv.Vt) ≈ T(asym)
             @test convert(Array, usv) ≈ T(asym)
             @test usv.Vt' ≈ usv.V
-            @test_throws ErrorException usv.Z
+            @test_throws FieldError usv.Z
             b = rand(eltya,n)
             @test usv\b ≈ T(asym)\b
         end
@@ -271,6 +271,27 @@ end
     @test B.U ≈ B32.U
     @test B.Vt ≈ B32.Vt
     @test B.S ≈ B32.S
+    C = Symmetric(A'A)
+    D = svd(C)
+    D32 = svd(Symmetric(Float32.(C)))
+    @test D isa SVD{Float16, Float16, Matrix{Float16}}
+    @test D.U isa Matrix{Float16}
+    @test D.Vt isa Matrix{Float16}
+    @test D.S isa Vector{Float16}
+    @test D.U ≈ D32.U
+    @test D.Vt ≈ D32.Vt
+    @test D.S ≈ D32.S
+    A = randn(ComplexF16, 3, 3)
+    E = Hermitian(A'A)
+    F = svd(E)
+    F32 = svd(Hermitian(ComplexF32.(E)))
+    @test F isa SVD{ComplexF16, Float16, Matrix{ComplexF16}, Vector{Float16}}
+    @test F.U isa Matrix{ComplexF16}
+    @test F.Vt isa Matrix{ComplexF16}
+    @test F.S isa Vector{Float16}
+    @test F.U ≈ F32.U
+    @test F.Vt ≈ F32.Vt
+    @test F.S ≈ F32.S
 end
 
 end # module TestSVD

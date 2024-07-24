@@ -333,6 +333,8 @@ struct PkgPrecompileError <: Exception
     msg::String
 end
 Base.showerror(io::IO, err::PkgPrecompileError) = print(io, err.msg)
+Base.showerror(io::IO, err::PkgPrecompileError, bt; kw...) = Base.showerror(io, err) # hide stacktrace
+
 # This needs a show method to make `julia> err` show nicely
 Base.show(io::IO, err::PkgPrecompileError) = print(io, "PkgPrecompileError: ", err.msg)
 
@@ -361,6 +363,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         manifest::Bool=false,)
 
     configs = configs isa Config ? [configs] : configs
+    requested_pkgs = copy(pkgs) # for understanding user intent
 
     time_start = time_ns()
 
@@ -382,10 +385,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     hascolor = get(io, :color, false)::Bool
     color_string(cstr::String, col::Union{Int64, Symbol}) = _color_string(cstr, col, hascolor)
 
-    direct_deps = [
-        Base.PkgId(uuid, name)
-        for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
-    ]
     stale_cache = Dict{StaleCacheKey, Bool}()
     exts = Dict{Base.PkgId, String}() # ext -> parent
     # make a flat map of each dep and its direct deps
@@ -399,14 +398,13 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         depsmap[pkg] = filter!(!Base.in_sysimage, deps)
         # add any extensions
         pkg_exts = Dict{Base.PkgId, Vector{Base.PkgId}}()
-        prev_ext = nothing
         for (ext_name, extdep_uuids) in env.extensions[dep]
             ext_deps = Base.PkgId[]
             push!(ext_deps, pkg) # depends on parent package
             all_extdeps_available = true
             for extdep_uuid in extdep_uuids
                 extdep_name = env.names[extdep_uuid]
-                if extdep_uuid in keys(env.deps) || Base.in_sysimage(Base.PkgId(extdep_uuid, extdep_name))
+                if extdep_uuid in keys(env.deps)
                     push!(ext_deps, Base.PkgId(extdep_uuid, extdep_name))
                 else
                     all_extdeps_available = false
@@ -414,13 +412,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                 end
             end
             all_extdeps_available || continue
-            if prev_ext isa Base.PkgId
-                # also make the exts depend on eachother sequentially to avoid race
-                push!(ext_deps, prev_ext)
-            end
             ext_uuid = Base.uuid5(pkg.uuid, ext_name)
             ext = Base.PkgId(ext_uuid, ext_name)
-            prev_ext = ext
             filter!(!Base.in_sysimage, ext_deps)
             depsmap[ext] = ext_deps
             exts[ext] = pkg.name
@@ -428,6 +421,59 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         end
         if !isempty(pkg_exts)
             pkg_exts_map[pkg] = collect(keys(pkg_exts))
+        end
+    end
+
+    direct_deps = [
+        Base.PkgId(uuid, name)
+        for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
+    ]
+
+    # consider exts of direct deps to be direct deps so that errors are reported
+    append!(direct_deps, keys(filter(d->last(d) in keys(env.project_deps), exts)))
+
+    # An extension effectively depends on another extension if it has all the the
+    # dependencies of that other extension
+    function expand_dependencies(depsmap)
+        function visit!(visited, node, all_deps)
+            if node in visited
+                return
+            end
+            push!(visited, node)
+            for dep in get(Set{Base.PkgId}, depsmap, node)
+                if !(dep in all_deps)
+                    push!(all_deps, dep)
+                    visit!(visited, dep, all_deps)
+                end
+            end
+        end
+
+        depsmap_transitive = Dict{Base.PkgId, Set{Base.PkgId}}()
+        for package in keys(depsmap)
+            # Initialize a set to keep track of all dependencies for 'package'
+            all_deps = Set{Base.PkgId}()
+            visited = Set{Base.PkgId}()
+            visit!(visited, package, all_deps)
+            # Update depsmap with the complete set of dependencies for 'package'
+            depsmap_transitive[package] = all_deps
+        end
+        return depsmap_transitive
+    end
+
+    depsmap_transitive = expand_dependencies(depsmap)
+
+    for (_, extensions_1) in pkg_exts_map
+        for extension_1 in extensions_1
+            deps_ext_1 = depsmap_transitive[extension_1]
+            for (_, extensions_2) in pkg_exts_map
+                for extension_2 in extensions_2
+                    extension_1 == extension_2 && continue
+                    deps_ext_2 = depsmap_transitive[extension_2]
+                    if issubset(deps_ext_2, deps_ext_1)
+                        push!(depsmap[extension_1], extension_2)
+                    end
+                end
+            end
         end
     end
 
@@ -745,10 +791,11 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     end
     @debug "precompile: starting precompilation loop" depsmap direct_deps
     ## precompilation loop
+
     for (pkg, deps) in depsmap
         cachepaths = Base.find_all_in_cache_path(pkg)
         sourcepath = Base.locate_package(pkg)
-        single_requested_pkg = length(pkgs) == 1 && only(pkgs) == pkg.name
+        single_requested_pkg = length(requested_pkgs) == 1 && only(requested_pkgs) == pkg.name
         for config in configs
             pkg_config = (pkg, config)
             if sourcepath === nothing
@@ -817,10 +864,11 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             end
                             loaded && (n_loaded += 1)
                         catch err
+                            # @show err
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
-                                failed_deps[pkg_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(get(std_outputs, pkg, ""))) : ""
+                                failed_deps[pkg_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(get(std_outputs, pkg_config, ""))) : ""
                                 delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
                                 !fancyprint && lock(print_lock) do
                                     println(io, " "^9, color_string("  ✗ ", Base.error_color()), name)
@@ -840,7 +888,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                     notify(was_processed[pkg_config])
                 catch err_outer
                     # For debugging:
-                    # println("Task failed $err_outer") # logging doesn't show here
+                    # println("Task failed $err_outer")
+                    # Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
                     handle_interrupt(err_outer) || rethrow()
                     notify(was_processed[pkg_config])
                 finally
@@ -943,7 +992,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                 end
             else
                 println(io)
-                error(err_msg)
+                throw(PkgPrecompileError(err_msg))
             end
         end
     end

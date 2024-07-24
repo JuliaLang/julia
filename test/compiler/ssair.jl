@@ -9,16 +9,6 @@ include("irutils.jl")
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
-function make_ci(code)
-    ci = (Meta.@lower 1 + 1).args[1]
-    ci.code = code
-    nstmts = length(ci.code)
-    ci.ssavaluetypes = nstmts
-    ci.codelocs = fill(Int32(1), nstmts)
-    ci.ssaflags = fill(Int32(0), nstmts)
-    return ci
-end
-
 # TODO: this test is broken
 #let code = Any[
 #        GotoIfNot(SlotNumber(2), 4),
@@ -501,7 +491,7 @@ let
 
     # this isn't valid code, we just care about looking at a variety of IR nodes
     body = Any[
-        Expr(:enter, 11),
+        EnterNode(11),
         Expr(:call, :+, SSAValue(3), 1),
         Expr(:throw_undef_if_not, :expected, false),
         Expr(:leave, Core.SSAValue(1)),
@@ -597,27 +587,6 @@ end
     @test length(ir.stmts) == instructions
 
     @test show(devnull, ir) === nothing
-end
-
-@testset "IncrementalCompact statefulness" begin
-    foo(i) = i == 1 ? 1 : 2
-    ir = only(Base.code_ircode(foo, (Int,)))[1]
-    compact = Core.Compiler.IncrementalCompact(ir)
-
-    # set up first iterator
-    x = Core.Compiler.iterate(compact)
-    x = Core.Compiler.iterate(compact, x[2])
-
-    # set up second iterator
-    x = Core.Compiler.iterate(compact)
-
-    # consume remainder
-    while x !== nothing
-        x = Core.Compiler.iterate(compact, x[2])
-    end
-
-    ir = Core.Compiler.complete(compact)
-    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # insert_node! operations
@@ -762,4 +731,89 @@ end
             end
         end
     end
+end
+
+# Test that things don't break if one branch of the frontend PhiNode becomes unreachable
+const global_error_switch_const1::Bool = false
+function gen_unreachable_phinode_edge1(world::UInt, source, args...)
+    ci = make_codeinfo(Any[
+        # block 1
+        GlobalRef(@__MODULE__, :global_error_switch_const1),
+        GotoIfNot(SSAValue(1), 4),
+        # block 2
+        Expr(:call, identity, Argument(3)),
+        # block 3
+        PhiNode(Int32[2, 3], Any[Argument(2), SSAValue(3)]),
+        ReturnNode(SSAValue(4))
+    ]; slottypes=Any[Any,Int,Int])
+    ci.slotnames = Symbol[:var"#self#", :x, :y]
+    ci.nargs = 3
+    ci.isva = false
+    return ci
+end
+@eval function f_unreachable_phinode_edge1(x, y)
+    $(Expr(:meta, :generated, gen_unreachable_phinode_edge1))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+@test f_unreachable_phinode_edge1(1, 2) == 1
+
+const global_error_switch_const2::Bool = true
+function gen_unreachable_phinode_edge2(world::UInt, source, args...)
+    ci = make_codeinfo(Any[
+        # block 1
+        GlobalRef(@__MODULE__, :global_error_switch_const2),
+        GotoIfNot(SSAValue(1), 4),
+        # block 2
+        Expr(:call, identity, Argument(3)),
+        # block 3
+        PhiNode(Int32[2, 3], Any[Argument(2), SSAValue(3)]),
+        ReturnNode(SSAValue(4))
+    ]; slottypes=Any[Any,Int,Int])
+    ci.slotnames = Symbol[:var"#self#", :x, :y]
+    ci.nargs = 3
+    ci.isva = false
+    return ci
+end
+@eval function f_unreachable_phinode_edge2(x, y)
+    $(Expr(:meta, :generated, gen_unreachable_phinode_edge2))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+@test f_unreachable_phinode_edge2(1, 2) == 2
+
+global global_error_switch::Bool = true
+function gen_must_throw_phinode_edge(world::UInt, source, _)
+    ci = make_codeinfo(Any[
+        # block 1
+        GlobalRef(@__MODULE__, :global_error_switch),
+        GotoIfNot(SSAValue(1), 4),
+        # block 2
+        Expr(:call, error, "This error is expected"),
+        # block 3
+        PhiNode(Int32[2, 3], Any[1, 2]),
+        ReturnNode(SSAValue(4))
+    ]; slottypes=Any[Any])
+    ci.slotnames = Symbol[:var"#self#"]
+    ci.nargs = 1
+    ci.isva = false
+    return ci
+end
+@eval function f_must_throw_phinode_edge()
+    $(Expr(:meta, :generated, gen_must_throw_phinode_edge))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+let ir = first(only(Base.code_ircode(f_must_throw_phinode_edge)))
+    @test !any(@nospecialize(x)->isa(x,PhiNode), ir.stmts.stmt)
+end
+@test_throws ErrorException f_must_throw_phinode_edge()
+global global_error_switch = false
+@test f_must_throw_phinode_edge() == 1
+
+# Test roundtrip of debuginfo compression
+let cl = Int32[32, 1, 1, 1000, 240, 230]
+    str = ccall(:jl_compress_codelocs, Any, (Int32, Any, Int), 378, cl, 2)::String;
+    cl2 = ccall(:jl_uncompress_codelocs, Any, (Any, Int), str, 2)
+    @test cl == cl2
 end

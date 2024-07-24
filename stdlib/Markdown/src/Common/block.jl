@@ -4,7 +4,7 @@
 # Paragraphs
 # ––––––––––
 
-mutable struct Paragraph
+mutable struct Paragraph <: MarkdownElement
     content
 end
 
@@ -39,7 +39,7 @@ end
 # Headers
 # –––––––
 
-mutable struct Header{level}
+mutable struct Header{level} <: MarkdownElement
     text
 end
 
@@ -95,7 +95,7 @@ end
 # Code
 # ––––
 
-mutable struct Code
+mutable struct Code <: MarkdownElement
     language::String
     code::String
 end
@@ -124,7 +124,7 @@ end
 # Footnote
 # --------
 
-mutable struct Footnote
+mutable struct Footnote <: MarkdownElement
     id::String
     text
 end
@@ -159,7 +159,7 @@ end
 # Quotes
 # ––––––
 
-mutable struct BlockQuote
+mutable struct BlockQuote <: MarkdownElement
     content
 end
 
@@ -188,7 +188,7 @@ end
 # Admonitions
 # -----------
 
-mutable struct Admonition
+mutable struct Admonition <: MarkdownElement
     category::String
     title::String
     content::Vector
@@ -246,7 +246,7 @@ end
 # Lists
 # –––––
 
-mutable struct List
+mutable struct List <: MarkdownElement
     items::Vector{Any}
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
     loose::Bool # TODO: Renderers should use this field
@@ -332,7 +332,7 @@ pushitem!(list, buffer) = push!(list.items, parse(String(take!(buffer))).content
 # HorizontalRule
 # ––––––––––––––
 
-mutable struct HorizontalRule
+mutable struct HorizontalRule <: MarkdownElement
 end
 
 function horizontalrule(stream::IO, block::MD)

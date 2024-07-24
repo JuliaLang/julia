@@ -12,8 +12,6 @@ Sys.__init_build()
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
-Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
-import .FakePTYs: open_fake_pty
 using Base.Meta
 
 ## Debugging options
@@ -171,7 +169,7 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
         println(k)
     end
 
-    # interactive statup uses this
+    # interactive startup uses this
     write(IOBuffer(), "")
 
     break   # only actually need to do this once

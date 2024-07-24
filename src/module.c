@@ -219,13 +219,16 @@ static void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 static jl_module_t *jl_binding_dbgmodule(jl_binding_t *b, jl_module_t *m, jl_sym_t *var) JL_GLOBALLY_ROOTED;
 
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var)
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
     jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
     if (b2 != b) {
-        if (b2 == NULL)
+        if (b2 == NULL) {
             check_safe_newbinding(m, var);
+            if (!alloc)
+                jl_errorf("Global %s.%s does not exist and cannot be assigned. Declare it using `global` before attempting assignment.", jl_symbol_name(m->name), jl_symbol_name(var));
+        }
         if (b2 != NULL || (!jl_atomic_cmpswap(&b->owner, &b2, b) && b2 != b)) {
             jl_module_t *from = jl_binding_dbgmodule(b, m, var);
             if (from == m)
@@ -678,10 +681,10 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
     b->exportp |= exported;
 }
 
-JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var) // unlike most queries here, this is currently seq_cst
+JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // unlike most queries here, this is currently seq_cst
 {
-    jl_binding_t *b = jl_get_binding(m, var);
-    return b && (jl_atomic_load(&b->value) != NULL);
+    jl_binding_t *b = allow_import ? jl_get_binding(m, var) : jl_get_module_binding(m, var, 0);
+    return b && (jl_atomic_load_relaxed(&b->owner) == b) && (jl_atomic_load(&b->value) != NULL);
 }
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
@@ -710,13 +713,15 @@ JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 
 static uint_t bindingkey_hash(size_t idx, jl_value_t *data)
 {
-    jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx);
+    jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx); // This must always happen inside the lock
     jl_sym_t *var = b->globalref->name;
     return var->hash;
 }
 
 static int bindingkey_eq(size_t idx, const void *var, jl_value_t *data, uint_t hv)
 {
+    if (idx >= jl_svec_len(data))
+        return 0; // We got a OOB access, probably due to a data race
     jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx);
     jl_sym_t *name = b->globalref->name;
     return var == name;
@@ -791,7 +796,7 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
-    jl_binding_t *bp = jl_get_binding_wr(m, var);
+    jl_binding_t *bp = jl_get_binding_wr(m, var, 0);
     jl_checked_assignment(bp, m, var, val);
 }
 
@@ -991,10 +996,19 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
     return (jl_value_t*)a;
 }
 
-JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
+uint8_t _binding_is_from_explicit_using(jl_binding_t *b) {
+    jl_binding_t *owner = jl_atomic_load_relaxed(&b->owner);
+    return (owner != NULL && owner != b && !b->imported);
+}
+
+void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
+    jl_array_grow_end(a, 1);
+    //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
+    jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)name);
+}
+
+void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings)
 {
-    jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
-    JL_GC_PUSH1(&a);
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
         jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
@@ -1003,15 +1017,39 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        if ((b->publicp ||
+        if (((b->publicp) ||
              (imported && b->imported) ||
+             (usings && _binding_is_from_explicit_using(b)) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || main_public))) &&
-            (all || (!b->deprecated && !hidden))) {
-            jl_array_grow_end(a, 1);
-            // n.b. change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
-            jl_array_ptr_set(a, jl_array_dim0(a)-1, (jl_value_t*)asname);
+            (all || (!b->deprecated && !hidden)))
+            _append_symbol_to_bindings_array(a, asname);
+    }
+}
+
+void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
+{
+    jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
+    for (size_t i = 0; i < jl_svec_len(table); i++) {
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
+        if ((void*)b == jl_nothing)
+            break;
+        if (b->exportp && (all || !b->deprecated))
+            _append_symbol_to_bindings_array(a, b->globalref->name);
+    }
+}
+
+JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int usings)
+{
+    jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
+    JL_GC_PUSH1(&a);
+    append_module_names(a, m, all, imported, usings);
+    if (usings) {
+        // If `usings` is specified, traverse the list of `using`-ed modules and incorporate
+        // the names exported by those modules into the list.
+        for(int i=(int)m->usings.len-1; i >= 0; --i) {
+            jl_module_t *usinged = module_usings_getidx(m, i);
+            append_exported_names(a, usinged, all);
         }
-        table = jl_atomic_load_relaxed(&m->bindings);
     }
     JL_GC_POP();
     return (jl_value_t*)a;

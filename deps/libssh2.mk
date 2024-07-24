@@ -11,6 +11,10 @@ endif
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
 		-DCMAKE_BUILD_TYPE=Release
 
+ifneq ($(fPIC),)
+LIBSSH2_OPTS += -DCMAKE_C_FLAGS="-fPIC"
+endif
+
 ifeq ($(OS),WINNT)
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=WinCNG -DENABLE_ZLIB_COMPRESSION=OFF
 ifeq ($(BUILD_OS),WINNT)
@@ -20,7 +24,7 @@ else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=OFF
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
@@ -45,12 +49,12 @@ $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extr
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) --build $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) test
+	$(CMAKE) --build $(dir $@) test
 endif
 	echo 1 > $@
 

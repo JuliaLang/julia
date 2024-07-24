@@ -475,6 +475,27 @@ void LLVMTrunc(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerP
     memcpy(pr, pa, onumbytes);
 }
 
+#if JL_LLVM_VERSION >= 170000
+extern "C" JL_DLLEXPORT
+unsigned countr_zero_8(uint8_t Val) {
+    return countr_zero(Val);
+}
+
+extern "C" JL_DLLEXPORT
+unsigned countr_zero_16(uint16_t Val) {
+    return countr_zero(Val);
+}
+
+extern "C" JL_DLLEXPORT
+unsigned countr_zero_32(uint32_t Val) {
+    return countr_zero(Val);
+}
+
+extern "C" JL_DLLEXPORT
+unsigned countr_zero_64(uint64_t Val) {
+    return countr_zero(Val);
+}
+#else
 extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_8(uint8_t Val) {
     return countTrailingZeros(Val);
@@ -494,6 +515,7 @@ extern "C" JL_DLLEXPORT
 unsigned countTrailingZeros_64(uint64_t Val) {
     return countTrailingZeros(Val);
 }
+#endif
 
 extern "C" JL_DLLEXPORT
 void jl_LLVMSMod(unsigned numbits, integerPart *pa, integerPart *pb, integerPart *pr) {
@@ -523,6 +545,37 @@ void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integer
         memcpy(pr, pa, numbytes);
 }
 
+#if JL_LLVM_VERSION >= 170000
+extern "C" JL_DLLEXPORT
+unsigned LLVMPopcount(unsigned numbits, integerPart *pa) {
+    CREATE(a)
+    return a.popcount();
+}
+
+extern "C" JL_DLLEXPORT
+unsigned LLVMCountr_one(unsigned numbits, integerPart *pa) {
+    CREATE(a)
+    return a.countr_one();
+}
+
+extern "C" JL_DLLEXPORT
+unsigned LLVMCountr_zero(unsigned numbits, integerPart *pa) {
+    CREATE(a)
+    return a.countr_zero();
+}
+
+extern "C" JL_DLLEXPORT
+unsigned LLVMCountl_one(unsigned numbits, integerPart *pa) {
+    CREATE(a)
+    return a.countl_one();
+}
+
+extern "C" JL_DLLEXPORT
+unsigned LLVMCountl_zero(unsigned numbits, integerPart *pa) {
+    CREATE(a)
+    return a.countl_zero();
+}
+#else
 extern "C" JL_DLLEXPORT
 unsigned LLVMCountPopulation(unsigned numbits, integerPart *pa) {
     CREATE(a)
@@ -552,3 +605,4 @@ unsigned LLVMCountLeadingZeros(unsigned numbits, integerPart *pa) {
     CREATE(a)
     return a.countLeadingZeros();
 }
+#endif

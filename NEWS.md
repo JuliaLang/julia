@@ -4,6 +4,18 @@ Julia v1.12 Release Notes
 New language features
 ---------------------
 
+- A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
+  find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
+- the `@atomic(...)` macro family supports now the reference assignment syntax, e.g.
+  `@atomic :monotonic v[3] += 4` modifies `v[3]` atomically with monotonic ordering semantics. ([#54707])
+  The supported syntax allows
+  - atomic fetch (`x = @atomic v[3]`),
+  - atomic set (`@atomic v[3] = 4`),
+  - atomic modify (`@atomic v[3] += 2`),
+  - atomic set once (`@atomiconce v[3] = 2`),
+  - atomic swap (`x = @atomicswap v[3] = 2`), and
+  - atomic replace (`x = @atomicreplace v[3] 2=>5`).
+
 Language changes
 ----------------
 
@@ -17,7 +29,7 @@ Language changes
    may pave the way for inference to be able to intelligently re-use the old
    results, once the new method is deleted. ([#53415])
 
- - Macro expansion will no longer eargerly recurse into into `Expr(:toplevel)`
+ - Macro expansion will no longer eagerly recurse into into `Expr(:toplevel)`
    expressions returned from macros. Instead, macro expansion of `:toplevel`
    expressions will be delayed until evaluation time. This allows a later
    expression within a given `:toplevel` expression to make use of macros
@@ -31,11 +43,19 @@ Compiler/Runtime improvements
   `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
   IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
 
+- A new exception `FieldError` is now introduced to raise/handle `getfield` exceptions. Previously `getfield` exception was captured by fallback generic exception `ErrorException`. Now that `FieldError` is more specific `getfield` related exceptions that can occur should use `FieldError` exception instead. ([#54504])
+
 Command-line option changes
 ---------------------------
 
 * The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
   This `main` function should be declared using `@main` to indicate that it is an entry point.
+* Enabling or disabling color text in Julia can now be controlled with the
+[`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
+variables. ([#53742]).
+* `--project=@temp` starts Julia with a temporary environment.
+* New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
+  to compile, in ms. ([#54662])
 
 Multi-threading changes
 -----------------------
@@ -49,6 +69,7 @@ New library functions
 * `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
+* `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
 
 New library features
 --------------------
@@ -82,6 +103,7 @@ Standard library changes
   is now guaranteed to be used for non-empty collections one or more times. This ensures that all calls
   to the reducing function `op` have one argument that is either `init` or the result from a
   previous `op` evaluation. Previously `init` was explicitly allowed to be omitted from the reduction entirely.
+* `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
 
 #### StyledStrings
 
@@ -90,6 +112,13 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+
+* `rank` can now take a `QRPivoted` matrix to allow rank estimation via QR factorization ([#54283]).
+* Added keyword argument `alg` to `eigen`, `eigen!`, `eigvals` and `eigvals!` for self-adjoint
+  matrix types (i.e., the type union `RealHermSymComplexHerm`) that allows one to switch
+  between different eigendecomposition algorithms ([#49355]).
+* Added a generic version of the (unblocked) pivoted Cholesky decomposition
+  (callable via `cholesky[!](A, RowMaximum())`) ([#54619]).
 
 #### Logging
 
@@ -100,6 +129,14 @@ Standard library changes
 #### Random
 
 #### REPL
+
+- Using the new `usings=true` feature of the `names()` function, REPL completions can now
+  complete names that have been explicitly `using`-ed. ([#54610])
+- REPL completions can now complete input lines like `[import|using] Mod: xxx|` e.g.
+  complete `using Base.Experimental: @op` to `using Base.Experimental: @opaque`. ([#54719])
+- the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
+  and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
+  in the REPL will now issue a warning the first time occurs. ([#54872])
 
 #### SuiteSparse
 

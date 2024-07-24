@@ -131,6 +131,13 @@ const XU = B * "}" * XB
 
         @test highlight_llvm("L7:\t\t; preds = %top") ==
             "$(L)L7:$(XL)\t\t$(C); preds = %top$(XC)\n"
+
+        @test highlight_llvm("  %\"box::GenericMemoryRef13\" = add i64 0, 0") ==
+            "  $(V)%\"box::GenericMemoryRef13\"$(XV) $EQU " *
+            "$(I)add$(XI) $(T)i64$(XT) $(N)0$(XN)$COM $(N)0$(XN)\n"
+
+        @test highlight_llvm("  \"label-as-string\":\t\t; preds = %top") ==
+            "  $(L)\"label-as-string\":$(XL)\t\t$(C); preds = %top$(XC)\n"
     end
     @testset "define" begin
         @test highlight_llvm("define double @julia_func_1234(float) {") ==

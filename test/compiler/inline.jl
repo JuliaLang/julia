@@ -1818,23 +1818,55 @@ let src = code_typed1((AtomicMemoryRef{Int},)) do a
     @test count(isinvokemodify(:+), src.code) == 1
 end
 
-
-
 # apply `ssa_inlining_pass` multiple times
-let interp = Core.Compiler.NativeInterpreter()
+func_mul_int(a::Int, b::Int) = Core.Intrinsics.mul_int(a, b)
+multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)
+let i::Int, continue_::Bool
+    interp = Core.Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
-    ir, = Base.code_ircode((Int,Int); optimize_until="inlining", interp) do a, b
-        @noinline a*b
-    end |> only
-    i = findfirst(isinvoke(:*), ir.stmts.stmt)
+    ir, = only(Base.code_ircode(multi_inlining1, (Int,Int); optimize_until="inlining", interp))
+    i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
-
-    # ok, now delete the callsite flag, and see the second inlining pass can inline the call
+    # now delete the callsite flag, and see the second inlining pass can inline the call
     @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
     inlining = Core.Compiler.InliningState(interp)
     ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
-    @test count(isinvoke(:*), ir.stmts.stmt) == 0
-    @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt) == 1
+    @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
+    @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
+    lins = Base.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
+    @test (continue_ = length(lins) == 2) # :multi_inlining1 -> :func_mul_int
+    if continue_
+        def1 = lins[1].method
+        @test def1 isa Core.MethodInstance && def1.def.name === :multi_inlining1
+        def2 = lins[2].method
+        @test def2 isa Core.MethodInstance && def2.def.name === :func_mul_int
+    end
+end
+
+call_func_mul_int(a::Int, b::Int) = @noinline func_mul_int(a, b)
+multi_inlining2(a::Int, b::Int) = call_func_mul_int(a, b)
+let i::Int, continue_::Bool
+    interp = Core.Compiler.NativeInterpreter()
+    # check if callsite `@noinline` annotation works
+    ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="inlining", interp))
+    i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
+    @test i !== nothing
+    # now delete the callsite flag, and see the second inlining pass can inline the call
+    @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
+    inlining = Core.Compiler.InliningState(interp)
+    ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
+    @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
+    @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
+    lins = Base.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
+    @test_broken (continue_ = length(lins) == 3) # see TODO in `ir_inline_linetable!`
+    if continue_
+        def1 = lins[1].method
+        @test def1 isa Core.MethodInstance && def1.def.name === :multi_inlining2
+        def2 = lins[2].method
+        @test def2 isa Core.MethodInstance && def2.def.name === :call_func_mul_int
+        def3 = lins[3].method
+        @test def3 isa Core.MethodInstance && def3.def.name === :call_func_mul_int
+    end
 end
 
 # Test special purpose inliner for Core.ifelse
@@ -2168,6 +2200,7 @@ issue52644(::UnionAll) = :UnionAll
 let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
         issue52644(t.tuple)
     end |> only |> first
+    ir.argtypes[1] = Tuple{}
     irfunc = Core.OpaqueClosure(ir)
     @test irfunc(Issue52644(Tuple{})) === :DataType
     @test irfunc(Issue52644(Tuple{<:Integer})) === :UnionAll
@@ -2176,6 +2209,7 @@ issue52644_single(x::DataType) = :DataType
 let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
         issue52644_single(t.tuple)
     end |> only |> first
+    ir.argtypes[1] = Tuple{}
     irfunc = Core.OpaqueClosure(ir)
     @test irfunc(Issue52644(Tuple{})) === :DataType
     @test_throws MethodError irfunc(Issue52644(Tuple{<:Integer}))

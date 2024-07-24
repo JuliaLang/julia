@@ -482,7 +482,7 @@ endif
 
 FC := $(CROSS_COMPILE)gfortran
 
-# Note: Supporting only macOS Yosemite and above
+# Note: Supporting only macOS Mojave and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 ifneq ($(APPLE_ARCH),arm64)
@@ -550,7 +550,17 @@ export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 endif
 endif
 
-JLDFLAGS :=
+# Conditional setting of RELRO flag for enhanced security on Linux builds.
+# RELRO (Read-Only Relocations) is a security feature that marks certain sections
+# of the binary as read-only to prevent exploitation techniques like
+# GOT (Global Offset Table) overwriting attacks.
+ifeq ($(OS),Linux)
+    RELRO_FLAG := -Wl,-z,relro
+else
+    RELRO_FLAG :=
+endif
+
+JLDFLAGS := $(RELRO_FLAG)
 
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
@@ -670,7 +680,7 @@ JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
 endif
 endif
 
-ifeq ($(OS), FreeBSD)
+ifneq ($(findstring $(OS),FreeBSD OpenBSD),)
 LOCALBASE ?= /usr/local
 else
 LOCALBASE ?= /usr
@@ -726,7 +736,7 @@ SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
-ifneq ($(findstring $(OS),Linux FreeBSD),)
+ifneq ($(findstring $(OS),Linux FreeBSD OpenBSD),)
 SANITIZE_LDFLAGS += -Wl,--warn-unresolved-symbols
 endif # OS Linux or FreeBSD
 endif # SANITIZE_MEMORY=1
@@ -1069,7 +1079,7 @@ JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
-ifeq ($(OS),Darwin)
+ifneq ($(findstring $(OS),Darwin OpenBSD),)
 LIBUNWIND:=-lunwind
 JCPPFLAGS+=-DLLVMLIBUNWIND
 else
@@ -1380,6 +1390,19 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expma
 	$(NO_WHOLE_ARCHIVE)
 endif
 
+ifeq ($(OS), OpenBSD)
+JLDFLAGS += -Wl,--Bdynamic
+ifneq ($(SANITIZE),1)
+JLDFLAGS += -Wl,-no-undefined
+endif
+
+JLIBLDFLAGS += -Wl,-Bsymbolic-functions
+
+OSLIBS += -Wl,--no-as-needed -lpthread -lm -lc++abi -lc
+OSLIBS += -Wl,--whole-archive -lcompiler_rt -Wl,--no-whole-archive
+OSLIBS += -Wl,--export-dynamic,--as-needed,--version-script=$(BUILDROOT)/src/julia.expmap
+endif
+
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
@@ -1393,7 +1416,7 @@ ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
-JLDFLAGS += -Wl,--stack,8388608
+JLDFLAGS += -Wl,--stack,8388608 --disable-auto-import --disable-runtime-pseudo-reloc
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
