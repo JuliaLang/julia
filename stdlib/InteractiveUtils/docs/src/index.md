@@ -34,4 +34,5 @@ InteractiveUtils.code_native
 InteractiveUtils.@code_native
 InteractiveUtils.@time_imports
 InteractiveUtils.clipboard
+InteractiveUtils.@repeat
 ```

@@ -150,6 +150,8 @@ Standard library changes
 #### DelimitedFiles
 
 #### InteractiveUtils
+- New `@repeat` macro for repeating a call either a number of times, or indefinitely, or while a given
+  expression returns `true`. i.e. `@time @repeat 1000 foo()`, `@repeat rand() > 0.5 foo()` ([#...])
 
 Deprecated or removed
 ---------------------

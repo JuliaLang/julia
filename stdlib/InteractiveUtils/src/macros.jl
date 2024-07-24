@@ -256,6 +256,36 @@ macro time_imports(ex)
     end
 end
 
+macro repeat(exs...)
+    if length(exs) == 1
+        quote
+            while true
+                $(esc(first(exs)))
+            end
+        end
+    elseif length(exs) == 2
+        terms = first(exs)
+        ex = last(exs)
+        if terms isa Expr || terms isa Bool
+            quote
+                while $(esc(terms))
+                    $(esc(ex))
+                end
+            end
+        elseif terms isa Integer
+            quote
+                for _ = 1:$(esc(terms))
+                    $(esc(ex))
+                end
+            end
+        else
+            throw(ArgumentError("@repeat first argument must be an Integer or an expression that returns a boolean"))
+        end
+    else
+        throw(ArgumentError("Too many arguments passed to @repeat"))
+    end
+end
+
 """
     @functionloc
 
@@ -409,3 +439,33 @@ julia> @time_imports using CSV
 
 """
 :@time_imports
+
+"""
+    @repeat call
+    @repeat n call
+    @repeat bool_expr call
+
+Repeat `call` indefinitely until interrupt or `n` times and discard the output.
+If an expression is given as a first argument it must return a `Bool` and
+repeats will occur until `false`.
+
+```julia-repl
+julia> @repeat println("Hello, World!")
+Hello, World!
+Hello, World!^C
+ERROR: InterruptException:
+...
+
+julia> @repeat 2 println("Hello, World!")
+Hello, World!
+Hello, World!
+
+julia> @repeat rand() > 0.5 println("Hello, World!")
+Hello, World!
+```
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@repeat
