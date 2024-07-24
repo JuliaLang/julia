@@ -94,6 +94,7 @@ New library features
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
+* `Lockable` is now exported ([#54595])
 
 Standard library changes
 ------------------------
