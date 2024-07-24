@@ -96,6 +96,24 @@ using Test, LinearAlgebra
             @test broadcast!(*, Z, X, Y) == broadcast(*, fX, fY)
         end
     end
+
+    @testset "type-stability in Bidiagonal" begin
+        B2 = @inferred (B -> .- B)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == -1 * B
+        B2 = @inferred (B -> B .* 2)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == B + B
+        B2 = @inferred (B -> 2 .* B)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == B + B
+        B2 = @inferred (B -> B ./ 1)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == B
+        B2 = @inferred (B -> 1 .\ B)(B)
+        @test B2 isa Bidiagonal
+        @test B2 == B
+    end
 end
 
 @testset "broadcast! where the destination is a structured matrix" begin
@@ -279,6 +297,15 @@ end
 
 # structured broadcast with function returning non-number type
 @test tuple.(Diagonal([1, 2])) == [(1,) (0,); (0,) (2,)]
+
+@testset "Broadcast with missing (#54467)" begin
+    select_first(x, y) = x
+    diag = Diagonal([1,2])
+    @test select_first.(diag, missing) == diag
+    @test select_first.(diag, missing) isa Diagonal{Int}
+    @test isequal(select_first.(missing, diag), fill(missing, 2, 2))
+    @test select_first.(missing, diag) isa Matrix{Missing}
+end
 
 @testset "broadcast over structured matrices with matrix elements" begin
     function standardbroadcastingtests(D, T)

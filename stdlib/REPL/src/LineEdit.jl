@@ -75,9 +75,10 @@ mutable struct MIState
     key_repeats::Int
     last_action::Symbol
     current_action::Symbol
+    async_channel::Channel{Function}
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none)
+MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -179,11 +180,11 @@ struct EmptyHistoryProvider <: HistoryProvider end
 
 reset_state(::EmptyHistoryProvider) = nothing
 
-complete_line(c::EmptyCompletionProvider, s) = String[], "", true
+complete_line(c::EmptyCompletionProvider, s; hint::Bool=false) = String[], "", true
 
 # complete_line can be specialized for only two arguments, when the active module
 # doesn't matter (e.g. Pkg does this)
-complete_line(c::CompletionProvider, s, ::Module) = complete_line(c, s)
+complete_line(c::CompletionProvider, s, ::Module; hint::Bool=false) = complete_line(c, s; hint)
 
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
@@ -380,7 +381,7 @@ function check_for_hint(s::MIState)
         # Requires making space for them earlier in refresh_multi_line
         return clear_hint(st)
     end
-    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
+    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return clear_hint(st)
     # Don't complete for single chars, given e.g. `x` completes to `xor`
     if length(partial) > 1 && should_complete
@@ -416,8 +417,8 @@ function clear_hint(s::ModeState)
     end
 end
 
-function complete_line(s::PromptState, repeats::Int, mod::Module)
-    completions, partial, should_complete = complete_line(s.p.complete, s, mod)::Tuple{Vector{String},String,Bool}
+function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false)
+    completions, partial, should_complete = complete_line(s.p.complete, s, mod; hint)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -2149,8 +2150,8 @@ setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
 setmodifiers!(c) = nothing
 
 # Search Mode completions
-function complete_line(s::SearchState, repeats, mod::Module)
-    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod)
+function complete_line(s::SearchState, repeats, mod::Module; hint::Bool=false)
+    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod; hint)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)
@@ -2309,7 +2310,7 @@ keymap_data(state, ::Union{HistoryPrompt, PrefixHistoryPrompt}) = state
 
 Base.isempty(s::PromptState) = s.input_buffer.size == 0
 
-on_enter(s::PromptState) = s.p.on_enter(s)
+on_enter(s::MIState) = state(s).p.on_enter(s)
 
 move_input_start(s::BufferLike) = (seek(buffer(s), 0); nothing)
 move_input_end(buf::IOBuffer) = (seekend(buf); nothing)
@@ -2822,44 +2823,61 @@ keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
 function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
     Base.reseteof(term)
+    l = Base.ReentrantLock()
+    t1 = Threads.@spawn :interactive while true
+        wait(s.async_channel)
+        status = @lock l begin
+            fcn = take!(s.async_channel)
+            fcn(s)
+        end
+        status ∈ (:ok, :ignore) || break
+    end
     raw!(term, true)
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
         old_state = mode(s)
-        while true
-            kmap = keymap(s, prompt)
-            fcn = match_input(kmap, s)
-            kdata = keymap_data(s, prompt)
-            s.current_action = :unknown # if the to-be-run action doesn't update this field,
-                                        # :unknown will be recorded in the last_action field
-            local status
-            # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
-            # try/catch block
-            try
-                status = fcn(s, kdata)
-            catch e
-                @error "Error in the keymap" exception=e,catch_backtrace()
-                # try to cleanup and get `s` back to its original state before returning
-                transition(s, :reset)
-                transition(s, old_state)
-                status = :done
-            end
-            status !== :ignore && (s.last_action = s.current_action)
-            if status === :abort
-                s.aborted = true
-                return buffer(s), false, false
-            elseif status === :done
-                return buffer(s), true, false
-            elseif status === :suspend
-                if Sys.isunix()
-                    return buffer(s), true, true
+        # spawn this because the main repl task is sticky (due to use of @async and _wait2)
+        # and we want to not block typing when the repl task thread is busy
+        t2 = Threads.@spawn :interactive while true
+            eof(term) || peek(term) # wait before locking but don't consume
+            @lock l begin
+                kmap = keymap(s, prompt)
+                fcn = match_input(kmap, s)
+                kdata = keymap_data(s, prompt)
+                s.current_action = :unknown # if the to-be-run action doesn't update this field,
+                                            # :unknown will be recorded in the last_action field
+                local status
+                # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
+                # try/catch block
+                try
+                    status = fcn(s, kdata)
+                catch e
+                    @error "Error in the keymap" exception=e,catch_backtrace()
+                    # try to cleanup and get `s` back to its original state before returning
+                    transition(s, :reset)
+                    transition(s, old_state)
+                    status = :done
                 end
-            else
-                @assert status ∈ (:ok, :ignore)
+                status !== :ignore && (s.last_action = s.current_action)
+                if status === :abort
+                    s.aborted = true
+                    return buffer(s), false, false
+                elseif status === :done
+                    return buffer(s), true, false
+                elseif status === :suspend
+                    if Sys.isunix()
+                        return buffer(s), true, true
+                    end
+                else
+                    @assert status ∈ (:ok, :ignore)
+                end
             end
         end
+        return fetch(t2)
     finally
+        put!(s.async_channel, Returns(:done))
+        wait(t1)
         raw!(term, false) && disable_bracketed_paste(term)
     end
     # unreachable

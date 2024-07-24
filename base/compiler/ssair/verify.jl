@@ -325,9 +325,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     error("")
                 end
             end
-        elseif isterminator(stmt) && idx != last(ir.cfg.blocks[bb].stmts)
-            @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
-            error("")
+        elseif isterminator(stmt)
+            if idx != last(ir.cfg.blocks[bb].stmts)
+                @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
+                error("")
+            end
+            if !isa(stmt, ReturnNode) && ir[SSAValue(idx)][:type] !== Any
+                @verify_error "Explicit terminators (other than ReturnNode) must have `Any` type"
+                error("")
+            end
         else
             isforeigncall = false
             if isa(stmt, Expr)
@@ -338,6 +344,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     if stmt.args[2] isa GlobalRef
                         # undefined GlobalRef as assignment RHS is OK
+                        continue
+                    end
+                elseif stmt.head === :isdefined
+                    if length(stmt.args) > 2 || (length(stmt.args) == 2 && !isa(stmt.args[2], Bool))
+                        @verify_error "malformed isdefined"
+                        error("")
+                    end
+                    if stmt.args[1] isa GlobalRef
+                        # undefined GlobalRef is OK in isdefined
                         continue
                     end
                 elseif stmt.head === :gc_preserve_end

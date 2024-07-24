@@ -116,7 +116,7 @@ end
 
 Julia Base uses this convention throughout and contains examples of functions
 with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref)), and others
-which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
+which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)). It
 is typical for such functions to also return the modified array for convenience.
 
 Functions related to IO or making use of random number generators (RNG) are notable exceptions:

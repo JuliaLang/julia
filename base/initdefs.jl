@@ -245,8 +245,14 @@ function init_load_path()
     if haskey(ENV, "JULIA_LOAD_PATH")
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
-        paths = filter!(env -> env !== nothing,
-            String[env == "@." ? current_project() : env for env in DEFAULT_LOAD_PATH])
+        paths = String[]
+        for env in DEFAULT_LOAD_PATH
+            if env == "@."
+                env = current_project()
+                env === nothing && continue
+            end
+            push!(paths, env)
+        end
     end
     append!(empty!(LOAD_PATH), paths)
 end
@@ -263,6 +269,7 @@ function init_active_project()
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
+cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 
 function load_path_expand(env::AbstractString)::Union{String, Nothing}
     # named environment?
@@ -271,19 +278,25 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@.` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
+        env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
-        if startswith(env, "@scriptdir")
+        if startswith(env, "@script")
             if @isdefined(PROGRAM_FILE)
                 dir = dirname(PROGRAM_FILE)
             else
-                cmds = unsafe_load_commands(opts.commands)
-                if any((cmd, arg)->cmd_suppresses_program(cmd), cmds)
+                cmds = unsafe_load_commands(JLOptions().commands)
+                if any(cmd::Pair{Char, String}->cmd_suppresses_program(first(cmd)), cmds)
                     # Usage error. The user did not pass a script.
                     return nothing
                 end
                 dir = dirname(ARGS[1])
             end
-            return abspath(replace(env, "@scriptdir" => dir))
+            if env == "@script"  # complete match, not startswith, so search upwards
+                return current_project(dir)
+            else
+                # starts with, so assume relative path is after
+                return abspath(replace(env, "@script" => dir))
+            end
         end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)

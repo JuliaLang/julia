@@ -202,7 +202,7 @@ DFS(blocks::Vector{BasicBlock}, is_post_dominator::Bool=false) = DFS!(DFSTree(0)
 """
 Keeps the per-BB state of the Semi NCA algorithm. In the original formulation,
 there are three separate length `n` arrays, `label`, `semi` and `ancestor`.
-Instead, for efficiency, we use one array in a array-of-structs style setup.
+Instead, for efficiency, we use one array in an array-of-structs style setup.
 """
 struct SNCAData
     semi::PreNumber
@@ -657,6 +657,8 @@ end
 Compute the nearest common (post-)dominator of `a` and `b`.
 """
 function nearest_common_dominator(domtree::GenericDomTree, a::BBNumber, b::BBNumber)
+    a == 0 && return a
+    b == 0 && return b
     alevel = domtree.nodes[a].level
     blevel = domtree.nodes[b].level
     # W.l.g. assume blevel <= alevel

@@ -27,6 +27,15 @@ throw
 
 ## native julia error handling ##
 
+# This is `Experimental.@max_methods 2 function error end`, which is not available at this point in bootstrap.
+# NOTE It is important to always be able to infer the return type of `error` as `Union{}`,
+# but there's a hitch when a package globally sets `@max_methods 1` and it causes inference
+# for `error(::Any)` to fail (JuliaLang/julia#54029).
+# This definition site `@max_methods 2` setting overrides any global `@max_methods 1` settings
+# on package side, guaranteeing that return type inference on `error` is successful always.
+function error end
+typeof(error).name.max_methods = UInt8(2)
+
 """
     error(message::AbstractString)
 
@@ -62,7 +71,7 @@ rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(@nospecialize(e)) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
-    code::Union{CodeInfo,Core.MethodInstance,Nothing}
+    code::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
     stmt::Csize_t
     mod::Union{Module,Nothing}
 end
@@ -87,7 +96,7 @@ function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Nothing}
+            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
             mod = njlvalues == 2 ? bt2[j+1]::Union{Module,Nothing} : nothing
             push!(ret, InterpreterIP(code, header, mod))
         else

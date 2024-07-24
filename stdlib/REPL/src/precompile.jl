@@ -58,6 +58,7 @@ $UP_ARROW$DOWN_ARROW$CTRL_C
 f(x) = x03
 f(1,2)
 [][1]
+Base.Iterators.minimum
 cd("complete_path\t\t$CTRL_C
 """
 
@@ -220,4 +221,8 @@ end
 generate_precompile_statements()
 
 precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+precompile(Tuple{typeof(Base.take!), Base.Channel{Function}})
+precompile(Tuple{typeof(Base.put!), Base.Channel{Function}, Function})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{names, T} where T<:Tuple where names, typeof(REPL.LineEdit.complete_line), REPL.LineEdit.EmptyCompletionProvider, Any})
+
 end # Precompile

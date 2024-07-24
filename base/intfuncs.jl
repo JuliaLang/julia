@@ -198,6 +198,7 @@ julia> gcdx(240, 46)
 """
 Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
     T = promote_type(typeof(a), typeof(b))
+    a == b == 0 && return (zero(T), zero(T), zero(T))
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
@@ -940,7 +941,8 @@ string(b::Bool) = b ? "true" : "false"
 """
     bitstring(n)
 
-A string giving the literal bit representation of a primitive type.
+A string giving the literal bit representation of a primitive type
+(in bigendian order, i.e. most-significant bit first).
 
 See also [`count_ones`](@ref), [`count_zeros`](@ref), [`digits`](@ref).
 
@@ -954,7 +956,7 @@ julia> bitstring(2.2)
 ```
 """
 function bitstring(x::T) where {T}
-    isprimitivetype(T) || throw(ArgumentError("$T not a primitive type"))
+    isprimitivetype(T) || throw(ArgumentError(LazyString(T, " not a primitive type")))
     sz = sizeof(T) * 8
     str = StringMemory(sz)
     i = sz
@@ -976,7 +978,7 @@ end
 
 Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indices, such that `n == sum(digits[k]*base^(k-1) for k=1:length(digits))`.
+higher indices, such that `n == sum(digits[k]*base^(k-1) for k in 1:length(digits))`.
 
 See also [`ndigits`](@ref), [`digits!`](@ref),
 and for base 2 also [`bitstring`](@ref), [`count_ones`](@ref).
@@ -1054,7 +1056,7 @@ julia> digits!([2, 2, 2, 2, 2, 2], 10, base = 2)
 function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
     2 <= abs(base) || throw(DomainError(base, "base must be ≥ 2 or ≤ -2"))
     hastypemax(T) && abs(base) - 1 > typemax(T) &&
-        throw(ArgumentError("type $T too small for base $base"))
+        throw(ArgumentError(LazyString("type ", T, " too small for base ", base)))
     isempty(a) && return a
 
     if base > 0
@@ -1203,6 +1205,7 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     end
     copysign(x, sgn)
 end
+binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
 
 """
     binomial(x::Number, k::Integer)

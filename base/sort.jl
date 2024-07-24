@@ -85,9 +85,16 @@ julia> issorted([1, 2, -2, 3], by=abs)
 true
 ```
 """
-issorted(itr;
-    lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-    issorted(itr, ord(lt,by,rev,order))
+function issorted(itr;
+        lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward)
+    # Explicit branching because the compiler can't optimize away the
+    # type instability of the `ord` call with Bool `rev` parameter.
+    if rev === true
+        issorted(itr, ord(lt, by, true, order))
+    else
+        issorted(itr, ord(lt, by, nothing, order))
+    end
+end
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
     # TODO move k from `alg` to `kw`
@@ -1732,7 +1739,7 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k; by=ientity, lt=isless, rev=false)
+    partialsortperm(v, k; by=identity, lt=isless, rev=false)
 
 Return a partial permutation `I` of the vector `v`, so that `v[I]` returns values of a fully
 sorted version of `v` at index `k`. If `k` is a range, a vector of indices is returned; if
@@ -2471,7 +2478,7 @@ function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
     @getkw lo hi scratch legacy_dispatch_entry
     if legacy_dispatch_entry === a
         # This error prevents infinite recursion for unknown algorithms
-        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o)), ::Any) is not defined"))
+        throw(ArgumentError(LazyString("Base.Sort._sort!(::", typeof(v), ", ::", typeof(a), ", ::", typeof(o), ", ::Any) is not defined")))
     else
         sort!(v, lo, hi, a, o)
         scratch

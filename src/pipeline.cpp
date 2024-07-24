@@ -189,10 +189,11 @@ namespace {
         // }
     }
 
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     static inline void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
-        if (!llvm_only)
-            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass()));
+        if (!llvm_only){
+            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass(true)));
+        }
         MPM.addPass(VerifierPass());
     }
 #endif
@@ -332,7 +333,7 @@ namespace {
 
 static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeEarlySimplificationMarkerPass());
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     addVerificationPasses(MPM, options.llvm_only);
 #endif
     if (options.enable_early_simplifications) {
@@ -608,7 +609,8 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
         if (O.getSpeedupLevel() >= 2) {
             buildVectorPipeline(FPM, PB, O, options);
         }
-        FPM.addPass(WarnMissedTransformationsPass());
+        if (options.warn_missed_transformations)
+            FPM.addPass(WarnMissedTransformationsPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
     buildIntrinsicLoweringPipeline(MPM, PB, O, options);
@@ -631,6 +633,7 @@ struct PipelineConfig {
     int enable_vector_pipeline;
     int remove_ni;
     int cleanup;
+    int warn_missed_transformations;
 };
 
 extern "C" JL_DLLEXPORT_CODEGEN void jl_build_newpm_pipeline_impl(void *MPM, void *PB, PipelineConfig* config) JL_NOTSAFEPOINT
@@ -671,7 +674,8 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_build_newpm_pipeline_impl(void *MPM, voi
                                         !!config->enable_loop_optimizations,
                                         !!config->enable_vector_pipeline,
                                         !!config->remove_ni,
-                                        !!config->cleanup});
+                                        !!config->cleanup,
+                                        !!config->warn_missed_transformations});
 }
 
 #undef JULIA_PASS
@@ -805,6 +809,17 @@ void NewPM::run(Module &M) {
 #else
     StandardInstrumentations SI(false);
 #endif
+#if JL_LLVM_VERSION >= 170000
+    PassInstrumentationCallbacks PIC;
+    adjustPIC(PIC);
+    TimePasses.registerCallbacks(PIC);
+    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
+    LoopAnalysisManager LAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+    SI.registerCallbacks(PIC, &MAM);
+    SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
+#else
     FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
@@ -814,6 +829,7 @@ void NewPM::run(Module &M) {
     LoopAnalysisManager LAM;
     CGSCCAnalysisManager CGAM;
     ModuleAnalysisManager MAM;
+#endif
     PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
     PB.registerLoopAnalyses(LAM);
     PB.registerFunctionAnalyses(FAM);
@@ -857,7 +873,8 @@ static Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJuliaPip
             OPTION(lower_intrinsics),
             OPTION(dump_native),
             OPTION(external_use),
-            OPTION(llvm_only)
+            OPTION(llvm_only),
+            OPTION(warn_missed_transformations)
 #undef OPTION
         };
         while (!name.empty()) {

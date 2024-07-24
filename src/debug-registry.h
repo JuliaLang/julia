@@ -99,18 +99,26 @@ public:
     };
 private:
 
-    struct ObjectInfo {
-        const llvm::object::ObjectFile *object = nullptr;
-        size_t SectionSize = 0;
-        ptrdiff_t slide = 0;
-        llvm::object::SectionRef Section{};
-        llvm::DIContext *context = nullptr;
+    struct LazyObjectInfo {
+        SmallVector<uint8_t, 0> data;
+        size_t uncompressedsize;
+        std::unique_ptr<const llvm::object::ObjectFile> object;
+        std::unique_ptr<llvm::DIContext> context;
+        LazyObjectInfo() = delete;
+    };
+
+    struct SectionInfo {
+        LazyObjectInfo *object;
+        size_t SectionSize;
+        ptrdiff_t slide;
+        uint64_t SectionIndex;
+        SectionInfo() = delete;
     };
 
     template<typename KeyT, typename ValT>
     using rev_map = std::map<KeyT, ValT, std::greater<KeyT>>;
 
-    typedef rev_map<size_t, ObjectInfo> objectmap_t;
+    typedef rev_map<size_t, SectionInfo> objectmap_t;
     typedef rev_map<uint64_t, objfileentry_t> objfilemap_t;
 
     objectmap_t objectmap{};

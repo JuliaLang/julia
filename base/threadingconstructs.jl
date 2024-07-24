@@ -67,7 +67,7 @@ function _tpid_to_sym(tpid::Int8)
     elseif tpid == -1
         return :foreign
     else
-        throw(ArgumentError("Unrecognized threadpool id $tpid"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool id ", tpid)))
     end
 end
 
@@ -79,7 +79,7 @@ function _sym_to_tpid(tp::Symbol)
     elseif tp == :foreign
         return Int8(-1)
     else
-        throw(ArgumentError("Unrecognized threadpool name `$tp`"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool name `", tp, "`")))
     end
 end
 
@@ -91,6 +91,24 @@ Returns the specified thread's threadpool; either `:default`, `:interactive`, or
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
     return _tpid_to_sym(tpid)
+end
+
+"""
+    Threads.threadpooldescription(tid = threadid()) -> String
+
+Returns the specified thread's threadpool name with extended description where appropriate.
+"""
+function threadpooldescription(tid = threadid())
+    threadpool_name = threadpool(tid)
+    if threadpool_name == :foreign
+        # TODO: extend tls to include a field to add a description to a foreign thread and make this more general
+        n_others = nthreads(:interactive) + nthreads(:default)
+        # Assumes GC threads come first in the foreign thread pool
+        if tid > n_others && tid <= n_others + ngcthreads()
+            return "foreign: gc"
+        end
+    end
+    return string(threadpool_name)
 end
 
 """
@@ -464,7 +482,7 @@ macro spawn(args...)
         if ttype isa QuoteNode
             ttype = ttype.value
             if ttype !== :interactive && ttype !== :default
-                throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+                throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
         else

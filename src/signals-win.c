@@ -244,6 +244,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         case EXCEPTION_STACK_OVERFLOW:
             if (ct->eh != NULL) {
                 ptls->needs_resetstkoflw = 1;
+                stack_overflow_warning();
                 jl_throw_in_ctx(ct, jl_stackovf_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
@@ -326,7 +327,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     default:
         jl_safe_printf("UNKNOWN"); break;
     }
-    jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+    jl_safe_printf(" at 0x%zx -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
     jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
     jl_critical_error(0, 0, ExceptionInfo->ContextRecord, ct);

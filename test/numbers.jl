@@ -262,7 +262,7 @@ end
 
 # GMP allocation overflow should not cause crash
 if Base.GMP.ALLOC_OVERFLOW_FUNCTION[] && sizeof(Int) > 4
-  @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
+    @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
 end
 
 # exponentiating with a negative base
@@ -1114,10 +1114,30 @@ end
 end
 
 @testset "Irrational zero and one" begin
-    @test one(pi) === true
-    @test zero(pi) === false
-    @test one(typeof(pi)) === true
-    @test zero(typeof(pi)) === false
+    for i in (π, ℯ, γ, catalan)
+        @test one(i) === true
+        @test zero(i) === false
+        @test one(typeof(i)) === true
+        @test zero(typeof(i)) === false
+    end
+end
+
+@testset "Irrational iszero, isfinite, isinteger, and isone" begin
+    for i in (π, ℯ, γ, catalan)
+        @test !iszero(i)
+        @test !isone(i)
+        @test !isinteger(i)
+        @test isfinite(i)
+    end
+end
+
+@testset "Irrational promote_type" begin
+    for T in (Float16, Float32, Float64)
+        for i in (π, ℯ, γ, catalan)
+            @test T(2.0) * i ≈ T(2.0) * T(i)
+            @test T(2.0) * i isa T
+        end
+    end
 end
 
 @testset "Irrationals compared with Irrationals" begin

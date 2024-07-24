@@ -2,7 +2,7 @@
 
 # RUN: julia --startup-file=no %s %t && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s
-# RUN: cat %t/module.ll | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='loop(LowerSIMDLoop)' -S - | FileCheck %s -check-prefix=LOWER
+# RUN: cat %t/module.ll | opt --load-pass-plugin=libjulia-codegen%shlibext -passes='loop(LowerSIMDLoop)' -S - | FileCheck %s -check-prefix=LOWER
 # RUN: julia --startup-file=no %s %t -O && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s -check-prefix=FINAL
 
@@ -26,11 +26,11 @@ function simdf(X)
     acc = zero(eltype(X))
     @simd for x in X
         acc += x
-# CHECK: br {{.*}}, !llvm.loop [[LOOPID:![0-9]+]]
-# LOWER-NOT: llvm.mem.parallel_loop_access
-# LOWER: fadd reassoc contract double
-# LOWER: br {{.*}}, !llvm.loop [[LOOPID:![0-9]+]]
-# FINAL: fadd reassoc contract <{{(vscale x )?}}{{[0-9]+}} x double>
+        # CHECK: br {{.*}}, !llvm.loop [[LOOPID:![0-9]+]]
+        # LOWER-NOT: llvm.mem.parallel_loop_access
+        # LOWER: fadd reassoc contract double
+        # LOWER: br {{.*}}, !llvm.loop [[LOOPID:![0-9]+]]
+        # FINAL: fadd reassoc contract <{{(vscale x )?}}{{[0-9]+}} x double>
     end
     acc
 end
@@ -41,10 +41,10 @@ function simdf2(X)
     acc = zero(eltype(X))
     @simd ivdep for x in X
         acc += x
-# CHECK: br {{.*}}, !llvm.loop [[LOOPID2:![0-9]+]]
-# LOWER: llvm.mem.parallel_loop_access
-# LOWER: fadd reassoc contract double
-# LOWER: br {{.*}}, !llvm.loop [[LOOPID2:![0-9]+]]
+        # CHECK: br {{.*}}, !llvm.loop [[LOOPID2:![0-9]+]]
+        # LOWER: llvm.mem.parallel_loop_access
+        # LOWER: fadd reassoc contract double
+        # LOWER: br {{.*}}, !llvm.loop [[LOOPID2:![0-9]+]]
     end
     acc
 end
@@ -58,13 +58,13 @@ end
     for i in 1:N
         iteration(i)
         $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.count"), 3)))
-# CHECK: br {{.*}}, !llvm.loop [[LOOPID3:![0-9]+]]
-# LOWER: br {{.*}}, !llvm.loop [[LOOPID3:![0-9]+]]
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
-# FINAL: br
+        # CHECK: br {{.*}}, !llvm.loop [[LOOPID3:![0-9]+]]
+        # LOWER: br {{.*}}, !llvm.loop [[LOOPID3:![0-9]+]]
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: br
     end
 end
 
@@ -79,23 +79,23 @@ end
     for i in 1:10
         for j in J
             1 <= j <= I && continue
-            @show (i,j)
+            @show (i, j)
             iteration(i)
         end
         $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.full"),)))
-# CHECK: br {{.*}}, !llvm.loop [[LOOPID4:![0-9]+]]
-# LOWER: br {{.*}}, !llvm.loop [[LOOPID4:![0-9]+]]
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
+        # CHECK: br {{.*}}, !llvm.loop [[LOOPID4:![0-9]+]]
+        # LOWER: br {{.*}}, !llvm.loop [[LOOPID4:![0-9]+]]
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL: call {{(swiftcc )?}}void @j_iteration
+        # FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
     end
 end
 
@@ -104,10 +104,10 @@ end
     for i in 1:10
         for j in J
             1 <= j <= I && continue
-            @show (i,j)
+            @show (i, j)
             iteration(i)
-# FINAL: call {{(swiftcc )?}}void @j_iteration
-# FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
+            # FINAL: call {{(swiftcc )?}}void @j_iteration
+            # FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
         end
         $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.disable"),)))
     end

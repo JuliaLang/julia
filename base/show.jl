@@ -681,7 +681,7 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
         has_typevar(v.lb, p) && return false
         has_typevar(v.ub, p) && return false
     end
-    for i = 1:length(env)
+    for i = eachindex(env)
         i == skip && continue
         has_typevar(env[i], p) && return false
     end
@@ -1188,7 +1188,7 @@ end
 
 function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
     first = true
-    for i in 1:length(syms)
+    for i in eachindex(syms)
         if !first
             print(io, ", ")
         end
@@ -1252,8 +1252,6 @@ show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
 print(io::IO, n::Unsigned) = print(io, string(n))
-
-show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(string(UInt(p), base = 16, pad = Sys.WORD_SIZE>>2))")
 
 has_tight_type(p::Pair) =
     typeof(p.first)  == typeof(p).parameters[1] &&
@@ -1336,15 +1334,15 @@ end
 
 show(io::IO, l::Core.MethodInstance) = show_mi(io, l)
 
-function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
-    def = l.def
+function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
+    def = mi.def
     if isa(def, Method)
-        if isdefined(def, :generator) && l === def.generator
+        if isdefined(def, :generator) && mi === def.generator
             print(io, "MethodInstance generator for ")
             show(io, def)
         else
             print(io, "MethodInstance for ")
-            show_tuple_as_call(io, def.name, l.specTypes; qualified=true)
+            show_tuple_as_call(io, def.name, mi.specTypes; qualified=true)
         end
     else
         print(io, "Toplevel MethodInstance thunk")
@@ -1352,12 +1350,15 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
         # MethodInstance is part of a stacktrace, it gets location info
         # added by other means.  But if it isn't, then we should try
         # to print a little more identifying information.
-        if !from_stackframe
-            di = mi.uninferred.debuginfo
-            file, line = IRShow.debuginfo_firstline(di)
-            file = string(file)
-            line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
-            print(io, " from ", def, " starting at ", line)
+        if !from_stackframe && isdefined(mi, :cache)
+            ci = mi.cache
+            if ci.owner === :uninferred
+                di = ci.inferred.debuginfo
+                file, line = IRShow.debuginfo_firstline(di)
+                file = string(file)
+                line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
+                print(io, " from ", def, " starting at ", line)
+            end
         end
     end
 end
@@ -1379,7 +1380,7 @@ function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
             show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
         end
     else
-        di = mi.uninferred.debuginfo
+        di = mi.cache.inferred.debuginfo
         file, line = IRShow.debuginfo_firstline(di)
         file = string(file)
         line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
@@ -2381,7 +2382,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if get(io, beginsym, false)
             print(io, '(')
             ind = indent + indent_width
-            for i = 1:length(ex.args)
+            for i = eachindex(ex.args)
                 if i > 1
                     # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
                     if !(i == 2 && ex.args[1] isa LineNumberNode)
@@ -2903,7 +2904,7 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     end
     print(io, "SimpleVector")
     if n > 0
-        for i = 1:length(x)
+        for i in eachindex(x)
             println(io)
             print(io, indent, "  ", i, ": ")
             if isassigned(x,i)
@@ -3020,7 +3021,7 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
         end
         fields = fieldnames(x)
         fieldtypes = datatype_fieldtypes(x)
-        for idx in 1:length(fields)
+        for idx in eachindex(fields)
             println(io)
             print(io, indent, "  ")
             is_mut && isconst(x, idx) && print(io, "const ")
@@ -3334,8 +3335,8 @@ bitstring(B::BitArray) = sprint(bitshow, B)
 function show(io::IO, oc::Core.OpaqueClosure)
     A, R = typeof(oc).parameters
     show_tuple_as_call(io, Symbol(""), A; hasfirst=false)
-    print(io, "::", R)
     print(io, "->◌")
+    print(io, "::", R)
 end
 
 function show(io::IO, ::MIME"text/plain", oc::Core.OpaqueClosure{A, R}) where {A, R}

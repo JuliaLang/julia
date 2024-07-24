@@ -14,7 +14,11 @@
 #include <llvm/Pass.h>
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/Statistic.h>
+#if JL_LLVM_VERSION >= 170000
+#include <llvm/TargetParser/Triple.h>
+#else
 #include <llvm/ADT/Triple.h>
+#endif
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -673,6 +677,7 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
     trampoline->removeFnAttr("julia.mv.reloc");
     trampoline->removeFnAttr("julia.mv.clones");
     trampoline->addFnAttr("julia.mv.alias");
+    trampoline->setDLLStorageClass(alias->getDLLStorageClass());
     alias->eraseFromParent();
 
     uint32_t id;
