@@ -549,8 +549,6 @@ STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
     return (void*)(((uintptr_t)v) & ~mask);
 }
 
-NOINLINE uintptr_t gc_get_stack_ptr(void);
-
 FORCE_INLINE void gc_big_object_unlink(const bigval_t *node) JL_NOTSAFEPOINT
 {
     assert(node != oldest_generation_of_bigvals);
