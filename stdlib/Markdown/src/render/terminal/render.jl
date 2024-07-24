@@ -39,6 +39,8 @@ function term(io::IO, md::Admonition, columns)
         Symbol(md.category)
     elseif md.category == "compat"
         :bright_cyan
+    elseif md.category == "todo"
+        :magenta
     else
         :default
     end

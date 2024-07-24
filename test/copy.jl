@@ -49,6 +49,15 @@ chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
 
         @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 1, src(), 2, 2)
     end
+
+    v = rand(Float32, 4)
+    a = Memory{Float32}(v)
+    b = similar(a)
+    copyto!(b, a)
+    @test a == b
+
+    c = Memory{Float32}(undef, 3)
+    @test_throws BoundsError copyto!(c, a)
 end
 
 @testset "with CartesianIndices" begin

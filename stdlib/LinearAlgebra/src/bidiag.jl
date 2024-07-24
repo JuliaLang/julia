@@ -191,8 +191,8 @@ end
     elseif A.uplo == 'L' && (i == j + 1)
         @inbounds A.ev[j] = x
     elseif !iszero(x)
-        throw(ArgumentError(string("cannot set entry ($i, $j) off the ",
-            "$(istriu(A) ? "upper" : "lower") bidiagonal band to a nonzero value ($x)")))
+        throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off the ",
+            istriu(A) ? "upper" : "lower", " bidiagonal band to a nonzero value ", x)))
     end
     return x
 end
@@ -231,7 +231,8 @@ promote_rule(::Type{<:Matrix}, ::Type{<:Bidiagonal}) = Matrix
 function Tridiagonal{T}(A::Bidiagonal) where T
     dv = convert(AbstractVector{T}, A.dv)
     ev = convert(AbstractVector{T}, A.ev)
-    z = fill!(similar(ev), zero(T))
+    # ensure that the types are identical, even if zero returns a different type
+    z = oftype(ev, zero(ev))
     A.uplo == 'U' ? Tridiagonal(z, dv, ev) : Tridiagonal(ev, dv, z)
 end
 promote_rule(::Type{<:Tridiagonal{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
@@ -319,7 +320,7 @@ function _copyto_banded!(A::Bidiagonal, B::Bidiagonal)
     else
         zeroband = istriu(A) ? "lower" : "upper"
         uplo = A.uplo
-        throw(ArgumentError(string("cannot set the ",
+        throw(ArgumentError(LazyString("cannot set the ",
             zeroband, " bidiagonal band to a nonzero value for uplo=:", uplo)))
     end
     return A
@@ -372,8 +373,8 @@ ishermitian(M::Bidiagonal) = isdiag(M) && all(ishermitian, M.dv)
 function tril!(M::Bidiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n - 1 <= k <= n - 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least ",
-            "$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least ",
+            lazy"$(-n - 1) and at most $(n - 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'U' && k < 0
         fill!(M.dv, zero(T))
         fill!(M.ev, zero(T))
@@ -391,8 +392,8 @@ end
 function triu!(M::Bidiagonal{T}, k::Integer=0) where T
     n = length(M.dv)
     if !(-n + 1 <= k <= n + 1)
-        throw(ArgumentError(string("the requested diagonal, $k, must be at least",
-            "$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
+        throw(ArgumentError(LazyString(lazy"the requested diagonal, $k, must be at least",
+            lazy"$(-n + 1) and at most $(n + 1) in an $n-by-$n matrix")))
     elseif M.uplo == 'L' && k > 0
         fill!(M.dv, zero(T))
         fill!(M.ev, zero(T))
@@ -417,8 +418,8 @@ function diag(M::Bidiagonal{T}, n::Integer=0) where T
     elseif -size(M,1) <= n <= size(M,1)
         return fill!(similar(M.dv, size(M,1)-abs(n)), zero(T))
     else
-        throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
-            "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+        throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
+            lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
     end
 end
 
@@ -469,8 +470,76 @@ const BiTri = Union{Bidiagonal,Tridiagonal}
 @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) =
     @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
-lmul!(A::Bidiagonal, B::AbstractVecOrMat) = @inline _mul!(B, A, B, MulAddMul())
-rmul!(B::AbstractMatrix, A::Bidiagonal) = @inline _mul!(B, B, A, MulAddMul())
+# B .= A * B
+function lmul!(A::Bidiagonal, B::AbstractVecOrMat)
+    _muldiag_size_check(A, B)
+    (; dv, ev) = A
+    if A.uplo == 'U'
+        for k in axes(B,2)
+            for i in axes(ev,1)
+                B[i,k] = dv[i] * B[i,k] + ev[i] * B[i+1,k]
+            end
+            B[end,k] = dv[end] * B[end,k]
+        end
+    else
+        for k in axes(B,2)
+            for i in reverse(axes(dv,1)[2:end])
+                B[i,k] = dv[i] * B[i,k] + ev[i-1] * B[i-1,k]
+            end
+            B[1,k] = dv[1] * B[1,k]
+        end
+    end
+    return B
+end
+# B .= D * B
+function lmul!(D::Diagonal, B::Bidiagonal)
+    _muldiag_size_check(D, B)
+    (; dv, ev) = B
+    isL = B.uplo == 'L'
+    dv[1] = D.diag[1] * dv[1]
+    for i in axes(ev,1)
+        ev[i] = D.diag[i + isL] * ev[i]
+        dv[i+1] = D.diag[i+1] * dv[i+1]
+    end
+    return B
+end
+# B .= B * A
+function rmul!(B::AbstractMatrix, A::Bidiagonal)
+    _muldiag_size_check(A, B)
+    (; dv, ev) = A
+    if A.uplo == 'U'
+        for k in reverse(axes(dv,1)[2:end])
+            for i in axes(B,1)
+                B[i,k] = B[i,k] * dv[k] + B[i,k-1] * ev[k-1]
+            end
+        end
+        for i in axes(B,1)
+            B[i,1] *= dv[1]
+        end
+    else
+        for k in axes(ev,1)
+            for i in axes(B,1)
+                B[i,k] = B[i,k] * dv[k] + B[i,k+1] * ev[k]
+            end
+        end
+        for i in axes(B,1)
+            B[i,end] *= dv[end]
+        end
+    end
+    return B
+end
+# B .= B * D
+function rmul!(B::Bidiagonal, D::Diagonal)
+    _muldiag_size_check(B, D)
+    (; dv, ev) = B
+    isU = B.uplo == 'U'
+    dv[1] *= D.diag[1]
+    for i in axes(ev,1)
+        ev[i] *= D.diag[i + isU]
+        dv[i+1] *= D.diag[i+1]
+    end
+    return B
+end
 
 function check_A_mul_B!_sizes(C, A, B)
     mA, nA = size(A)
@@ -749,18 +818,6 @@ function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(B, TS, size(B)), A, B)
     return A.uplo == 'L' ? LowerTriangular(C) : C
-end
-
-function *(A::Diagonal, B::SymTridiagonal)
-    TS = promote_op(*, eltype(A), eltype(B))
-    out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
-    mul!(out, A, B)
-end
-
-function *(A::SymTridiagonal, B::Diagonal)
-    TS = promote_op(*, eltype(A), eltype(B))
-    out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
-    mul!(out, A, B)
 end
 
 function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)

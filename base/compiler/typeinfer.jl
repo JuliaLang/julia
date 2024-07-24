@@ -369,6 +369,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
         # we can now widen our applicability in the global cache too
         result.valid_worlds = WorldRange(first(result.valid_worlds), typemax(UInt))
     end
+    @assert isdefined(result.ci, :inferred)
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this right now
     mi = result.linfo
@@ -376,13 +377,9 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     cache = WorldView(code_cache(interp), result.valid_worlds)
     if cache_results && haskey(cache, mi)
         ci = cache[mi]
-        # Even if we already have a CI for this, it's possible that the new CI has more
-        # information (E.g. because the source was limited before, but is no longer - this
-        # happens during bootstrap). In that case, allow the result to be recached.
         # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
-        if isdefined(ci, :inferred)
-            cache_results = false
-        end
+        @assert isdefined(ci, :inferred)
+        cache_results = false
     end
 
     if cache_results
@@ -1205,6 +1202,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     if source_mode == SOURCE_MODE_ABI && frame.cache_mode != CACHE_MODE_GLOBAL
         # XXX: jl_type_infer somewhat ambiguously assumes this must be cached, while jl_ci_cache_lookup sort of ambiguously re-caches it
         # XXX: this should be using the CI from the cache, if possible instead: haskey(cache, mi) && (ci = cache[mi])
+        @assert isdefined(ci, :inferred) "interpreter did not fulfill its requirements"
         code_cache(interp)[mi] = ci
     end
     if source_mode == SOURCE_MODE_FORCE_SOURCE && use_const_api(ci)

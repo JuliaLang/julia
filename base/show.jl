@@ -681,7 +681,7 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
         has_typevar(v.lb, p) && return false
         has_typevar(v.ub, p) && return false
     end
-    for i = 1:length(env)
+    for i = eachindex(env)
         i == skip && continue
         has_typevar(env[i], p) && return false
     end
@@ -1188,7 +1188,7 @@ end
 
 function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
     first = true
-    for i in 1:length(syms)
+    for i in eachindex(syms)
         if !first
             print(io, ", ")
         end
@@ -2382,7 +2382,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if get(io, beginsym, false)
             print(io, '(')
             ind = indent + indent_width
-            for i = 1:length(ex.args)
+            for i = eachindex(ex.args)
                 if i > 1
                     # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
                     if !(i == 2 && ex.args[1] isa LineNumberNode)
@@ -2904,7 +2904,7 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     end
     print(io, "SimpleVector")
     if n > 0
-        for i = 1:length(x)
+        for i in eachindex(x)
             println(io)
             print(io, indent, "  ", i, ": ")
             if isassigned(x,i)
@@ -3021,7 +3021,7 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
         end
         fields = fieldnames(x)
         fieldtypes = datatype_fieldtypes(x)
-        for idx in 1:length(fields)
+        for idx in eachindex(fields)
             println(io)
             print(io, indent, "  ")
             is_mut && isconst(x, idx) && print(io, "const ")
@@ -3335,8 +3335,8 @@ bitstring(B::BitArray) = sprint(bitshow, B)
 function show(io::IO, oc::Core.OpaqueClosure)
     A, R = typeof(oc).parameters
     show_tuple_as_call(io, Symbol(""), A; hasfirst=false)
-    print(io, "::", R)
     print(io, "->◌")
+    print(io, "::", R)
 end
 
 function show(io::IO, ::MIME"text/plain", oc::Core.OpaqueClosure{A, R}) where {A, R}

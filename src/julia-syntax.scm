@@ -983,8 +983,6 @@
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
      `(block
-       ;; This is to prevent the :isdefined below from resolving the binding to an import.
-       ;; This will be reworked to a different check with world-age partitioned bindings.
        (global ,name)
        (scope-block
         (block
@@ -998,7 +996,7 @@
                         (call (core svec) ,@attrs)
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
-         (if (isdefined (globalref (thismodule) ,name))
+         (if (isdefined (globalref (thismodule) ,name) (false))
              (block
               (= ,prev (globalref (thismodule) ,name))
               (if (call (core _equiv_typedef) ,prev ,name)
@@ -1061,7 +1059,7 @@
        (= ,name (call (core _abstracttype) (thismodule) (inert ,name) (call (core svec) ,@params)))
        (call (core _setsuper!) ,name ,super)
        (call (core _typebody!) ,name)
-       (if (&& (isdefined (globalref (thismodule) ,name))
+       (if (&& (isdefined (globalref (thismodule) ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))
@@ -1081,7 +1079,7 @@
        (= ,name (call (core _primitivetype) (thismodule) (inert ,name) (call (core svec) ,@params) ,n))
        (call (core _setsuper!) ,name ,super)
        (call (core _typebody!) ,name)
-       (if (&& (isdefined (globalref (thismodule) ,name))
+       (if (&& (isdefined (globalref (thismodule) ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))
@@ -2403,6 +2401,18 @@
             (cons (car e)
                   (map expand-forms (cdr e)))))))
 
+(define (find pred e)
+  (let loop ((xs e))
+    (if (null? xs)
+        #f
+        (let ((elt (car xs)))
+          (if (pred elt)
+              elt
+              (loop (cdr xs)))))))
+
+(define (something e)
+  (find (lambda (x) (not (equal? x '(null)))) e))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -2422,13 +2432,15 @@
 
    'opaque_closure
    (lambda (e)
-     (let* ((ty   (and (length> e 2) (expand-forms (cadr e))))
-            (F    (if (length> e 2) (caddr e) (cadr e)))
+     (let* ((argt  (something (list (expand-forms (cadr e)) #f)))
+            (rt_lb (something (list (expand-forms (caddr e)) #f)))
+            (rt_ub (something (list (expand-forms (cadddr e)) #f)))
+            (F     (caddddr e))
             (isva (let* ((arglist (function-arglist F))
                          (lastarg (and (pair? arglist) (last arglist))))
-                    (if (and ty (any (lambda (arg)
+                    (if (and argt (any (lambda (arg)
                                        (let ((arg (if (vararg? arg) (cadr arg) arg)))
-                                         (not (equal? (arg-type arg) '(core Any)))))
+                                         (not (symbol? arg))))
                                      arglist))
                         (error "Opaque closure argument type may not be specified both in the method signature and separately"))
                     (if (or (varargexpr? lastarg) (vararg? lastarg))
@@ -2448,7 +2460,7 @@
        (let* ((argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
                                 (expand-forms `(curly (core Tuple) ,@argtypes))
                                 (reverse tvars))))
-         `(_opaque_closure ,(or ty argtype) ,isva ,(length argtypes) ,functionloc ,lam))))
+         `(_opaque_closure ,(or argt argtype) ,rt_lb ,rt_ub ,isva ,(length argtypes) ,functionloc ,lam))))
 
    'block
    (lambda (e)
@@ -4014,9 +4026,9 @@ f(x) = yt(x)
                         e))
                    (else e))))
           ((_opaque_closure)
-           (let* ((isva  (caddr e))
-                  (nargs (cadddr e))
-                  (functionloc (caddddr e))
+           (let* ((isva  (car (cddddr e)))
+                  (nargs (cadr (cddddr e)))
+                  (functionloc (caddr (cddddr e)))
                   (lam2  (last e))
                   (vis   (lam:vinfo lam2))
                   (cvs   (map car (cadr vis))))
@@ -4028,7 +4040,7 @@ f(x) = yt(x)
                                            v)))
                                    cvs)))
                `(new_opaque_closure
-                 ,(cadr e) (call (core apply_type) (core Union)) (core Any) (true)
+                 ,(cadr e) ,(or (caddr e) '(call (core apply_type) (core Union))) ,(or (cadddr e) '(core Any)) (true)
                  (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs)))
                  ,@var-exprs))))
           ((method)

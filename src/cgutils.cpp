@@ -1598,7 +1598,7 @@ static bool can_optimize_isa_union(jl_uniontype_t *type)
 // a simple case of emit_isa that is obvious not to include a safe-point
 static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_datatype_t *dt, bool could_be_null=false)
 {
-    assert(jl_is_concrete_type((jl_value_t*)dt));
+    assert(jl_is_concrete_type((jl_value_t*)dt) || is_uniquerep_Type((jl_value_t*)dt));
     if (arg.TIndex) {
         unsigned tindex = get_box_tindex(dt, arg.typ);
         if (tindex > 0) {
@@ -1621,7 +1621,12 @@ static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_data
             BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_isa", ctx.f);
             ctx.builder.CreateCondBr(isboxed, isaBB, postBB);
             ctx.builder.SetInsertPoint(isaBB);
-            Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg.Vboxed, false, true), emit_tagfrom(ctx, dt));
+            Value *istype_boxed = NULL;
+            if (is_uniquerep_Type((jl_value_t*)dt)) {
+                istype_boxed = ctx.builder.CreateICmpEQ(decay_derived(ctx, arg.Vboxed), decay_derived(ctx, literal_pointer_val(ctx, jl_tparam0(dt))));
+            } else {
+                istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg.Vboxed, false, true), emit_tagfrom(ctx, dt));
+            }
             ctx.builder.CreateBr(postBB);
             isaBB = ctx.builder.GetInsertBlock(); // could have changed
             ctx.builder.SetInsertPoint(postBB);
@@ -4360,22 +4365,6 @@ static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const
         }
     }
     return data;
-}
-
-jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
-{
-    // This relies on the invariant that the JIT will have set the invoke ptr
-    // by the time it releases the codegen lock. If the code is refactored to make the
-    // codegen lock more fine-grained, this will have to be replaced by a per-codeinstance futex.
-    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    // This should only be possible if there's more than one thread. If not, either there's a bug somewhere
-    // that resulted in this not getting cleared, or we're about to deadlock. Either way, that's bad.
-    if (nthreads == 1) {
-        jl_error("Internal error: Reached jl_fptr_wait_for_compiled in single-threaded execution.");
-    }
-    JL_LOCK(&jl_codegen_lock);
-    JL_UNLOCK(&jl_codegen_lock);
-    return jl_atomic_load_acquire(&m->invoke)(f, args, nargs, m);
 }
 
 // Reset us back to codegen debug type
