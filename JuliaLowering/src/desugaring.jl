@@ -258,6 +258,84 @@ function expand_for(ctx, ex)
     ]
 end
 
+function match_try(ex)
+    @chk numchildren(ex) > 1 "Invalid `try` form"
+    try_ = ex[1]
+    catch_and_exc = nothing
+    exc_var = nothing
+    catch_ = nothing
+    finally_ = nothing
+    else_ = nothing
+    for e in ex[2:end]
+        k = kind(e)
+        if k == K"catch" && isnothing(catch_)
+            @chk numchildren(e) == 2 "Invalid `catch` form"
+            if !(kind(e[1]) == K"Bool" && e[1].value === false)
+                # TODO: Fix this strange AST wart upstream?
+                exc_var = e[1]
+            end
+            catch_ = e[2]
+            catch_and_exc = e
+        elseif k == K"else" && isnothing(else_)
+            @chk numchildren(e) == 1
+            else_ = e[1]
+        elseif k == K"finally" && isnothing(finally_)
+            @chk numchildren(e) == 1
+            finally_ = e[1]
+        else
+            throw(LoweringError(ex, "Invalid clause in `try` form"))
+        end
+    end
+    (try_, catch_and_exc, exc_var, catch_, else_, finally_)
+end
+
+function expand_try(ctx, ex)
+    (try_, catch_and_exc, exc_var, catch_, else_, finally_) = match_try(ex)
+
+    if !isnothing(finally_)
+        # TODO: check unmatched symbolic gotos in try.
+    end
+
+    try_body = @ast ctx try_ [K"scope_block"(scope_type=:neutral) try_]
+
+    if isnothing(catch_)
+        try_block = try_body
+    else
+        if !isnothing(exc_var) && !is_identifier_like(exc_var)
+            throw(LoweringError(exc_var, "Expected an identifier as exception variable"))
+        end
+        try_block = @ast ctx ex [K"trycatchelse"
+            try_body
+            [K"scope_block"(catch_and_exc, scope_type=:neutral)
+                if !isnothing(exc_var)
+                    if !is_identifier_like(exc_var)
+                        throw(LoweringError(exc_var, "Expected an identifier as exception variable"))
+                    end
+                    [K"block"
+                        [K"="(exc_var) exc_var [K"the_exception"]]
+                        catch_
+                    ]
+                else
+                    catch_
+                end
+            ]
+            if !isnothing(else_)
+                [K"scope_block"(else_, scope_type=:neutral) else_]
+            end
+        ]
+    end
+
+    # Add finally block
+    if isnothing(finally_)
+        try_block
+    else
+        @ast ctx ex [K"tryfinally"
+            try_block
+            [K"scope_block"(finally_, scope_type=:neutral) finally_]
+        ]
+    end
+end
+
 # Strip variable type declarations from within a `local` or `global`, returning
 # the stripped expression. Works recursively with complex left hand side
 # assignments containing tuple destructuring. Eg, given
@@ -750,6 +828,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 expand_forms_2(ctx, children(ex))...
             ]
         end
+    elseif k == K"try"
+        expand_try(ctx, ex)
     elseif k == K"tuple"
         # TODO: named tuples
         expand_forms_2(ctx, @ast ctx ex [K"call" 
