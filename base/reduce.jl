@@ -288,8 +288,9 @@ results of a previous `op` call, or it combines the results of two previous `op`
 The reduction function `op` should be associative but is not required to be commutative.
 When the `itrs` are ordered collections, `reduce` preserves the ordering of its elements
 in the arguments to `op` from left to right. In contrast to [`mapfoldl`](@ref) and
-[`mapfoldr`](@ref), `reduce` does not enforce a particular associativity. See the extended
-help for more details.
+[`mapfoldr`](@ref), `reduce` does not enforce a particular associativity and some
+implementations may reuse the return value of `f` for elements that appear multiple times in
+`itrs`. See the extended help for more details.
 
 For empty collections, `init` is the return value. It is generally an error to call `mapreduce`
 with an empty collection without specifying an `init` value, but in some unambiguous cases a known
