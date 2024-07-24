@@ -324,6 +324,15 @@ end
     write(buf, "xyz")
     @test takestring!(buf) == "xyz"
     buf = IOBuffer()
+
+    # Test with a nonzero offset in the buffer
+    v = rand(UInt8, 8)
+    for i in 1:8
+        pushfirst!(v, rand(UInt8))
+    end
+    buf = IOBuffer(v)
+    s = String(copy(v))
+    @test takestring!(buf) == s
 end
 
 @testset "Read/write readonly IOBuffer" begin
