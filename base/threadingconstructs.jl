@@ -94,6 +94,24 @@ function threadpool(tid = threadid())
 end
 
 """
+    Threads.threadpooldescription(tid = threadid()) -> String
+
+Returns the specified thread's threadpool name with extended description where appropriate.
+"""
+function threadpooldescription(tid = threadid())
+    threadpool_name = threadpool(tid)
+    if threadpool_name == :foreign
+        # TODO: extend tls to include a field to add a description to a foreign thread and make this more general
+        n_others = nthreads(:interactive) + nthreads(:default)
+        # Assumes GC threads come first in the foreign thread pool
+        if tid > n_others && tid <= n_others + ngcthreads()
+            return "foreign: gc"
+        end
+    end
+    return string(threadpool_name)
+end
+
+"""
     Threads.nthreadpools() -> Int
 
 Returns the number of threadpools currently configured.

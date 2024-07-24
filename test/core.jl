@@ -3999,6 +3999,14 @@ end
 end
 @test f13432b(true) == true
 @test f13432b(false) == false
+@noinline function f13432c(x)
+    offset = x ? Base.Bottom : 1
+    # Barrier for inference, so the optimizer cannot optimize this,
+    # but codegen can still see this is a constant
+    return ===(offset, Base.inferencebarrier(Base.Bottom))
+end
+@test f13432c(true) == true
+@test f13432c(false) == false
 
 #13433, read!(::IO, a::Vector{UInt8}) should return a
 mutable struct IO13433 <: IO end
@@ -8245,3 +8253,11 @@ let load_path = mktempdir()
         end
     end
 end
+
+# merging va tuple unions
+@test Tuple === Union{Tuple{},Tuple{Any,Vararg}}
+@test Tuple{Any,Vararg} === Union{Tuple{Any},Tuple{Any,Any,Vararg}}
+@test Core.Compiler.return_type(Base.front, Tuple{Tuple{Int,Vararg{Int}}}) === Tuple{Vararg{Int}}
+@test Tuple{Vararg{Int}} === Union{Tuple{Int}, Tuple{}, Tuple{Int, Int, Vararg{Int}}}
+@test (Tuple{Vararg{T}} where T) === (Union{Tuple{T, T, Vararg{T}}, Tuple{}, Tuple{T}} where T)
+@test_broken (Tuple{Vararg{T}} where T) === Union{Tuple{T, T, Vararg{T}} where T, Tuple{}, Tuple{T} where T}

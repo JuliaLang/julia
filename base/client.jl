@@ -620,11 +620,11 @@ const main = MyApp.main
 """
 macro main(args...)
     if !isempty(args)
-        error("USAGE: `@main` is expected to be used as `(@main)` without macro arguments.")
+        error("`@main` is expected to be used as `(@main)` without macro arguments.")
     end
     if isdefined(__module__, :main)
         if Base.binding_module(__module__, :main) !== __module__
-            error("USAGE: Symbol `main` is already a resolved import in module $(__module__). `@main` must be used in the defining module.")
+            error("Symbol `main` is already a resolved import in module $(__module__). `@main` must be used in the defining module.")
         end
     end
     Core.eval(__module__, quote

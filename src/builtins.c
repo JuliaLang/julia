@@ -1278,7 +1278,7 @@ JL_CALLABLE(jl_f_isdefined)
             order = jl_memory_order_unordered;
         if (order < jl_memory_order_unordered)
             jl_atomic_error("isdefined: module binding cannot be accessed non-atomically");
-        int bound = jl_boundp(m, s); // seq_cst always
+        int bound = jl_boundp(m, s, 1); // seq_cst always
         return bound ? jl_true : jl_false;
     }
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);

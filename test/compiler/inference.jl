@@ -2151,78 +2151,75 @@ end
 
 @testset "branching on conditional object" begin
     # simple
-    @test Base.return_types((Union{Nothing,Int},)) do a
+    @test Base.infer_return_type((Union{Nothing,Int},)) do a
         b = a === nothing
         return b ? 0 : a # ::Int
-    end == Any[Int]
+    end == Int
 
     # can use multiple times (as far as the subject of condition hasn't changed)
-    @test Base.return_types((Union{Nothing,Int},)) do a
+    @test Base.infer_return_type((Union{Nothing,Int},)) do a
         b = a === nothing
         c = b ? 0 : a # c::Int
         d = !b ? a : 0 # d::Int
         return c, d # ::Tuple{Int,Int}
-    end == Any[Tuple{Int,Int}]
+    end == Tuple{Int,Int}
 
     # should invalidate old constraint when the subject of condition has changed
-    @test Base.return_types((Union{Nothing,Int},)) do a
+    @test Base.infer_return_type((Union{Nothing,Int},)) do a
         cond = a === nothing
         r1 = cond ? 0 : a # r1::Int
         a = 0
         r2 = cond ? a : 1 # r2::Int, not r2::Union{Nothing,Int}
         return r1, r2 # ::Tuple{Int,Int}
-    end == Any[Tuple{Int,Int}]
+    end == Tuple{Int,Int}
 end
 
 # https://github.com/JuliaLang/julia/issues/42090#issuecomment-911824851
 # `PartialStruct` shouldn't wrap `Conditional`
-let M = Module()
-    @eval M begin
-        struct BePartialStruct
-            val::Int
-            cond
-        end
-    end
-
-    rt = @eval M begin
-        Base.return_types((Union{Nothing,Int},)) do a
-            cond = a === nothing
-            obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
-            r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
-            a = $(gensym(:anyvar))::Any
-            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
-            return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
-        end |> only
-    end
-    @test rt == Tuple{Union{Nothing,Int},Any}
+struct BePartialStruct
+    val::Int
+    cond
+end
+@test Tuple{Union{Nothing,Int},Any} == @eval Base.infer_return_type((Union{Nothing,Int},)) do a
+    cond = a === nothing
+    obj = $(Expr(:new, BePartialStruct, 42, :cond))
+    r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
+    a = $(gensym(:anyvar))::Any
+    r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
+    return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
 end
 
 # make sure we never form nested `Conditional` (https://github.com/JuliaLang/julia/issues/46207)
-@test Base.return_types((Any,)) do a
+@test Base.infer_return_type((Any,)) do a
     c = isa(a, Integer)
     42 === c ? :a : "b"
-end |> only === String
-@test Base.return_types((Any,)) do a
+end == String
+@test Base.infer_return_type((Any,)) do a
     c = isa(a, Integer)
     c === 42 ? :a : "b"
-end |> only === String
+end == String
 
-@testset "conditional constraint propagation from non-`Conditional` object" begin
-    @test Base.return_types((Bool,)) do b
-        if b
-            return !b ? nothing : 1 # ::Int
-        else
-            return 0
-        end
-    end == Any[Int]
-
-    @test Base.return_types((Any,)) do b
-        if b
-            return b # ::Bool
-        else
-            return nothing
-        end
-    end == Any[Union{Bool,Nothing}]
+function condition_object_update1(cond)
+    if cond # `cond` is known to be `Const(true)` within this branch
+        return !cond ? nothing : 1 # ::Int
+    else
+        return  cond ? nothing : 1 # ::Int
+    end
+end
+function condition_object_update2(x)
+    cond = x isa Int
+    if cond # `cond` is known to be `Const(true)` within this branch
+        return !cond ? nothing : x # ::Int
+    else
+        return  cond ? nothing : 1 # ::Int
+    end
+end
+@testset "state update for condition object" begin
+    # refine the type of condition object into constant boolean values on branching
+    @test Base.infer_return_type(condition_object_update1, (Bool,)) == Int
+    @test Base.infer_return_type(condition_object_update1, (Any,)) == Int
+    # refine even when their original type is `Conditional`
+    @test Base.infer_return_type(condition_object_update2, (Any,)) == Int
 end
 
 @testset "`from_interprocedural!`: translate inter-procedural information" begin

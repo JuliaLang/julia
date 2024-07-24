@@ -119,7 +119,7 @@ static inline int may_mark(void) JL_NOTSAFEPOINT
 
 static inline int may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    return (jl_atomic_load(&ptls->gc_sweeps_requested) > 0);
+    return (jl_atomic_load(&ptls->gc_tls.gc_sweeps_requested) > 0);
 }
 
 // parallel gc thread function
@@ -153,7 +153,7 @@ void jl_parallel_gc_threadfun(void *arg)
         if (may_sweep(ptls)) {
             assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
             gc_sweep_pool_parallel(ptls);
-            jl_atomic_fetch_add(&ptls->gc_sweeps_requested, -1);
+            jl_atomic_fetch_add(&ptls->gc_tls.gc_sweeps_requested, -1);
         }
     }
 }

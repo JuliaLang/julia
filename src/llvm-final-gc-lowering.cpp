@@ -43,7 +43,7 @@ struct FinalLowerGC: private JuliaPassContext {
 
 private:
     Function *queueRootFunc;
-    Function *poolAllocFunc;
+    Function *smallAllocFunc;
     Function *bigAllocFunc;
     Function *allocTypedFunc;
     Instruction *pgcstack;
@@ -202,7 +202,7 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         else {
             auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
             auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-            newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize, type });
+            newI = builder.CreateCall(smallAllocFunc, { ptls, pool_offs, pool_osize, type });
             if (sz > 0)
                 derefBytes = sz;
         }
@@ -238,7 +238,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     }
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
-    poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
+    smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
     T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
