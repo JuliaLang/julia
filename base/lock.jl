@@ -51,6 +51,8 @@ end
 
 assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
 
+show(io::IO, ::ReentrantLock) = print(io, ReentrantLock, "()")
+
 """
     islocked(lock) -> Status (Boolean)
 

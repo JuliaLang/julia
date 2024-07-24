@@ -159,6 +159,8 @@ let
     @test @lock(lockable2, lockable2[]["foo"]) == "hello"
 end
 
+@test repr(ReentrantLock()) == "ReentrantLock()"
+
 for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 0
     @test lock(get_finalizers_inhibited, l) == 1
