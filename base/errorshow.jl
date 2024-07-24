@@ -369,7 +369,7 @@ end
 
 function showerror(io::IO, exc::FieldError)
     @nospecialize
-    print(io, "FieldError: type $(exc.type |> nameof) has no field $(exc.field)")
+    print(io, "FieldError: type $(exc.type |> nameof) has no field `$(exc.field)`")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -1108,12 +1108,12 @@ Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 
 function fielderror_listfields_hint_handler(io, exc)
     fields = fieldnames(exc.type)
-    println(io, "\nFields of $(nameof(exc.type)):\n$(join(fields, ", "))")
+    println(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
     props = _propertynames_bytype(exc.type)
     isnothing(props) && return
     props = setdiff(props, fields)
     isempty(props) && return
-    println(io, "\nAlso, properties of $(nameof(exc.type)):\n$(join(props, ", "))")
+    println(io, "\nProperties: $(join(map(k -> "`$k`", props), ", "))")
 end
 
 _extract_val(::Type{Val{V}}) where {V} = V
