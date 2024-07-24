@@ -815,6 +815,7 @@ end
         a::Float32
         b::Int
     end
+    Base.propertynames(foo::FieldFoo) = (:x, :y, :z)
 
     s = FieldFoo(1, 2)
 
@@ -826,6 +827,7 @@ end
     errorMsg = sprint(Base.showerror, ex)
     @test occursin("FieldError: type FieldFoo has no field `c`", errorMsg)
     @test occursin("available fields: `a`, `b`", errorMsg)
+    @test occursin("Properties: `x`, `y`, `z`", errorMsg)
 
     d = Dict(s => 1)
 
