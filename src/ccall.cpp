@@ -23,6 +23,7 @@ TRANSFORMED_CCALL_STAT(jl_gc_safepoint);
 TRANSFORMED_CCALL_STAT(jl_get_ptls_states);
 TRANSFORMED_CCALL_STAT(jl_threadid);
 TRANSFORMED_CCALL_STAT(jl_get_tls_world_age);
+TRANSFORMED_CCALL_STAT(jl_get_world_counter);
 TRANSFORMED_CCALL_STAT(jl_gc_enable_disable_finalizers_internal);
 TRANSFORMED_CCALL_STAT(jl_get_current_task);
 TRANSFORMED_CCALL_STAT(jl_set_next_task);
@@ -1705,6 +1706,30 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             ai.decorateInst(world_age);
             return mark_or_box_ccall_result(ctx, world_age, retboxed, rt, unionall, static_rt);
         }
+    }
+    else if (is_libjulia_func(jl_get_world_counter)) {
+        ++CCALL_STAT(jl_get_world_counter);
+        assert(lrt == ctx.types().T_size);
+        assert(!isVa && !llvmcall && nccallargs == 0);
+        JL_GC_POP();
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+
+        // jl_task_t *ct = jl_current_task;
+        // if (ct->ptls->in_pure_callback)
+        //     return ~(size_t)0;
+        // return jl_atomic_load_acquire(&jl_world_counter);
+        Type *T_int16 = getInt16Ty(ctx.builder.getContext());
+        Value *offset = ConstantInt::get(ctx.types().T_size, offsetof(jl_tls_states_t, in_pure_callback) / sizeof(int16_t));
+        Value *field_ptr = ctx.builder.CreateInBoundsGEP(T_int16, get_current_ptls(ctx), offset);
+        Instruction *in_pure_callback = ai.decorateInst(ctx.builder.CreateAlignedLoad(T_int16,
+            field_ptr, Align(sizeof(int16_t)), "in_pure_callback"));
+        Value *cond = ctx.builder.CreateICmpEQ(in_pure_callback, ConstantInt::get(T_int16, 0));
+
+        Value *world_counter = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
+            prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
+        cast<LoadInst>(world_counter)->setOrdering(AtomicOrdering::Acquire);
+        Value *ret = ctx.builder.CreateSelect(cond, world_counter, ConstantInt::get(ctx.types().T_size, ~(size_t)0));
+        return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_gc_disable_finalizers_internal)
 #ifdef NDEBUG

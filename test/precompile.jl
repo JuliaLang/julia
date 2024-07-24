@@ -1963,6 +1963,19 @@ precompile_test_harness("Test flags") do load_path
     @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
+if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarch64)
+    @testset "Multiversioning" begin # This test isn't the most robust because it relies on being in CI,
+        pkg = Base.identify_package("Test")  # but we need better target reflection to make a better one.
+        cachefiles = Base.find_all_in_cache_path(pkg)
+        pkgpath = Base.locate_package(pkg)
+        idx = findfirst(cachefiles) do cf
+            Base.stale_cachefile(pkgpath, cf) !== true
+        end
+        targets = Base.parse_image_targets(Base.parse_cache_header(cachefiles[idx])[7])
+        @test length(targets) > 1
+    end
+end
+
 precompile_test_harness("No backedge precompile") do load_path
     # Test that the system doesn't accidentally forget to revalidate a method without backedges
     write(joinpath(load_path, "NoBackEdges.jl"),

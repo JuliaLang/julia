@@ -472,8 +472,8 @@ elements are not reordered if you use an ordered collection.
 julia> reduce(*, [2; 3; 4])
 24
 
-julia> reduce(*, [2; 3; 4]; init=-1)
--24
+julia> reduce(*, Int[]; init=1)
+1
 ```
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
