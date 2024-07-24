@@ -276,7 +276,7 @@ Apply function `f` to each element(s) in `itrs` (akin to [`map`](@ref)),
 and then repeatedly call the 2 argument function `op` on those results,
 `init`, or the result of a previous `op` evaluation until all elements
 in the `itrs` have been included in the computation and a single value
-is returned (akin to [`@reduce`](@ref)).
+is returned (akin to [`reduce`](@ref)).
 
 The optional `init` keyword argument must be an identity element for `op` as
 it may be included in the reduction one or more times when provided.
