@@ -16,13 +16,16 @@ function ParseError(stream::ParseStream; incomplete_tag=:none, kws...)
 end
 
 function Base.showerror(io::IO, err::ParseError)
-    println(io, "ParseError:")
     # Only show the first parse error for now - later errors are often
     # misleading due to the way recovery works
     i = findfirst(is_error, err.diagnostics)
     if isnothing(i)
         i = lastindex(err.diagnostics)
+        level_info = " some warnings detected:"
+    else
+        level_info = ""
     end
+    println(io, "ParseError:", level_info)
     show_diagnostics(io, err.diagnostics[1:i], err.source)
 end
 
