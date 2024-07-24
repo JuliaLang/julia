@@ -101,6 +101,7 @@ function __init__()
 end
 
 using Base.Meta, Sockets, StyledStrings
+using JuliaSyntaxHighlighting
 import InteractiveUtils
 
 export
@@ -507,12 +508,19 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
-        show(io, mime, x[])
+        show_repl(io, mime, x[])
         println(io)
     end
     return nothing
 end
+
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
+
+show_repl(io::IO, mime::MIME"text/plain", x) = show(io, mime, x)
+
+show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
+    print(io, JuliaSyntaxHighlighting.highlight(
+        sprint(show, ex, context=IOContext(io, :color => false))))
 
 function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
