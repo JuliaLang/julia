@@ -294,7 +294,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 
 For empty collections, `init` is the return value. It is generally an error to call `mapreduce`
 with an empty collection without specifying an `init` value, but in some unambiguous cases a known
-identity element for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
+identity element for `op` may be returned.
 
 Some commonly-used operators may have special implementations of a mapped reduction, and
 should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
@@ -344,7 +344,7 @@ More subtly, floating point arithmetic is typically non-associative,
 even for common operations like `+` that are associative in exact arithmetic.
 This means that the magnitude of floating-point errors incurred by `mapreduce` are
 also unspecified. For example, `mapreduce(x->x/10, +, [1, 2, 3, 4])` may return
-either `1.0` or `0.9999999999999999`, and both are [`≈`](@ref) to `1.0`:
+either `1.0` or `0.9999999999999999`, and both are [`≈`](@ref Base.isapprox) to `1.0`:
 
 ```jldoctest
 julia> mapfoldl(x->x/10, +, [1, 2, 3, 4])
@@ -523,7 +523,7 @@ extended help for more details.
 
 For empty collections, `init` is the return value. It is generally an error to call `reduce`
 with an empty collection without specifying an `init` value, but in some unambiguous cases a known
-identity element for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
+identity element for `op` may be returned.
 
 Some commonly-used operators may have special implementations of a reduction, and
 should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
@@ -576,7 +576,7 @@ More subtly, floating point arithmetic is _also_ typically non-associative,
 even for common operations like `+` that are associative in exact arithmetic.
 This means that the magnitude of floating-point errors incurred by `reduce` are
 also unspecified. For example, `reduce(+, [.1, .2, .3, .4])` may return
-either `1.0` or `0.9999999999999999`, and both are [`≈`](@ref) to `1.0`:
+either `1.0` or `0.9999999999999999`, and both are [`≈`](@ref Base.isapprox) to `1.0`:
 
 ```jldoctest
 julia> foldl(+, [.1, .2, .3, .4])
