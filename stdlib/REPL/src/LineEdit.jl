@@ -741,7 +741,26 @@ function edit_move_right(buf::IOBuffer)
     end
     return false
 end
-edit_move_right(s::PromptState) = edit_move_right(s.input_buffer) ? refresh_line(s) : false
+function edit_move_right(m::MIState)
+    s = state(m)
+    buf = s.input_buffer
+    if edit_move_right(s.input_buffer)
+        refresh_line(s)
+        return true
+    else
+        completions, partial, should_complete = complete_line(s.p.complete, s, m.active_module)
+        if should_complete && eof(buf) && length(completions) == 1 && length(partial) > 1
+            # Replace word by completion
+            prev_pos = position(s)
+            push_undo(s)
+            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
+            refresh_line(state(s))
+            return true
+        else
+            return false
+        end
+    end
+end
 
 function edit_move_word_right(s::PromptState)
     if !eof(s.input_buffer)
