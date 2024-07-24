@@ -272,24 +272,28 @@ mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Int
 """
     mapreduce(f, op, itrs...; [init])
 
-Apply function `f` to each element(s) in `itrs`, and then repeatedly call the 2 argument
-function `op` with those results or results from previous `op` evaluations until a single value is returned.
+Apply function `f` to each element(s) in `itrs` (akin to [`map`](@ref)),
+and then repeatedly call the 2 argument function `op` on those results,
+`init`, or the result of a previous `op` evaluation until all elements
+in the `itrs` have been included in the computation and a single value
+is returned (akin to [`@reduce`](@ref)).
 
-The optional `init` keyword argument must be an identity element for `op`.
+The optional `init` keyword argument must be an identity element for `op` as
+it may be included in the reduction one or more times when provided.
 The `init` value is not transformed by the function `f`.
-When `init` is provided, all initial evaluation(s) of `op` use `init` and an
-element from `itr` as its arguments with an unspecified argument ordering.
-For empty collections, `init` is the return value. It is generally an error to call `mapreduce`
-with an empty collection without specifying an `init` value, but in unambiguous cases a known
-identity element for `op` may be returned; see [`Base.mapreduce_empty`](@ref) for more details.
+Providing `init` ensures that `op` is never called with both its arguments coming from
+the mapped `itrs`; it always combines the mapped element(s) with `init` or with the
+results of a previous `op` call, or it combines the results of two previous `op` calls.
 
-The reduction function `op` must be an associative operation. In contrast with
-[`mapfoldl`](@ref) and [`mapfoldr`](@ref), the sequence of
-function evaluations and the associativity of `mapreduce` is
-not specified and may vary between different methods and across Julia versions. Some implementations
-may reuse the return value of `f` for elements that appear multiple times in the
-collection(s). When `itr` is an ordered collection, `mapreduce` preserves the ordering of the
-iterator in the reduction and so `op` is not required to be commutative. 
+The reduction function `op` should be associative but is not required to be commutative.
+When the `itrs` are ordered collections, `reduce` preserves the ordering of its elements
+in the arguments to `op` from left to right. In contrast to [`mapfoldl`](@ref) and
+[`mapfoldr`](@ref), `reduce` does not enforce a particular associativity. See the extended
+help for more details.
+
+For empty collections, `init` is the return value. It is generally an error to call `mapreduce`
+with an empty collection without specifying an `init` value, but in some unambiguous cases a known
+identity element for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
 
 Some commonly-used operators may have special implementations of a mapped reduction, and
 should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
@@ -312,28 +316,30 @@ julia> mapreduce(uppercase, *, ['j','u','l','i','a'])
 ## Arbitrary associativity: examples and consequences
 
 The associativity of the reduction is not specified, so the `op` function
-must be associative and `init` (if provided) must be an identity element.
+should be associative and `init` (if provided) must be an identity element.
 To demonstrate this, consider the example:
 
 ```jldoctest
-julia> mapreduce(√, +, [1, 4, 9, 16]; init=0)
-10
+julia> mapreduce(√, +, [1, 4, 9, 16]; init=0.0)
+10.0
 ```
 
 There are many possible ways in which `reduce` might compute this,
-including the left-associative `(((0+√1)+√4)+√9)+√16` (like [`foldl`](@ref))
-or the right-associative `√1+(√4+(√9+(√16+0)))` (like [`foldr`](@ref))
-or as a potentially-parallel `((0+√1)+(0+√4))+((0+√9)+(0+√16))`. The exact
-strategy does not matter; `reduce` returns `10.0` because `+` is associative
-and `0` is a commutative identity element for `+`. Note how the `init`
-value may be used one or more times with possibly varying argument orderings and
-is not transformed by `√`.
+including:
+  * `(((0 + √1) + √4) + √9) + √16` (left-associative, like [`mapfoldl`](@ref))
+  * `√1 + (√4 + (√9 + (√16 + 0)))` (right-associative, like [`mapfoldr`](@ref))
+  * `((0 + √1) + (√4 + 0)) + ((0 + √9) + (√16 + 0))` (potentiall parallel)
+The exact strategy does not matter; `reduce` returns `10.0` because these additions
+are associative and `0` is a commutative identity element for `+`. Note how the `init`
+value may be used one or more times with varying argument orderings and
+is not transformed by `√`, but the ordering of the values in `[1,4,9,16]` is always maintained.
 
-In contrast, the `-` function is not associative and is not a valid `op` for `reduce`.
-Were `-` erroneously used instead of `+` in the above example, the three example
-strategies return three different results (`-10.0`, `-2.0` and `0.0`, respectively).
+In contrast, subtraction is not associative. Were `-` erroneously used instead
+of `+` in the above example, `mapreduce` will return an arbitrary value as the
+exact strategy is not defined. The three example strategies above yield
+three different results (`-10.0`, `-2.0` and `4.0`, respectively).
 
-More subtly, floating point arithmetic is _also_ typically non-associative,
+More subtly, floating point arithmetic is typically non-associative,
 even for common operations like `+` that are associative in exact arithmetic.
 This means that the magnitude of floating-point errors incurred by `mapreduce` are
 also unspecified. For example, `mapreduce(x->x/10, +, [1, 2, 3, 4])` may return
@@ -498,21 +504,25 @@ _mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f,
 """
     reduce(op, itr; [init])
 
-Repeatedly call the 2 argument function `op` with the element(s) in `itr`
-or results from previous `op` evaluations until a single value is returned.
+Repeatedly call the 2 argument function `op` on the element(s) in the `itr`
+collection, `init`, or the result of a previous `op` evaluation until all elements
+in `itr` have been included in the computation and a single value is returned.
 
-The optional `init` keyword argument must be an identity element for `op`.
-When `init` is provided, all initial evaluation(s) of `op` use `init` and an
-element from `itr` as its arguments with an unspecified argument ordering.
+The optional `init` keyword argument must be an identity element for `op` as
+it may be included in the reduction one or more times when provided. Providing
+`init` ensures that `op` is never called with both its arguments coming from
+`itr`; it always combines an element in `itr` with `init` or with the results
+of a previous `op` call, or it combines the results of two previous `op` calls.
+
+The reduction function `op` should be associative but is not required to be commutative.
+When `itr` is an ordered collection, `reduce` preserves the ordering of its elements
+in the arguments to `op` from left to right. In contrast to [`foldl`](@ref) and
+[`foldr`](@ref), `reduce` does not enforce a particular associativity. See the
+extended help for more details.
+
 For empty collections, `init` is the return value. It is generally an error to call `reduce`
-with an empty collection without specifying an `init` value, but in unambiguous cases a known
+with an empty collection without specifying an `init` value, but in some unambiguous cases a known
 identity element for `op` may be returned; see [`Base.reduce_empty`](@ref) for more details.
-
-The reduction function `op` must be an associative operation. In contrast with
-[`foldl`](@ref) and [`foldr`](@ref), the associativity of `reduce` is
-not specified and may vary between different methods and across Julia versions.
-When `itr` is an ordered collection, `reduce` preserves the ordering of the
-iterator in the reduction and so `op` is not required to be commutative.
 
 Some commonly-used operators may have special implementations of a reduction, and
 should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
@@ -523,7 +533,7 @@ should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`su
 julia> reduce(+, [1, 2, 3, 4]; init=0)
 10
 
-julia> reduce(*, Int[]; init=1)
+julia> reduce(*, []; init=1)
 1
 
 julia> reduce(+, [.1, .2, .3, .4]) ≈ 1.0
@@ -538,7 +548,7 @@ julia> reduce(*, ['J','u','l','i','a'])
 ## Arbitrary associativity: examples and consequences
 
 The associativity of the reduction is not specified, so the `op` function
-must be associative and `init` (if provided) must be an identity element.
+should be associative and `init` (if provided) must be an identity element.
 To demonstrate this, consider the example:
 
 ```jldoctest
@@ -547,16 +557,19 @@ julia> reduce(+, [1, 2, 3, 4]; init=0)
 ```
 
 There are many possible ways in which `reduce` might compute this,
-including the left-associative `(((0+1)+2)+3)+4` (like [`foldl`](@ref))
-or the right-associative `1+(2+(3+(4+0)))` (like [`foldr`](@ref))
-or as a potentially-parallel `((0+1)+(0+2))+((0+3)+(0+4))`. The exact
-strategy does not matter; `reduce` returns `10` because `+` is associative
-and `0` is a commutative identity element for `+`. Note how the `init`
-value may be used one or more times with possibly varying argument orderings.
+including:
+  * `(((0 + 1) + 2) + 3) + 4` (left-associative, like [`foldl`](@ref))
+  * `1 + (2 + (3 + (4 + 0)))` (right-associative, like [`foldr`](@ref))
+  * `((0 + 1) + (2 + 0)) + ((0 + 3) + (4 + 0))` (potentially parallel)
+The exact strategy does not matter; `reduce` returns `10` because integer `+`
+is associative and `0` is its identity. Note how the `init` value is used
+one or more times with varying argument orderings, but the ordering of the
+values in `[1,2,3,4]` is always maintained.
 
-In contrast, the `-` function is not associative and is not a valid `op` for `reduce`.
-Were `-` erroneously used instead of `+` in the above example, the three example
-strategies return three different results (`-10`, `-2` and `0`, respectively).
+In contrast, integer subtraction is not associative. Were `-` erroneously
+used instead of `+` above, `reduce` will return an arbitrary value as the
+exact strategy is not defined. The three example strategies above yield
+three different results (`-10`, `-2` and `4`, respectively).
 
 More subtly, floating point arithmetic is _also_ typically non-associative,
 even for common operations like `+` that are associative in exact arithmetic.
@@ -594,7 +607,7 @@ arguments, a common return type is found to which all arguments are promoted.
 
 The optional `init` keyword argument must be an additive identity (i.e., zero),
 and it provides the return value for empty collections. It is generally an error to call `sum`
-with an empty collection without specifying an `init` value, but in unambiguous cases the
+with an empty collection without specifying an `init` value, but in some unambiguous cases the
 [`zero`](@ref) of the return type may be returned.
 
 Like [`mapreduce`](@ref), the associativity of the additions is not specified and the return
