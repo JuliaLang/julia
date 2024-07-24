@@ -1108,12 +1108,16 @@ Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 
 function fielderror_listfields_hint_handler(io, exc)
     fields = fieldnames(exc.type)
-    println(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
+    if isempty(fields)
+        print(io, "; $(nameof(exc.type)) has no fields at all.")
+    else
+        print(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
+    end
     props = _propertynames_bytype(exc.type)
     isnothing(props) && return
     props = setdiff(props, fields)
     isempty(props) && return
-    println(io, "\nProperties: $(join(map(k -> "`$k`", props), ", "))")
+    print(io, "\nAvailable properties: $(join(map(k -> "`$k`", props), ", "))")
 end
 
 _extract_val(::Type{Val{V}}) where {V} = V
