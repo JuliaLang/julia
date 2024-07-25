@@ -56,7 +56,7 @@ to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 
 !!! compat "Julia 1.12"
     Prior to 1.12, this function returned an `Int` instead of a `RawFD`. You may use
-    `RawFD(fd(x))` for compatibility with earlier Julia versions.
+    `RawFD(fd(x))` to produce a `RawFD` in all Julia versions.
 """
 fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
