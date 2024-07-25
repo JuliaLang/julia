@@ -159,7 +159,6 @@ end
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
-    state::VarTable
     conditional::Bool
 end
 
@@ -323,7 +322,7 @@ end
 
 @nospecializeinfer function isalreadyconst(@nospecialize t)
     isa(t, Const) && return true
-    isa(t, DataType) && isdefined(t, :instance) && return true
+    issingletontype(t) && return true
     return isconstType(t)
 end
 
@@ -724,28 +723,6 @@ function invalidate_slotwrapper(vt::VarState, changeid::Int, ignore_conditional:
     return nothing
 end
 
-function stupdate!(lattice::AbstractLattice, state::VarTable, changes::StateUpdate)
-    changed = false
-    changeid = slot_id(changes.var)
-    for i = 1:length(state)
-        if i == changeid
-            newtype = changes.vtype
-        else
-            newtype = changes.state[i]
-        end
-        invalidated = invalidate_slotwrapper(newtype, changeid, changes.conditional)
-        if invalidated !== nothing
-            newtype = invalidated
-        end
-        oldtype = state[i]
-        if schanged(lattice, newtype, oldtype)
-            state[i] = smerge(lattice, oldtype, newtype)
-            changed = true
-        end
-    end
-    return changed
-end
-
 function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable)
     changed = false
     for i = 1:length(state)
@@ -757,24 +734,6 @@ function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable)
         end
     end
     return changed
-end
-
-function stupdate1!(lattice::AbstractLattice, state::VarTable, change::StateUpdate)
-    changeid = slot_id(change.var)
-    for i = 1:length(state)
-        invalidated = invalidate_slotwrapper(state[i], changeid, change.conditional)
-        if invalidated !== nothing
-            state[i] = invalidated
-        end
-    end
-    # and update the type of it
-    newtype = change.vtype
-    oldtype = state[changeid]
-    if schanged(lattice, newtype, oldtype)
-        state[changeid] = smerge(lattice, oldtype, newtype)
-        return true
-    end
-    return false
 end
 
 function stoverwrite!(state::VarTable, newstate::VarTable)

@@ -147,6 +147,10 @@ module ObjLoadTest
     using Base: llvmcall, @ccallable
     using Test
     didcall = false
+    """    jl_the_callback()
+
+    Sets the global didcall when it did the call
+    """
     @ccallable Cvoid function jl_the_callback()
         global didcall
         didcall = true

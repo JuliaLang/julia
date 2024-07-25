@@ -300,7 +300,7 @@ on the author's laptop).
 ## Memory allocation analysis
 
 One of the most common techniques to improve performance is to reduce memory allocation. Julia
-provides several tools measure this:
+provides several tools to measure this:
 
 ### `@time`
 

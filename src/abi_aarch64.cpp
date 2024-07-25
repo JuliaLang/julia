@@ -88,7 +88,7 @@ Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
 Type *get_llvm_fp_or_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->name->mutabl || dt->layout->npointers || dt->layout->haspadding)
+    if (dt->name->mutabl || dt->layout->npointers || dt->layout->flags.haspadding)
         return nullptr;
     return dt->layout->nfields ? get_llvm_vectype(dt, ctx) : get_llvm_fptype(dt, ctx);
 }
@@ -184,7 +184,7 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const
     // uniquely addressable members.
     // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
     size_t dsz = jl_datatype_size(dt);
-    if (dsz > 64 || !dt->layout || dt->layout->npointers || dt->layout->haspadding)
+    if (dsz > 64 || !dt->layout || dt->layout->npointers || dt->layout->flags.haspadding)
         return NULL;
     nele = 0;
     ElementType eltype;

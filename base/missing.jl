@@ -241,7 +241,7 @@ function iterate(itr::SkipMissing, state...)
     y = iterate(itr.x, state...)
     y === nothing && return nothing
     item, state = y
-    while item === missing
+    while ismissing(item)
         y = iterate(itr.x, state)
         y === nothing && return nothing
         item, state = y
@@ -251,12 +251,12 @@ end
 
 IndexStyle(::Type{<:SkipMissing{T}}) where {T} = IndexStyle(T)
 eachindex(itr::SkipMissing) =
-    Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, eachindex(itr.x))
+    Iterators.filter(i -> !ismissing(@inbounds(itr.x[i])), eachindex(itr.x))
 keys(itr::SkipMissing) =
-    Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, keys(itr.x))
+    Iterators.filter(i -> !ismissing(@inbounds(itr.x[i])), keys(itr.x))
 @propagate_inbounds function getindex(itr::SkipMissing, I...)
     v = itr.x[I...]
-    v === missing && throw(MissingException(LazyString("the value at index ", I, " is missing")))
+    ismissing(v) && throw(MissingException(LazyString("the value at index ", I, " is missing")))
     v
 end
 
@@ -280,18 +280,18 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     ilast = last(inds)
     for outer i in i:ilast
         @inbounds ai = A[i]
-        ai !== missing && break
+        !ismissing(ai) && break
     end
-    ai === missing && return mapreduce_empty(f, op, eltype(itr))
+    ismissing(ai) && return mapreduce_empty(f, op, eltype(itr))
     a1::eltype(itr) = ai
     i == typemax(typeof(i)) && return mapreduce_first(f, op, a1)
     i += 1
     ai = missing
     for outer i in i:ilast
         @inbounds ai = A[i]
-        ai !== missing && break
+        !ismissing(ai) && break
     end
-    ai === missing && return mapreduce_first(f, op, a1)
+    ismissing(ai) && return mapreduce_first(f, op, a1)
     # We know A contains at least two non-missing entries: the result cannot be nothing
     something(mapreduce_impl(f, op, itr, first(inds), last(inds)))
 end
@@ -309,7 +309,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         return nothing
     elseif ifirst == ilast
         @inbounds a1 = A[ifirst]
-        if a1 === missing
+        if ismissing(a1)
             return nothing
         else
             return Some(mapreduce_first(f, op, a1))
@@ -320,25 +320,25 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         i = ifirst
         for outer i in i:ilast
             @inbounds ai = A[i]
-            ai !== missing && break
+            !ismissing(ai) && break
         end
-        ai === missing && return nothing
+        ismissing(ai) && return nothing
         a1 = ai::eltype(itr)
         i == typemax(typeof(i)) && return Some(mapreduce_first(f, op, a1))
         i += 1
         ai = missing
         for outer i in i:ilast
             @inbounds ai = A[i]
-            ai !== missing && break
+            !ismissing(ai) && break
         end
-        ai === missing && return Some(mapreduce_first(f, op, a1))
+        ismissing(ai) && return Some(mapreduce_first(f, op, a1))
         a2 = ai::eltype(itr)
         i == typemax(typeof(i)) && return Some(op(f(a1), f(a2)))
         i += 1
         v = op(f(a1), f(a2))
         @simd for i = i:ilast
             @inbounds ai = A[i]
-            if ai !== missing
+            if !ismissing(ai)
                 v = op(v, f(ai))
             end
         end
@@ -384,7 +384,7 @@ julia> filter(isodd, skipmissing(x))
 function filter(f, itr::SkipMissing{<:AbstractArray})
     y = similar(itr.x, eltype(itr), 0)
     for xi in itr.x
-        if xi !== missing && f(xi)
+        if !ismissing(xi) && f(xi)
             push!(y, xi)
         end
     end
@@ -450,7 +450,7 @@ ERROR: `b` is still missing
 macro coalesce(args...)
     expr = :(missing)
     for arg in reverse(args)
-        expr = :((val = $arg) !== missing ? val : $expr)
+        expr = :(!ismissing((val = $(esc(arg));)) ? val : $expr)
     end
-    return esc(:(let val; $expr; end))
+    return :(let val; $expr; end)
 end

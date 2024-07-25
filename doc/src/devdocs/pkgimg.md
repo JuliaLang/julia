@@ -33,7 +33,7 @@ Dynamic libraries on macOS need to link against `-lSystem`. On recent macOS vers
 To that effect we link with `-undefined dynamic_lookup`.
 
 ## [Package images optimized for multiple microarchitectures](@id pkgimgs-multi-versioning)
-Similar to [multi-versioning](@ref sysimg-multi-versioning) for system images, package images support multi-versioning. If you are in a heterogenous environment, with a unified cache,
+Similar to [multi-versioning](@ref sysimg-multi-versioning) for system images, package images support multi-versioning. If you are in a heterogeneous environment, with a unified cache,
 you can set the environment variable `JULIA_CPU_TARGET=generic` to multi-version the object caches.
 
 ## Flags that impact package image creation and selection

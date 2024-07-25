@@ -3,7 +3,7 @@
 module TestGivens
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: Givens, Rotation
+using LinearAlgebra: Givens, Rotation, givensAlgorithm
 
 # Test givens rotations
 @testset "Test Givens for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
@@ -110,6 +110,15 @@ oneunit(::Type{<:MockUnitful{T}}) where T = MockUnitful(one(T))
     @test g.c ≈ 3/5
     @test g.s ≈ 4/5
     @test r.data ≈ 5.0
+end
+
+# 51554
+# avoid infinite loop on Inf inputs
+@testset "givensAlgorithm - Inf inputs" for T in (Float64, ComplexF64)
+    cs, sn, r = givensAlgorithm(T(Inf), T(1.0))
+    @test !isfinite(r)
+    cs, sn, r = givensAlgorithm(T(1.0), T(Inf))
+    @test !isfinite(r)
 end
 
 end # module TestGivens

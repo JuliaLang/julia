@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Markdown/docs/src/index.md"
+```
+
 # [Markdown](@id markdown_stdlib)
 
 This section describes Julia's markdown syntax, which is enabled by the
@@ -75,7 +79,7 @@ the text enclosed in square brackets, `[ ]`, is the name of the link and the tex
 parentheses, `( )`, is the URL.
 
 ```
-A paragraph containing a link to [Julia](http://www.julialang.org).
+A paragraph containing a link to [Julia](https://www.julialang.org).
 ```
 
 It's also possible to add cross-references to other documented functions/methods/variables within
@@ -388,6 +392,16 @@ If no title text is specified after the admonition type, then the type name will
 
 Admonitions, like most other toplevel elements, can contain other toplevel elements (e.g. lists, images).
 
+## [Markdown String Literals](@id stdlib-markdown-literals)
+
+The `md""` macro allows you to embed Markdown strings directly into your Julia code.
+This macro is designed to simplify the inclusion of Markdown-formatted text within your Julia source files.
+
+### Usage
+
+```julia
+result = md"This is a **custom** Markdown string with [a link](http://example.com)."
+```
 ## Markdown Syntax Extensions
 
 Julia's markdown supports interpolation in a very similar way to basic string literals, with the
@@ -398,3 +412,14 @@ complex features (such as references) without cluttering the basic syntax.
 
 In principle, the Markdown parser itself can also be arbitrarily extended by packages, or an entirely
 custom flavour of Markdown can be used, but this should generally be unnecessary.
+
+
+## [API reference](@id stdlib-markdown-api)
+
+```@docs
+Markdown.MD
+Markdown.@md_str
+Markdown.@doc_str
+Markdown.html
+Markdown.latex
+```

@@ -13,7 +13,7 @@ static inline const std::string &host_cpu_name()
     return name;
 }
 
-static const std::vector<TargetData<1>> &get_cmdline_targets(void)
+static const llvm::SmallVector<TargetData<1>, 0> &get_cmdline_targets(void)
 {
     auto feature_cb = [] (const char*, size_t, FeatureList<1>&) {
         return false;
@@ -21,7 +21,7 @@ static const std::vector<TargetData<1>> &get_cmdline_targets(void)
     return ::get_cmdline_targets<1>(feature_cb);
 }
 
-static std::vector<TargetData<1>> jit_targets;
+static llvm::SmallVector<TargetData<1>, 0> jit_targets;
 
 static TargetData<1> arg_target_data(const TargetData<1> &arg, bool require_host)
 {
@@ -88,13 +88,13 @@ static void ensure_jit_target(bool imaging)
     }
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_noext(const TargetData<1> &data)
 {
-    return std::make_pair(data.name, std::vector<std::string>{});
+    return std::make_pair(data.name, llvm::SmallVector<std::string, 0>{});
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_vec(const TargetData<1> &data)
 {
     auto res0 = get_llvm_target_noext(data);
@@ -131,7 +131,7 @@ jl_image_t jl_init_processor_pkgimg(void *hdl)
     return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
@@ -144,13 +144,27 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
                 jl_get_cpu_features_llvm(), {{}, 0}, {{}, 0}, 0});
     return res;
 }
-
-extern "C" std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+#ifndef __clang_gcanalyzer__
+llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
-    if (jit_targets.empty())
-        jl_error("JIT targets not initialized");
-    std::vector<jl_target_spec_t> res;
-    for (auto &target: jit_targets) {
+
+    auto &cmdline = get_cmdline_targets();
+    check_cmdline(cmdline, true);
+    llvm::SmallVector<TargetData<1>, 0> image_targets;
+    for (auto &arg: cmdline) {
+        auto data = arg_target_data(arg, image_targets.empty());
+        image_targets.push_back(std::move(data));
+    }
+    auto ntargets = image_targets.size();
+    // Now decide the clone condition.
+    for (size_t i = 1; i < ntargets; i++) {
+        auto &t = image_targets[i];
+        t.en.flags |= JL_TARGET_CLONE_ALL;
+    }
+    if (image_targets.empty())
+        jl_error("No image targets found");
+    llvm::SmallVector<jl_target_spec_t, 0> res;
+    for (auto &target: image_targets) {
         jl_target_spec_t ele;
         std::tie(ele.cpu_name, ele.cpu_features) = get_llvm_target_str(target);
         ele.data = serialize_target_data(target.name, target.en.features,
@@ -161,15 +175,11 @@ extern "C" std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
     }
     return res;
 }
+#endif
 
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 {
-    return jl_cstr_to_string(host_cpu_name().c_str());
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
-{
-    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+    return jl_false; // Match behaviour of have_fma in src/llvm-cpufeatures.cpp (assume false)
 }
 
 JL_DLLEXPORT void jl_dump_host_cpu(void)
@@ -184,7 +194,7 @@ JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
     JL_GC_PUSH1(&rejection_reason);
     uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
     JL_GC_POP();
-    if (match_idx == (uint32_t)-1)
+    if (match_idx == UINT32_MAX)
         return rejection_reason;
     return jl_nothing;
 }

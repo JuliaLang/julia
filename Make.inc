@@ -92,6 +92,9 @@ WITH_DTRACE := 0
 # Enable ITTAPI integration
 WITH_ITTAPI := 0
 
+# Enable NVTX integration
+WITH_NVTX := 0
+
 # Enable Tracy support
 WITH_TRACY := 0
 WITH_TRACY_CALLSTACKS := 0
@@ -359,6 +362,10 @@ USE_MLIR := 0
 # Options to use RegionVectorizer
 USE_RV := 0
 
+# Use `ccache` for speeding up recompilation of the C/C++ part of Julia.
+# Requires the `ccache` executable to be in the `PATH` environment variable.
+USECCACHE := 0
+
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
 #XC_HOST := x86_64-w64-mingw32
@@ -478,7 +485,7 @@ endif
 
 FC := $(CROSS_COMPILE)gfortran
 
-# Note: Supporting only macOS Yosemite and above
+# Note: Supporting only macOS Mojave and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 ifneq ($(APPLE_ARCH),arm64)
@@ -497,7 +504,7 @@ JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
 JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
 JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++14
+JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
@@ -546,7 +553,17 @@ export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 endif
 endif
 
-JLDFLAGS :=
+# Conditional setting of RELRO flag for enhanced security on Linux builds.
+# RELRO (Read-Only Relocations) is a security feature that marks certain sections
+# of the binary as read-only to prevent exploitation techniques like
+# GOT (Global Offset Table) overwriting attacks.
+ifeq ($(OS),Linux)
+    RELRO_FLAG := -Wl,-z,relro
+else
+    RELRO_FLAG :=
+endif
+
+JLDFLAGS := $(RELRO_FLAG)
 
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
@@ -567,10 +584,10 @@ CXX_BASE := ccache
 FC_BASE  := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
-# http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+# https://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
 CC += -Qunused-arguments
 CXX += -Qunused-arguments
-# http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
+# https://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
 export CCACHE_CPP2 := yes
 endif
 else #USECCACHE
@@ -595,10 +612,13 @@ CPP_STDOUT := $(CPP) -P
 # file extensions
 ifeq ($(OS), WINNT)
   SHLIB_EXT := dll
+  PATHSEP := ;
 else ifeq ($(OS), Darwin)
   SHLIB_EXT := dylib
+  PATHSEP := :
 else
   SHLIB_EXT := so
+  PATHSEP := :
 endif
 
 ifeq ($(OS),WINNT)
@@ -663,7 +683,7 @@ JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
 endif
 endif
 
-ifeq ($(OS), FreeBSD)
+ifneq ($(findstring $(OS),FreeBSD OpenBSD),)
 LOCALBASE ?= /usr/local
 else
 LOCALBASE ?= /usr
@@ -719,7 +739,7 @@ SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
-ifneq ($(findstring $(OS),Linux FreeBSD),)
+ifneq ($(findstring $(OS),Linux FreeBSD OpenBSD),)
 SANITIZE_LDFLAGS += -Wl,--warn-unresolved-symbols
 endif # OS Linux or FreeBSD
 endif # SANITIZE_MEMORY=1
@@ -752,6 +772,12 @@ JCXXFLAGS += -DGC_VERIFY
 JCFLAGS += -DGC_VERIFY
 endif
 
+ifneq ($(JL_STACK_SIZE),)
+JCXXFLAGS += -DJL_STACK_SIZE=$(JL_STACK_SIZE)
+JCFLAGS += -DJL_STACK_SIZE=$(JL_STACK_SIZE)
+endif
+
+
 ifeq ($(WITH_GC_DEBUG_ENV), 1)
 JCXXFLAGS += -DGC_DEBUG_ENV
 JCFLAGS += -DGC_DEBUG_ENV
@@ -783,6 +809,11 @@ endif
 ifeq ($(WITH_TIMING_COUNTS), 1)
 JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
+endif
+
+ifeq ($(WITH_NVTX), 1)
+JCXXFLAGS += -DUSE_NVTX
+JCFLAGS += -DUSE_NVTX
 endif
 
 # ===========================================================================
@@ -1056,7 +1087,7 @@ JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
-ifeq ($(OS),Darwin)
+ifneq ($(findstring $(OS),Darwin OpenBSD),)
 LIBUNWIND:=-lunwind
 JCPPFLAGS+=-DLLVMLIBUNWIND
 else
@@ -1248,7 +1279,7 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # shipped with CSL. Although we do not depend on any of the symbols, it is entirely
 # possible that a user might choose to install a library which depends on symbols provided
 # by a newer libstdc++. Without runtime detection, those libraries would break.
-CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.31|GLIBCXX_3\.5\.|GLIBCXX_4\.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.33|GLIBCXX_3\.5\.|GLIBCXX_4\.
 
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
@@ -1367,6 +1398,19 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expma
 	$(NO_WHOLE_ARCHIVE)
 endif
 
+ifeq ($(OS), OpenBSD)
+JLDFLAGS += -Wl,--Bdynamic
+ifneq ($(SANITIZE),1)
+JLDFLAGS += -Wl,-no-undefined
+endif
+
+JLIBLDFLAGS += -Wl,-Bsymbolic-functions
+
+OSLIBS += -Wl,--no-as-needed -lpthread -lm -lc++abi -lc
+OSLIBS += -Wl,--whole-archive -lcompiler_rt -Wl,--no-whole-archive
+OSLIBS += -Wl,--export-dynamic,--as-needed,--version-script=$(BUILDROOT)/src/julia.expmap
+endif
+
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
@@ -1379,8 +1423,8 @@ endif
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
-JLDFLAGS += -Wl,--stack,8388608
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
+JLDFLAGS += -Wl,--stack,8388608 --disable-auto-import --disable-runtime-pseudo-reloc
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
@@ -1474,7 +1518,7 @@ endif
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
-CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+ CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path -sdk macosx)
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix

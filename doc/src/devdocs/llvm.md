@@ -43,7 +43,7 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 Some of the `.cpp` files form a group that compile to a single object.
 
 The difference between an intrinsic and a builtin is that a builtin is a first class function
-that can be used like any other Julia function.  An intrinsic can operate only on unboxed data,
+that can be used like any other Julia function. An intrinsic can operate only on unboxed data,
 and therefore its arguments must be statically typed.
 
 ### [Alias Analysis](@id LLVM-Alias-Analysis)
@@ -188,7 +188,7 @@ study it and the pass of interest in isolation.
 3. Pick out the IR at the point just before the pass of interest runs.
 4. Strip the debug metadata and fix up the TBAA metadata by hand.
 
-The last step is labor intensive.  Suggestions on a better way would be appreciated.
+The last step is labor intensive. Suggestions on a better way would be appreciated.
 
 ## The jlcall calling convention
 
@@ -341,8 +341,8 @@ ccall(:foo, Cvoid, (Ptr{Float64},), A)
 In lowering, the compiler will insert a conversion from the array to the
 pointer which drops the reference to the array value. However, we of course
 need to make sure that the array does stay alive while we're doing the
-[`ccall`](@ref). To understand how this is done, first recall the lowering of the
-above code:
+[`ccall`](@ref). To understand how this is done, lets look at a hypothetical
+approximate possible lowering of the above code:
 ```julia
 return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), 0, :(:ccall), Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), 0, :(:ccall), :(A)), :(A)))
 ```

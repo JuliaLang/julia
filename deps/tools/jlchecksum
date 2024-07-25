@@ -87,15 +87,17 @@ SHA512_PROG=""
 MD5_PROG=""
 find_checksum_progs()
 {
-    if [ ! -z $(which sha512sum) ]; then
+    if [ ! -z $(which sha512sum 2>/dev/null) ]; then
         SHA512_PROG="sha512sum $ARG1 | awk '{ print \$1; }'"
-    elif [ ! -z $(which shasum) ]; then
+    elif [ ! -z $(which shasum 2>/dev/null) ]; then
         SHA512_PROG="shasum -a 512 $ARG1 | awk '{ print \$1; }'"
+    elif [ ! -z $(which sha512 2>/dev/null) ]; then
+        SHA512_PROG="sha512 -q $ARG1"
     fi
 
-    if [ ! -z $(which md5sum) ]; then
+    if [ ! -z $(which md5sum 2>/dev/null) ]; then
         MD5_PROG="md5sum $ARG1 | awk '{ print \$1; }'"
-    elif [ ! -z $(which md5) ]; then
+    elif [ ! -z $(which md5 2>/dev/null) ]; then
         MD5_PROG="md5 -q $ARG1"
     fi
 }

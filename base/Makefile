@@ -203,19 +203,25 @@ endif
 $(build_bindir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
 	rm -f "$@" && \
-	ln -svf "$(7Z_PATH)" "$@"
+	ln -sf "$(7Z_PATH)" "$@"
 
-symlink_lld: $(build_bindir)/lld$(EXE)
+symlink_llvm_utils: $(build_depsbindir)/lld$(EXE) $(build_depsbindir)/dsymutil$(EXE)
 
 ifneq ($(USE_SYSTEM_LLD),0)
-SYMLINK_SYSTEM_LIBRARIES += symlink_lld
+SYMLINK_SYSTEM_LIBRARIES += symlink_llvm_utils
 LLD_PATH := $(shell which lld$(EXE))
+DSYMUTIL_PATH := $(shell which dsymutil$(EXE))
 endif
 
-$(build_bindir)/lld$(EXE):
+$(build_depsbindir)/lld$(EXE):
 	[ -e "$(LLD_PATH)" ] && \
 	rm -f "$@" && \
-	ln -svf "$(LLD_PATH)" "$@"
+	ln -sf "$(LLD_PATH)" "$@"
+
+$(build_depsbindir)/dsymutil$(EXE):
+	[ -e "$(DSYMUTIL_PATH)" ] && \
+	rm -f "$@" && \
+	ln -sf "$(DSYMUTIL_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 
@@ -243,12 +249,12 @@ endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
 endif
-$(eval $(call symlink_system_library,CSL,libquadmath,0))
 $(eval $(call symlink_system_library,CSL,libstdc++,6))
-# We allow libssp, libatomic and libgomp to fail as they are not available on all systems
+# We allow libssp, libatomic, libgomp and libquadmath to fail as they are not available on all systems
 $(eval $(call symlink_system_library,CSL,libssp,0,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
+$(eval $(call symlink_system_library,CSL,libquadmath,0,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,PCRE,libpcre2-8))
 $(eval $(call symlink_system_library,DSFMT,libdSFMT))
 $(eval $(call symlink_system_library,LIBBLASTRAMPOLINE,libblastrampoline))
@@ -269,11 +275,9 @@ $(eval $(call symlink_system_library,LIBSUITESPARSE,libamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libccolamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcholmod))
-$(eval $(call symlink_system_library,LIBSUITESPARSE,libcholmod_cuda))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcolamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libumfpack))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libspqr))
-$(eval $(call symlink_system_library,LIBSUITESPARSE,libspqr_cuda))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libsuitesparseconfig))
 # EXCLUDED LIBRARIES (installed/used, but not vendored for use with dlopen):
 # libunwind

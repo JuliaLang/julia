@@ -2,7 +2,7 @@
 
 In some circumstances, one might wish to provide hints or instructions that a given block of code
 has special properties: you might always want to inline it, or you might want to turn on special
-compiler optimization passes.  Starting with version 0.4, Julia has a convention that these instructions
+compiler optimization passes. Starting with version 0.4, Julia has a convention that these instructions
 can be placed inside a `:meta` expression, which is typically (but not necessarily) the first
 expression in the body of a function.
 
@@ -34,9 +34,8 @@ quote
 end
 ```
 
-`Base.pushmeta!(ex, :symbol, args...)` appends `:symbol` to the end of the `:meta` expression,
-creating a new `:meta` expression if necessary. If `args` is specified, a nested expression containing
-`:symbol` and these arguments is appended instead, which can be used to specify additional information.
+`Base.pushmeta!(ex, tag::Union{Symbol,Expr})` appends `:tag` to the end of the `:meta` expression,
+creating a new `:meta` expression if necessary.
 
 To use the metadata, you have to parse these `:meta` expressions. If your implementation can be
 performed within Julia, `Base.popmeta!` is very handy: `Base.popmeta!(body, :symbol)` will scan

@@ -83,6 +83,15 @@ may assume that any use of a Phi node will have an assigned value in the corresp
 for the mapping to be incomplete, i.e. for a Phi node to have missing incoming edges. In that case, it must
 be dynamically guaranteed that the corresponding value will not be used.
 
+Note that SSA uses semantically occur after the terminator of the corresponding predecessor ("on the edge").
+Consequently, if multiple Phi nodes appear at the start of a basic block, they are run simultaneously.
+This means that in the following IR snippet, if we came from block `23`, `%46` will take the value associated to
+`%45` _before_ we entered this block.
+```julia
+%45 = φ (#18 => %23, #23 => %50)
+%46 = φ (#18 => 1.0, #23 => %45)
+```
+
 PiNodes encode statically proven information that may be implicitly assumed in basic blocks dominated by a given
 pi node. They are conceptually equivalent to the technique introduced in the paper
 [ABCD: Eliminating Array Bounds Checks on Demand](https://dl.acm.org/citation.cfm?id=358438.349342) or the predicate info nodes in LLVM. To see how they work, consider,
@@ -190,7 +199,7 @@ The corresponding IR (with irrelevant types stripped) is:
 4 ┄ %13 = φᶜ (%3, %6, %9)::Bool
 │   %14 = φᶜ (%4, %7, %10)::Core.Compiler.MaybeUndef(Int64)
 │   %15 = φᶜ (%5)::Core.Const(1)
-└──       $(Expr(:leave, 1))
+└──       $(Expr(:leave, Core.SSAValue(2)))
 5 ─       $(Expr(:pop_exception, :(%2)))::Any
 │         $(Expr(:throw_undef_if_not, :y, :(%13)))::Any
 │   %19 = Core.tuple(%15, %14)
@@ -225,7 +234,7 @@ Instead, we do the following:
 - RAUW style operations are performed by setting the corresponding statement index to the replacement
   value.
 - Statements are erased by setting the corresponding statement to `nothing` (this is essentially just a special-case
-  convention of the above.
+  convention of the above).
 - If there are any uses of the statement being erased, they will be set to `nothing`.
 
 There is a `compact!` function that compacts the above data structure by performing the insertion of nodes in the appropriate place, trivial copy propagation, and renaming of uses to any changed SSA values. However, the clever part

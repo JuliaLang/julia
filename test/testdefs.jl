@@ -5,6 +5,9 @@ using Test, Random
 function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     Test.TESTSET_PRINT_ENABLE[] = false
+    # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
+    # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
+    empty!(Base.Experimental._hint_handlers)
     try
         if isolate
             # Simple enough to type and random enough so that no one will hard
@@ -79,9 +82,11 @@ function runtests(name, path, isolate=true; seed=nothing)
         rss = Sys.maxrss()
         #res_and_time_data[1] is the testset
         ts = res_and_time_data[1]
-        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Test.get_test_counts(ts)
+        tc = Test.get_test_counts(ts)
         # simplify our stored data to just contain the counts
-        res_and_time_data = (TestSetException(passes+c_passes, fails+c_fails, errors+c_errors, broken+c_broken, Test.filter_errors(ts)),
+        res_and_time_data = (TestSetException(tc.passes+tc.cumulative_passes, tc.fails+tc.cumulative_fails,
+                             tc.errors+tc.cumulative_errors, tc.broken+tc.cumulative_broken,
+                             Test.filter_errors(ts)),
                              res_and_time_data[2],
                              res_and_time_data[3],
                              res_and_time_data[4],

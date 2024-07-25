@@ -21,6 +21,7 @@ end
     close(err.in)
     out_task = @async readlines(out)
     @test readline(err) == "MethodError: no method matching this_function_has_no_methods()"
+    @test readline(err) == "The function `this_function_has_no_methods` exists, but no method is defined for this combination of argument types."
     @test success(p)
     lines = fetch(out_task)
     @test length(lines) == 11

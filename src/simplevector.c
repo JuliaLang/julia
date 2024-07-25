@@ -79,7 +79,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
 {
     size_t n = jl_svec_len(a);
     jl_svec_t *c = jl_alloc_svec_uninit(n);
-    memmove_refs((void**)jl_svec_data(c), (void**)jl_svec_data(a), n);
+    memmove_refs((_Atomic(void*)*)jl_svec_data(c), (_Atomic(void*)*)jl_svec_data(a), n);
     return c;
 }
 
@@ -95,11 +95,4 @@ JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
 JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT
 {
     return jl_svec_len(t);
-}
-
-JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i)
-{
-    jl_value_t *v = jl_svecref(t, (size_t)i);
-    assert(v != NULL);
-    return v;
 }

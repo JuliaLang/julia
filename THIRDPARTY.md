@@ -1,5 +1,5 @@
 The Julia language is licensed under the MIT License (see [LICENSE.md](./LICENSE.md) ). The "language" consists
-of the compiler (the contents of src/), most of the standard library (base/),
+of the compiler (the contents of `src/`), most of the standard library (`base/` and `stdlib/`),
 and some utilities (most of the rest of the files in this repository). See below
 for exceptions.
 
@@ -26,7 +26,8 @@ own licenses:
 
 and optionally:
 
-- [ITTAPI](https://github.com/intel/ittapi/blob/master/LICENSES/BSD-3-Clause.txt) [BSD-3]
+- [LibTracyClient](https://github.com/wolfpld/tracy/blob/master/LICENSE) [BSD-3]
+- [ITTAPI](https://github.com/intel/ittapi/tree/master/LICENSES) [BSD-3 AND GPL2]
 
 Julia's `stdlib` uses the following external libraries, which have their own licenses:
 
@@ -41,14 +42,26 @@ Julia's `stdlib` uses the following external libraries, which have their own lic
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE) [BSD-3]
 - [LAPACK](https://netlib.org/lapack/LICENSE.txt) [BSD-3]
 - [PCRE](https://www.pcre.org/licence.txt) [BSD-3]
-- [SUITESPARSE](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/LICENSE.txt) [mix of LGPL2+ and GPL2+; see individual module licenses]
+- [SUITESPARSE](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/master/LICENSE.txt) [mix of BSD-3-Clause, LGPL2.1+ and GPL2+; see individual module licenses]
+  - [`libamd`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/AMD/Doc/License.txt) [BSD-3-Clause]
+  - [`libcamd`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/CAMD/Doc/License.txt) [BSD-3-Clause]
+  - [`libccolamd`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/CCOLAMD/Doc/License.txt) [BSD-3-Clause]
+  - [`libcolamd`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/COLAMD/Doc/License.txt) [BSD-3-Clause]
+  - [`libsuitesparseconfig`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/SuiteSparse_config/README.txt) [BSD-3-Clause]
+  - [`libbtf`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/BTF/Doc/License.txt) [LGPL-2.1+]
+  - [`libklu`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/KLU/Doc/License.txt) [LGPL-2.1+]
+  - [`libldl`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/LDL/Doc/License.txt) [LGPL-2.1+]
+  - [`libcholmod`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/CHOLMOD/Doc/License.txt) [LGPL-2.1+ and GPL-2.0+]
+  - [`librbio`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/RBio/Doc/License.txt) [GPL-2.0+]
+  - [`libspqr`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/SPQR/Doc/License.txt) [GPL-2.0+]
+  - [`libumfpack`](https://github.com/DrTimothyAldenDavis/SuiteSparse/blob/dev/UMFPACK/Doc/License.txt) [GPL-2.0+]
 - [LIBBLASTRAMPOLINE](https://github.com/staticfloat/libblastrampoline/blob/main/LICENSE) [MIT]
 - [NGHTTP2](https://github.com/nghttp2/nghttp2/blob/master/COPYING) [MIT]
 
 Julia's build process uses the following external tools:
 
-- [PATCHELF](https://nixos.org/patchelf.html)
-- [OBJCONV](https://www.agner.org/optimize/#objconv)
+- [PATCHELF](https://github.com/NixOS/patchelf/blob/master/COPYING) [GPL3]
+- [OBJCONV](https://www.agner.org/optimize/#objconv) [GPL3]
 - [LIBWHICH](https://github.com/vtjnash/libwhich/blob/master/LICENSE) [MIT]
 
 Julia bundles the following external programs and libraries:

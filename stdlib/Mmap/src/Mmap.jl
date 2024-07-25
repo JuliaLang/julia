@@ -256,7 +256,7 @@ function mmap(io::IO,
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    finalizer(A) do x
+    finalizer(A.ref.mem) do x
         @static if Sys.isunix()
             systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen) != 0)
         else
@@ -367,8 +367,9 @@ Forces synchronization between the in-memory version of a memory-mapped `Array` 
 [`BitArray`](@ref) and the on-disk version.
 """
 function sync!(m::Array, flags::Integer=MS_SYNC)
-    offset = rem(UInt(pointer(m)), PAGESIZE)
-    ptr = pointer(m) - offset
+    ptr = pointer(m)
+    offset = rem(UInt(ptr), PAGESIZE)
+    ptr = ptr - offset
     mmaplen = sizeof(m) + offset
     GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
@@ -429,8 +430,9 @@ Advises the kernel on the intended usage of the memory-mapped `array`, with the 
 `flag` being one of the available `MADV_*` constants.
 """
 function madvise!(m::Array, flag::Integer=MADV_NORMAL)
-    offset = rem(UInt(pointer(m)), PAGESIZE)
-    ptr = pointer(m) - offset
+    ptr = pointer(m)
+    offset = rem(UInt(ptr), PAGESIZE)
+    ptr = ptr - offset
     mmaplen = sizeof(m) + offset
     GC.@preserve m begin
         systemerror("madvise",

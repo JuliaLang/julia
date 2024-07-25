@@ -43,7 +43,7 @@ struct FinalLowerGC: private JuliaPassContext {
 
 private:
     Function *queueRootFunc;
-    Function *poolAllocFunc;
+    Function *smallAllocFunc;
     Function *bigAllocFunc;
     Function *allocTypedFunc;
     Instruction *pgcstack;
@@ -103,9 +103,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     IRBuilder<> builder(target);
     StoreInst *inst = builder.CreateAlignedStore(
                 ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
-                builder.CreateBitCast(
-                        builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0, "frame.nroots"),
-                        T_size->getPointerTo(), "frame.nroots"), // GEP of 0 becomes a noop and eats the name
+                builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0, "frame.nroots"),// GEP of 0 becomes a noop and eats the name
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(F.getContext());
@@ -116,9 +114,9 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                     PointerType::get(T_ppjlvalue, 0)),
             Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    inst = builder.CreateAlignedStore(
+    builder.CreateAlignedStore(
             gcframe,
-            builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
+            pgcstack,
             Align(sizeof(void*)));
     target->eraseFromParent();
 }
@@ -136,8 +134,7 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
         inst,
-        builder.CreateBitCast(pgcstack,
-            PointerType::get(T_prjlvalue, 0)),
+        pgcstack,
         Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     target->eraseFromParent();
@@ -189,8 +186,7 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     IRBuilder<> builder(target);
     auto ptls = target->getArgOperand(0);
     auto type = target->getArgOperand(2);
-    Attribute derefAttr;
-
+    uint64_t derefBytes = 0;
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
         size_t sz = (size_t)CI->getZExtValue();
         // This is strongly architecture and OS dependent
@@ -200,22 +196,27 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
             newI = builder.CreateCall(
                 bigAllocFunc,
                 { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
-            derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sz + sizeof(void*));
+            if (sz > 0)
+                derefBytes = sz;
         }
         else {
             auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
             auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-            newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize, type });
-            derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), osize);
+            newI = builder.CreateCall(smallAllocFunc, { ptls, pool_offs, pool_osize, type });
+            if (sz > 0)
+                derefBytes = sz;
         }
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
-        size = builder.CreateAdd(size, ConstantInt::get(T_size, sizeof(void*)));
+        // allocTypedFunc does not include the type tag in the allocation size!
         newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
-        derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sizeof(void*));
+        derefBytes = sizeof(void*);
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
-    newI->addRetAttr(derefAttr);
+    unsigned align = std::max((unsigned)target->getRetAlign().valueOrOne().value(), (unsigned)sizeof(void*));
+    newI->addRetAttr(Attribute::getWithAlignment(F.getContext(), Align(align)));
+    if (derefBytes > 0)
+        newI->addDereferenceableRetAttr(derefBytes);
     newI->takeName(target);
     target->replaceAllUsesWith(newI);
     target->eraseFromParent();
@@ -237,7 +238,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     }
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
-    poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
+    smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
     T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());

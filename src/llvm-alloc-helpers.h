@@ -87,6 +87,8 @@ namespace jl_alloc {
         bool returned:1;
         // The object is used in an error function
         bool haserror:1;
+        // For checking attributes of "uninitialized" or "zeroed" or unknown
+        llvm::AllocFnKind allockind;
 
         // The alloc has a Julia object reference not in an explicit field.
         bool has_unknown_objref:1;
@@ -105,6 +107,7 @@ namespace jl_alloc {
             hasunknownmem = false;
             returned = false;
             haserror = false;
+            allockind = llvm::AllocFnKind::Unknown;
             has_unknown_objref = false;
             has_unknown_objrefaggr = false;
             uses.clear();
@@ -153,7 +156,7 @@ namespace jl_alloc {
         }
     };
 
-    void runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
+    void runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
 }
 
 

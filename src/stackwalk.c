@@ -5,6 +5,7 @@
   utilities for walking the stack and looking up information about code addresses
 */
 #include <inttypes.h>
+#include "gc.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"
@@ -260,21 +261,21 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             uintptr_t *sp_ptr = NULL;
             if (returnsp) {
                 jl_array_grow_end(sp, maxincr);
-                sp_ptr = (uintptr_t*)jl_array_data(sp) + offset;
+                sp_ptr = jl_array_data(sp, uintptr_t) + offset;
             }
             size_t size_incr = 0;
-            have_more_frames = jl_unw_stepn(&cursor, (jl_bt_element_t*)jl_array_data(ip) + offset,
+            have_more_frames = jl_unw_stepn(&cursor, jl_array_data(ip, jl_bt_element_t) + offset,
                                             &size_incr, sp_ptr, maxincr, skip, &pgcstack, 0);
             skip = 0;
             offset += size_incr;
         }
-        jl_array_del_end(ip, jl_array_len(ip) - offset);
+        jl_array_del_end(ip, jl_array_nrows(ip) - offset);
         if (returnsp)
-            jl_array_del_end(sp, jl_array_len(sp) - offset);
+            jl_array_del_end(sp, jl_array_nrows(sp) - offset);
 
         size_t n = 0;
-        jl_bt_element_t *bt_data = (jl_bt_element_t*)jl_array_data(ip);
-        while (n < jl_array_len(ip)) {
+        jl_bt_element_t *bt_data = jl_array_data(ip, jl_bt_element_t);
+        while (n < jl_array_nrows(ip)) {
             jl_bt_element_t *bt_entry = bt_data + n;
             if (!jl_bt_is_native(bt_entry)) {
                 size_t njlvals = jl_bt_num_jlvals(bt_entry);
@@ -303,7 +304,7 @@ static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
     bt = *btout = jl_alloc_array_1d(array_ptr_void_type, bt_size);
     static_assert(sizeof(jl_bt_element_t) == sizeof(void*),
                   "jl_bt_element_t is presented as Ptr{Cvoid} on julia side");
-    memcpy(bt->data, bt_data, bt_size * sizeof(jl_bt_element_t));
+    memcpy(jl_array_data(bt, jl_bt_element_t), bt_data, bt_size * sizeof(jl_bt_element_t));
     bt2 = *bt2out = jl_alloc_array_1d(jl_array_any_type, 0);
     // Scan the backtrace buffer for any gc-managed values
     for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
@@ -652,6 +653,80 @@ void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
     free(frames);
 }
 
+const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
+{
+    jl_value_t *def = debuginfo->def;
+    if (jl_is_method_instance(def))
+        def = ((jl_method_instance_t*)def)->def.value;
+    if (jl_is_method(def))
+        def = (jl_value_t*)((jl_method_t*)def)->file;
+    if (jl_is_symbol(def))
+        return jl_symbol_name((jl_sym_t*)def);
+    return "<unknown>";
+}
+
+const char *jl_debuginfo_file(jl_debuginfo_t *debuginfo)
+{
+    jl_debuginfo_t *linetable = debuginfo->linetable;
+    while ((jl_value_t*)linetable != jl_nothing) {
+        debuginfo = linetable;
+        linetable = debuginfo->linetable;
+    }
+    return jl_debuginfo_file1(debuginfo);
+}
+
+jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def)
+{
+    if (jl_is_method_instance(debuginfo_def))
+        debuginfo_def = ((jl_method_instance_t*)debuginfo_def)->def.value;
+    if (jl_is_method(debuginfo_def))
+        debuginfo_def = (jl_value_t*)((jl_method_t*)debuginfo_def)->module;
+    if (jl_is_module(debuginfo_def))
+        return (jl_module_t*)debuginfo_def;
+    return NULL;
+}
+
+const char *jl_debuginfo_name(jl_value_t *func)
+{
+    if (func == NULL)
+        return "macro expansion";
+    if (jl_is_method_instance(func))
+        func = ((jl_method_instance_t*)func)->def.value;
+    if (jl_is_method(func))
+        func = (jl_value_t*)((jl_method_t*)func)->name;
+    if (jl_is_symbol(func))
+        return jl_symbol_name((jl_sym_t*)func);
+    if (jl_is_module(func))
+        return "top-level scope";
+    return "<unknown>";
+}
+
+// func == module : top-level
+// func == NULL : macro expansion
+static void jl_print_debugloc(jl_debuginfo_t *debuginfo, jl_value_t *func, size_t ip, int inlined) JL_NOTSAFEPOINT
+{
+    if (!jl_is_symbol(debuginfo->def)) // this is a path or
+        func = debuginfo->def; // this is inlined code
+    struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo->codelocs, ip);
+    intptr_t edges_idx = stmt.to;
+    if (edges_idx) {
+        jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, edges_idx - 1);
+        assert(jl_typetagis(edge, jl_debuginfo_type));
+        jl_print_debugloc(edge, NULL, stmt.pc, 1);
+    }
+    intptr_t ip2 = stmt.line;
+    if (ip2 >= 0 && ip > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
+        jl_print_debugloc(debuginfo->linetable, func, ip2, 0);
+    }
+    else {
+        if (ip2 < 0) // set broken debug info to ignored
+            ip2 = 0;
+        const char *func_name = jl_debuginfo_name(func);
+        const char *file = jl_debuginfo_file(debuginfo);
+        jl_safe_print_codeloc(func_name, file, ip2, inlined);
+    }
+}
+
 // Print code location for backtrace buffer entry at *bt_entry
 void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
 {
@@ -659,33 +734,23 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         jl_print_native_codeloc(bt_entry[0].uintptr);
     }
     else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
-        size_t ip = jl_bt_entry_header(bt_entry);
+        size_t ip = jl_bt_entry_header(bt_entry); // zero-indexed
         jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
-        if (jl_is_method_instance(code)) {
+        jl_value_t *def = (jl_value_t*)jl_core_module; // just used as a token here that isa Module
+        if (jl_is_code_instance(code)) {
+            jl_code_instance_t *ci = (jl_code_instance_t*)code;
+            def = (jl_value_t*)ci->def;
+            code = jl_atomic_load_relaxed(&ci->inferred);
+        } else if (jl_is_method_instance(code)) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)code;
+            def = code;
             // When interpreting a method instance, need to unwrap to find the code info
-            code = jl_atomic_load_relaxed(&((jl_method_instance_t*)code)->uninferred);
+            code = mi->def.method->source;
         }
         if (jl_is_code_info(code)) {
             jl_code_info_t *src = (jl_code_info_t*)code;
             // See also the debug info handling in codegen.cpp.
-            // NB: debuginfoloc is 1-based!
-            intptr_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[ip];
-            while (debuginfoloc != 0) {
-                jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
-                    jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
-                assert(jl_typetagis(locinfo, jl_lineinfonode_type));
-                const char *func_name = "Unknown";
-                jl_value_t *method = locinfo->method;
-                if (jl_is_method_instance(method))
-                    method = ((jl_method_instance_t*)method)->def.value;
-                if (jl_is_method(method))
-                    method = (jl_value_t*)((jl_method_t*)method)->name;
-                if (jl_is_symbol(method))
-                    func_name = jl_symbol_name((jl_sym_t*)method);
-                jl_safe_print_codeloc(func_name, jl_symbol_name(locinfo->file),
-                                      locinfo->line, locinfo->inlined_at);
-                debuginfoloc = locinfo->inlined_at;
-            }
+            jl_print_debugloc(src->debuginfo, def, ip + 1, 0);
         }
         else {
             // If we're using this function something bad has already happened;
@@ -791,7 +856,7 @@ _os_tsd_get_direct(unsigned long slot)
 // Unconditionally defined ptrauth_strip (instead of using the ptrauth.h header)
 // since libsystem will likely be compiled with -mbranch-protection, and we currently are not.
 // code from https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/compiler-rt/lib/sanitizer_common/sanitizer_ptrauth.h
-static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) {
+static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) JL_NOTSAFEPOINT {
   // On the stack the link register is protected with Pointer
   // Authentication Code when compiled with -mbranch-protection.
   // Let's strip the PAC unconditionally because xpaclri is in the NOP space,
@@ -809,7 +874,7 @@ static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) {
 
 __attribute__((always_inline, pure))
 static __inline__ void**
-_os_tsd_get_base(void)
+_os_tsd_get_base(void) JL_NOTSAFEPOINT
 {
 #if defined(__arm__)
     uintptr_t tsd;
@@ -831,7 +896,7 @@ _os_tsd_get_base(void)
 #ifdef _os_tsd_get_base
 __attribute__((always_inline))
 static __inline__ void*
-_os_tsd_get_direct(unsigned long slot)
+_os_tsd_get_direct(unsigned long slot) JL_NOTSAFEPOINT
 {
     return _os_tsd_get_base()[slot];
 }
@@ -839,14 +904,14 @@ _os_tsd_get_direct(unsigned long slot)
 
 __attribute__((always_inline, pure))
 static __inline__ uintptr_t
-_os_ptr_munge_token(void)
+_os_ptr_munge_token(void) JL_NOTSAFEPOINT
 {
     return (uintptr_t)_os_tsd_get_direct(__TSD_PTR_MUNGE);
 }
 
 __attribute__((always_inline, pure))
 JL_UNUSED static __inline__ uintptr_t
-_os_ptr_munge(uintptr_t ptr)
+_os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 {
     return ptr ^ _os_ptr_munge_token();
 }
@@ -905,10 +970,12 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         c.R15 = mctx->R15;
         c.Rip = mctx->Rip;
         memcpy(&c.Xmm6, &mctx->Xmm6, 10 * sizeof(mctx->Xmm6)); // Xmm6-Xmm15
-#else
+#elif defined(_CPU_X86_)
         c.Eip = mctx->Eip;
         c.Esp = mctx->Esp;
         c.Ebp = mctx->Ebp;
+#else
+        #error Windows is currently only supported on x86 and x86_64
 #endif
         context = &c;
 #elif defined(JL_HAVE_UNW_CONTEXT)
@@ -1022,7 +1089,7 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         mc->__r14 = ((uint64_t*)mctx)[5];
         mc->__r15 = ((uint64_t*)mctx)[6];
         mc->__rip = ((uint64_t*)mctx)[7];
-        // added in libsystem_plaform 177.200.16 (macOS Mojave 10.14.3)
+        // added in libsystem_platform 177.200.16 (macOS Mojave 10.14.3)
         // prior to that _os_ptr_munge_token was (hopefully) typically 0,
         // so x ^ 0 == x and this is a no-op
         mc->__rbp = _OS_PTR_UNMUNGE(mc->__rbp);
@@ -1087,10 +1154,6 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
       (void)c;
      #endif
-#elif defined(JL_HAVE_ASYNCIFY)
-     #pragma message("jl_rec_backtrace not defined for ASYNCIFY")
-#elif defined(JL_HAVE_SIGALTSTACK)
-     #pragma message("jl_rec_backtrace not defined for SIGALTSTACK")
 #else
      #pragma message("jl_rec_backtrace not defined for unknown task system")
 #endif
@@ -1153,15 +1216,19 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (size_t i = 0; i < nthreads; i++) {
-        // skip GC threads since they don't have tasks
-        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
+        jl_ptls_t ptls2 = allstates[i];
+        if (gc_is_parallel_collector_thread(i)) {
+            jl_safe_printf("==== Skipping backtrace for parallel GC thread %zu\n", i + 1);
             continue;
         }
-        jl_ptls_t ptls2 = allstates[i];
+        if (gc_is_concurrent_collector_thread(i)) {
+            jl_safe_printf("==== Skipping backtrace for concurrent GC thread %zu\n", i + 1);
+            continue;
+        }
         if (ptls2 == NULL) {
             continue;
         }
-        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
         int t_state = JL_TASK_STATE_DONE;
         jl_task_t *t = ptls2->root_task;
