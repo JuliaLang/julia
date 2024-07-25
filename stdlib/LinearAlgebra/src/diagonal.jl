@@ -185,8 +185,25 @@ end
     end
     r
 end
+"""
+    diagzero(A::AbstractMatrix, i, j)
+
+Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `A`.
+"""
 diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
-diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = diagzero(T, axes(D.diag[i], 1), axes(D.diag[j], 2))
+# dispatching on the axes permits specializing on the axis types to return something other than an Array
+diagzero(T::Type, ax::Union{AbstractUnitRange, Integer}...) = diagzero(T, ax)
+diagzero(T::Type, ::Tuple{}) = zeros(T)
+"""
+    diagzero(T::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}})
+
+Return an appropriate zero-ed array with either the axes `ax`, or the `size` `map(length, ax)`,
+which may be used as a structural zero element of a banded matrix. By default, this falls back to
+using the size along each axis to construct the result.
+"""
+diagzero(T::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = diagzero(T, map(length, ax))
+diagzero(T::Type, sz::Tuple{Integer, Vararg{Integer}}) = zeros(T, sz)
 
 @inline function getindex(D::Diagonal, b::BandIndex)
     @boundscheck checkbounds(D, b)

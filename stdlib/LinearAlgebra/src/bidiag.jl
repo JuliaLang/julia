@@ -118,15 +118,15 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
-bidiagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
-function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
+diagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
+function diagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
     Tel = eltype(eltype(A.dv))
     if i < j && A.uplo == 'U' #= top right zeros =#
-        return zeros(Tel, size(A.ev[i], 1), size(A.ev[j-1], 2))
+        return diagzero(Tel, axes(A.ev[i], 1), axes(A.ev[j-1], 2))
     elseif j < i && A.uplo == 'L' #= bottom left zeros =#
-        return zeros(Tel, size(A.ev[i-1], 1), size(A.ev[j], 2))
+        return diagzero(Tel, axes(A.ev[i-1], 1), axes(A.ev[j], 2))
     else
-        return zeros(Tel, size(A.dv[i], 1), size(A.dv[j], 2))
+        return diagzero(Tel, axes(A.dv[i], 1), axes(A.dv[j], 2))
     end
 end
 
@@ -161,7 +161,7 @@ end
     elseif i == j - _offdiagind(A.uplo)
         return @inbounds A.ev[A.uplo == 'U' ? i : j]
     else
-        return bidiagzero(A, i, j)
+        return diagzero(A, i, j)
     end
 end
 
@@ -172,7 +172,7 @@ end
     elseif b.band == _offdiagind(A.uplo)
         return @inbounds A.ev[b.index]
     else
-        return bidiagzero(A, Tuple(_cartinds(b))...)
+        return diagzero(A, Tuple(_cartinds(b))...)
     end
 end
 
