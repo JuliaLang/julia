@@ -216,7 +216,7 @@ isbitsunion(u::Type) = u isa Union && allocatedinline(u)
 function _unsetindex!(A::Array, i::Int)
     @inline
     @boundscheck checkbounds(A, i)
-    @inbounds _unsetindex!(GenericMemoryRef(A.ref, i))
+    @inbounds _unsetindex!(memoryref(A.ref, i))
     return A
 end
 
@@ -239,14 +239,14 @@ function isassigned(a::Array, i::Int...)
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(Bool, a, i...) || return false
     ii = _sub2ind(size(a), i...)
-    return @inbounds isassigned(memoryref(a.ref, ii, false))
+    return @inbounds isassigned(memoryrefnew(a.ref, ii, false))
 end
 
 function isassigned(a::Vector, i::Int) # slight compiler simplification for the most common case
     @inline
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(Bool, a, i) || return false
-    return @inbounds isassigned(memoryref(a.ref, i, false))
+    return @inbounds isassigned(memoryrefnew(a.ref, i, false))
 end
 
 
@@ -281,7 +281,7 @@ the same manner as C.
 """
 function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
     n == 0 && return dest
-    unsafe_copyto!(GenericMemoryRef(dest.ref, doffs), GenericMemoryRef(src.ref, soffs), n)
+    unsafe_copyto!(memoryref(dest.ref, doffs), memoryref(src.ref, soffs), n)
     return dest
 end
 
@@ -303,8 +303,8 @@ function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Arr
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
-    @inbounds let dest = GenericMemoryRef(dest isa Array ? getfield(dest, :ref) : dest, doffs),
-                  src = GenericMemoryRef(src isa Array ? getfield(src, :ref) : src, soffs)
+    @inbounds let dest = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
+                  src = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
         unsafe_copyto!(dest, src, n)
     end
     return dest
@@ -348,7 +348,7 @@ copy
     @_nothrow_meta
     ref = a.ref
     newmem = ccall(:jl_genericmemory_copy_slice, Ref{Memory{T}}, (Any, Ptr{Cvoid}, Int), ref.mem, ref.ptr_or_offset, length(a))
-    return $(Expr(:new, :(typeof(a)), :(Core.memoryref(newmem)), :(a.size)))
+    return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
 end
 
 ## Constructors ##
@@ -964,21 +964,21 @@ function setindex! end
 function setindex!(A::Array{T}, x, i::Int) where {T}
     @_noub_if_noinbounds_meta
     @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
-    memoryrefset!(memoryref(A.ref, i, false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    memoryrefset!(memoryrefnew(A.ref, i, false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
     return A
 end
 function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @_noub_if_noinbounds_meta
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
-    memoryrefset!(memoryref(A.ref, _to_linear_index(A, i1, i2, I...), false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    memoryrefset!(memoryrefnew(A.ref, _to_linear_index(A, i1, i2, I...), false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
     return A
 end
 
 __safe_setindex!(A::Vector{Any}, @nospecialize(x), i::Int) = (@inline; @_nothrow_noub_meta;
-    memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
+    memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false); return A)
 __safe_setindex!(A::Vector{T}, x::T, i::Int) where {T} = (@inline; @_nothrow_noub_meta;
-    memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
+    memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false); return A)
 __safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
     __safe_setindex!(A, convert(T, x)::T, i))
 
@@ -1050,7 +1050,7 @@ function _growbeg!(a::Vector, delta::Integer)
     setfield!(a, :size, (newlen,))
     # if offset is far enough advanced to fit data in existing memory without copying
     if delta <= offset - 1
-        setfield!(a, :ref, @inbounds GenericMemoryRef(ref, 1 - delta))
+        setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
         @noinline (function()
         memlen = length(mem)
@@ -1075,7 +1075,7 @@ function _growbeg!(a::Vector, delta::Integer)
         if ref !== a.ref
             @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
         end
-        setfield!(a, :ref, @inbounds GenericMemoryRef(newmem, newoffset))
+        setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
         end)()
     end
     return
@@ -1114,7 +1114,7 @@ function _growend!(a::Vector, delta::Integer)
             newmem = array_new_memory(mem, newmemlen2)
             newoffset = offset
         end
-        newref = @inbounds GenericMemoryRef(newmem, newoffset)
+        newref = @inbounds memoryref(newmem, newoffset)
         unsafe_copyto!(newref, ref, len)
         if ref !== a.ref
             @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
@@ -1146,7 +1146,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
     prefer_start = i <= div(len, 2)
     # if offset is far enough advanced to fit data in beginning of the memory
     if prefer_start && delta <= offset - 1
-        newref = @inbounds GenericMemoryRef(mem, offset - delta)
+        newref = @inbounds memoryref(mem, offset - delta)
         unsafe_copyto!(newref, ref, i)
         setfield!(a, :ref, newref)
         for j in i:i+delta-1
@@ -1163,7 +1163,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         newmemlen = max(overallocation(memlen), len+2*delta+1)
         newoffset = (newmemlen - newlen) ÷ 2 + 1
         newmem = array_new_memory(mem, newmemlen)
-        newref = @inbounds GenericMemoryRef(newmem, newoffset)
+        newref = @inbounds memoryref(newmem, newoffset)
         unsafe_copyto!(newref, ref, i-1)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
         setfield!(a, :ref, newref)
@@ -1180,7 +1180,7 @@ function _deletebeg!(a::Vector, delta::Integer)
     end
     newlen = len - delta
     if newlen != 0 # if newlen==0 we could accidentally index past the memory
-        newref = @inbounds GenericMemoryRef(a.ref, delta + 1)
+        newref = @inbounds memoryref(a.ref, delta + 1)
         setfield!(a, :ref, newref)
     end
     setfield!(a, :size, (newlen,))
@@ -1316,8 +1316,7 @@ end
 
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
-
-append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
+append!(a::AbstractVector, iter...) = (for v in iter; append!(a, v); end; return a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
@@ -1376,10 +1375,9 @@ function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     return a
 end
 
-prepend!(a::Vector, iter) = _prepend!(a, IteratorSize(iter), iter)
-pushfirst!(a::Vector, iter...) = prepend!(a, iter)
-
-prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, init=a)
+prepend!(a::AbstractVector, iter) = _prepend!(a, IteratorSize(iter), iter)
+pushfirst!(a::AbstractVector, iter...) = prepend!(a, iter)
+prepend!(a::AbstractVector, iter...) = (for v = reverse(iter); prepend!(a, v); end; return a)
 
 function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
@@ -1497,16 +1495,16 @@ function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
         end
         newmem = array_new_memory(mem, sz)
         if first
-            newref = GenericMemoryRef(newmem, inc + 1)
+            newref = memoryref(newmem, inc + 1)
         else
-            newref = GenericMemoryRef(newmem)
+            newref = memoryref(newmem)
         end
         unsafe_copyto!(newref, ref, len)
         setfield!(a, :ref, newref)
     elseif first
         _growbeg!(a, inc)
         newref = getfield(a, :ref)
-        newref = GenericMemoryRef(newref, inc + 1)
+        newref = memoryref(newref, inc + 1)
         setfield!(a, :size, (len,)) # undo the size change from _growbeg!
         setfield!(a, :ref, newref) # undo the offset change from _growbeg!
     else # last

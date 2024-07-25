@@ -92,6 +92,9 @@ WITH_DTRACE := 0
 # Enable ITTAPI integration
 WITH_ITTAPI := 0
 
+# Enable NVTX integration
+WITH_NVTX := 0
+
 # Enable Tracy support
 WITH_TRACY := 0
 WITH_TRACY_CALLSTACKS := 0
@@ -492,7 +495,7 @@ MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
-JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
 JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
@@ -501,7 +504,7 @@ JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
 JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
 JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17
+JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
@@ -550,7 +553,17 @@ export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 endif
 endif
 
-JLDFLAGS :=
+# Conditional setting of RELRO flag for enhanced security on Linux builds.
+# RELRO (Read-Only Relocations) is a security feature that marks certain sections
+# of the binary as read-only to prevent exploitation techniques like
+# GOT (Global Offset Table) overwriting attacks.
+ifeq ($(OS),Linux)
+    RELRO_FLAG := -Wl,-z,relro
+else
+    RELRO_FLAG :=
+endif
+
+JLDFLAGS := $(RELRO_FLAG)
 
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
@@ -796,6 +809,11 @@ endif
 ifeq ($(WITH_TIMING_COUNTS), 1)
 JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
+endif
+
+ifeq ($(WITH_NVTX), 1)
+JCXXFLAGS += -DUSE_NVTX
+JCFLAGS += -DUSE_NVTX
 endif
 
 # ===========================================================================

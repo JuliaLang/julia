@@ -114,6 +114,13 @@ end
 Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
 
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
+
 # Examples
 ```jldoctest
 julia> a1() = sum(i for i in 1:1000);
@@ -728,7 +735,7 @@ Print an error log to `stderr` if task `t` fails.
 
 # Examples
 ```julia-repl
-julia> Base._wait(errormonitor(Threads.@spawn error("task failed")))
+julia> wait(errormonitor(Threads.@spawn error("task failed")); throw = false)
 Unhandled Task ERROR: task failed
 Stacktrace:
 [...]
@@ -827,7 +834,7 @@ function task_done_hook(t::Task)
     end
 
     if err && !handled && Threads.threadid() == 1
-        if isa(result, InterruptException) && isdefined(Base, :active_repl_backend) &&
+        if isa(result, InterruptException) && active_repl_backend !== nothing &&
             active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, result) # this terminates the task
@@ -842,7 +849,7 @@ function task_done_hook(t::Task)
         # the exception to the REPL task since the current task is done.
         # issue #19467
         if Threads.threadid() == 1 &&
-            isa(e, InterruptException) && isdefined(Base, :active_repl_backend) &&
+            isa(e, InterruptException) && active_repl_backend !== nothing &&
             active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
             throwto(active_repl_backend.backend_task, e)
@@ -990,6 +997,13 @@ the woken task.
 !!! warning
     It is incorrect to use `schedule` on an arbitrary `Task` that has already been started.
     See [the API reference](@ref low-level-schedule-wait) for more information.
+
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
 
 # Examples
 ```jldoctest

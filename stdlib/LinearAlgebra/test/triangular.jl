@@ -1081,13 +1081,82 @@ end
     end
 end
 
-@testset "copyto! with aliasing (#39460)" begin
-    M = Matrix(reshape(1:36, 6, 6))
-    @testset for T in (UpperTriangular, LowerTriangular)
-        A = T(view(M, 1:5, 1:5))
-        A2 = copy(A)
-        B = T(view(M, 2:6, 2:6))
-        @test copyto!(B, A) == A2
+@testset "copyto! tests" begin
+    @testset "copyto! with aliasing (#39460)" begin
+        M = Matrix(reshape(1:36, 6, 6))
+        @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+            A = T(view(M, 1:5, 1:5))
+            A2 = copy(A)
+            B = T(view(M, 2:6, 2:6))
+            @test copyto!(B, A) == A2
+        end
+    end
+
+    @testset "copyto! with different matrix types" begin
+        M1 = Matrix(reshape(1:36, 6, 6))
+        M2 = similar(M1)
+        # these copies always work
+        @testset for (Tdest, Tsrc) in (
+                            (UpperTriangular, UnitUpperTriangular),
+                            (UpperTriangular, UpperTriangular),
+                            (LowerTriangular, UnitLowerTriangular),
+                            (LowerTriangular, LowerTriangular),
+                            (UnitUpperTriangular, UnitUpperTriangular),
+                            (UnitLowerTriangular, UnitLowerTriangular)
+                        )
+
+            M2 .= 0
+            copyto!(Tdest(M2), Tsrc(M1))
+            @test Tdest(M2) == Tsrc(M1)
+        end
+        # these copies only work if the source has a unit diagonal
+        M3 = copy(M1)
+        M3[diagind(M3)] .= 1
+        @testset for (Tdest, Tsrc) in (
+                            (UnitUpperTriangular, UpperTriangular),
+                            (UnitLowerTriangular, LowerTriangular),
+                        )
+
+            M2 .= 0
+            copyto!(Tdest(M2), Tsrc(M3))
+            @test Tdest(M2) == Tsrc(M3)
+            @test_throws ArgumentError copyto!(Tdest(M2), Tsrc(M1))
+        end
+        # these copies work even when the parent of the source isn't initialized along the diagonal
+        @testset for (T, TU) in ((UpperTriangular, UnitUpperTriangular),
+                                    (LowerTriangular, UnitLowerTriangular))
+            M1 = Matrix{BigFloat}(undef, 3, 3)
+            M2 = similar(M1)
+            if TU == UnitUpperTriangular
+                M1[1,2] = M1[1,3] = M1[2,3] = 2
+            else
+                M1[2,1] = M1[3,1] = M1[3,2] = 2
+            end
+            for TD in (T, TU)
+                M2 .= 0
+                copyto!(T(M2), TU(M1))
+                @test T(M2) == TU(M1)
+            end
+        end
+    end
+
+    @testset "copyto! with different sizes" begin
+        Ap = zeros(3,3)
+        Bp = rand(2,2)
+        @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+            A = T(Ap)
+            B = T(Bp)
+            @test_throws ArgumentError copyto!(A, B)
+        end
+        @testset "error message" begin
+            A = UpperTriangular(Ap)
+            B = UpperTriangular(Bp)
+            @test_throws "cannot set index in the lower triangular part" copyto!(A, B)
+
+            A = LowerTriangular(Ap)
+            B = LowerTriangular(Bp)
+            @test_throws "cannot set index in the upper triangular part" copyto!(A, B)
+        end
     end
 end
 
@@ -1103,6 +1172,12 @@ end
         @test_throws "invalid index" T[true, 2]
         @test T[2,1] == T[Int8(2),UInt16(1)] == T[big(2), Int16(1)]
     end
+end
+
+@testset "type-stable eigvecs" begin
+    D = Float64[1 0; 0 2]
+    V = @inferred eigvecs(UpperTriangular(D))
+    @test V == Diagonal([1, 1])
 end
 
 end # module TestTriangular

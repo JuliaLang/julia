@@ -592,7 +592,7 @@ module IteratorsMD
         else
             # Given the fact that StepRange 1:2:4 === 1:2:3, we lost the original size information
             # and thus cannot calculate the correct linear indices when the steps are not 1.
-            throw(ArgumentError("LinearIndices for $(typeof(inds)) with non-1 step size is not yet supported."))
+            throw(ArgumentError(LazyString("LinearIndices for ", typeof(inds), " with non-1 step size is not yet supported.")))
         end
     end
 
@@ -684,6 +684,40 @@ end  # IteratorsMD
 
 
 using .IteratorsMD
+
+# from genericmemory.jl:
+## generate vararg methods for atomic indexing
+for ex in (
+    :(getindex_atomic(mem::GenericMemory, order::Symbol, i::Int)),
+    :(setindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)),
+    :(setindexonce_atomic!(mem::GenericMemory, success_order::Symbol, fail_order::Symbol, val, i::Int)),
+    :(modifyindex_atomic!(mem::GenericMemory, order::Symbol, op, val, i::Int)),
+    :(swapindex_atomic!(mem::GenericMemory, order::Symbol, val, i::Int)),
+    :(replaceindex_atomic!(mem::GenericMemory, success_order::Symbol, fail_order::Symbol, expected, desired, i::Int,)),
+)
+    fn = ex.args[1]
+    args = ex.args[2:end-1]
+
+    @eval begin
+        function $fn($(args...), i::Union{Integer,CartesianIndex}...)
+            return $fn($(args...), CartesianIndex(to_indices($(args[1]), i)))
+        end
+
+        function $fn($(args...), i::CartesianIndex)
+            return $fn($(args...), Tuple(i)...)
+        end
+
+        function $fn($(args...), i::Integer...)
+            idcs = to_indices($(args[1]), i)
+            S = IndexStyle($(args[1]))
+            if isa(S, IndexLinear)
+                return $fn($(args...), _to_linear_index($(args[1]), idcs...))
+            else
+                return $fn($(args...), _to_subscript_indices($(args[1]), idcs...))
+            end
+        end
+    end
+end
 
 ## Bounds-checking with CartesianIndex
 # Disallow linear indexing with CartesianIndex
@@ -1047,25 +1081,34 @@ end
 
 ### from abstractarray.jl
 
-# In the common case where we have two views into the same parent, aliasing checks
-# are _much_ easier and more important to get right
-function mightalias(A::SubArray{T,<:Any,P}, B::SubArray{T,<:Any,P}) where {T,P}
-    if !_parentsmatch(A.parent, B.parent)
-        # We cannot do any better than the usual dataids check
-        return !_isdisjoint(dataids(A), dataids(B))
+function mightalias(A::SubArray, B::SubArray)
+    # There are three ways that SubArrays might _problematically_ alias one another:
+    #   1. The parents are the same we can conservatively check if the indices might overlap OR
+    #   2. The parents alias eachother in a more complicated manner (and we can't trace indices) OR
+    #   3. One's parent is used in the other's indices
+    # Note that it's ok for just the indices to alias each other as those should not be mutated,
+    # so we can always do better than the default !_isdisjoint(dataids(A), dataids(B))
+    if isbits(A.parent) || isbits(B.parent)
+        return false # Quick out for immutables
+    elseif _parentsmatch(A.parent, B.parent)
+        # Each SubArray unaliases its own parent from its own indices upon construction, so if
+        # the two parents are the same, then by construction one cannot alias the other's indices
+        # and therefore this is the only test we need to perform:
+        return _indicesmightoverlap(A.indices, B.indices)
+    else
+        A_parent_ids = dataids(A.parent)
+        B_parent_ids = dataids(B.parent)
+        return !_isdisjoint(A_parent_ids, B_parent_ids) ||
+            !_isdisjoint(A_parent_ids, _splatmap(dataids, B.indices)) ||
+            !_isdisjoint(B_parent_ids, _splatmap(dataids, A.indices))
     end
-    # Now we know that A.parent === B.parent. This means that the indices of A
-    # and B are the same length and indexing into the same dimensions. We can
-    # just walk through them and check for overlaps: O(ndims(A)). We must finally
-    # ensure that the indices don't alias with either parent
-    return _indicesmightoverlap(A.indices, B.indices) ||
-        !_isdisjoint(dataids(A.parent), _splatmap(dataids, B.indices)) ||
-        !_isdisjoint(dataids(B.parent), _splatmap(dataids, A.indices))
 end
+# Test if two arrays are backed by exactly the same memory in exactly the same order
 _parentsmatch(A::AbstractArray, B::AbstractArray) = A === B
-# Two reshape(::Array)s of the same size aren't `===` because they have different headers
-_parentsmatch(A::Array, B::Array) = pointer(A) == pointer(B) && size(A) == size(B)
+_parentsmatch(A::DenseArray, B::DenseArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && size(A) == size(B)
+_parentsmatch(A::StridedArray, B::StridedArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && strides(A) == strides(B)
 
+# Given two SubArrays with the same parent, check if the indices might overlap (returning true if unsure)
 _indicesmightoverlap(A::Tuple{}, B::Tuple{}) = true
 _indicesmightoverlap(A::Tuple{}, B::Tuple) = error("malformed subarray")
 _indicesmightoverlap(A::Tuple, B::Tuple{}) = error("malformed subarray")
@@ -1631,7 +1674,7 @@ function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) wh
     length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
     isperm(perm) || throw(ArgumentError("input is not a permutation"))
     indsP = axes(P)
-    for i = 1:length(perm)
+    for i in eachindex(perm)
         indsP[i] == indsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
     nothing

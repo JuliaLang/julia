@@ -1210,36 +1210,42 @@ end
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 
+module loaded_pkgid1 end
+module loaded_pkgid2 end
+module loaded_pkgid3 end
+module loaded_pkgid4 end
+
 @testset "loading deadlock detector" begin
     pkid1 = Base.PkgId("pkgid1")
     pkid2 = Base.PkgId("pkgid2")
     pkid3 = Base.PkgId("pkgid3")
     pkid4 = Base.PkgId("pkgid4")
+    build_id = UInt128(0)
     e = Base.Event()
-    @test nothing === @lock Base.require_lock Base.start_loading(pkid4)     # module pkgid4
-    @test nothing === @lock Base.require_lock Base.start_loading(pkid1)     # module pkgid1
+    @test nothing === @lock Base.require_lock Base.start_loading(pkid4, build_id, false)     # module pkgid4
+    @test nothing === @lock Base.require_lock Base.start_loading(pkid1, build_id, false)     # module pkgid1
     t1 = @async begin
-        @test nothing === @lock Base.require_lock Base.start_loading(pkid2) # @async module pkgid2; using pkgid1; end
+        @test nothing === @lock Base.require_lock Base.start_loading(pkid2, build_id, false) # @async module pkgid2; using pkgid1; end
         notify(e)
-        @test "loaded_pkgid1" == @lock Base.require_lock Base.start_loading(pkid1)
-        @lock Base.require_lock Base.end_loading(pkid2, "loaded_pkgid2")
+        @test loaded_pkgid1 == @lock Base.require_lock Base.start_loading(pkid1, build_id, false)
+        @lock Base.require_lock Base.end_loading(pkid2, loaded_pkgid2)
     end
     wait(e)
     reset(e)
     t2 = @async begin
-        @test nothing === @lock Base.require_lock Base.start_loading(pkid3) # @async module pkgid3; using pkgid2; end
+        @test nothing === @lock Base.require_lock Base.start_loading(pkid3, build_id, false) # @async module pkgid3; using pkgid2; end
         notify(e)
-        @test "loaded_pkgid2" == @lock Base.require_lock Base.start_loading(pkid2)
-        @lock Base.require_lock Base.end_loading(pkid3, "loaded_pkgid3")
+        @test loaded_pkgid2 == @lock Base.require_lock Base.start_loading(pkid2, build_id, false)
+        @lock Base.require_lock Base.end_loading(pkid3, loaded_pkgid3)
     end
     wait(e)
     reset(e)
     @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 -> pkgid2 -> pkgid1 -> pkgid3 && pkgid4"),
-        @lock Base.require_lock Base.start_loading(pkid3)).value            # try using pkgid3
+        @lock Base.require_lock Base.start_loading(pkid3, build_id, false)).value            # try using pkgid3
     @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 -> pkgid4 && pkgid1"),
-        @lock Base.require_lock Base.start_loading(pkid4)).value            # try using pkgid4
-    @lock Base.require_lock Base.end_loading(pkid1, "loaded_pkgid1")        # end
-    @lock Base.require_lock Base.end_loading(pkid4, "loaded_pkgid4")        # end
+        @lock Base.require_lock Base.start_loading(pkid4, build_id, false)).value            # try using pkgid4
+    @lock Base.require_lock Base.end_loading(pkid1, loaded_pkgid1)        # end
+    @lock Base.require_lock Base.end_loading(pkid4, loaded_pkgid4)        # end
     wait(t2)
     wait(t1)
 end
@@ -1549,7 +1555,29 @@ end
         end
 
         file = joinpath(depot, "dev", "non-existent.jl")
-        @test_throws SystemError("opening file $(repr(file))") include(file)
+        @test try
+            include(file); false
+        catch e
+            @test e isa SystemError
+            @test e.prefix == "opening file $(repr(file))"
+            true
+        end
+        touch(file)
+        @test include_dependency(file) === nothing
+        chmod(file, 0x000)
+
+        # same for include_dependency: #52063
+        dir = mktempdir() do dir
+            @test include_dependency(dir) === nothing
+            dir
+        end
+        @test try
+            include_dependency(dir); false
+        catch e
+            @test e isa SystemError
+            @test e.prefix == "opening file or folder $(repr(dir))"
+            true
+        end
     end
 end
 
@@ -1626,6 +1654,19 @@ end
 
         id_dep = Base.identify_package("ProjectPathDep")
         @test Base.locate_package(id_dep) == joinpath(@__DIR__, "project", "ProjectPath", "ProjectPathDep", "CustomPath.jl")
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
+end
+
+@testset "extension path computation name collision" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        empty!(LOAD_PATH)
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ExtNameCollision_A"))
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ExtNameCollision_B"))
+        ext_B = Base.PkgId(Base.uuid5(Base.identify_package("ExtNameCollision_B").uuid, "REPLExt"), "REPLExt")
+        @test Base.locate_package(ext_B) == joinpath(@__DIR__, "project",  "Extensions", "ExtNameCollision_B", "ext", "REPLExt.jl")
     finally
         copy!(LOAD_PATH, old_load_path)
     end

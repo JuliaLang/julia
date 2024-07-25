@@ -1025,6 +1025,20 @@ end
     @test collect(Iterators.partition(lstrip("01111", '0'), 2)) == ["11", "11"]
 end
 
+@testset "IterableStringPairs" begin
+    for s in ["", "a", "abcde", "γ", "∋γa"]
+        for T in (String, SubString, GenericString)
+            sT = T(s)
+            p = pairs(sT)
+            @test collect(p) == [k=>v for (k,v) in zip(keys(sT), sT)]
+            rv = Iterators.reverse(p)
+            @test collect(rv) == reverse([k=>v for (k,v) in zip(keys(sT), sT)])
+            rrv = Iterators.reverse(rv)
+            @test collect(rrv) == collect(p)
+        end
+    end
+end
+
 let itr = (i for i in 1:9) # Base.eltype == Any
     @test first(Iterators.partition(itr, 3)) isa Vector{Any}
     @test collect(zip(repeat([Iterators.Stateful(itr)], 3)...)) == [(1, 2, 3), (4, 5, 6), (7, 8, 9)]

@@ -118,7 +118,7 @@ version = "2.0.1+16"
 [[deps.LibUnwind_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "745a5e78-f969-53e9-954f-d19f2f74f4e3"
-version = "1.7.2+2"
+version = "1.8.1+0"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -194,7 +194,7 @@ uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 version = "1.11.0"
 
 [[deps.REPL]]
-deps = ["InteractiveUtils", "Markdown", "Sockets", "StyledStrings", "Unicode"]
+deps = ["InteractiveUtils", "JuliaSyntaxHighlighting", "Markdown", "Sockets", "StyledStrings", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 version = "1.11.0"
 
@@ -242,7 +242,7 @@ version = "1.11.0"
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.6.1+0"
+version = "7.7.0+0"
 
 [[deps.TOML]]
 deps = ["Dates"]

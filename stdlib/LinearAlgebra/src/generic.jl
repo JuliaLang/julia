@@ -79,8 +79,6 @@ macro stable_muladdmul(expr)
     for (i, e) in enumerate(expr.args)
         e isa Expr || continue
         if e.head == :call && e.args[1] == :MulAddMul && length(e.args) == 3
-            e.args[2] isa Symbol || continue
-            e.args[3] isa Symbol || continue
             local asym = e.args[2]
             local bsym = e.args[3]
 
@@ -1678,7 +1676,7 @@ end
 """
     reflectorApply!(x, τ, A)
 
-Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - τ*[1; x] * [1; x]')*A`.
+Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - conj(τ)*[1; x[2:end]]*[1; x[2:end]]')*A`.
 """
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)

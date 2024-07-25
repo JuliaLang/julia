@@ -198,9 +198,11 @@ abstract type PivotingStrategy end
 """
     NoPivot
 
-Pivoting is not performed. Matrix factorizations such as the LU factorization
-may fail without pivoting, and may also be numerically unstable for floating-point matrices in the face of roundoff error.
-This pivot strategy is mainly useful for pedagogical purposes.
+Pivoting is not performed. This is the default strategy for [`cholesky`](@ref) and
+[`qr`](@ref) factorizations. Note, however, that other matrix factorizations such as the LU
+factorization may fail without pivoting, and may also be numerically unstable for
+floating-point matrices in the face of roundoff error. In such cases, this pivot strategy
+is mainly useful for pedagogical purposes.
 """
 struct NoPivot <: PivotingStrategy end
 
@@ -209,10 +211,11 @@ struct NoPivot <: PivotingStrategy end
 
 First non-zero element in the remaining rows is chosen as the pivot element.
 
-Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable — this strategy
-is mainly useful for comparison to hand calculations (which typically use this strategy) or for other
-algebraic types (e.g. rational numbers) not susceptible to roundoff errors.   Otherwise, the default
-`RowMaximum` pivoting strategy should be generally preferred in Gaussian elimination.
+Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable
+— this strategy is mainly useful for comparison to hand calculations (which typically use
+this strategy) or for other algebraic types (e.g. rational numbers) not susceptible to
+roundoff errors. Otherwise, the default `RowMaximum` pivoting strategy should be generally
+preferred in Gaussian elimination.
 
 Note that the [element type](@ref eltype) of the matrix must admit an [`iszero`](@ref)
 method.
@@ -222,20 +225,28 @@ struct RowNonZero <: PivotingStrategy end
 """
     RowMaximum
 
-The maximum-magnitude element in the remaining rows is chosen as the pivot element.
-This is the default strategy for LU factorization of floating-point matrices, and is sometimes
-referred to as the "partial pivoting" algorithm.
+A row (and potentially also column) pivot is chosen based on a maximum property.
+This is the default strategy for LU factorization and for pivoted Cholesky factorization
+(though [`NoPivot`] is the default for [`cholesky`](@ref)).
 
-Note that the [element type](@ref eltype) of the matrix must admit an [`abs`](@ref) method,
-whose result type must admit a [`<`](@ref) method.
+In the LU case, the maximum-magnitude element within the current column in the remaining
+rows is chosen as the pivot element. This is sometimes referred to as the "partial
+pivoting" algorithm. In this case, the [element type](@ref eltype) of the matrix must admit
+an [`abs`](@ref) method, whose result type must admit a [`<`](@ref) method.
+
+In the Cholesky case, the maximal element among the remaining diagonal elements is
+chosen as the pivot element. This is sometimes referred to as the "diagonal pivoting"
+algorithm, and leads to _complete pivoting_ (i.e., of both rows and columns by the same
+permutation). In this case, the (real part of the) [element type](@ref eltype) of the
+matrix must admit a [`<`](@ref) method.
 """
 struct RowMaximum <: PivotingStrategy end
 
 """
     ColumnNorm
 
-The column with the maximum norm is used for subsequent computation.  This
-is used for pivoted QR factorization.
+The column with the maximum norm is used for subsequent computation. This is used for
+pivoted QR factorization.
 
 Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref) and
 [`abs`](@ref) methods, whose respective result types must admit a [`<`](@ref) method.
@@ -658,32 +669,19 @@ matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
 matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
 # diagonal is special, as it does not change the structure of the other matrix
 # we call similar without a size to preserve the type of the matrix wherever possible
-matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
-matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
-matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+# reroute through _matprod_dest_diag to allow speicalizing on the type of the StructuredMatrix
+# without defining methods for both the orderings
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = _matprod_dest_diag(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = _matprod_dest_diag(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = _matprod_dest_diag(B, TS)
+_matprod_dest_diag(A, TS) = similar(A, TS)
+function _matprod_dest_diag(A::SymTridiagonal, TS)
+    n = size(A, 1)
+    Tridiagonal(similar(A, TS, n-1), similar(A, TS, n), similar(A, TS, n-1))
+end
 
 # Special handling for adj/trans vec
 matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
-
-# TODO: remove once not used anymore in SparseArrays.jl
-# some trait like this would be cool
-# onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
-# but we are actually asking for oneunit(T), that is, however, defined for generic T as
-# `T(one(T))`, so the question is equivalent for whether one(T) is defined
-onedefined(::Type) = false
-onedefined(::Type{<:Number}) = true
-
-# initialize return array for op(A, B)
-_init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    (onedefined(TA) && onedefined(TB)) ?
-        typeof(matprod(oneunit(TA), oneunit(TB))) :
-        promote_op(matprod, TA, TB)
-_init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    (onedefined(TA) && onedefined(TB)) ?
-        typeof(op(oneunit(TA), oneunit(TB))) :
-        promote_op(op, TA, TB)
-_initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
-    similar(C, _init_eltype(op, TA, TB), size(C))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
