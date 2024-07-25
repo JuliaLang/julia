@@ -608,10 +608,10 @@ module MyApp
 end
 const main = MyApp.main
 # `julia` Will *NOT* execute MyApp.main unless there is a separate `@main` annotation in `Main`
+```
 
 !!! compat "Julia 1.11"
     This macro is new in Julia 1.11. At present, the precise semantics of `@main` are still subject to change.
-```
 """
 macro main(args...)
     if !isempty(args)
