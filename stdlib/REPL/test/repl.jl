@@ -9,7 +9,7 @@ using Markdown
 
 empty!(Base.Experimental._hint_handlers) # unregister error hints so they can be tested separately
 
-@test isassigned(Base.REPL_MODULE_REF)
+@test Base.REPL_MODULE_REF[] === REPL
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))

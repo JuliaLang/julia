@@ -128,7 +128,7 @@ include("options.jl")
 
 include("LineEdit.jl")
 using .LineEdit
-import ..LineEdit:
+import .LineEdit:
     CompletionProvider,
     HistoryProvider,
     add_history,
@@ -760,6 +760,7 @@ struct LatexCompletions <: CompletionProvider end
 
 function active_module() # this method is also called from Base
     isdefined(Base, :active_repl) || return Main
+    Base.active_repl === nothing && return Main
     return active_module(Base.active_repl::AbstractREPL)
 end
 active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
@@ -1801,7 +1802,7 @@ module Numbered
 
 using ..REPL
 
-__current_ast_transforms() = isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+__current_ast_transforms() = Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
 function repl_eval_counter(hp)
     return length(hp.history) - hp.start_idx
@@ -1863,13 +1864,13 @@ end
 
 function __current_ast_transforms(backend)
     if backend === nothing
-        isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+        Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
     else
         backend.ast_transforms
     end
 end
 
-function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+function numbered_prompt!(repl::LineEditREPL=Base.active_repl::LineEditREPL, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)

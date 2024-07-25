@@ -295,7 +295,10 @@ function maybe_spawn_cache_PATH()
     @lock PATH_cache_lock begin
         PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
         time() < next_cache_update && return
-        PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
+        PATH_cache_task = Threads.@spawn begin
+            REPLCompletions.cache_PATH()
+            @lock PATH_cache_lock PATH_cache_task = nothing # release memory when done
+        end
         Base.errormonitor(PATH_cache_task)
     end
 end
