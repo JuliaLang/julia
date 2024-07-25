@@ -3709,8 +3709,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         }
         // free empty GC state for threads that have exited
         if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
-            if (gc_is_parallel_collector_thread(t_i))
-                continue;
+            // GC threads should never exit
+            assert(!gc_is_parallel_collector_thread(t_i));
+            assert(!gc_is_concurrent_collector_thread(t_i));
             jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
             if (heap->weak_refs.len == 0)
                 small_arraylist_free(&heap->weak_refs);
