@@ -940,6 +940,7 @@ BINARY:=64
 MARCH=
 endif
 
+# Allow Clang to use CRC instructions (only applicable on AArch64)
 ifneq (,$(findstring aarch64,$(ARCH)))
 ifeq ($(USECLANG),1)
 ifeq (,$(MARCH))
@@ -1392,6 +1393,11 @@ OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 # make it loaded first to
 # prevent from linking to outdated system libs.
 # See #21788
+# TODO: Determine whether the condition here on AArch64 (added in #55089) should actually
+# be `ifneq ($(USE_BINARYBUILDER),0)`. We vendor a correctly versioned libgcc_s when using
+# BinaryBuilder which we want to link in early as noted above, but it could be the case
+# that without BinaryBuilder, regardless of architecture, we need to delay linking libgcc_s
+# to avoid getting the system one.
 ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
 endif
