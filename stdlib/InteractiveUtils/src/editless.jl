@@ -84,8 +84,7 @@ already work:
 The following defines the usage of terminal-based `emacs`:
 
     define_editor(
-        r"\\bemacs\\b.*\\s(-nw|--no-window-system)\\b"; wait=true
-    ) do cmd, path, line
+        r"\\bemacs\\b.*\\s(-nw|--no-window-system)\\b"; wait=true) do cmd, path, line
         `\$cmd +\$line \$path`
     end
 
