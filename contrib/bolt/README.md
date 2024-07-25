@@ -12,6 +12,6 @@ make finish_stage1
 make merge_data
 make bolt
 ```
-After these commands finish, optimized version of Julia will be built in the `optimized.build` directory.
+After these commands finish, the optimized version of Julia will be built in the `optimized.build` directory.
 
 This doesn't align the code to support huge pages as it doesn't seem that we do that currently, this decreases the size of the .so files by 2-4mb.
