@@ -628,7 +628,6 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->sparam_vals = jl_emptysvec;
     mi->backedges = NULL;
     jl_atomic_store_relaxed(&mi->cache, NULL);
-    mi->inInference = 0;
     mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->precompiled, 0);
     return mi;
@@ -727,8 +726,6 @@ JL_DLLEXPORT jl_code_instance_t *jl_cache_uninferred(jl_method_instance_t *mi, j
     // Successfully inserted
     return newci;
 }
-
-
 
 // Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo

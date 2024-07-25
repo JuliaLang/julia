@@ -1098,7 +1098,7 @@ end
 end
 
 @nospecs function _getfield_tfunc(𝕃::AnyMustAliasesLattice, s00, name, setfield::Bool)
-    return _getfield_tfunc(widenlattice(𝕃), widenmustalias(s00), name, setfield)
+    return _getfield_tfunc(widenlattice(𝕃), widenmustalias(s00), widenmustalias(name), setfield)
 end
 
 @nospecs function _getfield_tfunc(𝕃::PartialsLattice, s00, name, setfield::Bool)

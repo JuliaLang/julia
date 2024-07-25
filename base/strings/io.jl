@@ -354,12 +354,20 @@ function join(io::IO, iterator, delim="")
 end
 
 function _join_preserve_annotations(iterator, args...)
-    if _isannotated(eltype(iterator)) || any(_isannotated, args)
+    if isconcretetype(eltype(iterator)) && !_isannotated(eltype(iterator)) && !any(_isannotated, args)
+        sprint(join, iterator, args...)
+    else
         io = AnnotatedIOBuffer()
         join(io, iterator, args...)
-        read(seekstart(io), AnnotatedString{String})
-    else
-        sprint(join, iterator, args...)
+        # If we know (from compile time information, or dynamically in the case
+        # of iterators with a non-concrete eltype), that the result is annotated
+        # in nature, we extract an `AnnotatedString`, otherwise we just extract
+        # a plain `String` from `io`.
+        if isconcretetype(eltype(iterator)) || !isempty(io.annotations)
+            read(seekstart(io), AnnotatedString{String})
+        else
+            String(take!(io.io))
+        end
     end
 end
 

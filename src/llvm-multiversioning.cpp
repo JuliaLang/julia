@@ -677,6 +677,7 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
     trampoline->removeFnAttr("julia.mv.reloc");
     trampoline->removeFnAttr("julia.mv.clones");
     trampoline->addFnAttr("julia.mv.alias");
+    trampoline->setDLLStorageClass(alias->getDLLStorageClass());
     alias->eraseFromParent();
 
     uint32_t id;

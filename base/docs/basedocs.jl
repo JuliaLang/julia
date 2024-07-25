@@ -1050,6 +1050,17 @@ exception object to the given variable within the `catch` block.
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
 
+A `try/catch` block can also have an `else` clause that executes only if no exception occurred:
+```julia
+try
+    a_dangerous_operation()
+catch
+    @warn "The operation failed."
+else
+    @info "The operation succeeded."
+end
+```
+
 A `try` or `try`/`catch` block can also have a [`finally`](@ref) clause that executes
 at the end, regardless of whether an exception occurred.  For example, this can be
 used to guarantee that an opened file is closed:
@@ -1064,6 +1075,9 @@ finally
 end
 ```
 (`finally` can also be used without a `catch` block.)
+
+!!! compat "Julia 1.8"
+    Else clauses require at least Julia 1.8.
 """
 kw"try", kw"catch"
 
@@ -1372,7 +1386,11 @@ Usually `begin` will not be necessary, since keywords such as [`function`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 
 `begin` may also be used when indexing to represent the first index of a
-collection or the first index of a dimension of an array.
+collection or the first index of a dimension of an array. For example,
+`a[begin]` is the first element of an array `a`.
+
+!!! compat "Julia 1.4"
+    Use of `begin` as an index requires Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -1433,8 +1451,20 @@ kw"struct"
     mutable struct
 
 `mutable struct` is similar to [`struct`](@ref), but additionally allows the
-fields of the type to be set after construction. See the manual section on
-[Composite Types](@ref) for more information.
+fields of the type to be set after construction.
+
+Individual fields of a mutable struct can be marked as `const` to make them immutable:
+
+```julia
+mutable struct Baz
+    a::Int
+    const b::Float64
+end
+```
+!!! compat "Julia 1.8"
+    The `const` keyword for fields of mutable structs requires at least Julia 1.8.
+
+See the manual section on [Composite Types](@ref) for more information.
 """
 kw"mutable struct"
 
@@ -1639,6 +1669,34 @@ julia> ex.msg
 ```
 """
 ErrorException
+
+"""
+    FieldError(type::DataType, field::Symbol)
+
+An operation tried to access invalid `field` of `type`.
+
+!!! compat "Julia 1.12"
+    Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
+
+See [`getfield`](@ref)
+
+# Examples
+```jldoctest
+julia> struct AB
+          a::Float32
+          b::Float64
+       end
+
+julia> ab = AB(1, 3)
+AB(1.0f0, 3.0)
+
+julia> ab.c # field `c` doesn't exist
+ERROR: FieldError: type AB has no field c
+Stacktrace:
+[...]
+```
+"""
+FieldError
 
 """
     WrappedException(msg)
@@ -2541,18 +2599,6 @@ Retrieve the declared type of the binding `name` from the module `module`.
     This function requires Julia 1.9 or later.
 """
 Core.get_binding_type
-
-"""
-    Core.set_binding_type!(module::Module, name::Symbol, [type::Type])
-
-Set the declared type of the binding `name` in the module `module` to `type`. Error if the
-binding already has a type that is not equivalent to `type`. If the `type` argument is
-absent, set the binding type to `Any` if unset, but do not error.
-
-!!! compat "Julia 1.9"
-    This function requires Julia 1.9 or later.
-"""
-Core.set_binding_type!
 
 """
     swapglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])

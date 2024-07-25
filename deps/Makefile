@@ -171,6 +171,9 @@ ifeq ($(WITH_ITTAPI),1)
 DEP_LIBS += ittapi
 endif
 
+ifeq ($(WITH_NVTX),1)
+DEP_LIBS += nvtx
+endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
@@ -194,7 +197,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	sanitizers libsuitesparse lld libtracyclient ittapi JuliaSyntax
+	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -231,6 +234,7 @@ getall: $(addprefix get-, $(DEP_LIBS_ALL))
 include $(SRCDIR)/csl.mk
 include $(SRCDIR)/sanitizers.mk
 include $(SRCDIR)/ittapi.mk
+include $(SRCDIR)/nvtx.mk
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
 include $(SRCDIR)/pcre.mk

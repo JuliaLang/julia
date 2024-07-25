@@ -864,11 +864,11 @@ end
 
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
-    Only use `@inbounds` when it is certain from the information locally available
-    that all accesses are in bounds. In particular, using `1:length(A)` instead of
-    `eachindex(A)` in a function like the one above is _not_ safely inbounds because
-    the first index of `A` may not be `1` for all user defined types that subtype
-    `AbstractArray`.
+    Only use `@inbounds` when you are certain that all accesses are in bounds (as
+    undefined behavior, e.g. crashes, might occur if this assertion is violated). For
+    example, using `1:length(A)` instead of `eachindex(A)` in a function like
+    the one above is _not_ safely inbounds because the first index of `A` may not
+    be `1` for all user defined types that subtype `AbstractArray`.
 """
 macro inbounds(blk)
     return Expr(:block,
@@ -1081,6 +1081,12 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 
+"""
+    inferencebarrier(x)
+
+A shorthand for `compilerbarrier(:type, x)` causes the type of this statement to be inferred as `Any`.
+See [`Base.compilerbarrier`](@ref) for more info.
+"""
 inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """

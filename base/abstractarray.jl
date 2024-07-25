@@ -1659,10 +1659,10 @@ typed_vcat(::Type{T}) where {T} = Vector{T}()
 typed_hcat(::Type{T}) where {T} = Vector{T}()
 
 ## cat: special cases
-vcat(X::T...) where {T}         = T[ X[i] for i=1:length(X) ]
-vcat(X::T...) where {T<:Number} = T[ X[i] for i=1:length(X) ]
-hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
-hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
+vcat(X::T...) where {T}         = T[ X[i] for i=eachindex(X) ]
+vcat(X::T...) where {T<:Number} = T[ X[i] for i=eachindex(X) ]
+hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=eachindex(X) ]
+hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=eachindex(X) ]
 
 vcat(X::Number...) = hvcat_fill!(Vector{promote_typeof(X...)}(undef, length(X)), X)
 hcat(X::Number...) = hvcat_fill!(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
@@ -3007,7 +3007,7 @@ end
 @inline function _stack_size_check(x, ax1::Tuple)
     if _iterator_axes(x) != ax1
         uax1 = map(UnitRange, ax1)
-        uaxN = map(UnitRange, axes(x))
+        uaxN = map(UnitRange, _iterator_axes(x))
         throw(DimensionMismatch(
             LazyString("stack expects uniform slices, got axes(x) == ", uaxN, " while first had ", uax1)))
     end
@@ -3287,7 +3287,7 @@ one *without* a colon in the slice. This is `view(A,:,i,:)`, whereas
 `mapslices(f, A; dims=(1,3))` uses `A[:,i,:]`. The function `f` may mutate
 values in the slice without affecting `A`.
 """
-function mapslices(f, A::AbstractArray; dims)
+@constprop :aggressive function mapslices(f, A::AbstractArray; dims)
     isempty(dims) && return map(f, A)
 
     for d in dims

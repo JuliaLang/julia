@@ -1492,7 +1492,7 @@ mktempdir() do dir
     @test isfile(name1)
     @test isfile(name2)
     namedir = joinpath(dir, "chalk")
-    namepath = joinpath(dir, "chalk","cheese","fresh")
+    namepath = joinpath(dir, "chalk", "cheese", "fresh")
     @test !ispath(namedir)
     @test mkdir(namedir) == namedir
     @test isdir(namedir)
@@ -1501,7 +1501,12 @@ mktempdir() do dir
     @test isdir(namepath)
     @test mkpath(namepath) == namepath
     @test isdir(namepath)
+    # issue 54826
+    namepath_dirpath = joinpath(dir, "x", "y", "z", "")
+    @test mkpath(namepath_dirpath) == namepath_dirpath
 end
+@test mkpath("") == ""
+@test mkpath("/") == "/"
 
 # issue #30588
 @test realpath(".") == realpath(pwd())

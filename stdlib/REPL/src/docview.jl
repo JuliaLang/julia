@@ -13,8 +13,6 @@ using Base: with_output_color, mapany, isdeprecated, isexported
 
 using Base.Filesystem: _readdirx
 
-import REPL
-
 using InteractiveUtils: subtypes
 
 using Unicode: normalize
@@ -475,7 +473,7 @@ repl_corrections(s) = repl_corrections(stdout, s)
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
-    if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
+    if isempty(symbols_latex)
         for (k,v) in Iterators.flatten((REPLCompletions.latex_symbols,
                                         REPLCompletions.emoji_symbols))
             symbols_latex[v] = k
