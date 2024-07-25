@@ -268,16 +268,16 @@ end
 (-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
 for f in (:+, :-)
-    @eval function $f(D::Diagonal, S::Symmetric)
+    @eval function $f(D::Diagonal{<:Number}, S::Symmetric{<:Number})
         return Symmetric($f(D, S.data), sym_uplo(S.uplo))
     end
-    @eval function $f(S::Symmetric, D::Diagonal)
+    @eval function $f(S::Symmetric{<:Number}, D::Diagonal{<:Number})
         return Symmetric($f(S.data, D), sym_uplo(S.uplo))
     end
-    @eval function $f(D::Diagonal{<:Real}, H::Hermitian)
+    @eval function $f(D::Diagonal{<:Real}, H::Hermitian{<:Number})
         return Hermitian($f(D, H.data), sym_uplo(H.uplo))
     end
-    @eval function $f(H::Hermitian, D::Diagonal{<:Real})
+    @eval function $f(H::Hermitian{<:Number}, D::Diagonal{<:Real})
         return Hermitian($f(H.data, D), sym_uplo(H.uplo))
     end
 end
