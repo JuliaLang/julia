@@ -159,7 +159,15 @@ let
     @test @lock(lockable2, lockable2[]["foo"]) == "hello"
 end
 
-@test repr(ReentrantLock()) == "ReentrantLock()"
+@testset "`show` for ReentrantLock" begin
+    l = ReentrantLock()
+    @test repr(l) == "ReentrantLock()"
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+    @lock l begin
+        @test startswith(repr("text/plain", l), "ReentrantLock() (locked by Task (")
+    end
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+end
 
 for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 0

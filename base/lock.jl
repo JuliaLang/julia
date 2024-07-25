@@ -53,6 +53,17 @@ assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
 
 show(io::IO, ::ReentrantLock) = print(io, ReentrantLock, "()")
 
+function show(io::IO, ::MIME"text/plain", l::ReentrantLock)
+    show(io, l)
+    if !(get(io, :compact, false)::Bool)
+        if islocked(l)
+            print(io, " (locked by ", l.locked_by, ")")
+        else
+            print(io, " (unlocked)")
+        end
+    end
+end
+
 """
     islocked(lock) -> Status (Boolean)
 
