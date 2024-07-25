@@ -311,7 +311,12 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@assume_effects
+```
+
+## Managing deprecations
+```@docs
 Base.@deprecate
+Base.depwarn
 ```
 
 ## Missing Values
