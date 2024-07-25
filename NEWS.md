@@ -100,6 +100,7 @@ Standard library changes
 ------------------------
 
 * `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
+* `fd` returns a `RawFD` instead of an `Int` ([#55080]).
 
 #### StyledStrings
 
