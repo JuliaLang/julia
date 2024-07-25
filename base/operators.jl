@@ -1161,6 +1161,8 @@ In other words, `Fix{3}(f, x)` behaves similarly to
 You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behaves
 similarly to `x -> g(x; a=2)` for a function `g` with one argument and one keyword argument.
 You can also write this as `Fix{:a}(g, 2)`.
+!!! compat "Julia 1.12"
+    Requires Julia 1.12 or later.
 
 !!! note
     When nesting multiple `Fix`, note that the `N` in `Fix{N}` is _relative_ to the current
