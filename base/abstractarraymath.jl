@@ -150,6 +150,9 @@ julia> b[1,1,1,1] = 5; a
  5  2
  3  4
 ```
+
+!!! compat "Julia 1.12"
+    Requires Julia 1.12 or later.
 """
 insertdims(A; dims) = _insertdims(A, dims)
 function _insertdims(A::AbstractArray{T, N}, dims::Tuple{Vararg{Int64, M}}) where {T, N, M}
