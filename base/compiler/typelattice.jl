@@ -393,8 +393,8 @@ ignorelimited(typ::LimitedAccuracy) = typ.typ
 # =============
 
 @nospecializeinfer function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
-    r = ⊑(widenlattice(lattice), ignorelimited(a), ignorelimited(b))
-    r || return false
+    ⊑(widenlattice(lattice), ignorelimited(a), ignorelimited(b)) || return false
+
     isa(b, LimitedAccuracy) || return true
 
     # We've found that ignorelimited(a) ⊑ ignorelimited(b).
