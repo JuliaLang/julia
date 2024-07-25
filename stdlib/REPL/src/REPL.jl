@@ -90,7 +90,7 @@ end
 function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
     Base.isbindingresolved(m, var) || return false
     (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
-    print(io, "\nHint: a global variable of this name also exists in $m.")
+    print(io, "\nHint: a global variable of this name also exists in `$m`. Try `$m.$var` to access it.")
     return true
 end
 
