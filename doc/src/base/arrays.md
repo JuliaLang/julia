@@ -136,6 +136,7 @@ Base.parentindices
 Base.selectdim
 Base.reinterpret
 Base.reshape
+Base.insertdims
 Base.dropdims
 Base.vec
 Base.SubArray
