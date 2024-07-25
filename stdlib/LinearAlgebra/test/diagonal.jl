@@ -822,7 +822,7 @@ end
 
         s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
         D = Diagonal(fill(s,3))
-        @test D[1,2] isa typeof(s)
+        @test @inferred(D[1,2]) isa typeof(s)
         @test all(iszero, D[1,2])
     end
 end
