@@ -1009,7 +1009,7 @@ void gc_stats_big_obj(void)
             v = v->next;
         }
 
-        mallocarray_t *ma = ptls2->gc_tls.heap.mallocarrays;
+        mallocmemory_t *ma = ptls2->gc_tls.heap.mallocarrays;
         while (ma != NULL) {
             if (gc_marked(jl_astaggedvalue(ma->a)->bits.gc)) {
                 nused++;
