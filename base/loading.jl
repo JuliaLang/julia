@@ -264,11 +264,15 @@ const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing)
 LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
 
 
-struct TOMLCache
-    p::TOML.Parser
+struct TOMLCache{Dates}
+    p::TOML.Parser{Dates}
     d::Dict{String, CachedTOMLDict}
 end
-const TOML_CACHE = TOMLCache(TOML.Parser(), Dict{String, Dict{String, Any}}())
+TOMLCache(p::TOML.Parser) = TOMLCache(p, Dict{String, CachedTOMLDict}())
+# TODO: Delete this converting constructor once Pkg stops using it
+TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, convert(Dict{String, CachedTOMLDict}, d))
+
+const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
