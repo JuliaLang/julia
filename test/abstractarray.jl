@@ -1771,6 +1771,9 @@ end
     @test_throws ArgumentError stack([1:3, 4:6]; dims=3)
     @test_throws ArgumentError stack(abs2, 1:3; dims=2)
 
+    @test stack(["hello", "world"]) isa Matrix{Char}
+    @test_throws DimensionMismatch stack(["hello", "world!"])  # had a bug in error printing
+
     # Empty
     @test_throws ArgumentError stack(())
     @test_throws ArgumentError stack([])

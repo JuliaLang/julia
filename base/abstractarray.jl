@@ -2985,7 +2985,7 @@ end
 @inline function _stack_size_check(x, ax1::Tuple)
     if _iterator_axes(x) != ax1
         uax1 = map(UnitRange, ax1)
-        uaxN = map(UnitRange, axes(x))
+        uaxN = map(UnitRange, _iterator_axes(x))
         throw(DimensionMismatch(
             LazyString("stack expects uniform slices, got axes(x) == ", uaxN, " while first had ", uax1)))
     end
