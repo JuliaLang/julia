@@ -128,12 +128,6 @@ Standard library changes
 * The new `@styled_str` string macro provides a convenient way of creating a
   `AnnotatedString` with various faces or other attributes applied ([#49586]).
 
-#### JuliaSyntaxHighlighting
-
-* A new standard library for applying syntax highlighting to Julia code, this
-  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
-  that creates an `AnnotatedString` with syntax highlighting applied.
-
 #### Package Manager
 
 #### LinearAlgebra
