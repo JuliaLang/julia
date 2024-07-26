@@ -987,6 +987,16 @@ end
             @test mul!(copy(S2), D, A2, 2, 2) ≈ D * M2 * 2 + MS2 * 2
         end
     end
+
+    t1 = SizedArrays.SizedArray{(2,3)}([1 2 3; 3 4 5])
+    t2 = SizedArrays.SizedArray{(3,2)}([1 2; 3 4; 5 6])
+    dv, ev, d = fill(t1, 4), fill(2t1, 3), fill(t2, 4)
+    for uplo in (:U, :L)
+        A = Bidiagonal(dv, ev, uplo)
+        D = Diagonal(d)
+        @test A * D ≈ Array(A) * Array(D)
+        @test D * A ≈ Array(D) * Array(A)
+    end
 end
 
 @testset "conversion to Tridiagonal for immutable bands" begin
