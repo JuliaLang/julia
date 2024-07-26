@@ -1154,9 +1154,8 @@ julia> filter(!isletter, str)
     Fix(f; kw=x)
 
 A type representing a partially-applied version of a function `f`, with the argument
-`x` fixed at argument `n::Int` or keyword `kw::Symbol`.
-In other words, `Fix{3}(f, x)` behaves similarly to
-`(y1, y2, y3...; kws...) -> f(y1, y2, x, y3...; kws...)`.
+`x` fixed at position `n::Int` or keyword `kw::Symbol`. In other words, `Fix{3}(f, x)`
+behaves similarly to `(y1, y2, y3...; kws...) -> f(y1, y2, x, y3...; kws...)`.
 
 You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behaves
 similarly to `(x...; kws...) -> g(x...; a=2, kws...)`. You can also write this as `Fix{:a}(g, 2)`.
