@@ -191,7 +191,7 @@ declare void @llvm.memcpy.p0.p11.i64(ptr noalias nocapture writeonly, ptr addrsp
 ; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
 declare void @llvm.memcpy.p0.p0.i64(ptr noalias nocapture writeonly, ptr noalias nocapture readonly, i64, i1 immarg) #0
 
-attributes #0 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
+attributes #0 = { nocallback nofree nounwind willreturn }
 attributes #1 = { allockind("alloc") }
 attributes #2 = { allockind("alloc,uninitialized") }
 attributes #3 = { allockind("alloc,zeroed") }
