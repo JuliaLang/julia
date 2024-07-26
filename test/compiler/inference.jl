@@ -5052,13 +5052,13 @@ g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
 # to terminate the call.
 @newinterp RecurseInterpreter
 let CC = Core.Compiler
-    function CC.const_prop_entry_heuristic(interp::RecurseInterpreter, result::CC.MethodCallResult,
-                                           si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+    function CC.const_prop_rettype_heuristic(interp::RecurseInterpreter, result::CC.MethodCallResult,
+                                             si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
         if result.rt isa CC.LimitedAccuracy
             return force # allow forced constprop to recurse into unresolved cycles
         end
-        return @invoke CC.const_prop_entry_heuristic(interp::CC.AbstractInterpreter, result::CC.MethodCallResult,
-                                                     si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+        return @invoke CC.const_prop_rettype_heuristic(interp::CC.AbstractInterpreter, result::CC.MethodCallResult,
+                                                       si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
     end
 end
 Base.@constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
