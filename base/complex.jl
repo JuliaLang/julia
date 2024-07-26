@@ -1062,9 +1062,8 @@ function atanh(z::Complex{T}) where T
             ξ = oftype(x, Inf)
             η = y
         else
-            ym = ay
-            ξ = log(sqrt(sqrt(muladd(y, y, 4)))/sqrt(ym))
-            η = copysign(oftype(y,pi)/2 + atan(ym/2), y)/2
+            ξ = log(sqrt(sqrt(muladd(y, y, 4)))/sqrt(ay))
+            η = copysign(oftype(y,pi)/2 + atan(ay/2), y)/2
         end
     else #Normal case
         ysq = ay^2
