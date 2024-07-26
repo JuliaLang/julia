@@ -300,7 +300,7 @@ tests = [
         "x where \n {T}"  =>  "(where x (braces T))"
         "x where {T,S}"  =>  "(where x (braces T S))"
         "x where {T S}"  =>  "(where x (bracescat (row T S)))"
-        "x where {y for y in ys}"  =>  "(where x (braces (generator y (= y ys))))"
+        "x where {y for y in ys}"  =>  "(where x (braces (generator y (iteration (in y ys)))))"
         "x where T"  =>  "(where x T)"
         "x where \n T"  =>  "(where x T)"
         "x where T<:S"  =>  "(where x (<: T S))"
@@ -389,7 +389,7 @@ tests = [
         "T[x   y]"  =>  "(typed_hcat T x y)"
         "T[x ; y]"  =>  "(typed_vcat T x y)"
         "T[a b; c d]"  =>  "(typed_vcat T (row a b) (row c d))"
-        "T[x for x in xs]"  =>  "(typed_comprehension T (generator x (= x xs)))"
+        "T[x for x in xs]"  =>  "(typed_comprehension T (generator x (iteration (in x xs))))"
         ((v=v"1.8",), "T[a ; b ;; c ; d]") => "(typed_ncat-2 T (nrow-1 a b) (nrow-1 c d))"
 
         # Dotted forms
@@ -461,8 +461,8 @@ tests = [
         "while cond body end"  =>  "(while cond (block body))"
         "while x < y \n a \n b \n end"  =>  "(while (call-i x < y) (block a b))"
         # for
-        "for x in xs end" => "(for (= x xs) (block))"
-        "for x in xs, y in ys \n a \n end" => "(for (cartesian_iterator (= x xs) (= y ys)) (block a))"
+        "for x in xs end" => "(for (iteration (in x xs)) (block))"
+        "for x in xs, y in ys \n a \n end" => "(for (iteration (in x xs) (in y ys)) (block a))"
         # let
         "let x=1\n end"    =>  "(let (block (= x 1)) (block))"
         "let x=1 ; end"    =>  "(let (block (= x 1)) (block))"
@@ -670,16 +670,16 @@ tests = [
         "import A..."   =>  "(import (importpath A ..))"
         "import A; B"   =>  "(import (importpath A))"
     ],
-    JuliaSyntax.parse_iteration_spec => [
-        "i = rhs"        =>  "(= i rhs)"
-        "i in rhs"       =>  "(= i rhs)"
-        "i ∈ rhs"        =>  "(= i rhs)"
-        "i = 1:10"       =>  "(= i (call-i 1 : 10))"
-        "(i,j) in iter"  =>  "(= (tuple-p i j) iter)"
-        "outer = rhs"       =>  "(= outer rhs)"
-        "outer <| x = rhs"  =>  "(= (call-i outer <| x) rhs)"
-        "outer i = rhs"     =>  "(= (outer i) rhs)"
-        "outer (x,y) = rhs" =>  "(= (outer (tuple-p x y)) rhs)"
+    JuliaSyntax.parse_iteration_specs => [
+        "i = rhs"        =>  "(iteration (in i rhs))"
+        "i in rhs"       =>  "(iteration (in i rhs))"
+        "i ∈ rhs"        =>  "(iteration (in i rhs))"
+        "i = 1:10"       =>  "(iteration (in i (call-i 1 : 10)))"
+        "(i,j) in iter"  =>  "(iteration (in (tuple-p i j) iter))"
+        "outer = rhs"       =>  "(iteration (in outer rhs))"
+        "outer <| x = rhs"  =>  "(iteration (in (call-i outer <| x) rhs))"
+        "outer i = rhs"     =>  "(iteration (in (outer i) rhs))"
+        "outer (x,y) = rhs" =>  "(iteration (in (outer (tuple-p x y)) rhs))"
     ],
     JuliaSyntax.parse_paren => [
         # Tuple syntax with commas
@@ -707,8 +707,8 @@ tests = [
         "(x)"         =>  "(parens x)"
         "(a...)"      =>  "(parens (... a))"
         # Generators
-        "(x for a in as)"       =>  "(parens (generator x (= a as)))"
-        "(x \n\n for a in as)"  =>  "(parens (generator x (= a as)))"
+        "(x for a in as)"       =>  "(parens (generator x (iteration (in a as))))"
+        "(x \n\n for a in as)"  =>  "(parens (generator x (iteration (in a as))))"
         # Range parsing in parens
         "(1:\n2)" => "(parens (call-i 1 : 2))"
         "(1:2)" => "(parens (call-i 1 : 2))"
@@ -776,19 +776,19 @@ tests = [
         "[x \n, ]"  =>  "(vect x)"
         "[x"        =>  "(vect x (error-t))"
         "[x \n\n ]" =>  "(vect x)"
-        "[x for a in as]"  =>  "(comprehension (generator x (= a as)))"
-        "[x \n\n for a in as]"  =>  "(comprehension (generator x (= a as)))"
+        "[x for a in as]"  =>  "(comprehension (generator x (iteration (in a as))))"
+        "[x \n\n for a in as]"  =>  "(comprehension (generator x (iteration (in a as))))"
         # parse_generator
-        "(x for a in as for b in bs)" => "(parens (generator x (= a as) (= b bs)))"
-        "(x for a in as, b in bs)" => "(parens (generator x (cartesian_iterator (= a as) (= b bs))))"
-        "(x for a in as, b in bs if z)" => "(parens (generator x (filter (cartesian_iterator (= a as) (= b bs)) z)))"
-        "(x for a in as, b in bs for c in cs, d in ds)" => "(parens (generator x (cartesian_iterator (= a as) (= b bs)) (cartesian_iterator (= c cs) (= d ds))))"
-        "(x for a in as for b in bs if z)" => "(parens (generator x (= a as) (filter (= b bs) z)))"
-        "(x for a in as if z for b in bs)" => "(parens (generator x (filter (= a as) z) (= b bs)))"
-        "[x for a = as for b = bs if cond1 for c = cs if cond2]"  =>  "(comprehension (generator x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))"
-        "[x for a = as if begin cond2 end]"  =>  "(comprehension (generator x (filter (= a as) (block cond2))))"
-        "[(x)for x in xs]"  =>  "(comprehension (generator (parens x) (error-t) (= x xs)))"
-        "(x for a in as if z)" => "(parens (generator x (filter (= a as) z)))"
+        "(x for a in as for b in bs)" => "(parens (generator x (iteration (in a as)) (iteration (in b bs))))"
+        "(x for a in as, b in bs)" => "(parens (generator x (iteration (in a as) (in b bs))))"
+        "(x for a in as, b in bs if z)" => "(parens (generator x (filter (iteration (in a as) (in b bs)) z)))"
+        "(x for a in as, b in bs for c in cs, d in ds)" => "(parens (generator x (iteration (in a as) (in b bs)) (iteration (in c cs) (in d ds))))"
+        "(x for a in as for b in bs if z)" => "(parens (generator x (iteration (in a as)) (filter (iteration (in b bs)) z)))"
+        "(x for a in as if z for b in bs)" => "(parens (generator x (filter (iteration (in a as)) z) (iteration (in b bs))))"
+        "[x for a = as for b = bs if cond1 for c = cs if cond2]"  =>  "(comprehension (generator x (iteration (in a as)) (filter (iteration (in b bs)) cond1) (filter (iteration (in c cs)) cond2)))"
+        "[x for a = as if begin cond2 end]"  =>  "(comprehension (generator x (filter (iteration (in a as)) (block cond2))))"
+        "[(x)for x in xs]"  =>  "(comprehension (generator (parens x) (error-t) (iteration (in x xs))))"
+        "(x for a in as if z)" => "(parens (generator x (filter (iteration (in a as)) z)))"
         # parse_vect
         "[x, y]"        =>  "(vect x y)"
         "[x, y]"        =>  "(vect x y)"
@@ -876,8 +876,8 @@ tests = [
         "\"hi\$(\"ho\")\""   =>  "(string \"hi\" (parens (string \"ho\")))"
         "\"\$(x,y)\""        =>  "(string (parens (error x y)))"
         "\"\$(x;y)\""        =>  "(string (parens (error x y)))"
-        "\"\$(x for y in z)\"" => "(string (parens (error (generator x (= y z)))))"
-        "\"\$((x for y in z))\"" => "(string (parens (parens (generator x (= y z)))))"
+        "\"\$(x for y in z)\"" => "(string (parens (error (generator x (iteration (in y z))))))"
+        "\"\$((x for y in z))\"" => "(string (parens (parens (generator x (iteration (in y z))))))"
         "\"\$(xs...)\""  =>  "(string (parens (... xs)))"
         "\"a \$foo b\""  =>  "(string \"a \" foo \" b\")"
         "\"\$var\""      =>  "(string var)"
@@ -996,7 +996,7 @@ parsestmt_test_specs = [
     ":+'y'"     => "(juxtapose (call-post (quote-: +) ') (call-post y '))"
     # unary subtype ops and newlines
     "a +\n\n<:" => "(call-i a + <:)"
-    "for\n\n<:" => "(for (= <: (error (error-t))) (block (error)) (error-t))"
+    "for\n\n<:" => "(for (iteration (in <: (error (error-t)))) (block (error)) (error-t))"
     # Empty character consumes trailing ' delimiter (ideally this could be
     # tested above but we don't require the input stream to be consumed in the
     # unit tests there.
