@@ -1161,7 +1161,7 @@ You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behav
 similarly to `(y...; kws...) -> g(y...; a=2, kws...)`. You can also write this as `Fix{:a}(g, 2)`.
 
 !!! compat "Julia 1.12"
-    Requires Julia 1.12 or later.
+    This functionality requires at least Julia 1.12.
 
 !!! note
     When nesting multiple `Fix`, note that the `n` in `Fix{n}` is _relative_ to the current
