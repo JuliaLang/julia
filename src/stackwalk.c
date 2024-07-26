@@ -1137,9 +1137,10 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         (void)mctx;
         (void)c;
       #endif
-     #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
+     #elif defined(_OS_FREEBSD_)
         sigjmp_buf *mctx = &t->ctx.ctx.uc_mcontext;
         mcontext_t *mc = &c.uc_mcontext;
+      #if defined(_CPU_X86_64_)
         // https://github.com/freebsd/freebsd-src/blob/releng/13.1/lib/libc/amd64/gen/_setjmp.S
         mc->mc_rip = ((long*)mctx)[0];
         mc->mc_rbx = ((long*)mctx)[1];
@@ -1150,6 +1151,34 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         mc->mc_r14 = ((long*)mctx)[6];
         mc->mc_r15 = ((long*)mctx)[7];
         context = &c;
+      #elif defined(_CPU_AARCH64_)
+        mc->mc_gpregs.gp_x[19] = ((long*)mctx)[0];
+        mc->mc_gpregs.gp_x[20] = ((long*)mctx)[1];
+        mc->mc_gpregs.gp_x[21] = ((long*)mctx)[2];
+        mc->mc_gpregs.gp_x[22] = ((long*)mctx)[3];
+        mc->mc_gpregs.gp_x[23] = ((long*)mctx)[4];
+        mc->mc_gpregs.gp_x[24] = ((long*)mctx)[5];
+        mc->mc_gpregs.gp_x[25] = ((long*)mctx)[6];
+        mc->mc_gpregs.gp_x[26] = ((long*)mctx)[7];
+        mc->mc_gpregs.gp_x[27] = ((long*)mctx)[8];
+        mc->mc_gpregs.gp_x[28] = ((long*)mctx)[9];
+        mc->mc_gpregs.gp_x[29] = ((long*)mctx)[10];
+        mc->mc_gpregs.gp_lr = ((long*)mctx)[11];
+        mc->mc_gpregs.gp_sp = ((long*)mctx)[12];
+        mc->mc_fpregs.fp_q[7] = ((long*)mctx)[13];
+        mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14];
+        mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15];
+        mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16];
+        mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17];
+        mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18];
+        mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19];
+        mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20];
+        context = &c;
+      #else
+       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown freebsd")
+        (void)mctx;
+        (void)c;
+      #endif
      #else
       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
       (void)c;
