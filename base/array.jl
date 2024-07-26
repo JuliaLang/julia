@@ -3086,8 +3086,10 @@ function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
     return ref
 end
 
-@noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(
-    "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $proddims > $len, so that the array would have more elements than the underlying memory can store."))
+@noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(LazyString(
+    "Attempted to wrap a MemoryRef of length ", len, " with an Array of size dims=", dims,
+    " which is invalid because prod(dims) = ", proddims, " > ", len,
+    " so that the array would have more elements than the underlying memory can store.")))
 
 @eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
     dims = convert(Dims, dims)
