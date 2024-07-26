@@ -166,9 +166,8 @@ function _insertdims(A::AbstractArray{T, N}, dims::Tuple{Vararg{Int64, M}}) wher
                              ((ds..., Base.OneTo(1)), n, Base.tail(dims)) :
                              ((ds..., axes(A,n)), n+1, dims),
                            ((), 1, dims), Val(ndims(A) + length(dims)))
-           # we need only the new shape and not n
-           reshape(A, ax_n[1])
 
+    # we need only the new shape and not n
     reshape(A, ax_n[1])
 end
 _insertdims(A::AbstractArray, dim::Integer) = _insertdims(A, (Int(dim),))
