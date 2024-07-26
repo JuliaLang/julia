@@ -1154,19 +1154,18 @@ julia> filter(!isletter, str)
     Fix(f; kw=x)
 
 A type representing a partially-applied version of a function `f`, with the argument
-"x" fixed at argument `n::Int` or keyword `kw::Symbol`.
+`x` fixed at argument `n::Int` or keyword `kw::Symbol`.
 In other words, `Fix{3}(f, x)` behaves similarly to
-`(y1, y2, y3...) -> f(y1, y2, x, y3...)`.
+`(y1, y2, y3...; kws...) -> f(y1, y2, x, y3...; kws...)`.
 
 You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behaves
-similarly to `x -> g(x; a=2)` for a function `g` with one argument and one keyword argument.
-You can also write this as `Fix{:a}(g, 2)`.
+similarly to `(x...; kws...) -> g(x...; a=2, kws...)`. You can also write this as `Fix{:a}(g, 2)`.
 
 !!! compat "Julia 1.12"
     Requires Julia 1.12 or later.
 
 !!! note
-    When nesting multiple `Fix`, note that the `N` in `Fix{N}` is _relative_ to the current
+    When nesting multiple `Fix`, note that the `n` in `Fix{n}` is _relative_ to the current
     available arguments, rather than an absolute ordering on the target function. For example,
     `Fix{1}(Fix{2}(f, 4), 4)` fixes the first and second arg, while `Fix{2}(Fix{1}(f, 4), 4)`
     fixes the first and third arg.
