@@ -526,3 +526,9 @@ end
 @deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
 
 # END 1.11 deprecations
+
+# BEGIN 1.12 deprecations
+
+@deprecate stat(fd::Integer) stat(RawFD(fd))
+
+# END 1.12 deprecations
