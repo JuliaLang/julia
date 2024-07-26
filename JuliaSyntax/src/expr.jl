@@ -198,6 +198,17 @@ function _extract_do_lambda!(args)
     end
 end
 
+function _append_iterspec!(args, ex)
+    if @isexpr(ex, :iteration)
+        for iter in ex.args::Vector{Any}
+            push!(args, Expr(:(=), iter.args...))
+        end
+    else
+        push!(args, ex)
+    end
+    return args
+end
+
 # Convert internal node of the JuliaSyntax parse tree to an Expr
 function _internal_node_to_Expr(source, srcrange, head, childranges, childheads, args)
     k = kind(head)
@@ -301,10 +312,8 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         # Move parameters blocks to args[2]
         _reorder_parameters!(args, 2)
     elseif k == K"for"
-        a1 = args[1]
-        if @isexpr(a1, :cartesian_iterator)
-            args[1] = Expr(:block, a1.args...)
-        end
+        iters = _append_iterspec!([], args[1])
+        args[1] = length(iters) == 1 ? only(iters) : Expr(:block, iters...)
         # Add extra line number node for the `end` of the block. This may seem
         # useless but it affects code coverage.
         push!(args[2].args, endloc)
@@ -360,12 +369,8 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         # source-ordered `generator` format.
         gen = args[1]
         for j = length(args):-1:2
-            aj = args[j]
-            if @isexpr(aj, :cartesian_iterator)
-                gen = Expr(:generator, gen, aj.args...)
-            else
-                gen = Expr(:generator, gen, aj)
-            end
+            gen = Expr(:generator, gen)
+            _append_iterspec!(gen.args, args[j])
             if j < length(args)
                 # Additional `for`s flatten the inner generator
                 gen = Expr(:flatten, gen)
@@ -374,14 +379,7 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         return gen
     elseif k == K"filter"
         @assert length(args) == 2
-        iterspec = args[1]
-        outargs = Any[args[2]]
-        if @isexpr(iterspec, :cartesian_iterator)
-            append!(outargs, iterspec.args)
-        else
-            push!(outargs, iterspec)
-        end
-        args = outargs
+        args = _append_iterspec!(Any[args[2]], args[1])
     elseif k == K"nrow" || k == K"ncat"
         # For lack of a better place, the dimension argument to nrow/ncat
         # is stored in the flags

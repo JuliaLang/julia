@@ -1099,7 +1099,7 @@ register_kinds!(JuliaSyntax, 0, [
         # Comprehensions
         "generator"
         "filter"
-        "cartesian_iterator"
+        "iteration"
         "comprehension"
         "typed_comprehension"
         # Container for a single statement/atom plus any trivia and errors

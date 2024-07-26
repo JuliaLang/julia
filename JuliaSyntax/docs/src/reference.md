@@ -76,7 +76,7 @@ class of tokenization errors and lets the parser deal with them.
 * Using `try catch else finally end` is parsed with `K"catch"` `K"else"` and `K"finally"` children to avoid the awkwardness of the optional child nodes in the `Expr` representation (#234)
 * The dotted import path syntax as in `import A.b.c` is parsed with a `K"importpath"` kind rather than `K"."`, because a bare `A.b.c` has a very different nested/quoted expression representation (#244)
 * We use flags rather than child nodes to represent the difference between `struct` and `mutable struct`, `module` and `baremodule` (#220)
-* Multiple iterations within the header of a `for`, as in `for a=as, b=bs body end` are represented with a `cartesian_iterator` head rather than a `block`, as these lists of iterators are neither semantically nor syntactically a sequence of statements. Unlike other uses of `block` (see also generators).
+* Iterations are represented with the `iteration` head rather than `=` within the header of a `for`. Thus `for i=is ; body end` parses to `(for (iteration i is) (block body))`. Cartesian iteration as in `for a=as, b=bs body end` are represented with a longer `iteration` block rather than a `block` containing `=` because these lists of iterators are neither semantically nor syntactically a sequence of statements, unlike other uses of `block`. Generators also use the `iteration` head - see information on that below.
 
 ## More detail on tree differences
 
@@ -90,8 +90,10 @@ mean
 
 ```
 for x in xs
-for y in ys
-  push!(xy, collection)
+    for y in ys
+        push!(xy, collection)
+    end
+end
 ```
 
 so the `xy` prefix is in the *body* of the innermost for loop. Following this,
@@ -112,8 +114,8 @@ source order.
 
 However, our green tree is strictly source-ordered, so we must deviate from the
 Julia AST. We deal with this by grouping cartesian products of iterators
-(separated by commas) within `cartesian_iterator` blocks as in `for` loops, and
-use the presence of multiple iterator blocks rather than the `flatten` head to
+(separated by commas) within `iteration` blocks as in `for` loops, and
+use the length of the `iteration` block rather than the `flatten` head to
 distinguish flattened iterators. The nested flattens and generators of `Expr`
 forms are reconstructed later. In this form the tree structure resembles the
 source much more closely. For example, `(xy for x in xs for y in ys)` is parsed as
@@ -121,8 +123,8 @@ source much more closely. For example, `(xy for x in xs for y in ys)` is parsed 
 ```
 (generator
   xy
-  (= x xs)
-  (= y ys))
+  (iteration x xs)
+  (iteration y ys))
 ```
 
 And the cartesian iteration `(xy for x in xs, y in ys)` is parsed as
@@ -130,9 +132,7 @@ And the cartesian iteration `(xy for x in xs, y in ys)` is parsed as
 ```
 (generator
   xy
-  (cartesian_iterator
-    (= x xs)
-    (= y ys)))
+  (iteration x xs y ys))
 ```
 
 ### Whitespace trivia inside strings
