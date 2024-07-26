@@ -460,8 +460,7 @@ Hello from 4
 ```
 """
 macro spawn(args...)
-    default_tp = gensym("unset")  # guard against setting threadpool multiple times
-    default_stack = gensym("unset")
+    default_tp = default_stack = nothing  # guard against setting threadpool multiple times
     tp = default_tp
     reserved_stack = default_stack
     1 <= length(args) <= 3 || throw(ArgumentError("wrong number of arguments in @spawn"))
