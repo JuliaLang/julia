@@ -191,19 +191,21 @@ end
 Return the appropriate zero element `A[i, j]` corresponding to a banded matrix `A`.
 """
 diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
-diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = diagzero(T, axes(D.diag[i], 1), axes(D.diag[j], 2))
+diagzero(D::Diagonal{M, <:AbstractVector{M}}, i, j) where {T,M<:AbstractMatrix{T}} =
+    diagzero(M, axes(D.diag[i], 1), axes(D.diag[j], 2))
 # dispatching on the axes permits specializing on the axis types to return something other than an Array
-diagzero(T::Type, ax::Union{AbstractUnitRange, Integer}...) = diagzero(T, ax)
-diagzero(T::Type, ::Tuple{}) = zeros(T)
+diagzero(M::Type, ax::Union{AbstractUnitRange, Integer}...) = diagzero(M, ax)
+diagzero(M::Type, ::Tuple{}) = zeros(eltype(M))
 """
-    diagzero(T::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}})
+    diagzero(::Type{M}, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) where {M<:AbstractMatrix}
 
-Return an appropriate zero-ed array with either the axes `ax`, or the `size` `map(length, ax)`,
-which may be used as a structural zero element of a banded matrix. By default, this falls back to
+Return an appropriate zero-ed matrix similar to `M`, with either
+the axes `ax`, or the `size` `map(length, ax)`.
+This will be used as a structural zero element of a banded matrix. By default, `diagzero` falls back to
 using the size along each axis to construct the result.
 """
-diagzero(T::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = diagzero(T, map(length, ax))
-diagzero(T::Type, sz::Tuple{Integer, Vararg{Integer}}) = zeros(T, sz)
+diagzero(M::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = diagzero(M, map(length, ax))
+diagzero(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatrix} = zeros(eltype(M), sz)
 
 @inline function getindex(D::Diagonal, b::BandIndex)
     @boundscheck checkbounds(D, b)

@@ -817,9 +817,6 @@ end
     @test fill(S,3,2)' * D == fill(S' * S, 2, 3)
 
     @testset "indexing with non-standard-axes" begin
-        LinearAlgebra.diagzero(T::Type, ax::Tuple{SizedArrays.SOneTo, Vararg{SizedArrays.SOneTo}}) =
-            zeros(T, ax)
-
         s = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
         D = Diagonal(fill(s,3))
         @test @inferred(D[1,2]) isa typeof(s)
