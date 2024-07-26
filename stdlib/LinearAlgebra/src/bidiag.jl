@@ -299,6 +299,13 @@ function Base.copy(tB::Transpose{<:Any,<:Bidiagonal})
     return Bidiagonal(map(x -> copy.(transpose.(x)), (B.dv, B.ev))..., B.uplo == 'U' ? :L : :U)
 end
 
+@noinline function throw_zeroband_error(A)
+    zeroband = istriu(A) ? "lower" : "upper"
+    uplo = A.uplo
+    throw(ArgumentError(LazyString("cannot set the ",
+        zeroband, " bidiagonal band to a nonzero value for uplo=:", uplo)))
+end
+
 # copyto! for matching axes
 function _copyto_banded!(A::Bidiagonal, B::Bidiagonal)
     A.dv .= B.dv
@@ -307,10 +314,7 @@ function _copyto_banded!(A::Bidiagonal, B::Bidiagonal)
     elseif iszero(B.ev) # diagonal source
         A.ev .= B.ev
     else
-        zeroband = istriu(A) ? "lower" : "upper"
-        uplo = A.uplo
-        throw(ArgumentError(LazyString("cannot set the ",
-            zeroband, " bidiagonal band to a nonzero value for uplo=:", uplo)))
+        throw_zeroband_error(A)
     end
     return A
 end
@@ -698,13 +702,26 @@ function _mul!(C::Bidiagonal, A::Bidiagonal, B::Diagonal, _add::MulAddMul)
     Cdv, Cev = C.dv, C.ev
     Bd = B.diag
     shift = Int(A.uplo == 'U')
-    @inbounds begin
-        _modify!(_add, Adv[1]*Bd[1], Cdv, 1)
-        for j in eachindex(IndexLinear(), Aev, Cev)
-            _modify!(_add, Aev[j]*Bd[j+shift], Cev, j)
-            _modify!(_add, Adv[j+1]*Bd[j+1], Cdv, j+1)
+    if C.uplo == A.uplo
+        @inbounds begin
+            _modify!(_add, Adv[1]*Bd[1], Cdv, 1)
+            for j in eachindex(IndexLinear(), Aev, Cev)
+                _modify!(_add, Aev[j]*Bd[j+shift], Cev, j)
+                _modify!(_add, Adv[j+1]*Bd[j+1], Cdv, j+1)
+            end
+        end # inbounds
+    else
+        @inbounds begin
+            _modify!(_add, Adv[1]*Bd[1], Cdv, 1)
+            for j in eachindex(IndexLinear(), Aev, Cev)
+                _modify!(_add, Adv[j+1]*Bd[j+1], Cdv, j+1)
+                # this branch will error unless the value is zero
+                _modify!(_add, Aev[j]*Bd[j+shift], C, (j+1-shift, j+shift))
+                # zeros of the correct type
+                _modify!(_add, A[j+shift, j+1-shift]*Bd[j+1-shift], Cev, j)
+            end
         end
-    end # inbounds
+    end
     C
 end
 
@@ -878,13 +895,26 @@ function _dibimul!(C::Bidiagonal, A::Diagonal, B::Bidiagonal, _add)
     Bdv, Bev = B.dv, B.ev
     Cdv, Cev = C.dv, C.ev
     shift = Int(B.uplo == 'L')
-    @inbounds begin
-        _modify!(_add, Ad[1]*Bdv[1], Cdv, 1)
-        for j in eachindex(IndexLinear(), Bev, Cev)
-            _modify!(_add, Ad[j+shift]*Bev[j], Cev, j)
-            _modify!(_add, Ad[j+1]*Bdv[j+1], Cdv, j+1)
+    if C.uplo == B.uplo
+        @inbounds begin
+            _modify!(_add, Ad[1]*Bdv[1], Cdv, 1)
+            for j in eachindex(IndexLinear(), Bev, Cev)
+                _modify!(_add, Ad[j+shift]*Bev[j], Cev, j)
+                _modify!(_add, Ad[j+1]*Bdv[j+1], Cdv, j+1)
+            end
+        end # inbounds
+    else
+        @inbounds begin
+            _modify!(_add, Ad[1]*Bdv[1], Cdv, 1)
+            for j in eachindex(IndexLinear(), Bev, Cev)
+                _modify!(_add, Ad[j+1]*Bdv[j+1], Cdv, j+1)
+                # this branch will error unless the value is zero
+                _modify!(_add, Ad[j+shift]*Bev[j], C, (j+shift, j+1-shift))
+                # zeros of the correct type
+                _modify!(_add, Ad[j+1-shift]*B[j+1-shift,j+shift], Cev, j)
+            end
         end
-    end # inbounds
+    end
     C
 end
 

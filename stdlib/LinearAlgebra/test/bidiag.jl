@@ -974,6 +974,17 @@ end
             S = similar(A, size(A))
             @test A * D ≈ mul!(S, A, D) ≈ M * D
             @test D * A ≈ mul!(S, D, A) ≈ D * M
+            @test mul!(copy(S), D, A, 2, 2) ≈ D * M * 2 + S * 2
+            @test mul!(copy(S), A, D, 2, 2) ≈ M * D * 2 + S * 2
+
+            A2 = Bidiagonal(dv, zero(ev), uplo)
+            M2 = Array(A2)
+            S2 = Bidiagonal(copy(dv), copy(ev), uplo == (:U) ? (:L) : (:U))
+            MS2 = Array(S2)
+            @test mul!(copy(S2), D, A2) ≈ D * M2
+            @test mul!(copy(S2), A2, D) ≈ M2 * D
+            @test mul!(copy(S2), A2, D, 2, 2) ≈ M2 * D * 2 + MS2 * 2
+            @test mul!(copy(S2), D, A2, 2, 2) ≈ D * M2 * 2 + MS2 * 2
         end
     end
 end
