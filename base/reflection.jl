@@ -212,6 +212,8 @@ end
 
 Get the name of field `i` of a `DataType`.
 
+The return type is `Int` (the index of the field) for `x <: Tuple`, otherwise the return type is `Symbol`.
+
 # Examples
 ```jldoctest
 julia> fieldname(Rational, 1)
@@ -219,6 +221,9 @@ julia> fieldname(Rational, 1)
 
 julia> fieldname(Rational, 2)
 :den
+
+julia> fieldname(Tuple{String,Int}, 2)
+2
 ```
 """
 function fieldname(t::DataType, i::Integer)
@@ -246,6 +251,8 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
 
 Get a tuple with the names of the fields of a `DataType`.
 
+For a tuple type, each name is an `Int` (the index of the field), otherwise it's a `Symbol`.
+
 See also [`propertynames`](@ref), [`hasfield`](@ref).
 
 # Examples
@@ -255,6 +262,9 @@ julia> fieldnames(Rational)
 
 julia> fieldnames(typeof(1+im))
 (:re, :im)
+
+julia> fieldnames(Tuple{String,Int})
+(1, 2)
 ```
 """
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
