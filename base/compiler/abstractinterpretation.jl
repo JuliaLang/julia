@@ -2239,16 +2239,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return CallMeta(Const(rty.val === false), Bottom, EFFECTS_TOTAL, MethodResultPure())
         end
         return call
-    elseif la == 3 && istopfunction(f, :(>:))
-        # mark issupertype as a exact alias for issubtype
-        # swap T1 and T2 arguments and call <:
-        if fargs !== nothing && length(fargs) == 3
-            fargs = Any[<:, fargs[3], fargs[2]]
-        else
-            fargs = nothing
-        end
-        argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
     elseif la == 2 && istopfunction(f, :typename)
         return CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure())
     elseif f === Core._hasmethod
