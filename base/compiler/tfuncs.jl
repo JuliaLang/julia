@@ -3016,14 +3016,6 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     return CallMeta(rt, Any, EFFECTS_TOTAL, NoCallInfo())
 end
 
-# N.B.: typename maps type equivalence classes to a single value
-function typename_static(@nospecialize(t))
-    t isa Const && return _typename(t.val)
-    t isa Conditional && return Bool.name
-    t = unwrap_unionall(widenconst(t))
-    return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
-end
-
 function global_order_nothrow(@nospecialize(o), loading::Bool, storing::Bool)
     o isa Const || return false
     sym = o.val

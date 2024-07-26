@@ -2249,8 +2249,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
         return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
-    elseif la == 2 && istopfunction(f, :typename)
-        return CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure())
     elseif f === Core._hasmethod
         return _hasmethod_tfunc(interp, argtypes, sv)
     end
