@@ -466,7 +466,7 @@ function take!(io::IOBuffer)
         if nbytes == 0 || io.reinit
             data = StringVector(0)
         elseif io.writable
-            data = wrap(Array, MemoryRef(io.data, io.offset + 1), nbytes)
+            data = wrap(Array, memoryref(io.data, io.offset + 1), nbytes)
         else
             data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
         end
@@ -475,7 +475,7 @@ function take!(io::IOBuffer)
         if nbytes == 0
             data = StringVector(0)
         elseif io.writable
-            data = wrap(Array, MemoryRef(io.data, io.ptr), nbytes)
+            data = wrap(Array, memoryref(io.data, io.ptr), nbytes)
         else
             data = read!(io, data)
         end
@@ -503,8 +503,8 @@ Array allocation), as well as omits some checks.
 """
 _unsafe_take!(io::IOBuffer) =
     wrap(Array, io.size == io.offset ?
-        MemoryRef(Memory{UInt8}()) :
-        MemoryRef(io.data, io.offset + 1),
+        memoryref(Memory{UInt8}()) :
+        memoryref(io.data, io.offset + 1),
         io.size - io.offset)
 
 function write(to::IO, from::GenericIOBuffer)

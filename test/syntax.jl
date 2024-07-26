@@ -3690,3 +3690,10 @@ begin
     Foreign54607.bar = 9
 end
 @test Foreign54607.bar == 9
+
+# Test that globals can be `using`'d even if they are not yet defined
+module UndefGlobal54954
+    global theglobal54954::Int
+end
+using .UndefGlobal54954: theglobal54954
+@test Core.get_binding_type(@__MODULE__, :theglobal54954) === Int

@@ -1095,7 +1095,7 @@ end
 end
 
 @nospecs function _getfield_tfunc(𝕃::AnyMustAliasesLattice, s00, name, setfield::Bool)
-    return _getfield_tfunc(widenlattice(𝕃), widenmustalias(s00), name, setfield)
+    return _getfield_tfunc(widenlattice(𝕃), widenmustalias(s00), widenmustalias(name), setfield)
 end
 
 @nospecs function _getfield_tfunc(𝕃::PartialsLattice, s00, name, setfield::Bool)
@@ -2074,7 +2074,7 @@ end
     hasintersect(widenconst(idx), Int) || return Bottom
     return ref
 end
-add_tfunc(memoryref, 1, 3, memoryref_tfunc, 1)
+add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
 
 @nospecs function memoryrefoffset_tfunc(𝕃::AbstractLattice, mem)
     hasintersect(widenconst(mem), GenericMemoryRef) || return Bottom
@@ -2224,7 +2224,7 @@ end
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 @nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
     ⊑ = partialorder(𝕃)
-    if f === memoryref
+    if f === memoryrefnew
         return memoryref_builtin_common_nothrow(argtypes)
     elseif f === memoryrefoffset
         length(argtypes) == 1 || return false
@@ -2348,7 +2348,7 @@ const _EFFECT_FREE_BUILTINS = [
     isa,
     UnionAll,
     getfield,
-    memoryref,
+    memoryrefnew,
     memoryrefoffset,
     memoryrefget,
     memoryref_isassigned,
@@ -2383,7 +2383,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
 ]
 
 const _ARGMEM_BUILTINS = Any[
-    memoryref,
+    memoryrefnew,
     memoryrefoffset,
     memoryrefget,
     memoryref_isassigned,
@@ -2565,7 +2565,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryref || f === memoryrefoffset
+        elseif f === memoryrefnew || f === memoryrefoffset
             consistent = ALWAYS_TRUE
         elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
@@ -2589,7 +2589,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             inaccessiblememonly = ALWAYS_FALSE
         end
-        if f === memoryref || f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
+        if f === memoryrefnew || f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
             noub = memoryop_noub(f, argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
         else
             noub = ALWAYS_TRUE
@@ -2604,7 +2604,7 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     nargs == 0 && return true # must throw and noub
     lastargtype = argtypes[end]
     isva = isvarargtype(lastargtype)
-    if f === memoryref
+    if f === memoryrefnew
         if nargs == 1 && !isva
             return true
         elseif nargs == 2 && !isva

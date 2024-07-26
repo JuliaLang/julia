@@ -88,7 +88,6 @@ New library functions
 * `Sys.username()` can be used to return the current user's username ([#51897]).
 * `Sys.isreadable(), Sys.iswritable()` can be used to check if the current user has access permissions
   that permit reading and writing, respectively. ([#53320]).
-* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
 * `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
 * `IdSet` is now exported from Base and considered public ([#53262]).
 * `@time` now reports a count of any lock conflicts where a `ReentrantLock` had to wait, plus a new macro
@@ -141,12 +140,6 @@ Standard library changes
   styled content ([#49586]).
 * The new `@styled_str` string macro provides a convenient way of creating a
   `AnnotatedString` with various faces or other attributes applied ([#49586]).
-
-#### JuliaSyntaxHighlighting
-
-* A new standard library for applying syntax highlighting to Julia code, this
-  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
-  that creates an `AnnotatedString` with syntax highlighting applied.
 
 #### Libdl
 

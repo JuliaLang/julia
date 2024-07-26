@@ -549,6 +549,7 @@ export
     mapfoldl,
     mapfoldr,
     mapreduce,
+    memoryref,
     merge!,
     mergewith!,
     merge,
@@ -1079,6 +1080,7 @@ public
     Checked,
     Filesystem,
     Order,
+    ScopedValues,
     Sort,
 
 # Types
