@@ -574,6 +574,7 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
     sentinel_node->next = node;
 }
 
+extern uv_mutex_t gc_perm_lock;
 extern uv_mutex_t gc_threads_lock;
 extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
@@ -593,6 +594,7 @@ void jl_gc_debug_init(void);
 
 // GC pages
 
+extern uv_mutex_t gc_pages_lock;
 void jl_gc_init_page(void) JL_NOTSAFEPOINT;
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
 void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;

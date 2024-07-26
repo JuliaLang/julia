@@ -3979,6 +3979,7 @@ void jl_gc_init(void)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&page_profile_lock);
     uv_mutex_init(&gc_perm_lock);
+    uv_mutex_init(&gc_pages_lock);
     uv_mutex_init(&gc_threads_lock);
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
@@ -4244,7 +4245,7 @@ STATIC_INLINE void *gc_try_perm_alloc_pool(size_t sz, unsigned align, unsigned o
 }
 
 // **NOT** a safepoint
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     // The caller should have acquired `gc_perm_lock`
     assert(align < GC_PERM_POOL_LIMIT);

@@ -350,9 +350,6 @@ jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset,
                                    int osize);
 jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize) JL_NOTSAFEPOINT;
-extern uv_mutex_t gc_perm_lock;
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
-    unsigned align, unsigned offset) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
 void gc_sweep_sysimg(void);
@@ -1699,6 +1696,7 @@ void jl_write_malloc_log(void);
 #  define jl_unreachable() ((void)jl_assume(0))
 #endif
 
+extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 
 // Tools for locally disabling spurious compiler warnings
