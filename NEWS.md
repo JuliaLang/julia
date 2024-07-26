@@ -106,6 +106,10 @@ Standard library changes
 
 #### JuliaSyntaxHighlighting
 
+* A new standard library for applying syntax highlighting to Julia code, this
+  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
+  that creates an `AnnotatedString` with syntax highlighting applied.
+
 #### Package Manager
 
 #### LinearAlgebra

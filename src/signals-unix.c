@@ -85,6 +85,9 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.mc_rsp;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.mc_gpregs.gp_sp;
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
     const struct sigcontext *ctx = (const struct sigcontext *)_ctx;
     return ctx->sc_rsp;
@@ -160,6 +163,11 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     ctx->uc_mcontext.sp = rsp;
     ctx->uc_mcontext.regs[29] = 0; // Clear link register (x29)
     ctx->uc_mcontext.pc = (uintptr_t)fptr;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    ctx->uc_mcontext.mc_gpregs.gp_sp = rsp;
+    ctx->uc_mcontext.mc_gpregs.gp_x[29] = 0; // Clear link register (x29)
+    ctx->uc_mcontext.mc_gpregs.gp_elr = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     uintptr_t target = (uintptr_t)fptr;
@@ -349,6 +357,13 @@ int is_write_fault(void *context) {
 int is_write_fault(void *context) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
+}
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+// FreeBSD seems not to expose a means of accessing ESR via `ucontext_t` on AArch64.
+// TODO: Is there an alternative approach that can be taken? ESR may become accessible
+// in a future release though.
+int is_write_fault(void *context) {
+    return 0;
 }
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
 int is_write_fault(void *context) {

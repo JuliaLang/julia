@@ -23,7 +23,7 @@ using Unicode: normalize
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote
-        docs = $REPL.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
+        docs = $Markdown.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
         $REPL.insert_internal_warning(docs, $internal_accesses)
     end
 end
@@ -75,20 +75,6 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
     :($REPL.@repl $io $expr $brief $mod $internal_accesses)
 end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
-
-# Print horizontal lines between each docstring if there are multiple docs
-function insert_hlines(docs)
-    if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
-        return docs
-    end
-    docs = docs::Markdown.MD
-    v = Any[]
-    for (n, doc) in enumerate(docs.content)
-        push!(v, doc)
-        n == length(docs.content) || push!(v, Markdown.HorizontalRule())
-    end
-    return Markdown.MD(v)
-end
 
 function formatdoc(d::DocStr)
     buffer = IOBuffer()

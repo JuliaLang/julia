@@ -1069,15 +1069,15 @@ static void sweep_big(jl_ptls_t ptls) JL_NOTSAFEPOINT
 
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned){
     // This is **NOT** a GC safe point.
-    mallocarray_t *ma;
+    mallocmemory_t *ma;
     if (ptls->gc_tls.heap.mafreelist == NULL) {
-        ma = (mallocarray_t*)malloc_s(sizeof(mallocarray_t));
+        ma = (mallocmemory_t*)malloc_s(sizeof(mallocmemory_t));
     }
     else {
         ma = ptls->gc_tls.heap.mafreelist;
         ptls->gc_tls.heap.mafreelist = ma->next;
     }
-    ma->a = (jl_value_t*)((uintptr_t)m | !!isaligned);
+    ma->a = (jl_genericmemory_t*)((uintptr_t)m | !!isaligned);
     ma->next = ptls->gc_tls.heap.mallocarrays;
     ptls->gc_tls.heap.mallocarrays = ma;
 }
@@ -1193,10 +1193,10 @@ static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 != NULL) {
-            mallocarray_t *ma = ptls2->gc_tls.heap.mallocarrays;
-            mallocarray_t **pma = &ptls2->gc_tls.heap.mallocarrays;
+            mallocmemory_t *ma = ptls2->gc_tls.heap.mallocarrays;
+            mallocmemory_t **pma = &ptls2->gc_tls.heap.mallocarrays;
             while (ma != NULL) {
-                mallocarray_t *nxt = ma->next;
+                mallocmemory_t *nxt = ma->next;
                 jl_value_t *a = (jl_value_t*)((uintptr_t)ma->a & ~1);
                 int bits = jl_astaggedvalue(a)->bits.gc;
                 if (gc_marked(bits)) {

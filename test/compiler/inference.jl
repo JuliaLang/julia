@@ -4200,6 +4200,110 @@ end
     end
 end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
 
+@testset "constraint back-propagation from typeassert" begin
+    @test Base.infer_return_type((Any,)) do a
+        typeassert(a, Int)
+        return a
+    end == Int
+
+    @test Base.infer_return_type((Any,Bool)) do a, b
+        if b
+            typeassert(a, Int64)
+        else
+            typeassert(a, Int32)
+        end
+        return a
+    end == Union{Int32,Int64}
+end
+
+callsig_backprop_basic(::Int) = nothing
+callsig_backprop_unionsplit(::Int32) = nothing
+callsig_backprop_unionsplit(::Int64) = nothing
+callsig_backprop_multi(::Int32, ::Int64) = nothing
+callsig_backprop_any(::Any) = nothing
+callsig_backprop_lhs(::Int) = nothing
+callsig_backprop_bailout(::Val{0}) = 0
+callsig_backprop_bailout(::Val{1}) = undefvar # undefvar::Any triggers `bail_out_call`
+callsig_backprop_bailout(::Val{2}) = 2
+callsig_backprop_addinteger(a::Integer, b::Integer) = a + b # results in too many matching methods and triggers `bail_out_call`)
+@test Base.infer_return_type(callsig_backprop_addinteger) == Any
+let effects = Base.infer_effects(callsig_backprop_addinteger)
+    @test !Core.Compiler.is_consistent(effects)
+    @test !Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test !Core.Compiler.is_terminates(effects)
+end
+callsig_backprop_anti(::Any) = :any
+callsig_backprop_anti(::Int) = :int
+
+@testset "constraint back-propagation from call signature" begin
+    # basic case
+    @test Base.infer_return_type(a->(callsig_backprop_basic(a); return a), (Any,)) == Int
+
+    # union-split case
+    @test Base.infer_return_type(a->(callsig_backprop_unionsplit(a); return a), (Any,)) == Union{Int32,Int64}
+
+    # multiple arguments updates
+    @test Base.infer_return_type((Any,Any)) do a, b
+        callsig_backprop_multi(a, b)
+        return a, b
+    end == Tuple{Int32,Int64}
+
+    # refinement should happen only when it's worthwhile
+    @test Base.infer_return_type(a->(callsig_backprop_any(a); return a), (Integer,)) == Integer
+
+    # state update on lhs slot (assignment effect should have the precedence)
+    @test Base.infer_return_type((Any,)) do a
+        a = callsig_backprop_lhs(a)
+        return a
+    end == Nothing
+
+    # make sure to throw away an intermediate refinement information when we bail out early
+    # (inference would bail out on `callsig_backprop_bailout(::Val{1})`)
+    @test Base.infer_return_type(a->(callsig_backprop_bailout(a); return a), (Any,)) == Any
+
+    # if we see all the matching methods, we don't need to throw away refinement information
+    # even if it's caught by `bail_out_call` check
+    @test Base.infer_return_type((Any,Any)) do a, b
+        callsig_backprop_addinteger(a, b)
+        return a, b
+    end == Tuple{Integer,Integer}
+
+    # anti case
+    @test Base.infer_return_type((Any,)) do x
+        callsig_backprop_anti(x)
+        return x
+    end == Any
+end
+
+# make sure to add backedges when we use call signature constraint
+function callsig_backprop_invalidation_outer(a)
+    callsig_backprop_invalidation_inner!(a)
+    return a
+end
+@eval callsig_backprop_invalidation_inner!(::Int) = $(gensym(:undefvar)) # ::Any
+@test Base.infer_return_type((Any,)) do a
+    callsig_backprop_invalidation_outer(a)
+end == Int
+# new definition of `callsig_backprop_invalidation_inner!` should invalidate `callsig_backprop_invalidation_outer`
+# (even if the previous return type is annotated as `Any`)
+@eval callsig_backprop_invalidation_inner!(::Nothing) = $(gensym(:undefvar)) # ::Any
+@test Base.infer_return_type((Any,)) do a
+    # since inference will bail out at the first matched `_inner!` and so call signature constraint won't be available
+    callsig_backprop_invalidation_outer(a)
+end ≠ Int
+
+# https://github.com/JuliaLang/julia/issues/37866
+function issue37866(v::Vector{Union{Nothing,Float64}})
+    for x in v
+        if x > 5.0
+            return x # x > 5.0 is MethodError for Nothing so can assume ::Float64
+        end
+    end
+    return 0.0
+end
+@test Base.infer_return_type(issue37866, (Vector{Union{Nothing,Float64}},)) == Float64
+
 # make sure inference on a recursive call graph with nested `Type`s terminates
 # https://github.com/JuliaLang/julia/issues/40336
 f40336(@nospecialize(t)) = f40336(Type{t})

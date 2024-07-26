@@ -231,6 +231,7 @@ distcleanall: $(addprefix distclean-, $(DEP_LIBS_ALL))
 	rm -rf $(build_prefix)
 getall: $(addprefix get-, $(DEP_LIBS_ALL))
 
+include $(SRCDIR)/BOLT.mk
 include $(SRCDIR)/csl.mk
 include $(SRCDIR)/sanitizers.mk
 include $(SRCDIR)/ittapi.mk
