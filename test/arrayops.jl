@@ -328,7 +328,7 @@ end
     @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
     @test_throws ArgumentError insertdims(a, dims=4)
     @test_throws ArgumentError insertdims(a, dims=6)
-    
+
     # insertdims and dropdims are inverses
     b = rand(1,1,1,5,1,1,7)
     for dims in [1, (1,), 2, (2,), 3, (3,), (1,3), (1,2,3), (1,2), (1,3,5), (1,2,5,6), (1,3,5,6), (1,3,5,6)]
