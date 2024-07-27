@@ -38,6 +38,7 @@ using Base: delete
 @test_throws FieldError (x=4, y=5, z=6)[[:a]]
 @test_throws FieldError (x=4, y=5, z=6)[[:x, :a]]
 @test_throws ErrorException (x=4, y=5, z=6)[(:x, :x)]
+@test_throws ImmutableFieldError (a=1,).a = 2
 
 @test length(NamedTuple()) == 0
 @test length((a=1,)) == 1
