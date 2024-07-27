@@ -56,8 +56,9 @@ show(io::IO, ::ReentrantLock) = print(io, ReentrantLock, "()")
 function show(io::IO, ::MIME"text/plain", l::ReentrantLock)
     show(io, l)
     if !(get(io, :compact, false)::Bool)
-        if islocked(l)
-            print(io, " (locked by ", l.locked_by, ")")
+        locked_by = l.locked_by
+        if locked_by isa Task
+            print(io, " (locked by ", locked_by === current_task() ? "current " : "", locked_by, ")")
         else
             print(io, " (unlocked)")
         end
