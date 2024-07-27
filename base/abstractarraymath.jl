@@ -100,7 +100,6 @@ _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 Inverse of [`dropdims`](@ref); return an array with new singleton dimensions
 at every dimension in `dims`.
 
-Repeated dimensions will throw.
 
 The result shares the same underlying data as `A`, such that the
 result is mutable if and only if `A` is mutable, and setting elements of one
