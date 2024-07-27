@@ -156,19 +156,19 @@ julia> b[1,1,1,1] = 5; a
 """
 insertdims(A; dims) = _insertdims(A, dims)
 function _insertdims(A::AbstractArray{T, N}, dims::Tuple{Vararg{Int64, M}}) where {T, N, M}
-    maximum(dims) ≤ ndims(A)+1 || throw(ArgumentError("The largest entry in dims must be ≤ ndims(A) + 1."))
+    maximum(dims) ≤ N+M || throw(ArgumentError("The largest entry in dims must be not larger than the dimension of the array and the length of dims"))
     1 ≤ minimum(dims) || throw(ArgumentError("The smallest entry in dims must be ≥ 1."))
-    issorted(dims) || throw(ArgumentError("dims=$(dims) are not sorted"))
 
-    # n is the amount of the dims already inserted
-    ax_n = Base._foldoneto(((ds, n, dims), _) ->
-                             dims != Tuple(()) && n == first(dims) ?
-                             ((ds..., Base.OneTo(1)), n, Base.tail(dims)) :
-                             ((ds..., axes(A,n)), n+1, dims),
-                           ((), 1, dims), Val(ndims(A) + length(dims)))
-
-    # we need only the new shape and not n
-    reshape(A, ax_n[1])
+    # acc is a tuple, where the first entry is the final shape
+    # the second entry conists of the initial dimensions of the array but 
+    # we chop them from the head 
+    inds= Base._foldoneto((acc, i) -> 
+                            i ∈ dims  
+                                ? ((acc[1]..., Base.OneTo(1)), acc[2]) 
+                                : ((acc[1]..., axes(A, acc[2])), acc[2] + 1), 
+                            ((), 1), Val(N+M))
+    new_shape = inds[1]
+    return reshape(A, new_shape)
 end
 _insertdims(A::AbstractArray, dim::Integer) = _insertdims(A, (Int(dim),))
 
