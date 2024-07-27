@@ -101,7 +101,7 @@ Inverse of [`dropdims`](@ref); return an array with new singleton dimensions
 at every dimension in `dims`.
 
 Repeated dimensions are forbidden and the largest entry in `dims` must be
-smaller than the dimensionality of the array and the length of `dims` together.
+less than or equal than `ndims(A) + length(dims)`.
 
 The result shares the same underlying data as `A`, such that the
 result is mutable if and only if `A` is mutable, and setting elements of one
