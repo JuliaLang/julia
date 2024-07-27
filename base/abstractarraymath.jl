@@ -95,60 +95,38 @@ _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
 
 """
-    insertdims(A; dims)
+     inserdims(A; dims)
 
-Return an array with the same data as `A`, but with singleton dimensions specified by
-`dims` inserted.
-The dimensions of `A` and `dims` must be contiguous.
-If dimensions occur multiple times in `dims`, several singleton dimensions are inserted.
+Inverse of [`dropdims`](@ref); return an array with new singleton dimensions
+at every dimension in `dims`.
+
+Repeated dimensions will throw.
 
 The result shares the same underlying data as `A`, such that the
 result is mutable if and only if `A` is mutable, and setting elements of one
 alters the values of the other.
 
-See also: [`reshape`](@ref), [`dropdims`](@ref), [`vec`](@ref).
-
+See also: [`dropdims`](@ref), [`reshape`](@ref), [`vec`](@ref).
 # Examples
 ```jldoctest
-julia> a = [1 2; 3 4]
-2×2 Matrix{Int64}:
- 1  2
- 3  4
+julia> x = [1 2 3; 4 5 6]
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
 
-julia> b = insertdims(a, dims=(1,1))
-1×1×2×2 Array{Int64, 4}:
-[:, :, 1, 1] =
- 1
+julia> insertdims(x, dims=3)
+2×3×1 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2  3
+ 4  5  6
 
-[:, :, 2, 1] =
- 3
+julia> insertdims(x, dims=(1,2,5)) == reshape(x, 1, 1, 2, 3, 1)
+true
 
-[:, :, 1, 2] =
- 2
-
-[:, :, 2, 2] =
- 4
-
-julia> b = insertdims(a, dims=(1,2))
-1×2×1×2 Array{Int64, 4}:
-[:, :, 1, 1] =
- 1  3
-
-[:, :, 1, 2] =
- 2  4
-
-julia> b = insertdims(a, dims=(1,3))
-1×2×2×1 Array{Int64, 4}:
-[:, :, 1, 1] =
- 1  3
-
-[:, :, 2, 1] =
- 2  4
-
-julia> b[1,1,1,1] = 5; a
-2×2 Matrix{Int64}:
- 5  2
- 3  4
+julia> dropdims(insertdims(x, dims=(1,2,5)), dims=(1,2,5))
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
 ```
 
 !!! compat "Julia 1.12"
