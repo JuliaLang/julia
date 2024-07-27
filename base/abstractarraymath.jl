@@ -95,7 +95,7 @@ _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
 
 """
-     inserdims(A; dims)
+    insertdims(A; dims)
 
 Inverse of [`dropdims`](@ref); return an array with new singleton dimensions
 at every dimension in `dims`.
