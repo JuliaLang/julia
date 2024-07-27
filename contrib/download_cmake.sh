@@ -29,7 +29,6 @@ case $PLATFORM in
     CMAKE_EXTRACTED_PATH=$FULLNAME/CMake.app/Contents/bin/cmake;;
   Linux-x86_64)
     FULLNAME=cmake-$CMAKE_VERSION-linux-x86_64
-    echo  https://cmake.org/files/v$CMAKE_VERSION_MAJMIN/$FULLNAME.tar.gz
     ../tools/jldownload https://cmake.org/files/v$CMAKE_VERSION_MAJMIN/$FULLNAME.tar.gz
     echo "$CMAKE_SHA256_LINUX_X86_64  $FULLNAME.tar.gz" | sha256sum -c -
     CMAKE_EXTRACTED_PATH=$FULLNAME/bin/cmake;;
