@@ -100,6 +100,8 @@ _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 Inverse of [`dropdims`](@ref); return an array with new singleton dimensions
 at every dimension in `dims`.
 
+Repeated dimensions are forbidden and the largest entry in `dims` must be 
+smaller than the dimensionality of the array and the length of `dims` together.
 
 The result shares the same underlying data as `A`, such that the
 result is mutable if and only if `A` is mutable, and setting elements of one
@@ -133,8 +135,13 @@ julia> dropdims(insertdims(x, dims=(1,2,5)), dims=(1,2,5))
 """
 insertdims(A; dims) = _insertdims(A, dims)
 function _insertdims(A::AbstractArray{T, N}, dims::Tuple{Vararg{Int64, M}}) where {T, N, M}
-    maximum(dims) ≤ N+M || throw(ArgumentError("The largest entry in dims must be not larger than the dimension of the array and the length of dims"))
-    1 ≤ minimum(dims) || throw(ArgumentError("The smallest entry in dims must be ≥ 1."))
+    for i in eachindex(dims)
+        1 ≤ dims[i] || throw(ArgumentError("the smallest entry in dims must be ≥ 1."))
+        dims[i] ≤ N+M || throw(ArgumentError("the largest entry in dims must be not larger than the dimension of the array and the length of dims added"))
+        for j = 1:i-1
+            dims[j] == dims[i] && throw(ArgumentError("inserted dims must be unique"))
+        end
+    end
 
     # acc is a tuple, where the first entry is the final shape
     # the second entry off acc is a counter for the axes of A 
