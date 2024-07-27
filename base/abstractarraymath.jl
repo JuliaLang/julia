@@ -100,7 +100,7 @@ _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 Inverse of [`dropdims`](@ref); return an array with new singleton dimensions
 at every dimension in `dims`.
 
-Repeated dimensions are forbidden and the largest entry in `dims` must be 
+Repeated dimensions are forbidden and the largest entry in `dims` must be
 smaller than the dimensionality of the array and the length of `dims` together.
 
 The result shares the same underlying data as `A`, such that the
@@ -144,11 +144,11 @@ function _insertdims(A::AbstractArray{T, N}, dims::Tuple{Vararg{Int64, M}}) wher
     end
 
     # acc is a tuple, where the first entry is the final shape
-    # the second entry off acc is a counter for the axes of A 
-    inds= Base._foldoneto((acc, i) -> 
-                            i ∈ dims  
-                                ? ((acc[1]..., Base.OneTo(1)), acc[2]) 
-                                : ((acc[1]..., axes(A, acc[2])), acc[2] + 1), 
+    # the second entry off acc is a counter for the axes of A
+    inds= Base._foldoneto((acc, i) ->
+                            i ∈ dims
+                                ? ((acc[1]..., Base.OneTo(1)), acc[2])
+                                : ((acc[1]..., axes(A, acc[2])), acc[2] + 1),
                             ((), 1), Val(N+M))
     new_shape = inds[1]
     return reshape(A, new_shape)
