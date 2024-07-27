@@ -164,7 +164,7 @@ end
     @test repr(l) == "ReentrantLock()"
     @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
     @lock l begin
-        @test startswith(repr("text/plain", l), "ReentrantLock() (locked by Task (")
+        @test startswith(repr("text/plain", l), "ReentrantLock() (locked by current Task (")
     end
     @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
 end
