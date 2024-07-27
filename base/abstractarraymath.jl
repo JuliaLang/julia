@@ -138,8 +138,7 @@ function _insertdims(A::AbstractArray{T, N}, dims::Tuple{Vararg{Int64, M}}) wher
     1 ≤ minimum(dims) || throw(ArgumentError("The smallest entry in dims must be ≥ 1."))
 
     # acc is a tuple, where the first entry is the final shape
-    # the second entry conists of the initial dimensions of the array but 
-    # we chop them from the head 
+    # the second entry off acc is a counter for the axes of A 
     inds= Base._foldoneto((acc, i) -> 
                             i ∈ dims  
                                 ? ((acc[1]..., Base.OneTo(1)), acc[2]) 
