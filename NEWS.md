@@ -35,6 +35,8 @@ Language changes
    expression within a given `:toplevel` expression to make use of macros
    defined earlier in the same `:toplevel` expression. ([#53515])
 
+ - `Base.Bottom`, an alias for the `Union{}` type, is deleted.
+
 Compiler/Runtime improvements
 -----------------------------
 
