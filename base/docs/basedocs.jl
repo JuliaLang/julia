@@ -3186,13 +3186,23 @@ Any
     Union{}
 
 `Union{}`, the empty [`Union`](@ref) of types, is the type that has no values. That is, it has the defining
-property `isa(x, Union{}) == false` for any `x`. `Base.Bottom` is defined as its alias and the type of `Union{}`
-is `Core.TypeofBottom`.
+property `isa(x, Union{}) == false` for any `x`. Thus it is an *empty*/*uninhabited* type.
+
+A property of `Union{}` is that it's the *bottom* type of the type system. That is, for each `T`
+such that `T isa Type`, `Union{} <: T`. Refer to the subtyping operator's documentation: [`<:`](@ref).
+
+`Base.Bottom` is defined as its alias and the type of `Union{}` is `Core.TypeofBottom`.
 
 # Examples
 ```jldoctest
 julia> isa(nothing, Union{})
 false
+
+julia> Union{} <: Union{} <: Int
+true
+
+julia> typeof(Union{}) === Core.TypeofBottom
+true
 ```
 """
 kw"Union{}", Base.Bottom
