@@ -39,12 +39,12 @@ $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-e
 	echo 1 > $@
 
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled: $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured
-	$(CMAKE) --build $(dir $<)
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked: $(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(CMAKE) --build $(dir $@) test
+	$(MAKE) -C $(dir $@) test
 endif
 	echo 1 > $@
 
