@@ -9,8 +9,11 @@ An indexing operation into an `AbstractDict` (`Dict`) or `Set` like object tried
 delete a non-existent element.
 """
 struct KeyError <: Exception
+    object
     key
 end
+
+KeyError(key) = KeyError(nothing, key)
 
 KeyTypeError(K, key) = TypeError(:var"dict key", K, key)
 
@@ -541,7 +544,7 @@ end
 function getindex(t::AbstractDict{<:Any,V}, key) where V
     v = get(t, key, secret_table_token)
     if v === secret_table_token
-        throw(KeyError(key))
+        throw(KeyError(t, key))
     end
     return v::V
 end

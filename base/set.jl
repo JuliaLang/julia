@@ -150,7 +150,7 @@ end
 
 function pop!(s::Set, x)
     index = ht_keyindex(s.dict, x)
-    index < 1 && throw(KeyError(x))
+    index < 1 && throw(KeyError(s, x))
     result = @inbounds s.dict.keys[index]
     _delete!(s.dict, index)
     result

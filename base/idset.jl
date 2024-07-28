@@ -74,7 +74,7 @@ function _pop!(s::IdSet, @nospecialize(x))
     end
     removed
 end
-pop!(s::IdSet, @nospecialize(x)) = _pop!(s, x) == -1 ? throw(KeyError(x)) : x
+pop!(s::IdSet, @nospecialize(x)) = _pop!(s, x) == -1 ? throw(KeyError(s, x)) : x
 pop!(s::IdSet, @nospecialize(x), @nospecialize(default)) = _pop!(s, x) == -1 ? default : x
 delete!(s::IdSet, @nospecialize(x)) = (_pop!(s, x); s)
 
