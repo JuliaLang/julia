@@ -1012,6 +1012,12 @@ const check_top_bit = check_sign_bit
 EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?
     EnterNode(new_dest, old.scope) : EnterNode(new_dest)
 
+# typename(_).constprop_heuristic
+const FORCE_CONST_PROP      = 0x1
+const ARRAY_INDEX_HEURISTIC = 0x2
+const ITERATE_HEURISTIC     = 0x3
+const SAMETYPE_HEURISTIC    = 0x4
+
 include(Core, "optimized_generics.jl")
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)
