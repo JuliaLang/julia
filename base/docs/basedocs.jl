@@ -3185,11 +3185,11 @@ Any
 """
     Union{}
 
-`Union{}`, the empty [`Union`](@ref) of types, is the type that has no values. That is, it has the defining
-property `isa(x, Union{}) == false` for any `x`. Thus it is an *empty*/*uninhabited* type.
+`Union{}`, the empty [`Union`](@ref) of types, is the *bottom* type of the type system. That is, for each
+`T::Type`, `Union{} <: T`. Also see the subtyping operator's documentation: [`<:`](@ref).
 
-A property of `Union{}` is that it's the *bottom* type of the type system. That is, for each `T::Type`,
-`Union{} <: T`. Refer to the subtyping operator's documentation: [`<:`](@ref).
+As such, `Union{}` is also an *empty*/*uninhabited* type, meaning that it has no values. That is, for each `x`,
+`isa(x, Union{}) == false`.
 
 `Base.Bottom` is defined as its alias and the type of `Union{}` is `Core.TypeofBottom`.
 
