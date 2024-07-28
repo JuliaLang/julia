@@ -3198,7 +3198,7 @@ A property of `Union{}` is that it's the *bottom* type of the type system. That 
 julia> isa(nothing, Union{})
 false
 
-julia> Union{} <: Union{} <: Int
+julia> Union{} <: Int
 true
 
 julia> typeof(Union{}) === Core.TypeofBottom
