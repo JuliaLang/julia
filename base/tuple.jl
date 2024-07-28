@@ -266,7 +266,7 @@ first(t::Tuple) = t[1]
 
 # eltype
 
-eltype(::Type{Tuple{}}) = Bottom
+eltype(::Type{Tuple{}}) = Union{}
 # the <: here makes the runtime a bit more complicated (needing to check isdefined), but really helps inference
 eltype(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)

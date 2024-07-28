@@ -15,7 +15,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 
 import Base.Docs.apropos
 
-using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
+using Base: unwrap_unionall, rewrap_unionall, isdeprecated, summarysize,
     signature_type, format_bytes
 using Base.Libc
 using Markdown
@@ -268,7 +268,7 @@ function _subtypes_in!(mods::Array, x::Type)
                 if isa(dt, DataType)
                     if dt.name.name === s && dt.name.module == m && supertype(dt).name == xt.name
                         ti = typeintersect(t, x)
-                        ti != Bottom && push!(sts, ti)
+                        ti != Union{} && push!(sts, ti)
                     end
                 elseif isa(t, Module) && nameof(t) === s && parentmodule(t) === m && t !== m
                     t === Base || push!(mods, t) # exclude Base, since it also parented by Main

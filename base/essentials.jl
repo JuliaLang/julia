@@ -4,8 +4,6 @@ using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryrefnew, 
 
 const Callable = Union{Function,Type}
 
-const Bottom = Union{}
-
 # Define minimal array interface here to help code used in macros:
 length(a::Array{T, 0}) where {T} = 1
 length(a::Array{T, 1}) where {T} = getfield(a, :size)[1]

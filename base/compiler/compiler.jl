@@ -79,6 +79,9 @@ const NUM_EFFECTS_OVERRIDES = 10 # sync with julia.h
 
 # essential files and libraries
 include("essentials.jl")
+
+const Bottom = Union{}
+
 include("ctypes.jl")
 include("generator.jl")
 include("reflection.jl")

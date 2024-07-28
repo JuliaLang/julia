@@ -17,7 +17,7 @@ julia> typejoin(Int, Float64, ComplexF32)
 Number
 ```
 """
-typejoin() = Bottom
+typejoin() = Union{}
 typejoin(@nospecialize(t)) = (@_nospecializeinfer_meta; t)
 typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u)) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(typejoin(t, s), u))
 typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; afoldl(typejoin, typejoin(t, s, u), ts...))
@@ -100,8 +100,8 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             if a.name === Type.body.name
                 ap = a.parameters[1]
                 bp = b.parameters[1]
-                if ((isa(ap,TypeVar) && ap.lb === Bottom && ap.ub === Any) ||
-                    (isa(bp,TypeVar) && bp.lb === Bottom && bp.ub === Any))
+                if ((isa(ap,TypeVar) && ap.lb === Union{} && ap.ub === Any) ||
+                    (isa(bp,TypeVar) && bp.lb === Union{} && bp.ub === Any))
                     # handle special Type{T} supertype
                     return Type
                 end
@@ -143,7 +143,7 @@ function typesplit(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
     @_nospecializeinfer_meta
     if a <: b
-        return Bottom
+        return Union{}
     end
     if isa(a, Union)
         return Union{typesplit(a.a, b),
@@ -247,7 +247,7 @@ function tailjoin(A::SimpleVector, i::Int)
     if i > length(A)
         return unwrapva(A[end])
     end
-    t = Bottom
+    t = Union{}
     for j = i:length(A)
         t = typejoin(t, unwrapva(A[j]))
     end
@@ -298,23 +298,23 @@ UInt16
 """
 function promote_type end
 
-promote_type()  = Bottom
+promote_type()  = Union{}
 promote_type(T) = T
 promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
 promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
+promote_type(::Type{Union{}}, ::Type{Union{}}) = Union{}
 promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
+promote_type(::Type{T}, ::Type{Union{}}) where {T} = T
+promote_type(::Type{Union{}}, ::Type{T}) where {T} = T
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
     @inline
     # Try promote_rule in both orders. Typically only one is defined,
-    # and there is a fallback returning Bottom below, so the common case is
+    # and there is a fallback returning `Union{}` below, so the common case is
     #   promote_type(T, S) =>
-    #   promote_result(T, S, result, Bottom) =>
-    #   typejoin(result, Bottom) => result
+    #   promote_result(T, S, result, Union{}) =>
+    #   typejoin(result, Union{}) => result
     promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
 end
 
@@ -327,18 +327,18 @@ it for new types as appropriate.
 """
 function promote_rule end
 
-promote_rule(::Type, ::Type) = Bottom
+promote_rule(::Type, ::Type) = Union{}
 # Define some methods to avoid needing to enumerate unrelated possibilities when presented
 # with Type{<:T}, and return a value in general accordance with the result given by promote_type
-promote_rule(::Type{Bottom}, slurp...) = Bottom
-promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
-promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
-promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
+promote_rule(::Type{Union{}}, slurp...) = Union{}
+promote_rule(::Type{Union{}}, ::Type{Union{}}, slurp...) = Union{} # not strictly necessary, since the next method would match unambiguously anyways
+promote_rule(::Type{Union{}}, ::Type{T}, slurp...) where {T} = T
+promote_rule(::Type{T}, ::Type{Union{}}, slurp...) where {T} = T
 
 promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
-# If no promote_rule is defined, both directions give Bottom. In that
+# If no promote_rule is defined, both directions give `Union{}`. In that
 # case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
+promote_result(::Type{T},::Type{S},::Type{Union{}},::Type{Union{}}) where {T,S} = (@inline; typejoin(T, S))
 
 """
     promote(xs...)

@@ -2781,7 +2781,7 @@ function show(io::IO, tv::TypeVar)
     # If we are in the `unionall_env`, the type-variable is bound
     # and the type constraints are already printed.
     # We don't need to print it again.
-    # Otherwise, the lower bound should be printed if it is not `Bottom`
+    # Otherwise, the lower bound should be printed if it is not `Union{}`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
     function show_bound(io::IO, @nospecialize(b))
@@ -2791,7 +2791,7 @@ function show(io::IO, tv::TypeVar)
         parens && print(io, ")")
     end
     lb, ub = tv.lb, tv.ub
-    if !in_env && lb !== Bottom
+    if !in_env && lb !== Union{}
         if ub === Any
             show_unquoted(io, tv.name)
             print(io, ">:")

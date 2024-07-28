@@ -817,14 +817,14 @@ function isidentityfree(@nospecialize(t))
     return false
 end
 
-iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Union{}))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
 has_free_typevars(@nospecialize(t)) = (@_total_meta; ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0)
 
 # equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
 function isdispatchelem(@nospecialize v)
-    return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
+    return (v === Union{}) || (v === typeof(Union{})) || isconcretedispatch(v) ||
         (isType(v) && !has_free_typevars(v))
 end
 
@@ -2513,9 +2513,9 @@ false
 function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
     m1 === m2 && return false
     ti = typeintersect(m1.sig, m2.sig)
-    ti === Bottom && return false
+    ti === Union{} && return false
     function inner(ti)
-        ti === Bottom && return false
+        ti === Union{} && return false
         if !ambiguous_bottom
             has_bottom_parameter(ti) && return false
         end
@@ -2623,7 +2623,7 @@ function has_bottom_parameter(t::DataType)
     end
     return false
 end
-has_bottom_parameter(t::typeof(Bottom)) = true
+has_bottom_parameter(t::typeof(Union{})) = true
 has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
 has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
 has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)

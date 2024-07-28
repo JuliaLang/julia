@@ -237,7 +237,7 @@ UInt8
 ```
 """
 eltype(::Type) = Any
-eltype(::Type{Bottom}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
+eltype(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 eltype(x) = eltype(typeof(x))
 eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
 

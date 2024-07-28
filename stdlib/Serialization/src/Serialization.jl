@@ -7,7 +7,7 @@ Provide serialization of Julia objects via the functions
 """
 module Serialization
 
-import Base: Bottom, unsafe_convert
+import Base: unsafe_convert
 import Core: svec, SimpleVector
 using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
@@ -62,7 +62,7 @@ const TAGS = Any[
     ReturnNode, GotoIfNot,
     fill(Symbol, n_reserved_tags)...,
 
-    (), Bool, Any, Bottom, Core.TypeofBottom, Type, svec(), Tuple{}, false, true, nothing,
+    (), Bool, Any, Union{}, Core.TypeofBottom, Type, svec(), Tuple{}, false, true, nothing,
     :Any, :Array, :TypeVar, :Box, :Tuple, :Ptr, :return, :call, Symbol("::"), :Function,
     :(=), :(==), :(===), :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y, :a, :b, :c, :d, :e, :f,
     :g, :h, :i, :j, :k, :l, :m, :n, :o, :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z, :add_int,
@@ -120,7 +120,7 @@ const TYPENAME_TAG = sertag(Core.TypeName)
 const INT32_TAG = sertag(Int32)
 const INT64_TAG = sertag(Int64)
 const GLOBALREF_TAG = sertag(GlobalRef)
-const BOTTOM_TAG = sertag(Bottom)
+const BOTTOM_TAG = sertag(Union{})
 const UNIONALL_TAG = sertag(UnionAll)
 const STRING_TAG = sertag(String)
 const o0 = sertag(SSAValue)
@@ -652,7 +652,7 @@ for i in 0:13
     @eval serialize(s::AbstractSerializer, n::$ty) = (writetag(s.io, $tag); write(s.io, n); nothing)
 end
 
-serialize(s::AbstractSerializer, ::Type{Bottom}) = write_as_tag(s.io, BOTTOM_TAG)
+serialize(s::AbstractSerializer, ::Type{Union{}}) = write_as_tag(s.io, BOTTOM_TAG)
 
 function serialize(s::AbstractSerializer, u::UnionAll)
     writetag(s.io, UNIONALL_TAG)

@@ -67,8 +67,8 @@ exception will continue propagation as if it had not been caught.
     `throw(e)` will preserve the root cause exception on the stack, as
     described in [`current_exceptions`](@ref).
 """
-rethrow() = ccall(:jl_rethrow, Bottom, ())
-rethrow(@nospecialize(e)) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
+rethrow() = ccall(:jl_rethrow, Union{}, ())
+rethrow(@nospecialize(e)) = ccall(:jl_rethrow_other, Union{}, (Any,), e)
 
 struct InterpreterIP
     code::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
