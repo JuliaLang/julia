@@ -1424,7 +1424,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         const jl_cgval_t &xinfo = argv[0];
         // verify argument types
         if (jl_is_primitivetype(xinfo.typ)){}
-        
         else if (is_ntuple_type(xinfo.typ) && jl_nparams(xinfo.typ) > 0)
         {
             jl_value_t *et = jl_tparam0(xinfo.typ);
