@@ -1,0 +1,23 @@
+name: Whitespace
+
+permissions: {}
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  typos-check:
+    name: Check whitespace
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout the JuliaLang/julia repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check whitespace
+        run: |
+          contrib/check-whitespace.jl
