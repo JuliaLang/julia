@@ -58,12 +58,14 @@ but which do not execute the operator or return a Bool:
 """
 (<:)
 
+import Core: >:
+
 """
     >:(T1, T2)
 
 Supertype operator, equivalent to `T2 <: T1`.
 """
-(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+>:
 
 """
     supertype(T::Union{DataType, UnionAll})
@@ -346,6 +348,7 @@ true
 ===
 const ≡ = ===
 
+import Core: !==
 """
     !==(x, y)
     ≢(x,y)
@@ -363,7 +366,8 @@ julia> a ≢ a
 false
 ```
 """
-!==(@nospecialize(x), @nospecialize(y)) = !(x === y)
+!==
+
 const ≢ = !==
 
 """
