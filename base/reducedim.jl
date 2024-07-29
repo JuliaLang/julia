@@ -334,6 +334,13 @@ julia> mapreduce(isodd, |, a, dims=1)
 mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
     _mapreduce_dim(f, op, init, A, dims)
 function mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...; kwargs...)
+    Adims = ndims(A)
+    if any(b->Adims != ndims(b), B)
+        # The map documentation explicitly allows arrays of different shapes when ndims don't match.
+        # We fall back to `map` in these cases — which will allocate — but perhaps this allocation will
+        # help someone identify their bug: if you hit this, the dimensionalities of your args don't match!
+        return reduce(op, map(f, A, B...); kwargs...)
+    end
     Aax = axes(A)
     all(b->Aax==axes(b), B) || throw(ArgumentError("all arguments must have the same axes"))
     mapreduce(splat(f), op, Broadcast.instantiate(broadcasted(tuple, A, B...)); kwargs...)
