@@ -3779,6 +3779,7 @@ void post_boot_hooks(void)
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
     jl_fielderror_type     = (jl_datatype_t*)core("FieldError");
+    jl_propertyerror_type     = (jl_datatype_t*)core("PropertyError");
     jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
     jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
     jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");

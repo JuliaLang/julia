@@ -373,6 +373,12 @@ function showerror(io::IO, exc::FieldError)
     Base.Experimental.show_error_hints(io, exc)
 end
 
+function showerror(io::IO, exc::PropertyError)
+    @nospecialize
+    print(io, "PropertyError: type object of type `$(exc.obj |> typeof)` has no property $(exc.property)")
+    Base.Experimental.show_error_hints(io, exc)
+end
+
 striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
@@ -1105,6 +1111,18 @@ function fielderror_hint_handler(io, exc)
 end
 
 Experimental.register_error_hint(fielderror_hint_handler, FieldError)
+
+# Display a hint in case the user tries to access non-member property of container type datastructures
+function propertyerror_hint_handler(io, exc)
+    @nospecialize
+    property = exc.property
+    obj = exc.obj
+    print(io, "\n An instance of type $(typeof(obj)) doesn't recognize property $property.\n")
+    printstyled(io, "$(typeof(obj)) has following properties $(propertynames(obj, true))", color=:cyan)
+    println(io)
+end
+
+Experimental.register_error_hint(propertyerror_hint_handler, PropertyError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

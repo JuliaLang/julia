@@ -431,6 +431,7 @@ Base.LoadError
 Base.MethodError
 Base.MissingException
 Core.OutOfMemoryError
+Core.PropertyError
 Core.ReadOnlyMemoryError
 Core.OverflowError
 Base.ProcessFailedException

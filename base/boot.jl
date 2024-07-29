@@ -206,7 +206,7 @@ export
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
-    UndefKeywordError, ConcurrencyViolationError, FieldError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError, PropertyError,
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
@@ -408,6 +408,11 @@ AssertionError() = AssertionError("")
 struct FieldError <: Exception
     type::DataType
     field::Symbol
+end
+
+struct PropertyError <: Exception
+    obj::Any
+    property::Symbol
 end
 
 abstract type WrappedException <: Exception end
