@@ -46,13 +46,13 @@ setproperty!(x::Array, f::Symbol, v) = error("setfield! fields of Array should n
 getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
-getproperty(x, f::Symbol) = begin
+getproperty(x, f::Symbol) = (@inline; begin
     try
         getfield(x, f)
     catch FieldError
         throw(PropertyError(x, f))
     end
-end
+end)
 
 # (@inline; getfield(x, f))
 function setproperty!(x, f::Symbol, v)
