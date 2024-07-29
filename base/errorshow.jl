@@ -1138,3 +1138,4 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     show_exception_stack(io, stack)
 end
 show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain")
+                
