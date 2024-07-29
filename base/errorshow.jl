@@ -1121,8 +1121,10 @@ function fielderror_listfields_hint_handler(io, exc)
 end
 
 _extract_val(::Type{Val{V}}) where {V} = V
-_extract_val(::Type{Val}) = nothing
-_propertynames_bytype(::Type{T}) where {T} = promote_op(Val∘propertynames, T) |> _extract_val
+_extract_val(@nospecialize _) = nothing
+_propertynames_bytype(::Type{T}) where {T} =
+    which(propertynames, (T,)) === which(propertynames, (Any,)) ? nothing :
+    _extract_val(promote_op(Val∘propertynames, T))
 
 Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
 
@@ -1135,4 +1137,4 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
     show_exception_stack(io, stack)
 end
-show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
+show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain")
