@@ -1034,12 +1034,12 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
     match::MethodMatch, sv::AbsIntState)
     method = match.method
     force = force_const_prop(interp, f, method)
-    if !const_prop_entry_heuristic(interp, result, si, sv, force)
-        # N.B. remarks are emitted within `const_prop_entry_heuristic`
+    if !const_prop_rettype_heuristic(interp, result, si, sv, force)
+        # N.B. remarks are emitted within `const_prop_rettype_heuristic`
         return nothing
     end
     if !const_prop_argument_heuristic(interp, arginfo, sv)
-        add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
+        add_remark!(interp, sv, "[constprop] Disabled by argument heuristics")
         return nothing
     end
     all_overridden = is_all_overridden(interp, arginfo, sv)
@@ -1061,28 +1061,28 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
     return mi
 end
 
-function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult,
-                                    si::StmtInfo, sv::AbsIntState, force::Bool)
-    if result.rt isa LimitedAccuracy
+function const_prop_rettype_heuristic(interp::AbstractInterpreter, result::MethodCallResult,
+                                      si::StmtInfo, sv::AbsIntState, force::Bool)
+    rt = result.rt
+    if rt isa LimitedAccuracy
         # optimizations like inlining are disabled for limited frames,
         # thus there won't be much benefit in constant-prop' here
         # N.B. don't allow forced constprop' for safety (xref #52763)
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
+        add_remark!(interp, sv, "[constprop] Disabled by rettype heuristic (limited accuracy)")
         return false
     elseif force
         return true
     elseif call_result_unused(si) && result.edgecycle
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (edgecycle with unused result)")
+        add_remark!(interp, sv, "[constprop] Disabled by rettype heuristic (edgecycle with unused result)")
         return false
     end
     # check if this return type is improvable (i.e. whether it's possible that with more
     # information, we might get a more precise type)
-    rt = result.rt
     if isa(rt, Type)
         # could always be improved to `Const`, `PartialStruct` or just a more precise type,
         # unless we're already at `Bottom`
         if rt === Bottom
-            add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (erroneous result)")
+            add_remark!(interp, sv, "[constprop] Disabled by rettype heuristic (erroneous result)")
             return false
         end
         return true
@@ -1091,14 +1091,15 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
         return true
     elseif isa(rt, Const)
         if is_nothrow(result.effects)
-            add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (nothrow const)")
+            add_remark!(interp, sv, "[constprop] Disabled by rettype heuristic (nothrow const)")
             return false
         end
         # Could still be improved to Bottom (or at least could see the effects improved)
         return true
+    else
+        add_remark!(interp, sv, "[constprop] Disabled by rettype heuristic (unimprovable result)")
+        return false
     end
-    add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable result)")
-    return false
 end
 
 # determines heuristically whether if constant propagation can be worthwhile
