@@ -1137,5 +1137,4 @@ function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
     printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
     show_exception_stack(io, stack)
 end
-show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain")
-                
+show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)
