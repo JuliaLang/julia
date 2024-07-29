@@ -5867,6 +5867,95 @@ bar54341(args...) = foo54341(4, args...)
 
 @test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int
 
+# `PartialStruct` for partially initialized structs:
+struct PartiallyInitialized1
+    a; b; c
+    PartiallyInitialized1(a) = (@nospecialize; new(a))
+    PartiallyInitialized1(a, b) = (@nospecialize; new(a, b))
+    PartiallyInitialized1(a, b, c) = (@nospecialize; new(a, b, c))
+end
+mutable struct PartiallyInitialized2
+    a; b; c
+    PartiallyInitialized2(a) = (@nospecialize; new(a))
+    PartiallyInitialized2(a, b) = (@nospecialize; new(a, b))
+    PartiallyInitialized2(a, b, c) = (@nospecialize; new(a, b, c))
+end
+
+# 1. isdefined modeling for partial struct
+@test Base.infer_return_type((Any,Any)) do a, b
+    Val(isdefined(PartiallyInitialized1(a, b), :b))
+end == Val{true}
+@test Base.infer_return_type((Any,Any,)) do a, b
+    Val(isdefined(PartiallyInitialized1(a, b), :c))
+end == Val{false}
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    Val(isdefined(PartiallyInitialized1(a, b, c), :c))
+end == Val{true}
+@test Base.infer_return_type((Any,Any)) do a, b
+    Val(isdefined(PartiallyInitialized2(a, b), :b))
+end == Val{true}
+@test Base.infer_return_type((Any,Any,)) do a, b
+    Val(isdefined(PartiallyInitialized2(a, b), :c))
+end >: Val{false}
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    s = PartiallyInitialized2(a, b)
+    s.c = c
+    Val(isdefined(s, :c))
+end >: Val{true}
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    Val(isdefined(PartiallyInitialized2(a, b, c), :c))
+end == Val{true}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    Val(isdefined(tuple(1, xs...), 1))
+end == Val{true}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    Val(isdefined(tuple(1, xs...), 2))
+end == Val
+
+# 2. getfield modeling for partial struct
+@test Base.infer_effects((Any,Any); optimize=false) do a, b
+    getfield(PartiallyInitialized1(a, b), :b)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+    getfield(PartiallyInitialized1(a, b), f, #=boundscheck=#false)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+    getfield(PartiallyInitialized1(a, b, c), :c)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+    getfield(PartiallyInitialized1(a, b, c), f, #=boundscheck=#false)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any); optimize=false) do a, b
+    getfield(PartiallyInitialized2(a, b), :b)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+    getfield(PartiallyInitialized2(a, b), f, #=boundscheck=#false)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+    getfield(PartiallyInitialized2(a, b, c), :c)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+    getfield(PartiallyInitialized2(a, b, c), f, #=boundscheck=#false)
+end |> Core.Compiler.is_nothrow
+
+# isdefined-Conditionals
+@test Base.infer_effects((Base.RefValue{Any},)) do x
+    if isdefined(x, :x)
+        return getfield(x, :x)
+    end
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Base.RefValue{Any},)) do x
+    if isassigned(x)
+        return x[]
+    end
+end |> Core.Compiler.is_nothrow
+
+# End to end test case for the partially initialized struct with `PartialStruct`
+@noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
+@test fully_eliminated() do
+    broadcast_noescape1(Ref("x"))
+end
+
 # InterConditional rt with Vararg argtypes
 fcondvarargs(a, b, c, d) = isa(d, Int64)
 gcondvarargs(a, x...) = return fcondvarargs(a, x...) ? isa(a, Int64) : !isa(a, Int64)

@@ -436,6 +436,15 @@ end
                 if !ismutabletype(a1) || isconst(a1, idx)
                     return Const(isdefined(arg1.val, idx))
                 end
+            elseif isa(arg1, PartialStruct)
+                nflds = length(arg1.fields)
+                if !isvarargtype(arg1.fields[end])
+                    if 1 ≤ idx ≤ nflds
+                        return Const(true)
+                    elseif !ismutabletype(a1) || isconst(a1, idx)
+                        return Const(false)
+                    end
+                end
             elseif !isvatuple(a1)
                 fieldT = fieldtype(a1, idx)
                 if isa(fieldT, DataType) && isbitstype(fieldT)
@@ -989,27 +998,39 @@ end
     ⊑ = partialorder(𝕃)
 
     # If we have s00 being a const, we can potentially refine our type-based analysis above
-    if isa(s00, Const) || isconstType(s00)
-        if !isa(s00, Const)
-            sv = (s00::DataType).parameters[1]
-        else
+    if isa(s00, Const) || isconstType(s00) || isa(s00, PartialStruct)
+        if isa(s00, Const)
             sv = s00.val
+            sty = typeof(sv)
+            nflds = nfields(sv)
+            ismod = sv isa Module
+        elseif isa(s00, PartialStruct)
+            sty = s00.typ
+            nflds = fieldcount_noerror(sty)
+            ismod = false
+        else
+            sv = (s00::DataType).parameters[1]
+            sty = typeof(sv)
+            nflds = nfields(sv)
+            ismod = sv isa Module
         end
         if isa(name, Const)
             nval = name.val
             if !isa(nval, Symbol)
-                isa(sv, Module) && return false
+                ismod && return false
                 isa(nval, Int) || return false
             end
             return isdefined_tfunc(𝕃, s00, name) === Const(true)
         end
-        boundscheck && return false
+
         # If bounds checking is disabled and all fields are assigned,
         # we may assume that we don't throw
-        isa(sv, Module) && return false
+        @assert !boundscheck
+        ismod && return false
         name ⊑ Int || name ⊑ Symbol || return false
-        typeof(sv).name.n_uninitialized == 0 && return true
-        for i = (datatype_min_ninitialized(typeof(sv)) + 1):nfields(sv)
+        sty.name.n_uninitialized == 0 && return true
+        nflds === nothing && return false
+        for i = (datatype_min_ninitialized(sty)+1):nflds
             isdefined_tfunc(𝕃, s00, Const(i)) === Const(true) || return false
         end
         return true
