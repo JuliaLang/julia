@@ -63,6 +63,8 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* There are new `Makefile`s to build Julia and LLVM using the Binary Optimization and Layout Tool (BOLT), see  `contrib/bolt` and `contrib/pgo-lto-bolt` ([#54107]).
+
 New library functions
 ---------------------
 
