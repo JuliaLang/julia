@@ -3203,6 +3203,9 @@ true
 
 julia> typeof(Union{}) === Core.TypeofBottom
 true
+
+julia> isa(Union{}, Union)
+false
 ```
 """
 kw"Union{}", Base.Bottom
