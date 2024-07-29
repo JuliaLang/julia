@@ -121,7 +121,7 @@ $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvmunwin
 	echo 1 > $@
 
 $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled: $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured
-	$(CMAKE) --build $(dir $<)
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 $(eval $(call staged-install, \
