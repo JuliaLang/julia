@@ -252,10 +252,12 @@ void Optimizer::optimizeAll()
             removeAlloc(orig);
             continue;
         }
+        bool has_bits = use_info.has_unknown_bits;
         bool has_ref = use_info.has_unknown_objref;
         bool has_refaggr = use_info.has_unknown_objrefaggr;
         for (auto memop: use_info.memops) {
             auto &field = memop.second;
+            has_bits |= field.hasbits;
             if (field.hasobjref) {
                 has_ref = true;
                 // This can be relaxed a little based on hasload
@@ -282,6 +284,15 @@ void Optimizer::optimizeAll()
             });
             // No one actually care about the memory layout of this object, split it.
             splitOnStack(orig);
+            continue;
+        }
+        if (has_bits && has_ref) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation could not be split and contained both julia object and non-julia-object data, unable to move to stack " << ore::NV("GC Allocation", orig);
+            });
+            if (use_info.hastypeof)
+                optimizeTag(orig);
             continue;
         }
         REMARK([&](){
