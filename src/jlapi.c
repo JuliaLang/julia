@@ -450,7 +450,7 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
     jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t *s = (jl_value_t*)jl_symbol(fld);
-        int i = jl_field_index((jl_datatype_t*)jl_typeof(o), (jl_sym_t*)s, 1);
+        int i = jl_field_index((jl_datatype_t*)jl_typeof(o), (jl_sym_t*)s, 2);
         v = jl_get_nth_field(o, i);
         jl_exception_clear();
     }
