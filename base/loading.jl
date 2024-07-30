@@ -3831,13 +3831,14 @@ end
                         return true
                     end
                 else
-                    fsize = filesize(f)
+                    fstat = stat(f)
+                    fsize = filesize(fstat)
                     if fsize != fsize_req
                         @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
                         record_reason(reasons, "include_dependency fsize change")
                         return true
                     end
-                    hash = isdir(f) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
+                    hash = isdir(fstat) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
                     if hash != hash_req
                         @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
                         record_reason(reasons, "include_dependency fhash change")
