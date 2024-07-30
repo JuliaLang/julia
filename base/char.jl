@@ -2,18 +2,22 @@
 
 """
 The `AbstractChar` type is the supertype of all character implementations
-in Julia. A character represents a Unicode code point, and can be converted
-to an integer via the [`codepoint`](@ref) function in order to obtain the
-numerical value of the code point, or constructed from the same integer.
-These numerical values determine how characters are compared with `<` and `==`,
-for example.  New `T <: AbstractChar` types should define a `codepoint(::T)`
+in Julia. A character normally represents a Unicode codepoint (and can
+also encapsulate other information from an encoded byte sequence as described below),
+and characters can be converted to integer codepoint values via the [`codepoint`](@ref)
+function, or can be constructed from the same integer.  At least for valid,
+properly encoded Unicode characters, these numerical codepoint values
+determine how characters are compared with `<` and `==`, for example. 
+New `T <: AbstractChar` types should define a `codepoint(::T)`
 method and a `T(::UInt32)` constructor, at minimum.
 
 A given `AbstractChar` subtype may be capable of representing only a subset
 of Unicode, in which case conversion from an unsupported `UInt32` value
 may throw an error. Conversely, the built-in [`Char`](@ref) type represents
 a *superset* of Unicode (in order to losslessly encode invalid byte streams),
-in which case conversion of a non-Unicode value *to* `UInt32` throws an error.
+in which case conversion of a non-Unicode value *to* `UInt32` throws an error
+(see [`Base.ismalformed`](@ref)), and on the other hand a `Char` can also represent
+a nonstandard "overlong" encoding ([`Base.isoverlong`](@ref)) of a codepoint.
 The [`isvalid`](@ref) function can be used to check which codepoints are
 representable in a given `AbstractChar` type.
 
