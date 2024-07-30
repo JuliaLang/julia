@@ -3,7 +3,7 @@
 ```@docs
 Core.Task
 Base.@task
-Base.@async
+Base.Threads.@spawn
 Base.asyncmap
 Base.asyncmap!
 Base.current_task
@@ -138,7 +138,7 @@ end
 
 ev = OneWayEvent()
 @sync begin
-    @async begin
+    Threads.@spawn begin
         wait(ev)
         println("done")
     end
