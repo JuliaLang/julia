@@ -389,7 +389,7 @@ julia> nameof(Base.Broadcast)
 """
 nameof(m::Module) = (@_total_meta; ccall(:jl_module_name, Ref{Symbol}, (Any,), m))
 
-function iterate end
+typeof(function iterate end).name.constprop_heuristic = Core.ITERATE_HEURISTIC
 
 """
     convert(T, x)
@@ -1245,3 +1245,16 @@ that is whether it has an `iterate` method or not.
 function isiterable(T)::Bool
     return hasmethod(iterate, Tuple{T})
 end
+
+# Special constprop heuristics for various binary opes
+typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function * end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function == end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function != end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function <= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function >= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function < end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function > end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function << end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function >> end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
