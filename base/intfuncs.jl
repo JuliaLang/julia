@@ -978,7 +978,7 @@ end
 
 Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indices, such that `n == sum(digits[k]*base^(k-1) for k in eachindex(digits))`.
+higher indices, such that `n == sum(digits[k]*base^(k-1) for k in 1:length(digits))`.
 
 See also [`ndigits`](@ref), [`digits!`](@ref),
 and for base 2 also [`bitstring`](@ref), [`count_ones`](@ref).

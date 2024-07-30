@@ -218,12 +218,6 @@ arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
 JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers = 0;
 
-
-NOINLINE uintptr_t gc_get_stack_ptr(void)
-{
-    return (uintptr_t)jl_get_frame_addr();
-}
-
 void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 
 // malloc wrappers, aligned allocation
@@ -1075,15 +1069,15 @@ static void sweep_big(jl_ptls_t ptls) JL_NOTSAFEPOINT
 
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned){
     // This is **NOT** a GC safe point.
-    mallocarray_t *ma;
+    mallocmemory_t *ma;
     if (ptls->gc_tls.heap.mafreelist == NULL) {
-        ma = (mallocarray_t*)malloc_s(sizeof(mallocarray_t));
+        ma = (mallocmemory_t*)malloc_s(sizeof(mallocmemory_t));
     }
     else {
         ma = ptls->gc_tls.heap.mafreelist;
         ptls->gc_tls.heap.mafreelist = ma->next;
     }
-    ma->a = (jl_value_t*)((uintptr_t)m | !!isaligned);
+    ma->a = (jl_genericmemory_t*)((uintptr_t)m | !!isaligned);
     ma->next = ptls->gc_tls.heap.mallocarrays;
     ptls->gc_tls.heap.mallocarrays = ma;
 }
@@ -1199,10 +1193,10 @@ static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 != NULL) {
-            mallocarray_t *ma = ptls2->gc_tls.heap.mallocarrays;
-            mallocarray_t **pma = &ptls2->gc_tls.heap.mallocarrays;
+            mallocmemory_t *ma = ptls2->gc_tls.heap.mallocarrays;
+            mallocmemory_t **pma = &ptls2->gc_tls.heap.mallocarrays;
             while (ma != NULL) {
-                mallocarray_t *nxt = ma->next;
+                mallocmemory_t *nxt = ma->next;
                 jl_value_t *a = (jl_value_t*)((uintptr_t)ma->a & ~1);
                 int bits = jl_astaggedvalue(a)->bits.gc;
                 if (gc_marked(bits)) {
@@ -1248,7 +1242,7 @@ pagetable_t alloc_map;
 static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 {
     // Do not pass in `ptls` as argument. This slows down the fast path
-    // in pool_alloc significantly
+    // in small_alloc significantly
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
     pg->osize = p->osize;
@@ -1262,13 +1256,13 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 }
 
 // Size includes the tag and the tag is not cleared!!
-STATIC_INLINE jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset,
+STATIC_INLINE jl_value_t *jl_gc_small_alloc_inner(jl_ptls_t ptls, int offset,
                                           int osize)
 {
     // Use the pool offset instead of the pool address as the argument
     // to workaround a llvm bug.
     // Ref https://llvm.org/bugs/show_bug.cgi?id=27190
-    jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + pool_offset);
+    jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + offset);
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 #ifdef MEMDEBUG
     return jl_gc_big_alloc(ptls, osize, NULL);
@@ -1319,19 +1313,19 @@ STATIC_INLINE jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
     return jl_valueof(v);
 }
 
-// Instrumented version of jl_gc_pool_alloc_inner, called into by LLVM-generated code.
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset, int osize, jl_value_t* type)
+// Instrumented version of jl_gc_small_alloc_inner, called into by LLVM-generated code.
+JL_DLLEXPORT jl_value_t *jl_gc_small_alloc(jl_ptls_t ptls, int offset, int osize, jl_value_t* type)
 {
-    jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
+    jl_value_t *val = jl_gc_small_alloc_inner(ptls, offset, osize);
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);
     return val;
 }
 
-// This wrapper exists only to prevent `jl_gc_pool_alloc_inner` from being inlined into
-// its callers. We provide an external-facing interface for callers, and inline `jl_gc_pool_alloc_inner`
+// This wrapper exists only to prevent `jl_gc_small_alloc_inner` from being inlined into
+// its callers. We provide an external-facing interface for callers, and inline `jl_gc_small_alloc_inner`
 // into this. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset, int osize) {
-    return jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
+jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset, int osize) {
+    return jl_gc_small_alloc_inner(ptls, offset, osize);
 }
 
 int jl_gc_classify_pools(size_t sz, int *osize)
@@ -3715,8 +3709,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         }
         // free empty GC state for threads that have exited
         if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
-            if (gc_is_parallel_collector_thread(t_i))
-                continue;
+            // GC threads should never exit
+            assert(!gc_is_parallel_collector_thread(t_i));
+            assert(!gc_is_concurrent_collector_thread(t_i));
             jl_thread_heap_t *heap = &ptls2->gc_tls.heap;
             if (heap->weak_refs.len == 0)
                 small_arraylist_free(&heap->weak_refs);
@@ -3984,6 +3979,7 @@ void jl_gc_init(void)
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&page_profile_lock);
     uv_mutex_init(&gc_perm_lock);
+    uv_mutex_init(&gc_pages_lock);
     uv_mutex_init(&gc_threads_lock);
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
@@ -4249,7 +4245,7 @@ STATIC_INLINE void *gc_try_perm_alloc_pool(size_t sz, unsigned align, unsigned o
 }
 
 // **NOT** a safepoint
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT
 {
     // The caller should have acquired `gc_perm_lock`
     assert(align < GC_PERM_POOL_LIMIT);

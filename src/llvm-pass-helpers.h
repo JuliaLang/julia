@@ -147,8 +147,8 @@ namespace jl_well_known {
     // `jl_gc_big_alloc`: allocates bytes.
     extern const WellKnownFunctionDescription GCBigAlloc;
 
-    // `jl_gc_pool_alloc`: allocates bytes.
-    extern const WellKnownFunctionDescription GCPoolAlloc;
+    // `jl_gc_small_alloc`: allocates bytes.
+    extern const WellKnownFunctionDescription GCSmallAlloc;
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;

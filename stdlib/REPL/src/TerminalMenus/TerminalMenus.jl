@@ -2,7 +2,7 @@
 
 module TerminalMenus
 
-using REPL: REPL
+using ..REPL: REPL
 
 function default_terminal(; in::IO=stdin, out::IO=stdout, err::IO=stderr)
     return REPL.Terminals.TTYTerminal(

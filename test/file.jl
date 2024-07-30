@@ -442,8 +442,7 @@ end
                 for pth in ("afile",
                             joinpath("afile", "not_file"),
                             SubString(joinpath(dir, "afile")),
-                            Base.RawFD(-1),
-                            -1)
+                            Base.RawFD(-1))
                     test_stat_error(stat, pth)
                     test_stat_error(lstat, pth)
                 end

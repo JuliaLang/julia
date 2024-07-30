@@ -346,13 +346,10 @@ extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
-jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset,
+jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset,
                                    int osize);
 jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize) JL_NOTSAFEPOINT;
-extern uv_mutex_t gc_perm_lock;
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
-    unsigned align, unsigned offset) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
 void gc_sweep_sysimg(void);
@@ -405,7 +402,7 @@ static const int jl_gc_sizeclasses[] = {
 #ifdef GC_SMALL_PAGE
 #ifdef _P64
 #  define JL_GC_N_POOLS 39
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
 #  define JL_GC_N_POOLS 40
 #else
 #  define JL_GC_N_POOLS 41
@@ -413,7 +410,7 @@ static const int jl_gc_sizeclasses[] = {
 #else
 #ifdef _P64
 #  define JL_GC_N_POOLS 49
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
 #  define JL_GC_N_POOLS 50
 #else
 #  define JL_GC_N_POOLS 51
@@ -428,7 +425,7 @@ STATIC_INLINE int jl_gc_alignment(size_t sz) JL_NOTSAFEPOINT
 #ifdef _P64
     (void)sz;
     return 16;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
     return sz <= 4 ? 8 : 16;
 #else
     // szclass 8
@@ -460,7 +457,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz) JL_NOTSAFEPOINT
     if (sz <= 8)
         return 0;
     const int N = 0;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
     if (sz <= 8)
         return (sz >= 4 ? 1 : 0);
     const int N = 1;
@@ -478,7 +475,7 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
     if (sz >= 16 && sz <= 152) {
 #ifdef _P64
         const int N = 0;
-#elif MAX_ALIGN == 8
+#elif MAX_ALIGN > 4
         const int N = 1;
 #else
         const int N = 2;
@@ -504,9 +501,9 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         int pool_id = jl_gc_szclass(allocsz);
         jl_gc_pool_t *p = &ptls->gc_tls.heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
-        // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
+        // We call `jl_gc_small_alloc_noinline` instead of `jl_gc_small_alloc` to avoid double-counting in
         // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-        v = jl_gc_pool_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
+        v = jl_gc_small_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
@@ -1699,6 +1696,7 @@ void jl_write_malloc_log(void);
 #  define jl_unreachable() ((void)jl_assume(0))
 #endif
 
+extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 
 // Tools for locally disabling spurious compiler warnings
