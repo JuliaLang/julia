@@ -76,7 +76,7 @@ and [Ruby](https://en.wikipedia.org/wiki/Ruby_(programming_language)).
 
 The most significant departures of Julia from typical dynamic languages are:
 
-  * The core language imposes very little; Julia Base and the standard library are written in Julia itself, including
+  * The core language imposes very little; [Julia Base and the standard library](@ref man-core-base-and-stdlib) are written in Julia itself, including
     primitive operations like integer arithmetic
   * A rich language of types for constructing and describing objects, that can also optionally be
     used to make type declarations
@@ -126,3 +126,23 @@ language. In addition to the above, some advantages of Julia over comparable sys
   * Call C functions directly (no wrappers or special APIs needed)
   * Powerful shell-like capabilities for managing other processes
   * Lisp-like macros and other metaprogramming facilities
+
+## [Julia Core, Base and the Standard Library](@id man-core-base-and-stdlib)
+
+```@docs; canonical=false
+Core
+Base
+```
+
+### [The Standard Library](@id man-stdlib)
+
+The Julia standard library contains additional, commonly used packages that are installed alongside the Julia runtime by default.
+To use a standard library package, it is first necessary to load the package with a [`using`](@ref) or [`import`](@ref) statement.
+Links to available standard library packages are provided below,
+and may also be found in the website sidebar.
+
+```@eval
+import Markdown
+list = sort(filter(x -> match(r"_jll$", x) === nothing, readdir(Sys.STDLIB)))
+Markdown.parse(join("- [`" .* list .* "`](stdlib/" .* list .* ".html)", "\n"))
+```
