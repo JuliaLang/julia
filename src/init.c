@@ -746,6 +746,9 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();
 
+    // initialize symbol-table lock
+    uv_mutex_init(&symtab_lock);
+
     // initialize backtraces
     jl_init_profile_lock();
 #ifdef _OS_WINDOWS_

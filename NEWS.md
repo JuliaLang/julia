@@ -63,6 +63,8 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* There are new `Makefile`s to build Julia and LLVM using the Binary Optimization and Layout Tool (BOLT), see  `contrib/bolt` and `contrib/pgo-lto-bolt` ([#54107]).
+
 New library functions
 ---------------------
 
@@ -94,6 +96,7 @@ New library features
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
+* `Lockable` is now exported ([#54595])
 
 Standard library changes
 ------------------------
@@ -101,10 +104,15 @@ Standard library changes
 * `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
+* `fd` returns a `RawFD` instead of an `Int` ([#55080]).
 
 #### StyledStrings
 
 #### JuliaSyntaxHighlighting
+
+* A new standard library for applying syntax highlighting to Julia code, this
+  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
+  that creates an `AnnotatedString` with syntax highlighting applied.
 
 #### Package Manager
 

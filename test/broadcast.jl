@@ -979,6 +979,10 @@ end
     @test sum(bc, dims=1, init=0) == [5]
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, ['a','b'], 'c'))
     @test prod(bc, dims=1, init="") == ["acbc"]
+
+    a = rand(-10:10,32,4); b = rand(-10:10,32,4)
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+,a,b))
+    @test sum(bc; dims = 1, init = 0.0) == sum(collect(bc); dims = 1, init = 0.0)
 end
 
 # treat Pair as scalar:

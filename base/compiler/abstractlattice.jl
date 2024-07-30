@@ -288,9 +288,13 @@ has_extended_unionsplit(::JLTypeLattice) = false
 ⊑(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(𝕃, a, b)
 ⊏(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊏(𝕃, a, b)
 ⋤(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⋤(𝕃, a, b)
+tmerge(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> tmerge(𝕃, a, b)
+tmeet(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> tmeet(𝕃, a, b)
 partialorder(𝕃::AbstractLattice) = ⊑(𝕃)
 strictpartialorder(𝕃::AbstractLattice) = ⊏(𝕃)
 strictneqpartialorder(𝕃::AbstractLattice) = ⋤(𝕃)
+join(𝕃::AbstractLattice) = tmerge(𝕃)
+meet(𝕃::AbstractLattice) = tmeet(𝕃)
 
 # Fallbacks for external packages using these methods
 const fallback_lattice = InferenceLattice(BaseInferenceLattice.instance)

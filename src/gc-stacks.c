@@ -332,10 +332,6 @@ JL_DLLEXPORT jl_array_t *jl_live_tasks(void)
     size_t l = 0; // l is not reset on restart, so we keep getting more aggressive at making a big enough list everything it fails
 restart:
     for (size_t i = 0; i < nthreads; i++) {
-        // skip GC threads since they don't have tasks
-        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
-            continue;
-        }
         jl_ptls_t ptls2 = allstates[i];
         if (ptls2 == NULL)
             continue;
@@ -349,10 +345,6 @@ restart:
     allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     size_t j = 0;
     for (size_t i = 0; i < nthreads; i++) {
-        // skip GC threads since they don't have tasks
-        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
-            continue;
-        }
         jl_ptls_t ptls2 = allstates[i];
         if (ptls2 == NULL)
             continue;

@@ -42,7 +42,7 @@ it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
 
-isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
+isinteger(x::AbstractFloat) = iszero(x - trunc(x)) # note: x == trunc(x) would be incorrect for x=Inf
 
 # See rounding.jl for docstring.
 
