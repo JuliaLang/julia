@@ -412,9 +412,8 @@ julia> triu(a)
 """
 function triu(M::AbstractMatrix)
     d = similar(M)
-    copytrito!(d, M, 'U')
-    triu!(d)
-    return d
+    A = triu!(d) # may return a different type
+    copytrito!(A, M, 'U')
 end
 
 """
@@ -441,9 +440,8 @@ julia> tril(a)
 """
 function tril(M::AbstractMatrix)
     d = similar(M)
-    copytrito!(d, M, 'L')
-    tril!(d)
-    return d
+    A = tril!(d) # may return a different type
+    copytrito!(A, M, 'L')
 end
 
 """
