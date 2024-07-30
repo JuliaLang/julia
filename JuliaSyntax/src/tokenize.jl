@@ -538,8 +538,9 @@ function _next_token(l::Lexer, c)
         return emit(l, k)
     else
         emit(l,
-            !isvalid(c)          ? K"ErrorInvalidUTF8"   :
-            is_invisible_char(c) ? K"ErrorInvisibleChar" :
+            !isvalid(c)           ? K"ErrorInvalidUTF8"   :
+            is_invisible_char(c)  ? K"ErrorInvisibleChar" :
+            is_identifier_char(c) ? K"ErrorIdentifierStart" :
             K"ErrorUnknownCharacter")
     end
 end

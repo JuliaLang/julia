@@ -19,6 +19,7 @@ end
         @test diagnostic("a$(c)b") ==
             Diagnostic(2, 1+sizeof(string(c)), :error, "invisible character $(repr(c))")
     end
+    @test diagnostic("₁") == Diagnostic(1, 3, :error, "identifier cannot begin with character '₁'")
     @test diagnostic(":⥻") == Diagnostic(2, 4, :error, "unknown unicode character '⥻'")
 
     @test diagnostic("\"X \u202a X\"") == Diagnostic(2, 8, :error, "unbalanced bidirectional unicode formatting \"X \\u202a X\"")
