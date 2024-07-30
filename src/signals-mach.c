@@ -294,10 +294,13 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_task_t *ct = jl_get_current_task();
         jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
         jl_call_in_state(ptls, (host_thread_state_t*)jl_to_bt_context(context), &jl_sig_throw);
+        return;
     }
-    else {
-        sigdie_handler(sig, info, context);
+    jl_task_t *ct = jl_get_current_task();
+    if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+        stack_overflow_warning();
     }
+    sigdie_handler(sig, info, context);
 }
 
 // n.b. mach_exc_server expects us to define this symbol locally

@@ -416,78 +416,97 @@ function load_REPL()
 end
 
 global active_repl
+global active_repl_backend = nothing
+
+function run_fallback_repl(interactive::Bool)
+    let input = stdin
+        if isa(input, File) || isa(input, IOStream)
+            # for files, we can slurp in the whole thing at once
+            ex = parse_input_line(read(input, String))
+            if Meta.isexpr(ex, :toplevel)
+                # if we get back a list of statements, eval them sequentially
+                # as if we had parsed them sequentially
+                for stmt in ex.args
+                    eval_user_input(stderr, stmt, true)
+                end
+                body = ex.args
+            else
+                eval_user_input(stderr, ex, true)
+            end
+        else
+            while !eof(input)
+                if interactive
+                    print("julia> ")
+                    flush(stdout)
+                end
+                try
+                    line = ""
+                    ex = nothing
+                    while !eof(input)
+                        line *= readline(input, keep=true)
+                        ex = parse_input_line(line)
+                        if !(isa(ex, Expr) && ex.head === :incomplete)
+                            break
+                        end
+                    end
+                    eval_user_input(stderr, ex, true)
+                catch err
+                    isa(err, InterruptException) ? print("\n\n") : rethrow()
+                end
+            end
+        end
+    end
+    nothing
+end
+
+function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::Bool)
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
+    banner == :no || REPL.banner(term, short=banner==:short)
+    if term.term_type == "dumb"
+        repl = REPL.BasicREPL(term)
+        quiet || @warn "Terminal not fully functional"
+    else
+        repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
+        repl.history_file = history_file
+    end
+    # Make sure any displays pushed in .julia/config/startup.jl ends up above the
+    # REPLDisplay
+    d = REPL.REPLDisplay(repl)
+    last_active_repl = @isdefined(active_repl) ? active_repl : nothing
+    last_active_repl_backend = active_repl_backend
+    global active_repl = repl
+    pushdisplay(d)
+    try
+        global active_repl = repl
+        _atreplinit(repl)
+        REPL.run_repl(repl, backend->(global active_repl_backend = backend))
+    finally
+        popdisplay(d)
+        active_repl = last_active_repl
+        active_repl_backend = last_active_repl_backend
+    end
+    nothing
+end
 
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool)
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
     if !fallback_repl && interactive
         load_InteractiveUtils()
-        if !isassigned(REPL_MODULE_REF)
+        REPL = REPL_MODULE_REF[]
+        if REPL === Base
             load_REPL()
         end
     end
-    # TODO cleanup REPL_MODULE_REF
-    if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
-        invokelatest(REPL_MODULE_REF[]) do REPL
-            term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-            term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            banner == :no || REPL.banner(term, short=banner==:short)
-            if term.term_type == "dumb"
-                repl = REPL.BasicREPL(term)
-                quiet || @warn "Terminal not fully functional"
-            else
-                repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
-                repl.history_file = history_file
-            end
-            global active_repl = repl
-            # Make sure any displays pushed in .julia/config/startup.jl ends up above the
-            # REPLDisplay
-            pushdisplay(REPL.REPLDisplay(repl))
-            _atreplinit(repl)
-            REPL.run_repl(repl, backend->(global active_repl_backend = backend))
-        end
+    REPL = REPL_MODULE_REF[]
+    if !fallback_repl && interactive && REPL !== Base
+        invokelatest(run_std_repl, REPL, quiet, banner, history_file)
     else
-        # otherwise provide a simple fallback
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
-        let input = stdin
-            if isa(input, File) || isa(input, IOStream)
-                # for files, we can slurp in the whole thing at once
-                ex = parse_input_line(read(input, String))
-                if Meta.isexpr(ex, :toplevel)
-                    # if we get back a list of statements, eval them sequentially
-                    # as if we had parsed them sequentially
-                    for stmt in ex.args
-                        eval_user_input(stderr, stmt, true)
-                    end
-                    body = ex.args
-                else
-                    eval_user_input(stderr, ex, true)
-                end
-            else
-                while !eof(input)
-                    if interactive
-                        print("julia> ")
-                        flush(stdout)
-                    end
-                    try
-                        line = ""
-                        ex = nothing
-                        while !eof(input)
-                            line *= readline(input, keep=true)
-                            ex = parse_input_line(line)
-                            if !(isa(ex, Expr) && ex.head === :incomplete)
-                                break
-                            end
-                        end
-                        eval_user_input(stderr, ex, true)
-                    catch err
-                        isa(err, InterruptException) ? print("\n\n") : rethrow()
-                    end
-                end
-            end
-        end
+        run_fallback_repl(interactive)
     end
     nothing
 end
@@ -613,10 +632,10 @@ module MyApp
 end
 const main = MyApp.main
 # `julia` Will *NOT* execute MyApp.main unless there is a separate `@main` annotation in `Main`
+```
 
 !!! compat "Julia 1.11"
     This macro is new in Julia 1.11. At present, the precise semantics of `@main` are still subject to change.
-```
 """
 macro main(args...)
     if !isempty(args)

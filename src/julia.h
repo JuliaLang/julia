@@ -531,6 +531,7 @@ typedef struct {
     uint8_t mayinlinealloc:1;
     uint8_t _reserved:5;
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
+    uint8_t constprop_heustic; // override for inference's constprop heuristic
 } jl_typename_t;
 
 typedef struct {

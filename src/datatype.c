@@ -83,6 +83,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->atomicfields = NULL;
     tn->constfields = NULL;
     tn->max_methods = 0;
+    tn->constprop_heustic = 0;
     return tn;
 }
 
