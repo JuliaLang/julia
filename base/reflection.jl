@@ -251,7 +251,7 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
 
 Get a tuple with the names of the fields of a `DataType`.
 
-For a tuple type, each name is an `Int` (the index of the field), otherwise it's a `Symbol`.
+For a tuple type, each name is an `Int` (the index of the field), otherwise it is a `Symbol`.
 
 See also [`propertynames`](@ref), [`hasfield`](@ref).
 
