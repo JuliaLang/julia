@@ -2403,6 +2403,8 @@ function parse_atsym(ps::ParseState, allow_quotes=true)
         # export outer  ==> (export outer)
         # export ($f)   ==> (export ($ f))
         mark = position(ps)
+        # Syntax Edition TODO: make all the various ways to quote things inside
+        # import paths an error and require `var""` in the few remaining cases.
         if allow_quotes && peek(ps) == K":" && !is_closing_token(ps, peek(ps,2))
             # import A.:+  ==>  (import (importpath A (quote-: +)))
             emit_diagnostic(ps, warning="quoting with `:` is not required here")
@@ -2423,10 +2425,10 @@ function parse_atsym(ps::ParseState, allow_quotes=true)
                 warn_parens = true
             end
         end
-        if warn_parens
+        b = peek_behind(ps, pos)
+        if warn_parens && b.orig_kind != K".."
             emit_diagnostic(ps, mark, warning="parentheses are not required here")
         end
-        b = peek_behind(ps, pos)
         ok = (b.is_leaf  && (b.kind == K"Identifier" || is_operator(b.kind))) ||
              (!b.is_leaf && b.kind in KSet"$ var")
         if !ok
@@ -2497,7 +2499,7 @@ function parse_import(ps::ParseState, word, has_import_prefix)
         # import A: x as y  ==>  (import (: (importpath A) (as (importpath x) y)))
         # using  A: x as y  ==>  (using (: (importpath A) (as (importpath x) y)))
         bump(ps, TRIVIA_FLAG)
-        parse_atsym(ps)
+        parse_atsym(ps, false)
         emit(ps, mark, K"as")
         if word == K"using" && !has_import_prefix
             # using A as B     ==>  (using (error (as (importpath A) B)))
@@ -2552,7 +2554,7 @@ function parse_import_path(ps::ParseState)
     else
         # import @x     ==>  (import (importpath @x))
         # import $A     ==>  (import (importpath ($ A)))
-        parse_atsym(ps)
+        parse_atsym(ps, false)
     end
     while true
         t = peek_token(ps)

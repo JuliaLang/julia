@@ -125,12 +125,15 @@ end
         Diagnostic(9, 9, :warning, "space between dots in import path")
 	@test diagnostic("import A.:+") ==
         Diagnostic(10, 10, :warning, "quoting with `:` is not required here")
-    # No warning for import `:` symbol
+    # No warnings for imports of `:` and parenthesized `(..)`
     @test diagnostic("import A.:, :", allow_multiple=true) == []
+    @test diagnostic("import A: (..)", allow_multiple=true) == []
     @test diagnostic("import A.(:+)") ==
         Diagnostic(10, 13, :warning, "parentheses are not required here")
     @test diagnostic("export (x)") ==
         Diagnostic(8, 10, :warning, "parentheses are not required here")
+    @test diagnostic("import :A") ==
+        Diagnostic(8, 9, :error, "expected identifier")
     @test diagnostic("export :x") ==
         Diagnostic(8, 9, :error, "expected identifier")
     @test diagnostic("public = 4", version=v"1.11") ==
