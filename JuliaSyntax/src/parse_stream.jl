@@ -50,6 +50,11 @@ Set for K"toplevel" which is delimited by parentheses
 const TOPLEVEL_SEMICOLONS_FLAG = RawFlags(1<<5)
 
 """
+Set for K"function" in short form definitions such as `f() = 1`
+"""
+const SHORT_FORM_FUNCTION_FLAG = RawFlags(1<<5)
+
+"""
 Set for K"struct" when mutable
 """
 const MUTABLE_FLAG = RawFlags(1<<5)
@@ -143,6 +148,8 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
             has_flags(head, COLON_QUOTE) && (str = str*"-:")
         elseif kind(head) == K"toplevel"
             has_flags(head, TOPLEVEL_SEMICOLONS_FLAG) && (str = str*"-;")
+        elseif kind(head) == K"function"
+            has_flags(head, SHORT_FORM_FUNCTION_FLAG) && (str = str*"-=")
         elseif kind(head) == K"struct"
             has_flags(head, MUTABLE_FLAG) && (str = str*"-mut")
         elseif kind(head) == K"module"
@@ -646,17 +653,17 @@ function peek_behind(stream::ParseStream, pos::ParseStreamPosition)
 end
 
 function first_child_position(stream::ParseStream, pos::ParseStreamPosition)
+    ranges = stream.ranges
+    @assert pos.range_index > 0
+    parent = ranges[pos.range_index]
     # Find the first nontrivia range which is a child of this range but not a
     # child of the child
     c = 0
-    @assert pos.range_index > 0
-    parent = stream.ranges[pos.range_index]
     for i = pos.range_index-1:-1:1
-        if stream.ranges[i].first_token < parent.first_token
+        if ranges[i].first_token < parent.first_token
             break
         end
-        if (c == 0 || stream.ranges[i].first_token < stream.ranges[c].first_token) &&
-           !is_trivia(stream.ranges[i])
+        if (c == 0 || ranges[i].first_token < ranges[c].first_token) && !is_trivia(ranges[i])
             c = i
         end
     end
@@ -670,19 +677,44 @@ function first_child_position(stream::ParseStream, pos::ParseStreamPosition)
         end
     end
 
-    if c != 0
-        if t != 0
-            if stream.ranges[c].first_token > t
-                # Need a child index strictly before `t`. `c=0` works.
-                return ParseStreamPosition(t, 0)
-            else
-                return ParseStreamPosition(stream.ranges[c].last_token, c)
-            end
-        else
-            return ParseStreamPosition(stream.ranges[c].last_token, c)
-        end
+    if c == 0 || (t != 0 && ranges[c].first_token > t)
+        # Return leaf node at `t`
+        return ParseStreamPosition(t, 0)
     else
-        return ParseStreamPosition(t, c)
+        # Return interior node at `c`
+        return ParseStreamPosition(ranges[c].last_token, c)
+    end
+end
+
+function last_child_position(stream::ParseStream, pos::ParseStreamPosition)
+    ranges = stream.ranges
+    @assert pos.range_index > 0
+    parent = ranges[pos.range_index]
+    # Find the last nontrivia range which is a child of this range
+    c = 0
+    if pos.range_index > 1
+        i = pos.range_index-1
+        if ranges[i].first_token >= parent.first_token
+            # Valid child of current range
+            c = i
+        end
+    end
+
+    # Find last nontrivia token
+    t = 0
+    for i = parent.last_token:-1:parent.first_token
+        if !is_trivia(stream.tokens[i])
+            t = i
+            break
+        end
+    end
+
+    if c == 0 || (t != 0 && ranges[c].last_token < t)
+        # Return leaf node at `t`
+        return ParseStreamPosition(t, 0)
+    else
+        # Return interior node at `c`
+        return ParseStreamPosition(ranges[c].last_token, c)
     end
 end
 

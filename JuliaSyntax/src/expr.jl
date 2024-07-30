@@ -28,11 +28,6 @@ macro isexpr(ex, head, nargs)
       length($(esc(ex)).args) == $(esc(nargs)))
 end
 
-function is_eventually_call(ex)
-    return ex isa Expr && (ex.head === :call ||
-        (ex.head === :where || ex.head === :(::)) && is_eventually_call(ex.args[1]))
-end
-
 function _reorder_parameters!(args::Vector{Any}, params_pos)
     p = 0
     for i = length(args):-1:1
@@ -233,16 +228,6 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
 
     if k == K"?"
         headsym = :if
-    elseif k == K"=" && !is_decorated(head)
-        a2 = args[2]
-        if is_eventually_call(args[1])
-            if @isexpr(a2, :block)
-                pushfirst!(a2.args, loc)
-            else
-                # Add block for short form function locations
-                args[2] = Expr(:block, loc, a2)
-            end
-        end
     elseif k == K"macrocall"
         do_lambda = _extract_do_lambda!(args)
         _reorder_parameters!(args, 2)
@@ -399,14 +384,22 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         end
     elseif k == K"function"
         if length(args) > 1
-            a1 = args[1]
-            if @isexpr(a1, :tuple)
-                # Convert to weird Expr forms for long-form anonymous functions.
-                #
-                # (function (tuple (... xs)) body) ==> (function (... xs) body)
-                if length(a1.args) == 1 && (a11 = a1.args[1]; @isexpr(a11, :...))
-                    # function (xs...) \n body end
-                    args[1] = a11
+            if has_flags(head, SHORT_FORM_FUNCTION_FLAG)
+                a2 = args[2]
+                if !@isexpr(a2, :block)
+                    args[2] = Expr(:block, a2)
+                end
+                headsym = :(=)
+            else
+                a1 = args[1]
+                if @isexpr(a1, :tuple)
+                    # Convert to weird Expr forms for long-form anonymous functions.
+                    #
+                    # (function (tuple (... xs)) body) ==> (function (... xs) body)
+                    if length(a1.args) == 1 && (a11 = a1.args[1]; @isexpr(a11, :...))
+                        # function (xs...) \n body end
+                        args[1] = a11
+                    end
                 end
             end
             pushfirst!((args[2]::Expr).args, loc)
