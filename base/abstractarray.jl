@@ -1264,6 +1264,10 @@ function _memory_offset(x::AbstractArray, I::Vararg{Any,N}) where {N}
     return sum(map((i, s, o)->s*(i-o), J, strides(x), Tuple(first(CartesianIndices(x)))))*elsize(x)
 end
 
+## Special constprop heuristics for getindex/setindex
+typename(typeof(function getindex end)).constprop_heuristic = Core.ARRAY_INDEX_HEURISTIC
+typename(typeof(function setindex! end)).constprop_heuristic = Core.ARRAY_INDEX_HEURISTIC
+
 ## Approach:
 # We only define one fallback method on getindex for all argument types.
 # That dispatches to an (inlined) internal _getindex function, where the goal is

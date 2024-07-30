@@ -889,4 +889,14 @@ end
     @test UpperTriangular(A) == UpperTriangular(B)
 end
 
+@testset "inference in syev!/syevd!" begin
+    for T in (Float32, Float64), CT in (T, Complex{T})
+        A = rand(CT, 4,4)
+        @inferred (A -> LAPACK.syev!('N', 'U', A))(A)
+        @inferred (A -> LAPACK.syev!('V', 'U', A))(A)
+        @inferred (A -> LAPACK.syevd!('N', 'U', A))(A)
+        @inferred (A -> LAPACK.syevd!('V', 'U', A))(A)
+    end
+end
+
 end # module TestLAPACK

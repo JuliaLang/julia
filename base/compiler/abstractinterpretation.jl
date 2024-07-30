@@ -17,7 +17,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::AbsIntState, max_methods::Int)
     𝕃ₚ, 𝕃ᵢ = ipo_lattice(interp), typeinf_lattice(interp)
-    ⊑ₚ = ⊑(𝕃ₚ)
+    ⊑ₚ, ⊔ₚ, ⊔ᵢ  = partialorder(𝕃ₚ), join(𝕃ₚ), join(𝕃ᵢ)
     if !should_infer_this_call(interp, sv)
         add_remark!(interp, sv, "Skipped call in throw block")
         # At this point we are guaranteed to end up throwing on this path,
@@ -37,7 +37,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     (; valid_worlds, applicable, info) = matches
     update_valid_age!(sv, valid_worlds)
     napplicable = length(applicable)
-    rettype = excttype = Bottom
+    rettype = exctype = Bottom
     edges = MethodInstance[]
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
     seen = 0               # number of signatures actually inferred
@@ -96,8 +96,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     const_results[i] = const_result
                 end
                 edge === nothing || push!(edges, edge)
-                this_rt = tmerge(this_rt, rt)
-                this_exct = tmerge(this_exct, exct)
+                this_rt = this_rt ⊔ₚ rt
+                this_exct = this_exct ⊔ₚ exct
                 if bail_out_call(interp, this_rt, sv)
                     break
                 end
@@ -156,8 +156,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
         @assert !(this_conditional isa Conditional || this_rt isa MustAlias) "invalid lattice element returned from inter-procedural context"
         seen += 1
-        rettype = tmerge(𝕃ₚ, rettype, this_rt)
-        excttype = tmerge(𝕃ₚ, excttype, this_exct)
+        rettype = rettype ⊔ₚ this_rt
+        exctype = exctype ⊔ₚ this_exct
         if has_conditional(𝕃ₚ, sv) && this_conditional !== Bottom && is_lattice_bool(𝕃ₚ, rettype) && fargs !== nothing
             if conditionals === nothing
                 conditionals = Any[Bottom for _ in 1:length(argtypes)],
@@ -165,8 +165,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
             for i = 1:length(argtypes)
                 cnd = conditional_argtype(𝕃ᵢ, this_conditional, sig, argtypes, i)
-                conditionals[1][i] = tmerge(𝕃ᵢ, conditionals[1][i], cnd.thentype)
-                conditionals[2][i] = tmerge(𝕃ᵢ, conditionals[2][i], cnd.elsetype)
+                conditionals[1][i] = conditionals[1][i] ⊔ᵢ cnd.thentype
+                conditionals[2][i] = conditionals[2][i] ⊔ᵢ cnd.elsetype
             end
         end
         if bail_out_call(interp, InferenceLoopState(sig, rettype, all_effects), sv)
@@ -182,14 +182,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
 
     if seen ≠ napplicable
         # there is unanalyzed candidate, widen type and effects to the top
-        rettype = excttype = Any
+        rettype = exctype = Any
         all_effects = Effects()
     else
         if (matches isa MethodMatches ? (!matches.fullmatch || any_ambig(matches)) :
             (!all(matches.fullmatches) || any_ambig(matches)))
             # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
             all_effects = Effects(all_effects; nothrow=false)
-            excttype = tmerge(𝕃ₚ, excttype, MethodError)
+            exctype = exctype ⊔ₚ MethodError
         end
         if sv isa InferenceState && fargs !== nothing
             slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
@@ -240,7 +240,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
     end
 
-    return CallMeta(rettype, excttype, all_effects, info, slotrefinements)
+    return CallMeta(rettype, exctype, all_effects, info, slotrefinements)
 end
 
 struct FailedMethodMatch
@@ -367,7 +367,7 @@ function from_interprocedural!(interp::AbstractInterpreter, @nospecialize(rt), s
                                arginfo::ArgInfo, @nospecialize(maybecondinfo))
     rt = collect_limitations!(rt, sv)
     if isa(rt, InterMustAlias)
-        rt = from_intermustalias(rt, arginfo, sv)
+        rt = from_intermustalias(typeinf_lattice(interp), rt, arginfo, sv)
     elseif is_lattice_bool(ipo_lattice(interp), rt)
         if maybecondinfo === nothing
             rt = widenconditional(rt)
@@ -387,12 +387,13 @@ function collect_limitations!(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function from_intermustalias(rt::InterMustAlias, arginfo::ArgInfo, sv::AbsIntState)
+function from_intermustalias(𝕃ᵢ::AbstractLattice, rt::InterMustAlias, arginfo::ArgInfo, sv::AbsIntState)
     fargs = arginfo.fargs
     if fargs !== nothing && 1 ≤ rt.slot ≤ length(fargs)
         arg = ssa_def_slot(fargs[rt.slot], sv)
         if isa(arg, SlotNumber)
             argtyp = widenslotwrapper(arginfo.argtypes[rt.slot])
+            ⊑ = partialorder(𝕃ᵢ)
             if rt.vartyp ⊑ argtyp
                 return MustAlias(arg, rt.vartyp, rt.fldidx, rt.fldtyp)
             else
@@ -412,6 +413,7 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
     alias = nothing
     thentype = elsetype = Any
     condval = maybe_extract_const_bool(rt)
+    ⊑, ⋤, ⊓ = partialorder(𝕃ᵢ), strictneqpartialorder(𝕃ᵢ), meet(𝕃ᵢ)
     for i in 1:length(fargs)
         # find the first argument which supports refinement,
         # and intersect all equivalent arguments with it
@@ -447,24 +449,24 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
             end
             if condval === false
                 thentype = Bottom
-            elseif ⊑(𝕃ᵢ, new_thentype, thentype)
+            elseif new_thentype ⊑ thentype
                 thentype = new_thentype
             else
-                thentype = tmeet(𝕃ᵢ, thentype, widenconst(new_thentype))
+                thentype = thentype ⊓ widenconst(new_thentype)
             end
             if condval === true
                 elsetype = Bottom
-            elseif ⊑(𝕃ᵢ, new_elsetype, elsetype)
+            elseif new_elsetype ⊑ elsetype
                 elsetype = new_elsetype
             else
-                elsetype = tmeet(𝕃ᵢ, elsetype, widenconst(new_elsetype))
+                elsetype = elsetype ⊓ widenconst(new_elsetype)
             end
-            if (slot > 0 || condval !== false) && ⋤(𝕃ᵢ, thentype, old)
+            if (slot > 0 || condval !== false) && thentype ⋤ old
                 slot = id
                 if !(arg isa SlotNumber) && argtyp isa MustAlias
                     alias = argtyp
                 end
-            elseif (slot > 0 || condval !== true) && ⋤(𝕃ᵢ, elsetype, old)
+            elseif (slot > 0 || condval !== true) && elsetype ⋤ old
                 slot = id
                 if !(arg isa SlotNumber) && argtyp isa MustAlias
                     alias = argtyp
@@ -1158,16 +1160,16 @@ end
 function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method::Method)
     return is_aggressive_constprop(method) ||
            InferenceParams(interp).aggressive_constant_propagation ||
-           istopfunction(f, :getproperty) ||
-           istopfunction(f, :setproperty!)
+           typename(typeof(f)).constprop_heuristic === Core.FORCE_CONST_PROP
 end
 
 function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecialize(f),
     arginfo::ArgInfo, all_overridden::Bool, sv::AbsIntState)
     argtypes = arginfo.argtypes
+    heuristic = typename(typeof(f)).constprop_heuristic
     if length(argtypes) > 1
         𝕃ᵢ = typeinf_lattice(interp)
-        if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
+        if heuristic === Core.ARRAY_INDEX_HEURISTIC
             arrty = argtypes[2]
             # don't propagate constant index into indexing of non-constant array
             if arrty isa Type && arrty <: AbstractArray && !issingletontype(arrty)
@@ -1180,17 +1182,14 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
             elseif ⊑(𝕃ᵢ, arrty, Array) || ⊑(𝕃ᵢ, arrty, GenericMemory)
                 return false
             end
-        elseif istopfunction(f, :iterate)
+        elseif heuristic === Core.ITERATE_HEURISTIC
             itrty = argtypes[2]
             if ⊑(𝕃ᵢ, itrty, Array) || ⊑(𝕃ᵢ, itrty, GenericMemory)
                 return false
             end
         end
     end
-    if !all_overridden && (istopfunction(f, :+) || istopfunction(f, :-) || istopfunction(f, :*) ||
-                           istopfunction(f, :(==)) || istopfunction(f, :!=) ||
-                           istopfunction(f, :<=) || istopfunction(f, :>=) || istopfunction(f, :<) || istopfunction(f, :>) ||
-                           istopfunction(f, :<<) || istopfunction(f, :>>))
+    if !all_overridden && heuristic === Core.SAMETYPE_HEURISTIC
         # it is almost useless to inline the op when all the same type,
         # but highly worthwhile to inline promote of a constant
         length(argtypes) > 2 || return false
@@ -1371,7 +1370,6 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
     given_argtypes = Vector{Any}(undef, length(argtypes))
     def = mi.def::Method
     nargs = Int(def.nargs)
-    local condargs = nothing
     for i in 1:length(argtypes)
         argtype = argtypes[i]
         # forward `Conditional` if it conveys a constraint on any other argument
@@ -1388,10 +1386,6 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
                     # TODO bail out here immediately rather than just propagating Bottom ?
                     given_argtypes[i] = Bottom
                 else
-                    if condargs === nothing
-                        condargs = Tuple{Int,Int}[]
-                    end
-                    push!(condargs, (slotid, i))
                     given_argtypes[i] = Conditional(slotid, thentype, elsetype)
                 end
                 continue
