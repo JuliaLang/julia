@@ -413,6 +413,9 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                     # return the path the entry point for the code, if it could be found
                     # otherwise, signal failure
                     path = implicit_manifest_uuid_path(env, pkg)
+                    if path !== nothing && !isfile_casesensitive(path)
+                        path = nothing
+                    end
                     env′ = env
                     @goto done
                 end
@@ -447,9 +450,6 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
         end
     end
     @label done
-    if path !== nothing && !isfile_casesensitive(path)
-        path = nothing
-    end
     if cache !== nothing
         cache.located[(pkg, stopenv)] = path === nothing ? nothing : (path, something(env′))
     end
