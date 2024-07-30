@@ -212,7 +212,7 @@ end
 
 Get the name of field `i` of a `DataType`.
 
-The return type is `Int` (the index of the field) for `x <: Tuple`, otherwise the return type is `Symbol`.
+The return type is `Symbol`, except when `x <: Tuple`, in which case the index of the field is returned, of type `Int`.
 
 # Examples
 ```jldoctest
@@ -251,7 +251,8 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
 
 Get a tuple with the names of the fields of a `DataType`.
 
-For a tuple type, each name is an `Int` (the index of the field), otherwise it is a `Symbol`.
+Each name is a `Symbol`, except when `x <: Tuple`, in which case each name (actually the
+index of the field) is an `Int`.
 
 See also [`propertynames`](@ref), [`hasfield`](@ref).
 
