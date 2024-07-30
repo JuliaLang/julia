@@ -676,6 +676,11 @@ tests = [
         "import A.⋆.f"  =>  "(import (importpath A ⋆ f))"
         "import A..."   =>  "(import (importpath A ..))"
         "import A; B"   =>  "(import (importpath A))"
+        # Colons not allowed first in import paths
+        # but are allowed in trailing components (#473)
+        "using :A"         =>  "(using (importpath (error (quote-: A))))"
+        "using A: :b"      =>  "(using (: (importpath A) (importpath (error (quote-: b)))))"
+        "using A: b.:c"    =>  "(using (: (importpath A) (importpath b (quote-: c))))"
     ],
     JuliaSyntax.parse_iteration_specs => [
         "i = rhs"        =>  "(iteration (in i rhs))"
