@@ -6,17 +6,42 @@
 
 # N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
 # inside the global code cache.
-#
-# # The type of a value might be constant
-# struct Const
-#     val
-# end
-#
-# struct PartialStruct
-#     typ
-#     fields::Vector{Any} # elements are other type lattice members
-# end
+
 import Core: Const, PartialStruct
+
+"""
+    struct Const
+        val
+    end
+
+The type representing a constant value.
+"""
+:(Const)
+
+"""
+    struct PartialStruct
+        typ
+        fields::Vector{Any} # elements are other type lattice members
+    end
+
+This extended lattice element is introduced when we have information about an object's
+fields beyond what can be obtained from the object type. E.g. it represents a tuple where
+some elements are known to be constants or a struct whose `Any`-typed field is initialized
+with `Int` values.
+
+- `typ` indicates the type of the object
+- `fields` holds the lattice elements corresponding to each field of the object
+
+If `typ` is a struct, `fields` represents the fields of the struct that are guaranteed to be
+initialized. For instance, if the length of `fields` of `PartialStruct` representing a
+struct with 4 fields is 3, the 4th field may be uninitialized. If the length is four, all
+fields are guaranteed to be initialized.
+
+If `typ` is a tuple, the last element of `fields` may be `Vararg`. In this case, it is
+guaranteed that the number of elements in the tuple is at least `length(fields)-1`, but the
+exact number of elements is unknown.
+"""
+:(PartialStruct)
 function PartialStruct(@nospecialize(typ), fields::Vector{Any})
     for i = 1:length(fields)
         assert_nested_slotwrapper(fields[i])
@@ -57,8 +82,13 @@ end
 Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     Conditional(slot_id(var), thentype, elsetype)
 
+import Core: InterConditional
 """
-    cnd::InterConditional
+    struct InterConditional
+        slot::Int
+        thentype
+        elsetype
+    end
 
 Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
 This is separate from `Conditional` to catch logic errors: the lattice element name is `InterConditional`
@@ -66,14 +96,6 @@ while processing a call, then `Conditional` everywhere else. Thus `InterConditio
 `CompilerTypes`—these type's usages are disjoint—though we define the lattice for `InterConditional`.
 """
 :(InterConditional)
-import Core: InterConditional
-# struct InterConditional
-#     slot::Int
-#     thentype
-#     elsetype
-#     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) =
-#         new(slot, thentype, elsetype)
-# end
 InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     InterConditional(slot_id(var), thentype, elsetype)
 
