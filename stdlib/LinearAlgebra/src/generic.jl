@@ -410,7 +410,12 @@ julia> triu(a)
  0.0  0.0  0.0  1.0
 ```
 """
-triu(M::AbstractMatrix) = triu!(copymutable(M))
+function triu(M::AbstractMatrix)
+    d = similar(M)
+    copytrito!(d, M, 'U')
+    triu!(d)
+    return d
+end
 
 """
     tril(M)
@@ -434,7 +439,12 @@ julia> tril(a)
  1.0  1.0  1.0  1.0
 ```
 """
-tril(M::AbstractMatrix) = tril!(copymutable(M))
+function tril(M::AbstractMatrix)
+    d = similar(M)
+    copytrito!(d, M, 'L')
+    tril!(d)
+    return d
+end
 
 """
     triu(M, k::Integer)
