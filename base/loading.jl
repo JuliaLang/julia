@@ -822,14 +822,15 @@ end
 # given a project directory (implicit env from LOAD_PATH) and a name,
 # find an entry point for `name`, and see if it has an associated project file
 function entry_point_and_project_file(dir::String, name::String)::Union{Tuple{Nothing,Nothing},Tuple{String,Nothing},Tuple{String,String}}
-    path = normpath(joinpath(dir, "$name.jl"))
-    isfile_casesensitive(path) && return path, nothing
     dir_name = joinpath(dir, name)
     path, project_file = entry_point_and_project_file_inside(dir_name, name)
     path === nothing || return path, project_file
     dir_jl = dir_name * ".jl"
     path, project_file = entry_point_and_project_file_inside(dir_jl, name)
     path === nothing || return path, project_file
+    # check for less likely case with a bare file and no src directory last to minimize stat calls
+    path = normpath(joinpath(dir, "$name.jl"))
+    isfile_casesensitive(path) && return path, nothing
     return nothing, nothing
 end
 
