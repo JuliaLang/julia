@@ -133,6 +133,9 @@ function first_child_position(ps::ParseState, pos::ParseStreamPosition)
     first_child_position(ps.stream, pos)
 end
 
+function last_child_position(ps::ParseState, pos::ParseStreamPosition)
+    last_child_position(ps.stream, pos)
+end
 #-------------------------------------------------------------------------------
 # Parser Utils
 
@@ -325,6 +328,12 @@ function was_eventually_call(ps::ParseState)
             return true
         elseif b.kind == K"where" || b.kind == K"parens" ||
                 (b.kind == K"::" && has_flags(b.flags, INFIX_FLAG))
+            if b.kind == K"::"
+                p_last = last_child_position(ps, p)
+                if p == p_last
+                    return false
+                end
+            end
             p = first_child_position(ps, p)
         else
             return false
@@ -618,12 +627,19 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         parse_assignment(ps, down)
         emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     else
-        # a += b  ==>  (+= a b)
-        # a .= b  ==>  (.= a b)
+        # f() = 1  ==>  (function-= (call f) 1)
+        # f() .= 1 ==>  (.= (call f) 1)
+        # a += b   ==>  (+= a b)
+        # a .= b   ==>  (.= a b)
+        is_short_form_func = k == K"=" && !is_dotted(t) && was_eventually_call(ps)
         bump(ps, TRIVIA_FLAG)
         bump_trivia(ps)
+        # Syntax Edition TODO: We'd like to call `down` here when
+        # is_short_form_func is true, to prevent `f() = 1 = 2` from parsing.
         parse_assignment(ps, down)
-        emit(ps, mark, k, flags(t))
+        emit(ps, mark,
+             is_short_form_func ? K"function" : k,
+             is_short_form_func ? SHORT_FORM_FUNCTION_FLAG : flags(t))
     end
 end
 

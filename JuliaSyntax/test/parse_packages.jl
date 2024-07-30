@@ -20,7 +20,13 @@ base_path = let
     p
 end
 @testset "Parse Base at $base_path" begin
-    test_parse_all_in_path(base_path)
+    test_parse_all_in_path(base_path) do f
+        if endswith(f, "gmp.jl")
+            # Loose comparison due to `f(::g(w) = z) = a` syntax
+            return exprs_roughly_equal
+        end
+        return exprs_equal_no_linenum
+    end
 end
 
 base_tests_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")

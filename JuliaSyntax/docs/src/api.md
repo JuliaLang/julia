@@ -118,6 +118,7 @@ JuliaSyntax.COLON_QUOTE
 JuliaSyntax.TOPLEVEL_SEMICOLONS_FLAG
 JuliaSyntax.MUTABLE_FLAG
 JuliaSyntax.BARE_MODULE_FLAG
+JuliaSyntax.SHORT_FORM_FUNCTION_FLAG
 ```
 
 ## Syntax trees
