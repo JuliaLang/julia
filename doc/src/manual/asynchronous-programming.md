@@ -65,7 +65,7 @@ to finish before proceeding.
 
 It is common to want to create a task and schedule it right away, so the
 macro [`Threads.@spawn`](@ref) is provided for that purpose --- `Threads.@spawn x` is
-equivalent to `schedule(@task x)`.
+equivalent to `task = @task x; task.sticky = false; schedule(task)`.
 
 ## Communicating with Channels
 
