@@ -3,7 +3,7 @@
 ```@docs
 Core.Task
 Base.@task
-Base.Threads.@spawn
+Base.@async
 Base.asyncmap
 Base.asyncmap!
 Base.current_task
