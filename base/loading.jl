@@ -3809,7 +3809,7 @@ end
                 end
                 if !ispath(f)
                     _f = fixup_stdlib_path(f)
-                    if isfile(_f) && startswith(_f, Sys.STDLIB)
+                    if _f != f && isfile(_f) && startswith(_f, Sys.STDLIB)
                         continue
                     end
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"
