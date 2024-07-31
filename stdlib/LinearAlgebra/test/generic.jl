@@ -729,23 +729,35 @@ end
 end
 
 @testset "tril/triu with partly initialized matrices" begin
-    function test_triu(M)
+    function test_triu(M, k=nothing)
         M[1,1] = M[2,2] = M[1,2] = M[1,3] = M[2,3] = 3
-        MU = triu(M)
+        if isnothing(k)
+            MU = triu(M)
+        else
+            MU = triu(M, k)
+        end
         @test iszero(MU[2,1])
         @test MU[1,1] == MU[2,2] == MU[1,2] == MU[1,3] == MU[2,3] == 3
     end
     test_triu(Matrix{BigInt}(undef, 2, 3))
+    test_triu(Matrix{BigInt}(undef, 2, 3), 0)
     test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+    test_triu(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
 
-    function test_tril(M)
+    function test_tril(M, k=nothing)
         M[1,1] = M[2,2] = M[2,1] = 3
-        ML = tril(M)
+        if isnothing(k)
+            ML = tril(M)
+        else
+            ML = tril(M, k)
+        end
         @test ML[1,2] == ML[1,3] == ML[2,3] == 0
         @test ML[1,1] == ML[2,2] == ML[2,1] == 3
     end
     test_tril(Matrix{BigInt}(undef, 2, 3))
+    test_tril(Matrix{BigInt}(undef, 2, 3), 0)
     test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)))
+    test_tril(SizedArrays.SizedArray{(2,3)}(Matrix{BigInt}(undef, 2, 3)), 0)
 end
 
 end # module TestGeneric
