@@ -298,6 +298,7 @@ register_kinds!(JuliaSyntax, 0, [
 
     # Level 1
     "BEGIN_ASSIGNMENTS"
+        "BEGIN_SYNTACTIC_ASSIGNMENTS"
         "="
         "+="
         "-="   # Also used for "−="
@@ -314,9 +315,10 @@ register_kinds!(JuliaSyntax, 0, [
         "\\="
         "&="
         ":="
-        "~"
         "\$="
         "⊻="
+        "END_SYNTACTIC_ASSIGNMENTS"
+        "~"
         "≔"
         "⩴"
         "≕"
@@ -1227,6 +1229,7 @@ is_prec_pipe_lt(x)     = kind(x) == K"<|"
 is_prec_pipe_gt(x)     = kind(x) == K"|>"
 is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS"<= kind(x) <= K"END_SYNTAX_KINDS"
 is_macro_name(x)       = K"BEGIN_MACRO_NAMES" <= kind(x) <= K"END_MACRO_NAMES"
+is_syntactic_assignment(x) = K"BEGIN_SYNTACTIC_ASSIGNMENTS" <= kind(x) <= K"END_SYNTACTIC_ASSIGNMENTS"
 
 function is_number(x)
     kind(x) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float", K"Float32")

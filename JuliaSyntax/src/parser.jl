@@ -279,7 +279,7 @@ function is_syntactic_operator(k)
     # TODO: Do we need to disallow dotted and suffixed forms here?
     # The lexer itself usually disallows such tokens, so it's not clear whether
     # we need to handle them. (Though note `.->` is a token...)
-    return k in KSet"&& || . ... ->" || (is_prec_assignment(k) && k != K"~")
+    return k in KSet"&& || . ... ->" || is_syntactic_assignment(k)
 end
 
 function is_syntactic_unary_op(k)
@@ -617,7 +617,8 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
             # [a ~b]  ==>  (hcat a (call-pre ~ b))
             return
         end
-        # ~ is the only non-syntactic assignment-precedence operator.
+        # ~ is currently the only assignment-precedence operator which is parsed as a call.
+        # TODO: Make the other non-syntactic assignments such as `≔ ⩴ ≕` into calls as well?
         # a ~ b      ==>  (call-i a ~ b)
         # a .~ b     ==>  (dotcall-i a ~ b)
         # [a ~ b c]  ==>  (hcat (call-i a ~ b) c)
