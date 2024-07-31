@@ -1990,15 +1990,6 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_value_t *pi = iparams[i];
             if (jl_is_vararg(pi) && jl_unwrap_vararg(pi) == jl_bottom_type) {
                 jl_value_t *va1 = jl_unwrap_vararg_num(pi);
-                if (va1 && jl_is_long(va1)) {
-                    ssize_t nt = jl_unbox_long(va1);
-                    if (nt == 0)
-                        va1 = NULL;
-                    else
-                        pi = jl_bottom_type; // trigger errorf below
-                }
-                // This imposes an implicit constraint that va1==0,
-                // so we keep the Vararg if it has a TypeVar
                 if (va1 == NULL) {
                     p = NULL;
                     ntp -= 1;
@@ -2006,12 +1997,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                     break;
                 }
             }
-            if (pi == jl_bottom_type) {
-                if (nothrow)
-                    return NULL;
-                jl_errorf("Tuple field type cannot be Union{}");
-            }
-            if (cacheable && !jl_is_concrete_type(pi))
+            if (cacheable && !jl_is_concrete_type(pi) && pi != jl_bottom_type)
                 cacheable = 0;
         }
     }
