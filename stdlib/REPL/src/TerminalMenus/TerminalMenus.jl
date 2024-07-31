@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    REPL.TerminalMenus
+
+A module that contains code for displaying text mode interactive menus.
+Key exported symobls include [`REPL.TerminalMenus.RadioMenu`](@ref) and
+[`REPL.TerminalMenus.MultiSelectMenu`](@ref).
+"""
 module TerminalMenus
 
 using ..REPL: REPL
