@@ -863,3 +863,12 @@ end
     # this is fixed in #40038, so the evaluation of its CartesianIndices should work
     @test CartesianIndices(A) == CartesianIndices(B)
 end
+
+@testset "overflowing show" begin
+    A = OffsetArray(repeat([1], 1), typemax(Int)-1)
+    b = IOBuffer(maxsize=10)
+    show(b, A)
+    @test String(take!(b)) == "[1]"
+    show(b, (A, A))
+    @test String(take!(b)) == "([1], [1])"
+end
