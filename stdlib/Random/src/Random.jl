@@ -29,8 +29,6 @@ export rand!, randn!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice, TaskLocalRNG, Xoshiro
 
-public default_rng, seed!
-
 ## general definitions
 
 """
