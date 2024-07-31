@@ -6,12 +6,11 @@ Programming languages have traditionally employed one of two quite different typ
 static type systems, where expressions must have a computable type before the execution of the program,
 and dynamic type systems, where types are only computed at run time,
 when the actual values manipulated by the program are available.
-Statically typed languages typically offer faster execution,
-at the cost of type annotations which must be explicitly added by the programmer.
-Dynamic typing, on the other hand, allows for polymorphism,
-which is the ability to write code that can operate on different types.
-Only by explicitly checking types, or when objects fail to support operations at run time,
-are the types of any values ever restricted.
+Statically typed languages typically offer faster execution of programs,
+while treating any data of unknown or invalid type as an error.
+In these languages, the programmer is responsible for ensuring the validity of all types of data that the program may encounter.
+Dynamically typed languages, on the other hand, do not explicitly check types,
+and types of data only become invalid when they fail to support run-time operations.
 
 Julia's type system is dynamic, but gains some of the advantages of static type systems
 by allowing optional type annotations. Type annotations are important for defining efficient new data structures,
