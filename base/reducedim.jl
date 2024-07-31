@@ -34,10 +34,13 @@ function inner_indices(axs::Indices{N}, region) where N
 end
 
 # Given an outer and an inner cartesian index, merge them depending on the dims
+sliceall(x) = @inbounds x[begin:end]
+merge_outer_inner(outer::CartesianIndices{N}, inner::CartesianIndices{N}, use_inner::NTuple{N, Bool}) where {N} =
+    CartesianIndices(_mapifelse(use_inner, inner.indices, map(sliceall, outer.indices)))
 merge_outer_inner(outer::CartesianIndex{N}, inner::CartesianIndex{N}, use_inner::NTuple{N, Bool}) where {N} =
-    CartesianIndex(_merge_outer_inner(outer.I, inner.I, use_inner))
-_merge_outer_inner(outer::Tuple, inner, use_inner) = (ifelse(use_inner[1], inner[1], outer[1]), _merge_outer_inner(tail(outer), tail(inner), tail(use_inner))...)
-_merge_outer_inner(outer::Tuple{}, inner, use_inner) = ()
+    CartesianIndex(_mapifelse(use_inner, inner.I, outer.I))
+_mapifelse(b::NTuple{N,Bool}, x::NTuple{N}, y::NTuple{N}) where {N} = (ifelse(b[1], x[1], y[1]), _mapifelse(tail(b), tail(x), tail(y))...)
+_mapifelse(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 merge_outer_inner_prep(tup::NTuple{N}, region) where {N} = ntuple(d->d in region, Val(N))
 
 function _check_valid_region(region)
@@ -132,11 +135,11 @@ _firstslice(i::OneTo) = OneTo(1)
 _firstslice(i::Slice) = Slice(_firstslice(i.indices))
 _firstslice(i) = i[firstindex(i):firstindex(i)]
 
-function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
+function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted, Aax=axes(A))
     lsiz = check_reducedims(R,A)
     isempty(A) && return R
 
-    if has_fast_linear_indexing(A) && lsiz > 16
+    if has_fast_linear_indexing(A) && lsiz > 16 && axes(A) === Aax
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
         ibase = first(LinearIndices(A))-1
         for i in eachindex(R) # TODO: add tests for this change
@@ -145,7 +148,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
         end
         return R
     end
-    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
+    indsAt, indsRt = safe_tail(Aax), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
@@ -153,7 +156,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
-            @simd for i in axes(A, 1)
+            @simd for i in Aax[1]
                 r = op(r, f(A[i, IA])) # this could also be done pairwise
             end
             R[i1,IR] = r
@@ -161,7 +164,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     else
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            @simd for i in axes(A, 1)
+            @simd for i in Aax[1]
                 R[i,IR] = op(R[i,IR], f(A[i,IA]))
             end
         end
@@ -226,27 +229,56 @@ function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, d
             end
         end
     else
-        # Dynamically switch loops to prioritize the largest first dimension
+        # Take care of the smallest cartesian "rectangle" that includes our two peeled elements
+        small_inner, large_inner = _split2(inner_inds)
+        # and we may as well try to do this in a cache-advantageous manner
         if something(findfirst((>)(1), size(inner_inds))) < something(findfirst((>)(1), size(outer_inds)), typemax(Int))
             for IR in outer_inds
                 @inbounds r = R[IR]
-                for IA in Iterators.drop(inner_inds, 2)
+                for IA in Iterators.drop(small_inner, 2)
                     iA = merge_outer_inner(IR, IA, merger)
                     r = op(r, f(@inbounds(A[iA])))
                 end
                 @inbounds R[IR] = r
             end
         else
-            for IA in Iterators.drop(inner_inds, 2)
-                @simd for IR in outer_inds
+            for IA in Iterators.drop(small_inner, 2)
+                for IR in outer_inds
                     iA = merge_outer_inner(IR, IA, merger)
                     v = op(@inbounds(R[IR]), f(@inbounds(A[iA])))
                     @inbounds R[IR] = v
                 end
             end
         end
+        # And then if there's anything left, defer to _mapreducedim!
+        if !isempty(large_inner)
+            large_inds = merge_outer_inner(outer_inds, large_inner, merger)
+            _mapreducedim!(f, op, R, A, large_inds.indices)
+        end
     end
     return R
+end
+
+# Split a CartesianIndices into two parts such that we can Iterators.drop 2 elements from the smallest
+# rectangular subsection and then iterate more quickly over the larger remainder.
+#
+# We have a choice in how we do this split: we can take the away the first column, the first *two* rows, or the first page or...
+# We want to pick the _smallest_ split. For example, given four non-singleton dimensions, we have a choice of:
+# first: (:, :, :, 1:1)   or (:, :, 1:1,   :) or (:, 1:1, :, :)   or (1:2,   :, :, :)
+# rest:  (:, :, :, 2:end) or (:, :, 2:end, :) or (:, 2:end, :, :) or (3:end, :, :, :)
+# With dimension lengths of (a, b, c, d), that's minimizing: (a*b*c) vs (a*b*d) vs (a*c*d) vs (2*b*c*d)
+# The smallest subsection will always be the one that slices on the _longest_ dimension.
+function _split2(ci::CartesianIndices{N}) where {N}
+    inds = ci.indices
+    first_non_singleton = something(findfirst((>)(1), size(ci)))
+    # The first non-singleton dimension "costs half" because we take two elements
+    lengths = map(length, inds)
+    weights = setindex(lengths, lengths[first_non_singleton]÷2, first_non_singleton)
+    sliced_dim = argmax(weights)
+
+    nskip = Int(sliced_dim == first_non_singleton)
+    return (CartesianIndices(ntuple(d->d==sliced_dim ? inds[d][begin:begin+nskip] : inds[d][begin:end], Val(N))),
+            CartesianIndices(ntuple(d->d==sliced_dim ? inds[d][begin+nskip+1:end] : inds[d][begin:end], Val(N))))
 end
 
 _mapreduce_similar(f, op, A, ::Type{T}, axes) where {T} = similar(A,T,axes)
