@@ -320,20 +320,20 @@ function copyto!(dest::BandedMatrix, src::BandedMatrix)
 end
 function _copyto_banded!(T::Tridiagonal, D::Diagonal)
     T.d .= D.diag
-    T.dl .= zero.(T.dl)
-    T.du .= zero.(T.du)
+    T.dl .= view(D, diagind(D, -1, IndexStyle(D)))
+    T.du .= view(D, diagind(D,  1, IndexStyle(D)))
     return T
 end
 function _copyto_banded!(SymT::SymTridiagonal, D::Diagonal)
     issymmetric(D) || throw(ArgumentError("cannot copy a non-symmetric Diagonal matrix to a SymTridiagonal"))
     SymT.dv .= D.diag
     _ev = _evview(SymT)
-    _ev .= zero.(_ev)
+    _ev .= view(D, diagind(D,  1, IndexStyle(D)))
     return SymT
 end
 function _copyto_banded!(B::Bidiagonal, D::Diagonal)
     B.dv .= D.diag
-    B.ev .= zero.(B.ev)
+    B.ev .= view(D, diagind(D,  B.uplo == 'U' ? 1 : -1, IndexStyle(D)))
     return B
 end
 function _copyto_banded!(D::Diagonal, B::Bidiagonal)
@@ -361,10 +361,10 @@ function _copyto_banded!(T::Tridiagonal, B::Bidiagonal)
     T.d .= B.dv
     if B.uplo == 'U'
         T.du .= B.ev
-        T.dl .= zero.(T.dl)
+        T.dl .= view(B, diagind(B, -1, IndexStyle(B)))
     else
         T.dl .= B.ev
-        T.du .= zero.(T.du)
+        T.du .= view(B, diagind(B,  1, IndexStyle(B)))
     end
     return T
 end
@@ -372,7 +372,7 @@ function _copyto_banded!(SymT::SymTridiagonal, B::Bidiagonal)
     issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Bidiagonal matrix to a SymTridiagonal"))
     SymT.dv .= B.dv
     _ev = _evview(SymT)
-    _ev .= zero.(_ev)
+    _ev .= B.ev
     return SymT
 end
 function _copyto_banded!(B::Bidiagonal, T::Tridiagonal)
