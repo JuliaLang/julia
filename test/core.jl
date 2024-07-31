@@ -5532,9 +5532,6 @@ let a = Base.StringVector(2^17)
     @test sizeof(c) == 0
 end
 
-# issue #53990 / https://github.com/JuliaLang/julia/pull/53896#discussion_r1555087951
-@test Base.StringVector(UInt64(2)) isa Vector{UInt8}
-
 @test_throws ArgumentError eltype(Bottom)
 
 # issue #16424, re-evaluating type definitions

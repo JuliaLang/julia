@@ -5329,7 +5329,7 @@ for (syev, syevr, syevd, sygvd, elty) in
         #       INTEGER            INFO, LDA, LWORK, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :aggressive function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkuplo(uplo)
@@ -5429,7 +5429,7 @@ for (syev, syevr, syevd, sygvd, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :aggressive function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
@@ -5526,7 +5526,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   RWORK( * ), W( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :aggressive function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)
@@ -5639,7 +5639,7 @@ for (syev, syevr, syevd, sygvd, elty, relty) in
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   RWORK( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+        Base.@constprop :aggressive function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
             @chkvalidparam 1 jobz ('N', 'V')
             chkstride1(A)

@@ -53,6 +53,9 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
+typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+
 dotgetproperty(x, f) = getproperty(x, f)
 
 getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))
@@ -224,7 +227,7 @@ delete_method(which(Pair{Any,Any}, (Any, Any)))
 end
 
 # The REPL stdlib hooks into Base using this Ref
-const REPL_MODULE_REF = Ref{Module}()
+const REPL_MODULE_REF = Ref{Module}(Base)
 
 include("checked.jl")
 using .Checked

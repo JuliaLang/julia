@@ -145,12 +145,11 @@ JL_EXTENSION typedef struct _bigval_t {
     // must be 64-byte aligned here, in 32 & 64 bit modes
 } bigval_t;
 
-// data structure for tracking malloc'd arrays and genericmemory.
-
-typedef struct _mallocarray_t {
-    jl_value_t *a;
-    struct _mallocarray_t *next;
-} mallocarray_t;
+// data structure for tracking malloc'd genericmemory.
+typedef struct _mallocmemory_t {
+    jl_genericmemory_t *a; // lowest bit is tagged if this is aligned memory
+    struct _mallocmemory_t *next;
+} mallocmemory_t;
 
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
@@ -549,8 +548,6 @@ STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
     return (void*)(((uintptr_t)v) & ~mask);
 }
 
-NOINLINE uintptr_t gc_get_stack_ptr(void);
-
 FORCE_INLINE void gc_big_object_unlink(const bigval_t *node) JL_NOTSAFEPOINT
 {
     assert(node != oldest_generation_of_bigvals);
@@ -577,6 +574,7 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
     sentinel_node->next = node;
 }
 
+extern uv_mutex_t gc_perm_lock;
 extern uv_mutex_t gc_threads_lock;
 extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
@@ -596,6 +594,7 @@ void jl_gc_debug_init(void);
 
 // GC pages
 
+extern uv_mutex_t gc_pages_lock;
 void jl_gc_init_page(void) JL_NOTSAFEPOINT;
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
 void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;

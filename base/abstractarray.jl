@@ -1264,6 +1264,10 @@ function _memory_offset(x::AbstractArray, I::Vararg{Any,N}) where {N}
     return sum(map((i, s, o)->s*(i-o), J, strides(x), Tuple(first(CartesianIndices(x)))))*elsize(x)
 end
 
+## Special constprop heuristics for getindex/setindex
+typename(typeof(function getindex end)).constprop_heuristic = Core.ARRAY_INDEX_HEURISTIC
+typename(typeof(function setindex! end)).constprop_heuristic = Core.ARRAY_INDEX_HEURISTIC
+
 ## Approach:
 # We only define one fallback method on getindex for all argument types.
 # That dispatches to an (inlined) internal _getindex function, where the goal is
@@ -3007,7 +3011,7 @@ end
 @inline function _stack_size_check(x, ax1::Tuple)
     if _iterator_axes(x) != ax1
         uax1 = map(UnitRange, ax1)
-        uaxN = map(UnitRange, axes(x))
+        uaxN = map(UnitRange, _iterator_axes(x))
         throw(DimensionMismatch(
             LazyString("stack expects uniform slices, got axes(x) == ", uaxN, " while first had ", uax1)))
     end
