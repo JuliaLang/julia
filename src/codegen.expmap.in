@@ -17,8 +17,8 @@
     llvmGetPassPluginInfo;
 
     /* freebsd */
-    environ;
-    __progname;
+    environ*;
+    __progname*;
 
   local:
     *;

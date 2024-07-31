@@ -2,6 +2,7 @@
   global:
     pthread*;
     __stack_chk_*;
+    asprintf;
     bitvector_*;
     ios_*;
     arraylist_grow;
@@ -30,8 +31,8 @@
     JLJIT*;
 
     /* freebsd */
-    environ;
-    __progname;
+    environ*;
+    __progname*;
 
   local:
     *;
