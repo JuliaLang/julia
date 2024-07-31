@@ -791,5 +791,5 @@ end
 
     @test mapreduce(identity, &, [3,7,6]; dims=1) == [mapreduce(identity, &, [3,7,6])] == [3 & 7 & 6] == [2]
     @test mapreduce(identity, |, [3,7,6]; dims=1) == [mapreduce(identity, |, [3,7,6])] == [3 | 7 | 6] == [7]
-    @test mapreduce(identity, xor, [3,7,6]; dims=1) == [mapreduce(identity, xor, [3,7,6]] == [xor(xor(3, 7), 6)] == [2]
+    @test mapreduce(identity, xor, [3,7,6]; dims=1) == [mapreduce(identity, xor, [3,7,6])] == [xor(xor(3, 7), 6)] == [2]
 end
