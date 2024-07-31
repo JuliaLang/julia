@@ -1385,7 +1385,6 @@ ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /
 JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
 JLDFLAGS += -Wl,-Bdynamic
-OSLIBS += -Wl,--version-script=$(BUILDROOT)/src/julia.expmap
 ifneq ($(SANITIZE),1)
 JLDFLAGS += -Wl,-no-undefined
 endif
@@ -1417,8 +1416,7 @@ ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
 endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--undefined-version -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE)
+OSLIBS += -Wl,--export-dynamic $(NO_WHOLE_ARCHIVE)
 endif
 
 ifeq ($(OS), OpenBSD)
@@ -1431,7 +1429,7 @@ JLIBLDFLAGS += -Wl,-Bsymbolic-functions
 
 OSLIBS += -Wl,--no-as-needed -lpthread -lm -lc++abi -lc
 OSLIBS += -Wl,--whole-archive -lcompiler_rt -Wl,--no-whole-archive
-OSLIBS += -Wl,--export-dynamic,--as-needed,--version-script=$(BUILDROOT)/src/julia.expmap
+OSLIBS += -Wl,--export-dynamic,--as-needed
 endif
 
 ifeq ($(OS), Darwin)
@@ -1445,7 +1443,7 @@ endif
 
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
+OSLIBS += -Wl,--export-all-symbols  \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
 JLDFLAGS += -Wl,--stack,8388608 --disable-auto-import --disable-runtime-pseudo-reloc
 ifeq ($(ARCH),i686)

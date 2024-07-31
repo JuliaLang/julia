@@ -4,30 +4,18 @@
     __stack_chk_*;
     bitvector_*;
     ios_*;
-    arraylist_grow;
-    small_arraylist_grow;
     jl_*;
     ijl_*;
     _jl_mutex_*;
-    rec_backtrace;
     julia_*;
-    libsupport_init;
-    memhash;
-    memhash32;
-    memhash32_seed;
-    memhash_seed;
-    restore_signals;
     u8_*;
     uv_*;
     utf8proc_*;
-    jlbacktrace;
-    jlbacktracet;
-    _Z24jl_coverage_data_pointerN4llvm9StringRefEi;
-    _Z22jl_coverage_alloc_lineN4llvm9StringRefEi;
-    _Z22jl_malloc_data_pointerN4llvm9StringRefEi;
     _jl_timing_*;
     LLVMExtra*;
     JLJIT*;
+    llvmGetPassPluginInfo;
+
 
   local:
     *;

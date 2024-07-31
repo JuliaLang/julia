@@ -46,6 +46,7 @@ else
 LIBS += $(LIBUTF8PROC)
 endif
 
+OSLIBS += -Wl,--version-script=$(SRCDIR)/flisp.expmap
 
 FLAGS := -I$(LLTSRCDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
