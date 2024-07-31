@@ -499,7 +499,7 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
     std::string code;
     raw_string_ostream stream(code);
 
-    {
+    if (dump->F) {
         //RAII will release the module
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         //If TSM is not passed in, then the context MUST be locked externally.
@@ -1204,7 +1204,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
 {
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
-    { // scope block
+    if (dump->F) { // scope block also
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         llvm::raw_svector_ostream asmfile(ObjBufferSV);
         TSM->withModuleDo([&](Module &m) {

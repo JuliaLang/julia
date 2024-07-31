@@ -14,6 +14,8 @@ export libgfortran, libstdcxx, libgomp
 const PATH = Ref("")
 const LIBPATH = Ref("")
 artifact_dir::String = ""
+libgcc_s_handle::Ptr{Cvoid} = C_NULL
+libgcc_s_path::String = ""
 libgfortran_handle::Ptr{Cvoid} = C_NULL
 libgfortran_path::String = ""
 libstdcxx_handle::Ptr{Cvoid} = C_NULL

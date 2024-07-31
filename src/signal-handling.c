@@ -309,6 +309,11 @@ static void jl_check_profile_autostop(void)
     }
 }
 
+static void stack_overflow_warning(void)
+{
+    jl_safe_printf("Warning: detected a stack overflow; program state may be corrupted, so further execution might be unreliable.\n");
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
@@ -335,6 +340,8 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
     return ((CONTEXT*)_ctx)->Rip;
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     return ((ucontext_t*)_ctx)->uc_mcontext.pc;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.mc_gpregs.gp_elr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     return ((ucontext_t*)_ctx)->uc_mcontext.arm_pc;
 #else

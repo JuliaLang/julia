@@ -1,4 +1,4 @@
 JULIASYNTAXHIGHLIGHTING_BRANCH = main
-JULIASYNTAXHIGHLIGHTING_SHA1 = 4110caaf4fcdf0c614fd3ecd7c5bf589ca82ac63
+JULIASYNTAXHIGHLIGHTING_SHA1 = a463611e715c9ec546ac8463c38b6890d892e0c8
 JULIASYNTAXHIGHLIGHTING_GIT_URL := https://github.com/julialang/JuliaSyntaxHighlighting.jl.git
 JULIASYNTAXHIGHLIGHTING_TAR_URL = https://api.github.com/repos/julialang/JuliaSyntaxHighlighting.jl/tarball/$1

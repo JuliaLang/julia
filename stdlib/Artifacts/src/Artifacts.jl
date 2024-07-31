@@ -9,7 +9,9 @@ that would be convenient to place within an immutable, life-cycled datastore.
 module Artifacts
 
 import Base: get, SHA1
-using Base.BinaryPlatforms, Base.TOML
+using Base.BinaryPlatforms: AbstractPlatform, Platform, HostPlatform
+using Base.BinaryPlatforms: tags, triplet, select_platform
+using Base.TOML: TOML
 
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
        select_downloadable_artifacts, find_artifacts_toml, @artifact_str
@@ -400,7 +402,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
 
     # If it's an array, find the entry that best matches our current platform
     if isa(meta, Vector)
-        dl_dict = Dict{AbstractPlatform,Dict{String,Any}}()
+        dl_dict = Dict{Platform,Dict{String,Any}}()
         for x in meta
             x = x::Dict{String, Any}
             dl_dict[unpack_platform(x, name, artifacts_toml)] = x
@@ -543,10 +545,10 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, @nospecialize(lazyartifacts))
-    moduleroot = Base.moduleroot(__module__)
-    if haskey(Base.module_keys, moduleroot)
+    pkg = Base.PkgId(__module__)
+    if pkg.uuid !== nothing
         # Process overrides for this UUID, if we know what it is
-        process_overrides(artifact_dict, Base.module_keys[moduleroot].uuid)
+        process_overrides(artifact_dict, pkg.uuid)
     end
 
     # If the artifact exists, we're in the happy path and we can immediately

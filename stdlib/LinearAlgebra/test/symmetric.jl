@@ -223,8 +223,8 @@ end
 
         @testset "linalg unary ops" begin
             @testset "tr" begin
-                @test tr(asym) == tr(Symmetric(asym))
-                @test tr(aherm) == tr(Hermitian(aherm))
+                @test tr(asym) ≈ tr(Symmetric(asym))
+                @test tr(aherm) ≈ tr(Hermitian(aherm))
             end
 
             @testset "isposdef[!]" begin
@@ -1094,6 +1094,16 @@ end
         B = T(view(M, 1:3, 1:3), uploB)
         B2 = copy(B)
         @test copyto!(A, B) == B2
+    end
+end
+
+@testset "copyto with incompatible sizes" begin
+    A = zeros(3,3); B = zeros(2,2)
+    @testset "copyto with incompatible sizes" begin
+        for T in (Symmetric, Hermitian)
+            @test_throws BoundsError copyto!(T(B), T(A))
+            @test_throws "Cannot set a non-diagonal index" copyto!(T(A), T(B))
+        end
     end
 end
 

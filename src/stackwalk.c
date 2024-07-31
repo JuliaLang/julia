@@ -5,6 +5,7 @@
   utilities for walking the stack and looking up information about code addresses
 */
 #include <inttypes.h>
+#include "gc.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"
@@ -969,10 +970,12 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         c.R15 = mctx->R15;
         c.Rip = mctx->Rip;
         memcpy(&c.Xmm6, &mctx->Xmm6, 10 * sizeof(mctx->Xmm6)); // Xmm6-Xmm15
-#else
+#elif defined(_CPU_X86_)
         c.Eip = mctx->Eip;
         c.Esp = mctx->Esp;
         c.Ebp = mctx->Ebp;
+#else
+        #error Windows is currently only supported on x86 and x86_64
 #endif
         context = &c;
 #elif defined(JL_HAVE_UNW_CONTEXT)
@@ -1134,9 +1137,10 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         (void)mctx;
         (void)c;
       #endif
-     #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
+     #elif defined(_OS_FREEBSD_)
         sigjmp_buf *mctx = &t->ctx.ctx.uc_mcontext;
         mcontext_t *mc = &c.uc_mcontext;
+      #if defined(_CPU_X86_64_)
         // https://github.com/freebsd/freebsd-src/blob/releng/13.1/lib/libc/amd64/gen/_setjmp.S
         mc->mc_rip = ((long*)mctx)[0];
         mc->mc_rbx = ((long*)mctx)[1];
@@ -1147,12 +1151,38 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         mc->mc_r14 = ((long*)mctx)[6];
         mc->mc_r15 = ((long*)mctx)[7];
         context = &c;
+      #elif defined(_CPU_AARCH64_)
+        mc->mc_gpregs.gp_x[19] = ((long*)mctx)[0];
+        mc->mc_gpregs.gp_x[20] = ((long*)mctx)[1];
+        mc->mc_gpregs.gp_x[21] = ((long*)mctx)[2];
+        mc->mc_gpregs.gp_x[22] = ((long*)mctx)[3];
+        mc->mc_gpregs.gp_x[23] = ((long*)mctx)[4];
+        mc->mc_gpregs.gp_x[24] = ((long*)mctx)[5];
+        mc->mc_gpregs.gp_x[25] = ((long*)mctx)[6];
+        mc->mc_gpregs.gp_x[26] = ((long*)mctx)[7];
+        mc->mc_gpregs.gp_x[27] = ((long*)mctx)[8];
+        mc->mc_gpregs.gp_x[28] = ((long*)mctx)[9];
+        mc->mc_gpregs.gp_x[29] = ((long*)mctx)[10];
+        mc->mc_gpregs.gp_lr = ((long*)mctx)[11];
+        mc->mc_gpregs.gp_sp = ((long*)mctx)[12];
+        mc->mc_fpregs.fp_q[7] = ((long*)mctx)[13];
+        mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14];
+        mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15];
+        mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16];
+        mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17];
+        mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18];
+        mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19];
+        mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20];
+        context = &c;
+      #else
+       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown freebsd")
+        (void)mctx;
+        (void)c;
+      #endif
      #else
       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
       (void)c;
      #endif
-#elif defined(JL_HAVE_SIGALTSTACK)
-     #pragma message("jl_rec_backtrace not defined for SIGALTSTACK")
 #else
      #pragma message("jl_rec_backtrace not defined for unknown task system")
 #endif
@@ -1215,15 +1245,19 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (size_t i = 0; i < nthreads; i++) {
-        // skip GC threads since they don't have tasks
-        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
+        jl_ptls_t ptls2 = allstates[i];
+        if (gc_is_parallel_collector_thread(i)) {
+            jl_safe_printf("==== Skipping backtrace for parallel GC thread %zu\n", i + 1);
             continue;
         }
-        jl_ptls_t ptls2 = allstates[i];
+        if (gc_is_concurrent_collector_thread(i)) {
+            jl_safe_printf("==== Skipping backtrace for concurrent GC thread %zu\n", i + 1);
+            continue;
+        }
         if (ptls2 == NULL) {
             continue;
         }
-        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
         int t_state = JL_TASK_STATE_DONE;
         jl_task_t *t = ptls2->root_task;

@@ -221,6 +221,7 @@ const HermOrSym{T,        S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
+const SelfAdjoint = Union{Symmetric{<:Real}, Hermitian{<:Number}}
 
 size(A::HermOrSym) = size(A.data)
 axes(A::HermOrSym) = axes(A.data)
@@ -322,22 +323,6 @@ end
 # storage type of A (not wrapped in a symmetry type). The following method covers these cases.
 similar(A::Union{Symmetric,Hermitian}, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
-# Conversion
-function Matrix{T}(A::Symmetric) where {T}
-    B = copytri!(convert(Matrix{T}, copy(A.data)), A.uplo)
-    for i = 1:size(A, 1)
-        B[i,i] = symmetric(A[i,i], sym_uplo(A.uplo))::symmetric_type(eltype(A.data))
-    end
-    return B
-end
-function Matrix{T}(A::Hermitian) where {T}
-    B = copytri!(convert(Matrix{T}, copy(A.data)), A.uplo, true)
-    for i = 1:size(A, 1)
-        B[i,i] = hermitian(A[i,i], sym_uplo(A.uplo))::hermitian_type(eltype(A.data))
-    end
-    return B
-end
-
 parent(A::HermOrSym) = A.data
 Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:AbstractMatrix{T}} = A
 Symmetric{T,S}(A::Symmetric) where {T,S<:AbstractMatrix{T}} = Symmetric{T,S}(convert(S,A.data),A.uplo)
@@ -352,7 +337,9 @@ copy(A::Symmetric) = (Symmetric(parentof_applytri(copy, A), sym_uplo(A.uplo)))
 copy(A::Hermitian) = (Hermitian(parentof_applytri(copy, A), sym_uplo(A.uplo)))
 
 function copyto!(dest::Symmetric, src::Symmetric)
-    if src.uplo == dest.uplo
+    if axes(dest) != axes(src)
+        @invoke copyto!(dest::AbstractMatrix, src::AbstractMatrix)
+    elseif src.uplo == dest.uplo
         copytrito!(dest.data, src.data, src.uplo)
     else
         transpose!(dest.data, Base.unalias(dest.data, src.data))
@@ -361,12 +348,42 @@ function copyto!(dest::Symmetric, src::Symmetric)
 end
 
 function copyto!(dest::Hermitian, src::Hermitian)
-    if src.uplo == dest.uplo
+    if axes(dest) != axes(src)
+        @invoke copyto!(dest::AbstractMatrix, src::AbstractMatrix)
+    elseif src.uplo == dest.uplo
         copytrito!(dest.data, src.data, src.uplo)
     else
         adjoint!(dest.data, Base.unalias(dest.data, src.data))
     end
     return dest
+end
+
+@propagate_inbounds function copyto!(dest::StridedMatrix, A::HermOrSym)
+    if axes(dest) != axes(A)
+        @invoke copyto!(dest::StridedMatrix, A::AbstractMatrix)
+    else
+        _copyto!(dest, Base.unalias(dest, A))
+    end
+    return dest
+end
+@propagate_inbounds function _copyto!(dest::StridedMatrix, A::HermOrSym)
+    copytrito!(dest, parent(A), A.uplo)
+    conjugate = A isa Hermitian
+    copytri!(dest, A.uplo, conjugate)
+    _symmetrize_diagonal!(dest, A)
+    return dest
+end
+@inline function _symmetrize_diagonal!(B, A::Symmetric)
+    for i = 1:size(A, 1)
+        B[i,i] = symmetric(A[i,i], sym_uplo(A.uplo))::symmetric_type(eltype(A.data))
+    end
+    return B
+end
+@inline function _symmetrize_diagonal!(B, A::Hermitian)
+    for i = 1:size(A, 1)
+        B[i,i] = hermitian(A[i,i], sym_uplo(A.uplo))::hermitian_type(eltype(A.data))
+    end
+    return B
 end
 
 # fill[stored]!

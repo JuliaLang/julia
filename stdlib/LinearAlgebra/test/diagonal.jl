@@ -1322,4 +1322,29 @@ end
     @test M == D
 end
 
+@testset "rmul!/lmul! with banded matrices" begin
+    @testset "$(nameof(typeof(B)))" for B in (
+                            Bidiagonal(rand(4), rand(3), :L),
+                            Tridiagonal(rand(3), rand(4), rand(3))
+                    )
+        BA = Array(B)
+        D = Diagonal(rand(size(B,1)))
+        DA = Array(D)
+        @test rmul!(copy(B), D) ≈ B * D ≈ BA * DA
+        @test lmul!(D, copy(B)) ≈ D * B ≈ DA * BA
+    end
+end
+
+@testset "+/- with block Symmetric/Hermitian" begin
+    for p in ([1 2; 3 4], [1 2+im; 2-im 4+2im])
+        m = SizedArrays.SizedArray{(2,2)}(p)
+        D = Diagonal(fill(m, 2))
+        for T in (Symmetric, Hermitian)
+            S = T(fill(m, 2, 2))
+            @test D + S == Array(D) + Array(S)
+            @test S + D == Array(S) + Array(D)
+        end
+    end
+end
+
 end # module TestDiagonal

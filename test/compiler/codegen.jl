@@ -222,18 +222,18 @@ if opt_level > 0
     @test occursin("call i32 @memcmp(", compare_large_struct_ir) || occursin("call i32 @bcmp(", compare_large_struct_ir)
     @test !occursin("%gcframe", compare_large_struct_ir)
 
-    @test occursin("jl_gc_pool_alloc", get_llvm(MutableStruct, Tuple{}))
+    @test occursin("jl_gc_small_alloc", get_llvm(MutableStruct, Tuple{}))
     breakpoint_mutable_ir = get_llvm(breakpoint_mutable, Tuple{MutableStruct})
     @test !occursin("%gcframe", breakpoint_mutable_ir)
-    @test !occursin("jl_gc_pool_alloc", breakpoint_mutable_ir)
+    @test !occursin("jl_gc_small_alloc", breakpoint_mutable_ir)
 
     breakpoint_badref_ir = get_llvm(breakpoint_badref, Tuple{MutableStruct})
     @test !occursin("%gcframe", breakpoint_badref_ir)
-    @test !occursin("jl_gc_pool_alloc", breakpoint_badref_ir)
+    @test !occursin("jl_gc_small_alloc", breakpoint_badref_ir)
 
     breakpoint_ptrstruct_ir = get_llvm(breakpoint_ptrstruct, Tuple{RealStruct})
     @test !occursin("%gcframe", breakpoint_ptrstruct_ir)
-    @test !occursin("jl_gc_pool_alloc", breakpoint_ptrstruct_ir)
+    @test !occursin("jl_gc_small_alloc", breakpoint_ptrstruct_ir)
 end
 
 function two_breakpoint(a::Float64)
@@ -251,17 +251,17 @@ end
 if opt_level > 0
     breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Cvoid, (Ref{Float64},), a),
                                  Tuple{Float64})
-    @test !occursin("jl_gc_pool_alloc", breakpoint_f64_ir)
+    @test !occursin("jl_gc_small_alloc", breakpoint_f64_ir)
     breakpoint_any_ir = get_llvm((a)->ccall(:jl_breakpoint, Cvoid, (Ref{Any},), a),
                                  Tuple{Float64})
-    @test occursin("jl_gc_pool_alloc", breakpoint_any_ir)
+    @test occursin("jl_gc_small_alloc", breakpoint_any_ir)
     two_breakpoint_ir = get_llvm(two_breakpoint, Tuple{Float64})
-    @test !occursin("jl_gc_pool_alloc", two_breakpoint_ir)
+    @test !occursin("jl_gc_small_alloc", two_breakpoint_ir)
     @test occursin("llvm.lifetime.end", two_breakpoint_ir)
 
     @test load_dummy_ref(1234) === 1234
     load_dummy_ref_ir = get_llvm(load_dummy_ref, Tuple{Int})
-    @test !occursin("jl_gc_pool_alloc", load_dummy_ref_ir)
+    @test !occursin("jl_gc_small_alloc", load_dummy_ref_ir)
     # Hopefully this is reliable enough. LLVM should be able to optimize this to a direct return.
     @test occursin("ret $Iptr %\"x::$(Int)\"", load_dummy_ref_ir)
 end
@@ -859,7 +859,7 @@ foo50964(1) # Shouldn't assert!
 
 # https://github.com/JuliaLang/julia/issues/51233
 obj51233 = (1,)
-@test_throws ErrorException obj51233.x
+@test_throws FieldError obj51233.x
 
 # Very specific test for multiversioning
 if Sys.ARCH === :x86_64
@@ -938,3 +938,21 @@ BigStructAnyInt() = BigStructAnyInt((Union{Base.inferencebarrier(Float64), Int}=
 @test egal_any54109(Torture1_54109(), Torture1_54109())
 @test egal_any54109(Torture2_54109(), Torture2_54109())
 @test !egal_any54109(Torture1_54109(), Torture1_54109((DefaultOr54109(2.0, false) for i = 1:897)...))
+
+bar54599() = Base.inferencebarrier(true) ? (Base.PkgId(Main),1) : nothing
+
+function foo54599()
+    pkginfo = @noinline bar54599()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    @noinline println(devnull, pkgid)
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+
+#this function used to crash allocopt due to a no predecessors bug
+barnopreds() = Base.inferencebarrier(true) ? (Base.PkgId(Test),1) : nothing
+function foonopreds()
+    pkginfo = @noinline barnopreds()
+    pkgid = pkginfo !== nothing ? pkginfo[1] : nothing
+    pkgid.uuid !== nothing ? pkgid.uuid : false
+end
+@test foonopreds() !== nothing

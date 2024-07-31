@@ -211,7 +211,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
             A[k,k] = Akk
             AkkInv = inv(copy(Akk'))
             for j = k + 1:n
-                for i = 1:k - 1
+                @simd for i = 1:k - 1
                     A[k,j] -= A[i,k]'A[i,j]
                 end
                 A[k,j] = AkkInv*A[k,j]
@@ -236,14 +236,15 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
                 return LowerTriangular(A), convert(BlasInt, k)
             end
             A[k,k] = Akk
-            AkkInv = inv(Akk)
+            AkkInv = inv(copy(Akk'))
             for j = 1:k - 1
+                Akjc = A[k,j]'
                 @simd for i = k + 1:n
-                    A[i,k] -= A[i,j]*A[k,j]'
+                    A[i,k] -= A[i,j]*Akjc
                 end
             end
-            for i = k + 1:n
-                A[i,k] *= AkkInv'
+            @simd for i = k + 1:n
+                A[i,k] *= AkkInv
             end
         end
      end
@@ -255,16 +256,164 @@ function _chol!(x::Number, _)
     rx = real(x)
     iszero(rx) && return (rx, convert(BlasInt, 1))
     rxr = sqrt(abs(rx))
-    rval =  convert(promote_type(typeof(x), typeof(rxr)), rxr)
+    rval = convert(promote_type(typeof(x), typeof(rxr)), rxr)
     return (rval, convert(BlasInt, rx != abs(x)))
 end
 
-## for StridedMatrices, check that matrix is symmetric/Hermitian
+# _cholpivoted!. Internal methods for calling pivoted Cholesky
+Base.@propagate_inbounds function _swap_rowcols!(A, ::Type{UpperTriangular}, n, j, q)
+    j == q && return
+    @assert j < q
+    # swap rows and cols without touching the possibly undef-ed triangle
+    A[q, q] = A[j, j]
+    for k in 1:j-1 # initial vertical segments
+        A[k,j], A[k,q] = A[k,q], A[k,j]
+    end
+    for k in j+1:q-1 # intermediate segments
+        A[j,k], A[k,q] = conj(A[k,q]), conj(A[j,k])
+    end
+    A[j,q] = conj(A[j,q]) # corner case
+    for k in q+1:n # final horizontal segments
+        A[j,k], A[q,k] = A[q,k], A[j,k]
+    end
+    return
+end
+Base.@propagate_inbounds function _swap_rowcols!(A, ::Type{LowerTriangular}, n, j, q)
+    j == q && return
+    @assert j < q
+    # swap rows and cols without touching the possibly undef-ed triangle
+    A[q, q] = A[j, j]
+    for k in 1:j-1 # initial horizontal segments
+        A[j,k], A[q,k] = A[q,k], A[j,k]
+    end
+    for k in j+1:q-1 # intermediate segments
+        A[k,j], A[q,k] = conj(A[q,k]), conj(A[k,j])
+    end
+    A[q,j] = conj(A[q,j]) # corner case
+    for k in q+1:n # final vertical segments
+        A[k,j], A[k,q] = A[k,q], A[k,j]
+    end
+    return
+end
+### BLAS/LAPACK element types
+_cholpivoted!(A::StridedMatrix{<:BlasFloat}, ::Type{UpperTriangular}, tol::Real, check::Bool) =
+    LAPACK.pstrf!('U', A, tol)
+_cholpivoted!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular}, tol::Real, check::Bool) =
+    LAPACK.pstrf!('L', A, tol)
+## Non BLAS/LAPACK element types (generic)
+function _cholpivoted!(A::AbstractMatrix, ::Type{UpperTriangular}, tol::Real, check::Bool)
+    rTA = real(eltype(A))
+    # checks
+    Base.require_one_based_indexing(A)
+    n = LinearAlgebra.checksquare(A)
+    # initialization
+    piv = collect(1:n)
+    dots = zeros(rTA, n)
+    temp = similar(dots)
+
+    @inbounds begin
+        # first step
+        Akk, q = findmax(i -> real(A[i,i]), 1:n)
+        stop = tol < 0 ? eps(rTA)*n*abs(Akk) : tol
+        Akk ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
+        # swap
+        _swap_rowcols!(A, UpperTriangular, n, 1, q)
+        piv[1], piv[q] = piv[q], piv[1]
+        A[1,1] = Akk = sqrt(Akk)
+        AkkInv = inv(copy(Akk'))
+        @simd for j in 2:n
+            A[1, j] *= AkkInv
+        end
+
+        for k in 2:n
+            @simd for j in k:n
+                dots[j] += abs2(A[k-1, j])
+                temp[j] = real(A[j,j]) - dots[j]
+            end
+            Akk, q = findmax(j -> temp[j], k:n)
+            Akk ≤ stop && return A, piv, convert(BlasInt, k - 1), convert(BlasInt, 1)
+            q += k - 1
+            # swap
+            _swap_rowcols!(A, UpperTriangular, n, k, q)
+            dots[k], dots[q] = dots[q], dots[k]
+            piv[k], piv[q] = piv[q], piv[k]
+            # update
+            A[k,k] = Akk = sqrt(Akk)
+            AkkInv = inv(copy(Akk'))
+            for j in (k+1):n
+                @simd for i in 1:(k-1)
+                    A[k,j] -= A[i,k]'A[i,j]
+                end
+                A[k,j] = AkkInv * A[k,j]
+            end
+        end
+        return A, piv, convert(BlasInt, n), convert(BlasInt, 0)
+    end
+end
+function _cholpivoted!(A::AbstractMatrix, ::Type{LowerTriangular}, tol::Real, check::Bool)
+    rTA = real(eltype(A))
+    # checks
+    Base.require_one_based_indexing(A)
+    n = LinearAlgebra.checksquare(A)
+    # initialization
+    piv = collect(1:n)
+    dots = zeros(rTA, n)
+    temp = similar(dots)
+
+    @inbounds begin
+        # first step
+        Akk, q = findmax(i -> real(A[i,i]), 1:n)
+        stop = tol < 0 ? eps(rTA)*n*abs(Akk) : tol
+        Akk ≤ stop && return A, piv, convert(BlasInt, 0), convert(BlasInt, 1)
+        # swap
+        _swap_rowcols!(A, LowerTriangular, n, 1, q)
+        piv[1], piv[q] = piv[q], piv[1]
+        A[1,1] = Akk = sqrt(Akk)
+        AkkInv = inv(copy(Akk'))
+        @simd for i in 2:n
+            A[i,1] *= AkkInv
+        end
+
+        for k in 2:n
+            @simd for j in k:n
+                dots[j] += abs2(A[j, k-1])
+                temp[j] = real(A[j,j]) - dots[j]
+            end
+            Akk, q = findmax(i -> temp[i], k:n)
+            Akk ≤ stop && return A, piv, convert(BlasInt, k-1), convert(BlasInt, 1)
+            q += k - 1
+            # swap
+            _swap_rowcols!(A, LowerTriangular, n, k, q)
+            dots[k], dots[q] = dots[q], dots[k]
+            piv[k], piv[q] = piv[q], piv[k]
+            # update
+            A[k,k] = Akk = sqrt(Akk)
+            for j in 1:(k-1)
+                Akjc = A[k,j]'
+                @simd for i in (k+1):n
+                    A[i,k] -= A[i,j]*Akjc
+                end
+            end
+            AkkInv = inv(copy(Akk'))
+            @simd for i in (k+1):n
+                A[i, k] *= AkkInv
+            end
+        end
+        return A, piv, convert(BlasInt, n), convert(BlasInt, 0)
+    end
+end
+function _cholpivoted!(x::Number, tol)
+    rx = real(x)
+    iszero(rx) && return (rx, convert(BlasInt, 1))
+    rxr = sqrt(abs(rx))
+    rval = convert(promote_type(typeof(x), typeof(rxr)), rxr)
+    return (rval, convert(BlasInt, !(rx == abs(x) > tol)))
+end
 
 # cholesky!. Destructive methods for computing Cholesky factorization of real symmetric
 # or Hermitian matrix
 ## No pivoting (default)
-function cholesky!(A::RealHermSymComplexHerm, ::NoPivot = NoPivot(); check::Bool = true)
+function cholesky!(A::SelfAdjoint, ::NoPivot = NoPivot(); check::Bool = true)
     C, info = _chol!(A.data, A.uplo == 'U' ? UpperTriangular : LowerTriangular)
     check && checkpositivedefinite(info)
     return Cholesky(C.data, A.uplo, info)
@@ -295,7 +444,7 @@ Stacktrace:
 function cholesky!(A::AbstractMatrix, ::NoPivot = NoPivot(); check::Bool = true)
     checksquare(A)
     if !ishermitian(A) # return with info = -1 if not Hermitian
-        check && checkpositivedefinite(-1)
+        check && checkpositivedefinite(convert(BlasInt, -1))
         return Cholesky(A, 'U', convert(BlasInt, -1))
     else
         return cholesky!(Hermitian(A), NoPivot(); check = check)
@@ -305,23 +454,15 @@ end
 @deprecate cholesky!(A::RealHermSymComplexHerm, ::Val{false}; check::Bool = true) cholesky!(A, NoPivot(); check) false
 
 ## With pivoting
-### BLAS/LAPACK element types
-function cholesky!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
-                   ::RowMaximum; tol = 0.0, check::Bool = true)
-    AA, piv, rank, info = LAPACK.pstrf!(A.uplo, A.data, tol)
-    C = CholeskyPivoted{eltype(AA),typeof(AA),typeof(piv)}(AA, A.uplo, piv, rank, tol, info)
+### Non BLAS/LAPACK element types (generic).
+function cholesky!(A::SelfAdjoint, ::RowMaximum; tol = 0.0, check::Bool = true)
+    AA, piv, rank, info = _cholpivoted!(A.data, A.uplo == 'U' ? UpperTriangular : LowerTriangular, tol, check)
+    C = CholeskyPivoted(AA, A.uplo, piv, rank, tol, info)
     check && chkfullrank(C)
     return C
 end
-@deprecate cholesky!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
-
-### Non BLAS/LAPACK element types (generic). Since generic fallback for pivoted Cholesky
-### is not implemented yet we throw an error
-cholesky!(A::RealHermSymComplexHerm{<:Real}, ::RowMaximum; tol = 0.0, check::Bool = true) =
-    throw(ArgumentError("generic pivoted Cholesky factorization is not implemented yet"))
 @deprecate cholesky!(A::RealHermSymComplexHerm{<:Real}, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
 
-### for AbstractMatrix, check that matrix is symmetric/Hermitian
 """
     cholesky!(A::AbstractMatrix, RowMaximum(); tol = 0.0, check = true) -> CholeskyPivoted
 
@@ -333,12 +474,12 @@ e.g. for integer types.
 function cholesky!(A::AbstractMatrix, ::RowMaximum; tol = 0.0, check::Bool = true)
     checksquare(A)
     if !ishermitian(A)
-        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(),convert(BlasInt, 1),
+        C = CholeskyPivoted(A, 'U', Vector{BlasInt}(), convert(BlasInt, 1),
                             tol, convert(BlasInt, -1))
-        check && chkfullrank(C)
+        check && checkpositivedefinite(convert(BlasInt, -1))
         return C
     else
-        return cholesky!(Hermitian(A), RowMaximum(); tol = tol, check = check)
+        return cholesky!(Hermitian(A), RowMaximum(); tol, check)
     end
 end
 @deprecate cholesky!(A::StridedMatrix, ::Val{true}; kwargs...) cholesky!(A, RowMaximum(); kwargs...) false
@@ -738,7 +879,7 @@ end
 
 function chkfullrank(C::CholeskyPivoted)
     if C.rank < size(C.factors, 1)
-        throw(RankDeficientException(C.info))
+        throw(RankDeficientException(C.rank))
     end
 end
 

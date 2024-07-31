@@ -269,6 +269,7 @@ function init_active_project()
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
+cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 
 function load_path_expand(env::AbstractString)::Union{String, Nothing}
     # named environment?
@@ -277,13 +278,14 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@.` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
+        env == "@temp" && return mktempdir()
         env == "@stdlib" && return Sys.STDLIB
         if startswith(env, "@script")
             if @isdefined(PROGRAM_FILE)
                 dir = dirname(PROGRAM_FILE)
             else
-                cmds = unsafe_load_commands(opts.commands)
-                if any((cmd, arg)->cmd_suppresses_program(cmd), cmds)
+                cmds = unsafe_load_commands(JLOptions().commands)
+                if any(cmd::Pair{Char, String}->cmd_suppresses_program(first(cmd)), cmds)
                     # Usage error. The user did not pass a script.
                     return nothing
                 end

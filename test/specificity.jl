@@ -316,3 +316,14 @@ end
 @test args_morespecific(Tuple{typeof(Union{}), Any}, Tuple{Any, Type{Union{}}})
 @test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any}, Tuple{Type{Union{}}, Any, Type{Union{}}})
 @test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any, Type{Union{}}}, Tuple{Type{Union{}}, Any, Type{Union{}}, Type{Union{}}})
+
+# requires assertions enabled
+let root = NTuple
+    N = root.var
+    T = root.body.var
+    x1 = root.body.body
+    x2 = Dict{T,Tuple{N}}
+    A = UnionAll(N, UnionAll(T, Tuple{Union{x1, x2}}))
+    B = Tuple{Union{UnionAll(N, UnionAll(T, x1)), UnionAll(N, UnionAll(T, x2))}}
+    @ccall jl_type_morespecific_no_subtype(A::Any, B::Any)::Cint
+end

@@ -403,26 +403,23 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         CreateTrap(ctx.builder);
         return UndefValue::get(to);
     }
-    if (frompointer && topointer) {
-        unboxed = emit_bitcast(ctx, unboxed, to);
-    }
     else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
         assert(DL.getTypeSizeInBits(ty) == DL.getTypeSizeInBits(to));
         AllocaInst *cast = ctx.builder.CreateAlloca(ty);
         setName(ctx.emission_context, cast, "coercion");
         ctx.builder.CreateStore(unboxed, cast);
-        unboxed = ctx.builder.CreateLoad(to, ctx.builder.CreateBitCast(cast, to->getPointerTo()));
+        unboxed = ctx.builder.CreateLoad(to, cast);
     }
     else if (frompointer) {
         Type *INTT_to = INTT(to, DL);
         unboxed = ctx.builder.CreatePtrToInt(unboxed, INTT_to);
         setName(ctx.emission_context, unboxed, "coercion");
-        if (INTT_to != to)
+        if (INTT_to != to) //TODO when is this true?
             unboxed = ctx.builder.CreateBitCast(unboxed, to);
     }
     else if (topointer) {
         Type *INTT_to = INTT(to, DL);
-        if (to != INTT_to)
+        if (to != INTT_to) //TODO when is this true?
             unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
         unboxed = emit_inttoptr(ctx, unboxed, to);
         setName(ctx.emission_context, unboxed, "coercion");
@@ -460,7 +457,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
 
     if (jt == (jl_value_t*)jl_bool_type || to->isIntegerTy(1)) {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
-        Instruction *unbox_load = ai.decorateInst(ctx.builder.CreateLoad(getInt8Ty(ctx.builder.getContext()), maybe_bitcast(ctx, p, getInt8PtrTy(ctx.builder.getContext()))));
+        Instruction *unbox_load = ai.decorateInst(ctx.builder.CreateLoad(getInt8Ty(ctx.builder.getContext()), p));
         setName(ctx.emission_context, unbox_load, p->getName() + ".unbox");
         if (jt == (jl_value_t*)jl_bool_type)
             unbox_load->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
@@ -494,7 +491,6 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
             return emit_unboxed_coercion(ctx, to, ai.decorateInst(load));
         }
     }
-    p = maybe_bitcast(ctx, p, ptype);
     Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
     setName(ctx.emission_context, load, p->getName() + ".unbox");
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
@@ -514,9 +510,6 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
         assert(x.V);
         Value *unboxed = zext_struct(ctx, x.V);
-        Type *dest_ty = unboxed->getType()->getPointerTo();
-        if (dest->getType() != dest_ty)
-            dest = emit_bitcast(ctx, dest, dest_ty);
         StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, Align(alignment));
         store->setVolatile(isVolatile);
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
@@ -617,8 +610,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, v.tbaa);
         vx = ai.decorateInst(ctx.builder.CreateLoad(
             storage_type,
-            emit_bitcast(ctx, data_pointer(ctx, v),
-                storage_type->getPointerTo())));
+            data_pointer(ctx, v)));
         setName(ctx.emission_context, vx, "bitcast");
     }
 
@@ -640,11 +632,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
                 setName(ctx.emission_context, vx, "bitcast_coercion");
         } else if (vxt->isPointerTy() && llvmt->isPointerTy()) {
             // emit_bitcast preserves the origin address space, which we can't have here
-            #if JL_LLVM_VERSION >= 170000
             vx = ctx.builder.CreateAddrSpaceCast(vx, llvmt);
-            #else
-            vx = ctx.builder.CreatePointerBitCastOrAddrSpaceCast(vx, llvmt);
-            #endif
             if (isa<Instruction>(vx) && !vx->hasName())
                 // cast may have been folded
                 setName(ctx.emission_context, vx, "bitcast_coercion");
@@ -778,8 +766,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         setName(ctx.emission_context, im1, "pointerref_offset");
-        Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
-        thePtr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, thePtr, getInt8PtrTy(ctx.builder.getContext())), im1);
+        Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
+        thePtr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), thePtr, im1);
         setName(ctx.emission_context, thePtr, "pointerref_src");
         MDNode *tbaa = best_tbaa(ctx.tbaa(), ety);
         emit_memcpy(ctx, strct, jl_aliasinfo_t::fromTBAA(ctx, tbaa), thePtr, jl_aliasinfo_t::fromTBAA(ctx, nullptr), size, sizeof(jl_value_t*), align_nb);
@@ -852,7 +840,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         ai.decorateInst(store);
     }
     else if (x.ispointer()) {
-        thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
+        thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
@@ -961,16 +949,15 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
         assert(jl_is_datatype(ety));
         Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety, true);
         setName(ctx.emission_context, strct, "atomic_pointerref_box");
-        Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
+        Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
         Type *loadT = Type::getIntNTy(ctx.builder.getContext(), nb * 8);
-        thePtr = emit_bitcast(ctx, thePtr, loadT->getPointerTo());
         MDNode *tbaa = best_tbaa(ctx.tbaa(), ety);
         LoadInst *load = ctx.builder.CreateAlignedLoad(loadT, thePtr, Align(nb));
         setName(ctx.emission_context, load, "atomic_pointerref");
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         ai.decorateInst(load);
         load->setOrdering(llvm_order);
-        thePtr = emit_bitcast(ctx, strct, thePtr->getType());
+        thePtr = strct;
         StoreInst *store = ctx.builder.CreateAlignedStore(load, thePtr, Align(julia_alignment(ety)));
         ai.decorateInst(store);
         return mark_julia_type(ctx, strct, true, ety);
@@ -1060,7 +1047,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
 
     if (!jl_isbits(ety)) {
         //if (!deserves_stack(ety))
-        //Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
+        //Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
         //uint64_t size = jl_datatype_size(ety);
         return emit_runtime_call(ctx, f, argv, nargs); // TODO: optimizations
     }
@@ -1211,8 +1198,6 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             else {
                 x_ptr = decay_derived(ctx, x_ptr);
                 y_ptr = decay_derived(ctx, y_ptr);
-                if (x_ptr->getType() != y_ptr->getType())
-                    y_ptr = ctx.builder.CreateBitCast(y_ptr, x_ptr->getType());
                 ifelse_result = ctx.builder.CreateSelect(isfalse, y_ptr, x_ptr);
                 setName(ctx.emission_context, ifelse_result, "ifelse_result");
                 ifelse_tbaa = MDNode::getMostGenericTBAA(x.tbaa, y.tbaa);

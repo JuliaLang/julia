@@ -24,7 +24,8 @@ const __internal_changes_list = (
     :invertedlinetables,
     :codeinforefactor,
     :miuninferredrm,
-    :codeinfonargs  # #54341
+    :codeinfonargs,  # #54341
+    :ocnopartial,
     # Add new change names above this line
 )
 
@@ -118,9 +119,7 @@ export __has_internal_change
 # and of exporting the function.
 #
 # For more complex cases, move the body of the deprecated method in this file,
-# and call depwarn() directly from inside it. The symbol depwarn() expects is
-# the name of the function, which is used to ensure that the deprecation warning
-# is only printed the first time for each call place.
+# and call depwarn() directly from inside it.
 
 """
     @deprecate old new [export_old=true]
@@ -129,6 +128,8 @@ Deprecate method `old` and specify the replacement call `new`, defining a new me
 with the specified signature in the process.
 
 To prevent `old` from being exported, set `export_old` to `false`.
+
+See also [`Base.depwarn()`](@ref).
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
@@ -226,6 +227,26 @@ macro deprecate(old, new, export_old=true)
     end
 end
 
+"""
+    Base.depwarn(msg::String, funcsym::Symbol; force=false)
+
+Print `msg` as a deprecation warning. The symbol `funcsym` should be the name
+of the calling function, which is used to ensure that the deprecation warning is
+only printed the first time for each call place. Set `force=true` to force the
+warning to always be shown, even if Julia was started with `--depwarn=no` (the
+default).
+
+See also [`@deprecate`](@ref).
+
+# Examples
+```julia
+function deprecated_func()
+    Base.depwarn("Don't use `deprecated_func()`!", :deprecated_func)
+
+    1 + 1
+end
+```
+"""
 @nospecializeinfer function depwarn(msg, funcsym; force::Bool=false)
     @nospecialize
     # N.B. With this use of `@invokelatest`, we're preventing the addition of backedges from
@@ -505,3 +526,9 @@ end
 @deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
 
 # END 1.11 deprecations
+
+# BEGIN 1.12 deprecations
+
+@deprecate stat(fd::Integer) stat(RawFD(fd))
+
+# END 1.12 deprecations

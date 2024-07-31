@@ -479,7 +479,7 @@ end
 @test f15259(1,2) == (1,2,1,2)
 # check that error cases are still correct
 @eval g15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); a.z)
-@test_throws ErrorException g15259(1,1)
+@test_throws FieldError g15259(1,1)
 @eval h15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); getfield(a, 3))
 @test_throws BoundsError h15259(1,1)
 
@@ -2151,78 +2151,75 @@ end
 
 @testset "branching on conditional object" begin
     # simple
-    @test Base.return_types((Union{Nothing,Int},)) do a
+    @test Base.infer_return_type((Union{Nothing,Int},)) do a
         b = a === nothing
         return b ? 0 : a # ::Int
-    end == Any[Int]
+    end == Int
 
     # can use multiple times (as far as the subject of condition hasn't changed)
-    @test Base.return_types((Union{Nothing,Int},)) do a
+    @test Base.infer_return_type((Union{Nothing,Int},)) do a
         b = a === nothing
         c = b ? 0 : a # c::Int
         d = !b ? a : 0 # d::Int
         return c, d # ::Tuple{Int,Int}
-    end == Any[Tuple{Int,Int}]
+    end == Tuple{Int,Int}
 
     # should invalidate old constraint when the subject of condition has changed
-    @test Base.return_types((Union{Nothing,Int},)) do a
+    @test Base.infer_return_type((Union{Nothing,Int},)) do a
         cond = a === nothing
         r1 = cond ? 0 : a # r1::Int
         a = 0
         r2 = cond ? a : 1 # r2::Int, not r2::Union{Nothing,Int}
         return r1, r2 # ::Tuple{Int,Int}
-    end == Any[Tuple{Int,Int}]
+    end == Tuple{Int,Int}
 end
 
 # https://github.com/JuliaLang/julia/issues/42090#issuecomment-911824851
 # `PartialStruct` shouldn't wrap `Conditional`
-let M = Module()
-    @eval M begin
-        struct BePartialStruct
-            val::Int
-            cond
-        end
-    end
-
-    rt = @eval M begin
-        Base.return_types((Union{Nothing,Int},)) do a
-            cond = a === nothing
-            obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
-            r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
-            a = $(gensym(:anyvar))::Any
-            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
-            return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
-        end |> only
-    end
-    @test rt == Tuple{Union{Nothing,Int},Any}
+struct BePartialStruct
+    val::Int
+    cond
+end
+@test Tuple{Union{Nothing,Int},Any} == @eval Base.infer_return_type((Union{Nothing,Int},)) do a
+    cond = a === nothing
+    obj = $(Expr(:new, BePartialStruct, 42, :cond))
+    r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
+    a = $(gensym(:anyvar))::Any
+    r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
+    return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
 end
 
 # make sure we never form nested `Conditional` (https://github.com/JuliaLang/julia/issues/46207)
-@test Base.return_types((Any,)) do a
+@test Base.infer_return_type((Any,)) do a
     c = isa(a, Integer)
     42 === c ? :a : "b"
-end |> only === String
-@test Base.return_types((Any,)) do a
+end == String
+@test Base.infer_return_type((Any,)) do a
     c = isa(a, Integer)
     c === 42 ? :a : "b"
-end |> only === String
+end == String
 
-@testset "conditional constraint propagation from non-`Conditional` object" begin
-    @test Base.return_types((Bool,)) do b
-        if b
-            return !b ? nothing : 1 # ::Int
-        else
-            return 0
-        end
-    end == Any[Int]
-
-    @test Base.return_types((Any,)) do b
-        if b
-            return b # ::Bool
-        else
-            return nothing
-        end
-    end == Any[Union{Bool,Nothing}]
+function condition_object_update1(cond)
+    if cond # `cond` is known to be `Const(true)` within this branch
+        return !cond ? nothing : 1 # ::Int
+    else
+        return  cond ? nothing : 1 # ::Int
+    end
+end
+function condition_object_update2(x)
+    cond = x isa Int
+    if cond # `cond` is known to be `Const(true)` within this branch
+        return !cond ? nothing : x # ::Int
+    else
+        return  cond ? nothing : 1 # ::Int
+    end
+end
+@testset "state update for condition object" begin
+    # refine the type of condition object into constant boolean values on branching
+    @test Base.infer_return_type(condition_object_update1, (Bool,)) == Int
+    @test Base.infer_return_type(condition_object_update1, (Any,)) == Int
+    # refine even when their original type is `Conditional`
+    @test Base.infer_return_type(condition_object_update2, (Any,)) == Int
 end
 
 @testset "`from_interprocedural!`: translate inter-procedural information" begin
@@ -2564,6 +2561,14 @@ Base.return_types(intermustalias_edgecase, (Any,); interp=MustAliasInterpreter()
 @test Base.return_types((Any,); interp=MustAliasInterpreter()) do x
     intermustalias_edgecase(x)
 end |> only === Core.Compiler.InterMustAlias
+
+@test Base.infer_return_type((AliasableField,Integer,); interp=MustAliasInterpreter()) do a, x
+    s = (;x)
+    if getfield(a, :f) isa Symbol
+        return getfield(s, getfield(a, :f))
+    end
+    return 0
+end == Integer
 
 function f25579(g)
     h = g[]
@@ -4195,6 +4200,110 @@ end
     end
 end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
 
+@testset "constraint back-propagation from typeassert" begin
+    @test Base.infer_return_type((Any,)) do a
+        typeassert(a, Int)
+        return a
+    end == Int
+
+    @test Base.infer_return_type((Any,Bool)) do a, b
+        if b
+            typeassert(a, Int64)
+        else
+            typeassert(a, Int32)
+        end
+        return a
+    end == Union{Int32,Int64}
+end
+
+callsig_backprop_basic(::Int) = nothing
+callsig_backprop_unionsplit(::Int32) = nothing
+callsig_backprop_unionsplit(::Int64) = nothing
+callsig_backprop_multi(::Int32, ::Int64) = nothing
+callsig_backprop_any(::Any) = nothing
+callsig_backprop_lhs(::Int) = nothing
+callsig_backprop_bailout(::Val{0}) = 0
+callsig_backprop_bailout(::Val{1}) = undefvar # undefvar::Any triggers `bail_out_call`
+callsig_backprop_bailout(::Val{2}) = 2
+callsig_backprop_addinteger(a::Integer, b::Integer) = a + b # results in too many matching methods and triggers `bail_out_call`)
+@test Base.infer_return_type(callsig_backprop_addinteger) == Any
+let effects = Base.infer_effects(callsig_backprop_addinteger)
+    @test !Core.Compiler.is_consistent(effects)
+    @test !Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test !Core.Compiler.is_terminates(effects)
+end
+callsig_backprop_anti(::Any) = :any
+callsig_backprop_anti(::Int) = :int
+
+@testset "constraint back-propagation from call signature" begin
+    # basic case
+    @test Base.infer_return_type(a->(callsig_backprop_basic(a); return a), (Any,)) == Int
+
+    # union-split case
+    @test Base.infer_return_type(a->(callsig_backprop_unionsplit(a); return a), (Any,)) == Union{Int32,Int64}
+
+    # multiple arguments updates
+    @test Base.infer_return_type((Any,Any)) do a, b
+        callsig_backprop_multi(a, b)
+        return a, b
+    end == Tuple{Int32,Int64}
+
+    # refinement should happen only when it's worthwhile
+    @test Base.infer_return_type(a->(callsig_backprop_any(a); return a), (Integer,)) == Integer
+
+    # state update on lhs slot (assignment effect should have the precedence)
+    @test Base.infer_return_type((Any,)) do a
+        a = callsig_backprop_lhs(a)
+        return a
+    end == Nothing
+
+    # make sure to throw away an intermediate refinement information when we bail out early
+    # (inference would bail out on `callsig_backprop_bailout(::Val{1})`)
+    @test Base.infer_return_type(a->(callsig_backprop_bailout(a); return a), (Any,)) == Any
+
+    # if we see all the matching methods, we don't need to throw away refinement information
+    # even if it's caught by `bail_out_call` check
+    @test Base.infer_return_type((Any,Any)) do a, b
+        callsig_backprop_addinteger(a, b)
+        return a, b
+    end == Tuple{Integer,Integer}
+
+    # anti case
+    @test Base.infer_return_type((Any,)) do x
+        callsig_backprop_anti(x)
+        return x
+    end == Any
+end
+
+# make sure to add backedges when we use call signature constraint
+function callsig_backprop_invalidation_outer(a)
+    callsig_backprop_invalidation_inner!(a)
+    return a
+end
+@eval callsig_backprop_invalidation_inner!(::Int) = $(gensym(:undefvar)) # ::Any
+@test Base.infer_return_type((Any,)) do a
+    callsig_backprop_invalidation_outer(a)
+end == Int
+# new definition of `callsig_backprop_invalidation_inner!` should invalidate `callsig_backprop_invalidation_outer`
+# (even if the previous return type is annotated as `Any`)
+@eval callsig_backprop_invalidation_inner!(::Nothing) = $(gensym(:undefvar)) # ::Any
+@test Base.infer_return_type((Any,)) do a
+    # since inference will bail out at the first matched `_inner!` and so call signature constraint won't be available
+    callsig_backprop_invalidation_outer(a)
+end ≠ Int
+
+# https://github.com/JuliaLang/julia/issues/37866
+function issue37866(v::Vector{Union{Nothing,Float64}})
+    for x in v
+        if x > 5.0
+            return x # x > 5.0 is MethodError for Nothing so can assume ::Float64
+        end
+    end
+    return 0.0
+end
+@test Base.infer_return_type(issue37866, (Vector{Union{Nothing,Float64}},)) == Float64
+
 # make sure inference on a recursive call graph with nested `Type`s terminates
 # https://github.com/JuliaLang/julia/issues/40336
 f40336(@nospecialize(t)) = f40336(Type{t})
@@ -4262,10 +4371,10 @@ let # Test the presence of PhiNodes in lowered IR by taking the above function,
     Core.Compiler.replace_code_newstyle!(ci, ir)
     ci.ssavaluetypes = length(ci.ssavaluetypes)
     @test any(x->isa(x, Core.PhiNode), ci.code)
-    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(b, 1.0)
     @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
-    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
 end
@@ -4943,13 +5052,13 @@ g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
 # to terminate the call.
 @newinterp RecurseInterpreter
 let CC = Core.Compiler
-    function CC.const_prop_entry_heuristic(interp::RecurseInterpreter, result::CC.MethodCallResult,
-                                           si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+    function CC.const_prop_rettype_heuristic(interp::RecurseInterpreter, result::CC.MethodCallResult,
+                                             si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
         if result.rt isa CC.LimitedAccuracy
             return force # allow forced constprop to recurse into unresolved cycles
         end
-        return @invoke CC.const_prop_entry_heuristic(interp::CC.AbstractInterpreter, result::CC.MethodCallResult,
-                                                     si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+        return @invoke CC.const_prop_rettype_heuristic(interp::CC.AbstractInterpreter, result::CC.MethodCallResult,
+                                                       si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
     end
 end
 Base.@constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
@@ -5290,6 +5399,15 @@ end
 end
 foo51090(b) = return bar51090(b)
 @test !fully_eliminated(foo51090, (Int,))
+
+Base.@assume_effects :terminates_globally @noinline function bar51090_terminates(b)
+    b == 0 && return
+    r = foo51090_terminates(b - 1)
+    Base.donotdelete(b)
+    return r
+end
+foo51090_terminates(b) = return bar51090_terminates(b)
+@test !fully_eliminated(foo51090_terminates, (Int,))
 
 # exploit throwness from concrete eval for intrinsics
 @test Base.return_types() do
