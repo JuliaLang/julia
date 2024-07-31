@@ -4587,7 +4587,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     assert(jl_svec_len(fn) == 1);
                     Value *typ_sym = literal_pointer_val(ctx, jl_svecref(fn, 0));
                     Value *cond = ctx.builder.CreateICmpEQ(mark_callee_rooted(ctx, typ_sym), mark_callee_rooted(ctx, boxed(ctx, fld)));
-                    emit_hasnoproperty_error_ifnot(ctx, cond, utt, fld);
+                    emit_hasnofield_error_ifnot(ctx, cond, utt, fld);
                     *ret = emit_getfield_knownidx(ctx, obj, 0, utt, order);
                     return true;
                 }
