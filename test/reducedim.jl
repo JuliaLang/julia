@@ -793,3 +793,78 @@ end
     @test mapreduce(identity, |, [3,7,6]; dims=1) == [mapreduce(identity, |, [3,7,6])] == [3 | 7 | 6] == [7]
     @test mapreduce(identity, xor, [3,7,6]; dims=1) == [mapreduce(identity, xor, [3,7,6])] == [xor(xor(3, 7), 6)] == [2]
 end
+
+@testset "indexing" begin
+    A = [1 2; 3 4]
+    B = [5 6; 7 8]
+
+    @test mapreduce(/, +, A, B) ≈ sum(A./B)
+    @test mapreduce(i -> A[i]/B[i], +, eachindex(A,B)) ≈ sum(A./B)
+    @test mapreduce(i -> A[i]/B'[i], +, eachindex(A,B')) ≈ sum(A./B')
+
+    @test mapreduce(/, +, A, B; dims=1) ≈ sum(A./B; dims=1)
+    @test mapreduce(i -> A[i]/B[i], +, reshape(eachindex(A,B), size(A)); dims=1) ≈ sum(A./B; dims=1)  # BoundsError
+    @test mapreduce(i -> A[i]/B'[i], +, eachindex(A,B'); dims=1) ≈ sum(A./B'; dims=1)  # BoundsError
+end
+
+@testset "more related to issue #26488" begin
+    @test mapreduce(x -> log10(x-1), +, [11, 101]) ≈ 3.0
+    @test mapreduce(x -> log10(x-1), *, [11, 101]) ≈ 2.0
+    @test mapreduce(x -> log10(x-1), +, [11, 101]; dims=1) ≈ [3.0]
+    @test mapreduce(x -> log10(x-1), +, [11, 101]; init=-10) ≈ -7.0
+    @test mapreduce(x -> log10(x-1), +, [11, 101]; init=-10, dims=1) ≈ [-7.0]
+
+    @test mapreduce(_ -> pi, +, [1,2]) ≈ 2pi
+    @test mapreduce(_ -> pi, *, [1,2]) ≈ pi^2
+    @test mapreduce(_ -> pi, +, [1,2]; dims=1) ≈ [2pi]
+end
+
+_add(x,y) = x+y  # this avoids typeof(+) dispatch
+
+@testset "mapreduce fast paths, dims=:, op=$op, kw=$kw" for op in (+,_add),
+                                                            kw in ((;), (; init=0.0))
+    @test_broken 0 == @allocated mapreduce(/, op, 1:3, 4:7; kw...)
+    @test_broken 0 == @allocated mapreduce(/, op, 1:3, 4:9; kw...)  # stops early
+    @test mapreduce(/, op, 1:3, 4:7; kw...) ≈ reduce(op, map(/, 1:3, 4:7); kw...)
+    @test mapreduce(/, op, 1:3, 4:9; kw...) ≈ reduce(op, map(/, 1:3, 4:9); kw...)
+
+    A = [1 2; 3 4]
+    B = [5 6; 7 8]
+
+    @test_broken 0 == @allocated mapreduce(*, op, A, B; kw...)  # LinearIndices
+    @test_broken 0 == @allocated mapreduce(*, op, A, B'; kw...)  # CartesianIndices
+
+    @test mapreduce(*, op, A, B; kw...) == reduce(op, map(*, A, B); kw...)
+    @test mapreduce(*, op, A, B'; kw...) == reduce(op, map(*, A, B'); kw...)
+
+    @test_broken 0 == @allocated mapreduce(*, op, A, 5:7; kw...)  # stops early
+    @test_broken 0 == @allocated mapreduce(*, op, 1:3, B'; kw...)  # stops early
+    @test mapreduce(*, op, A, 5:7; kw...) == reduce(op, map(*, A, 5:7); kw...)
+    @test mapreduce(*, op, 1:3, B'; kw...) == reduce(op, map(*, 1:3, B'); kw...)
+    @test mapreduce(*, op, 1:3, B', 10:20; kw...) == reduce(op, map(*, 1:3, B', 10:20); kw...)
+
+    @test_throws DimensionMismatch map(*, A, hcat(B, 9:10))  # same ndims, does not stop early
+    @test_throws DimensionMismatch mapreduce(*, op, A, hcat(B, 9:10); kw...)
+end
+
+@testset "mapreduce fast paths, dims=$dims, op=$op, kw=$kw" for dims in (1,2,[2],(1,2),3),
+                                                                op in (+,*,_add),
+                                                                kw in ((;), (; init=0.0))
+    (kw == (;) && op == _add) && continue
+
+    @test mapreduce(/, op, 1:3, 4:7; dims, kw...) ≈ reduce(op, map(/, 1:3, 4:7); dims, kw...)
+    @test mapreduce(/, op, 1:3, 4:9; dims, kw...) ≈ reduce(op, map(/, 1:3, 4:9); dims, kw...)
+
+    A = [1 2; 3 4]
+    B = [5 6; 7 8]
+    @test mapreduce(*, op, A, B; dims, kw...) == reduce(op, map(*, A, B); dims, kw...)  # LinearIndices
+    @test mapreduce(*, op, A, B'; dims, kw...) == reduce(op, map(*, A, B'); dims, kw...)  # CartesianIndices
+
+    @test_broken @allocated(mapreduce(*, op, A, B; dims, kw...)) < @allocated(reduce(op, map(*, A, B); dims, kw...))
+    @test_broken @allocated(mapreduce(*, op, A, B'; dims, kw...)) < @allocated(reduce(op, map(*, A, B'); dims, kw...))
+
+    @test mapreduce(*, op, A, 5:7; dims, kw...) == reduce(op, map(*, A, 5:7); dims, kw...)  # stops early
+    @test mapreduce(*, op, 1:3, B'; dims, kw...) == reduce(op, map(*, 1:3, B'); dims, kw...)
+
+    @test_throws DimensionMismatch mapreduce(*, +, A, hcat(B, 9:10); dims, kw...)
+end
