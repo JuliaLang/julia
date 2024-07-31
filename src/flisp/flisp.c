@@ -2485,6 +2485,9 @@ int fl_load_system_image(fl_context_t *fl_ctx, value_t sys_image_iostream)
     return 0;
 }
 
+JL_DLLEXPORT const char *__progname;
+JL_DLLEXPORT char **environ;
+
 #ifdef __cplusplus
 }
 #endif

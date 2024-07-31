@@ -242,6 +242,9 @@ extern "C" {
 
 #include "builtin_proto.h"
 
+JL_DLLEXPORT const char *__progname;
+JL_DLLEXPORT char **environ;
+
 extern void __stack_chk_fail();
 
 #ifdef _OS_WINDOWS_

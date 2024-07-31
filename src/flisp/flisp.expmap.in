@@ -23,6 +23,10 @@
     LLVMExtra*;
     JLJIT*;
 
+    /* freebsd */
+    environ;
+    __progname;
+
   local:
     *;
 };

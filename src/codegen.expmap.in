@@ -16,6 +16,9 @@
     JLJIT*;
     llvmGetPassPluginInfo;
 
+    /* freebsd */
+    environ;
+    __progname;
 
   local:
     *;
