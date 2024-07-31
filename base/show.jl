@@ -1402,11 +1402,11 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
                     x = itr[i]
                     show(recur_io, x)
                 end
-                i += 1
-                if i > l
+                if i == l
                     delim_one && first && print(io, delim)
                     break
                 end
+                i += 1
                 first = false
                 print(io, delim)
                 print(io, ' ')
