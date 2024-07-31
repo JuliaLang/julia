@@ -30,6 +30,8 @@ export
     Pager,
     request
 
+public pick, cancel, writeline, options, numoptions, selected, header, keypress
+
 # TODO: remove in Julia 2.0
 # While not exported, AbstractMenu documented these as an extension interface
 @deprecate printMenu printmenu
