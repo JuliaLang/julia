@@ -763,12 +763,36 @@ tests = [
         """var"x"1"""   =>  "(var x (error-t))"
         """var"x"y"""   =>  "(var x (error-t))"
         # Standalone syntactic operators are errors
-        "+="  =>  "(error +=)"
         "?"   =>  "(error ?)"
+        "&&"  =>  "(error &&)"
+        "||"  =>  "(error ||)"
+        "."   =>  "(error .)"
+        "..." =>  "(error ...)"
+        "+="  =>  "(error +=)"
+        "-="  =>  "(error -=)"
+        "*="  =>  "(error *=)"
+        "/="  =>  "(error /=)"
+        "//=" =>  "(error //=)"
+        "|="  =>  "(error |=)"
+        "^="  =>  "(error ^=)"
+        "÷="  =>  "(error ÷=)"
+        "%="  =>  "(error %=)"
+        "<<=" =>  "(error <<=)"
+        ">>=" =>  "(error >>=)"
+        ">>>="=>  "(error >>>=)"
+        "\\=" =>  "(error \\=)"
+        "&="  =>  "(error &=)"
+        ":="  =>  "(error :=)"
+        "\$=" =>  "(error \$=)"
+        "⊻="  =>  "(error ⊻=)"
         ".+=" =>  "(error (. +=))"
         # Normal operators
         "+"  =>  "+"
+        # Assignment-precedence operators which can be used as identifiers
         "~"  =>  "~"
+        "≔"  =>  "≔"
+        "⩴"  =>  "⩴"
+        "≕"  =>  "≕"
         # Quoted syntactic operators allowed
         ":+="  =>  "(quote-: +=)"
         ":.="  =>  "(quote-: (. =))"
@@ -777,7 +801,7 @@ tests = [
         ":end" => "(quote-: end)"
         ":(end)" => "(quote-: (parens (error-t)))"
         ":<:"  => "(quote-: <:)"
-        # unexpect =
+        # unexpected =
         "="    => "(error =)"
         # parse_cat
         "[]"        =>  "(vect)"
