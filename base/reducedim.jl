@@ -34,9 +34,11 @@ function inner_indices(axs::Indices{N}, region) where N
 end
 
 # Given an outer and an inner cartesian index, merge them depending on the dims
-merge_outer_inner(outer::CartesianIndex{N}, inner::CartesianIndex{N}, region) where {N} =
-    CartesianIndex(ntuple(d->d in region ? inner.I[d] : outer.I[d], Val(N)))
-
+merge_outer_inner(outer::CartesianIndex{N}, inner::CartesianIndex{N}, use_inner::NTuple{N, Bool}) where {N} =
+    CartesianIndex(_merge_outer_inner(outer.I, inner.I, use_inner))
+_merge_outer_inner(outer::Tuple, inner, use_inner) = (ifelse(use_inner[1], inner[1], outer[1]), _merge_outer_inner(tail(outer), tail(inner), tail(use_inner))...)
+_merge_outer_inner(outer::Tuple{}, inner, use_inner) = ()
+merge_outer_inner_prep(tup::NTuple{N}, region) where {N} = ntuple(d->d in region, Val(N))
 
 function _check_valid_region(region)
     for d in region
@@ -78,7 +80,8 @@ _realtype(::Any, T) = T
 has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = IndexStyle(a) === IndexLinear()
 has_fast_linear_indexing(a::AbstractVector) = true
 
-function check_reducedims(R, A)
+check_reducedims(R, A) = check_reducedims_axes(axes(R), axes(A))
+function check_reducedims_axes(Rax, Aax)
     # Check whether R has compatible dimensions w.r.t. A for reduction
     #
     # It returns an integer value (useful for choosing implementation)
@@ -87,11 +90,11 @@ function check_reducedims(R, A)
     #   it will be size(A, 1) or size(A, 1) * size(A, 2).
     # - Otherwise, e.g. sum(A, dims=2) or sum(A, dims=(1,3)), it returns 0.
     #
-    ndims(R) <= ndims(A) || throw(DimensionMismatch("cannot reduce $(ndims(A))-dimensional array to $(ndims(R)) dimensions"))
+    length(Rax) <= length(Aax) || throw(DimensionMismatch("cannot reduce $(length(Aax))-dimensional array to $(length(Rax)) dimensions"))
     lsiz = 1
     had_nonreduc = false
-    for i = 1:ndims(A)
-        Ri, Ai = axes(R, i), axes(A, i)
+    for i = 1:length(Aax)
+        Ri, Ai = get(Rax, i, OneTo(1)), Aax[i]
         sRi, sAi = length(Ri), length(Ai)
         if sRi == 1
             if sAi > 1
@@ -102,7 +105,7 @@ function check_reducedims(R, A)
                 end
             end
         else
-            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(axes(A)) with output with indices $(axes(R))"))
+            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(Aax) with output with indices $(Rax)"))
             had_nonreduc = true
         end
     end
@@ -135,9 +138,8 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
 
     if has_fast_linear_indexing(A) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
-        nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
-        for i = 1:nslices
+        for i in eachindex(R) # TODO: add tests for this change
             @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
             ibase += lsiz
         end
@@ -180,6 +182,7 @@ end
 #       * Proceeding involves skipping the first two inner iterations
 function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims)
     rinds = reduced_indices(A, dims)
+    lsiz = check_reducedims_axes(rinds, axes(A))
     outer_inds = CartesianIndices(rinds)
     inner_inds = CartesianIndices(inner_indices(A, dims))
     n = length(inner_inds)
@@ -187,14 +190,15 @@ function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, d
     n == 1 && return _mapreduce_one_array(f, op, A, rinds)
 
     inner1, inner2 = inner_inds
+    merger = merge_outer_inner_prep(rinds, dims)
     # Create the result vector with the first step of the reduction
     # note that this is using a (potentially) bad cache ordering, so we don't want to continue like this
     i1 = first(outer_inds)
-    v = op(f(A[merge_outer_inner(i1, inner1, dims)]), f(A[merge_outer_inner(i1, inner2, dims)]))
+    v = op(f(A[merge_outer_inner(i1, inner1, merger)]), f(A[merge_outer_inner(i1, inner2, merger)]))
     R = _mapreduce_similar(f, op, A, typeof(v), rinds)
     R[begin] = v
     for i in Iterators.drop(outer_inds, 1)
-        v = op(f(A[merge_outer_inner(i, inner1, dims)]), f(A[merge_outer_inner(i, inner2, dims)]))
+        v = op(f(A[merge_outer_inner(i, inner1, merger)]), f(A[merge_outer_inner(i, inner2, merger)]))
         if !(typeof(v) <: eltype(R))
             Rnew = _mapreduce_similar(f, op, A, promote_type(eltype(R), typeof(v)), rinds)
             copyto!(Rnew, R) # TODO: could only copy from begin:i
@@ -203,12 +207,33 @@ function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, d
         R[i] = v
     end
 
-    # TODO: It's easy to add reducedim1 performance optimizations here
-    # TODO: Would also be good to do loop switching in the general case, too
-    for IR in outer_inds
-        for IA in Iterators.drop(inner_inds, 2)
-            iA = merge_outer_inner(IR, IA, dims)
-            R[IR] = op(R[IR], f(A[iA]))
+    if has_fast_linear_indexing(A) && lsiz > 0
+        ibase = first(LinearIndices(A))-1
+        if lsiz > 16
+            # use mapreduce_impl, which is better tuned to achieve higher performance and works pairwise
+            for i in eachindex(R)
+                @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+3, ibase+lsiz))
+                ibase += lsiz
+            end
+        else
+            for i in eachindex(R)
+                @inbounds r = R[i]
+                @simd for Ai in ibase+3:ibase+lsiz
+                    r = op(r, f(@inbounds(A[Ai])))
+                end
+                @inbounds R[i] = r
+                ibase += lsiz
+            end
+        end
+    else
+        # TODO: Would also be good to do loop switching in the general case, too
+        for IR in outer_inds
+            @inbounds r = R[IR]
+            for IA in Iterators.drop(inner_inds, 2)
+                iA = merge_outer_inner(IR, IA, merger)
+                r = op(r, f(@inbounds(A[iA])))
+            end
+            @inbounds R[IR] = r
         end
     end
     return R
