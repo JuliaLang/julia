@@ -587,7 +587,7 @@ Parametric types can also be used in [type annotations](#Type-Annotations).
 
 !!! note
     For any parametric composite type,
-    both [`isabstracttype`](@ref) and [`isconcretetype`](@ref) will return false.
+    both [`isabstracttype`](@ref) and [`isconcretetype`](@ref) will return `false`.
 
 Type parameters are introduced immediately after the type name, and surrounded by curly braces:
 
