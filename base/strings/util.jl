@@ -1272,5 +1272,5 @@ function Base.rest(s::AbstractString, st...)
     for c in Iterators.rest(s, st...)
         print(io, c)
     end
-    return unsafe_takestring!(io)
+    return takestring!(io)
 end

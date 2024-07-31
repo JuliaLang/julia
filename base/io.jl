@@ -544,7 +544,7 @@ julia> rm("my_file.txt")
 """
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
 readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
-readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = unsafe_takestring!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...))
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = takestring!(copyuntil(IOBuffer(sizehint=70), stream, delim; kw...))
 readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
 
 
@@ -616,7 +616,7 @@ Logan
 """
 readline(filename::AbstractString; keep::Bool=false) =
     open(io -> readline(io; keep), filename)
-readline(s::IO=stdin; keep::Bool=false) = unsafe_takestring!(copyline(IOBuffer(sizehint=16), s; keep))
+readline(s::IO=stdin; keep::Bool=false) = takestring!(copyline(IOBuffer(sizehint=16), s; keep))
 
 """
     copyline(out::IO, io::IO=stdin; keep::Bool=false)

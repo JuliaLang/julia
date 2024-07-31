@@ -141,7 +141,7 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
         while !eof(stream)
             if startswith(stream, delimiter)
                 if count == 0
-                    return unsafe_takestring!(buffer)
+                    return takestring!(buffer)
                 else
                     count -= 1
                     write(buffer, delimiter)
