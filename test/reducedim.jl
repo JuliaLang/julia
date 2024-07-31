@@ -775,3 +775,11 @@ end
     @test sum(bc, dims=(1,2)) ≈ [sum(A .+ 2)]
     @test mapreduce(sqrt, +, bc, dims=(1,2)) ≈ [mapreduce(sqrt, +, A .+ 2)]
 end
+
+@testset "reductions over complex values; issue #54920" begin
+    A = Complex{Int}.(rand(Complex{Int8}, 2, 2, 2));
+    @test maximum(abs, A; dims=(1,)) == mapreduce(abs, max, A, dims=(1,)) == [maximum(abs, A[:,1,1]) maximum(abs, A[:,2,1]);;; maximum(abs, A[:,1,2]) maximum(abs, A[:,2,2])]
+    @test maximum(abs, A; dims=(2,)) == mapreduce(abs, max, A, dims=(2,)) == [maximum(abs, A[1,:,1]); maximum(abs, A[2,:,1]);;; maximum(abs, A[1,:,2]); maximum(abs, A[2,:,2])]
+    @test maximum(abs, A; dims=(1, 2)) == mapreduce(abs, max, A, dims=(1, 2)) == [maximum(abs, A[:,:,1]);;; maximum(abs, A[:,:,2])]
+    @test maximum(abs, A; dims=(1, 2, 3)) == mapreduce(abs, max, A, dims=(1, 2, 3)) == [maximum(abs, A);;;]
+end
