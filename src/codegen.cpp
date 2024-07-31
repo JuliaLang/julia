@@ -242,7 +242,6 @@ extern "C" {
 
 #include "builtin_proto.h"
 
-
 extern void __stack_chk_fail();
 
 #ifdef _OS_WINDOWS_
