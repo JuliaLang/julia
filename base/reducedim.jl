@@ -181,11 +181,11 @@ end
 function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims)
     rinds = reduced_indices(A, dims)
     outer_inds = CartesianIndices(rinds)
-    n = prod(map(d->size(A, d), dims))
+    inner_inds = CartesianIndices(inner_indices(A, dims))
+    n = length(inner_inds)
     (n == 0 || isempty(A)) && return _mapreduce_empty_array(f, op, A, rinds)
     n == 1 && return _mapreduce_one_array(f, op, A, rinds)
 
-    inner_inds = CartesianIndices(inner_indices(A, dims))
     inner1, inner2 = inner_inds
     # Create the result vector with the first step of the reduction
     # note that this is using a (potentially) bad cache ordering, so we don't want to continue like this

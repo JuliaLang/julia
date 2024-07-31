@@ -762,3 +762,16 @@ end
     @test_throws ArgumentError sum(x->sqrt(x-1), ones(0); dims=1)
     @test_throws ArgumentError sum(x->sqrt(x-1), ones(0))
 end
+
+@testset "reductions on broadcasted; issue #41054" begin
+    A = randn(3,4)
+    bc = Base.broadcasted(+, A, 2)
+    @test sum(bc, dims=1) ≈ sum(A .+ 2, dims=1)
+    @test mapreduce(sqrt, +, bc, dims=1) ≈ mapreduce(sqrt, +, A .+ 2, dims=1)
+
+    @test sum(bc, dims=2) ≈ sum(A .+ 2, dims=2)
+    @test mapreduce(sqrt, +, bc, dims=2) ≈ mapreduce(sqrt, +, A .+ 2, dims=2)
+
+    @test sum(bc, dims=(1,2)) ≈ [sum(A .+ 2)]
+    @test mapreduce(sqrt, +, bc, dims=(1,2)) ≈ [mapreduce(sqrt, +, A .+ 2)]
+end
