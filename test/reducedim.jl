@@ -764,7 +764,7 @@ end
 end
 
 @testset "reductions on broadcasted; issue #41054" begin
-    A = randn(3,4)
+    A = clamp.(randn(3,4), -1, 1)
     bc = Base.broadcasted(+, A, 2)
     @test sum(bc, dims=1) ≈ sum(A .+ 2, dims=1)
     @test mapreduce(sqrt, +, bc, dims=1) ≈ mapreduce(sqrt, +, A .+ 2, dims=1)
