@@ -505,7 +505,7 @@ end
 # based on the package ecosystem
 function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
     return get!(filenamecache, spath) do
-        path = string(spath)
+        path = Base.fixup_stdlib_path(string(spath))
         if isabspath(path)
             if ispath(path)
                 # try to replace the file-system prefix with a short "@Module" one,
