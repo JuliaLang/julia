@@ -417,7 +417,7 @@ true
     `qr` returns multiple types because LAPACK uses several representations
     that minimize the memory storage requirements of products of Householder
     elementary reflectors, so that the `Q` and `R` matrices can be stored
-    compactly rather as two separate dense matrices.
+    compactly rather than two separate dense matrices.
 """
 function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
