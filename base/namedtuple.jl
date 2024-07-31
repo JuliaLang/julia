@@ -425,6 +425,24 @@ function diff_fallback(a::NamedTuple, an::Tuple{Vararg{Symbol}}, bn::Tuple{Varar
 end
 
 """
+    delete(a::NamedTuple, field::Symbol)
+
+Construct a new named tuple from `a` by removing the named field.
+
+```jldoctest
+julia> Base.delete((a=1, b=2, c=3), :a)
+(b = 2, c = 3)
+
+julia> Base.delete((a=1, b=2, c=3), :b)
+(a = 1, c = 3)
+```
+"""
+@constprop :aggressive function delete(a::NamedTuple{an}, field::Symbol) where {an}
+    names = diff_names(an, (field,))
+    NamedTuple{names}(a)
+end
+
+"""
     structdiff(a::NamedTuple, b::Union{NamedTuple,Type{NamedTuple}})
 
 Construct a copy of named tuple `a`, except with fields that exist in `b` removed.
