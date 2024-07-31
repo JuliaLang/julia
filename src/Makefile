@@ -364,10 +364,10 @@ $(FLISP_EXECUTABLE_release): $(BUILDDIR)/flisp/libflisp.a
 $(FLISP_EXECUTABLE_debug): $(BUILDDIR)/flisp/libflisp-debug.a
 	$(MAKE) -C $(BUILDDIR)/flisp $(subst $(abspath $(BUILDDIR)/flisp)/,,$(abspath $(FLISP_EXECUTABLE_debug)))
 
-$(BUILDDIR)/flisp/libflisp.a: $(addprefix $(SRCDIR)/flisp/,*.h *.c) $(BUILDDIR)/support/libsupport.a $(BUILDDIR)/flisp/flisp.expmap
+$(BUILDDIR)/flisp/libflisp.a: $(addprefix $(SRCDIR)/flisp/,*.h *.c) $(BUILDDIR)/support/libsupport.a
 	$(MAKE) -C $(SRCDIR)/flisp BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
-$(BUILDDIR)/flisp/libflisp-debug.a: $(addprefix $(SRCDIR)/,flisp/*.h flisp/*.c) $(BUILDDIR)/support/libsupport-debug.a $(BUILDDIR)/flisp/flisp.expmap
+$(BUILDDIR)/flisp/libflisp-debug.a: $(addprefix $(SRCDIR)/,flisp/*.h flisp/*.c) $(BUILDDIR)/support/libsupport-debug.a
 	$(MAKE) -C $(SRCDIR)/flisp debug BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
 $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
@@ -386,10 +386,6 @@ $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 CXXLD = $(CXX) -shared
 
 $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in
-	sed <'$<' >'$@' -e "s/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/" \
-		        -e "s/@LLVM_SHLIB_SYMBOL_VERSION@/$(LLVM_SHLIB_SYMBOL_VERSION)/"
-
-$(BUILDDIR)/flisp/flisp.expmap: $(SRCDIR)/flisp/flisp.expmap.in
 	sed <'$<' >'$@' -e "s/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/" \
 		        -e "s/@LLVM_SHLIB_SYMBOL_VERSION@/$(LLVM_SHLIB_SYMBOL_VERSION)/"
 
@@ -462,7 +458,6 @@ clean:
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia.expmap
-	-rm -f $(BUILDDIR)/flisp/flisp.expmap
 	-rm -f $(BUILDDIR)/codegen.expmap
 	-rm -f $(BUILDDIR)/julia_version.h
 

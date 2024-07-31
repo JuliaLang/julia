@@ -30,9 +30,3 @@
   local:
     *;
 };
-
-@LLVM_SHLIB_SYMBOL_VERSION@ {
-  global:
-    /* Make visible so that linker will merge duplicate definitions across DSO boundaries */
-    _ZN4llvm3Any6TypeId*;
-};

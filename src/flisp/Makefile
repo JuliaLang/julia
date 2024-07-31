@@ -103,10 +103,13 @@ JLDFLAGS += -static-libsan
 endif
 endif
 
-$(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
+$(BUILDDIR)/flisp.expmap: $(SRCDIR)/flisp.expmap.in
+	sed <'$<' >'$@' -e "s/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/"
+
+$(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/flisp.expmap $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
 
-$(BUILDDIR)/$(EXENAME)$(EXE): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
+$(BUILDDIR)/$(EXENAME)$(EXE): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/flisp.expmap $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(JLDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
 
 $(BUILDDIR)/host/Makefile:
@@ -141,5 +144,6 @@ clean:
 	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
 	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
 	rm -f $(BUILDDIR)/host/*
+	rm -f $(BUILDDIR)/flisp.expmap
 
 .PHONY: flisp-deps
