@@ -1543,7 +1543,7 @@ end
 @testset "FieldError Shim tests and Softdeprecation of @test_throws ErrorException" begin
     feexc = FEexc(nothing, nothing)
     # This is redundant regular test for FieldError
-    @test_throws FieldError feexc.c
+    @test_throws PropertyError feexc.c
     # This should raise ErrorException
     @test_throws ErrorException feexc.a = 1
     # This is test for FieldError shim and deprecation

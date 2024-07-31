@@ -148,7 +148,7 @@ let n = 10
         @test size(H.Q, 2) == size(A, 2)
         @test size(H.Q) == size(A)
         @test size(H) == size(A)
-        @test_throws FieldError H.Z
+        @test_throws PropertyError H.Z
         @test convert(Array, H) ≈ A
         @test (H.Q * H.H) * H.Q' ≈ A ≈ (Matrix(H.Q) * Matrix(H.H)) * Matrix(H.Q)'
         @test (H.Q' * A) * H.Q ≈ H.H

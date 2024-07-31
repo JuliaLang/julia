@@ -375,7 +375,7 @@ end
 
 function showerror(io::IO, exc::PropertyError)
     @nospecialize
-    print(io, "PropertyError: instance of type `$(exc.obj |> typeof)` has no property `$(exc.property)`")
+    print(io, "PropertyError: instance of type `$(exc.type |> nameof)` has no property `$(exc.property)`")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -1116,9 +1116,9 @@ Experimental.register_error_hint(fielderror_hint_handler, FieldError)
 function propertyerror_hint_handler(io, exc)
     @nospecialize
     property = exc.property
-    obj = exc.obj
+    type = exc.type
     # print(io, "\nAn instance of type $(typeof(obj)) doesn't recognize property $property.\n")
-    printstyled(io, "\n$(typeof(obj)) has following properties $(propertynames(obj, true))", color=:cyan)
+    printstyled(io, "\n$(type) has following properties $(fieldnames(type))", color=:cyan)
     println(io)
 end
 

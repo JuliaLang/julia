@@ -1924,9 +1924,9 @@ end
 
 # issue #4526
 f4526(x) = isa(x.a, Nothing)
-@test_throws FieldError f4526(1)
-@test_throws FieldError f4526(im)
-@test_throws FieldError f4526(1+2im)
+@test_throws PropertyError f4526(1)
+@test_throws PropertyError f4526(im)
+@test_throws PropertyError f4526(1+2im)
 
 # issue #4528
 function f4528(A, B)

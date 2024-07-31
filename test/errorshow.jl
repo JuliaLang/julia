@@ -11,6 +11,7 @@ Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, Me
 Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
 Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.fielderror_hint_handler, FieldError)
+Base.Experimental.register_error_hint(Base.propertyerror_hint_handler, PropertyError)
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -817,13 +818,13 @@ end
 
     s = FieldFoo(1, 2)
 
-    test = @test_throws FieldError s.c
+    test = @test_throws PropertyError s.c
 
-    ex = test.value::FieldError
+    ex = test.value::PropertyError
 
     # Check error message first
     errorMsg = sprint(Base.showerror, ex)
-    @test occursin("FieldError: type FieldFoo has no field c", errorMsg)
+    @test occursin("PropertyError: instance FieldFoo has no property c", errorMsg)
 
     d = Dict(s => 1)
 
@@ -835,12 +836,12 @@ end
         end
         @test !(ex isa Type) || ex <: FieldError
     end
-    test = @test_throws FieldError d.c
+    test = @test_throws PropertyError d.c
 
-    ex = test.value::FieldError
+    ex = test.value::PropertyError
 
     errorMsg = sprint(Base.showerror, ex)
-    @test occursin("FieldError: type Dict has no field c", errorMsg)
+    @test occursin("PropertyError: instance Dict has no property c", errorMsg)
     # Check hint message
     hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
     @test occursin(hintExpected, errorMsg)

@@ -411,7 +411,7 @@ struct FieldError <: Exception
 end
 
 struct PropertyError <: Exception
-    obj::Any
+    type::DataType
     property::Symbol
 end
 
