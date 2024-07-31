@@ -226,14 +226,24 @@ function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, d
             end
         end
     else
-        # TODO: Would also be good to do loop switching in the general case, too
-        for IR in outer_inds
-            @inbounds r = R[IR]
-            for IA in Iterators.drop(inner_inds, 2)
-                iA = merge_outer_inner(IR, IA, merger)
-                r = op(r, f(@inbounds(A[iA])))
+        # Dynamically switch loops to prioritize the largest first dimension
+        if something(findfirst((>)(1), size(inner_inds))) < something(findfirst((>)(1), size(outer_inds)), typemax(Int))
+            for IR in outer_inds
+                @inbounds r = R[IR]
+                for IA in Iterators.drop(inner_inds, 2)
+                    iA = merge_outer_inner(IR, IA, merger)
+                    r = op(r, f(@inbounds(A[iA])))
+                end
+                @inbounds R[IR] = r
             end
-            @inbounds R[IR] = r
+        else
+            for IA in Iterators.drop(inner_inds, 2)
+                @simd for IR in outer_inds
+                    iA = merge_outer_inner(IR, IA, merger)
+                    v = op(@inbounds(R[IR]), f(@inbounds(A[iA])))
+                    @inbounds R[IR] = v
+                end
+            end
         end
     end
     return R
