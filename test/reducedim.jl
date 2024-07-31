@@ -783,3 +783,13 @@ end
     @test maximum(abs, A; dims=(1, 2)) == mapreduce(abs, max, A, dims=(1, 2)) == [maximum(abs, A[:,:,1]);;; maximum(abs, A[:,:,2])]
     @test maximum(abs, A; dims=(1, 2, 3)) == mapreduce(abs, max, A, dims=(1, 2, 3)) == [maximum(abs, A);;;]
 end
+
+@testset "bitwise operators on integers; part of issue #45562" begin
+    @test mapreduce(identity, &, [3,3,3]; dims=1) == [mapreduce(identity, &, [3,3,3])] == [3 & 3 & 3] == [3]
+    @test mapreduce(identity, |, [3,3,3]; dims=1) == [mapreduce(identity, |, [3,3,3])] == [3 | 3 | 3] == [3]
+    @test mapreduce(identity, xor, [3,3,3]; dims=1) == [mapreduce(identity, xor, [3,3,3])] == [xor(xor(3, 3), 3)] == [3]
+
+    @test mapreduce(identity, &, [3,7,6]; dims=1) == [mapreduce(identity, &, [3,7,6])] == [3 & 7 & 6] == [2]
+    @test mapreduce(identity, |, [3,7,6]; dims=1) == [mapreduce(identity, |, [3,7,6])] == [3 | 7 | 6] == [7]
+    @test mapreduce(identity, xor, [3,7,6]; dims=1) == [mapreduce(identity, xor, [3,7,6]] == [xor(xor(3, 7), 6)] == [2]
+end
