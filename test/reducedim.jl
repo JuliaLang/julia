@@ -173,7 +173,7 @@ end
 
     x = sum(Real[1.0], dims=1)
     @test x == [1.0]
-    @test x isa Vector{Real}
+    @test x isa Vector{<:Real}
 
     x = mapreduce(cos, +, Union{Int,Missing}[1, 2], dims=1)
     @test x == mapreduce(cos, +, [1, 2], dims=1)
@@ -209,9 +209,9 @@ end
 
     for f in (minimum, maximum)
         @test_throws "reducing over an empty collection is not allowed" f(A, dims=1)
-        @test isequal(f(A, dims=2), zeros(Int, 0, 1))
+        @test_broken isequal(f(A, dims=2), zeros(Int, 0, 1))
         @test_throws "reducing over an empty collection is not allowed" f(A, dims=(1, 2))
-        @test isequal(f(A, dims=3), zeros(Int, 0, 1))
+        @test_broken isequal(f(A, dims=3), zeros(Int, 0, 1))
     end
     for f in (findmin, findmax)
         @test_throws ArgumentError f(A, dims=1)
@@ -613,6 +613,7 @@ function unordered_test_for_extrema(a; dims_test = ((), 1, 2, (1,2), 3))
         @test isequal(extrema!(copy(vext), a), vext)
         @test all(x -> isequal(x[1], x[2:3]), zip(vext,vmin,vmax))
     end
+    true
 end
 @testset "0.0,-0.0 test for extrema with dims" begin
     @test extrema([-0.0;0.0], dims = 1)[1] === (-0.0,0.0)
@@ -623,13 +624,13 @@ end
         for T in (Int, Float64, BigFloat, BigInt)
             Aₘ = Matrix{Union{T, Missing}}(rand(-sz:sz, sz, sz))
             Aₘ[rand(1:sz*sz, sz)] .= missing
-            unordered_test_for_extrema(Aₘ)
+            @test unordered_test_for_extrema(Aₘ)
             if T <: AbstractFloat
                 Aₙ = map(i -> ismissing(i) ? T(NaN) : i, Aₘ)
-                unordered_test_for_extrema(Aₙ)
+                @test unordered_test_for_extrema(Aₙ)
                 p = rand(1:sz*sz, sz)
                 Aₘ[p] .= NaN
-                unordered_test_for_extrema(Aₘ)
+                @test unordered_test_for_extrema(Aₘ)
             end
         end
     end
@@ -695,4 +696,69 @@ end
     @test_broken @inferred(minimum(exp, A; dims = 1))[1] === missing
     @test_broken @inferred(maximum(exp, A; dims = 1))[1] === missing
     @test_broken @inferred(extrema(exp, A; dims = 1))[1] === (missing, missing)
+end
+
+@testset "generic sum reductions; issue #31427" begin
+    add31427(a, b) = a+b
+    A = rand(1:10, 5, 5)
+    @test reduce(add31427, A, dims = (1, 2)) == reduce(+, A, dims = (1, 2)) == [sum(A);;]
+
+    As = [rand(5, 4) for _ in 1:2, _ in 1:3]
+    @test reduce(hcat, reduce(vcat, As, dims=1)) == [As[1,1] As[1,2] As[1,3]; As[2,1] As[2,2] As[2,3]]
+end
+
+@testset "sum with missings; issue #55213" begin
+    @test isequal(sum([0.0 1; 0.0 missing], dims=2), [1.0; missing;;])
+    @test sum([0.0 1; 0.0 missing], dims=2)[1] === 1.0
+    @test isequal(sum(Any[0.0 1; 0.0 missing], dims=2), [1.0; missing;;])
+    @test sum(Any[0.0 1; 0.0 missing], dims=2)[1] === 1.0
+
+    @test isequal(sum([1 0.0; 0.0 missing], dims=1), [1.0 missing])
+    @test sum([1 0.0; 0.0 missing], dims=1)[1] === 1.0
+    @test isequal(sum(Any[1 0.0; 0.0 missing], dims=1), [1.0 missing])
+    @test sum(Any[1 0.0; 0.0 missing], dims=1)[1] === 1.0
+end
+
+@testset "issues #45566 and #47231; initializers" begin
+    @test reduce(gcd, [1]; dims=1) == [reduce(gcd, [1])] == [1]
+
+    x = reshape(1:6, 2, 3)
+    @test reduce(+, x, dims=2) == [9;12;;]
+    @test reduce(-, x, dims=1) == [1-2 3-4 5-6]
+    @test reduce(/, x, dims=1) == [1/2 3/4 5/6]
+    @test reduce(^, x, dims=1) == [1^2 3^4 5^6]
+    # These have arbitrary associativity, but they shouldn't error
+    @test reduce(-, x, dims=2) in ([(1-3)-5; (2-4)-6;;], [1-(3-5); 2-(4-6);;])
+    @test reduce(/, x, dims=2) in ([(1/3)/5; (2/4)/6;;], [1/(3/5); 2/(4/6);;])
+    @test reduce(^, x, dims=2) in ([(1^3)^5; (2^4)^6;;], [1^(3^5); 2^(4^6);;])
+end
+
+@testset "better initializations" begin
+    @test mapreduce(_ -> pi, +, [1,2]; dims=1) == [mapreduce(_ -> pi, +, [1,2])] == [2pi]
+    @test mapreduce(_ -> pi, +, [1 2]; dims=2) == [mapreduce(_ -> pi, +, [1 2]);;] == [2pi;;]
+    @test mapreduce(_ -> pi, +, [1 2]; dims=(1,2)) == [2pi;;]
+    @test mapreduce(_ -> pi, +, [1]; dims=1) == [mapreduce(_ -> pi, +, [1])] == [pi]
+    @test mapreduce(_ -> pi, +, [1;;]; dims=2) == [mapreduce(_ -> pi, +, [1;;]);;] == [pi;;]
+    @test_throws ArgumentError mapreduce(_ -> pi, +, []; dims=1)
+    @test_throws ArgumentError mapreduce(_ -> pi, +, [;;]; dims=2)
+    @test_throws ArgumentError mapreduce(_ -> pi, +, [;;]; dims=(1,2))
+    @test_throws ArgumentError mapreduce(_ -> pi, +, [])
+    @test_throws ArgumentError mapreduce(_ -> pi, +, [;;])
+
+    @test mapreduce(x -> log(x-1), +, [2,3,4]; dims=1) == [mapreduce(x -> log(x-1), +, [2,3,4])] == [log(1) + log(2) + log(3)]
+    @test mapreduce(x -> log(x-1), +, [2,3]; dims=1) == [mapreduce(x -> log(x-1), +, [2,3])] == [log(1) + log(2)]
+    @test mapreduce(x -> log(x-1), +, [2]; dims=1) == [mapreduce(x -> log(x-1), +, [2])] == [log(1)]
+    @test mapreduce(x -> log(x-1), +, [2 3 4]; dims=2) == [mapreduce(x -> log(x-1), +, [2,3,4]);;] == [log(1) + log(2) + log(3);;]
+    @test mapreduce(x -> log(x-1), +, [2 3]; dims=2) == [mapreduce(x -> log(x-1), +, [2,3]);;] == [log(1) + log(2);;]
+    @test mapreduce(x -> log(x-1), +, [2;;]; dims=2) == [mapreduce(x -> log(x-1), +, [2]);;] == [log(1);;]
+    @test_throws ArgumentError mapreduce(x -> log(x-1), +, []; dims=1)
+    @test_throws ArgumentError mapreduce(x -> log(x-1), +, [;;]; dims=2)
+    @test_throws ArgumentError mapreduce(x -> log(x-1), +, [;;]; dims=(1,2))
+    @test_throws ArgumentError mapreduce(x -> log(x-1), +, [])
+    @test_throws ArgumentError mapreduce(x -> log(x-1), +, [;;])
+
+    @test sum(x->sqrt(x-1), ones(5); dims=1) == [sum(x->sqrt(x-1), ones(5))] == [0.0]
+    @test sum(x->sqrt(x-1), ones(1); dims=1) == [sum(x->sqrt(x-1), ones(1))] == [0.0]
+    @test_throws ArgumentError sum(x->sqrt(x-1), ones(0); dims=1)
+    @test_throws ArgumentError sum(x->sqrt(x-1), ones(0))
 end

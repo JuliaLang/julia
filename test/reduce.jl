@@ -666,10 +666,12 @@ x = [j+7 for j in i]
 end
 
 # make sure we specialize on mapfoldl(::Type, ...)
-@test @inferred(mapfoldl(Int, +, [1, 2, 3]; init=0)) === 6
+@testset "inference" begin
+    @test @inferred(mapfoldl(Int, +, [1, 2, 3]; init=0)) === 6
 
-# issue #39281
-@test @inferred(extrema(rand(2), dims=1)) isa Vector{Tuple{Float64,Float64}}
+    # issue #39281
+    @test @inferred(extrema(rand(2), dims=1)) isa Vector{Tuple{Float64,Float64}}
+end
 
 # issue #38627
 @testset "overflow in mapreduce" begin
