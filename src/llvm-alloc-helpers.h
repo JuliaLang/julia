@@ -47,7 +47,7 @@ namespace jl_alloc {
         bool multiloc:1;
         bool hasload:1;
         // The alloc has a non-julia object at this offset.
-        bool hasbits:1;
+        bool hasunboxed:1;
         llvm::Type *elty;
         llvm::SmallVector<MemOp,4> accesses;
         Field(uint32_t size, llvm::Type *elty)
@@ -56,7 +56,7 @@ namespace jl_alloc {
               hasaggr(false),
               multiloc(false),
               hasload(false),
-              hasbits(false),
+              hasunboxed(false),
               elty(elty)
         {
         }
@@ -99,7 +99,7 @@ namespace jl_alloc {
         bool has_unknown_objrefaggr:1;
 
         // The alloc has a non-julia object at an unknown offset.
-        bool has_unknown_bits:1;
+        bool has_unknown_unboxed:1;
 
         void reset()
         {
@@ -116,7 +116,7 @@ namespace jl_alloc {
             allockind = llvm::AllocFnKind::Unknown;
             has_unknown_objref = false;
             has_unknown_objrefaggr = false;
-            has_unknown_bits = false;
+            has_unknown_unboxed = false;
             uses.clear();
             preserves.clear();
             memops.clear();

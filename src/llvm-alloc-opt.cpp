@@ -252,12 +252,12 @@ void Optimizer::optimizeAll()
             removeAlloc(orig);
             continue;
         }
-        bool has_bits = use_info.has_unknown_bits;
+        bool has_unboxed = use_info.has_unknown_bits;
         bool has_ref = use_info.has_unknown_objref;
         bool has_refaggr = use_info.has_unknown_objrefaggr;
         for (auto memop: use_info.memops) {
             auto &field = memop.second;
-            has_bits |= field.hasbits;
+            has_unboxed |= field.hasbits;
             if (field.hasobjref) {
                 has_ref = true;
                 // This can be relaxed a little based on hasload
@@ -286,7 +286,11 @@ void Optimizer::optimizeAll()
             splitOnStack(orig);
             continue;
         }
-        if (has_bits && has_ref) {
+        // The move to stack code below, if has_ref is set, changes the allocation to an array of jlvalue_t's. This is fine
+        // if all objects are jlvalue_t's. However, if part of the allocation is not a julia object (e.g. it is a { float, jlvaluet }),
+        // then the moveToStackCAll will create a [2 x jlvaluet] bitcast to { float, jlvaluet }. The float clearly is not a GC
+        // value and will result in segfaults and other problems.
+        if (has_unboxed && has_ref) {
             REMARK([&]() {
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
                     << "GC allocation could not be split and contained both julia object and non-julia-object data, unable to move to stack " << ore::NV("GC Allocation", orig);
