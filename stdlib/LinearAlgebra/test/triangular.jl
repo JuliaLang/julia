@@ -1056,4 +1056,18 @@ end
     @test V == Diagonal([1, 1])
 end
 
+@testset "preserve structure in scaling by NaN" begin
+    M = rand(Int8,2,2)
+    for (Ts, TD) in (((UpperTriangular, UnitUpperTriangular), UpperTriangular),
+                    ((LowerTriangular, UnitLowerTriangular), LowerTriangular))
+        for T in Ts
+            U = T(M)
+            for V in (U * NaN, NaN * U, U / NaN, NaN \ U)
+                @test V isa TD{Float64, Matrix{Float64}}
+                @test all(isnan, diag(V))
+            end
+        end
+    end
+end
+
 end # module TestTriangular

@@ -643,6 +643,43 @@ function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriang
     return A
 end
 
+function _trirdiv!(A::UpperTriangular, B::UpperOrUnitUpperTriangular, c::Number)
+    n = checksize1(A, B)
+    for j in 1:n
+        for i in 1:j
+            @inbounds A[i, j] = B[i, j] / c
+        end
+    end
+    return A
+end
+function _trirdiv!(A::LowerTriangular, B::LowerOrUnitLowerTriangular, c::Number)
+    n = checksize1(A, B)
+    for j in 1:n
+        for i in j:n
+            @inbounds A[i, j] = B[i, j] / c
+        end
+    end
+    return A
+end
+function _trildiv!(A::UpperTriangular, c::Number, B::UpperOrUnitUpperTriangular)
+    n = checksize1(A, B)
+    for j in 1:n
+        for i in 1:j
+            @inbounds A[i, j] = c \ B[i, j]
+        end
+    end
+    return A
+end
+function _trildiv!(A::LowerTriangular, c::Number, B::LowerOrUnitLowerTriangular)
+    n = checksize1(A, B)
+    for j in 1:n
+        for i in j:n
+            @inbounds A[i, j] = c \ B[i, j]
+        end
+    end
+    return A
+end
+
 rmul!(A::UpperOrLowerTriangular, c::Number) = @inline _triscale!(A, A, c, MulAddMul())
 lmul!(c::Number, A::UpperOrLowerTriangular) = @inline _triscale!(A, c, A, MulAddMul())
 
@@ -964,7 +1001,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
     tstrided = t{<:Any, <:StridedMaybeAdjOrTransMat}
     @eval begin
         (*)(A::$t, x::Number) = $t(A.data*x)
-        (*)(A::$tstrided, x::Number) = A .* x
+        function (*)(A::$tstrided, x::Number)
+            eltype_dest = promote_op(*, eltype(A), typeof(x))
+            dest = $t(similar(parent(A), eltype_dest))
+            _triscale!(dest, x, A, MulAddMul())
+        end
 
         function (*)(A::$unitt, x::Number)
             B = $t(A.data)*x
@@ -975,7 +1016,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
         end
 
         (*)(x::Number, A::$t) = $t(x*A.data)
-        (*)(x::Number, A::$tstrided) = x .* A
+        function (*)(x::Number, A::$tstrided)
+            eltype_dest = promote_op(*, typeof(x), eltype(A))
+            dest = $t(similar(parent(A), eltype_dest))
+            _triscale!(dest, x, A, MulAddMul())
+        end
 
         function (*)(x::Number, A::$unitt)
             B = x*$t(A.data)
@@ -986,7 +1031,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
         end
 
         (/)(A::$t, x::Number) = $t(A.data/x)
-        (/)(A::$tstrided, x::Number) = A ./ x
+        function (/)(A::$tstrided, x::Number)
+            eltype_dest = promote_op(/, eltype(A), typeof(x))
+            dest = $t(similar(parent(A), eltype_dest))
+            _trirdiv!(dest, A,  x)
+        end
 
         function (/)(A::$unitt, x::Number)
             B = $t(A.data)/x
@@ -998,7 +1047,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
         end
 
         (\)(x::Number, A::$t) = $t(x\A.data)
-        (\)(x::Number, A::$tstrided) = x .\ A
+        function (\)(x::Number, A::$tstrided)
+            eltype_dest = promote_op(\, typeof(x), eltype(A))
+            dest = $t(similar(parent(A), eltype_dest))
+            _trildiv!(dest, x, A)
+        end
 
         function (\)(x::Number, A::$unitt)
             B = x\$t(A.data)
