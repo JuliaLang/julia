@@ -1156,7 +1156,8 @@ A type representing a partially-applied version of a function `f`, with the argu
 `(y1, y2, y3...; kws...) -> f(y1, y2, x, y3...; kws...)`.
 
 !!! compat "Julia 1.12"
-    This functionality requires at least Julia 1.12.
+    This general functionality requires at least Julia 1.12, while `Fix1` and `Fix2`
+    are available earlier.
 
 !!! note
     When nesting multiple `Fix`, note that the `N` in `Fix{N}` is _relative_ to the current
