@@ -352,5 +352,12 @@ end
             @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `0.5::Float64`") Fix{0.5}(>, 1)
             @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `1::UInt64`") Fix{UInt64(1)}(>, 1)
         end
+        @testset "Specialize to structs not in `Base`" begin
+            struct MyStruct
+                x::Int
+            end
+            f = Fix{1}(MyStruct, 1)
+            @test f isa Fix{1,Type{MyStruct},Int}
+        end
     end
 end
