@@ -3246,3 +3246,9 @@ end
     @test size(mem, 2) == 1
     @test size(mem, 0x2) == 1
 end
+
+@testset "MemoryRef" begin
+    mem = Memory{Float32}(undef, 3)
+    ref = memoryref(mem, 2)
+    @test parent(ref) === mem
+end
