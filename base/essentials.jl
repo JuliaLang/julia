@@ -501,7 +501,13 @@ julia> Base.tail(())
 ERROR: ArgumentError: Cannot call tail on an empty tuple.
 ```
 """
-tail(x::Tuple) = argtail(x...)
+function tail(x::Tuple{Any,Vararg})
+    y = argtail(x...)::Tuple
+    if x isa NTuple  # help the type inference
+        y = y::NTuple
+    end
+    y
+end
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
 function unwrap_unionall(@nospecialize(a))
