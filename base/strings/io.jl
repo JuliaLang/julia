@@ -382,8 +382,8 @@ escape_nul(c::Union{Nothing, AbstractChar}) =
     (c !== nothing && '0' <= c <= '7') ? "\\x00" : "\\0"
 
 """
-    escape_string(str::AbstractString[, esc]; keep = ())::AbstractString
-    escape_string(io, str::AbstractString[, esc]; keep = ())::Nothing
+    escape_string(str::AbstractString[, esc]; keep=(), ascii=false, fullhex=false)::AbstractString
+    escape_string(io, str::AbstractString[, esc]; keep=())::Nothing
 
 General escaping of traditional C and Unicode escape sequences. The first form returns the
 escaped string, the second prints the result to `io`.
@@ -398,10 +398,22 @@ escaped by a prepending backslash (`\"` is also escaped by default in the first 
 The argument `keep` specifies a collection of characters which are to be kept as
 they are. Notice that `esc` has precedence here.
 
+The argument `ascii` can be set to `true` to escape all non-ASCII characters,
+whereas the default `ascii=false` outputs printable Unicode characters as-is.
+(`keep` takes precedence over `ascii`.)
+
+The argument `fullhex` can be set to `true` to require all `\\u` escapes to be
+printed with 4 hex digits, and `\\U` escapes to be printed with 8 hex digits,
+whereas by default (`fullhex=false`) they are printed with fewer digits if
+possible (omitting leading zeros).
+
 See also [`unescape_string`](@ref) for the reverse operation.
 
 !!! compat "Julia 1.7"
     The `keep` argument is available as of Julia 1.7.
+
+!!! compat "Julia 1.12"
+    The `ascii` and `fullhex` arguments require Julia 1.12.
 
 # Examples
 ```jldoctest
@@ -421,7 +433,7 @@ julia> escape_string(string('\\u2135','\\0','0')) # \\0 would be ambiguous
 "ℵ\\\\x000"
 ```
 """
-function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
+function escape_string(io::IO, s::AbstractString, esc=""; keep = (), ascii::Bool=false, fullhex::Bool=false)
     a = Iterators.Stateful(s)
     for c::AbstractChar in a
         if c in esc
@@ -436,10 +448,10 @@ function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
             isprint(c)         ? print(io, c) :
                                  print(io, "\\x", string(UInt32(c), base = 16, pad = 2))
         elseif !isoverlong(c) && !ismalformed(c)
-            isprint(c)         ? print(io, c) :
-            c <= '\x7f'        ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
-            c <= '\uffff'      ? print(io, "\\u", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
-                                 print(io, "\\U", string(UInt32(c), base = 16, pad = need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
+            !ascii && isprint(c) ? print(io, c) :
+            c <= '\x7f'          ? print(io, "\\x", string(UInt32(c), base = 16, pad = 2)) :
+            c <= '\uffff'        ? print(io, "\\u", string(UInt32(c), base = 16, pad = fullhex || need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 4 : 2)) :
+                                   print(io, "\\U", string(UInt32(c), base = 16, pad = fullhex || need_full_hex(peek(a)::Union{AbstractChar,Nothing}) ? 8 : 4))
         else # malformed or overlong
             u = bswap(reinterpret(UInt32, c)::UInt32)
             while true
@@ -450,8 +462,8 @@ function escape_string(io::IO, s::AbstractString, esc=""; keep = ())
     end
 end
 
-escape_string(s::AbstractString, esc=('\"',); keep = ()) =
-    sprint((io)->escape_string(io, s, esc; keep = keep), sizehint=lastindex(s))
+escape_string(s::AbstractString, esc=('\"',); keep = (), ascii::Bool=false, fullhex::Bool=false) =
+    sprint((io)->escape_string(io, s, esc; keep, ascii, fullhex), sizehint=lastindex(s))
 
 function print_quoted(io, s::AbstractString)
     print(io, '"')

@@ -92,6 +92,9 @@ New library features
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `escape_string` takes additional keyword arguments `ascii=true` (to escape all
+  non-ASCII characters) and `fullhex=true` (to require full 4/8-digit hex numbers
+  for u/U escapes, e.g. for C compatibility) [#55099]).
 * `filter` can now act on a `NamedTuple` ([#50795]).
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
   the uniquing checking ([#53474])
