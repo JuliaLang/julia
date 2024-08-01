@@ -2871,7 +2871,7 @@ end
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
-    UNKNOWN = CallMeta(Type, Any, EFFECTS_THROWS, NoCallInfo())
+    UNKNOWN = CallMeta(Type, Any, Effects(EFFECTS_THROWS, terminates=false), NoCallInfo())
     if !(2 <= length(argtypes) <= 3)
         return UNKNOWN
     end
@@ -2916,27 +2916,30 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     end
     info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
     rt = widenslotwrapper(call.rt)
+    # effects are not an issue if we know this statement will get removed, but if it does not get removed,
+    # then this could be recursively re-entering inference (via concrete-eval), which will not terminate
+    effects = EFFECTS_TOTAL
     if isa(rt, Const)
         # output was computed to be constant
-        return CallMeta(Const(typeof(rt.val)), Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Const(typeof(rt.val)), Union{}, effects, info)
     end
     rt = widenconst(rt)
     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
         # output cannot be improved so it is known for certain
-        return CallMeta(Const(rt), Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Const(rt), Union{}, effects, info)
     elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
         # conservatively express uncertainty of this result
         # in two ways: both as being a subtype of this, and
         # because of LimitedAccuracy causes
-        return CallMeta(Type{<:rt}, Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{<:rt}, Union{}, Effects(effects; terminates=false), info)
     elseif isa(tt, Const) || isconstType(tt)
         # input arguments were known for certain
         # XXX: this doesn't imply we know anything about rt
-        return CallMeta(Const(rt), Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Const(rt), Union{}, effects, info)
     elseif isType(rt)
-        return CallMeta(Type{rt}, Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{rt}, Union{}, Effects(effects; terminates=false), info)
     else
-        return CallMeta(Type{<:rt}, Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{<:rt}, Union{}, Effects(effects; terminates=false), info)
     end
 end
 
