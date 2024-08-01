@@ -39,21 +39,24 @@ static void walk_print_cb(uv_handle_t *h, void *arg)
     const char *type = uv_handle_type_name(h->type);
     if (!type)
         type = "<unknown>";
+    size_t resource_id; // fits an int or pid_t on Unix, HANDLE or PID on Windows
     uv_os_fd_t fd;
     if (h->type == UV_PROCESS)
-        fd = uv_process_get_pid((uv_process_t*)h);
-    else if (uv_fileno(h, &fd))
-        fd = (uv_os_fd_t)-1;
+        resource_id = (size_t)uv_process_get_pid((uv_process_t*)h);
+    else if (uv_fileno(h, &fd) == 0)
+        resource_id = (size_t)fd;
+    else
+        resource_id = -1;
     const char *pad = "                "; // 16 spaces
-    int npad = fd == -1 ? 0 : snprintf(NULL, 0, "%zd", (size_t)fd);
+    int npad = resource_id == -1 ? 0 : snprintf(NULL, 0, "%zd", resource_id);
     if (npad < 0)
         npad = 0;
     npad += strlen(type);
     pad += npad < strlen(pad) ? npad : strlen(pad);
-    if (fd == -1)
+    if (resource_id == -1)
         jl_safe_printf(" %s   %s%p->%p\n", type,             pad, (void*)h, (void*)h->data);
     else
-        jl_safe_printf(" %s[%zd] %s%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s[%zd] %s%p->%p\n", type, resource_id, pad, (void*)h, (void*)h->data);
 }
 
 static void wait_empty_func(uv_timer_t *t)
