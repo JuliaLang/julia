@@ -165,11 +165,13 @@ OSLIBS += -Wl,-U,__dyld_atfork_parent -Wl,-U,__dyld_atfork_prepare -Wl,-U,__dyld
 LIBJULIA_PATH_REL := @rpath/libjulia
 else
 LIBJULIA_PATH_REL := libjulia
+RT_VERSIONSCRIPT := -Wl,--version-script=$(SRCDIR)/julia.expmap
+CG_VERSIONSCRIPT := -Wl,--version-script=$(SRCDIR)/codegen.expmap
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)
-RT_LIBS := $(WHOLE_ARCHIVE) $(LIBUV) $(WHOLE_ARCHIVE) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) -Wl,--version-script=$(SRCDIR)/julia.expmap $(LIBTRACYCLIENT) $(LIBITTAPI)
-CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) -Wl,--version-script=$(SRCDIR)/codegen.expmap $(LIBTRACYCLIENT) $(LIBITTAPI)
+RT_LIBS := $(WHOLE_ARCHIVE) $(LIBUV) $(WHOLE_ARCHIVE) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(RT_VERSIONSCRIPT) $(LIBTRACYCLIENT) $(LIBITTAPI)
+CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(CG_VERSIONSCRIPT) $(LIBTRACYCLIENT) $(LIBITTAPI)
 RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a -ljulia-debug $(RT_LIBS)
 CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia-debug -ljulia-internal-debug
 RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a -ljulia $(RT_LIBS)
