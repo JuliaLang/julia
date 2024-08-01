@@ -30,6 +30,7 @@ export
     Pager,
     request
 
+public Config, config, MultiSelectConfig
 public pick, cancel, writeline, options, numoptions, selected, header, keypress
 
 # TODO: remove in Julia 2.0
