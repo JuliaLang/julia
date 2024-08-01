@@ -308,7 +308,7 @@ end
 
                 # One over
                 fixed_g3 = Fix{3}(g, 100)
-                @test_throws ArgumentError("expected at least 2 arguments to a `Fix` function with `N=3`, but got 1") fixed_g3(1)
+                @test_throws ArgumentError("expected at least 2 arguments to `Fix{3}`, but got 1") fixed_g3(1)
             end
         end
         @testset "Type Stability and Inference" begin
@@ -343,28 +343,14 @@ end
             g3 = Fix{2}(g2, "3")
             @test g3("") == "123"
         end
-        @testset "With kwargs" begin
-            sum1 = Fix(sum; dims=1)
-            x = ones(3, 2)
-            sum1(x) == [3.0 3.0]
-        end
         @testset "Zero arguments" begin
             f = Fix{1}(x -> x, 'a')
             @test f() == 'a'
         end
         @testset "Dummy-proofing" begin
             @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, but got 0") Fix{0}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got `0.5::Float64`") Fix{0.5}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got `1::UInt64`") Fix{UInt64(1)}(>, 1)
-
-            # duplicate keywords
-            sum1 = Fix(sum; dims=1)
-            x = ones(3, 2)
-            @test sum1(x) == [3.0 3.0]
-            @test_throws ArgumentError("found duplicate keyword argument `dims` passed to a `Fix` function") sum1(x; dims=2)
-
-            # Trying to fix multiple keywords
-            @test_throws ArgumentError("`Fix` expects exactly one argument or keyword argument, but got keywords `(:kw1, :kw2)`") Fix((args...; kwargs...) -> 1; kw1=1, kw2=2)
+            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `0.5::Float64`") Fix{0.5}(>, 1)
+            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `1::UInt64`") Fix{UInt64(1)}(>, 1)
         end
     end
 end

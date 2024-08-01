@@ -1149,22 +1149,17 @@ julia> filter(!isletter, str)
 !(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
-    Fix{n}(f, x)
-    Fix{:kw}(f, x)
-    Fix(f; kw=x)
+    Fix{N}(f, x)
 
 A type representing a partially-applied version of a function `f`, with the argument
-`x` fixed at position `n::Int` or keyword `kw::Symbol`. In other words, `Fix{3}(f, x)`
-behaves similarly to `(y1, y2, y3...; kws...) -> f(y1, y2, x, y3...; kws...)`.
-
-You may also use this to fix keyword arguments. For example, `Fix(g; a=2)` behaves
-similarly to `(y...; kws...) -> g(y...; a=2, kws...)`. You can also write this as `Fix{:a}(g, 2)`.
+`x` fixed at position `N::Int`. In other words, `Fix{3}(f, x)` behaves similarly to
+`(y1, y2, y3...; kws...) -> f(y1, y2, x, y3...; kws...)`.
 
 !!! compat "Julia 1.12"
-    This functionality requires at least Julia 1.12.
+    The general form of `Fix1` and `Fix2` to `Fix{N}` requires at least Julia 1.12.
 
 !!! note
-    When nesting multiple `Fix`, note that the `n` in `Fix{n}` is _relative_ to the current
+    When nesting multiple `Fix`, note that the `N` in `Fix{N}` is _relative_ to the current
     available arguments, rather than an absolute ordering on the target function. For example,
     `Fix{1}(Fix{2}(f, 4), 4)` fixes the first and second arg, while `Fix{2}(Fix{1}(f, 4), 4)`
     fixes the first and third arg.
@@ -1174,28 +1169,18 @@ struct Fix{N,F,T} <: Function
     x::T
 
     function Fix{N}(f::F, x) where {N,F}
-        if N isa Int && N < 1
+        if !(N isa Int)
+            throw(ArgumentError("expected type parameter in `Fix` to be `Int`, but got `$N::$(typeof(N))`"))
+        elseif N < 1
             throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, but got $N"))
-        elseif !(N isa Union{Int,Symbol})
-            throw(ArgumentError("expected type parameter in `Fix` to be `Int` or `Symbol`, but got `$N::$(typeof(N))`"))
         end
         new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
 end
-function Fix(f::F; kws...) where {F}
-    length(kws) != 1 && throw(ArgumentError("`Fix` expects exactly one argument or keyword argument, but got keywords `$(keys(kws))`"))
-    Fix{only(keys(kws))}(f, only(values(kws)))
-end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
-    if N isa Symbol
-        N in keys(kws) && throw(ArgumentError("found duplicate keyword argument `$N` passed to a `Fix` function"))
-        f_kws = NamedTuple{(N,)}((f.x,))
-        return f.f(args...; f_kws..., kws...)
-    else # Int
-        M < N-1 && throw(ArgumentError("expected at least $(N-1) arguments to a `Fix` function with `N=$(N)`, but got $M"))
-        return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
-    end
+    M < N-1 && throw(ArgumentError("expected at least $(N-1) arguments to `Fix{$(N)}`, but got $M"))
+    return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
 end
 
 # Special cases for improved constant propagation
