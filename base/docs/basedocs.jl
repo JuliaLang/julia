@@ -1706,7 +1706,7 @@ An operation tried to access invalid `property` of `type`.
 !!! compat "Julia 1.12"
     Prior to Julia 1.12, invalid field access threw an [`ErrorException`](@ref)
 
-See [`getfield`, `FieldError``](@ref)
+See [`getfield`, `getproperty`](@ref)
 
 # Examples
 ```jldoctest
