@@ -76,7 +76,8 @@ class of tokenization errors and lets the parser deal with them.
 * Using `try catch else finally end` is parsed with `K"catch"` `K"else"` and `K"finally"` children to avoid the awkwardness of the optional child nodes in the `Expr` representation (#234)
 * The dotted import path syntax as in `import A.b.c` is parsed with a `K"importpath"` kind rather than `K"."`, because a bare `A.b.c` has a very different nested/quoted expression representation (#244)
 * We use flags rather than child nodes to represent the difference between `struct` and `mutable struct`, `module` and `baremodule` (#220)
-* Iterations are represented with the `iteration` head rather than `=` within the header of a `for`. Thus `for i=is ; body end` parses to `(for (iteration i is) (block body))`. Cartesian iteration as in `for a=as, b=bs body end` are represented with a longer `iteration` block rather than a `block` containing `=` because these lists of iterators are neither semantically nor syntactically a sequence of statements, unlike other uses of `block`. Generators also use the `iteration` head - see information on that below.
+* Iterations are represented with the `iteration` and `in` heads rather than `=` within the header of a `for`. Thus `for i=is ; body end` parses to `(for (iteration (in i is)) (block body))`. Cartesian iteration as in `for a=as, b=bs body end` are represented with a nested `(iteration (in a as) (in b bs))` rather than a `block` containing `=` because these lists of iterators are neither semantically nor syntactically a sequence of statements, unlike other uses of `block`. Generators also use the `iteration` head - see information on that below.
+* Short form functions like `f(x) = x + 1` are represented with the `function` head rather than the `=` head. In this case the `SHORT_FORM_FUNCTION_FLAG` flag is set to allow the surface syntactic form to be easily distinguished from long form functions.
 
 ## More detail on tree differences
 
@@ -123,8 +124,8 @@ source much more closely. For example, `(xy for x in xs for y in ys)` is parsed 
 ```
 (generator
   xy
-  (iteration x xs)
-  (iteration y ys))
+  (iteration (in x xs))
+  (iteration (in y ys)))
 ```
 
 And the cartesian iteration `(xy for x in xs, y in ys)` is parsed as
@@ -132,7 +133,7 @@ And the cartesian iteration `(xy for x in xs, y in ys)` is parsed as
 ```
 (generator
   xy
-  (iteration x xs y ys))
+  (iteration (in x xs) (in y ys)))
 ```
 
 ### Whitespace trivia inside strings
