@@ -38,6 +38,7 @@ public clear,
     Allocs
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
+using StyledStrings: @styled_str
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
 
@@ -503,7 +504,7 @@ end
 
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
-function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
+function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,String}})
     return get!(filenamecache, spath) do
         path = Base.fixup_stdlib_path(string(spath))
         if isabspath(path)
@@ -523,19 +524,19 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                             isempty(pkgid.name) && return path # bad Project file
                             # return the joined the module name prefix and path suffix
                             path = path[nextind(path, sizeof(root)):end]
-                            return string("@", pkgid.name, path)
+                            return string("@", pkgid.name), path
                         end
                     end
                 end
             end
-            return path
+            return "", path
         elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
-            return joinpath("@Base", normpath(path))
+            return "@Base", normpath(path)
         else
             # for non-existent relative paths (such as "REPL[1]"), just consider simplifying them
-            return normpath(path) # drop leading "./"
+            return "", normpath(path) # drop leading "./"
         end
     end
 end
@@ -766,7 +767,7 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         m = m[keep]
     end
     util_perc = (1 - (nsleeping / totalshots)) * 100
-    filenamemap = Dict{Symbol,String}()
+    filenamemap = Dict{Symbol,Tuple{String,String}}()
     if isempty(lilist)
         if is_subsection
             Base.print(io, "Total snapshots: ")
@@ -790,7 +791,7 @@ end
 
 function print_flat(io::IO, lilist::Vector{StackFrame},
         n::Vector{Int}, m::Vector{Int},
-        cols::Int, filenamemap::Dict{Symbol,String},
+        cols::Int, filenamemap::Dict{Symbol,Tuple{String,String}},
         fmt::ProfileFormat)
     if fmt.sortedby === :count
         p = sortperm(n)
@@ -802,7 +803,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
     lilist = lilist[p]
     n = n[p]
     m = m[p]
-    filenames = String[short_path(li.file, filenamemap) for li in lilist]
+    pkgnames_filenames = Tuple{String,String}[short_path(li.file, filenamemap) for li in lilist]
     funcnames = String[string(li.func) for li in lilist]
     wcounts = max(6, ndigits(maximum(n)))
     wself = max(9, ndigits(maximum(m)))
@@ -813,7 +814,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
         li = lilist[i]
         maxline = max(maxline, li.line)
         maxfunc = max(maxfunc, length(funcnames[i]))
-        maxfile = max(maxfile, length(filenames[i]))
+        maxfile = max(maxfile, sum(textwidth, pkgnames_filenames[i]) + 1)
     end
     wline = max(5, ndigits(maxline))
     ntext = max(20, cols - wcounts - wself - wline - 3)
@@ -841,9 +842,17 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
                 Base.print(io, "[any unknown stackframes]")
             end
         else
-            file = filenames[i]
+            pkgname, file = pkgnames_filenames[i]
             isempty(file) && (file = "[unknown file]")
-            Base.print(io, rpad(rtruncto(file, wfile), wfile, " "), " ")
+            pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
+            Base.printstyled(io, pkgname, color=pkgcolor)
+            file_trunc = rtruncto(file, wfile)
+            wpad = wfile - textwidth(pkgname)
+            if !isempty(pkgname) && !startswith(file_trunc, "/")
+                Base.print(io, "/")
+                wpad -= 1
+            end
+            Base.print(io, rpad(file_trunc, wpad, " "), " ")
             Base.print(io, lpad(li.line > 0 ? string(li.line) : "?", wline, " "), " ")
             fname = funcnames[i]
             if !li.from_c && li.linfo !== nothing
@@ -889,14 +898,17 @@ function indent(depth::Int)
     return indent
 end
 
-function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,String}, showpointer::Bool)
+# mimics Stacktraces
+const PACKAGE_FIXEDCOLORS = Dict{String, Any}("@Base" => :light_black, "@Core" => :light_black)
+
+function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,Tuple{String,String}}, showpointer::Bool)
     nindent = min(cols>>1, level)
     ndigoverhead = ndigits(maxes.overhead)
     ndigcounts = ndigits(maxes.count)
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    strs = Vector{String}(undef, length(frames))
+    strs = Vector{Base.AnnotatedString{String}}(undef, length(frames))
     showextra = false
     if level > nindent
         nextra = level - nindent
@@ -924,7 +936,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 else
                     fname = string(li.func)
                 end
-                filename = short_path(li.file, filenamemap)
+                pkgname, filename = short_path(li.file, filenamemap)
                 if showpointer
                     fname = string(
                         "0x",
@@ -932,8 +944,12 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                         " ",
                         fname)
                 end
-                strs[i] = string(stroverhead, "╎", base, strcount, " ",
-                    rtruncto(filename, widthfile),
+                pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
+                remaining_path = rtruncto(filename, widthfile - length(pkgname) - 1)
+                strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ",
+                    styled"{$pkgcolor:$pkgname}",
+                    !isempty(pkgname) && !startswith(remaining_path, "/") ? "/" : "",
+                    remaining_path,
                     ":",
                     li.line == -1 ? "?" : string(li.line),
                     "; ",
@@ -1101,7 +1117,7 @@ end
 # avoid stack overflows.
 function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat, is_subsection::Bool) where T
     maxes = maxstats(bt)
-    filenamemap = Dict{Symbol,String}()
+    filenamemap = Dict{Symbol,Tuple{String,String}}()
     worklist = [(bt, 0, 0, "")]
     if !is_subsection
         Base.print(io, "Overhead ╎ [+additional indent] Count File:Line; Function\n")
@@ -1197,20 +1213,33 @@ function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoFlatDict)
 end
 
 # Utilities
-function rtruncto(str::String, w::Int)
+function rtruncto(str::AbstractString, w::Int, replace_str::AbstractString = "…")
     if textwidth(str) <= w
         return str
     else
-        return string("…", str[prevind(str, end, w-2):end])
+        i, acclen = firstindex(str), textwidth(replace_str)
+        while acclen + textwidth(str[i]) <= w && i < lastindex(str)
+            acclen += textwidth(str[i])
+            i = nextind(str, i)
+        end
+        return str[firstindex(str):prevind(str, i)] * replace_str
     end
 end
-function ltruncto(str::String, w::Int)
+
+function ltruncto(str::AbstractString, w::Int, replace_str::AbstractString = "…")
     if textwidth(str) <= w
         return str
     else
-        return string(str[1:nextind(str, 1, w-2)], "…")
+        i, acclen = lastindex(str), textwidth(replace_str)
+        while acclen + textwidth(str[i]) <= w && i > firstindex(str)
+            acclen += textwidth(str[i])
+            i = prevind(str, i)
+        end
+        return replace_str * str[nextind(str, i):lastindex(str)]
     end
 end
+
+
 
 
 truncto(str::Symbol, w::Int) = truncto(string(str), w)
