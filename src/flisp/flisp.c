@@ -2488,7 +2488,7 @@ int fl_load_system_image(fl_context_t *fl_ctx, value_t sys_image_iostream)
 #ifndef _OS_WINDOWS_
 extern int asprintf(char **str, const char *fmt, ...) {}
 #endif
-  
+
 #ifdef __cplusplus
 }
 #endif
