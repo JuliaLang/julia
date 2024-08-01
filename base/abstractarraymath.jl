@@ -134,7 +134,7 @@ julia> dropdims(insertdims(x, dims=(1,2,5)), dims=(1,2,5))
     Requires Julia 1.12 or later.
 """
 insertdims(A; dims) = _insertdims(A, dims)
-function _insertdims(A::AbstractArray{T, N}, dims::Tuple{Vararg{Int64, M}}) where {T, N, M}
+function _insertdims(A::AbstractArray{T, N}, dims::NTuple{M, Int}}) where {T, N, M}
     for i in eachindex(dims)
         1 ≤ dims[i] || throw(ArgumentError("the smallest entry in dims must be ≥ 1."))
         dims[i] ≤ N+M || throw(ArgumentError("the largest entry in dims must be not larger than the dimension of the array and the length of dims added"))
