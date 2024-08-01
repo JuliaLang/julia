@@ -1170,16 +1170,16 @@ struct Fix{N,F,T} <: Function
 
     function Fix{N}(f::F, x) where {N,F}
         if !(N isa Int)
-            throw(ArgumentError("expected type parameter in `Fix` to be `Int`, but got `$N::$(typeof(N))`"))
+            throw(ArgumentError(LazyString("expected type parameter in `Fix` to be `Int`, but got `", N, "::", typeof(N), "`")))
         elseif N < 1
-            throw(ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, but got $N"))
+            throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
         end
         new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
 end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
-    M < N-1 && throw(ArgumentError("expected at least $(N-1) arguments to `Fix{$(N)}`, but got $M"))
+    M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
     return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
 end
 
