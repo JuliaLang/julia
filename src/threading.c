@@ -465,8 +465,6 @@ void jl_safepoint_resume_all_threads(jl_task_t *ct)
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
-void jl_free_thread_gc_state(jl_ptls_t ptls);
-
 static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
 #ifndef _OS_WINDOWS_

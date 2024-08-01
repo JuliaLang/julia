@@ -1011,12 +1011,12 @@ static void *signal_listener(void *arg)
         else if (critical) {
             // critical in this case actually means SIGINFO request
 #ifndef SIGINFO // SIGINFO already prints something similar automatically
-            int nrunning = 0;
+            int n_threads_running = 0;
             for (int idx = nthreads; idx-- > 0; ) {
                 jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[idx];
-                nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
+                n_threads_running += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
             }
-            jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, nthreads);
+            jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), n_threads_running, nthreads);
 #endif
 
             jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
