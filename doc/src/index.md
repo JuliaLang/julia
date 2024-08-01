@@ -127,12 +127,17 @@ language. In addition to the above, some advantages of Julia over comparable sys
   * Powerful shell-like capabilities for managing other processes
   * Lisp-like macros and other metaprogramming facilities
 
-## [Julia Core, Base and the Standard Library](@id man-core-base-and-stdlib)
+## [Julia Standard Modules and the Standard Library](@id man-standard-modules-stdlib)
+
+The Julia runtime comes with [standard modules](@ref standard-modules),
+which are essential namespaces that are usually loaded automatically.
 
 ```@docs; canonical=false
 Core
 Base
 ```
+
+Julia's `Base` module contains various [useful submodules](@id base-submodules).
 
 ### [The Standard Library](@id man-stdlib)
 
@@ -140,6 +145,7 @@ The Julia standard library contains additional, commonly used packages that are 
 To use a standard library package, it is first necessary to load the package with a [`using`](@ref) or [`import`](@ref) statement.
 Links to available standard library packages are provided below,
 and may also be found in the website sidebar.
+Their source code is available in the `Sys.STDLIB` directory of a Julia installation.
 
 ```@eval
 import Markdown

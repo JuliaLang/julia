@@ -108,14 +108,14 @@ where
 ::
 ```
 
-## Standard Modules
+## [Standard Modules](@id standard-modules)
 ```@docs
 Main
 Core
 Base
 ```
 
-## Base Submodules
+## [Base Submodules](@id base-submodules)
 ```@docs
 Base.Broadcast
 Base.Docs
