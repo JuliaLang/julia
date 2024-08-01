@@ -637,7 +637,7 @@ function _collect(::Type{T}, itr, isz::SizeUnknown) where T
 end
 
 # make a collection similar to `c` and appropriate for collecting `itr`
-_similar_for(c, ::Type{T}, itr, isz, shp) where {T} = similar(c, T)
+_similar_for(c, ::Type{T}, itr, isz, shp) where {T} = similar(c, T, shp)
 
 _similar_shape(itr, ::SizeUnknown) = nothing
 _similar_shape(itr, ::HasLength) = length(itr)::Integer

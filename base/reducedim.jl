@@ -172,6 +172,16 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted, 
     return R
 end
 
+if isdefined(Core, :Compiler)
+    function _mapreduce_might_widen(f::F, op::G, ::Type{T}) where {F,G,T}
+        return !isconcretetype(Core.Compiler.return_type(x->op(f(x), f(x)), Tuple{T}))
+    end
+else
+    _mapreduce_might_widen(_, _, _) = true
+end
+
+
+
 #### Reduction initialization ####
 #
 # Similar to the scalar mapreduce, there are two*three cases we need to consider
@@ -183,7 +193,8 @@ end
 #   * One value: Fill with `mapreduce_first` & return
 #   * Two+ values: Fill with `op(f(a1), f(a2))`, proceed <--- this is the hard case:
 #       * Proceeding involves skipping the first two inner iterations
-function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims)
+_mapreduce_dim(::Type{F}, op::G, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) where {F, G} = _mapreduce_dim(x->F(x), op, Base._InitialValue(), A, dims)
+function _mapreduce_dim(f::F, op::G, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) where {F, G}
     rinds = reduced_indices(A, dims)
     lsiz = check_reducedims_axes(rinds, axes(A))
     outer_inds = CartesianIndices(rinds)
@@ -194,20 +205,25 @@ function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, d
 
     inner1, inner2 = inner_inds
     merger = merge_outer_inner_prep(rinds, dims)
+    _mapreduce_might_widen(f, op, eltype(A)) && return collect_similar(A, (
+        begin
+            # slow path that supports incremental widening
+            r = op(f(A[merge_outer_inner(IR, inner1, merger)]), f(A[merge_outer_inner(IR, inner2, merger)]))
+            for IA in Iterators.drop(inner_inds, 2)
+                r = op(r, f(A[merge_outer_inner(IR, IA, merger)]))
+            end
+            r
+        end for IR in outer_inds))
+
     # Create the result vector with the first step of the reduction
     # note that this is using a (potentially) bad cache ordering, so we don't want to continue like this
     i1 = first(outer_inds)
     v = op(f(A[merge_outer_inner(i1, inner1, merger)]), f(A[merge_outer_inner(i1, inner2, merger)]))
-    R = _mapreduce_similar(f, op, A, typeof(v), rinds)
+    R = similar(A, typeof(v), rinds)
     R[begin] = v
     for i in Iterators.drop(outer_inds, 1)
-        v = op(f(A[merge_outer_inner(i, inner1, merger)]), f(A[merge_outer_inner(i, inner2, merger)]))
-        if !(typeof(v) <: eltype(R))
-            Rnew = _mapreduce_similar(f, op, A, promote_type(eltype(R), typeof(v)), rinds)
-            copyto!(Rnew, R) # TODO: could only copy from begin:i
-            R = Rnew
-        end
-        R[i] = v
+        v = op(f(@inbounds(A[merge_outer_inner(i, inner1, merger)])), f(@inbounds(A[merge_outer_inner(i, inner2, merger)])))
+        @inbounds R[i] = v
     end
 
     if has_fast_linear_indexing(A) && lsiz > 0
@@ -231,7 +247,7 @@ function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, d
     else
         # Take care of the smallest cartesian "rectangle" that includes our two peeled elements
         small_inner, large_inner = _split2(inner_inds)
-        # and we may as well try to do this in a cache-advantageous manner
+        # and we may as well try to do this small part in a cache-advantageous manner
         if something(findfirst((>)(1), size(inner_inds))) < something(findfirst((>)(1), size(outer_inds)), typemax(Int))
             for IR in outer_inds
                 @inbounds r = R[IR]
@@ -281,37 +297,12 @@ function _split2(ci::CartesianIndices{N}) where {N}
             CartesianIndices(ntuple(d->d==sliced_dim ? inds[d][begin+nskip+1:end] : inds[d][begin:end], Val(N))))
 end
 
-_mapreduce_similar(f, op, A, ::Type{T}, axes) where {T} = similar(A,T,axes)
-# Extrema, max and min have special support for preserving the original matrix eltype with identity maps
-function _mapreduce_similar(f::ExtremaMap{typeof(identity)}, op::typeof(_extrema_rf), A, ::Type{Tuple{T,T}}, axes) where {T}
-    similar(A,Tuple{promote_type(eltype(A),T),promote_type(eltype(A),T)},axes)
-end
-function _mapreduce_similar(f::typeof(identity), op::Union{typeof(min), typeof(max)}, A, ::Type{T}, axes) where {T}
-    similar(A,promote_type(eltype(A),T),axes)
-end
-
 function _mapreduce_empty_array(f, op, A, axes)
     init = mapreduce_empty(f, op, eltype(A))
-    return fill!(_mapreduce_similar(f, op, A, typeof(init), axes), init)
+    return fill!(similar(A, typeof(init), axes), init)
 end
 
-function _mapreduce_one_array(f, op, A, axes)
-    idxs = CartesianIndices(axes)
-    i1 = first(idxs)
-    v = mapreduce_first(f, op, A[i1])
-    R = _mapreduce_similar(f, op, A, typeof(v), axes)
-    R[i1] = v
-    for i in Iterators.drop(idxs, 1)
-        v = mapreduce_first(f, op, A[i])
-        if !(typeof(v) <: eltype(R))
-            Rnew = _mapreduce_similar(f, op, A, promote_type(eltype(R), typeof(v)), axes)
-            copyto!(Rnew, R)
-            R = Rnew
-        end
-        R[i] = v
-    end
-    return R
-end
+_mapreduce_one_array(f, op, A, axes) = collect_similar(A, (mapreduce_first(f, op, A[i]) for i in CartesianIndices(axes)))
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
     (_mapreducedim!(f, op, R, A); R)

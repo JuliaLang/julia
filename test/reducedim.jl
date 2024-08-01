@@ -610,7 +610,7 @@ function unordered_test_for_extrema(a; dims_test = ((), 1, 2, (1,2), 3))
     for dims in dims_test
         vext = extrema(a; dims)
         vmin, vmax = minimum(a; dims), maximum(a; dims)
-        @test isequal(extrema!(copy(vext), a), vext)
+        @test isequal(extrema!(similar(vext, NTuple{2, eltype(a)}), a), vext)
         @test all(x -> isequal(x[1], x[2:3]), zip(vext,vmin,vmax))
     end
     true
