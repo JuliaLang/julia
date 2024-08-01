@@ -137,7 +137,7 @@ Core
 Base
 ```
 
-Julia's `Base` module contains various [useful submodules](@id base-submodules).
+Julia's `Base` module contains various [useful submodules](@ref base-submodules).
 
 ### [The Standard Library](@id man-stdlib)
 
