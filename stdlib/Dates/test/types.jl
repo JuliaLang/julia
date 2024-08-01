@@ -41,6 +41,7 @@ end
     @test Dates.isleapyear(-1) == false
     @test Dates.isleapyear(4) == true
     @test Dates.isleapyear(-4) == true
+    @test_throws MethodError Dates.isleapyear(Dates.Year(1992))
 end
 # Create "test" check manually
 y = Dates.Year(1)

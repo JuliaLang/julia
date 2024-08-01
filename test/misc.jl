@@ -132,7 +132,7 @@ end
 # Lockable{T, L<:AbstractLock}
 using Base: Lockable
 let
-    @test_broken Base.isexported(Base, :Lockable)
+    @test Base.isexported(Base, :Lockable)
     lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
     # note field access is non-public
     @test lockable.value["foo"] == "hello"
@@ -321,23 +321,32 @@ v11801, t11801 = @timed sin(1)
 @test names(@__MODULE__, all = true) == names_before_timing
 
 redirect_stdout(devnull) do # suppress time prints
+
 # Accepted @time argument formats
 @test @time true
 @test @time "message" true
+@test @time 1 true
 let msg = "message"
     @test @time msg true
 end
 let foo() = "message"
     @test @time foo() true
 end
+let foo() = 1
+    @test @time foo() true
+end
 
 # Accepted @timev argument formats
 @test @timev true
 @test @timev "message" true
+@test @timev 1 true
 let msg = "message"
     @test @timev msg true
 end
 let foo() = "message"
+    @test @timev foo() true
+end
+let foo() = 1
     @test @timev foo() true
 end
 
@@ -1547,4 +1556,24 @@ end
 
 @testset "Base.Libc docstrings" begin
     @test isempty(Docs.undocumented_names(Libc))
+end
+
+@testset "Silenced missed transformations" begin
+    # Ensure the WarnMissedTransformationsPass is not on by default
+    src = """
+        @noinline iteration(i) = (@show(i); return nothing)
+        @eval function loop_unroll_full_fail(N)
+            for i in 1:N
+              iteration(i)
+              \$(Expr(:loopinfo, (Symbol("llvm.loop.unroll.full"), 1)))
+          end
+       end
+       loop_unroll_full_fail(3)
+    """
+    out_err = mktemp() do _, f
+        run(`$(Base.julia_cmd()) -e "$src"`, devnull, devnull, f)
+        seekstart(f)
+        read(f, String)
+    end
+    @test !occursin("loop not unrolled", out_err)
 end

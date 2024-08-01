@@ -86,7 +86,7 @@ declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #2
 declare void @ijl_gc_queue_root({} addrspace(10)*) #3
 
 ; Function Attrs: allocsize(1)
-declare noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc(i8*, i32, i32) #1
+declare noalias nonnull {} addrspace(10)* @ijl_gc_small_alloc(i8*, i32, i32, i8*) #1
 
 ; Function Attrs: allocsize(1)
 declare noalias nonnull {} addrspace(10)* @ijl_gc_big_alloc(i8*, i64) #1
