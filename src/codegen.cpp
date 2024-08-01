@@ -3374,11 +3374,14 @@ static size_t emit_masked_bits_compare(callback &emit_desc, jl_datatype_t *aty, 
     size_t padding_bytes = 0;
     size_t nfields = jl_datatype_nfields(aty);
     size_t total_size = jl_datatype_size(aty);
+    assert(aty->layout->flags.isbitsegal);
     for (size_t i = 0; i < nfields; ++i) {
         size_t offset = jl_field_offset(aty, i);
         size_t fend = i == nfields - 1 ? total_size : jl_field_offset(aty, i + 1);
         size_t fsz = jl_field_size(aty, i);
         jl_datatype_t *fty = (jl_datatype_t*)jl_field_type(aty, i);
+        assert(jl_is_datatype(fty)); // union fields should never reach here
+        assert(fty->layout->flags.isbitsegal);
         if (jl_field_isptr(aty, i) || !fty->layout->flags.haspadding) {
             // The field has no internal padding
             data_bytes += fsz;

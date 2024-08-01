@@ -44,7 +44,7 @@ struct ABI_PPC64leLayout : AbiLayout {
 // count the homogeneous floating aggregate size (saturating at max count of 8)
 unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
 {
-    if (jl_datatype_size(ty) > 128 || ty->layout->npointers || ty->layout->flags.haspadding)
+    if (jl_datatype_size(ty) > 128 || ty->layout->npointers || !ty->layout->flags.isbitsegal || ty->layout->flags.haspadding)
         return 9;
 
     size_t i, l = ty->layout->nfields;
