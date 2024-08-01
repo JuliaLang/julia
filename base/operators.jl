@@ -1170,13 +1170,13 @@ struct Fix{N,F,T} <: Function
     f::F
     x::T
 
-    function Fix{N}(f::Union{F,Type{F}}, x) where {N,F}
+    function Fix{N}(f::F, x) where {N,F}
         if !(N isa Int)
             throw(ArgumentError(LazyString("expected type parameter in `Fix` to be `Int`, but got `", N, "::", typeof(N), "`")))
         elseif N < 1
             throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
         end
-        new{N,(f isa Type{F} ? Type{F} : F),_stable_typeof(x)}(f, x)
+        new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
     end
 end
 
