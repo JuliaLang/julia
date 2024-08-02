@@ -339,11 +339,13 @@ function _global_julia_startup_file()
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
     BINDIR = Sys.BINDIR
     SYSCONFDIR = Base.SYSCONFDIR
+    p1 = nothing
     if !isempty(SYSCONFDIR)
         p1 = abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl")
         isfile(p1) && return p1
     end
     p2 = abspath(BINDIR, "..", "etc", "julia", "startup.jl")
+    p1 == p2 && return nothing # don't check the same path twice
     isfile(p2) && return p2
     return nothing
 end
