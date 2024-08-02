@@ -449,6 +449,9 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     if is_effect_overridden(override, :consistent_overlay)
         ipo_effects = Effects(ipo_effects; nonoverlayed=CONSISTENT_OVERLAY)
     end
+    if is_effect_overridden(override, :no_return_type_call)
+        ipo_effects = Effects(ipo_effects; no_return_type_call=true)
+    end
     return ipo_effects
 end
 

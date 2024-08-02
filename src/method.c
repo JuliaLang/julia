@@ -491,6 +491,8 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
                         if (noub_if_noinbounds) li->purity.overrides.ipo_noub_if_noinbounds = noub_if_noinbounds;
                         int8_t consistent_overlay = jl_unbox_bool(jl_exprarg(ma, 9));
                         if (consistent_overlay) li->purity.overrides.ipo_consistent_overlay = consistent_overlay;
+                        int8_t no_return_type_call = jl_unbox_bool(jl_exprarg(ma, 10));
+                        if (no_return_type_call) li->purity.overrides.ipo_no_return_type_call = no_return_type_call;
                     }
                 }
                 else

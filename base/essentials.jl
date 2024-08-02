@@ -202,7 +202,8 @@ macro _total_meta()
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#true))
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
@@ -216,7 +217,8 @@ macro _foldable_meta()
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#true))
 end
 # can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
 macro _terminates_locally_meta()
@@ -230,7 +232,8 @@ macro _terminates_locally_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally` (supposed to be used for bootstrapping)
 macro _terminates_globally_meta()
@@ -244,7 +247,8 @@ macro _terminates_globally_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally :notaskstate` (supposed to be used for bootstrapping)
 macro _terminates_globally_notaskstate_meta()
@@ -258,7 +262,8 @@ macro _terminates_globally_notaskstate_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#false))
 end
 # can be used in place of `@assume_effects :terminates_globally :noub` (supposed to be used for bootstrapping)
 macro _terminates_globally_noub_meta()
@@ -272,7 +277,8 @@ macro _terminates_globally_noub_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#false))
 end
 # can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
 macro _effect_free_terminates_locally_meta()
@@ -286,7 +292,8 @@ macro _effect_free_terminates_locally_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#false))
 end
 # can be used in place of `@assume_effects :nothrow :noub` (supposed to be used for bootstrapping)
 macro _nothrow_noub_meta()
@@ -300,7 +307,8 @@ macro _nothrow_noub_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#false))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _nothrow_meta()
@@ -314,7 +322,8 @@ macro _nothrow_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#false))
 end
 # can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
 macro _noub_meta()
@@ -342,7 +351,8 @@ macro _notaskstate_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#false))
 end
 # can be used in place of `@assume_effects :noub_if_noinbounds` (supposed to be used for bootstrapping)
 macro _noub_if_noinbounds_meta()
@@ -356,7 +366,8 @@ macro _noub_if_noinbounds_meta()
         #=:inaccessiblememonly=#false,
         #=:noub=#false,
         #=:noub_if_noinbounds=#true,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#false))
 end
 
 # another version of inlining that propagates an inbounds context

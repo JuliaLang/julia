@@ -284,7 +284,8 @@ macro _foldable_meta()
         #=:inaccessiblememonly=#true,
         #=:noub=#true,
         #=:noub_if_noinbounds=#false,
-        #=:consistent_overlay=#false))
+        #=:consistent_overlay=#false,
+        #=:no_return_type_call=#true))
 end
 
 macro inline()   Expr(:meta, :inline)   end
