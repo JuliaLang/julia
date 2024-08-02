@@ -3953,7 +3953,7 @@ macro __RELOCDIR__()
     dir = impl__DIR__(__source__.file)
     the_depot, subpath = dir, missing
     for depot in DEPOT_PATH
-        if startswith(dir, depot)
+        if startswith(dir, string(depot,Filesystem.pathsep())) || dir == depot
             the_depot = depot
             subpath = replace(dir, depot=>"", count=1)
             break
