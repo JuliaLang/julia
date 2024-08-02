@@ -63,6 +63,11 @@ Multi-threading changes
 * `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
 * A new public (but unexported) struct `Base.Lockable{T, L<:AbstractLock}` makes it easy to bundle a resource and its lock together ([#52898]).
 
+Build system changes
+--------------------
+
+* There is a new `Makefile` to build Julia and LLVM using the profile-guided and link-time optimizations (PGO and LTO) strategies, see `contrib/pgo-lto/Makefile` ([#45641]).
+
 New library functions
 ---------------------
 
@@ -220,6 +225,7 @@ Tooling Improvements
 [#42593]: https://github.com/JuliaLang/julia/issues/42593
 [#43845]: https://github.com/JuliaLang/julia/issues/43845
 [#45156]: https://github.com/JuliaLang/julia/issues/45156
+[#45641]: https://github.com/JuliaLang/julia/issues/45641
 [#46501]: https://github.com/JuliaLang/julia/issues/46501
 [#47354]: https://github.com/JuliaLang/julia/issues/47354
 [#47679]: https://github.com/JuliaLang/julia/issues/47679
