@@ -70,9 +70,7 @@ end
 
 function _leaf_to_Expr(source, txtbuf, head, srcrange, node)
     k = kind(head)
-    if k == K"core_@cmd"
-        return GlobalRef(Core, Symbol("@cmd"))
-    elseif k == K"MacroName" && view(source, srcrange) == "."
+    if k == K"MacroName" && view(source, srcrange) == "."
         return Symbol("@__dot__")
     elseif is_error(k)
         return k == K"error" ?
@@ -102,7 +100,7 @@ end
 #
 # This function concatenating adjacent string chunks together as done in the
 # reference parser.
-function _string_to_Expr(k, args)
+function _string_to_Expr(args)
     args2 = Any[]
     i = 1
     while i <= length(args)
@@ -140,7 +138,7 @@ function _string_to_Expr(k, args)
         #   """\n  a\n  b""" ==>  "a\nb"
         return only(args2)
     else
-        # This only happens when k == K"string" or when an error has occurred. 
+        # This only happens when the kind is K"string" or when an error has occurred. 
         return Expr(:string, args2...)
     end
 end
@@ -212,12 +210,16 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         # K"var" and K"char" nodes, but this discounts having embedded error
         # nodes when ignore_errors=true is set.
         return args[1]
-    elseif k == K"string" || k == K"cmdstring"
-        return _string_to_Expr(k, args)
+    elseif k == K"string"
+        return _string_to_Expr(args)
     end
 
     loc = source_location(LineNumberNode, source, first(srcrange))
     endloc = source_location(LineNumberNode, source, last(srcrange))
+
+    if k == K"cmdstring"
+        return Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), loc, _string_to_Expr(args))
+    end
 
     _fixup_Expr_children!(head, loc, args)
 
@@ -229,6 +231,13 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
     if k == K"?"
         headsym = :if
     elseif k == K"macrocall"
+        if length(args) == 2 
+            a2 = args[2]
+            if @isexpr(a2, :macrocall) && kind(childheads[1]) == K"CmdMacroName"
+                # Fix up for custom cmd macros like `` foo`x` ``
+                args[2] = a2.args[3]
+            end
+        end
         do_lambda = _extract_do_lambda!(args)
         _reorder_parameters!(args, 2)
         insert!(args, 2, loc)

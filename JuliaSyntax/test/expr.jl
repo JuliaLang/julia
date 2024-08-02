@@ -663,6 +663,24 @@
             Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(2), "x", :f)
     end
 
+    @testset "String and cmd macros" begin
+        # Custom string macros
+        @test parsestmt("foo\"str\"") ==
+            Expr(:macrocall, Symbol("@foo_str"), LineNumberNode(1), "str")
+        # Bare @cmd
+        @test parsestmt("\n`str`") ==
+            Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), LineNumberNode(2), "str")
+        # Custom cmd macros
+        @test parsestmt("foo`str`") ==
+            Expr(:macrocall, Symbol("@foo_cmd"), LineNumberNode(1), "str")
+        @test parsestmt("foo```\n  a\n  b```") ==
+            Expr(:macrocall, Symbol("@foo_cmd"), LineNumberNode(1), "a\nb")
+        # Expr conversion distinguishes from explicit calls to a macro of the same name
+        @test parsestmt("@foo_cmd `str`") ==
+            Expr(:macrocall, Symbol("@foo_cmd"), LineNumberNode(1),
+                 Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), LineNumberNode(1), "str"))
+    end
+
     @testset "return" begin
         @test parsestmt("return x") == Expr(:return, :x)
         @test parsestmt("return")  == Expr(:return, nothing)

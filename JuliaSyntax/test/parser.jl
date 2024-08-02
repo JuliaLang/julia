@@ -847,9 +847,9 @@ tests = [
         # __dot__ macro
         "@. x" => "(macrocall @. x)"
         # cmd strings
-        "``"         =>  "(macrocall core_@cmd (cmdstring-r \"\"))"
-        "`cmd`"      =>  "(macrocall core_@cmd (cmdstring-r \"cmd\"))"
-        "```cmd```"  =>  "(macrocall core_@cmd (cmdstring-s-r \"cmd\"))"
+        "``"         =>  "(cmdstring-r \"\")"
+        "`cmd`"      =>  "(cmdstring-r \"cmd\")"
+        "```cmd```"  =>  "(cmdstring-s-r \"cmd\")"
         # literals
         "true" => "true"
         "42"   => "42"
@@ -922,7 +922,7 @@ tests = [
         # Triple-quoted dedenting:
         "\"\"\"\nx\"\"\""   =>  raw"""(string-s "x")"""
         "\"\"\"\n\nx\"\"\"" =>  raw"""(string-s "\n" "x")"""
-        "```\n x\n y```"    =>  raw"""(macrocall core_@cmd (cmdstring-s-r "x\n" "y"))"""
+        "```\n x\n y```"    =>  raw"""(cmdstring-s-r "x\n" "y")"""
         # Various newlines (\n \r \r\n) and whitespace (' ' \t)
         "\"\"\"\n x\n y\"\"\""  =>  raw"""(string-s "x\n" "y")"""
         "\"\"\"\r x\r y\"\"\""  =>  raw"""(string-s "x\n" "y")"""
@@ -976,7 +976,7 @@ tests = [
         "'ab'"        =>  "(char (ErrorOverLongCharacter))"
         "\"\xf5\""    =>  "(string (ErrorInvalidUTF8))"
         "'\xf5'"      =>  "(char (ErrorInvalidUTF8))"
-        "`\xf5`"      =>  "(macrocall core_@cmd (cmdstring-r (ErrorInvalidUTF8)))"
+        "`\xf5`"      =>  "(cmdstring-r (ErrorInvalidUTF8))"
         "10.0e1000'"  =>  "(ErrorNumericOverflow)"
         "10.0f100'"   =>  "(ErrorNumericOverflow)"
     ],
@@ -1053,8 +1053,8 @@ parsestmt_test_specs = [
     # detecting raw vs non-raw strings. The old parser was tightly coupled to
     # the lexer and the parser state was used to disambiguate these cases.
     "x in' '" => "(call-i x in (char (error)))"
-    "x in'``\$" => "(call-i x in (call-i (juxtapose (char '`' (error-t)) (macrocall core_@cmd (cmdstring-r (error-t)))) \$ (error)))"
-    "var\"#\"`str`" => "(juxtapose (var # (error-t)) (macrocall core_@cmd (cmdstring-r \"str\")))"
+    "x in'``\$" => "(call-i x in (call-i (juxtapose (char '`' (error-t)) (cmdstring-r (error-t))) \$ (error)))"
+    "var\"#\"`str`" => "(juxtapose (var # (error-t)) (cmdstring-r \"str\"))"
     "var\"#\"\"str\"" => "(juxtapose (var # (error-t)) (error-t) (string \"str\"))"
 ]
 
