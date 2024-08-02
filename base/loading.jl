@@ -3185,7 +3185,7 @@ function replace_depot_path(path::AbstractString)
             depot = dirname(depot)
         end
 
-        if startswith(path, depot)
+        if startswith(path, string(depot, Filesystem.pathsep())) || path == depot
             path = replace(path, depot => "@depot"; count=1)
             break
         end
