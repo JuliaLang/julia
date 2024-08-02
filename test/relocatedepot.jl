@@ -32,7 +32,12 @@ if !test_relocated_depot
             mktempdir() do dir
                 pushfirst!(DEPOT_PATH, dir)
                 path = dir*dir
-                @test Base.replace_depot_path(path) == "@depot"*dir
+                if Sys.iswindows()
+                    # dirs start with a drive letter instead of a path separator
+                    @test Base.replace_depot_path(path) == path
+                else
+                    @test Base.replace_depot_path(path) == "@depot"*dir
+                end
             end
         end
 
@@ -43,12 +48,42 @@ if !test_relocated_depot
                 if isdirpath(DEPOT_PATH[1])
                     DEPOT_PATH[1] = dirname(DEPOT_PATH[1]) # strip trailing pathsep
                 end
-                tag = joinpath("@depot", "") # append a pathsep
+                tag = string("@depot", Base.Filesystem.pathsep())
                 @test startswith(Base.replace_depot_path(path), tag)
-                DEPOT_PATH[1] = joinpath(DEPOT_PATH[1], "") # append a pathsep
+                DEPOT_PATH[1] = string(DEPOT_PATH[1], Base.Filesystem.pathsep())
                 @test startswith(Base.replace_depot_path(path), tag)
                 popfirst!(DEPOT_PATH)
                 @test !startswith(Base.replace_depot_path(path), tag)
+            end
+        end
+
+        # 55340
+        test_harness(empty_depot_path=true) do
+            mktempdir() do dir
+                jlrc = joinpath(dir, "julia-rc2")
+                jl   = joinpath(dir, "julia")
+                mkdir(jl)
+                push!(DEPOT_PATH, jl)
+                @test Base.replace_depot_path(jl) == "@depot"
+                @test Base.replace_depot_path(string(jl,Base.Filesystem.pathsep())) ==
+                            string("@depot",Base.Filesystem.pathsep())
+                @test Base.replace_depot_path(jlrc) != "@depot-rc2"
+                @test Base.replace_depot_path(jlrc) == jlrc
+            end
+            if Sys.iswindows()
+                # windows accepts '\\' and '/' as path separators
+                mktempdir() do dir
+                    jlrc = string(dir, "/", "julia-rc2")
+                    jl   = string(dir, "/", "julia")
+                    mkdir(jl)
+                    push!(DEPOT_PATH, jl)
+                    @test Base.replace_depot_path(jl) == "@depot"
+                    @test Base.replace_depot_path(string(jl,"/"))  == string("@depot","\\")
+                    @test Base.replace_depot_path(string(jl,"\\")) == string("@depot","\\")
+                    @test Base.replace_depot_path(jlrc) != "@depot-rc2"
+                    @test Base.replace_depot_path(jlrc) ==
+                        replace(jlrc, Base.Filesystem.path_separator_re=>"\\")
+                end
             end
         end
 

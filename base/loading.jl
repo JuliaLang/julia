@@ -3177,12 +3177,19 @@ mutable struct CacheHeaderIncludes
 end
 
 function replace_depot_path(path::AbstractString)
+    @static if Sys.iswindows()
+        path = replace(path, Filesystem.path_separator_re=>Filesystem.pathsep())
+    end
     for depot in DEPOT_PATH
         !isdir(depot) && continue
 
         # Strip extraneous pathseps through normalization.
         if isdirpath(depot)
             depot = dirname(depot)
+        end
+
+        @static if Sys.iswindows()
+            depot = replace(depot, Filesystem.path_separator_re=>Filesystem.pathsep())
         end
 
         if startswith(path, string(depot, Filesystem.pathsep())) || path == depot
