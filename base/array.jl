@@ -660,7 +660,7 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
 
 
 """
-    collect(collection)
+    collect(iterator)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
 a `Vector` of `key=>value` [Pair](@ref Pair)s. If the argument is array-like or is an iterator
@@ -670,6 +670,9 @@ and number of dimensions as the argument.
 Used by [comprehensions](@ref man-comprehensions) to turn a [generator expression](@ref man-generators)
 into an `Array`. Thus, *on generators*, the square-brackets notation may be used instead of calling `collect`,
 see second example.
+
+The element type of the returned array is based on the types of the values collected. However, if the
+iterator is empty then the element type of the returned (empty) array is determined by type inference.
 
 # Examples
 
@@ -691,6 +694,21 @@ julia> collect(x^2 for x in 1:3)
  1
  4
  9
+```
+
+Collecting an empty iterator where the result type depends on type inference:
+
+```jldoctest
+julia> [rand(Bool) ? 1 : missing for _ in []]
+Union{Missing, Int64}[]
+```
+
+When the iterator is non-empty, the result type depends only on values:
+
+```
+julia> [rand(Bool) ? 1 : missing for _ in [""]]
+1-element Vector{Int64}:
+ 1
 ```
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(itr))
