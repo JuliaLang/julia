@@ -58,12 +58,14 @@ but which do not execute the operator or return a Bool:
 """
 (<:)
 
+import Core: >:
+
 """
     >:(T1, T2)
 
 Supertype operator, equivalent to `T2 <: T1`.
 """
-(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+>:
 
 """
     supertype(T::Union{DataType, UnionAll})
@@ -111,9 +113,10 @@ Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
 
-[`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
-[`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
-should therefore also implement [`hash`](@ref).
+Equality and hashing are intimately related; two values that are considered [`isequal`](@ref) **must**
+have the same [`hash`](@ref) and by default `isequal` falls back to `==`. If a type customizes the behavior of `==` and/or [`isequal`](@ref),
+then [`hash`](@ref) must be similarly implemented to ensure `isequal` and `hash` agree. `Set`s, `Dict`s, and many other internal
+implementations assume that this invariant holds.
 
 If some type defines `==`, [`isequal`](@ref), and [`isless`](@ref) then it should
 also implement [`<`](@ref) to ensure consistency of comparisons.
@@ -345,6 +348,7 @@ true
 ===
 const ≡ = ===
 
+import Core: !==
 """
     !==(x, y)
     ≢(x,y)
@@ -362,7 +366,8 @@ julia> a ≢ a
 false
 ```
 """
-!==(@nospecialize(x), @nospecialize(y)) = !(x === y)
+!==
+
 const ≢ = !==
 
 """

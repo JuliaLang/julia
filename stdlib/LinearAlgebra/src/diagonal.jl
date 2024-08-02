@@ -268,10 +268,10 @@ end
 (-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
 for f in (:+, :-)
-    @eval function $f(D::Diagonal, S::Symmetric)
+    @eval function $f(D::Diagonal{<:Number}, S::Symmetric)
         return Symmetric($f(D, S.data), sym_uplo(S.uplo))
     end
-    @eval function $f(S::Symmetric, D::Diagonal)
+    @eval function $f(S::Symmetric, D::Diagonal{<:Number})
         return Symmetric($f(S.data, D), sym_uplo(S.uplo))
     end
     @eval function $f(D::Diagonal{<:Real}, H::Hermitian)
@@ -684,9 +684,9 @@ function kron(A::Diagonal, B::SymTridiagonal)
 end
 function kron(A::Diagonal, B::Tridiagonal)
     # `_droplast!` is only guaranteed to work with `Vector`
-    kd = _makevector(kron(diag(A), B.d))
-    kdl = _droplast!(_makevector(kron(diag(A), _pushzero(B.dl))))
-    kdu = _droplast!(_makevector(kron(diag(A), _pushzero(B.du))))
+    kd = convert(Vector, kron(diag(A), B.d))
+    kdl = _droplast!(convert(Vector, kron(diag(A), _pushzero(B.dl))))
+    kdu = _droplast!(convert(Vector, kron(diag(A), _pushzero(B.du))))
     Tridiagonal(kdl, kd, kdu)
 end
 

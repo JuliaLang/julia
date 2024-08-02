@@ -15,6 +15,7 @@
 extern "C" {
 #endif
 
+uv_mutex_t symtab_lock;
 static _Atomic(jl_sym_t*) symtab = NULL;
 
 #define MAX_SYM_LEN ((size_t)INTPTR_MAX - sizeof(jl_taggedvalue_t) - sizeof(jl_sym_t) - 1)
@@ -35,7 +36,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
 {
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
-    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb, 0, sizeof(void*), 0);
+    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc(nb, 0, sizeof(void*), 0);
     sym = (jl_sym_t*)jl_valueof(tag);
     // set to old marked so that we won't look at it in the GC or write barrier.
     jl_set_typetagof(sym, jl_symbol_tag, GC_OLD_MARKED);
@@ -86,15 +87,15 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT // (or throw)
     _Atomic(jl_sym_t*) *slot;
     jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);
     if (node == NULL) {
-        uv_mutex_lock(&gc_perm_lock);
+        uv_mutex_lock(&symtab_lock);
         // Someone might have updated it, check and look up again
         if (jl_atomic_load_relaxed(slot) != NULL && (node = symtab_lookup(slot, str, len, &slot))) {
-            uv_mutex_unlock(&gc_perm_lock);
+            uv_mutex_unlock(&symtab_lock);
             return node;
         }
         node = mk_symbol(str, len);
         jl_atomic_store_release(slot, node);
-        uv_mutex_unlock(&gc_perm_lock);
+        uv_mutex_unlock(&symtab_lock);
     }
     return node;
 }

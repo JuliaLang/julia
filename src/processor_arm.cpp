@@ -11,7 +11,7 @@
 
 // This nesting is required to allow compilation on musl
 #define USE_DYN_GETAUXVAL
-#if defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_CPU_AARCH64_)
 #  undef USE_DYN_GETAUXVAL
 #  include <sys/auxv.h>
 #elif defined(__GLIBC_PREREQ)
@@ -737,7 +737,16 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 #  define AT_HWCAP2 26
 #endif
 
-#if defined(USE_DYN_GETAUXVAL)
+#if defined(_OS_FREEBSD_)
+static inline unsigned long jl_getauxval(unsigned long type)
+{
+    unsigned long val;
+    if (elf_aux_info((int)type, &val, sizeof(val)) != 0) {
+        return 0;
+    }
+    return val;
+}
+#elif defined(USE_DYN_GETAUXVAL)
 static unsigned long getauxval_procfs(unsigned long type)
 {
     int fd = open("/proc/self/auxv", O_RDONLY);

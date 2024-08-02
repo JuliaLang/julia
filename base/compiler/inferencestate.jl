@@ -312,6 +312,9 @@ mutable struct InferenceState
         nargtypes = length(argtypes)
         for i = 1:nslots
             argtyp = (i > nargtypes) ? Bottom : argtypes[i]
+            if argtyp === Bool && has_conditional(typeinf_lattice(interp))
+                argtyp = Conditional(i, Const(true), Const(false))
+            end
             slottypes[i] = argtyp
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
         end
