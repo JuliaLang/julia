@@ -541,6 +541,14 @@ end
     end
 end
 
+f44906(x) = maximum(f44906, x); f44906(x::Number) = x
+g44906(x) = mapreduce(g44906, max, x); g44906(x::Number) = x
+@testset "inference with minimum/maximum, issue #44906" begin
+    x = [[1, 2], [3, 4]];
+    @test @inferred(f44906(x)) == 4
+    @test @inferred(g44906(x)) == 4
+end
+
 # issue #6672
 @test sum(Real[1 2 3; 4 5.3 7.1], dims=2) == reshape([6, 16.4], 2, 1)
 @test sum(Any[1 2;3 4], dims=1) == [4 6]
