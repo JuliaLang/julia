@@ -48,6 +48,9 @@ Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
 Base.lpad
 Base.rpad
+Base.ltrunc
+Base.rtrunc
+Base.ctrunc
 Base.findfirst(::AbstractString, ::AbstractString)
 Base.findnext(::AbstractString, ::AbstractString, ::Integer)
 Base.findnext(::AbstractChar, ::AbstractString, ::Integer)

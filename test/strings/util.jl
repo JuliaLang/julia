@@ -67,6 +67,36 @@ end
     @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
 end
 
+@testset "string truncation (ltrunc, rtrunc, ctrunc)" begin
+    @test ltrunc("foo", 4) == "foo"
+    @test ltrunc("foo", 3) == "foo"
+    @test ltrunc("foo", 2) == "…o"
+    @test ltrunc("🍕🍕 I love 🍕", 10) == "…I love 🍕" # handle wide emojis
+    @test ltrunc("🍕🍕 I love 🍕", 10, "[…]") == "[…]love 🍕"
+    # when the replacement string is longer than the trunc
+    # trust that the user wants the replacement string rather than erroring
+    @test ltrunc("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @test rtrunc("foo", 4) == "foo"
+    @test rtrunc("foo", 3) == "foo"
+    @test rtrunc("foo", 2) == "f…"
+    @test rtrunc("🍕🍕 I love 🍕", 10) == "🍕🍕 I lo…"
+    @test rtrunc("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕 I […]"
+    @test rtrunc("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @test ctrunc("foo", 4) == "foo"
+    @test ctrunc("foo", 3) == "foo"
+    @test ctrunc("foo", 2) == "f…"
+    @test ctrunc("foo", 2; prefer_left=true) == "f…"
+    @test ctrunc("foo", 2; prefer_left=false) == "…o"
+    @test ctrunc("foobar", 6) == "foobar"
+    @test ctrunc("foobar", 5) == "fo…ar"
+    @test ctrunc("foobar", 4) == "fo…r"
+    @test ctrunc("🍕🍕 I love 🍕", 10) == "🍕🍕 …e 🍕"
+    @test ctrunc("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕[…] 🍕"
+    @test ctrunc("abc", 2, "xxxxxx") == "xxxxxx"
+end
+
 # string manipulation
 @testset "lstrip/rstrip/strip" begin
     @test strip("") == ""

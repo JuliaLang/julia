@@ -514,6 +514,126 @@ function rpad(
 end
 
 """
+    rtrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…")
+
+Truncate `str` to at most `w` characters (see [`textwidth`](@ref)), replacing the last characters
+with `replace_str` if necessary. The default replacement string is "…".
+
+# Examples
+```jldoctest
+julia> s = rtrunc("🍕🍕 I love 🍕", 10)
+"🍕🍕 I lo…"
+
+julia> textwidth(s)
+10
+
+julia> rtrunc("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltrunc`](@ref) and [`ctrunc`](@ref).
+"""
+function rtrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…")
+    if textwidth(str) <= w
+        return str
+    else
+        i, accwidth = firstindex(str), textwidth(replace_str)
+        while true
+            tw = textwidth(str[i])
+            accwidth + tw <= w || break # no need to check if we go out of bounds because of the first if branch
+            accwidth += tw
+            i = nextind(str, i)
+        end
+        return str[firstindex(str):prevind(str, i)] * replace_str
+    end
+end
+
+"""
+    ltrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…")
+
+Truncate `str` to at most `w` characters (see [`textwidth`](@ref)), replacing the first characters
+with `replace_str` if necessary. The default replacement string is "…".
+
+# Examples
+```jldoctest
+julia> s = ltrunc("🍕🍕 I love 🍕", 10)
+"…I love 🍕"
+
+julia> textwidth(s)
+10
+
+julia> ltrunc("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`rtrunc`](@ref) and [`ctrunc`](@ref).
+"""
+function ltrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…")
+    if textwidth(str) <= w
+        return str
+    else
+        i, accwidth = lastindex(str), textwidth(replace_str)
+        while true
+            tw = textwidth(str[i])
+            accwidth + tw <= w || break # no need to check if we go out of bounds because of the first if branch
+            accwidth += tw
+            i = prevind(str, i)
+        end
+        return replace_str * str[nextind(str, i):lastindex(str)]
+    end
+end
+
+"""
+    ctrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…"; prefer_left::Bool = true)
+
+Truncate `str` to at most `w` characters (see [`textwidth`](@ref)), replacing the middle characters
+with `replace_str` if necessary. The default replacement string is "…". By default, the truncation
+prefers keeping chars on the left, but this can be changed by setting `prefer_left` to `false`.
+
+# Examples
+```jldoctest
+julia> s = ctrunc("🍕🍕 I love 🍕", 10)
+"🍕🍕 …e 🍕"
+
+julia> textwidth(s)
+10
+
+julia> ctrunc("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltrunc`](@ref) and [`rtrunc`](@ref).
+"""
+function ctrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…"; prefer_left::Bool = true)
+    if textwidth(str) <= w
+        return str
+    else
+        l, r, accwidth = firstindex(str), lastindex(str), textwidth(replace_str)
+        isleft = prefer_left
+        while true
+            tw = if isleft textwidth(str[l]) else textwidth(str[r]) end
+            (accwidth += tw) <= w || break
+            if isleft
+                l = nextind(str, l)
+            else
+                r = prevind(str, r)
+            end
+            isleft = !isleft
+        end
+        return str[firstindex(str):prevind(str, l)] * replace_str * str[nextind(str, r):lastindex(str)]
+    end
+end
+
+"""
     eachsplit(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
     eachsplit(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 
