@@ -185,11 +185,11 @@ end
 
 stat(fd::OS_HANDLE)         = @stat_call jl_fstat OS_HANDLE fd
 function stat(path::AbstractString)
-    @debug "stat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
+    # @info "stat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
     @stat_call jl_stat  Cstring path
 end
 function lstat(path::AbstractString)
-    @debug "lstat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
+    # @info "lstat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
     @stat_call jl_lstat Cstring path
 end
 if RawFD !== OS_HANDLE
