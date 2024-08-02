@@ -41,7 +41,7 @@ merge_outer_inner(outer::CartesianIndex{N}, inner::CartesianIndex{N}, use_inner:
     CartesianIndex(_mapifelse(use_inner, inner.I, outer.I))
 _mapifelse(b::NTuple{N,Bool}, x::NTuple{N}, y::NTuple{N}) where {N} = (ifelse(b[1], x[1], y[1]), _mapifelse(tail(b), tail(x), tail(y))...)
 _mapifelse(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
-merge_outer_inner_prep(tup::NTuple{N}, region) where {N} = ntuple(d->d in region, Val(N))
+merge_outer_inner_prep(tup, region) where {N} = ntuple(d->d in region, Val(length(tup)))
 
 function _check_valid_region(region)
     for d in region

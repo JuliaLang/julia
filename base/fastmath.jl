@@ -403,11 +403,6 @@ minimum_fast(a; kw...) = Base.reduce(min_fast, a; kw...)
 maximum_fast(f, a; kw...) = Base.mapreduce(f, max_fast, a; kw...)
 minimum_fast(f, a; kw...) = Base.mapreduce(f, min_fast, a; kw...)
 
-Base._mapreduce_similar(f, ::typeof(max_fast), A, ::Type{T}, axes) where {T} =
-    Base._mapreduce_similar(f, max, A, T, axes)
-Base._mapreduce_similar(f, ::typeof(min_fast), A, ::Type{T}, axes) where {T} =
-    Base._mapreduce_similar(f, min, A, T, axes)
-
 maximum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
     maximum!_fast(identity, r, A; kw...)
 minimum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
