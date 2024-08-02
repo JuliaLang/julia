@@ -252,8 +252,8 @@ tr(B::Bidiagonal) = sum(B.dv)
 
 function kron(A::Diagonal, B::Bidiagonal)
     # `_droplast!` is only guaranteed to work with `Vector`
-    kdv = _makevector(kron(diag(A), B.dv))
-    kev = _droplast!(_makevector(kron(diag(A), _pushzero(B.ev))))
+    kdv = convert(Vector, kron(diag(A), B.dv))
+    kev = _droplast!(convert(Vector, kron(diag(A), _pushzero(B.ev))))
     Bidiagonal(kdv, kev, B.uplo)
 end
 

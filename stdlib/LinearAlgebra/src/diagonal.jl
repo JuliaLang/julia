@@ -684,9 +684,9 @@ function kron(A::Diagonal, B::SymTridiagonal)
 end
 function kron(A::Diagonal, B::Tridiagonal)
     # `_droplast!` is only guaranteed to work with `Vector`
-    kd = _makevector(kron(diag(A), B.d))
-    kdl = _droplast!(_makevector(kron(diag(A), _pushzero(B.dl))))
-    kdu = _droplast!(_makevector(kron(diag(A), _pushzero(B.du))))
+    kd = convert(Vector, kron(diag(A), B.d))
+    kdl = _droplast!(convert(Vector, kron(diag(A), _pushzero(B.dl))))
+    kdu = _droplast!(convert(Vector, kron(diag(A), _pushzero(B.du))))
     Tridiagonal(kdl, kd, kdu)
 end
 
