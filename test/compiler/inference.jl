@@ -1538,7 +1538,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_nothrow(String)
     @test !sizeof_nothrow(Type{String})
     @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
-    let PT = Core.Compiler.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
+    let PT = Core.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
         @test sizeof_tfunc(PT) === Const(16)
         @test nfields_tfunc(PT) === Const(2)
         @test sizeof_nothrow(PT)
@@ -4743,32 +4743,40 @@ end
 
 # issue #43784
 @testset "issue #43784" begin
-    init = Base.ImmutableDict{Any,Any}()
-    a = Const(init)
-    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, Any])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c)
-    @test ⊑(b, c)
+    ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
+    ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    Const, PartialStruct = Core.Const, Core.PartialStruct
 
-    init = Base.ImmutableDict{Number,Number}()
-    a = Const(init)
-    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c) && ⊑(b, c)
-    @test c === typeof(init)
-
-    a = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c) && ⊑(b, c)
-    @test c.fields[2] === Any # or Number
-    @test c.fields[3] === ComplexF64
-
-    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c)
-    @test ⊑(b, c)
-    @test c.fields[2] === Complex
-    @test c.fields[3] === Complex
+    let init = Base.ImmutableDict{Any,Any}()
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(init), Any, Any])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === typeof(init)
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === typeof(init)
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c.fields[2] === Number
+        @test c.fields[3] === ComplexF64
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c.fields[2] === Complex
+        @test c.fields[3] === Complex
+    end
 
     global const ginit43784 = Base.ImmutableDict{Any,Any}()
     @test Base.return_types() do
@@ -5887,7 +5895,11 @@ end
 end == Val{true}
 @test Base.infer_return_type((Any,Any,)) do a, b
     Val(isdefined(PartiallyInitialized1(a, b), :c))
-end == Val{false}
+end >: Val{false}
+@test Base.infer_return_type((PartiallyInitialized1,)) do x
+    @assert isdefined(x, :a)
+    return Val(isdefined(x, :c))
+end == Val
 @test Base.infer_return_type((Any,Any,Any)) do a, b, c
     Val(isdefined(PartiallyInitialized1(a, b, c), :c))
 end == Val{true}
@@ -5949,6 +5961,13 @@ end |> Core.Compiler.is_nothrow
         return x[]
     end
 end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any); optimize=false) do a, c
+    x = PartiallyInitialized2(a)
+    x.c = c
+    if isdefined(x, :c)
+        return x.b
+    end
+end |> !Core.Compiler.is_nothrow
 
 # End to end test case for the partially initialized struct with `PartialStruct`
 @noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)

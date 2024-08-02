@@ -328,6 +328,9 @@ const issimpleenoughtupleelem = issimpleenoughtype
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
+        if length(typea.fields) > datatype_min_ninitialized(unwrap_unionall(aty))
+            return false # TODO more accuracy here?
+        end
         for i = 1:length(typea.fields)
             ai = unwrapva(typea.fields[i])
             bi = fieldtype(aty, i)
@@ -572,34 +575,43 @@ end
 
 # N.B. This can also be called with both typea::Const and typeb::Const to
 # to recover PartialStruct from `Const`s with overlapping fields.
-@nospecializeinfer function tmerge_partial_struct(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
+@nospecializeinfer function tmerge_partial_struct(𝕃::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
     aty = widenconst(typea)
     bty = widenconst(typeb)
     if aty === bty
         # must have egal here, since we do not create PartialStruct for non-concrete types
-        typea_nfields = nfields_tfunc(lattice, typea)
-        typeb_nfields = nfields_tfunc(lattice, typeb)
+        typea_nfields = nfields_tfunc(𝕃, typea)
+        typeb_nfields = nfields_tfunc(𝕃, typeb)
         isa(typea_nfields, Const) || return nothing
         isa(typeb_nfields, Const) || return nothing
         type_nfields = typea_nfields.val::Int
-        type_nfields === typeb_nfields.val::Int || return nothing
+        type_nfields == typeb_nfields.val::Int || return nothing
         type_nfields == 0 && return nothing
+        if typea isa PartialStruct
+            if typeb isa PartialStruct
+                length(typea.fields) == length(typeb.fields) || return nothing
+            else
+                length(typea.fields) == type_nfields || return nothing
+            end
+        elseif typeb isa PartialStruct
+            length(typeb.fields) == type_nfields || return nothing
+        end
         fields = Vector{Any}(undef, type_nfields)
         anyrefine = false
         for i = 1:type_nfields
-            ai = getfield_tfunc(lattice, typea, Const(i))
-            bi = getfield_tfunc(lattice, typeb, Const(i))
+            ai = getfield_tfunc(𝕃, typea, Const(i))
+            bi = getfield_tfunc(𝕃, typeb, Const(i))
             # N.B.: We're assuming here that !isType(aty), because that case
             # only arises when typea === typeb, which should have been caught
             # before calling this.
             ft = fieldtype(aty, i)
-            if is_lattice_equal(lattice, ai, bi) || is_lattice_equal(lattice, ai, ft)
+            if is_lattice_equal(𝕃, ai, bi) || is_lattice_equal(𝕃, ai, ft)
                 # Since ai===bi, the given type has no restrictions on complexity.
                 # and can be used to refine ft
                 tyi = ai
-            elseif is_lattice_equal(lattice, bi, ft)
+            elseif is_lattice_equal(𝕃, bi, ft)
                 tyi = bi
-            elseif (tyi′ = tmerge_field(lattice, ai, bi); tyi′ !== nothing)
+            elseif (tyi′ = tmerge_field(𝕃, ai, bi); tyi′ !== nothing)
                 # allow external lattice implementation to provide a custom field-merge strategy
                 tyi = tyi′
             else
@@ -621,8 +633,8 @@ end
             end
             fields[i] = tyi
             if !anyrefine
-                anyrefine = has_nontrivial_extended_info(lattice, tyi) || # extended information
-                            ⋤(lattice, tyi, ft) # just a type-level information, but more precise than the declared type
+                anyrefine = has_nontrivial_extended_info(𝕃, tyi) || # extended information
+                            ⋤(𝕃, tyi, ft) # just a type-level information, but more precise than the declared type
             end
         end
         anyrefine && return PartialStruct(aty, fields)
