@@ -98,7 +98,7 @@ namespace jl_alloc {
         // The alloc has an aggregate Julia object reference not in an explicit field.
         bool has_unknown_objrefaggr:1;
 
-        // The alloc has a non-julia object at an unknown offset.
+        // The alloc has an unboxed object at an unknown offset.
         bool has_unknown_unboxed:1;
 
         void reset()
