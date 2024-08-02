@@ -2485,11 +2485,11 @@ int fl_load_system_image(fl_context_t *fl_ctx, value_t sys_image_iostream)
     return 0;
 }
 
+// Empty symbol to export when asprintf not defined
 #if !defined(_OS_WINDOWS_) || defined(HAVE_ASPRINTF)
-#if defined(__GNUC__)
-__attribute__ ((noreturn))
-#endif
-extern int asprintf(char **str, const char *fmt, ...) {}
+extern int asprintf(char **str, const char *fmt, ...) {
+  return 0;
+}
 #endif
 
 #ifdef __cplusplus
