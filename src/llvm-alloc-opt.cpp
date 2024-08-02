@@ -287,13 +287,13 @@ void Optimizer::optimizeAll()
             continue;
         }
         // The move to stack code below, if has_ref is set, changes the allocation to an array of jlvalue_t's. This is fine
-        // if all objects are jlvalue_t's. However, if part of the allocation is not a julia object (e.g. it is a { float, jlvaluet }),
-        // then the moveToStackCAll will create a [2 x jlvaluet] bitcast to { float, jlvaluet }. The float clearly is not a GC
-        // value and will result in segfaults and other problems.
+        // if all objects are jlvalue_t's. However, if part of the allocation is an unboxed value (e.g. it is a { float, jlvaluet }),
+        // then moveToStack will create a [2 x jlvaluet] bitcast to { float, jlvaluet }. 
+        // This later causes the GC rooting pass, to miss-characterize the float as a pointer to a GC value
         if (has_unboxed && has_ref) {
             REMARK([&]() {
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation could not be split and contained both julia object and non-julia-object data, unable to move to stack " << ore::NV("GC Allocation", orig);
+                    << "GC allocation could not be split since it contains both boxed and unboxed values, unable to move to stack " << ore::NV("GC Allocation", orig);
             });
             if (use_info.hastypeof)
                 optimizeTag(orig);
