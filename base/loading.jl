@@ -3922,8 +3922,11 @@ See also [`@__RELOCDIR__`](@ref).
 ```
 """
 macro __DIR__()
-    __source__.file === nothing && return nothing
-    _dirname = dirname(String(__source__.file::Symbol))
+    return impl__DIR__(__source__.file)
+end
+function impl__DIR__(file::Union{Nothing,Symbol})
+    file === nothing && return nothing
+    _dirname = dirname(String(file::Symbol))
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end
 
@@ -3947,9 +3950,7 @@ See also [`@__DIR__`](@ref).
     This macro requires at least Julia 1.12.
 """
 macro __RELOCDIR__()
-    __source__.file === nothing && return nothing
-    _dirname = dirname(String(__source__.file::Symbol))
-    dir = isempty(_dirname) ? pwd() : abspath(_dirname)
+    dir = impl__DIR__(__source__.file)
     the_depot, subpath = dir, missing
     for depot in DEPOT_PATH
         if startswith(dir, depot)
