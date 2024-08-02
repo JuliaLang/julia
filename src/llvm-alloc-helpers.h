@@ -46,7 +46,7 @@ namespace jl_alloc {
         bool hasaggr:1;
         bool multiloc:1;
         bool hasload:1;
-        // The alloc has a non-julia object at this offset.
+        // The alloc has a unboxed object at this offset.
         bool hasunboxed:1;
         llvm::Type *elty;
         llvm::SmallVector<MemOp,4> accesses;
