@@ -48,6 +48,7 @@ the source text more closely.
 * Docstrings use the `K"doc"` kind, and are not lowered to `Core.@doc` until later (#217)
 * Juxtaposition uses the `K"juxtapose"` kind rather than lowering immediately to `*` (#220)
 * `return` without a value has zero children, rather than lowering to `return nothing` (#220)
+* Command syntax `` `foo` `` parses into a `cmdstring` tree node wrapping the string, as `(cmdstring "foo")` (#438). These are lowered to a macro call later rather than by the parser.
 
 ### Containers for string-like constructs
 

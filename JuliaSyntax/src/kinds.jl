@@ -189,35 +189,24 @@ kind(k::Kind) = k
 #-------------------------------------------------------------------------------
 # Kinds used by JuliaSyntax
 register_kinds!(JuliaSyntax, 0, [
-    "None"         # Placeholder; never emitted by lexer
-    "EndMarker"    # EOF
+    # Whitespace
     "Comment"
     "Whitespace"
     "NewlineWs"    # newline-containing whitespace
-    "Identifier"
-    "@"
-    ","
-    ";"
 
-    "BEGIN_ERRORS"
-        # Tokenization errors
-        "ErrorEofMultiComment"
-        "ErrorInvalidNumericConstant"
-        "ErrorHexFloatMustContainP"
-        "ErrorAmbiguousNumericConstant"
-        "ErrorAmbiguousNumericDotMultiply"
-        "ErrorInvalidInterpolationTerminator"
-        "ErrorNumericOverflow"
-        "ErrorInvalidEscapeSequence"
-        "ErrorOverLongCharacter"
-        "ErrorInvalidUTF8"
-        "ErrorInvisibleChar"
-        "ErrorIdentifierStart"
-        "ErrorUnknownCharacter"
-        "ErrorBidiFormatting"
-        # Generic error
-        "error"
-    "END_ERRORS"
+    # Identifiers
+    "BEGIN_IDENTIFIERS"
+        "Identifier"
+        # Macro names are modelled as special kinds of identifiers because the full
+        # macro name may not appear as characters in the source: The `@` may be
+        # detached from the macro name as in `@A.x` (ugh!!), or have a _str or _cmd
+        # suffix appended.
+        "BEGIN_MACRO_NAMES"
+            "MacroName"
+            "StringMacroName"
+            "CmdMacroName"
+        "END_MACRO_NAMES"
+    "END_IDENTIFIERS"
 
     "BEGIN_KEYWORDS"
         "baremodule"
@@ -278,6 +267,12 @@ register_kinds!(JuliaSyntax, 0, [
     "END_LITERAL"
 
     "BEGIN_DELIMITERS"
+        # Punctuation
+        "@"
+        ","
+        ";"
+
+        # Paired delimiters
         "["
         "]"
         "{"
@@ -1028,45 +1023,6 @@ register_kinds!(JuliaSyntax, 0, [
     "END_UNICODE_OPS"
     "END_OPS"
 
-    # The following kinds are emitted by the parser. There's two types of these:
-
-    # 1. Implied tokens which have a position but might have zero width in the
-    #    source text.
-    #
-    # In some cases we want to generate parse tree nodes in a standard form,
-    # but some of the leaf tokens are implied rather than existing in the
-    # source text, or the lexed tokens need to be re-kinded to represent
-    # special forms which only the parser can infer. These are "parser tokens".
-    #
-    # Some examples:
-    #
-    # Docstrings - the macro name is invisible
-    #   "doc" foo() = 1   ==>  (macrocall (core @doc) . (= (call foo) 1))
-    #
-    # String macros - the macro name does not appear in the source text, so we
-    # need a special kind of token to imply it.
-    #
-    # In these cases, we use some special kinds which can be emitted as zero
-    # width tokens to keep the parse tree more uniform.
-    "BEGIN_PARSER_TOKENS"
-
-        "TOMBSTONE" # Empty placeholder for kind to be filled later
-
-        # Macro names are modelled as a special kind of identifier because the
-        # @ may not be attached to the macro name in the source (or may not be
-        # associated with a token at all in the case of implied macro calls
-        # like CORE_DOC_MACRO_NAME)
-        "BEGIN_MACRO_NAMES"
-            "MacroName"
-            "StringMacroName"
-            "CmdMacroName"
-            "core_@cmd"
-            "core_@int128_str"
-            "core_@uint128_str"
-            "core_@big_str"
-        "END_MACRO_NAMES"
-    "END_PARSER_TOKENS"
-
     # 2. Nonterminals which are exposed in the AST, but where the surface
     #    syntax doesn't have a token corresponding to the node type.
     "BEGIN_SYNTAX_KINDS"
@@ -1108,6 +1064,31 @@ register_kinds!(JuliaSyntax, 0, [
         # Container for a single statement/atom plus any trivia and errors
         "wrapper"
     "END_SYNTAX_KINDS"
+
+    # Special tokens
+    "TOMBSTONE"    # Empty placeholder for kind to be filled later
+    "None"         # Placeholder; never emitted by lexer
+    "EndMarker"    # EOF
+
+    "BEGIN_ERRORS"
+        # Tokenization errors
+        "ErrorEofMultiComment"
+        "ErrorInvalidNumericConstant"
+        "ErrorHexFloatMustContainP"
+        "ErrorAmbiguousNumericConstant"
+        "ErrorAmbiguousNumericDotMultiply"
+        "ErrorInvalidInterpolationTerminator"
+        "ErrorNumericOverflow"
+        "ErrorInvalidEscapeSequence"
+        "ErrorOverLongCharacter"
+        "ErrorInvalidUTF8"
+        "ErrorInvisibleChar"
+        "ErrorIdentifierStart"
+        "ErrorUnknownCharacter"
+        "ErrorBidiFormatting"
+        # Generic error
+        "error"
+    "END_ERRORS"
 ])
 
 #-------------------------------------------------------------------------------
