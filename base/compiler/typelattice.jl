@@ -34,7 +34,7 @@ with `Int` values.
 
 If `typ` is a struct, `fields` represents the fields of the struct that are guaranteed to be
 initialized. For instance, if the length of `fields` of `PartialStruct` representing a
-struct with 4 fields is 3, the 4th field may be uninitialized. If the length is four, all
+struct with 4 fields is 3, the 4th field may not be initialized. If the length is 4, all
 fields are guaranteed to be initialized.
 
 If `typ` is a tuple, the last element of `fields` may be `Vararg`. In this case, it is

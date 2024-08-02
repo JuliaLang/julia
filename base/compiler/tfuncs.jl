@@ -419,7 +419,7 @@ end
             else
                 return Bottom
             end
-            if 1 <= idx <= datatype_min_ninitialized(a1)
+            if 1 ≤ idx ≤ datatype_min_ninitialized(a1)
                 return Const(true)
             elseif a1.name === _NAMEDTUPLE_NAME
                 if isconcretetype(a1)
@@ -427,22 +427,19 @@ end
                 else
                     ns = a1.parameters[1]
                     if isa(ns, Tuple)
-                        return Const(1 <= idx <= length(ns))
+                        return Const(1 ≤ idx ≤ length(ns))
                     end
                 end
-            elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
+            elseif idx ≤ 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
             elseif isa(arg1, Const)
                 if !ismutabletype(a1) || isconst(a1, idx)
                     return Const(isdefined(arg1.val, idx))
                 end
             elseif isa(arg1, PartialStruct)
-                nflds = length(arg1.fields)
                 if !isvarargtype(arg1.fields[end])
-                    if 1 ≤ idx ≤ nflds
+                    if 1 ≤ idx ≤ length(arg1.fields)
                         return Const(true)
-                    elseif !ismutabletype(a1) || isconst(a1, idx)
-                        return Const(false)
                     end
                 end
             elseif !isvatuple(a1)
@@ -1005,7 +1002,7 @@ end
             nflds = nfields(sv)
             ismod = sv isa Module
         elseif isa(s00, PartialStruct)
-            sty = s00.typ
+            sty = unwrap_unionall(s00.typ)
             nflds = fieldcount_noerror(sty)
             ismod = false
         else
