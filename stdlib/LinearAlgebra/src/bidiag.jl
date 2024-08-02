@@ -276,7 +276,6 @@ end
 ####################
 
 function show(io::IO, M::Bidiagonal)
-    # TODO: make this readable and one-line
     print(io, "Bidiagonal(")
     show(io, M.dv)
     print(io, ", ")
