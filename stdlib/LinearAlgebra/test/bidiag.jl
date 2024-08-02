@@ -143,11 +143,9 @@ Random.seed!(1)
 
     @testset "show" begin
         BD = Bidiagonal(dv, ev, :U)
-        dstring = sprint(Base.print_matrix,BD.dv')
-        estring = sprint(Base.print_matrix,BD.ev')
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n super:$estring"
+        @test sprint(show,BD) == "Bidiagonal($(repr(dv)), $(repr(ev)), :U)"
         BD = Bidiagonal(dv,ev,:L)
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n sub:$estring"
+        @test sprint(show,BD) == "Bidiagonal($(repr(dv)), $(repr(ev)), :L)"
     end
 
     @testset for uplo in (:U, :L)
