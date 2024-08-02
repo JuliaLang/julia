@@ -571,6 +571,11 @@ tests = [
         "function (x,y) end"   =>  "(function (tuple-p x y) (block))"
         "function (x=1) end"   =>  "(function (tuple-p (= x 1)) (block))"
         "function (;x=1) end"  =>  "(function (tuple-p (parameters (= x 1))) (block))"
+        "function (f(x),) end" =>  "(function (tuple-p (call f x)) (block))"
+        "function (@f(x);) end" => "(function (tuple-p (macrocall-p @f x) (parameters)) (block))"
+        "function (@f(x)...) end" =>  "(function (tuple-p (... (macrocall-p @f x))) (block))"
+        "function (@f(x)) end" =>  "(function (error (tuple-p (macrocall-p @f x))) (block))"
+        "function (\$f) end"   =>  "(function (error (tuple-p (\$ f))) (block))"
         "function ()(x) end"   =>  "(function (call (tuple-p) x) (block))"
         "function (A).f() end" =>  "(function (call (. (parens A) f)) (block))"
         "function (:)() end"   =>  "(function (call (parens :)) (block))"
@@ -589,6 +594,7 @@ tests = [
         "function f end"      =>  "(function f)"
         "function f \n\n end" =>  "(function f)"
         "function \$f end"    =>  "(function (\$ f))"
+        "function var\".\" end" => "(function (var .))"
         "macro f end"         =>  "(macro f)"
         # Function argument list
         "function f(x,y) end"    =>  "(function (call f x y) (block))"
@@ -611,6 +617,11 @@ tests = [
         # body
         "function f() \n a \n b end"  =>  "(function (call f) (block a b))"
         "function f() end"       =>  "(function (call f) (block))"
+        # Macrocall as sig
+        ((v=v"1.12",), "function @callmemacro(a::Int) \n 1 \n end") => "(function (macrocall-p @callmemacro (::-i a Int)) (block 1))"
+        ((v=v"1.12",), "function @callmemacro(a::T, b::T) where T <: Int64\n3\nend") => "(function (where (macrocall-p @callmemacro (::-i a T) (::-i b T)) (<: T Int64)) (block 3))"
+        ((v=v"1.12",), "function @callmemacro(a::Int, b::Int, c::Int)::Float64\n4\nend") => "(function (::-i (macrocall-p @callmemacro (::-i a Int) (::-i b Int) (::-i c Int)) Float64) (block 4))"
+        ((v=v"1.12",), "function @f()() end") => "(function (call (macrocall-p @f)) (block))"
         # Errors
         "function"            => "(function (error (error)) (block (error)) (error-t))"
     ],
@@ -1000,6 +1011,9 @@ tests = [
         "public[7] = 5"                                 => "(= (ref public 7) 5)"
         "public() = 6"                                  => "(function-= (call public) 6)"
     ]),
+    JuliaSyntax.parse_stmts => [
+        ((v = v"1.12",), "@callmemacro(b::Float64) = 2") => "(= (macrocall-p @callmemacro (::-i b Float64)) 2)"
+    ],
     JuliaSyntax.parse_docstring => [
         """ "notdoc" ]        """ => "(string \"notdoc\")"
         """ "notdoc" \n]      """ => "(string \"notdoc\")"
