@@ -11,7 +11,7 @@ export JULIA_LOAD_PATH := @$(PATHSEP)@stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
-TESTGROUPS = unicode strings compiler
+TESTGROUPS = unicode strings compiler trimming
 TESTS = all default stdlib $(TESTGROUPS) \
 		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
 		$(filter-out runtests testdefs relocatedepot, \

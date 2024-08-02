@@ -29,7 +29,7 @@ const TESTNAMES = [
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
-        "scopedvalues", "compileall"
+        "scopedvalues", "compileall", "trimming"
 ]
 
 const INTERNET_REQUIRED_LIST = [
@@ -161,6 +161,7 @@ function choosetests(choices = [])
         "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/EscapeAnalysis"])
     filtertests!(tests, "compiler/EscapeAnalysis", [
         "compiler/EscapeAnalysis/EscapeAnalysis"])
+    filtertests!(tests, "trimming", ["trimming/trimming"])
     filtertests!(tests, "stdlib", STDLIBS)
     filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
