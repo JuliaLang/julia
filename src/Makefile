@@ -165,8 +165,8 @@ OSLIBS += -Wl,-U,__dyld_atfork_parent -Wl,-U,__dyld_atfork_prepare -Wl,-U,__dyld
 LIBJULIA_PATH_REL := @rpath/libjulia
 else
 LIBJULIA_PATH_REL := libjulia
-RT_VERSIONSCRIPT := -Wl,--version-script=$(SRCDIR)/julia.expmap
-CG_VERSIONSCRIPT := -Wl,--version-script=$(SRCDIR)/codegen.expmap
+RT_VERSIONSCRIPT := -Wl,--version-script=$(BUILDDIR)/julia.expmap
+CG_VERSIONSCRIPT := -Wl,--version-script=$(BUILDDIR)/codegen.expmap
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)

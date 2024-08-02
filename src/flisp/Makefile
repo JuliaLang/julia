@@ -47,7 +47,7 @@ LIBS += $(LIBUTF8PROC)
 endif
 
 ifneq ($(OS), Darwin)
-OSLIBS += -Wl,--version-script=$(SRCDIR)/flisp.expmap
+OSLIBS += -Wl,--version-script=$(BUILDDIR)/flisp.expmap
 endif
 
 FLAGS := -I$(LLTSRCDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
