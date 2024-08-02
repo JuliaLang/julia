@@ -41,6 +41,9 @@ end
     @test diagnostic("\n+ (x, y)") ==
         Diagnostic(3, 3, :error, "whitespace not allowed between prefix function call and argument list")
 
+    @test diagnostic("function (\$f) body end") ==
+        Diagnostic(10, 13, :error, "Ambiguous signature. Add a trailing comma if this is a 1-argument anonymous function; remove parentheses if this is a macro call acting as function signature.")
+
 	@test diagnostic("A.@B.x", only_first=true) ==
         Diagnostic(3, 4, :error, "`@` must appear on first or last macro name component")
 	@test diagnostic("@M.(x)") ==
