@@ -8,6 +8,7 @@ export
     chown,
     cp,
     cptree,
+    DirEntry,
     diskstat,
     hardlink,
     mkdir,
@@ -983,13 +984,13 @@ isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(obj.pat
 realpath(obj::DirEntry) = realpath(obj.path)
 
 """
-    _readdirx(dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
+    readdir(::Type{DirEntry}, dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
 
 Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
 or the current working directory if not given. If `sort` is true, the returned vector is
 sorted by name.
 
-Unlike [`readdir`](@ref), `_readdirx` returns [`DirEntry`](@ref) objects, which contain the name of the
+The [`DirEntry`](@ref) objects that are returned contain the name of the
 file, the directory it is in, and the type of the file which is determined during the
 directory scan. This means that calls to [`isfile`](@ref), [`isdir`](@ref), [`islink`](@ref), [`isfifo`](@ref),
 [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref) can be made on the
@@ -998,12 +999,12 @@ cannot be determined without a stat call. In these cases the `rawtype` field of 
 object will be 0 (`UV_DIRENT_UNKNOWN`) and [`isfile`](@ref) etc. will fall back to a `stat` call.
 
 ```julia
-for obj in _readdirx()
+for obj in readdirx(DirEntry, ".")
     isfile(obj) && println("\$(obj.name) is a file with path \$(obj.path)")
 end
 ```
 """
-_readdirx(dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
+readdir(::Type{DirEntry}, dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
 
 function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
@@ -1093,7 +1094,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
                 end
                 return
             end
-        entries = tryf(_readdirx, root)
+        entries = tryf(p -> readdir(DirEntry, p), root)
         entries === nothing && return
         dirs = Vector{String}()
         files = Vector{String}()

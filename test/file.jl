@@ -31,8 +31,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
-    @test map(o->o.names, Base.Filesystem._readdirx(dirlink)) == map(o->o.names, Base.Filesystem._readdirx(subdir))
-    @test realpath.(Base.Filesystem._readdirx(dirlink)) == realpath.(Base.Filesystem._readdirx(subdir))
+    @test map(o->o.names, readdir(DirEntry, dirlink)) == map(o->o.names, readdir(DirEntry, subdir))
+    @test realpath.(readdir(DirEntry, dirlink)) == realpath.(readdir(DirEntry, subdir))
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -40,7 +40,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
-    @test Base.Filesystem._readdirx(relsubdirlink) == Base.Filesystem._readdirx(subdir2)
+    @test readdir(DirEntry, relsubdirlink) == readdir(DirEntry, subdir2)
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
@@ -59,7 +59,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mkdir(new_dir)
     touch(foo_file)
     @test readdir(new_dir) == readdir(nedlink)
-    @test realpath.(Base.Filesystem._readdirx(new_dir)) == realpath.(Base.Filesystem._readdirx(nedlink))
+    @test realpath.(readdir(DirEntry, new_dir)) == realpath.(readdir(DirEntry, nedlink))
 
     rm(foo_file)
     rm(new_dir)
@@ -1444,10 +1444,10 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
-            @test issorted(Base.Filesystem._readdirx())
-            @test map(o->o.name, Base.Filesystem._readdirx()) == readdir()
-            @test map(o->o.path, Base.Filesystem._readdirx()) == readdir(join=true)
-            @test count(isfile, readdir(join=true)) == count(isfile, Base.Filesystem._readdirx())
+            @test issorted(readdir(DirEntry, ))
+            @test map(o->o.name, readdir(DirEntry, )) == readdir()
+            @test map(o->o.path, readdir(DirEntry, )) == readdir(join=true)
+            @test count(isfile, readdir(join=true)) == count(isfile, readdir(DirEntry, ))
         end
     end
 end
