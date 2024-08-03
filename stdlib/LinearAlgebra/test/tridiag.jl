@@ -830,4 +830,22 @@ end
     @test axes(B) === (ax, ax)
 end
 
+@testset "rmul!/lmul! with banded matrices" begin
+    dl, d, du = rand(3), rand(4), rand(3)
+    A = Tridiagonal(dl, d, du)
+    D = Diagonal(d)
+    @test rmul!(copy(A), D) ≈ A * D
+    @test lmul!(D, copy(A)) ≈ D * A
+
+    @testset "non-commutative" begin
+        S32 = SizedArrays.SizedArray{(3,2)}(rand(3,2))
+        S33 = SizedArrays.SizedArray{(3,3)}(rand(3,3))
+        S22 = SizedArrays.SizedArray{(2,2)}(rand(2,2))
+        T = Tridiagonal(fill(S32,3), fill(S32, 4), fill(S32, 3))
+        D = Diagonal(fill(S22, size(T,2)))
+        @test rmul!(copy(T), D) ≈ T * D
+        D = Diagonal(fill(S33, size(T,1)))
+        @test lmul!(D, copy(T)) ≈ D * T
+    end
+end
 end # module TestTridiagonal

@@ -884,4 +884,38 @@ end
     @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
 end
 
+@testset "rmul!/lmul! with banded matrices" begin
+    dv, ev = rand(4), rand(3)
+    for A in (Bidiagonal(dv, ev, :U), Bidiagonal(dv, ev, :L))
+        @testset "$(nameof(typeof(B)))" for B in (
+                                Bidiagonal(dv, ev, :U),
+                                Bidiagonal(dv, ev, :L),
+                                Diagonal(dv)
+                        )
+            @test_throws ArgumentError rmul!(B, A)
+            @test_throws ArgumentError lmul!(A, B)
+        end
+        D = Diagonal(dv)
+        @test rmul!(copy(A), D) ≈ A * D
+        @test lmul!(D, copy(A)) ≈ D * A
+    end
+    @testset "non-commutative" begin
+        S32 = SizedArrays.SizedArray{(3,2)}(rand(3,2))
+        S33 = SizedArrays.SizedArray{(3,3)}(rand(3,3))
+        S22 = SizedArrays.SizedArray{(2,2)}(rand(2,2))
+        for uplo in (:L, :U)
+            B = Bidiagonal(fill(S32, 4), fill(S32, 3), uplo)
+            D = Diagonal(fill(S22, size(B,2)))
+            @test rmul!(copy(B), D) ≈ B * D
+            D = Diagonal(fill(S33, size(B,1)))
+            @test lmul!(D, copy(B)) ≈ D * B
+        end
+
+        B = Bidiagonal(fill(S33, 4), fill(S33, 3), :U)
+        D = Diagonal(fill(S32, 4))
+        @test lmul!(B, Array(D)) ≈ B * D
+        B = Bidiagonal(fill(S22, 4), fill(S22, 3), :U)
+        @test rmul!(Array(D), B) ≈ D * B
+    end
+end
 end # module TestBidiagonal
