@@ -999,7 +999,7 @@ cannot be determined without a stat call. In these cases the `rawtype` field of 
 object will be 0 (`UV_DIRENT_UNKNOWN`) and [`isfile`](@ref) etc. will fall back to a `stat` call.
 
 ```julia
-for obj in readdirx(DirEntry, ".")
+for obj in readdir(DirEntry, ".")
     isfile(obj) && println("\$(obj.name) is a file with path \$(obj.path)")
 end
 ```
