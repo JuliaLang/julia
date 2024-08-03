@@ -698,13 +698,23 @@ function abstract_call_method(interp::AbstractInterpreter,
             end
             add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
             # TODO (#48913) implement a proper recursion handling for irinterp:
-            # This works just because currently the `:terminate` condition guarantees that
-            # irinterp doesn't fail into unresolved cycles, but it's not a good solution.
+            # This works just because currently the `:terminate` condition usually means this is unreachable here
+            # for irinterp because there are not unresolved cycles, but it's not a good solution.
             # We should revisit this once we have a better story for handling cycles in irinterp.
-            if isa(topmost, InferenceState)
+            if isa(sv, InferenceState)
+                # since the hardlimit is against the edge to the parent frame,
+                # we should try to poison the whole edge, not just the topmost frame
                 parentframe = frame_parent(topmost)
-                if isa(sv, InferenceState) && isa(parentframe, InferenceState)
-                    poison_callstack!(sv, parentframe === nothing ? topmost : parentframe)
+                while !isa(parentframe, InferenceState)
+                    # attempt to find a parent frame that can handle this LimitedAccuracy result correctly
+                    # so we don't try to cache this incomplete intermediate result
+                    parentframe === nothing && break
+                    parentframe = frame_parent(parentframe)
+                end
+                if isa(parentframe, InferenceState)
+                    poison_callstack!(sv, parentframe)
+                elseif isa(topmost, InferenceState)
+                    poison_callstack!(sv, topmost)
                 end
             end
             # n.b. this heuristic depends on the non-local state, so we must record the limit later
