@@ -1417,7 +1417,7 @@ ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
 endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--undefined-version -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE)
 endif
 
