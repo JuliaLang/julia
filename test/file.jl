@@ -26,13 +26,45 @@ let err = nothing
     end
 end
 
+@testset "readdir" begin
+    @test ispath("does/not/exist") == false
+    @test isdir("does/not/exist") == false
+    @test_throws Base.IOError readdir("does/not/exist")
+    @test_throws Base.IOError readdir(DirEntry, "does/not/exist")
+
+    mktempdir() do dir
+        touch(joinpath(dir, "afile.txt"))
+        mkdir(joinpath(dir, "adir"))
+        touch(joinpath(dir, "adir", "bfile.txt"))
+        @test length(readdir(dir)) == 2
+        @test readdir(dir) == map(e->e.name, readdir(DirEntry, dir))
+        for p in readdir(dir, join=true)
+            if isdir(p)
+                @test only(readdir(p)) == "bfile.txt"
+            else
+                @test isfile(p)
+                @test p == joinpath(dir, "afile.txt")
+            end
+        end
+        for e in readdir(DirEntry, dir)
+            if isdir(e) || continue
+                @test only(readdir(e)).name == "bfile.txt"
+                @test only(readdir(DirEntry, e)).name == "bfile.txt"
+            else
+                @test isfile(e)
+                @test e.name == "afile.txt"
+            end
+        end
+    end
+end
+
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
-    @test map(o->o.names, Base.Filesystem._readdirx(dirlink)) == map(o->o.names, Base.Filesystem._readdirx(subdir))
-    @test realpath.(Base.Filesystem._readdirx(dirlink)) == realpath.(Base.Filesystem._readdirx(subdir))
+    @test isempty(readdir(DirEntry, dirlink))
+    @test isempty(readdir(DirEntry, subdir))
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -40,7 +72,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
-    @test Base.Filesystem._readdirx(relsubdirlink) == Base.Filesystem._readdirx(subdir2)
+    @test isempty(readdir(DirEntry, relsubdirlink))
+    @test isempty(readdir(DirEntry, subdir2))
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
@@ -59,7 +92,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mkdir(new_dir)
     touch(foo_file)
     @test readdir(new_dir) == readdir(nedlink)
-    @test realpath.(Base.Filesystem._readdirx(new_dir)) == realpath.(Base.Filesystem._readdirx(nedlink))
+    @test realpath.(readdir(DirEntry, new_dir)) == realpath.(readdir(DirEntry, nedlink))
 
     rm(foo_file)
     rm(new_dir)
@@ -1444,10 +1477,10 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
-            @test issorted(Base.Filesystem._readdirx())
-            @test map(o->o.name, Base.Filesystem._readdirx()) == readdir()
-            @test map(o->o.path, Base.Filesystem._readdirx()) == readdir(join=true)
-            @test count(isfile, readdir(join=true)) == count(isfile, Base.Filesystem._readdirx())
+            @test issorted(readdir(DirEntry))
+            @test map(o->o.name, readdir(DirEntry)) == readdir()
+            @test map(o->o.path, readdir(DirEntry)) == readdir(join=true)
+            @test count(isfile, readdir(join=true)) == count(isfile, readdir(DirEntry))
         end
     end
 end

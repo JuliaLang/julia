@@ -8,6 +8,7 @@ export
     chown,
     cp,
     cptree,
+    DirEntry,
     diskstat,
     hardlink,
     mkdir,
@@ -949,11 +950,20 @@ const UV_DIRENT_BLOCK = Cint(7)
 
 """
     DirEntry
+    DirEntry(path::String)
 
 A type representing a filesystem entry that contains the name of the entry, the directory, and
 the raw type of the entry. The full path of the entry can be obtained lazily by accessing the
-`path` field. The type of the entry can be checked for by calling [`isfile`](@ref), [`isdir`](@ref),
+`path` field.
+
+Public fields:
+- `dir::String`: The directory containing the entry.
+- `name::String`: The name of the entry.
+- `path::String`: The full path of the entry, lazily constructed from `dir` and `name`. Also accessible via `joinpath(entry)`.
+
+The type of the entry can be checked for by calling [`isfile`](@ref), [`isdir`](@ref),
 [`islink`](@ref), [`isfifo`](@ref), [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref)
+on the entry object.
 """
 struct DirEntry
     dir::String
@@ -983,13 +993,14 @@ isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(obj.pat
 realpath(obj::DirEntry) = realpath(obj.path)
 
 """
-    _readdirx(dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
+    readdir(::Type{DirEntry}, dir::Union{AbstractString,DirEntry}=pwd(); sort::Bool = true) -> Vector{DirEntry}
+    readdir(entry::DirEntry; sort::Bool=true) -> Vector{DirEntry}
 
 Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
 or the current working directory if not given. If `sort` is true, the returned vector is
 sorted by name.
 
-Unlike [`readdir`](@ref), `_readdirx` returns [`DirEntry`](@ref) objects, which contain the name of the
+The [`DirEntry`](@ref) objects that are returned contain the name of the
 file, the directory it is in, and the type of the file which is determined during the
 directory scan. This means that calls to [`isfile`](@ref), [`isdir`](@ref), [`islink`](@ref), [`isfifo`](@ref),
 [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref) can be made on the
@@ -997,13 +1008,23 @@ returned objects without further stat calls. However, for some filesystems, the 
 cannot be determined without a stat call. In these cases the `rawtype` field of the [`DirEntry`](@ref))
 object will be 0 (`UV_DIRENT_UNKNOWN`) and [`isfile`](@ref) etc. will fall back to a `stat` call.
 
+# Examples
 ```julia
-for obj in _readdirx()
-    isfile(obj) && println("\$(obj.name) is a file with path \$(obj.path)")
+for entry in readdir(DirEntry, ".")
+    if isfile(entry)
+        println("\$(entry.name) is a file with path \$(entry.path)")
+        continue
+    end
+    isdir(entry) || continue
+    for entry2 in readdir(entry)
+        ...
+    end
 end
 ```
 """
-_readdirx(dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
+readdir(::Type{DirEntry}, dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
+readdir(::Type{DirEntry}, entry::DirEntry; sort::Bool=true) = readdir(entry; sort)::Vector{DirEntry}
+readdir(entry::DirEntry; sort::Bool=true) = readdir(DirEntry, entry.path; sort)::Vector{DirEntry}
 
 function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct
@@ -1093,7 +1114,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
                 end
                 return
             end
-        entries = tryf(_readdirx, root)
+        entries = tryf(p -> readdir(DirEntry, p), root)
         entries === nothing && return
         dirs = Vector{String}()
         files = Vector{String}()
