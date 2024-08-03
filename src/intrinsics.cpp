@@ -800,7 +800,7 @@ static jl_cgval_t emit_runtime_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t
 static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     const jl_cgval_t &e = argv[0];
-    const jl_cgval_t &x = argv[1];
+    jl_cgval_t x = argv[1];
     const jl_cgval_t &i = argv[2];
     const jl_cgval_t &align = argv[3];
 
@@ -823,6 +823,9 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         return jl_cgval_t();
     }
     emit_typecheck(ctx, x, ety, "pointerset");
+    x = update_julia_type(ctx, x, ety);
+    if (x.typ == jl_bottom_type)
+        return jl_cgval_t();
 
     Value *idx = emit_unbox(ctx, ctx.types().T_size, i, (jl_value_t*)jl_long_type);
     Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(ctx.types().T_size, 1));
@@ -966,7 +969,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
     bool ismodifyfield = f == atomic_pointermodify;
     const jl_cgval_t undefval;
     const jl_cgval_t &e = argv[0];
-    const jl_cgval_t &x = isreplacefield || ismodifyfield ? argv[2] : argv[1];
+    jl_cgval_t x = isreplacefield || ismodifyfield ? argv[2] : argv[1];
     const jl_cgval_t &y = isreplacefield || ismodifyfield ? argv[1] : undefval;
     const jl_cgval_t &ord = isreplacefield || ismodifyfield ? argv[3] : argv[2];
     const jl_cgval_t &failord = isreplacefield ? argv[4] : undefval;
@@ -1008,8 +1011,12 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
         emit_error(ctx, msg);
         return jl_cgval_t();
     }
-    if (!ismodifyfield)
+    if (!ismodifyfield) {
         emit_typecheck(ctx, x, ety, std::string(jl_intrinsic_name((int)f)));
+        x = update_julia_type(ctx, x, ety);
+        if (x.typ == jl_bottom_type)
+            return jl_cgval_t();
+    }
 
     size_t nb = jl_datatype_size(ety);
     if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE) {
