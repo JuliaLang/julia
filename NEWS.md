@@ -84,6 +84,9 @@ New library features
   `c` to cleanly cancel immediately, `d` to detach, `i` for a profile peek,
   `v` to toggle verbose mode showing elapsed time, CPU%, and memory usage, and `?` for help. ([#60943]).
 * Instances of an `Enum` can now be given their own docstrings within the `@enum` definition ([#61955]).
+* New methods `readdir(DirEntry, path::String)` and `readdir(e::DirEntry)` will now return directory contents
+  along with the type of the entries in a vector of new `DirEntry` objects to provide more efficient `isfile`
+  etc. checks ([#55358]).
 
 Standard library changes
 ------------------------

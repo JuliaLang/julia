@@ -889,6 +889,7 @@ export
     close,
     closewrite,
     countlines,
+    DirEntry,
     eachline,
     readeach,
     eof,

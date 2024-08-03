@@ -11,7 +11,6 @@ using Core: Const
 const CC = Base.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
-using Base.Filesystem: _readdirx
 using Base.JuliaSyntax: @K_str, @KSet_str, parseall, byte_range, children, is_prefix_call, is_trivia, kind
 
 using ..REPL.LineEdit: NamedCompletion
@@ -479,7 +478,7 @@ function cache_PATH()
         end
 
         path_entries = try
-            _readdirx(pathdir)
+            readdir(DirEntry, pathdir)
         catch e
             # Bash allows dirs in PATH that can't be read, so we should as well.
             if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -541,9 +540,9 @@ function complete_path(path::AbstractString;
     end
     entries = try
         if isempty(dir)
-            _readdirx()
+            readdir(DirEntry)
         elseif isdir(dir)
-            _readdirx(dir)
+            readdir(DirEntry, dir)
         else
             return Completion[], dir, false
         end
@@ -1089,7 +1088,7 @@ function complete_loading_candidates!(suggestions::Vector{Completion}, s::String
             end
         end
         isdir(dir) || continue
-        for entry in _readdirx(dir)
+        for entry in readdir(DirEntry, dir)
             pname = entry.name
             if pname[1] != '.' && pname != "METADATA" &&
                 pname != "REQUIRE" && startswith(pname, s)
