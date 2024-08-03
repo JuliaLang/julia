@@ -179,7 +179,7 @@ end
         @inbounds A.ev[j] = x
     elseif !iszero(x)
         throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off the ",
-            istriu(A) ? "upper" : "lower", " bidiagonal band to a nonzero value ", x)))
+            A.uplo == 'U' ? "upper" : "lower", " bidiagonal band to a nonzero value ", x)))
     end
     return x
 end
