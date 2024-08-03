@@ -2,41 +2,41 @@
   global:
     pthread*;
     __stack_chk_*;
-    asprintf;
+    asprintf*;
     bitvector_*;
     ios_*;
-    arraylist_grow;
-    small_arraylist_grow;
+    arraylist_grow*;
+    small_arraylist_grow*;
     jl_*;
     ijl_*;
     _jl_mutex_*;
-    rec_backtrace;
+    rec_backtrace*;
     julia_*;
-    libsupport_init;
-    localtime_r;
-    memhash;
-    memhash32;
-    memhash32_seed;
-    memhash_seed;
-    restore_signals;
+    libsupport_init*;
+    localtime_r*;
+    memhash*;
+    memhash32*;
+    memhash32_seed*;
+    memhash_seed*;
+    restore_signals*;
     u8_*;
     uv_*;
-    add_library_mapping;
+    add_library_mapping*;
     utf8proc_*;
-    jlbacktrace;
-    jlbacktracet;
-    _IO_stdin_used;
-    _Z24jl_coverage_data_pointerN4llvm9StringRefEi;
-    _Z22jl_coverage_alloc_lineN4llvm9StringRefEi;
-    _Z22jl_malloc_data_pointerN4llvm9StringRefEi;
+    jlbacktrace*;
+    jlbacktracet*;
+    _IO_stdin_used*;
+    _Z24jl_coverage_data_pointerN4llvm9StringRefEi*;
+    _Z22jl_coverage_alloc_lineN4llvm9StringRefEi*;
+    _Z22jl_malloc_data_pointerN4llvm9StringRefEi*;
     _jl_timing_*;
     LLVMExtra*;
     JLJIT*;
-    llvmGetPassPluginInfo;
+    llvmGetPassPluginInfo*;
 
     /* freebsd */
-    environ;
-    __progname;
+    environ*;
+    __progname*;
 
   local:
     *;
