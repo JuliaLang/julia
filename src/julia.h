@@ -27,22 +27,10 @@
 
 #include <setjmp.h>
 #ifndef _OS_WINDOWS_
-#  define jl_jmp_buf sigjmp_buf
-#  if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
-#    define MAX_ALIGN 8
-#  elif defined(_CPU_AARCH64_)
-// int128 is 16 bytes aligned on aarch64
-#    define MAX_ALIGN 16
-#  elif defined(_P64)
-// Generically we assume MAX_ALIGN is sizeof(void*)
-#    define MAX_ALIGN 8
-#  else
-#    define MAX_ALIGN 4
-#  endif
+    #define jl_jmp_buf sigjmp_buf
 #else
-#  include "win32_ucontext.h"
-#  define jl_jmp_buf jmp_buf
-#  define MAX_ALIGN 8
+    #include "win32_ucontext.h"
+    #define jl_jmp_buf jmp_buf
 #endif
 
 // Define the largest size (bytes) of a properly aligned object that the

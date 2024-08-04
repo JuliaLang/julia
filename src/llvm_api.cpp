@@ -21,6 +21,7 @@
 #include <llvm/Support/CBindingWrapping.h>
 #include <llvm/Support/MemoryBuffer.h>
 
+#if JL_LLVM_VERSION < 180000
 namespace llvm {
 namespace orc {
 class OrcV2CAPIHelper {
@@ -38,7 +39,7 @@ public:
 };
 } // namespace orc
 } // namespace llvm
-
+#endif
 
 typedef struct JLOpaqueJuliaOJIT *JuliaOJITRef;
 typedef struct LLVMOrcOpaqueIRCompileLayer *LLVMOrcIRCompileLayerRef;
@@ -46,8 +47,13 @@ typedef struct LLVMOrcOpaqueIRCompileLayer *LLVMOrcIRCompileLayerRef;
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(JuliaOJIT, JuliaOJITRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::JITDylib, LLVMOrcJITDylibRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ExecutionSession, LLVMOrcExecutionSessionRef)
+#if JL_LLVM_VERSION >= 180000
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::SymbolStringPoolEntryUnsafe::PoolEntry,
+                                   LLVMOrcSymbolStringPoolEntryRef)
+#else
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::OrcV2CAPIHelper::PoolEntry,
                                    LLVMOrcSymbolStringPoolEntryRef)
+#endif
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::IRCompileLayer, LLVMOrcIRCompileLayerRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::MaterializationResponsibility,
                                    LLVMOrcMaterializationResponsibilityRef)
@@ -113,7 +119,11 @@ JL_DLLEXPORT_CODEGEN LLVMOrcSymbolStringPoolEntryRef
 JLJITMangleAndIntern_impl(JuliaOJITRef JIT,
                                             const char *Name)
 {
+#if JL_LLVM_VERSION >= 180000
+    return wrap(orc::SymbolStringPoolEntryUnsafe::take(unwrap(JIT)->mangle(Name)).rawPtr());
+#else
     return wrap(orc::OrcV2CAPIHelper::moveFromSymbolStringPtr(unwrap(JIT)->mangle(Name)));
+#endif
 }
 
 JL_DLLEXPORT_CODEGEN const char *
