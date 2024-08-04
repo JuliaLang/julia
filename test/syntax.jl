@@ -3928,3 +3928,10 @@ module ImportConstantTestModule
     @test ImportConstant == 1
     @test isconst(@__MODULE__, :ImportConstant)
 end
+
+# Test trying to define a constant and then trying to assign to the same value
+module AssignConstValueTest
+    const x = 1
+    x = 1
+end
+@test isconst(AssignConstValueTest, :x)

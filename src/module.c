@@ -235,7 +235,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    if (bpart->kind != BINDING_KIND_GLOBAL) {
+    if (bpart->kind != BINDING_KIND_GLOBAL && bpart->kind != BINDING_KIND_CONST && bpart->kind != BINDING_KIND_CONST_IMPORT) {
         if (jl_bpart_is_some_guard(bpart)) {
             check_safe_newbinding(m, var);
             if (!alloc)
