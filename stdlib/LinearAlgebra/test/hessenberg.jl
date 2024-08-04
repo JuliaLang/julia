@@ -276,6 +276,7 @@ end
     D = diagm(0=>ComplexF64[1,2])
     S = Symmetric(D)
     H = hessenberg(S)
+    @test H.H == D
 end
 
 end # module TestHessenberg
