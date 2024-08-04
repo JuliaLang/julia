@@ -28,7 +28,7 @@ julia> Threads.threadid(Threads.@spawn "foo")
 
 !!! note
     The thread that a task runs on may change if the task yields, which is known as [`Task Migration`](@ref man-task-migration).
-    For this reason in most cases it is not safe to use `threadid([task])` to index into, say, a vector of buffer or stateful
+    For this reason in most cases it is not safe to use `threadid([task])` to index into, say, a vector of buffers or stateful
     objects.
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
