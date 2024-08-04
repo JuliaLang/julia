@@ -130,14 +130,14 @@ function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
     end
 end
 
+_offdiagind(uplo) = uplo == 'U' ? 1 : -1
+
 @inline function Base.isassigned(A::Bidiagonal, i::Int, j::Int)
     @boundscheck checkbounds(Bool, A, i, j) || return false
     if i == j
         return @inbounds isassigned(A.dv, i)
-    elseif A.uplo == 'U' && (i == j - 1)
-        return @inbounds isassigned(A.ev, i)
-    elseif A.uplo == 'L' && (i == j + 1)
-        return @inbounds isassigned(A.ev, j)
+    elseif i == j - _offdiagind(A.uplo)
+        return @inbounds isassigned(A.ev, A.uplo == 'U' ? i : j)
     else
         return true
     end
@@ -147,10 +147,8 @@ end
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds Base.isstored(A.dv, i)
-    elseif A.uplo == 'U' && (i == j - 1)
-        return @inbounds Base.isstored(A.ev, i)
-    elseif A.uplo == 'L' && (i == j + 1)
-        return @inbounds Base.isstored(A.ev, j)
+    elseif i == j - _offdiagind(A.uplo)
+        return @inbounds Base.isstored(A.ev, A.uplo == 'U' ? i : j)
     else
         return false
     end
@@ -160,10 +158,8 @@ end
     @boundscheck checkbounds(A, i, j)
     if i == j
         return @inbounds A.dv[i]
-    elseif A.uplo == 'U' && (i == j - 1)
-        return @inbounds A.ev[i]
-    elseif A.uplo == 'L' && (i == j + 1)
-        return @inbounds A.ev[j]
+    elseif i == j - _offdiagind(A.uplo)
+        return @inbounds A.ev[A.uplo == 'U' ? i : j]
     else
         return bidiagzero(A, i, j)
     end
@@ -173,9 +169,7 @@ end
     @boundscheck checkbounds(A, _cartinds(b))
     if b.band == 0
         return @inbounds A.dv[b.index]
-    elseif A.uplo == 'U' && b.band == 1
-        return @inbounds A.ev[b.index]
-    elseif A.uplo == 'L' && b.band == -1
+    elseif b.band == _offdiagind(A.uplo)
         return @inbounds A.ev[b.index]
     else
         return bidiagzero(A, Tuple(_cartinds(b))...)
@@ -186,13 +180,11 @@ end
     @boundscheck checkbounds(A, i, j)
     if i == j
         @inbounds A.dv[i] = x
-    elseif A.uplo == 'U' && (i == j - 1)
-        @inbounds A.ev[i] = x
-    elseif A.uplo == 'L' && (i == j + 1)
-        @inbounds A.ev[j] = x
+    elseif i == j - _offdiagind(A.uplo)
+        @inbounds A.ev[A.uplo == 'U' ? i : j] = x
     elseif !iszero(x)
         throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off the ",
-            istriu(A) ? "upper" : "lower", " bidiagonal band to a nonzero value ", x)))
+            A.uplo == 'U' ? "upper" : "lower", " bidiagonal band to a nonzero value ", x)))
     end
     return x
 end
@@ -202,11 +194,7 @@ Base._reverse(A::Bidiagonal, ::Colon) = Bidiagonal(reverse(A.dv), reverse(A.ev),
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::AbstractString)
-    if A.uplo == 'U'
-        i==j || i==j-1 ? s : Base.replace_with_centered_mark(s)
-    else
-        i==j || i==j+1 ? s : Base.replace_with_centered_mark(s)
-    end
+    i==j || i==j-_offdiagind(A.uplo) ? s : Base.replace_with_centered_mark(s)
 end
 
 #Converting from Bidiagonal to dense Matrix
@@ -215,7 +203,7 @@ function Matrix{T}(A::Bidiagonal) where T
     if haszero(T) # optimized path for types with zero(T) defined
         size(B,1) > 1 && fill!(B, zero(T))
         copyto!(view(B, diagind(B)), A.dv)
-        copyto!(view(B, diagind(B, A.uplo == 'U' ? 1 : -1)), A.ev)
+        copyto!(view(B, diagind(B, _offdiagind(A.uplo))), A.ev)
     else
         copyto!(B, A)
     end
@@ -252,8 +240,8 @@ tr(B::Bidiagonal) = sum(B.dv)
 
 function kron(A::Diagonal, B::Bidiagonal)
     # `_droplast!` is only guaranteed to work with `Vector`
-    kdv = _makevector(kron(diag(A), B.dv))
-    kev = _droplast!(_makevector(kron(diag(A), _pushzero(B.ev))))
+    kdv = convert(Vector, kron(diag(A), B.dv))
+    kev = _droplast!(convert(Vector, kron(diag(A), _pushzero(B.ev))))
     Bidiagonal(kdv, kev, B.uplo)
 end
 
@@ -541,10 +529,7 @@ function rmul!(B::Bidiagonal, D::Diagonal)
     return B
 end
 
-function check_A_mul_B!_sizes(C, A, B)
-    mA, nA = size(A)
-    mB, nB = size(B)
-    mC, nC = size(C)
+@noinline function check_A_mul_B!_sizes((mC, nC)::NTuple{2,Integer}, (mA, nA)::NTuple{2,Integer}, (mB, nB)::NTuple{2,Integer})
     if mA != mC
         throw(DimensionMismatch(lazy"first dimension of A, $mA, and first dimension of output C, $mC, must match"))
     elseif nA != mB
@@ -561,7 +546,7 @@ _diag(A::SymTridiagonal, k) = k == 0 ? A.dv : A.ev
 function _diag(A::Bidiagonal, k)
     if k == 0
         return A.dv
-    elseif (A.uplo == 'L' && k == -1) || (A.uplo == 'U' && k == 1)
+    elseif k == _offdiagind(A.uplo)
         return A.ev
     else
         return diag(A, k)
@@ -573,7 +558,7 @@ _mul!(C::AbstractMatrix, A::BiTriSym, B::TriSym, _add::MulAddMul) =
 _mul!(C::AbstractMatrix, A::BiTriSym, B::Bidiagonal, _add::MulAddMul) =
     _bibimul!(C, A, B, _add)
 function _bibimul!(C, A, B, _add)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     # We use `_rmul_or_fill!` instead of `_modify!` here since using
@@ -631,7 +616,7 @@ end
 
 function _mul!(C::AbstractMatrix, A::BiTriSym, B::Diagonal, _add::MulAddMul)
     require_one_based_indexing(C)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
@@ -697,7 +682,7 @@ end
 
 function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul)
     require_one_based_indexing(C, A)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     n = size(A,1)
     m = size(B,2)
@@ -732,7 +717,7 @@ end
 
 function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAddMul)
     require_one_based_indexing(C, A)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     if size(A, 1) <= 3 || size(B, 2) <= 1
         return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
@@ -762,7 +747,7 @@ _mul!(C::AbstractMatrix, A::Diagonal, B::TriSym, _add::MulAddMul) =
     _dibimul!(C, A, B, _add)
 function _dibimul!(C, A, B, _add)
     require_one_based_indexing(C)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
     _rmul_or_fill!(C, _add.beta)  # see the same use above

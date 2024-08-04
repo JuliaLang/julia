@@ -227,10 +227,19 @@ end
 @nospecs shift_tfunc(𝕃::AbstractLattice, x, y) = shift_tfunc(widenlattice(𝕃), x, y)
 @nospecs shift_tfunc(::JLTypeLattice, x, y) = widenconst(x)
 
+function not_tfunc(𝕃::AbstractLattice, @nospecialize(b))
+    if isa(b, Conditional)
+        return Conditional(b.slot, b.elsetype, b.thentype)
+    elseif isa(b, Const)
+        return Const(not_int(b.val))
+    end
+    return math_tfunc(𝕃, b)
+end
+
 add_tfunc(and_int, 2, 2, and_int_tfunc, 1)
 add_tfunc(or_int, 2, 2, or_int_tfunc, 1)
 add_tfunc(xor_int, 2, 2, math_tfunc, 1)
-add_tfunc(not_int, 1, 1, math_tfunc, 0) # usually used as not_int(::Bool) to negate a condition
+add_tfunc(not_int, 1, 1, not_tfunc, 0) # usually used as not_int(::Bool) to negate a condition
 add_tfunc(shl_int, 2, 2, shift_tfunc, 1)
 add_tfunc(lshr_int, 2, 2, shift_tfunc, 1)
 add_tfunc(ashr_int, 2, 2, shift_tfunc, 1)

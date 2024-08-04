@@ -9,7 +9,7 @@ using Markdown
 
 empty!(Base.Experimental._hint_handlers) # unregister error hints so they can be tested separately
 
-@test isassigned(Base.REPL_MODULE_REF)
+@test Base.REPL_MODULE_REF[] === REPL
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
@@ -1216,9 +1216,9 @@ global some_undef_global
 @test occursin("does not exist", sprint(show, help_result("..")))
 # test that helpmode is sensitive to contextual module
 @test occursin("No documentation found", sprint(show, help_result("Fix2", Main)))
-@test occursin("A type representing a partially-applied version", # exact string may change
+@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
                sprint(show, help_result("Base.Fix2", Main)))
-@test occursin("A type representing a partially-applied version", # exact string may change
+@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
                sprint(show, help_result("Fix2", Base)))
 
 

@@ -389,7 +389,7 @@ julia> nameof(Base.Broadcast)
 """
 nameof(m::Module) = (@_total_meta; ccall(:jl_module_name, Ref{Symbol}, (Any,), m))
 
-function iterate end
+typeof(function iterate end).name.constprop_heuristic = Core.ITERATE_HEURISTIC
 
 """
     convert(T, x)
@@ -501,7 +501,13 @@ julia> Base.tail(())
 ERROR: ArgumentError: Cannot call tail on an empty tuple.
 ```
 """
-tail(x::Tuple) = argtail(x...)
+function tail(x::Tuple{Any,Vararg})
+    y = argtail(x...)::Tuple
+    if x isa NTuple  # help the type inference
+        y = y::NTuple
+    end
+    y
+end
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
 function unwrap_unionall(@nospecialize(a))
@@ -575,15 +581,7 @@ function unconstrain_vararg_length(va::Core.TypeofVararg)
     return Vararg{unwrapva(va)}
 end
 
-typename(a) = error("typename does not apply to this type")
-typename(a::DataType) = a.name
-function typename(a::Union)
-    ta = typename(a.a)
-    tb = typename(a.b)
-    ta === tb || error("typename does not apply to unions whose components have different typenames")
-    return tb
-end
-typename(union::UnionAll) = typename(union.body)
+import Core: typename
 
 _tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
@@ -1245,3 +1243,16 @@ that is whether it has an `iterate` method or not.
 function isiterable(T)::Bool
     return hasmethod(iterate, Tuple{T})
 end
+
+# Special constprop heuristics for various binary opes
+typename(typeof(function + end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function - end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function * end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function == end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function != end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function <= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function >= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function < end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function > end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
+typename(typeof(function << end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
+typename(typeof(function >> end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC

@@ -14,6 +14,7 @@ public
     AsyncCondition,
     CodeUnits,
     Event,
+    Fix,
     Fix1,
     Fix2,
     Generator,
@@ -112,4 +113,5 @@ public
 # misc
     notnothing,
     runtests,
-    text_colors
+    text_colors,
+    depwarn
