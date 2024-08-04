@@ -1903,7 +1903,7 @@ function _sortperm(A::AbstractVector; alg, order, scratch, dims...)
         throw(ArgumentError("Multiple dims specified for a vector"))
     end
 
-    if length(dims) == 1 && dims[1] != 1
+    if isone(length(dims)) && !isone(dims[1])
         throw(ArgumentError("dims needs to be 1 for a vector"))
     end
 
@@ -1925,23 +1925,6 @@ function _sortperm(A::AbstractVector; alg, order, scratch, dims...)
 end
 
 function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
-    ix = copymutable(LinearIndices(A))
-    sort!(ix; alg, order = Perm(order, vec(A)), scratch, dims...)
-end
-
-
-function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
-    if order === Forward && isa(A,Vector) && eltype(A)<:Integer
-        n = length(A)
-        if n > 1
-            min, max = extrema(A)
-            (diff, o1) = sub_with_overflow(max, min)
-            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
-            if !(o1 || o2)::Bool && rangelen < div(n,2)
-                return sortperm_int_range(A, rangelen, min)
-            end
-        end
-    end
     ix = copymutable(LinearIndices(A))
     sort!(ix; alg, order = Perm(order, vec(A)), scratch, dims...)
 end
