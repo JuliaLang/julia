@@ -252,12 +252,12 @@ void Optimizer::optimizeAll()
             removeAlloc(orig);
             continue;
         }
-        bool has_unboxed = use_info.has_unknown_bits;
+        bool has_unboxed = use_info.has_unknown_unboxed;
         bool has_ref = use_info.has_unknown_objref;
         bool has_refaggr = use_info.has_unknown_objrefaggr;
         for (auto memop: use_info.memops) {
             auto &field = memop.second;
-            has_unboxed |= field.hasbits;
+            has_unboxed |= field.hasunboxed;
             if (field.hasobjref) {
                 has_ref = true;
                 // This can be relaxed a little based on hasload
