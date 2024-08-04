@@ -903,7 +903,6 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(bp, jl_current_task->world_age);
     bpart->kind = BINDING_KIND_CONST;
-    bpart->restriction = val;
     jl_atomic_store_relaxed(&bpart->restriction, val);
     jl_gc_wb(bpart, val);
 }
@@ -980,7 +979,7 @@ jl_value_t *jl_check_binding_wr(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t 
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     assert(!jl_bpart_is_some_guard(bpart) && !jl_bpart_is_some_import(bpart));
     if (jl_bpart_is_some_constant(bpart)) {
-        if (rhs == bpart->restriction)
+        if (rhs == jl_atomic_load_relaxed(&bpart->restriction))
             return NULL;
         jl_errorf("invalid redefinition of constant %s.%s",
                     jl_symbol_name(mod->name), jl_symbol_name(var));
