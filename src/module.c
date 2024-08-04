@@ -12,6 +12,9 @@
 extern "C" {
 #endif
 
+// In this translation unit and this translation unit only emit this symbol `extern` for use by julia
+extern JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT;
+
 JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_names)
 {
     jl_task_t *ct = jl_current_task;
@@ -175,6 +178,7 @@ static jl_binding_partition_t *new_binding_partition(void)
     jl_atomic_store_relaxed(&bpart->max_world, (size_t)-1);
     jl_atomic_store_relaxed(&bpart->next, NULL);
     bpart->kind = BINDING_KIND_GUARD;
+    bpart->padding = 0;
     return bpart;
 }
 
@@ -1080,7 +1084,7 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
         if (((b->publicp) ||
              (imported && (bpart->kind == BINDING_KIND_CONST_IMPORT || bpart->kind == BINDING_KIND_IMPORTED)) ||
-             (usings && bpart->kind == BINDING_KIND_IMPLICIT) ||
+             (usings && bpart->kind == BINDING_KIND_EXPLICIT) ||
              ((bpart->kind == BINDING_KIND_GLOBAL || bpart->kind == BINDING_KIND_CONST) && (all || main_public))) &&
             (all || (!b->deprecated && !hidden)))
             _append_symbol_to_bindings_array(a, asname);

@@ -878,7 +878,9 @@ STATIC_INLINE int jl_bpart_is_some_guard(jl_binding_partition_t *b) JL_NOTSAFEPO
     return b->kind == BINDING_KIND_FAILED || b->kind == BINDING_KIND_GUARD || b->kind == BINDING_KIND_DECLARED;
 }
 
-STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT {
+JL_DLLEXPORT inline jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT {
+    if (b && jl_is_globalref(b))
+        b = ((jl_globalref_t*)b)->binding;
     if (!b)
         return NULL;
     assert(jl_is_binding(b));
