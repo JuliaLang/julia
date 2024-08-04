@@ -2,6 +2,9 @@
 
 using Random
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays: OffsetVector, OffsetArray
+
 # main tests
 
 # issue #35800
@@ -209,19 +212,19 @@ end
 
     for f in (minimum, maximum)
         @test_throws "reducing over an empty collection is not allowed" f(A, dims=1)
-        @test_broken isequal(f(A, dims=2), zeros(Int, 0, 1))
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=2), zeros(Int, 0, 1))
         @test_throws "reducing over an empty collection is not allowed" f(A, dims=(1, 2))
-        @test_broken isequal(f(A, dims=3), zeros(Int, 0, 1))
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=3), zeros(Int, 0, 1))
     end
     for f in (findmin, findmax)
-        @test_throws ArgumentError f(A, dims=1)
-        @test isequal(f(A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-        @test_throws ArgumentError f(A, dims=(1, 2))
-        @test isequal(f(A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-        @test_throws ArgumentError f(abs2, A, dims=1)
-        @test isequal(f(abs2, A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-        @test_throws ArgumentError f(abs2, A, dims=(1, 2))
-        @test isequal(f(abs2, A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws "reducing over an empty collection is not allowed" f(A, dims=1)
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws "reducing over an empty collection is not allowed" f(A, dims=(1, 2))
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=1)
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(abs2, A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=(1, 2))
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(abs2, A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
     end
 
 end
@@ -715,7 +718,7 @@ end
     @test reduce(hcat, reduce(vcat, As, dims=1)) == [As[1,1] As[1,2] As[1,3]; As[2,1] As[2,2] As[2,3]]
 end
 
-@testset "sum with missings; issue #55213" begin
+@testset "sum with `missing`s; issue #55213 and #32366" begin
     @test isequal(sum([0.0 1; 0.0 missing], dims=2), [1.0; missing;;])
     @test sum([0.0 1; 0.0 missing], dims=2)[1] === 1.0
     @test isequal(sum(Any[0.0 1; 0.0 missing], dims=2), [1.0; missing;;])
@@ -725,6 +728,10 @@ end
     @test sum([1 0.0; 0.0 missing], dims=1)[1] === 1.0
     @test isequal(sum(Any[1 0.0; 0.0 missing], dims=1), [1.0 missing])
     @test sum(Any[1 0.0; 0.0 missing], dims=1)[1] === 1.0
+
+    @test isequal(sum([true false missing], dims=2), sum([1 0 missing], dims=2))
+    @test isequal(sum([true false missing], dims=2), [sum([true false missing]);;])
+    @test isequal(sum([true false missing], dims=2), [missing;;])
 end
 
 @testset "issues #45566 and #47231; initializers" begin
@@ -875,4 +882,39 @@ end
     @test mapreduce(*, op, 1:3, B'; dims, kw...) == reduce(op, map(*, 1:3, B'); dims, kw...)
 
     @test_throws DimensionMismatch mapreduce(*, +, A, hcat(B, 9:10); dims, kw...)
+end
+
+struct Infinity21097 <: Number
+end
+Base.:+(::Infinity21097,::Infinity21097) = Infinity21097()
+@testset "don't call zero on unknown numbers, issue #21097" begin
+    @test reduce(+, [Infinity21097()], init=Infinity21097()) == Infinity21097()
+    @test reduce(+, [Infinity21097()], init=Infinity21097(), dims=1) == [Infinity21097()]
+    @test reduce(+, [Infinity21097();;], init=Infinity21097(), dims=2) == [Infinity21097();;]
+    for len in [2,15,16,17,31,32,33,63,64,65,127,128,129]
+        for init in ((), (; init=Infinity21097()))
+            @test reduce(+,fill(Infinity21097(), len); init...) == Infinity21097()
+            @test reduce(+,fill(Infinity21097(), len, 2); init...) == Infinity21097()
+            @test reduce(+,fill(Infinity21097(), len, 16); init...) == Infinity21097()
+            @test reduce(+,fill(Infinity21097(), len); dims = 1, init...) == [Infinity21097()]
+            @test reduce(+,fill(Infinity21097(), len, 2); dims = 1, init...) == fill(Infinity21097(), 1, 2)
+            @test reduce(+,fill(Infinity21097(), len, 16); dims = 1, init...) == fill(Infinity21097(), 1, 16)
+            @test reduce(+,fill(Infinity21097(), len, 2); dims = 2, init...) == fill(Infinity21097(), len, 1)
+            @test reduce(+,fill(Infinity21097(), len, 16); dims = 2, init...) == fill(Infinity21097(), len, 1)
+        end
+    end
+end
+
+@testset "zero indices are not special, issue #38660" begin
+    v = OffsetVector([-1, 1], 0:1)
+    @test findmin(v, dims=1) == OffsetVector.(([-1], [0]), (0:0,))
+
+    A = rand(3,4,5)
+    OA = OffsetArray(A, (-1,-2,-3))
+    for dims in ((), 1, 2, 3, (1,2), (1,3), (2,3))
+        av, ai = findmin(A; dims)
+        ov, oi = findmin(OA; dims)
+        @test av == ov.parent
+        @test ai == oi.parent .+ CartesianIndex(1,2,3)
+    end
 end

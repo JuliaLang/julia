@@ -1335,7 +1335,9 @@ end
 
 ## count
 
-_bool(f) = x->f(x)::Bool
+_assert_bool(x) = x::Bool
+_bool(f) = _assert_bool ∘ f
+mapreduce_empty(::ComposedFunction{typeof(_assert_bool), <:Any}, ::typeof(add_sum), itr) = false+false
 
 """
     count([f=identity,] itr; init=0) -> Integer
