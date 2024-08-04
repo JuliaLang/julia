@@ -653,7 +653,7 @@ typedef struct _jl_binding_partition_t {
      *   jl_binding_t *imported;
      * } restriction;
      */
-    jl_value_t *restriction;
+    _Atomic(jl_value_t *) restriction;
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t*) next;

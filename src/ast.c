@@ -207,14 +207,14 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     jl_binding_t *b = jl_get_module_binding(mod, var, 0);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     while (jl_bpart_is_some_import(bpart)) {
-        b = (jl_binding_t*)bpart->restriction;
+        b = (jl_binding_t*)jl_atomic_load_relaxed(&bpart->restriction);
         bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     }
     if (!bpart)
         return fl_ctx->F;
     if (jl_bpart_is_some_guard(bpart))
         return fl_ctx->F;
-    return  (jl_bpart_is_some_constant(bpart) ? bpart->restriction : jl_atomic_load_relaxed(&b->value)) != NULL ? fl_ctx->T : fl_ctx->F;
+    return  (jl_bpart_is_some_constant(bpart) ? jl_atomic_load_relaxed(&bpart->restriction) : jl_atomic_load_relaxed(&b->value)) != NULL ? fl_ctx->T : fl_ctx->F;
 }
 
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT

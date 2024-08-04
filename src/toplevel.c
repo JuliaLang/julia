@@ -298,7 +298,7 @@ void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
     if (bpart->kind != BINDING_KIND_GLOBAL) {
         if (jl_bpart_is_some_guard(bpart)) {
             bpart->kind = BINDING_KIND_GLOBAL;
-            bpart->restriction = ty;
+            jl_atomic_store_relaxed(&bpart->restriction, ty);
             jl_gc_wb(bpart, ty);
             return;
         } else {
@@ -310,12 +310,12 @@ void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
         jl_errorf("cannot set type for imported constant %s.%s.",
                   jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
     }
-    jl_value_t *old_ty = bpart->restriction;
+    jl_value_t *old_ty = jl_atomic_load_relaxed(&bpart->restriction);
     if (!jl_types_equal(ty, old_ty)) {
         jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
                   jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
     }
-    bpart->restriction = ty;
+    jl_atomic_store_relaxed(&bpart->restriction, ty);
     jl_gc_wb(bpart, ty);
 }
 
@@ -719,14 +719,14 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl
 {
     jl_declare_constant(b);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    if (bpart->restriction) {
-        if (jl_egal(val, bpart->restriction))
+    if (jl_atomic_load_relaxed(&bpart->restriction)) {
+        if (jl_egal(val, jl_atomic_load_relaxed(&bpart->restriction)))
             return bpart;
         jl_errorf("invalid redefinition of constant %s.%s",
             jl_symbol_name(b->globalref->mod->name),
             jl_symbol_name(b->globalref->name));
     }
-    bpart->restriction = val;
+    jl_atomic_store_relaxed(&bpart->restriction, val);
     jl_gc_wb(bpart, val);
     return bpart;
 }

@@ -3233,7 +3233,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
             if (bnd->deprecated) {
                 cg_bdw(ctx, name, bnd);
             }
-            bnd = (jl_binding_t*)bpart->restriction;
+            bnd = (jl_binding_t*)jl_atomic_load_relaxed(&bpart->restriction);
             bpart = jl_get_binding_partition(bnd, ctx.max_world);
         }
         if (jl_bpart_is_some_constant(bpart)) {
@@ -3250,7 +3250,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         cg_bdw(ctx, name, bnd);
     }
     assert(bpart->kind == BINDING_KIND_GLOBAL);
-    jl_value_t *ty = bpart->restriction;
+    jl_value_t *ty = jl_atomic_load_relaxed(&bpart->restriction);
     bp = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
@@ -3268,7 +3268,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     if (bp == NULL)
         return jl_cgval_t();
     if (bnd && !jl_bpart_is_some_constant(bpart)) {
-        jl_value_t *ty = bpart->restriction;
+        jl_value_t *ty = jl_atomic_load_relaxed(&bpart->restriction);
         if (ty != nullptr) {
             const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
             if (!ismodifyglobal) {
@@ -5499,7 +5499,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
             bpart = jl_get_binding_partition(b, ctx.max_world);
         }
         while (jl_bpart_is_some_import(bpart)) {
-            b = (jl_binding_t*)bpart->restriction;
+            b = (jl_binding_t*)jl_atomic_load_relaxed(&bpart->restriction);
             bpart = jl_get_binding_partition(b, ctx.max_world);
         }
     }

@@ -226,7 +226,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
                         if (jl_bpart_is_some_guard(bpart)) {
                             bpart->kind = BINDING_KIND_GLOBAL;
-                            bpart->restriction = (jl_value_t*)jl_any_type;
+                            jl_atomic_store_relaxed(&bpart->restriction, (jl_value_t*)jl_any_type);
                             jl_gc_wb(bpart, jl_any_type);
                         }
                     }
