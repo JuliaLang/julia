@@ -3935,3 +3935,13 @@ module AssignConstValueTest
     x = 1
 end
 @test isconst(AssignConstValueTest, :x)
+
+# Module Replacement
+module ReplacementContainer
+    module ReplaceMe
+    end
+    const Old = ReplaceMe
+    module ReplaceMe
+    end
+end
+@test ReplacementContainer.Old !== ReplacementContainer.ReplaceMe

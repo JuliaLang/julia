@@ -156,13 +156,29 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     }
     else {
         jl_binding_t *b = jl_get_module_binding(parent_module, name, 1);
-        jl_binding_partition_t *bpart = jl_declare_constant_val(b, (jl_value_t*)newm);
-        if (bpart->next != NULL) {
-            // create a hidden gc root for the old module
-            JL_LOCK(&jl_modules_mutex);
-            uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, (void*)bpart->next->restriction);
-            *refcnt += 1;
-            JL_UNLOCK(&jl_modules_mutex);
+        jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
+        if (bpart->kind != BINDING_KIND_CONST) {
+            jl_declare_constant_val(b, (jl_value_t*)newm);
+        } else {
+            // As a special exception allow binding replacement of modules
+            jl_value_t *old = NULL;
+            if (!jl_atomic_cmpswap(&bpart->restriction, &old, (jl_value_t*)newm)) {
+                if (!jl_is_module(old)) {
+                    jl_errorf("invalid redefinition of constant %s", jl_symbol_name(name));
+                }
+                if (jl_generating_output())
+                    jl_errorf("cannot replace module %s during compilation", jl_symbol_name(name));
+                jl_printf(JL_STDERR, "WARNING: replacing module %s.\n", jl_symbol_name(name));
+                old = jl_atomic_exchange(&b->value, (jl_value_t*)newm);
+            }
+            jl_gc_wb(bpart, newm);
+            if (old != NULL) {
+                // create a hidden gc root for the old module
+                JL_LOCK(&jl_modules_mutex);
+                uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, old);
+                *refcnt += 1;
+                JL_UNLOCK(&jl_modules_mutex);
+            }
         }
     }
 
