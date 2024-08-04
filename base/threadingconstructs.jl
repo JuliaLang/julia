@@ -4,10 +4,10 @@ export threadid, nthreads, @threads, @spawn,
        threadpool, nthreadpools
 
 """
-    Threads.threadid() -> Int
+    Threads.threadid([t::Task]) -> Int
 
-Get the ID number of the current thread of execution. The master thread has
-ID `1`.
+Get the ID number of the current thread of execution, or the thread of task
+`t`. The master thread has ID `1`.
 
 # Examples
 ```julia-repl
@@ -21,6 +21,9 @@ julia> Threads.@threads for i in 1:4
 2
 5
 4
+
+julia> Threads.threadid(Threads.@spawn "foo")
+2
 ```
 
 !!! note
