@@ -979,6 +979,8 @@ jl_value_t *jl_check_binding_wr(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     assert(!jl_bpart_is_some_guard(bpart) && !jl_bpart_is_some_import(bpart));
     if (jl_bpart_is_some_constant(bpart)) {
+        if (rhs == bpart->restriction)
+            return NULL;
         jl_errorf("invalid redefinition of constant %s.%s",
                     jl_symbol_name(mod->name), jl_symbol_name(var));
     }
