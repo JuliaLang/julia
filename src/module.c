@@ -13,7 +13,7 @@ extern "C" {
 #endif
 
 // In this translation unit and this translation unit only emit this symbol `extern` for use by julia
-extern JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT;
+EXTERN_INLINE_DEFINE jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_names)
 {
