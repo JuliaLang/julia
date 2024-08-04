@@ -5661,8 +5661,9 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
             name = (jl_sym_t*)sym;
         }
         jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-        if (bnd && jl_atomic_load_relaxed(&bnd->owner) == bnd) {
-            if (jl_atomic_load_acquire(&bnd->value) != NULL && bnd->constp)
+        jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.min_world);
+        if (bpart && (bpart->kind == BINDING_KIND_GLOBAL || bpart->kind == BINDING_KIND_CONST || bpart->kind == BINDING_KIND_CONST_IMPORT)) {
+            if (jl_get_binding_value_if_const(bnd))
                 return mark_julia_const(ctx, jl_true);
             Value *bp = julia_binding_gv(ctx, bnd);
             bp = julia_binding_pvalue(ctx, bp);

@@ -766,8 +766,16 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // unlike most queries here, this is currently seq_cst
 {
-    jl_binding_t *b = allow_import ? jl_get_binding(m, var) : jl_get_module_binding(m, var, 0);
-    return b && (jl_atomic_load_relaxed(&b->owner) == b) && (jl_atomic_load(&b->value) != NULL);
+    jl_binding_t *b = jl_get_module_binding(m, var, allow_import);
+    if (!b)
+        return 0;
+    if (!allow_import) {
+        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+        if (!bpart || jl_bpart_is_some_import(bpart))
+            return 0;
+        return jl_get_binding_value(b) != NULL;
+    }
+    return jl_reresolve_binding_value(b) != NULL;
 }
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
@@ -1069,10 +1077,11 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
+        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
         if (((b->publicp) ||
-             (imported && b->imported) ||
-             (usings && _binding_is_from_explicit_using(b)) ||
-             (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || main_public))) &&
+             (imported && (bpart->kind == BINDING_KIND_CONST_IMPORT || bpart->kind == BINDING_KIND_IMPORTED)) ||
+             (usings && bpart->kind == BINDING_KIND_IMPLICIT) ||
+             ((bpart->kind == BINDING_KIND_GLOBAL || bpart->kind == BINDING_KIND_CONST) && (all || main_public))) &&
             (all || (!b->deprecated && !hidden)))
             _append_symbol_to_bindings_array(a, asname);
     }
