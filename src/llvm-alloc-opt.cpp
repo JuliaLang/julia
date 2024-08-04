@@ -288,7 +288,7 @@ void Optimizer::optimizeAll()
         }
         // The move to stack code below, if has_ref is set, changes the allocation to an array of jlvalue_t's. This is fine
         // if all objects are jlvalue_t's. However, if part of the allocation is an unboxed value (e.g. it is a { float, jlvaluet }),
-        // then moveToStack will create a [2 x jlvaluet] bitcast to { float, jlvaluet }. 
+        // then moveToStack will create a [2 x jlvaluet] bitcast to { float, jlvaluet }.
         // This later causes the GC rooting pass, to miss-characterize the float as a pointer to a GC value
         if (has_unboxed && has_ref) {
             REMARK([&]() {

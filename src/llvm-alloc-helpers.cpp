@@ -88,7 +88,6 @@ bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
     memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
     auto &field = getField(offset, size, elty);
-            
     field.second.hasunboxed |= !hasObjref(elty) || (hasObjref(elty) && !isa<PointerType>(elty));
 
     if (field.second.hasobjref != memop.isobjref)
