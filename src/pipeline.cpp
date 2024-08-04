@@ -40,6 +40,7 @@
 #include <llvm/Transforms/IPO/ConstantMerge.h>
 #include <llvm/Transforms/IPO/ForceFunctionAttrs.h>
 #include <llvm/Transforms/IPO/GlobalDCE.h>
+#include <llvm/Transforms/IPO/GlobalOpt.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
@@ -417,6 +418,7 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
           MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
       }
       MPM.addPass(GlobalDCEPass());
+      MPM.addPass(GlobalOptPass());
     }
     MPM.addPass(AfterEarlyOptimizationMarkerPass());
 }
@@ -590,6 +592,7 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
             if (O.getSpeedupLevel() >= 2) {
                 FPM.addPass(GVNPass());
             }
+            MPM.addPass(GlobalOptPass());
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
     }
