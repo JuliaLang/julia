@@ -1045,3 +1045,8 @@ function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
     _evview(A) .= B.du
     return A
 end
+
+uppertriangular(T::SymTridiagonal{<:Number}) = Bidiagonal(T.dv, T.ev, :U)
+lowertriangular(T::SymTridiagonal{<:Number}) = Bidiagonal(T.dv, T.ev, :L)
+uppertriangular(T::Tridiagonal) = Bidiagonal(T.d, T.du, :U)
+lowertriangular(T::Tridiagonal) = Bidiagonal(T.d, T.dl, :L)

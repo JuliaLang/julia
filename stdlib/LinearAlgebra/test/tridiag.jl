@@ -914,4 +914,14 @@ end
     end
 end
 
+@testset "uppertriangular/lowertriangular views" begin
+    T = Tridiagonal(fill(1, 3), fill(2,4), fill(3,3))
+    @test uppertriangular(T) == Bidiagonal(T, :U)
+    @test lowertriangular(T) == Bidiagonal(T, :L)
+
+    S = SymTridiagonal(fill(2,4), fill(3,3))
+    @test uppertriangular(S) == Bidiagonal(S, :U)
+    @test lowertriangular(S) == Bidiagonal(S, :L)
+end
+
 end # module TestTridiagonal
