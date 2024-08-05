@@ -1176,9 +1176,6 @@ Return `newpath`.
 OS-specific restrictions may apply when `oldpath` and `newpath` are in different directories.
 
 See also: [`mv`](@ref).
-
-!!! compat "Julia 1.12"
-    This method was added in Julia 1.12.
 """
 function rename(oldpath::AbstractString, newpath::AbstractString)
     err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), oldpath, newpath)
