@@ -272,4 +272,11 @@ end
     @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
 end
 
+@testset "complex Symmetric" begin
+    D = diagm(0=>ComplexF64[1,2])
+    S = Symmetric(D)
+    H = hessenberg(S)
+    @test H.H == D
+end
+
 end # module TestHessenberg

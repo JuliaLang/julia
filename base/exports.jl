@@ -407,6 +407,7 @@ export
     indexin,
     argmax,
     argmin,
+    insertdims,
     invperm,
     invpermute!,
     isassigned,

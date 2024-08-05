@@ -181,7 +181,7 @@ Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(ad
 ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
 issymmetric(S::SymTridiagonal) = true
 
-tr(S::SymTridiagonal) = sum(S.dv)
+tr(S::SymTridiagonal) = sum(symmetric, S.dv)
 
 @noinline function throw_diag_outofboundserror(n, sz)
     sz1, sz2 = sz

@@ -900,8 +900,11 @@ const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "
 
 # Aux function to detect whether we're right after a using or import keyword
 function get_import_mode(s::String)
+    # allow all of these to start with leading whitespace and macros like @eval and @eval(
+    # ^\s*(?:@\w+\s*(?:\(\s*)?)?
+
     # match simple cases like `using |` and `import  |`
-    mod_import_match_simple = match(r"^\b(using|import)\s*$", s)
+    mod_import_match_simple = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s*$", s)
     if mod_import_match_simple !== nothing
         if mod_import_match_simple[1] == "using"
             return :using_module
@@ -910,7 +913,7 @@ function get_import_mode(s::String)
         end
     end
     # match module import statements like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`
-    mod_import_match = match(r"^\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
+    mod_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
     if mod_import_match !== nothing
         if mod_import_match.captures[1] == "using"
             return :using_module
@@ -919,7 +922,7 @@ function get_import_mode(s::String)
         end
     end
     # now match explicit name import statements like `using Foo: |` and `import Foo: bar, baz|`
-    name_import_match = match(r"^\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
+    name_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
     if name_import_match !== nothing
         if name_import_match[1] == "using"
             return :using_name
