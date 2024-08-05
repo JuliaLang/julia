@@ -234,7 +234,7 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patc
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
-ifeq ($(shell expr $(LLVM_VER_MAJ) \>= 19), 1)
+ifeq ($(shell test $(LLVM_VER_MAJ) -ge 19 && echo true),true)
 	$(eval $(call LLVM_PATCH,llvm19-ittapi-cmake))
 else
 	$(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
