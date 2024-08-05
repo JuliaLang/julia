@@ -325,6 +325,20 @@ end
     @test hcat(Transpose(vecvec), Transpose(vecvec))::Transpose{Transpose{Complex{Int},Vector{Complex{Int}}},Vector{Vector{Complex{Int}}}} == hcat(tvecvec, tvecvec)
 end
 
+@testset "dropdims on Adjoint/Transpose-wrapped vectors & matrices" begin
+    intvec = [1, 2]
+    @test dropdims(Adjoint(intvec); dims=1) === intvec
+    @test dropdims(Transpose(intvec); dims=1) === intvec
+    cvec = [1.0 + 3im, 3.0 + 4im]
+    @test dropdims(Adjoint(cvec); dims=1) == conj(cvec)
+    @test dropdims(Transpose(cvec); dims=1) === cvec
+    intmat = [1 2 3]
+    @test dropdims(Adjoint(intmat); dims=2) == vec(intmat)
+    @test dropdims(Adjoint(intmat); dims=2) isa Vector
+    @test dropdims(Transpose(intmat); dims=2) == vec(intmat)
+    @test dropdims(Transpose(intmat); dims=2) isa Vector
+end
+
 @testset "map/broadcast over Adjoint/Transpose-wrapped vectors and Numbers" begin
     # map and broadcast over Adjoint/Transpose-wrapped vectors and Numbers
     # should preserve the Adjoint/Transpose-wrapper to preserve semantics downstream
