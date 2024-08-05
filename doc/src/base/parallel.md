@@ -138,7 +138,7 @@ end
 
 ev = OneWayEvent()
 @sync begin
-    @async begin
+    Threads.@spawn begin
         wait(ev)
         println("done")
     end
