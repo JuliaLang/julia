@@ -259,7 +259,7 @@ specific instances where annotations are helpful.
 
 ### Avoid fields with abstract type
 
-Types can be declared without specifying the types of their fields:
+Types can be annotated without specifying the types of their fields:
 
 ```jldoctest myambig
 julia> struct MyAmbiguousType

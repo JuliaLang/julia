@@ -108,7 +108,7 @@ the call site that at least one of the arguments (often the first one) is being 
 
 ## Argument-type annotations
 
-You can declare the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Annotations](@ref) in Julia.
+You can annotate the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Annotations](@ref) in Julia.
 For example, the following function computes [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number) recursively:
 ```
 fib(n::Integer) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)

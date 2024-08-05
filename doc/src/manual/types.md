@@ -40,7 +40,7 @@ The [`typeof`](@ref) and [`isa`](@ref) methods facilitate checking the type of a
 
 Julia's type system is designed to be powerful and expressive, yet clear, intuitive and unobtrusive.
 Many Julia programmers may never feel the need to write code that explicitly uses types. Some
-kinds of programming, however, become clearer, simpler, faster and more robust with declared types.
+kinds of programming, however, become clearer, simpler, faster and more robust with annotated types.
 
 ## Type Annotations
 
@@ -75,7 +75,7 @@ the value on the left must have that type as its implementation.
 When the type is abstract,
 it suffices for the value to have a concrete type that is a subtype of the abstract type.
 When appended to a variable on the left-hand side of an assignment, or as part of a `local` declaration,
-the `::` operator means something a bit different: it declares the variable to always have the
+the `::` operator means something a bit different: it annotates the variable to always have the
 specified type, like a type declaration in a statically-typed language such as C. Every value
 assigned to the variable will be converted to the declared type using [`convert`](@ref):
 
@@ -569,7 +569,7 @@ declare a family of concrete, [composite types](#Composite-Types),
 whereas [parametric abstract types](#Parametric-Abstract-Types)
 declare a family of [abstract types](#man-abstract-types).
 Other kinds of built-in parametric types such as tuple types are discussed in this section as well.
-Parametric types can also be used in [type annotations](#Type-Annotations).
+Parametric types can also be used in [type annotations](#Type-Annotations) when the parameters are specified.
 
 !!! note
     Parametric types do not represent a single node in the type graph.
@@ -602,7 +602,7 @@ This declaration defines a new parametric type, `Point{T}`,
 holding two "coordinates" of the same type `T`.
 The parameter `T` is a placeholder, which will be replaced by a particular type
 when an instance of this type is created.
-Thus, this single declaration actually declares an unlimited number of types:
+Thus, this single annotation actually declares an unlimited number of types:
 `Point{Float64}`, `Point{AbstractString}`, `Point{Int64}`, etc.
 Each of these is now a usable concrete type:
 
