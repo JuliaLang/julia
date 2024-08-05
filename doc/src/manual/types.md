@@ -22,10 +22,8 @@ Method dispatch is explored in detail in the [Methods](@ref) section, but is roo
 
 All values in a Julia program belong to exactly one concrete type.
 All types belong to a single type tree, i.e. they are all at least related to the [`Any`](@ref) type.
-User-defined types are treated the same as built-in types.
 For additional flexibility, types can be defined as concrete, abstract or parametric.
 Their relation to other types must be explicitly declared.
-One particularly distinctive feature of Julia's type system is that only abstract types can be used as supertypes for a family of related types.
 Concrete types are final, and may not subtype each other.
 While this might at first seem unduly restrictive, it has many beneficial consequences with surprisingly
 few drawbacks. Both [abstract types](#man-abstract-types) and [parametric types](#Parametric-Types)
