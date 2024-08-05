@@ -264,12 +264,13 @@ end
 ####################
 
 function show(io::IO, M::Bidiagonal)
-    # TODO: make this readable and one-line
-    summary(io, M)
-    print(io, ":\n diag:")
-    print_matrix(io, (M.dv)')
-    print(io, M.uplo == 'U' ? "\n super:" : "\n sub:")
-    print_matrix(io, (M.ev)')
+    print(io, "Bidiagonal(")
+    show(io, M.dv)
+    print(io, ", ")
+    show(io, M.ev)
+    print(io, ", ")
+    show(io, sym_uplo(M.uplo))
+    print(io, ")")
 end
 
 size(M::Bidiagonal) = (n = length(M.dv); (n, n))
