@@ -3,12 +3,13 @@
 using Test
 using REPL
 using Random
+using Logging
 import REPL.LineEdit
 using Markdown
 
 empty!(Base.Experimental._hint_handlers) # unregister error hints so they can be tested separately
 
-@test isassigned(Base.REPL_MODULE_REF)
+@test Base.REPL_MODULE_REF[] === REPL
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
@@ -1215,9 +1216,9 @@ global some_undef_global
 @test occursin("does not exist", sprint(show, help_result("..")))
 # test that helpmode is sensitive to contextual module
 @test occursin("No documentation found", sprint(show, help_result("Fix2", Main)))
-@test occursin("A type representing a partially-applied version", # exact string may change
+@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
                sprint(show, help_result("Base.Fix2", Main)))
-@test occursin("A type representing a partially-applied version", # exact string may change
+@test occursin("Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).", # exact string may change
                sprint(show, help_result("Fix2", Base)))
 
 
@@ -1400,6 +1401,126 @@ end
     Base.wait(backend.backend_task)
 end
 
+# Mimic of JSON.jl's structure
+module JSON54872
+
+module Parser
+export parse
+function parse end
+end # Parser
+
+using .Parser: parse
+end # JSON54872
+
+# Test the public mechanism
+module JSON54872_public
+public tryparse
+end # JSON54872_public
+
+@testset "warn_on_non_owning_accesses AST transform" begin
+    @test REPL.has_ancestor(JSON54872.Parser, JSON54872)
+    @test !REPL.has_ancestor(JSON54872, JSON54872.Parser)
+
+    # JSON54872.Parser owns `parse`
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872.Parser.parse
+    end)
+    @test isempty(warnings)
+
+    # A submodule of `JSON54872` owns `parse`
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872.parse
+    end)
+    @test isempty(warnings)
+
+    # `JSON54872` does not own `tryparse` (nor is it public)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872.tryparse
+    end)
+    @test length(warnings) == 1
+    @test only(warnings).owner == Base
+    @test only(warnings).name_being_accessed == :tryparse
+
+    # Same for nested access
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872.Parser.tryparse
+    end)
+    @test length(warnings) == 1
+    @test only(warnings).owner == Base
+    @test only(warnings).name_being_accessed == :tryparse
+
+    test_logger = TestLogger()
+    with_logger(test_logger) do
+        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
+        REPL.warn_on_non_owning_accesses(@__MODULE__, :(JSON54872.tryparse))
+    end
+    # only 1 logging statement emitted thanks to `maxlog` mechanism
+    @test length(test_logger.logs) == 1
+    record = only(test_logger.logs)
+    @test record.level == Warn
+    @test record.message == "tryparse is defined in Base and is not public in $JSON54872"
+
+    # However JSON54872_public has `tryparse` declared public
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        JSON54872_public.tryparse
+    end)
+    @test isempty(warnings)
+
+    # Now let us test some tricky cases
+    # No warning since `JSON54872` is local (LHS of `=`)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        let JSON54872 = (; tryparse=1)
+            JSON54872.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # No warning for nested local access either
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        let JSON54872 = (; Parser = (; tryparse=1))
+            JSON54872.Parser.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # No warning since `JSON54872` is local (long-form function arg)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        function f(JSON54872=(; tryparse))
+            JSON54872.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # No warning since `JSON54872` is local (short-form function arg)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        f(JSON54872=(; tryparse)) = JSON54872.tryparse
+    end)
+    @test isempty(warnings)
+
+    # No warning since `JSON54872` is local (long-form anonymous function)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        function (JSON54872=(; tryparse))
+            JSON54872.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # No warning since `JSON54872` is local (short-form anonymous function)
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        (JSON54872 = (; tryparse)) -> begin
+            JSON54872.tryparse
+        end
+    end)
+    @test isempty(warnings)
+
+    # false-negative: missing warning
+    warnings = REPL.collect_qualified_access_warnings(@__MODULE__, quote
+        let JSON54872 = JSON54872
+            JSON54872.tryparse
+        end
+    end)
+    @test_broken !isempty(warnings)
+end
 
 backend = REPL.REPLBackend()
 frontend_task = @async begin
@@ -1478,6 +1599,11 @@ end
         @test isempty(mods)
         mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
         @test mods == [:Foo]
+
+        mods = REPL.modules_to_be_loaded(:(import .Foo: a))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(:(using .Foo: a))
+        @test isempty(mods)
     end
 end
 

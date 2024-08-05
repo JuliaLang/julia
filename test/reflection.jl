@@ -686,7 +686,7 @@ let
     @test @inferred wrapperT(ReflectionExample{T, Int64} where T) == ReflectionExample
     @test @inferred wrapperT(ReflectionExample) == ReflectionExample
     @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
-    @test_throws(ErrorException("typename does not apply to unions whose components have different typenames"),
+    @test_throws(Core.TypeNameError(Union{Int, Float64}),
                  Base.typename(Union{Int, Float64}))
 end
 
@@ -1296,3 +1296,5 @@ end
 
 @test Base.infer_return_type(code_lowered, (Any,)) == Vector{Core.CodeInfo}
 @test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
+
+@test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187

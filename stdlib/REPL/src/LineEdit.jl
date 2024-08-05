@@ -3,7 +3,7 @@
 module LineEdit
 
 import ..REPL
-using REPL: AbstractREPL, Options
+using ..REPL: AbstractREPL, Options
 
 using ..Terminals
 import ..Terminals: raw!, width, height, clear_line, beep
@@ -741,7 +741,26 @@ function edit_move_right(buf::IOBuffer)
     end
     return false
 end
-edit_move_right(s::PromptState) = edit_move_right(s.input_buffer) ? refresh_line(s) : false
+function edit_move_right(m::MIState)
+    s = state(m)
+    buf = s.input_buffer
+    if edit_move_right(s.input_buffer)
+        refresh_line(s)
+        return true
+    else
+        completions, partial, should_complete = complete_line(s.p.complete, s, m.active_module)
+        if should_complete && eof(buf) && length(completions) == 1 && length(partial) > 1
+            # Replace word by completion
+            prev_pos = position(s)
+            push_undo(s)
+            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
+            refresh_line(state(s))
+            return true
+        else
+            return false
+        end
+    end
+end
 
 function edit_move_word_right(s::PromptState)
     if !eof(s.input_buffer)
@@ -2840,7 +2859,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         # spawn this because the main repl task is sticky (due to use of @async and _wait2)
         # and we want to not block typing when the repl task thread is busy
         t2 = Threads.@spawn :interactive while true
-            eof(term) || peek(term, Char) # wait before locking but don't consume
+            eof(term) || peek(term) # wait before locking but don't consume
             @lock l begin
                 kmap = keymap(s, prompt)
                 fcn = match_input(kmap, s)

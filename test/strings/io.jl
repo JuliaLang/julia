@@ -165,6 +165,11 @@
     @test Base.escape_raw_string(raw"some\"string\\", '`') == "some\"string\\\\"
     @test Base.escape_raw_string(raw"some\"string") == "some\\\"string"
     @test Base.escape_raw_string(raw"some`string", '`') == "some\\`string"
+
+    # ascii and fullhex flags:
+    @test escape_string("\u00e4\u00f6\u00fc") == "\u00e4\u00f6\u00fc"
+    @test escape_string("\u00e4\u00f6\u00fc", ascii=true) == "\\ue4\\uf6\\ufc"
+    @test escape_string("\u00e4\u00f6\u00fc", ascii=true, fullhex=true) == "\\u00e4\\u00f6\\u00fc"
 end
 @testset "join()" begin
     @test join([]) == join([],",") == ""
