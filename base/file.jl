@@ -448,18 +448,27 @@ function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
 end
 
 function _mv_replace(src::AbstractString, dst::AbstractString)
+    if ispath(dst) && Base.samefile(src, dst)
+        abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
+        abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
+        throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir. ",
+                                   "This is not supported.\n  ",
+                                   "`src` refers to: $(abs_src)\n  ",
+                                   "`dst` refers to: $(abs_dst)\n")))
+    end
     # First try to do a regular rename, because this might avoid a situation
     # where dst is deleted or truncated.
     try
         rename(src, dst)
-    catch ex
-        ex isa IOError || rethrow()
+    catch err
+        err isa IOError || rethrow()
+        err.code==Base.UV_ENOENT && rethrow()
         # on rename error try to delete dst if it exists and isn't the same as src
         checkfor_mv_cp_cptree(src, dst, "moving"; force=true)
         try
             rename(src, dst)
-        catch ex
-            ex isa IOError || rethrow()
+        catch err
+            err isa IOError || rethrow()
             # on second error, default to force cp && rm
             cp(src, dst; force=true, follow_symlinks=false)
             rm(src; recursive=true)
@@ -474,8 +483,9 @@ function _mv_noreplace(src::AbstractString, dst::AbstractString)
     checkfor_mv_cp_cptree(src, dst, "moving"; force=false)
     try
         rename(src, dst)
-    catch ex
-        ex isa IOError || rethrow()
+    catch err
+        err isa IOError || rethrow()
+        err.code==Base.UV_ENOENT && rethrow()
         # on error, default to cp && rm
         cp(src, dst; force=false, follow_symlinks=false)
         rm(src; recursive=true)
