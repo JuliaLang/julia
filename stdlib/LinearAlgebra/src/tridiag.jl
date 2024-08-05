@@ -173,7 +173,7 @@ Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(ad
 ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
 issymmetric(S::SymTridiagonal) = true
 
-tr(S::SymTridiagonal) = sum(S.dv)
+tr(S::SymTridiagonal) = sum(symmetric, S.dv)
 
 function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
     # every branch call similar(..., ::Int) to make sure the
