@@ -1215,3 +1215,9 @@ end
     @test !iseven(7+0im) && isodd(7+0im)
     @test !iseven(6+1im) && !isodd(7+1im)
 end
+
+@testset "issue #55266" begin
+    for T in (ComplexF32, ComplexF64)
+        @test isapprox(atanh(1+nextfloat(zero(T))), T(atanh(1+big(nextfloat(zero(T))))))
+    end
+end
