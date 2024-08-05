@@ -514,10 +514,10 @@ function rpad(
 end
 
 """
-    rtrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…")
+    rtrunc(str::AbstractString, maxwidth::Int, replace_str::AbstractString = "…")
 
-Truncate `str` to at most `w` characters (see [`textwidth`](@ref)), replacing the last characters
-with `replace_str` if necessary. The default replacement string is "…".
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the last characters
+with `replacement` if necessary. The default replacement string is "…".
 
 # Examples
 ```jldoctest
@@ -536,26 +536,13 @@ julia> rtrunc("foo", 3)
 
 See also [`ltrunc`](@ref) and [`ctrunc`](@ref).
 """
-function rtrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…")
-    if textwidth(str) <= w
-        return str
-    else
-        i, accwidth = firstindex(str), textwidth(replace_str)
-        while true
-            tw = textwidth(str[i])
-            accwidth + tw <= w || break # no need to check if we go out of bounds because of the first if branch
-            accwidth += tw
-            i = nextind(str, i)
-        end
-        return str[firstindex(str):prevind(str, i)] * replace_str
-    end
-end
+rtrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…') = struncate(str, maxwidth, replacement, :right)
 
 """
-    ltrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…")
+    ltrunc(str::AbstractString, maxwidth::Int, replace_str::AbstractString = "…")
 
-Truncate `str` to at most `w` characters (see [`textwidth`](@ref)), replacing the first characters
-with `replace_str` if necessary. The default replacement string is "…".
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the first characters
+with `replacement` if necessary. The default replacement string is "…".
 
 # Examples
 ```jldoctest
@@ -574,26 +561,13 @@ julia> ltrunc("foo", 3)
 
 See also [`rtrunc`](@ref) and [`ctrunc`](@ref).
 """
-function ltrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…")
-    if textwidth(str) <= w
-        return str
-    else
-        i, accwidth = lastindex(str), textwidth(replace_str)
-        while true
-            tw = textwidth(str[i])
-            accwidth + tw <= w || break # no need to check if we go out of bounds because of the first if branch
-            accwidth += tw
-            i = prevind(str, i)
-        end
-        return replace_str * str[nextind(str, i):lastindex(str)]
-    end
-end
+ltrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…') = struncate(str, maxwidth, replacement, :left)
 
 """
-    ctrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…"; prefer_left::Bool = true)
+    ctrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…'; prefer_left::Bool = true)
 
-Truncate `str` to at most `w` characters (see [`textwidth`](@ref)), replacing the middle characters
-with `replace_str` if necessary. The default replacement string is "…". By default, the truncation
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the middle characters
+with `replacement` if necessary. The default replacement string is "…". By default, the truncation
 prefers keeping chars on the left, but this can be changed by setting `prefer_left` to `false`.
 
 # Examples
@@ -613,24 +587,25 @@ julia> ctrunc("foo", 3)
 
 See also [`ltrunc`](@ref) and [`rtrunc`](@ref).
 """
-function ctrunc(str::AbstractString, w::Int, replace_str::AbstractString = "…"; prefer_left::Bool = true)
-    if textwidth(str) <= w
-        return str
-    else
-        l, r, accwidth = firstindex(str), lastindex(str), textwidth(replace_str)
-        isleft = prefer_left
-        while true
-            tw = if isleft textwidth(str[l]) else textwidth(str[r]) end
-            (accwidth += tw) <= w || break
-            if isleft
-                l = nextind(str, l)
-            else
-                r = prevind(str, r)
-            end
-            isleft = !isleft
+ctrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…'; prefer_left::Bool = true) =
+    struncate(str, maxwidth, replacement, :center, prefer_left)
+
+function struncate(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char}, mode::Symbol = :center, prefer_left::Bool = true)
+    maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
+    textwidth(str) <= maxwidth && return str
+    l0, _ = left, right = firstindex(str), lastindex(str)
+    width = textwidth(replacement)
+    while true
+        if mode === :left || (mode === :center && (!prefer_left || left > l0))
+            (width += textwidth(str[right])) <= maxwidth || break
+            right = prevind(str, right)
         end
-        return str[firstindex(str):prevind(str, l)] * replace_str * str[nextind(str, r):lastindex(str)]
+        if mode ∈ (:right, :center)
+            (width += textwidth(str[left])) <= maxwidth || break
+            left = nextind(str, left)
+        end
     end
+    @views return str[begin:prevind(str, left)] * replacement * str[nextind(str, right):end]
 end
 
 """
