@@ -5,6 +5,7 @@ module TestSpecial
 using Test, LinearAlgebra, Random
 using LinearAlgebra: rmul!, BandIndex
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
 using .Main.SizedArrays
 
