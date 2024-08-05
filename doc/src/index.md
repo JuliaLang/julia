@@ -152,3 +152,14 @@ import Markdown
 list = sort(filter(x -> match(r"_jll$", x) === nothing, readdir(Sys.STDLIB)))
 Markdown.parse(join("- [`" .* list .* "`](stdlib/" .* list .* ".html)", "\n"))
 ```
+
+Julia also provides various standard, pre-built binary libraries
+of established software that is written in other languages.
+By convention, these packages have names that end with `_jll`.
+The [`using`](@ref) statement can load symbol names from these binary libraries:
+
+```@eval
+import Markdown
+list = sort(filter(x -> match(r"_jll$", x) !== nothing, readdir(Sys.STDLIB)))
+Markdown.parse(join("- [`" .* list .* "`](stdlib/" .* list .* ".html)", "\n"))
+```
