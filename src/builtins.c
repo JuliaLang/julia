@@ -2197,6 +2197,9 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
     JL_GC_PUSH2(&a, &b);
     a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
+    // if tb recursively refers to itself in its supertype, assume that it refers to ta
+    // before checking whether the supertypes are equal
+    b = jl_substitute_datatype(b, dtb, dta);
     if (!jl_types_equal(a, b))
         goto no;
     JL_TRY {

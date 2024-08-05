@@ -1607,6 +1607,115 @@ jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u)
     return t;
 }
 
+// Create a copy of type expression t where any occurrence of data type x is replaced by y.
+// If x does not occur in t, return t without any copy.
+// For example, jl_substitute_datatype(Foo{Bar}, Foo{T}, Qux{S}) is Qux{Bar}, with T and S
+// free type variables.
+// To substitute type variables, use jl_substitute_var instead.
+jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype_t * y)
+{
+    if jl_is_datatype(t) {
+        jl_datatype_t *typ = (jl_datatype_t*)t;
+        // For datatypes call itself recursively on the parameters to form new parameters.
+        // Then, if typename(t) == typename(x), rewrap the wrapper of y around the new
+        // parameters. Otherwise, do the same around the wrapper of t.
+        // This ensures that the types and supertype are properly set.
+        // Start by check whether there is a parameter that needs replacing.
+        long i_firstnewparam = -1;
+        size_t nparams = jl_svec_len(typ->parameters);
+        jl_value_t *firstnewparam = NULL;
+        JL_GC_PUSH1(&firstnewparam);
+        for (size_t i = 0; i < nparams; i++) {
+            jl_value_t *param = NULL;
+            JL_GC_PUSH1(&param);
+            param = jl_svecref(typ->parameters, i);
+            firstnewparam = jl_substitute_datatype(param, x, y);
+            if (param != firstnewparam) {
+                i_firstnewparam = i;
+                JL_GC_POP();
+                break;
+            }
+            JL_GC_POP();
+        }
+        // If one of the parameters needs to be updated, or if the type name is that to
+        // substitute, create a new datataype
+        if (i_firstnewparam != -1 || typ->name == x->name) {
+            jl_datatype_t *uw = typ->name == x->name ? y : typ; // substitution occurs here
+            jl_value_t *wrapper = uw->name->wrapper;
+            jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(wrapper);
+            jl_svec_t *sv = jl_alloc_svec_uninit(jl_svec_len(uw->parameters));
+            JL_GC_PUSH1(&sv);
+            jl_value_t **vals = jl_svec_data(sv);
+            // no JL_GC_PUSHARGS(vals, ...) since GC is already aware of sv
+            for (long i = 0; i < i_firstnewparam; i++) { // copy the identical parameters
+                vals[i] = jl_svecref(typ->parameters, i); // value
+            }
+            if (i_firstnewparam != -1) { // insert the first non-identical parameter
+                vals[i_firstnewparam] = firstnewparam;
+            }
+            for (size_t i = i_firstnewparam+1; i < nparams; i++) { // insert the remaining parameters
+                vals[i] = jl_substitute_datatype(jl_svecref(typ->parameters, i), x, y);
+            }
+            if (jl_is_tuple_type(wrapper)) {
+                // special case for tuples, since the wrapper (Tuple) does not have as
+                // many parameters as t (it only has a Vararg instead).
+                t = jl_apply_tuple_type(sv, 0);
+            } else {
+                t = jl_instantiate_type_in_env((jl_value_t*)w, (jl_unionall_t*)wrapper, vals);
+            }
+            JL_GC_POP();
+        }
+        JL_GC_POP();
+    }
+    else if jl_is_unionall(t) { // recursively call itself on body and var bounds
+        jl_unionall_t* ut = (jl_unionall_t*)t;
+        jl_value_t *lb = NULL;
+        jl_value_t *ub = NULL;
+        jl_value_t *body = NULL;
+        JL_GC_PUSH3(&lb, &ub, &body);
+        lb = jl_substitute_datatype(ut->var->lb, x, y);
+        ub = jl_substitute_datatype(ut->var->ub, x, y);
+        body = jl_substitute_datatype(ut->body, x, y);
+        if (lb != ut->var->lb || ub != ut->var->ub) {
+            jl_tvar_t *newtvar = jl_new_typevar(ut->var->name, lb, ub);
+            JL_GC_PUSH1(&newtvar);
+            t = jl_new_struct(jl_unionall_type, newtvar, body);
+            JL_GC_POP();
+        }
+        else if (body != ut->body) {
+            t = jl_new_struct(jl_unionall_type, ut->var, body);
+        }
+        JL_GC_POP();
+    }
+    else if jl_is_uniontype(t) { // recursively call itself on a and b
+        jl_uniontype_t *u = (jl_uniontype_t*)t;
+        jl_value_t *a = NULL;
+        jl_value_t *b = NULL;
+        JL_GC_PUSH2(&a, &b);
+        a = jl_substitute_datatype(u->a, x, y);
+        b = jl_substitute_datatype(u->b, x, y);
+        if (a != u->a || b != u->b) {
+            t = jl_new_struct(jl_uniontype_type, a, b);
+        }
+        JL_GC_POP();
+    }
+    else if jl_is_vararg(t) { // recursively call itself on T
+        jl_vararg_t *vt = (jl_vararg_t*)t;
+        jl_value_t *rT = NULL;
+        JL_GC_PUSH1(&rT);
+        rT = jl_substitute_datatype(vt->T, x, y);
+        if (rT != vt->T) {
+            jl_task_t *ct = jl_current_task;
+            t = jl_gc_alloc(ct->ptls, sizeof(jl_vararg_t), jl_vararg_type);
+            jl_set_typetagof((jl_vararg_t *)t, jl_vararg_tag, 0);
+            ((jl_vararg_t *)t)->T = rT;
+            ((jl_vararg_t *)t)->N = vt->N;
+        }
+        JL_GC_POP();
+    }
+    return t;
+}
+
 static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, size_t ntp,
                                      jl_value_t **iparams)
 {
