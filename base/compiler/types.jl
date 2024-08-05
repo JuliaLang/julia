@@ -1,4 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
+
+const WorkThunk = Any
+# #@eval struct WorkThunk
+#    thunk::Core.OpaqueClosure{Tuple{Vector{Tasks}}, Bool}
+#    WorkThunk(work) = new($(Expr(:opaque_closure, :(Tuple{Vector{Tasks}}), :Bool, :Bool, :((tasks) -> work(tasks))))) # @opaque Vector{Tasks}->Bool (tasks)->work(tasks)
+# end
+# (p::WorkThunk)() = p.thunk()
 
 """
     AbstractInterpreter
