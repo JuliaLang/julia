@@ -812,8 +812,8 @@ end
     @test S - T == -(T - S) == SA - TA
     @test S + S == SA + SA
     @test S - S == -(S - S) == SA - SA
-    @test S + I == I + S == SA + IA 
-    @test S - I == -(I - S) == SA - IA 
+    @test S + I == I + S == SA + IA
+    @test S - I == -(I - S) == SA - IA
 
     @test S == S
     @test S != D

@@ -21,8 +21,8 @@ function Tridiagonal(A::Bidiagonal)
     Tridiagonal(A.uplo == 'U' ? z : A.ev, A.dv, A.uplo == 'U' ? A.ev : z)
 end
 
-_diagview(S::SymTridiagonal{<:Number}) = S.dv 
-_diagview(S::SymTridiagonal) = view(S, diagind(S, IndexStyle(S))) 
+_diagview(S::SymTridiagonal{<:Number}) = S.dv
+_diagview(S::SymTridiagonal) = view(S, diagind(S, IndexStyle(S)))
 
 # conversions from SymTridiagonal to other special matrix types
 Diagonal(A::SymTridiagonal) = Diagonal(_diagview(A))
@@ -167,7 +167,7 @@ function (-)(A::Diagonal, B::Bidiagonal)
 end
 
 # Return a SymTridiagonal if the elements of `newdv` are
-# statically known to be symmetric. Return a Tridiagonal otherwise 
+# statically known to be symmetric. Return a Tridiagonal otherwise
 function _symtri_or_tri(dl, d, du)
     new_du = oftype(d, du)
     new_dl = oftype(d, dl)
