@@ -264,12 +264,13 @@ end
 ####################
 
 function show(io::IO, M::Bidiagonal)
-    # TODO: make this readable and one-line
-    summary(io, M)
-    print(io, ":\n diag:")
-    print_matrix(io, (M.dv)')
-    print(io, M.uplo == 'U' ? "\n super:" : "\n sub:")
-    print_matrix(io, (M.ev)')
+    print(io, "Bidiagonal(")
+    show(io, M.dv)
+    print(io, ", ")
+    show(io, M.ev)
+    print(io, ", ")
+    show(io, sym_uplo(M.uplo))
+    print(io, ")")
 end
 
 size(M::Bidiagonal) = (n = length(M.dv); (n, n))
@@ -460,7 +461,7 @@ const BiTri = Union{Bidiagonal,Tridiagonal}
 
 # B .= A * B
 function lmul!(A::Bidiagonal, B::AbstractVecOrMat)
-    _muldiag_size_check(A, B)
+    _muldiag_size_check(size(A), size(B))
     (; dv, ev) = A
     if A.uplo == 'U'
         for k in axes(B,2)
@@ -481,7 +482,7 @@ function lmul!(A::Bidiagonal, B::AbstractVecOrMat)
 end
 # B .= D * B
 function lmul!(D::Diagonal, B::Bidiagonal)
-    _muldiag_size_check(D, B)
+    _muldiag_size_check(size(D), size(B))
     (; dv, ev) = B
     isL = B.uplo == 'L'
     dv[1] = D.diag[1] * dv[1]
@@ -493,7 +494,7 @@ function lmul!(D::Diagonal, B::Bidiagonal)
 end
 # B .= B * A
 function rmul!(B::AbstractMatrix, A::Bidiagonal)
-    _muldiag_size_check(A, B)
+    _muldiag_size_check(size(A), size(B))
     (; dv, ev) = A
     if A.uplo == 'U'
         for k in reverse(axes(dv,1)[2:end])
@@ -518,7 +519,7 @@ function rmul!(B::AbstractMatrix, A::Bidiagonal)
 end
 # B .= B * D
 function rmul!(B::Bidiagonal, D::Diagonal)
-    _muldiag_size_check(B, D)
+    _muldiag_size_check(size(B), size(D))
     (; dv, ev) = B
     isU = B.uplo == 'U'
     dv[1] *= D.diag[1]

@@ -293,42 +293,39 @@ Base.literal_pow(::typeof(^), D::Diagonal, valp::Val) =
     Diagonal(Base.literal_pow.(^, D.diag, valp)) # for speed
 Base.literal_pow(::typeof(^), D::Diagonal, ::Val{-1}) = inv(D) # for disambiguation
 
-function _muldiag_size_check(A, B)
-    nA = size(A, 2)
-    mB = size(B, 1)
-    @noinline throw_dimerr(::AbstractMatrix, nA, mB) = throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match first dimension of B, $mB"))
-    @noinline throw_dimerr(::AbstractVector, nA, mB) = throw(DimensionMismatch(lazy"second dimension of D, $nA, does not match length of V, $mB"))
-    nA == mB || throw_dimerr(B, nA, mB)
+function _muldiag_size_check(szA::NTuple{2,Integer}, szB::Tuple{Integer,Vararg{Integer}})
+    nA = szA[2]
+    mB = szB[1]
+    @noinline throw_dimerr(szB::NTuple{2}, nA, mB) = throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match first dimension of B, $mB"))
+    @noinline throw_dimerr(szB::NTuple{1}, nA, mB) = throw(DimensionMismatch(lazy"second dimension of D, $nA, does not match length of V, $mB"))
+    nA == mB || throw_dimerr(szB, nA, mB)
     return nothing
 end
 # the output matrix should have the same size as the non-diagonal input matrix or vector
 @noinline throw_dimerr(szC, szA) = throw(DimensionMismatch(lazy"output matrix has size: $szC, but should have size $szA"))
-_size_check_out(C, ::Diagonal, A) = _size_check_out(C, A)
-_size_check_out(C, A, ::Diagonal) = _size_check_out(C, A)
-_size_check_out(C, A::Diagonal, ::Diagonal) = _size_check_out(C, A)
-function _size_check_out(C, A)
-    szA = size(A)
-    szC = size(C)
-    szA == szC || throw_dimerr(szC, szA)
-    return nothing
+function _size_check_out(szC::NTuple{2}, szA::NTuple{2}, szB::NTuple{2})
+    (szC[1] == szA[1] && szC[2] == szB[2]) || throw_dimerr(szC, (szA[1], szB[2]))
 end
-function _muldiag_size_check(C, A, B)
-    _muldiag_size_check(A, B)
-    _size_check_out(C, A, B)
+function _size_check_out(szC::NTuple{1}, szA::NTuple{2}, szB::NTuple{1})
+    szC[1] == szA[1] || throw_dimerr(szC, (szA[1],))
+end
+function _muldiag_size_check(szC::Tuple{Vararg{Integer}}, szA::Tuple{Vararg{Integer}}, szB::Tuple{Vararg{Integer}})
+    _muldiag_size_check(szA, szB)
+   _size_check_out(szC, szA, szB)
 end
 
 function (*)(Da::Diagonal, Db::Diagonal)
-    _muldiag_size_check(Da, Db)
+    _muldiag_size_check(size(Da), size(Db))
     return Diagonal(Da.diag .* Db.diag)
 end
 
 function (*)(D::Diagonal, V::AbstractVector)
-    _muldiag_size_check(D, V)
+    _muldiag_size_check(size(D), size(V))
     return D.diag .* V
 end
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
-    _muldiag_size_check(A, D)
+    _muldiag_size_check(size(A), size(D))
     for I in CartesianIndices(A)
         row, col = Tuple(I)
         @inbounds A[row, col] *= D.diag[col]
@@ -337,7 +334,7 @@ function rmul!(A::AbstractMatrix, D::Diagonal)
 end
 # T .= T * D
 function rmul!(T::Tridiagonal, D::Diagonal)
-    _muldiag_size_check(T, D)
+    _muldiag_size_check(size(T), size(D))
     (; dl, d, du) = T
     d[1] *= D.diag[1]
     for i in axes(dl,1)
@@ -349,7 +346,7 @@ function rmul!(T::Tridiagonal, D::Diagonal)
 end
 
 function lmul!(D::Diagonal, B::AbstractVecOrMat)
-    _muldiag_size_check(D, B)
+    _muldiag_size_check(size(D), size(B))
     for I in CartesianIndices(B)
         row = I[1]
         @inbounds B[I] = D.diag[row] * B[I]
@@ -360,7 +357,7 @@ end
 # in-place multiplication with a diagonal
 # T .= D * T
 function lmul!(D::Diagonal, T::Tridiagonal)
-    _muldiag_size_check(D, T)
+    _muldiag_size_check(size(D), size(T))
     (; dl, d, du) = T
     d[1] = D.diag[1] * d[1]
     for i in axes(dl,1)
@@ -452,7 +449,7 @@ function __muldiag!(out, D1::Diagonal, D2::Diagonal, _add::MulAddMul{ais1,bis0})
 end
 
 function _mul_diag!(out, A, B, _add)
-    _muldiag_size_check(out, A, B)
+    _muldiag_size_check(size(out), size(A), size(B))
     __muldiag!(out, A, B, _add)
     return out
 end
@@ -469,14 +466,14 @@ _mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, _add) =
     _mul_diag!(C, Da, Db, _add)
 
 function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
-    _muldiag_size_check(Da, A)
-    _muldiag_size_check(A, Db)
+    _muldiag_size_check(size(Da), size(A))
+    _muldiag_size_check(size(A), size(Db))
     return broadcast(*, Da.diag, A, permutedims(Db.diag))
 end
 
 function (*)(Da::Diagonal, Db::Diagonal, Dc::Diagonal)
-    _muldiag_size_check(Da, Db)
-    _muldiag_size_check(Db, Dc)
+    _muldiag_size_check(size(Da), size(Db))
+    _muldiag_size_check(size(Db), size(Dc))
     return Diagonal(Da.diag .* Db.diag .* Dc.diag)
 end
 
