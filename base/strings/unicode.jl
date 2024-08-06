@@ -240,6 +240,9 @@ end
 
 ############################################################################
 
+# precomputed table of ASCII text widths
+const _textwidth_ascii = [ccall(:utf8proc_charwidth, Cint, (UInt32,), c) for c = 0:127]
+
 ## character column width function ##
 """
     textwidth(c)
@@ -256,6 +259,8 @@ julia> textwidth('⛵')
 ```
 """
 function textwidth(c::AbstractChar)
+    b = bswap(reinterpret(UInt32, c)) # from isascii(c)
+    b < 0x80 && @inbounds return Int(_textwidth_ascii[b%Int+1]) # ASCII fast path
     ismalformed(c) && return 1
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
