@@ -1040,7 +1040,7 @@ function _copyto_banded!(A::Tridiagonal, B::SymTridiagonal)
     return A
 end
 function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
-    issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal"))
+    issymmetric(B) || throw(ArgumentError("cannot copy an asymmetric Tridiagonal matrix to a SymTridiagonal"))
     A.dv .= B.d
     _evview(A) .= B.du
     return A

@@ -305,7 +305,7 @@ function _copyto_banded!(A::Bidiagonal, B::Bidiagonal)
     if A.uplo == B.uplo
         A.ev .= B.ev
     elseif iszero(B.ev) # diagonal source
-        A.ev .= zero.(A.ev)
+        A.ev .= B.ev
     else
         zeroband = istriu(A) ? "lower" : "upper"
         uplo = A.uplo
