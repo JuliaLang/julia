@@ -43,6 +43,15 @@ function showerror(io::IO, ex::Meta.ParseError)
     end
 end
 
+function showerror(io::IO, ex::Core.TypeNameError)
+    print(io, "TypeNameError: ")
+    if isa(ex.a, Union)
+        print(io, "typename does not apply to unions whose components have different typenames")
+    else
+        print(io, "typename does not apply to this type")
+    end
+end
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)

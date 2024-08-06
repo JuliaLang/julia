@@ -13,6 +13,31 @@ call_result_unused(sv::InferenceState, currpc::Int) =
     isexpr(sv.src.code[currpc], :call) && isempty(sv.ssavalue_uses[currpc])
 call_result_unused(si::StmtInfo) = !si.used
 
+is_const_bool_or_bottom(@nospecialize(b)) = (isa(b, Const) && isa(b.val, Bool)) || b == Bottom
+function can_propagate_conditional(@nospecialize(rt), argtypes::Vector{Any})
+    isa(rt, InterConditional) || return false
+    if rt.slot > length(argtypes)
+        # In the vararg tail - can't be conditional
+        @assert isvarargtype(argtypes[end])
+        return false
+    end
+    return isa(argtypes[rt.slot], Conditional) &&
+        is_const_bool_or_bottom(rt.thentype) && is_const_bool_or_bottom(rt.thentype)
+end
+
+function propagate_conditional(rt::InterConditional, cond::Conditional)
+    new_thentype = rt.thentype === Const(false) ? cond.elsetype : cond.thentype
+    new_elsetype = rt.elsetype === Const(true) ? cond.thentype : cond.elsetype
+    if rt.thentype == Bottom
+        @assert rt.elsetype != Bottom
+        return Conditional(cond.slot, Bottom, new_elsetype)
+    elseif rt.elsetype == Bottom
+        @assert rt.thentype != Bottom
+        return Conditional(cond.slot, new_thentype, Bottom)
+    end
+    return Conditional(cond.slot, new_thentype, new_elsetype)
+end
+
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::AbsIntState, max_methods::Int)
@@ -156,6 +181,15 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
         @assert !(this_conditional isa Conditional || this_rt isa MustAlias) "invalid lattice element returned from inter-procedural context"
         seen += 1
+
+        if can_propagate_conditional(this_conditional, argtypes)
+            # The only case where we need to keep this in rt is where
+            # we can directly propagate the conditional to a slot argument
+            # that is not one of our arguments, otherwise we keep all the
+            # relevant information in `conditionals` below.
+            this_rt = this_conditional
+        end
+
         rettype = rettype ⊔ₚ this_rt
         exctype = exctype ⊔ₚ this_exct
         if has_conditional(𝕃ₚ, sv) && this_conditional !== Bottom && is_lattice_bool(𝕃ₚ, rettype) && fargs !== nothing
@@ -409,6 +443,9 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
     has_conditional(𝕃ᵢ, sv) || return widenconditional(rt)
     (; fargs, argtypes) = arginfo
     fargs === nothing && return widenconditional(rt)
+    if can_propagate_conditional(rt, argtypes)
+        return propagate_conditional(rt, argtypes[rt.slot]::Conditional)
+    end
     slot = 0
     alias = nothing
     thentype = elsetype = Any
@@ -661,13 +698,23 @@ function abstract_call_method(interp::AbstractInterpreter,
             end
             add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
             # TODO (#48913) implement a proper recursion handling for irinterp:
-            # This works just because currently the `:terminate` condition guarantees that
-            # irinterp doesn't fail into unresolved cycles, but it's not a good solution.
+            # This works just because currently the `:terminate` condition usually means this is unreachable here
+            # for irinterp because there are not unresolved cycles, but it's not a good solution.
             # We should revisit this once we have a better story for handling cycles in irinterp.
-            if isa(topmost, InferenceState)
+            if isa(sv, InferenceState)
+                # since the hardlimit is against the edge to the parent frame,
+                # we should try to poison the whole edge, not just the topmost frame
                 parentframe = frame_parent(topmost)
-                if isa(sv, InferenceState) && isa(parentframe, InferenceState)
-                    poison_callstack!(sv, parentframe === nothing ? topmost : parentframe)
+                while !isa(parentframe, InferenceState)
+                    # attempt to find a parent frame that can handle this LimitedAccuracy result correctly
+                    # so we don't try to cache this incomplete intermediate result
+                    parentframe === nothing && break
+                    parentframe = frame_parent(parentframe)
+                end
+                if isa(parentframe, InferenceState)
+                    poison_callstack!(sv, parentframe)
+                elseif isa(topmost, InferenceState)
+                    poison_callstack!(sv, topmost)
                 end
             end
             # n.b. this heuristic depends on the non-local state, so we must record the limit later
@@ -2217,14 +2264,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
     elseif is_return_type(f)
         return return_type_tfunc(interp, argtypes, si, sv)
-    elseif la == 2 && istopfunction(f, :!)
-        # handle Conditional propagation through !Bool
-        aty = argtypes[2]
-        if isa(aty, Conditional)
-            call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Bool]), si, Tuple{typeof(f), Bool}, sv, max_methods) # make sure we've inferred `!(::Bool)`
-            return CallMeta(Conditional(aty.slot, aty.elsetype, aty.thentype), Any, call.effects, call.info)
-        end
-    elseif la == 3 && istopfunction(f, :!==)
+    elseif la == 3 && f === Core.:(!==)
         # mark !== as exactly a negated call to ===
         call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, sv, max_methods)
         rty = abstract_call_known(interp, (===), arginfo, si, sv, max_methods).rt
@@ -2234,7 +2274,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return CallMeta(Const(rty.val === false), Bottom, EFFECTS_TOTAL, MethodResultPure())
         end
         return call
-    elseif la == 3 && istopfunction(f, :(>:))
+    elseif la == 3 && f === Core.:(>:)
         # mark issupertype as a exact alias for issubtype
         # swap T1 and T2 arguments and call <:
         if fargs !== nothing && length(fargs) == 3
@@ -2244,7 +2284,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
         return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
-    elseif la == 2 && istopfunction(f, :typename)
+    elseif la == 2 && f === Core.typename
         return CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure())
     elseif f === Core._hasmethod
         return _hasmethod_tfunc(interp, argtypes, sv)
@@ -3194,7 +3234,7 @@ function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
     # narrow representation of bestguess slightly to prepare for tmerge with rt
     if rt isa InterConditional && bestguess isa Const
         slot_id = rt.slot
-        old_id_type = slottypes[slot_id]
+        old_id_type = widenconditional(slottypes[slot_id])
         if bestguess.val === true && rt.elsetype !== Bottom
             bestguess = InterConditional(slot_id, old_id_type, Bottom)
         elseif bestguess.val === false && rt.thentype !== Bottom

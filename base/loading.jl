@@ -822,14 +822,15 @@ end
 # given a project directory (implicit env from LOAD_PATH) and a name,
 # find an entry point for `name`, and see if it has an associated project file
 function entry_point_and_project_file(dir::String, name::String)::Union{Tuple{Nothing,Nothing},Tuple{String,Nothing},Tuple{String,String}}
-    path = normpath(joinpath(dir, "$name.jl"))
-    isfile_casesensitive(path) && return path, nothing
     dir_name = joinpath(dir, name)
     path, project_file = entry_point_and_project_file_inside(dir_name, name)
     path === nothing || return path, project_file
     dir_jl = dir_name * ".jl"
     path, project_file = entry_point_and_project_file_inside(dir_jl, name)
     path === nothing || return path, project_file
+    # check for less likely case with a bare file and no src directory last to minimize stat calls
+    path = normpath(joinpath(dir, "$name.jl"))
+    isfile_casesensitive(path) && return path, nothing
     return nothing, nothing
 end
 
@@ -3809,7 +3810,7 @@ end
                 end
                 if !ispath(f)
                     _f = fixup_stdlib_path(f)
-                    if isfile(_f) && startswith(_f, Sys.STDLIB)
+                    if _f != f && isfile(_f) && startswith(_f, Sys.STDLIB)
                         continue
                     end
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"
@@ -3831,13 +3832,14 @@ end
                         return true
                     end
                 else
-                    fsize = filesize(f)
+                    fstat = stat(f)
+                    fsize = filesize(fstat)
                     if fsize != fsize_req
                         @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
                         record_reason(reasons, "include_dependency fsize change")
                         return true
                     end
-                    hash = isdir(f) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
+                    hash = isdir(fstat) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
                     if hash != hash_req
                         @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
                         record_reason(reasons, "include_dependency fhash change")

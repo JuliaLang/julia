@@ -181,7 +181,7 @@ Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(ad
 ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
 issymmetric(S::SymTridiagonal) = true
 
-tr(S::SymTridiagonal) = sum(S.dv)
+tr(S::SymTridiagonal) = sum(symmetric, S.dv)
 
 @noinline function throw_diag_outofboundserror(n, sz)
     sz1, sz2 = sz
@@ -1040,7 +1040,7 @@ function _copyto_banded!(A::Tridiagonal, B::SymTridiagonal)
     return A
 end
 function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
-    issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal"))
+    issymmetric(B) || throw(ArgumentError("cannot copy an asymmetric Tridiagonal matrix to a SymTridiagonal"))
     A.dv .= B.d
     _evview(A) .= B.du
     return A

@@ -1921,7 +1921,7 @@ julia> vcat(range(1, 2, length=3))  # collects lazy ranges
  2.0
 
 julia> two = ([10, 20, 30]', Float64[4 5 6; 7 8 9])  # row vector and a matrix
-([10 20 30], [4.0 5.0 6.0; 7.0 8.0 9.0])
+(adjoint([10, 20, 30]), [4.0 5.0 6.0; 7.0 8.0 9.0])
 
 julia> vcat(two...)
 3×3 Matrix{Float64}:

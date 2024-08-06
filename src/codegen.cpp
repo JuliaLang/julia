@@ -2180,7 +2180,7 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
             gv = get_gv(gvname);
         }
     }
-    assert(gv->getName().startswith(name.str()));
+    assert(gv->getName().starts_with(name.str()));
     assert(val == gv->getInitializer());
     return gv;
 }
@@ -8846,7 +8846,7 @@ static jl_llvm_functions_t
                 !jl_is_submodule(mod, jl_core_module));
     };
     auto in_tracked_path = [] (StringRef file) { // falls within an explicitly set file or directory
-        return jl_options.tracked_path != NULL && file.startswith(jl_options.tracked_path);
+        return jl_options.tracked_path != NULL && file.starts_with(jl_options.tracked_path);
     };
     bool mod_is_user_mod = in_user_mod(ctx.module);
     bool mod_is_tracked = in_tracked_path(ctx.file);
@@ -9638,7 +9638,7 @@ static jl_llvm_functions_t
                     // make sure that anything we attempt to call has some inlining info, just in case optimization messed up
                     // (except if we know that it is an intrinsic used in our prologue, which should never have its own debug subprogram)
                     Function *F = call->getCalledFunction();
-                    if (!in_prologue || !F || !(F->isIntrinsic() || F->getName().startswith("julia.") || &I == restTuple)) {
+                    if (!in_prologue || !F || !(F->isIntrinsic() || F->getName().starts_with("julia.") || &I == restTuple)) {
                         I.setDebugLoc(topdebugloc);
                     }
                 }

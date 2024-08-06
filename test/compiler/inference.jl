@@ -5866,3 +5866,8 @@ end
 bar54341(args...) = foo54341(4, args...)
 
 @test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int
+
+# InterConditional rt with Vararg argtypes
+fcondvarargs(a, b, c, d) = isa(d, Int64)
+gcondvarargs(a, x...) = return fcondvarargs(a, x...) ? isa(a, Int64) : !isa(a, Int64)
+@test Core.Compiler.return_type(gcondvarargs, Tuple{Vararg{Any}}) === Bool

@@ -471,7 +471,7 @@ end
 end
 
 @testset "SymTridiagonal/Tridiagonal block matrix" begin
-    M = [1 2; 2 4]
+    M = [1 2; 3 4]
     n = 5
     A = SymTridiagonal(fill(M, n), fill(M, n-1))
     @test @inferred A[1,1] == Symmetric(M)
@@ -484,6 +484,9 @@ end
     @test_throws ArgumentError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
+
+    @test tr(A) == sum(diag(A))
+    @test issymmetric(tr(A))
 
     A = Tridiagonal(fill(M, n-1), fill(M, n), fill(M, n-1))
     @test @inferred A[1,1] == M
@@ -805,7 +808,7 @@ end
     @test copyto!(zero(S), T) == T
 
     T2 = Tridiagonal(ones(length(ev)), zero(dv), zero(ev))
-    @test_throws "cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
+    @test_throws "cannot copy an asymmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
 
     @testset "mismatched sizes" begin
         dv2 = [4; @view dv[2:end]]
