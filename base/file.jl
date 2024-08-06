@@ -448,6 +448,7 @@ function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
 end
 
 function _mv_replace(src::AbstractString, dst::AbstractString)
+    # This check is copied from checkfor_mv_cp_cptree
     if ispath(dst) && Base.samefile(src, dst)
         abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
         abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
