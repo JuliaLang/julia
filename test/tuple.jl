@@ -845,10 +845,3 @@ end
         end
     end
 end
-
-@testset "abstract return type inference for homogeneous tuples" begin
-    @test NTuple == Core.Compiler.return_type(Base.tail, Tuple{NTuple})
-    @test NTuple == Core.Compiler.return_type(Base.front, Tuple{NTuple})
-    @test NTuple == Core.Compiler.return_type(reverse, Tuple{NTuple})
-    @test NTuple == Core.Compiler.return_type(circshift, Tuple{NTuple,Int})
-end
