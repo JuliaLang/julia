@@ -1444,9 +1444,9 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
-            @test issorted(readdir(DirEntry, ))
-            @test map(o->o.name, readdir(DirEntry, )) == readdir()
-            @test map(o->o.path, readdir(DirEntry, )) == readdir(join=true)
+            @test issorted(readdir(DirEntry))
+            @test map(o->o.name, readdir(DirEntry)) == readdir()
+            @test map(o->o.path, readdir(DirEntry)) == readdir(join=true)
             @test count(isfile, readdir(join=true)) == count(isfile, readdir(DirEntry, ))
         end
     end
