@@ -2,6 +2,14 @@
 
 SubStr(s) = SubString("abc$(s)de", firstindex(s) + 3, lastindex(s) + 3)
 
+@testset "textwidth" begin
+    for (c, w) in [('x', 1), ('α', 1), ('🍕', 2), ('\0', 0), ('\u0302', 0), ('\xc0', 1)]
+        @test textwidth(c) == w
+        @test textwidth(c^3) == w*3
+        @test w == @invoke textwidth(c::AbstractChar)
+    end
+end
+
 @testset "padding (lpad and rpad)" begin
     @test lpad("foo", 2) == "foo"
     @test rpad("foo", 2) == "foo"
