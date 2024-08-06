@@ -1840,7 +1840,7 @@ function parse_testset_args(args)
         if isa(arg, Symbol) || Base.isexpr(arg, :.)
             if testsettype !== nothing
                 msg = """Multiple testset types provided to @testset. \
-                    This may be disallowed in the future."""
+                    This is deprecated and may error in the future."""
                 Base.depwarn(msg, :testset_multiple_testset_types; force=true)
             end
             testsettype = esc(arg)
@@ -1848,7 +1848,7 @@ function parse_testset_args(args)
         elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head === :string)
             if desc !== nothing
                 msg = """Multiple descriptions provided to @testset. \
-                    This may be disallowed in the future."""
+                    This is deprecated and may error in the future."""
                 Base.depwarn(msg, :testset_multiple_descriptions; force=true)
             end
             desc = esc(arg)
