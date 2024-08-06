@@ -42,7 +42,7 @@ end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
 StringMemory(n::Integer) = unsafe_wrap(Memory{UInt8}, _string_n(n))
-StringVector(n::Integer) = view(StringMemory(n), 1:n)::Vector{UInt8}
+StringVector(n::Integer) = wrap(Array, StringMemory(n))
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
@@ -219,7 +219,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isbitstype(T) && isa(a,Array)
+    if isa(a, MutableDenseArrayType{UInt8})
         nb = UInt(nel * sizeof(T))
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
@@ -466,7 +466,7 @@ function take!(io::IOBuffer)
         if nbytes == 0 || io.reinit
             data = StringVector(0)
         elseif io.writable
-            data = view(io.data, io.offset+1:nbytes+io.offset)
+            data = wrap(Array, memoryref(io.data, io.offset + 1), nbytes)
         else
             data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
         end
@@ -475,7 +475,7 @@ function take!(io::IOBuffer)
         if nbytes == 0
             data = StringVector(0)
         elseif io.writable
-            data = view(io.data, io.ptr:io.ptr+nbytes-1)
+            data = wrap(Array, memoryref(io.data, io.ptr), nbytes)
         else
             data = read!(io, data)
         end
@@ -501,7 +501,11 @@ state.  This should only be used internally for performance-critical
 It might save an allocation compared to `take!` (if the compiler elides the
 Array allocation), as well as omits some checks.
 """
-_unsafe_take!(io::IOBuffer) = view(io.data, io.offset+1:io.size)
+_unsafe_take!(io::IOBuffer) =
+    wrap(Array, io.size == io.offset ?
+        memoryref(Memory{UInt8}()) :
+        memoryref(io.data, io.offset + 1),
+        io.size - io.offset)
 
 function write(to::IO, from::GenericIOBuffer)
     written::Int = bytesavailable(from)
@@ -548,8 +552,8 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
-function readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb::Int)
+readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::Int)
     nr = min(nb, bytesavailable(io))
     if length(b) < nr
         resize!(b, nr)

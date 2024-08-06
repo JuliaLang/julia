@@ -229,30 +229,26 @@
               lst)))
 
 ;; get the name from a function formal argument expression, allowing `(escape x)`
-(define (try-arg-name v)
-  (cond ((symbol? v) (list v))
+(define (try-arg-name v (escaped #f))
+  (cond ((symbol? v) (if escaped '() (list v)))
         ((atom? v) '())
         (else
          (case (car v)
-           ((|::|) (if (length= v 2) '() (try-arg-name (cadr v))))
-           ((... kw =) (try-arg-name (cadr v)))
-           ((escape) (list v))
-           ((hygienic-scope) (try-arg-name (cadr v)))
+           ((|::|) (if (length= v 2) '() (try-arg-name (cadr v) escaped)))
+           ((... kw =) (try-arg-name (cadr v) escaped))
+           ((escape) (if escaped (list (cadr v)) '()))
+           ((hygienic-scope) (try-arg-name (cadr v) escaped))
+           ((tuple) (apply nconc (map (lambda (e) (try-arg-name e escaped)) (cdr v))))
            ((meta)  ;; allow certain per-argument annotations
             (if (nospecialize-meta? v #t)
-                (try-arg-name (caddr v))
+                (try-arg-name (caddr v) escaped)
                 '()))
            (else '())))))
 
 ;; get names from a formal argument list, specifying whether to include escaped ones
 (define (safe-arg-names lst (escaped #f))
   (apply nconc
-         (map (lambda (v)
-                (let ((vv (try-arg-name v)))
-                  (if (eq? escaped (and (pair? vv) (pair? (car vv)) (eq? (caar vv) 'escape)))
-                      (if escaped (list (cadar vv)) vv)
-                      '())))
-              lst)))
+         (map (lambda (v) (try-arg-name v escaped)) lst)))
 
 ;; arg names, looking only at positional args
 (define (safe-llist-positional-args lst (escaped #f))

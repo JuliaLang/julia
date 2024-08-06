@@ -77,28 +77,33 @@ function fullname(m::Module)
 end
 
 """
-    names(x::Module; all::Bool = false, imported::Bool = false)
+    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) -> Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
-are also included. Names are returned in sorted order.
+are also included.
+If `usings` is true, then names explicitly imported via `using` are also included.
+Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
 
 !!! note
     `sym ∈ names(SomeModule)` does *not* imply `isdefined(SomeModule, sym)`.
-    `names` will return symbols marked with `public` or `export`, even if
+    `names` may return symbols marked with `public` or `export`, even if
     they are not defined in the module.
+
+!!! warning
+    `names` may return duplicate names. The duplication happens, e.g. if an `import`ed name
+    conflicts with an already existing identifier.
 
 See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
-names(m::Module; all::Bool = false, imported::Bool = false) =
-    sort!(unsorted_names(m; all, imported))
-unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
-    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
+names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
+unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, usings)
 
 """
     isexported(m::Module, s::Symbol) -> Bool
@@ -207,6 +212,8 @@ end
 
 Get the name of field `i` of a `DataType`.
 
+The return type is `Symbol`, except when `x <: Tuple`, in which case the index of the field is returned, of type `Int`.
+
 # Examples
 ```jldoctest
 julia> fieldname(Rational, 1)
@@ -214,6 +221,9 @@ julia> fieldname(Rational, 1)
 
 julia> fieldname(Rational, 2)
 :den
+
+julia> fieldname(Tuple{String,Int}, 2)
+2
 ```
 """
 function fieldname(t::DataType, i::Integer)
@@ -241,6 +251,9 @@ fieldname(t::Type{<:Tuple}, i::Integer) =
 
 Get a tuple with the names of the fields of a `DataType`.
 
+Each name is a `Symbol`, except when `x <: Tuple`, in which case each name (actually the
+index of the field) is an `Int`.
+
 See also [`propertynames`](@ref), [`hasfield`](@ref).
 
 # Examples
@@ -250,6 +263,9 @@ julia> fieldnames(Rational)
 
 julia> fieldnames(typeof(1+im))
 (:re, :im)
+
+julia> fieldnames(Tuple{String,Int})
+(1, 2)
 ```
 """
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
@@ -530,6 +546,17 @@ function datatype_nfields(dt::DataType)
 end
 
 """
+    Base.datatype_npointers(dt::DataType) -> Int
+
+Return the number of pointers in the layout of a datatype.
+"""
+function datatype_npointers(dt::DataType)
+    @_foldable_meta
+    dt.layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+end
+
+"""
     Base.datatype_pointerfree(dt::DataType) -> Bool
 
 Return whether instances of this type can contain references to gc-managed memory.
@@ -537,9 +564,7 @@ Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
-    return npointers == 0
+    return datatype_npointers(dt) == 0
 end
 
 """
@@ -971,7 +996,7 @@ julia> struct Foo
        end
 
 julia> Base.fieldindex(Foo, :z)
-ERROR: type Foo has no field z
+ERROR: FieldError: type Foo has no field z
 Stacktrace:
 [...]
 
@@ -1154,7 +1179,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     for m in method_instances(f, t, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
-                code = ccall(:jl_code_for_staged, Any, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)::CodeInfo
+                code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
@@ -1655,12 +1680,12 @@ function code_typed_by_type(@nospecialize(tt::Type);
     asts = []
     for match in matches.matches
         match = match::Core.MethodMatch
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, optimize)
+        code = Core.Compiler.typeinf_code(interp, match, optimize)
         if code === nothing
             push!(asts, match.method => Any)
         else
             debuginfo === :none && remove_linenums!(code)
-            push!(asts, code => ty)
+            push!(asts, code => code.rettype)
         end
     end
     return asts
@@ -1677,14 +1702,19 @@ function get_oc_code_rt(oc::Core.OpaqueClosure, types, optimize::Bool)
                 tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
                 mi = Core.Compiler.specialize_method(m, tt, Core.svec())
                 interp = Core.Compiler.NativeInterpreter(m.primary_world)
-                return Core.Compiler.typeinf_code(interp, mi, optimize)
+                code = Core.Compiler.typeinf_code(interp, mi, optimize)
+                if code isa CodeInfo
+                    return Pair{CodeInfo, Any}(code, code.rettype)
+                end
+                error("inference not successful")
             else
                 code = _uncompressed_ir(m)
-                return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
+                return Pair{CodeInfo, Any}(code, typeof(oc).parameters[2])
             end
         else
             # OC constructed from optimized IR
             codeinst = m.specializations.cache
+            # XXX: the inferred field is not normally a CodeInfo, but this assumes it is guaranteed to be always
             return Pair{CodeInfo, Any}(codeinst.inferred, codeinst.rettype)
         end
     else
@@ -2204,7 +2234,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     for match in matches.matches
         match = match::Core.MethodMatch
         println(io, match.method)
-        (code, ty) = Core.Compiler.typeinf_code(interp, match, true)
+        code = Core.Compiler.typeinf_code(interp, match, true)
         if code === nothing
             println(io, "  inference not successful")
         else
@@ -2406,7 +2436,7 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     for kw in kws
         endswith(String(kw), "...") && return true
     end
-    kwnames = Symbol[kwnames[i] for i in 1:length(kwnames)]
+    kwnames = collect(kwnames)
     return issubset(kwnames, kws)
 end
 

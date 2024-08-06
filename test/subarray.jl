@@ -1077,6 +1077,37 @@ end
     end
 end
 
+@testset "aliasing checks with shared indices" begin
+    indices = [1,3]
+    a = rand(3)
+    av = @view a[indices]
+    b = rand(3)
+    bv = @view b[indices]
+    @test !Base.mightalias(av, bv)
+    @test Base.mightalias(a, av)
+    @test Base.mightalias(b, bv)
+    @test Base.mightalias(indices, av)
+    @test Base.mightalias(indices, bv)
+    @test Base.mightalias(view(indices, :), av)
+    @test Base.mightalias(view(indices, :), bv)
+end
+
+@testset "aliasing checks with disjoint arrays" begin
+    A = rand(3,4,5)
+    @test Base.mightalias(view(A, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(A, :, :, 1), view(A, :, :, 2))
+
+    B = reinterpret(UInt64, A)
+    @test Base.mightalias(view(B, :, :, 1), view(A, :, :, 1))
+    @test !Base.mightalias(view(B, :, :, 1), view(A, :, :, 2))
+
+    C = reinterpret(UInt32, A)
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 1))
+    @test Base.mightalias(view(C, :, :, 1), view(A, :, :, 2)) # This is overly conservative
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 1))
+    @test Base.mightalias(@view(C[begin:2:end, :, 1]), view(A, :, :, 2)) # This is overly conservative
+end
+
 @testset "aliasing check with reshaped subarrays" begin
     C = rand(2,1)
     V1 = @view C[1, :]

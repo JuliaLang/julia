@@ -26,6 +26,7 @@
 #include "julia_internal.h"
 #include "platform.h"
 #include "llvm-codegen-shared.h"
+#include "llvm-version.h"
 #include <stack>
 #include <queue>
 
@@ -90,6 +91,7 @@ struct OptimizationOptions {
     bool enable_vector_pipeline;
     bool remove_ni;
     bool cleanup;
+    bool warn_missed_transformations;
 
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
@@ -103,12 +105,13 @@ struct OptimizationOptions {
         bool enable_loop_optimizations=true,
         bool enable_vector_pipeline=true,
         bool remove_ni=true,
-        bool cleanup=true) {
+        bool cleanup=true,
+        bool warn_missed_transformations=false) {
         return {lower_intrinsics, dump_native, external_use, llvm_only,
                 always_inline, enable_early_simplifications,
                 enable_early_optimizations, enable_scalar_optimizations,
                 enable_loop_optimizations, enable_vector_pipeline,
-                remove_ni, cleanup};
+                remove_ni, cleanup, warn_missed_transformations};
     }
 };
 
@@ -261,9 +264,7 @@ jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &M,
         jl_method_instance_t *mi,
         jl_code_info_t *src,
-        jl_value_t *jlrettype,
-        jl_codegen_params_t &params,
-        size_t min_world, size_t max_world);
+        jl_codegen_params_t &params);
 
 jl_llvm_functions_t jl_emit_codeinst(
         orc::ThreadSafeModule &M,
@@ -537,7 +538,7 @@ public:
     #endif
     uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
-    StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
+    StringRef getFunctionAtAddress(uint64_t Addr, jl_callptr_t invoke, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
     auto getContext() JL_NOTSAFEPOINT {
         return *ContextPool;
     }
@@ -559,6 +560,7 @@ public:
     TargetIRAnalysis getTargetIRAnalysis() const JL_NOTSAFEPOINT;
 
     size_t getTotalBytes() const JL_NOTSAFEPOINT;
+    void addBytes(size_t bytes) JL_NOTSAFEPOINT;
     void printTimers() JL_NOTSAFEPOINT;
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
@@ -575,6 +577,8 @@ public:
 
     // Note that this is a safepoint due to jl_get_library_ and jl_dlsym calls
     void optimizeDLSyms(Module &M);
+
+    jl_mutex_t jitlock;
 
 private:
 
@@ -603,10 +607,10 @@ private:
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
+    std::atomic<size_t> jit_bytes_size{0};
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #else
-    std::atomic<size_t> total_size{0};
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
@@ -642,4 +646,8 @@ void optimizeDLSyms(Module &M);
 // NewPM
 #include "passes.h"
 
+#if JL_LLVM_VERSION >= 180000
+CodeGenOptLevel CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
+#else
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;
+#endif

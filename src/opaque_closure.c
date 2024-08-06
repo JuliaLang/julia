@@ -159,7 +159,7 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
         sigtype = jl_argtype_with_function_type(argslotty, (jl_value_t*)argt);
         jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)root, sigtype, jl_emptysvec);
         inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
-            0, world, world, 0, 0, jl_nothing, 0, ci->debuginfo);
+            0, world, world, 0, jl_nothing, 0, ci->debuginfo);
         jl_mi_cache_insert(mi, inst);
     }
 
@@ -170,10 +170,10 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
 
 JL_CALLABLE(jl_new_opaque_closure_jlcall)
 {
-    if (nargs < 4)
+    if (nargs < 5)
         jl_error("new_opaque_closure: Not enough arguments");
     return (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)args[0],
-        args[1], args[2], args[3], &args[4], nargs-4, 1);
+        args[1], args[2], args[4], &args[5], nargs-5, 1);
 }
 
 // check whether the specified number of arguments is compatible with the

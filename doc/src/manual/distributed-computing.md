@@ -123,7 +123,7 @@ An important thing to remember is that, once fetched, a [`Future`](@ref Distribu
 locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
 have fetched, the remote stored value is deleted.
 
-[`@async`](@ref) is similar to [`@spawnat`](@ref), but only runs tasks on the local process. We
+[`Threads.@spawn`](@ref) is similar to [`@spawnat`](@ref), but only runs tasks on the local process. We
 use it to create a "feeder" task for each process. Each task picks the next index that needs to
 be computed, then waits for its process to finish, then repeats until we run out of indices. Note
 that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
@@ -186,7 +186,7 @@ end
 ```
 
 In order to refer to `MyType` across all processes, `DummyModule.jl` needs to be loaded on
-every process.  Calling `include("DummyModule.jl")` loads it only on a single process.  To
+every process. Calling `include("DummyModule.jl")` loads it only on a single process. To
 load it on every process, use the [`@everywhere`](@ref) macro (starting Julia with `julia -p
 2`):
 
@@ -198,7 +198,7 @@ loaded
 ```
 
 As usual, this does not bring `DummyModule` into scope on any of the process, which requires
-[`using`](@ref) or [`import`](@ref).  Moreover, when `DummyModule` is brought into scope on one process, it
+[`using`](@ref) or [`import`](@ref). Moreover, when `DummyModule` is brought into scope on one process, it
 is not on any other:
 
 ```julia-repl
@@ -657,7 +657,7 @@ julia> function make_jobs(n)
 
 julia> n = 12;
 
-julia> errormonitor(@async make_jobs(n)); # feed the jobs channel with "n" jobs
+julia> errormonitor(Threads.@spawn make_jobs(n)); # feed the jobs channel with "n" jobs
 
 julia> for p in workers() # start tasks on the workers to process requests in parallel
            remote_do(do_work, p, jobs, results)
@@ -896,7 +896,7 @@ conflicts. For example:
 ```julia
 @sync begin
     for p in procs(S)
-        @async begin
+        Threads.@spawn begin
             remotecall_wait(fill!, p, S, p)
         end
     end
@@ -978,7 +978,7 @@ and one that delegates in chunks:
 julia> function advection_shared!(q, u)
            @sync begin
                for p in procs(q)
-                   @async remotecall_wait(advection_shared_chunk!, p, q, u)
+                   Threads.@spawn remotecall_wait(advection_shared_chunk!, p, q, u)
                end
            end
            q

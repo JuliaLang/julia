@@ -85,6 +85,9 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.mc_rsp;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.mc_gpregs.gp_sp;
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
     const struct sigcontext *ctx = (const struct sigcontext *)_ctx;
     return ctx->sc_rsp;
@@ -160,6 +163,11 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     ctx->uc_mcontext.sp = rsp;
     ctx->uc_mcontext.regs[29] = 0; // Clear link register (x29)
     ctx->uc_mcontext.pc = (uintptr_t)fptr;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    ctx->uc_mcontext.mc_gpregs.gp_sp = rsp;
+    ctx->uc_mcontext.mc_gpregs.gp_x[29] = 0; // Clear link register (x29)
+    ctx->uc_mcontext.mc_gpregs.gp_elr = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     uintptr_t target = (uintptr_t)fptr;
@@ -350,6 +358,13 @@ int is_write_fault(void *context) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
 }
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+// FreeBSD seems not to expose a means of accessing ESR via `ucontext_t` on AArch64.
+// TODO: Is there an alternative approach that can be taken? ESR may become accessible
+// in a future release though.
+int is_write_fault(void *context) {
+    return 0;
+}
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
 int is_write_fault(void *context) {
     struct sigcontext *ctx = (struct sigcontext *)context;
@@ -404,6 +419,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
     if (ct->eh == NULL)
         sigdie_handler(sig, info, context);
     if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+        stack_overflow_warning();
         jl_throw_in_ctx(ct, jl_stackovf_exception, sig, context);
     }
     else if (jl_is_on_sigstack(ct->ptls, info->si_addr, context)) {
@@ -949,16 +965,16 @@ static void *signal_listener(void *arg)
 
                         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[i];
 
-                        // store threadid but add 1 as 0 is preserved to indicate end of block
+                        // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
                         bt_data_prof[bt_size_cur++].uintptr = ptls2->tid + 1;
 
-                        // store task id (never null)
+                        // META_OFFSET_TASKID store task id (never null)
                         bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
 
-                        // store cpu cycle clock
+                        // META_OFFSET_CPUCYCLECLOCK store cpu cycle clock
                         bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
-                        // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                        // META_OFFSET_SLEEPSTATE store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
                         bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls2->sleep_check_state) + 1;
 
                         // Mark the end of this block with two 0's
@@ -995,12 +1011,12 @@ static void *signal_listener(void *arg)
         else if (critical) {
             // critical in this case actually means SIGINFO request
 #ifndef SIGINFO // SIGINFO already prints something similar automatically
-            int nrunning = 0;
+            int n_threads_running = 0;
             for (int idx = nthreads; idx-- > 0; ) {
                 jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[idx];
-                nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
+                n_threads_running += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
             }
-            jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, nthreads);
+            jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), n_threads_running, nthreads);
 #endif
 
             jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));

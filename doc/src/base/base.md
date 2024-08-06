@@ -4,7 +4,7 @@
 
 Julia Base contains a range of functions and macros appropriate for performing
 scientific and numerical computing, but is also as broad as those of many general purpose programming
-languages.  Additional functionality is available from a growing collection of
+languages. Additional functionality is available from a growing collection of
 [available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
 
@@ -102,6 +102,10 @@ where
 ;
 =
 ?:
+.=
+.
+->
+::
 ```
 
 ## Standard Modules
@@ -277,6 +281,7 @@ Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
+Base.Fix
 Base.Fix1
 Base.Fix2
 ```
@@ -307,7 +312,12 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@assume_effects
+```
+
+## Managing deprecations
+```@docs
 Base.@deprecate
+Base.depwarn
 ```
 
 ## Missing Values
@@ -414,6 +424,7 @@ Core.DivideError
 Core.DomainError
 Base.EOFError
 Core.ErrorException
+Core.FieldError
 Core.InexactError
 Core.InterruptException
 Base.KeyError

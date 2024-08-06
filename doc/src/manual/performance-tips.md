@@ -96,8 +96,8 @@ a vector of 64-bit floats so there should be no need to allocate (heap) memory.
 
 We should clarify that what `@time` reports is specifically *heap* allocations, which are typically needed for either
 mutable objects or for creating/growing variable-sized containers (such as `Array` or `Dict`, strings, or "type-unstable"
-objects whose type is only known at runtime).  Allocating (or deallocating) such blocks of memory may require an expensive function
-call to libc (e.g. via `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like
+objects whose type is only known at runtime). Allocating (or deallocating) such blocks of memory may require an expensive function
+call to libc (e.g. via `malloc` in C), and they must be tracked for garbage collection. In contrast, immutable values like
 numbers (except bignums), tuples, and immutable `struct`s can be stored much more cheaply, e.g. in stack or CPU-register
 memory, so one doesn’t typically worry about the performance cost of "allocating" them.
 
@@ -862,10 +862,10 @@ The magic of type inference takes place in the later phase of compilation.
 
 Thus, the parser does not know that `r` has a fixed type (`Int`).
 Nor that `r` does not change value once the inner function is created (so that
-the box is unneeded).  Therefore, the parser emits code for
+the box is unneeded). Therefore, the parser emits code for
 box that holds an object with an abstract type such as `Any`, which
-requires run-time type dispatch for each occurrence of `r`.  This can be
-verified by applying `@code_warntype` to the above function.  Both the boxing
+requires run-time type dispatch for each occurrence of `r`. This can be
+verified by applying `@code_warntype` to the above function. Both the boxing
 and the run-time type dispatch can cause loss of performance.
 
 If captured variables are used in a performance-critical section of the code,
@@ -1157,7 +1157,7 @@ known prior to execution), then you might want to consider using the [StaticArra
 This package allows you to represent such arrays in a way that avoids unnecessary heap allocations and allows the compiler to
 specialize code for the *size* of the array, e.g. by completely unrolling vector operations (eliminating the loops) and storing elements in CPU registers.
 
-For example, if you are doing computations with 2d geometries, you might have many computations with 2-component vectors.  By
+For example, if you are doing computations with 2d geometries, you might have many computations with 2-component vectors. By
 using the `SVector` type from StaticArrays.jl, you can use convenient vector notation and operations like `norm(3v - w)` on
 vectors `v` and `w`, while allowing the compiler to unroll the code to a minimal computation equivalent to `@inbounds hypot(3v[1]-w[1], 3v[2]-w[2])`.
 
@@ -1423,7 +1423,7 @@ Sometimes you can enable better optimization by promising certain program proper
     to differences for IEEE numbers. Be careful when doing this, as this may change numerical results.
     This corresponds to the `-ffast-math` option of clang.
   * Write [`@simd`](@ref) in front of `for` loops to promise that the iterations are independent and may be
-    reordered.  Note that in many cases, Julia can automatically vectorize code without the `@simd` macro;
+    reordered. Note that in many cases, Julia can automatically vectorize code without the `@simd` macro;
     it is only beneficial in cases where such a transformation would otherwise be illegal, including cases
     like allowing floating-point re-associativity and ignoring dependent memory accesses (`@simd ivdep`).
     Again, be very careful when asserting `@simd` as erroneously annotating a loop with dependent iterations
@@ -1723,7 +1723,7 @@ using Distributed
 responses = Vector{Any}(undef, nworkers())
 @sync begin
     for (idx, pid) in enumerate(workers())
-        @async responses[idx] = remotecall_fetch(foo, pid, args...)
+        Threads.@spawn responses[idx] = remotecall_fetch(foo, pid, args...)
     end
 end
 ```

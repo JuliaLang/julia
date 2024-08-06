@@ -835,4 +835,20 @@ end
     @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
     @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
     @test_throws MethodError circshift(t1, 'a')
+    @test Core.Compiler.return_type(circshift, Tuple{Tuple,Integer}) <: Tuple
+    @test Core.Compiler.return_type(circshift, Tuple{Tuple{Vararg{Any,10}},Integer}) <: Tuple{Vararg{Any,10}}
+    for len ∈ 0:5
+        v = 1:len
+        t = Tuple(v)
+        for shift ∈ -6:6
+            @test circshift(v, shift) == collect(circshift(t, shift))
+        end
+    end
+end
+
+@testset "abstract return type inference for homogeneous tuples" begin
+    @test NTuple == Core.Compiler.return_type(Base.tail, Tuple{NTuple})
+    @test NTuple == Core.Compiler.return_type(Base.front, Tuple{NTuple})
+    @test NTuple == Core.Compiler.return_type(reverse, Tuple{NTuple})
+    @test NTuple == Core.Compiler.return_type(circshift, Tuple{NTuple,Int})
 end

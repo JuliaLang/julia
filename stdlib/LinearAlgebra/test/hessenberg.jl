@@ -148,7 +148,7 @@ let n = 10
         @test size(H.Q, 2) == size(A, 2)
         @test size(H.Q) == size(A)
         @test size(H) == size(A)
-        @test_throws ErrorException H.Z
+        @test_throws FieldError H.Z
         @test convert(Array, H) ≈ A
         @test (H.Q * H.H) * H.Q' ≈ A ≈ (Matrix(H.Q) * Matrix(H.H)) * Matrix(H.Q)'
         @test (H.Q' * A) * H.Q ≈ H.H
@@ -270,6 +270,13 @@ end
     S = UpperHessenberg(M)
     @test_throws "invalid index" S[3, true]
     @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+end
+
+@testset "complex Symmetric" begin
+    D = diagm(0=>ComplexF64[1,2])
+    S = Symmetric(D)
+    H = hessenberg(S)
+    @test H.H == D
 end
 
 end # module TestHessenberg

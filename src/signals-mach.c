@@ -45,7 +45,6 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
-extern uv_mutex_t safepoint_lock;
 extern uv_cond_t safepoint_cond_begin;
 
 #define GC_STATE_SHIFT 8*sizeof(int16_t)
@@ -295,10 +294,13 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_task_t *ct = jl_get_current_task();
         jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
         jl_call_in_state(ptls, (host_thread_state_t*)jl_to_bt_context(context), &jl_sig_throw);
+        return;
     }
-    else {
-        sigdie_handler(sig, info, context);
+    jl_task_t *ct = jl_get_current_task();
+    if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+        stack_overflow_warning();
     }
+    sigdie_handler(sig, info, context);
 }
 
 // n.b. mach_exc_server expects us to define this symbol locally
@@ -353,7 +355,7 @@ kern_return_t catch_mach_exception_raise(
     // XXX: jl_throw_in_thread or segv_handler will eventually check this, but
     //      we would like to avoid some of this work if we could detect this earlier
     // if (jl_has_safe_restore(ptls2)) {
-    //     jl_throw_in_thread(ptls2, thread, jl_stackovf_exception);
+    //     jl_throw_in_thread(ptls2, thread, NULL);
     //     return KERN_SUCCESS;
     // }
     if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING)
@@ -385,6 +387,7 @@ kern_return_t catch_mach_exception_raise(
         return KERN_FAILURE;
     jl_value_t *excpt;
     if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {
+        stack_overflow_warning();
         excpt = jl_stackovf_exception;
     }
     else if (is_write_fault(exc_state)) // false for alignment errors
@@ -735,16 +738,16 @@ void *mach_profile_listener(void *arg)
 #endif
                 jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[i];
 
-                // store threadid but add 1 as 0 is preserved to indicate end of block
+                // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
                 bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
 
-                // store task id (never null)
+                // META_OFFSET_TASKID store task id (never null)
                 bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
 
-                // store cpu cycle clock
+                // META_OFFSET_CPUCYCLECLOCK store cpu cycle clock
                 bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
-                // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                // META_OFFSET_SLEEPSTATE store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
                 bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
 
                 // Mark the end of this block with two 0's

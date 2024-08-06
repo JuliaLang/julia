@@ -416,7 +416,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `new`
 
     Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
-    to this, and the type is always inserted by the compiler.  This is very much an internal-only
+    to this, and the type is always inserted by the compiler. This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 
   * `splatnew`
@@ -426,8 +426,11 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `isdefined`
 
-    `Expr(:isdefined, :x)` returns a Bool indicating whether `x` has
-    already been defined in the current scope.
+    `Expr(:isdefined, :x [, allow_import])` returns a Bool indicating whether `x` has
+    already been defined in the current scope. The optional second argument is a boolean
+    that specifies whether `x` should be considered defined by an import or if only constants
+    or globals in the current module count as being defined. If `x` is not a global, the argument
+    is ignored.
 
   * `the_exception`
 
@@ -436,7 +439,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
-    error.  Yields a token which is consumed by `pop_exception`.
+    error. Yields a token which is consumed by `pop_exception`.
 
   * `leave`
 
@@ -519,17 +522,21 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
 
-      * `args[2]` : isva
-
-        Indicates whether the closure accepts varargs.
-
-      * `args[3]` : lb
+      * `args[2]` : lb
 
         Lower bound on the output type. (Defaults to `Union{}`)
 
-      * `args[4]` : ub
+      * `args[3]` : ub
 
         Upper bound on the output type. (Defaults to `Any`)
+
+      * `args[4]` : constprop
+
+        Indicates whether the opaque closure's identity may be used for constant
+        propagation. The `@opaque` macro enables this by default, but this will
+        cause additional inference which may be undesirable and prevents the
+        code from running during precompile.
+        If `args[4]` is a method, the argument is considered skipped.
 
       * `args[5]` : method
 
@@ -660,7 +667,7 @@ for important details on how to modify these fields safely.
 
 ### CodeInfo
 
-A (usually temporary) container for holding lowered source code.
+A (usually temporary) container for holding lowered (and possibly inferred) source code.
 
   * `code`
 
@@ -691,25 +698,18 @@ A (usually temporary) container for holding lowered source code.
     Statement-level 32 bits flags for each expression in the function.
     See the definition of `jl_code_info_t` in julia.h for more details.
 
+These are only populated after inference (or by generated functions in some cases):
+
   * `debuginfo`
 
     An object to retrieve source information for each statements, see
     [How to interpret line numbers in a `CodeInfo` object](@ref).
 
-Optional Fields:
-
-  * `slottypes`
-
-    An array of types for the slots.
-
   * `rettype`
 
-    The inferred return type of the lowered form (IR). Default value is `Any`.
-
-  * `method_for_inference_limit_heuristics`
-
-    The `method_for_inference_heuristics` will expand the given method's generator if
-    necessary during inference.
+    The inferred return type of the lowered form (IR). Default value is `Any`. This is
+    mostly present for convenience, as (due to the way OpaqueClosures work) it is not
+    necessarily the rettype used by codegen.
 
   * `parent`
 
@@ -723,16 +723,19 @@ Optional Fields:
 
     The range of world ages for which this code was valid at the time when it had been inferred.
 
+Optional Fields:
+
+  * `slottypes`
+
+    An array of types for the slots.
+
+  * `method_for_inference_limit_heuristics`
+
+    The `method_for_inference_heuristics` will expand the given method's generator if
+    necessary during inference.
+
 
 Boolean properties:
-
-  * `inferred`
-
-    Whether this has been produced by type inference.
-
-  * `inlineable`
-
-    Whether this should be eligible for inlining.
 
   * `propagate_inbounds`
 
@@ -742,7 +745,7 @@ Boolean properties:
 
 `UInt8` settings:
 
-  * `constprop`
+  * `constprop`, `inlineable`
 
     * 0 = use heuristic
     * 1 = aggressive

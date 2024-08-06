@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base: delete
+
 @test_throws TypeError NamedTuple{1,Tuple{}}
 @test_throws TypeError NamedTuple{(),1}
 @test_throws TypeError NamedTuple{(:a,1),Tuple{Int}}
@@ -28,13 +30,13 @@
 @test (x=4, y=5, z=6)[()] == NamedTuple()
 @test (x=4, y=5, z=6)[:] == (x=4, y=5, z=6)
 @test NamedTuple()[()] == NamedTuple()
-@test_throws ErrorException (x=4, y=5, z=6).a
+@test_throws FieldError (x=4, y=5, z=6).a
 @test_throws BoundsError (a=2,)[0]
 @test_throws BoundsError (a=2,)[2]
-@test_throws ErrorException (x=4, y=5, z=6)[(:a,)]
-@test_throws ErrorException (x=4, y=5, z=6)[(:x, :a)]
-@test_throws ErrorException (x=4, y=5, z=6)[[:a]]
-@test_throws ErrorException (x=4, y=5, z=6)[[:x, :a]]
+@test_throws FieldError (x=4, y=5, z=6)[(:a,)]
+@test_throws FieldError (x=4, y=5, z=6)[(:x, :a)]
+@test_throws FieldError (x=4, y=5, z=6)[[:a]]
+@test_throws FieldError (x=4, y=5, z=6)[[:x, :a]]
 @test_throws ErrorException (x=4, y=5, z=6)[(:x, :x)]
 
 @test length(NamedTuple()) == 0
@@ -255,7 +257,7 @@ function abstr_nt_22194_2()
     a = NamedTuple[(a=1,), (b=2,)]
     return a[1].b
 end
-@test_throws ErrorException abstr_nt_22194_2()
+@test_throws FieldError abstr_nt_22194_2()
 @test Base.return_types(abstr_nt_22194_2, ()) == Any[Any]
 
 mutable struct HasAbstractNamedTuples
@@ -281,6 +283,11 @@ function abstr_nt_22194_3()
 end
 abstr_nt_22194_3()
 @test Base.return_types(abstr_nt_22194_3, ()) == Any[Any]
+
+@test delete((a=1,), :a) == NamedTuple()
+@test delete((a=1, b=2), :a) == (b=2,)
+@test delete((a=1, b=2, c=3), :b) == (a=1, c=3)
+@test delete((a=1, b=2, c=3), :z) == (a=1, b=2, c=3)
 
 @test Base.structdiff((a=1, b=2), (b=3,)) == (a=1,)
 @test Base.structdiff((a=1, b=2, z=20), (b=3,)) == (a=1, z=20)
@@ -398,14 +405,14 @@ for f in (Base.merge, Base.structdiff)
         fallback_func(a::NamedTuple, b::NamedTuple) = @invoke f(a::NamedTuple, b::NamedTuple)
         @testset let eff = Base.infer_effects(fallback_func)
             @test Core.Compiler.is_foldable(eff)
-            @test eff.nonoverlayed
+            @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(fallback_func)) == NamedTuple
         # test if `max_methods = 4` setting works as expected
         general_func(a::NamedTuple, b::NamedTuple) = f(a, b)
         @testset let eff = Base.infer_effects(general_func)
             @test Core.Compiler.is_foldable(eff)
-            @test eff.nonoverlayed
+            @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(general_func)) == NamedTuple
     end
@@ -442,7 +449,7 @@ end
 for NT in (NamedTuple{(:a, :b), Union{}}, NamedTuple{(:a, :b), T} where T<:Union{})
     @test fieldtype(NT, 1) == Union{}
     @test fieldtype(NT, :b) == Union{}
-    @test_throws ErrorException fieldtype(NT, :c)
+    @test_throws FieldError fieldtype(NT, :c)
     @test_throws BoundsError fieldtype(NT, 0)
     @test_throws BoundsError fieldtype(NT, 3)
     @test Base.return_types((Type{NT},)) do NT; fieldtype(NT, :a); end == Any[Type{Union{}}]

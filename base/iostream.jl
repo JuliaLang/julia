@@ -47,12 +47,18 @@ macro _lock_ios(s, expr)
 end
 
 """
-    fd(stream)
+    fd(stream) -> RawFD
 
 Return the file descriptor backing the stream or file. Note that this function only applies
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+
+`RawFD` objects can be passed directly to other languages via the `ccall` interface.
+
+!!! compat "Julia 1.12"
+    Prior to 1.12, this function returned an `Int` instead of a `RawFD`. You may use
+    `RawFD(fd(x))` to produce a `RawFD` in all Julia versions.
 """
-fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
+fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
 
@@ -486,9 +492,7 @@ function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
     return out
 end
 
-function readbytes_all!(s::IOStream,
-                        b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                        nb::Integer)
+function readbytes_all!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = lb = length(b)
     nr = 0
     let l = s._dolock, slock = s.lock
@@ -516,9 +520,7 @@ function readbytes_all!(s::IOStream,
     return nr
 end
 
-function readbytes_some!(s::IOStream,
-                         b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                         nb::Integer)
+function readbytes_some!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = length(b)
     if nb > olb
         resize!(b, nb)
@@ -547,10 +549,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 `read` call is performed, and the amount of data returned is device-dependent. Note that not
 all stream types support the `all` option.
 """
-function readbytes!(s::IOStream,
-                    b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                    nb=length(b);
-                    all::Bool=true)
+function readbytes!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 
