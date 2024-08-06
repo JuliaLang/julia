@@ -206,8 +206,12 @@ function expand_call(ctx, ex)
 end
 
 function expand_for(ctx, ex)
-    iterspec = ex[1]
+    iterspecs = ex[1]
 
+    @chk kind(iterspecs) == K"iteration"
+    @chk numchildren(iterspecs) == 1
+
+    iterspec = iterspecs[1]
     iter_var = iterspec[1]
     iter_ex = iterspec[2]
 
