@@ -53,7 +53,8 @@ Lowering has five symbolic simplification passes:
 ## Syntax trees
 
 Want something something better than `JuliaSyntax.SyntaxNode`! `SyntaxTree` and
-`SyntaxGraph` provide this. (These will probably end up in `JuliaSyntax`.)
+`SyntaxGraph` provide this. Some future version of these should end up in
+`JuliaSyntax`.
 
 We want to allow arbitrary attributes to be attached to tree nodes by analysis
 passes. This separates the analysis pass implementation from the data
@@ -76,6 +77,14 @@ are similar.
 
 Analogy 3: Graph algorithms which represent graphs as a compact array of node
 ids and edges with integer indices, rather than using a linked data structure.
+
+### References
+
+Sander Mertens, the author of the Flecs ECS has a blog post series discussing
+ECS data structures and the many things that may be done with them. We may want
+to use some of these tricks to make `SyntaxTree` faster, eventually. See, for
+example,
+[Building Games in ECS with Entity Relationships](https://ajmmertens.medium.com/building-games-in-ecs-with-entity-relationships-657275ba2c6c)
 
 ## Provenance tracking
 
