@@ -8,6 +8,12 @@ SubStr(s) = SubString("abc$(s)de", firstindex(s) + 3, lastindex(s) + 3)
         @test textwidth(c^3) == w*3
         @test w == @invoke textwidth(c::AbstractChar)
     end
+    for i in 0x00:0x7f # test all ASCII chars (which have fast path)
+        w = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), i))
+        c = Char(i)
+        @test textwidth(c) == w
+        @test w == @invoke textwidth(c::AbstractChar)
+    end
 end
 
 @testset "padding (lpad and rpad)" begin
