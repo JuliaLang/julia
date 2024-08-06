@@ -241,7 +241,7 @@ end
 ############################################################################
 
 # precomputed table of ASCII text widths
-const _textwidth_ascii = [ccall(:utf8proc_charwidth, Cint, (UInt32,), c) for c = 0:127]
+const _textwidth_ascii = ntuple(i -> ccall(:utf8proc_charwidth, Cint, (UInt32,), i-1), 128)
 
 ## character column width function ##
 """
