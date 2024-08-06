@@ -536,7 +536,15 @@ julia> rtrunc("foo", 3)
 
 See also [`ltrunc`](@ref) and [`ctrunc`](@ref).
 """
-rtrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…') = struncate(str, maxwidth, replacement, :right)
+function rtrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…')
+    ret = string_truncate_boundaries(str, maxwidth, replacement, Val(:right))
+    if isnothing(ret)
+        return str
+    else
+        left, _ = ret::Tuple{Int,Int}
+        @views return str[begin:left] * replacement
+    end
+end
 
 """
     ltrunc(str::AbstractString, maxwidth::Int, replace_str::AbstractString = "…")
@@ -561,7 +569,15 @@ julia> ltrunc("foo", 3)
 
 See also [`rtrunc`](@ref) and [`ctrunc`](@ref).
 """
-ltrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…') = struncate(str, maxwidth, replacement, :left)
+function ltrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…')
+    ret = string_truncate_boundaries(str, maxwidth, replacement, Val(:left))
+    if isnothing(ret)
+        return str
+    else
+        _, right = ret::Tuple{Int,Int}
+        @views return replacement * str[right:end]
+    end
+end
 
 """
     ctrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…'; prefer_left::Bool = true)
@@ -587,12 +603,33 @@ julia> ctrunc("foo", 3)
 
 See also [`ltrunc`](@ref) and [`rtrunc`](@ref).
 """
-ctrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…'; prefer_left::Bool = true) =
-    struncate(str, maxwidth, replacement, :center, prefer_left)
+function ctrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…'; prefer_left::Bool = true)
+    ret = string_truncate_boundaries(str, maxwidth, replacement, Val(:center), prefer_left)
+    if isnothing(ret)
+        return str
+    else
+        left, right = ret::Tuple{Int,Int}
+        @views return str[begin:left] * replacement * str[right:end]
+    end
+end
 
-function struncate(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char}, mode::Symbol = :center, prefer_left::Bool = true)
+function string_truncate_boundaries(
+            str::AbstractString,
+            maxwidth::Int,
+            replacement::Union{AbstractString,Char},
+            ::Val{mode},
+            prefer_left::Bool = true) where {mode}
+
     maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
-    textwidth(str) <= maxwidth && return str
+
+    # check efficiently for early return if str is less wide than maxwidth
+    total_width = 0
+    for c in str
+        total_width += textwidth(c)
+        total_width > maxwidth && break
+    end
+    total_width <= maxwidth && return nothing
+
     l0, _ = left, right = firstindex(str), lastindex(str)
     width = textwidth(replacement)
     while true
@@ -605,7 +642,7 @@ function struncate(str::AbstractString, maxwidth::Int, replacement::Union{Abstra
             left = nextind(str, left)
         end
     end
-    @views return str[begin:prevind(str, left)] * replacement * str[nextind(str, right):end]
+    return prevind(str, left), nextind(str, right)
 end
 
 """
