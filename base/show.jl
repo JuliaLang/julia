@@ -513,11 +513,8 @@ function _show_default(io::IO, @nospecialize(x))
     print(io,')')
 end
 
-function active_module()
-    REPL = REPL_MODULE_REF[]
-    REPL === Base && return Main
-    return invokelatest(REPL.active_module)::Module
-end
+_active_module::Module = Main
+active_module() = _active_module
 
 # Check if a particular symbol is exported from a standard library module
 function is_exported_from_stdlib(name::Symbol, mod::Module)

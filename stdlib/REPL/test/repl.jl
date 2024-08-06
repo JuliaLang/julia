@@ -1157,16 +1157,20 @@ fake_repl() do stdin_write, stdout_read, repl
     s = readuntil(stdout_read, "\n\n")
     @test endswith(s, "(123, Base.Fix1)")
 
-    repl.mistate.active_module = Base # simulate activate_module(Base)
-    write(stdin_write, " ( 456 , Base.Fix2 , ) \n")
-    s = readuntil(stdout_read, "\n\n")
-    # ".Base" prefix not shown here
-    @test endswith(s, "(456, Fix2)")
+    try
+        Base._active_module = Base # simulate activate_module(Base)
+        write(stdin_write, " ( 456 , Base.Fix2 , ) \n")
+        s = readuntil(stdout_read, "\n\n")
+        # ".Base" prefix not shown here
+        @test endswith(s, "(456, Fix2)")
 
-    # Close REPL ^D
-    readuntil(stdout_read, "julia> ", keep=true)
-    write(stdin_write, '\x04')
-    Base.wait(repltask)
+        # Close REPL ^D
+        readuntil(stdout_read, "julia> ", keep=true)
+        write(stdin_write, '\x04')
+        Base.wait(repltask)
+    finally
+        Base._active_module = Main
+    end
 end
 
 help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line, mod))

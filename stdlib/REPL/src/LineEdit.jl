@@ -65,7 +65,6 @@ show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), 
 
 mutable struct MIState
     interface::ModalInterface
-    active_module::Module
     current_mode::TextInterface
     aborted::Bool
     mode_state::IdDict{TextInterface,ModeState}
@@ -78,7 +77,7 @@ mutable struct MIState
     async_channel::Channel{Function}
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
+MIState(i, c, a, m) = MIState(i, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -365,7 +364,7 @@ end
 # Prompt Completions & Hints
 function complete_line(s::MIState)
     set_action!(s, :complete_line)
-    if complete_line(state(s), s.key_repeats, s.active_module)
+    if complete_line(state(s), s.key_repeats, Base.active_module())
         return refresh_line(s)
     else
         beep(s)
@@ -381,7 +380,7 @@ function check_for_hint(s::MIState)
         # Requires making space for them earlier in refresh_multi_line
         return clear_hint(st)
     end
-    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module; hint = true)::Tuple{Vector{String},String,Bool}
+    completions, partial, should_complete = complete_line(st.p.complete, st, Base.active_module(); hint = true)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return clear_hint(st)
     # Don't complete for single chars, given e.g. `x` completes to `xor`
     if length(partial) > 1 && should_complete
@@ -2749,7 +2748,7 @@ init_state(terminal, prompt::Prompt) =
                 #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
 
 function init_state(terminal, m::ModalInterface)
-    s = MIState(m, Main, m.modes[1], false, IdDict{Any,Any}())
+    s = MIState(m, m.modes[1], false, IdDict{Any,Any}())
     for mode in m.modes
         s.mode_state[mode] = init_state(terminal, mode)
     end

@@ -151,4 +151,5 @@ Base.TOML.reinit!(Base.TOML_CACHE.p, "")
     BINDIR = ""
     STDLIB = ""
 end
+Base._active_module = Main
 end
