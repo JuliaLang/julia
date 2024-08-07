@@ -205,6 +205,29 @@ function expand_call(ctx, ex)
     end
 end
 
+function expand_dot(ctx, ex)
+    @chk numchildren(ex) == 2 # TODO: bare `.+` syntax
+    rhs = ex[2]
+    kr = kind(rhs)
+    expand_forms_2(ctx,
+        @ast ctx ex [K"call"
+            "getproperty"::K"top" 
+            ex[1]
+            if kr == K"Identifier"
+                rhs=>K"Symbol"
+            else
+                if !(kind(rhs) == K"string" || is_leaf(rhs))
+                    throw(LoweringError(rhs, "Unrecognized field access syntax"))
+                end
+                # Required to support the possibly dubious syntax `a."b"`. See
+                # https://github.com/JuliaLang/julia/issues/26873
+                # Syntax edition TODO: reconsider this; possibly restrict to only K"String"?
+                rhs
+            end
+        ]
+    )
+end
+
 function expand_for(ctx, ex)
     iterspecs = ex[1]
 
@@ -758,15 +781,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     if k == K"call"
         expand_call(ctx, ex)
     elseif k == K"."
-        @chk numchildren(ex) == 2
-        @chk kind(ex[2]) == K"Identifier"
-        expand_forms_2(ctx,
-            @ast ctx ex [K"call"
-                "getproperty"::K"top" 
-                ex[1]
-                ex[2]=>K"Symbol"
-            ]
-        )
+        expand_dot(ctx, ex)
     elseif k == K"?"
         @chk numchildren(ex) == 3
         expand_forms_2(ctx, @ast ctx ex [K"if" children(ex)...])

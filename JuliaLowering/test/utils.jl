@@ -10,7 +10,8 @@ using JuliaLowering:
     Kind, SourceRef, SyntaxTree, NodeId,
     makenode, makeleaf, setattr!, sethead!,
     is_leaf, numchildren, children,
-    @ast, flattened_provenance, showprov, LoweringError
+    @ast, flattened_provenance, showprov, LoweringError,
+    syntax_graph, Bindings, ScopeLayer
 
 function _ast_test_graph()
     graph = SyntaxGraph()
@@ -92,6 +93,12 @@ format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
 #-------------------------------------------------------------------------------
 
 # Test tools
+
+function desugar(mod::Module, src::String)
+    ex = parsestmt(SyntaxTree, src, filename="foo.jl")
+    ctx = JuliaLowering.DesugaringContext(syntax_graph(ex), Bindings(), ScopeLayer[], mod)
+    JuliaLowering.expand_forms_2(ctx, ex)
+end
 
 function match_ir_test_case(case_str)
     m = match(r"# *([^\n]*)\n((?:.|\n)*)#----*\n((?:.|\n)*)"m, strip(case_str))

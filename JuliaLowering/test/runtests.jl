@@ -302,6 +302,7 @@ macro A.b(ex)
 end
 """)
 
+include("desugaring.jl")
 include("branching.jl")
 include("loops.jl")
 
