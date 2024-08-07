@@ -514,7 +514,7 @@ function rpad(
 end
 
 """
-    rtrunc(str::AbstractString, maxwidth::Int, replace_str::AbstractString = "…")
+    rtrunc(str::AbstractString, maxwidth::Integer, replace_str::AbstractString = "…")
 
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the last characters
 with `replacement` if necessary. The default replacement string is "…".
@@ -536,10 +536,10 @@ julia> rtrunc("foo", 3)
 
 See also [`ltrunc`](@ref) and [`ctrunc`](@ref).
 """
-function rtrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…')
-    ret = string_truncate_boundaries(str, maxwidth, replacement, Val(:right))
+function rtrunc(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:right))
     if isnothing(ret)
-        return str
+        return string(str)
     else
         left, _ = ret::Tuple{Int,Int}
         @views return str[begin:left] * replacement
@@ -547,7 +547,7 @@ function rtrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractS
 end
 
 """
-    ltrunc(str::AbstractString, maxwidth::Int, replace_str::AbstractString = "…")
+    ltrunc(str::AbstractString, maxwidth::Integer, replace_str::AbstractString = "…")
 
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the first characters
 with `replacement` if necessary. The default replacement string is "…".
@@ -569,10 +569,10 @@ julia> ltrunc("foo", 3)
 
 See also [`rtrunc`](@ref) and [`ctrunc`](@ref).
 """
-function ltrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…')
-    ret = string_truncate_boundaries(str, maxwidth, replacement, Val(:left))
+function ltrunc(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:left))
     if isnothing(ret)
-        return str
+        return string(str)
     else
         _, right = ret::Tuple{Int,Int}
         @views return replacement * str[right:end]
@@ -580,7 +580,7 @@ function ltrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractS
 end
 
 """
-    ctrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…'; prefer_left::Bool = true)
+    ctrunc(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
 
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the middle characters
 with `replacement` if necessary. The default replacement string is "…". By default, the truncation
@@ -603,10 +603,10 @@ julia> ctrunc("foo", 3)
 
 See also [`ltrunc`](@ref) and [`rtrunc`](@ref).
 """
-function ctrunc(str::AbstractString, maxwidth::Int, replacement::Union{AbstractString,Char} = '…'; prefer_left::Bool = true)
-    ret = string_truncate_boundaries(str, maxwidth, replacement, Val(:center), prefer_left)
+function ctrunc(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:center), prefer_left)
     if isnothing(ret)
-        return str
+        return string(str)
     else
         left, right = ret::Tuple{Int,Int}
         @views return str[begin:left] * replacement * str[right:end]
@@ -615,8 +615,8 @@ end
 
 function string_truncate_boundaries(
             str::AbstractString,
-            maxwidth::Int,
-            replacement::Union{AbstractString,Char},
+            maxwidth::Integer,
+            replacement::Union{AbstractString,AbstractChar},
             ::Val{mode},
             prefer_left::Bool = true) where {mode}
 
@@ -632,7 +632,7 @@ function string_truncate_boundaries(
 
     l0, _ = left, right = firstindex(str), lastindex(str)
     width = textwidth(replacement)
-    while true
+    @inbounds while true
         if mode === :left || (mode === :center && (!prefer_left || left > l0))
             (width += textwidth(str[right])) <= maxwidth || break
             right = prevind(str, right)
