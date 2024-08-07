@@ -88,6 +88,8 @@ bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
     memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
     auto &field = getField(offset, size, elty);
+    field.second.hasunboxed |= !hasObjref(elty) || (hasObjref(elty) && !isa<PointerType>(elty));
+
     if (field.second.hasobjref != memop.isobjref)
         field.second.multiloc = true; // can't split this field, since it contains a mix of references and bits
     if (!isstore)
@@ -198,6 +200,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 auto elty = inst->getType();
                 required.use_info.has_unknown_objref |= hasObjref(elty);
                 required.use_info.has_unknown_objrefaggr |= hasObjref(elty) && !isa<PointerType>(elty);
+                required.use_info.has_unknown_unboxed |= !hasObjref(elty) || (hasObjref(elty) && !isa<PointerType>(elty));
                 required.use_info.hasunknownmem = true;
             } else if (!required.use_info.addMemOp(inst, 0, cur.offset,
                                                                inst->getType(),
@@ -289,6 +292,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 auto elty = storev->getType();
                 required.use_info.has_unknown_objref |= hasObjref(elty);
                 required.use_info.has_unknown_objrefaggr |= hasObjref(elty) && !isa<PointerType>(elty);
+                required.use_info.has_unknown_unboxed |= !hasObjref(elty) || (hasObjref(elty) && !isa<PointerType>(elty));
                 required.use_info.hasunknownmem = true;
             } else if (!required.use_info.addMemOp(inst, use->getOperandNo(),
                                                                cur.offset, storev->getType(),
@@ -310,10 +314,14 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
             }
             required.use_info.hasload = true;
             auto storev = isa<AtomicCmpXchgInst>(inst) ? cast<AtomicCmpXchgInst>(inst)->getNewValOperand() : cast<AtomicRMWInst>(inst)->getValOperand();
+            Type *elty = storev->getType();
             if (cur.offset == UINT32_MAX || !required.use_info.addMemOp(inst, use->getOperandNo(),
-                                                               cur.offset, storev->getType(),
+                                                               cur.offset, elty,
                                                                true, required.DL)) {
                 LLVM_DEBUG(dbgs() << "Atomic inst has unknown offset\n");
+                required.use_info.has_unknown_objref |= hasObjref(elty);
+                required.use_info.has_unknown_objrefaggr |= hasObjref(elty) && !isa<PointerType>(elty);
+                required.use_info.has_unknown_unboxed |= !hasObjref(elty) || (hasObjref(elty) && !isa<PointerType>(elty));
                 required.use_info.hasunknownmem = true;
             }
             required.use_info.refload = true;

@@ -2108,7 +2108,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
                     llvmf = NULL;
             }
-            else if (f_name.startswith("llvm.")) {
+            else if (f_name.starts_with("llvm.")) {
                 // compute and verify auto-mangling for intrinsic name
                 auto ID = Function::lookupIntrinsicID(f_name);
                 if (ID != Intrinsic::not_intrinsic) {

@@ -73,6 +73,7 @@ New library functions
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
 * `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
 * `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`
+* The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
 
 New library features
 --------------------

@@ -252,10 +252,12 @@ void Optimizer::optimizeAll()
             removeAlloc(orig);
             continue;
         }
+        bool has_unboxed = use_info.has_unknown_unboxed;
         bool has_ref = use_info.has_unknown_objref;
         bool has_refaggr = use_info.has_unknown_objrefaggr;
         for (auto memop: use_info.memops) {
             auto &field = memop.second;
+            has_unboxed |= field.hasunboxed;
             if (field.hasobjref) {
                 has_ref = true;
                 // This can be relaxed a little based on hasload
@@ -282,6 +284,19 @@ void Optimizer::optimizeAll()
             });
             // No one actually care about the memory layout of this object, split it.
             splitOnStack(orig);
+            continue;
+        }
+        // The move to stack code below, if has_ref is set, changes the allocation to an array of jlvalue_t's. This is fine
+        // if all objects are jlvalue_t's. However, if part of the allocation is an unboxed value (e.g. it is a { float, jlvaluet }),
+        // then moveToStack will create a [2 x jlvaluet] bitcast to { float, jlvaluet }.
+        // This later causes the GC rooting pass, to miss-characterize the float as a pointer to a GC value
+        if (has_unboxed && has_ref) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation could not be split since it contains both boxed and unboxed values, unable to move to stack " << ore::NV("GC Allocation", orig);
+            });
+            if (use_info.hastypeof)
+                optimizeTag(orig);
             continue;
         }
         REMARK([&](){
