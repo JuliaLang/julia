@@ -2084,6 +2084,12 @@ static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layou
         return references_name(((jl_uniontype_t*)p)->a, name, affects_layout, freevars) ||
                references_name(((jl_uniontype_t*)p)->b, name, affects_layout, freevars);
     }
+    if (jl_is_vararg(p)) {
+        jl_value_t *T = ((jl_vararg_t*)p)->T;
+        jl_value_t *N = ((jl_vararg_t*)p)->N;
+        return (T && references_name(T, name, affects_layout, freevars)) ||
+               (N && references_name(N, name, affects_layout, freevars));
+    }
     if (jl_is_typevar(p))
         return 0; // already checked by unionall, if applicable
     if (jl_is_datatype(p)) {
