@@ -3374,11 +3374,14 @@ static size_t emit_masked_bits_compare(callback &emit_desc, jl_datatype_t *aty, 
     size_t padding_bytes = 0;
     size_t nfields = jl_datatype_nfields(aty);
     size_t total_size = jl_datatype_size(aty);
+    assert(aty->layout->flags.isbitsegal);
     for (size_t i = 0; i < nfields; ++i) {
         size_t offset = jl_field_offset(aty, i);
         size_t fend = i == nfields - 1 ? total_size : jl_field_offset(aty, i + 1);
         size_t fsz = jl_field_size(aty, i);
         jl_datatype_t *fty = (jl_datatype_t*)jl_field_type(aty, i);
+        assert(jl_is_datatype(fty)); // union fields should never reach here
+        assert(fty->layout->flags.isbitsegal);
         if (jl_field_isptr(aty, i) || !fty->layout->flags.haspadding) {
             // The field has no internal padding
             data_bytes += fsz;
@@ -5652,7 +5655,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             else {
                 const DataLayout &DL = jl_Module->getDataLayout();
                 uint64_t sz = DL.getTypeStoreSize(T);
-                emit_memcpy(ctx, ssaslot, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), vi.value, sz, ssaslot->getAlign().value(), varslot->getAlign().value());
+                emit_memcpy(ctx, ssaslot, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), vi.value, sz, ssaslot->getAlign(), varslot->getAlign());
             }
             Value *tindex = NULL;
             if (vi.pTIndex)
@@ -5756,8 +5759,9 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
                 // This check should probably mostly catch the relevant situations.
                 if (vi.value.V != rval_info.V) {
                     Value *copy_bytes = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), jl_datatype_size(vi.value.typ));
+                    Align alignment(julia_alignment(rval_info.typ));
                     emit_memcpy(ctx, vi.value.V, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), rval_info, copy_bytes,
-                                julia_alignment(rval_info.typ), julia_alignment(rval_info.typ), vi.isVolatile);
+                                alignment, alignment, vi.isVolatile);
                 }
             }
             else {
@@ -6868,8 +6872,9 @@ static void emit_cfunc_invalidate(
             root1 = ctx.builder.CreateConstInBoundsGEP2_32(get_returnroots_type(ctx, return_roots), root1, 0, 0);
             ctx.builder.CreateStore(gf_ret, root1);
         }
+        Align alignment(julia_alignment(rettype));
         emit_memcpy(ctx, &*gf_thunk->arg_begin(), jl_aliasinfo_t::fromTBAA(ctx, nullptr), gf_ret,
-                    jl_aliasinfo_t::fromTBAA(ctx, nullptr), jl_datatype_size(rettype), julia_alignment(rettype), julia_alignment(rettype));
+                    jl_aliasinfo_t::fromTBAA(ctx, nullptr), jl_datatype_size(rettype), Align(alignment), Align(alignment));
         ctx.builder.CreateRetVoid();
         break;
     }
@@ -8729,7 +8734,7 @@ static jl_llvm_functions_t
                 jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
                     nullptr, nullptr, false, AtomicOrdering::NotAtomic, false, ctx.types().alignof_ptr.value());
                 ctx.world_age_at_entry = closure_world.V; // The tls world in a OC is the world of the closure
-                emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, ctx.types().alignof_ptr.value());
+                emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, ctx.types().alignof_ptr);
 
                 // Load closure env
                 Value *envaddr = ctx.builder.CreateInBoundsGEP(
@@ -9272,8 +9277,9 @@ static jl_llvm_functions_t
                     }
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_concrete_type(jlrettype));
+                        Align alignment(julia_alignment(jlrettype));
                         emit_memcpy(ctx, sret, jl_aliasinfo_t::fromTBAA(ctx, nullptr), retvalinfo,
-                                    jl_datatype_size(jlrettype), julia_alignment(jlrettype), julia_alignment(jlrettype));
+                                    jl_datatype_size(jlrettype), alignment, alignment);
                     }
                     else { // must be jl_returninfo_t::Union
                         emit_unionmove(ctx, sret, nullptr, retvalinfo, /*skip*/isboxed_union);
@@ -9511,7 +9517,7 @@ static jl_llvm_functions_t
                     // load of val) if the runtime type of val isn't phiType
                     Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                     emit_guarded_test(ctx, isvalid, nullptr, [&] {
-                        emit_unbox_store(ctx, update_julia_type(ctx, val, phiType), dest, ctx.tbaa().tbaa_stack, julia_alignment(phiType));
+                        emit_unbox_store(ctx, update_julia_type(ctx, val, phiType), dest, ctx.tbaa().tbaa_stack, Align(julia_alignment(phiType)));
                         return nullptr;
                     });
                 }
@@ -9538,7 +9544,7 @@ static jl_llvm_functions_t
                         if (VN)
                             V = Constant::getNullValue(ctx.types().T_prjlvalue);
                         if (dest)
-                            emit_unbox_store(ctx, val, dest, ctx.tbaa().tbaa_stack, julia_alignment(val.typ));
+                            emit_unbox_store(ctx, val, dest, ctx.tbaa().tbaa_stack, Align(julia_alignment(val.typ)));
                         RTindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex);
                     }
                 }
