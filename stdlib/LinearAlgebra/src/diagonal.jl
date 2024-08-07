@@ -745,7 +745,7 @@ adjoint(D::Diagonal{<:Number}) = Diagonal(vec(adjoint(D.diag)))
 adjoint(D::Diagonal{<:Number,<:Base.ReshapedArray{<:Number,1,<:Adjoint}}) = Diagonal(adjoint(parent(D.diag)))
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
-permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
+permutedims(D::Diagonal, perm) = (Base.checkdims_perm(axes(D), axes(D), perm); D)
 
 function diag(D::Diagonal{T}, k::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
