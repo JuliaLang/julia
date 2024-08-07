@@ -403,6 +403,10 @@ endif
 	# Install appdata file
 	mkdir -p $(DESTDIR)$(datarootdir)/metainfo/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/metainfo/
+	# Install terminal info database
+ifneq ($(WITH_TERMINFO),0)
+	cp -R -L $(build_datarootdir)/terminfo $(DESTDIR)$(datarootdir)
+endif
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
