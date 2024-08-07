@@ -514,29 +514,29 @@ function rpad(
 end
 
 """
-    rtrunc(str::AbstractString, maxwidth::Integer, replace_str::AbstractString = "…")
+    rtruncate(str::AbstractString, maxwidth::Integer, replace_str::AbstractString = "…")
 
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the last characters
 with `replacement` if necessary. The default replacement string is "…".
 
 # Examples
 ```jldoctest
-julia> s = rtrunc("🍕🍕 I love 🍕", 10)
+julia> s = rtruncate("🍕🍕 I love 🍕", 10)
 "🍕🍕 I lo…"
 
 julia> textwidth(s)
 10
 
-julia> rtrunc("foo", 3)
+julia> rtruncate("foo", 3)
 "foo"
 ```
 
 !!! compat "Julia 1.12"
     This function was added in Julia 1.12.
 
-See also [`ltrunc`](@ref) and [`ctrunc`](@ref).
+See also [`ltruncate`](@ref) and [`ctruncate`](@ref).
 """
-function rtrunc(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+function rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
     ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:right))
     if isnothing(ret)
         return string(str)
@@ -547,29 +547,29 @@ function rtrunc(str::AbstractString, maxwidth::Integer, replacement::Union{Abstr
 end
 
 """
-    ltrunc(str::AbstractString, maxwidth::Integer, replace_str::AbstractString = "…")
+    ltruncate(str::AbstractString, maxwidth::Integer, replace_str::AbstractString = "…")
 
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the first characters
 with `replacement` if necessary. The default replacement string is "…".
 
 # Examples
 ```jldoctest
-julia> s = ltrunc("🍕🍕 I love 🍕", 10)
+julia> s = ltruncate("🍕🍕 I love 🍕", 10)
 "…I love 🍕"
 
 julia> textwidth(s)
 10
 
-julia> ltrunc("foo", 3)
+julia> ltruncate("foo", 3)
 "foo"
 ```
 
 !!! compat "Julia 1.12"
     This function was added in Julia 1.12.
 
-See also [`rtrunc`](@ref) and [`ctrunc`](@ref).
+See also [`rtruncate`](@ref) and [`ctruncate`](@ref).
 """
-function ltrunc(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+function ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
     ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:left))
     if isnothing(ret)
         return string(str)
@@ -580,7 +580,7 @@ function ltrunc(str::AbstractString, maxwidth::Integer, replacement::Union{Abstr
 end
 
 """
-    ctrunc(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
+    ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
 
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the middle characters
 with `replacement` if necessary. The default replacement string is "…". By default, the truncation
@@ -588,22 +588,22 @@ prefers keeping chars on the left, but this can be changed by setting `prefer_le
 
 # Examples
 ```jldoctest
-julia> s = ctrunc("🍕🍕 I love 🍕", 10)
+julia> s = ctruncate("🍕🍕 I love 🍕", 10)
 "🍕🍕 …e 🍕"
 
 julia> textwidth(s)
 10
 
-julia> ctrunc("foo", 3)
+julia> ctruncate("foo", 3)
 "foo"
 ```
 
 !!! compat "Julia 1.12"
     This function was added in Julia 1.12.
 
-See also [`ltrunc`](@ref) and [`rtrunc`](@ref).
+See also [`ltruncate`](@ref) and [`rtruncate`](@ref).
 """
-function ctrunc(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
+function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
     ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:center), prefer_left)
     if isnothing(ret)
         return string(str)
