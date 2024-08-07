@@ -1217,7 +1217,7 @@ end
 end
 
 @testset "issue #55266" begin
-    for T in (ComplexF32, ComplexF64)
-        @test isapprox(atanh(1+nextfloat(zero(T))), T(atanh(1+big(nextfloat(zero(T))))))
+    for T in (Float32, Float64)
+        @test isapprox(atanh(1+im*floatmin(T)), T(atanh(1+im*big(floatmin(T)))))
     end
 end
