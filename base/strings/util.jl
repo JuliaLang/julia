@@ -514,7 +514,7 @@ function rpad(
 end
 
 """
-    rtruncate(str::AbstractString, maxwidth::Integer, replace_str::AbstractString = "…")
+    rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
 
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the last characters
 with `replacement` if necessary. The default replacement string is "…".
@@ -547,7 +547,7 @@ function rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{Ab
 end
 
 """
-    ltruncate(str::AbstractString, maxwidth::Integer, replace_str::AbstractString = "…")
+    ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
 
 Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the first characters
 with `replacement` if necessary. The default replacement string is "…".
