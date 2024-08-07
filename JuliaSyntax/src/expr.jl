@@ -231,10 +231,10 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
     if k == K"?"
         headsym = :if
     elseif k == K"macrocall"
-        if length(args) == 2 
+        if length(args) >= 2
             a2 = args[2]
             if @isexpr(a2, :macrocall) && kind(childheads[1]) == K"CmdMacroName"
-                # Fix up for custom cmd macros like `` foo`x` ``
+                # Fix up for custom cmd macros like foo`x`
                 args[2] = a2.args[3]
             end
         end

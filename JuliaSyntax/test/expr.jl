@@ -673,6 +673,8 @@
         # Custom cmd macros
         @test parsestmt("foo`str`") ==
             Expr(:macrocall, Symbol("@foo_cmd"), LineNumberNode(1), "str")
+        @test parsestmt("foo`str`flag") ==
+            Expr(:macrocall, Symbol("@foo_cmd"), LineNumberNode(1), "str", "flag")
         @test parsestmt("foo```\n  a\n  b```") ==
             Expr(:macrocall, Symbol("@foo_cmd"), LineNumberNode(1), "a\nb")
         # Expr conversion distinguishes from explicit calls to a macro of the same name
