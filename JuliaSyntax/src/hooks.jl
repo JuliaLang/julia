@@ -10,7 +10,7 @@ function _first_error(t::SyntaxNode)
     if is_error(t)
         return 0,t
     end
-    if haschildren(t)
+    if !is_leaf(t)
         for (i,c) in enumerate(children(t))
             if is_error(c)
                 return i,c

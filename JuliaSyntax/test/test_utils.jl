@@ -28,7 +28,7 @@ using .JuliaSyntax:
     SyntaxHead,
     is_trivia,
     sourcetext,
-    haschildren,
+    is_leaf,
     children,
     child,
     fl_parseall,
@@ -276,14 +276,14 @@ function _reduce_tree(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum
     if equals_flisp_parse(exprs_equal, tree)
         return false
     end
-    if !haschildren(tree)
+    if is_leaf(tree)
         push!(failing_subtrees, tree)
         return true
     end
     had_failing_subtrees = false
-    if haschildren(tree)
+    if !is_leaf(tree)
         for child in children(tree)
-            if is_trivia(child) || !haschildren(child)
+            if is_trivia(child) || is_leaf(child)
                 continue
             end
             had_failing_subtrees |= _reduce_tree(failing_subtrees, child; exprs_equal=exprs_equal)

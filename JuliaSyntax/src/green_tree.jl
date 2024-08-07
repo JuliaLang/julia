@@ -23,16 +23,16 @@ As implementation choices, we choose that:
 struct GreenNode{Head}
     head::Head
     span::UInt32
-    args::Union{Tuple{},Vector{GreenNode{Head}}}
+    args::Union{Nothing,Vector{GreenNode{Head}}}
 end
 
-function GreenNode(head::Head, span::Integer, args) where {Head}
+function GreenNode(head::Head, span::Integer, args=nothing) where {Head}
     GreenNode{Head}(head, span, args)
 end
 
 # Accessors / predicates
-haschildren(node::GreenNode) = !(node.args isa Tuple{})
-children(node::GreenNode)    = node.args
+is_leaf(node::GreenNode)     = isnothing(node.args)
+children(node::GreenNode)    = isnothing(node.args) ? () : node.args
 span(node::GreenNode)        = node.span
 head(node::GreenNode)        = node.head
 
@@ -49,19 +49,19 @@ function _show_green_node(io, node, indent, pos, str, show_trivia)
         return
     end
     posstr = "$(lpad(pos, 6)):$(rpad(pos+span(node)-1, 6)) │"
-    is_leaf = !haschildren(node)
-    if is_leaf
+    leaf = is_leaf(node)
+    if leaf
         line = string(posstr, indent, summary(node))
     else
         line = string(posstr, indent, '[', summary(node), ']')
     end
-    if !is_trivia(node) && is_leaf
+    if !is_trivia(node) && leaf
         line = rpad(line, 40) * "✔"
     end
     if is_error(node)
         line = rpad(line, 41) * "✘"
     end
-    if is_leaf && !isnothing(str)
+    if leaf && !isnothing(str)
         line = string(rpad(line, 43), ' ', repr(str[pos:prevind(str, pos + span(node))]))
     end
     line = line*"\n"
@@ -70,7 +70,7 @@ function _show_green_node(io, node, indent, pos, str, show_trivia)
     else
         print(io, line)
     end
-    if !is_leaf
+    if !leaf
         new_indent = indent*"  "
         p = pos
         for x in children(node)
@@ -91,7 +91,7 @@ end
 function build_tree(::Type{GreenNode}, stream::ParseStream; kws...)
     build_tree(GreenNode{SyntaxHead}, stream; kws...) do h, srcrange, cs
         span = length(srcrange)
-        isnothing(cs) ? GreenNode(h, span, ()) :
+        isnothing(cs) ? GreenNode(h, span) :
                         GreenNode(h, span, collect(GreenNode{SyntaxHead}, cs))
     end
 end
