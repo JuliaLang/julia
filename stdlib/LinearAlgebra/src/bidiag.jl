@@ -300,8 +300,8 @@ function Base.copy(tB::Transpose{<:Any,<:Bidiagonal})
 end
 
 @noinline function throw_zeroband_error(A)
-    zeroband = istriu(A) ? "lower" : "upper"
     uplo = A.uplo
+    zeroband = uplo == 'U' ? "lower" : "upper"
     throw(ArgumentError(LazyString("cannot set the ",
         zeroband, " bidiagonal band to a nonzero value for uplo=:", uplo)))
 end
