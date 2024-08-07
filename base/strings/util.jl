@@ -632,14 +632,30 @@ function string_truncate_boundaries(
 
     l0, _ = left, right = firstindex(str), lastindex(str)
     width = textwidth(replacement)
+    # used to balance the truncated width on either side
+    rm_width_left, rm_width_right, force_other = 0, 0, false
     @inbounds while true
         if mode === :left || (mode === :center && (!prefer_left || left > l0))
-            (width += textwidth(str[right])) <= maxwidth || break
-            right = prevind(str, right)
+            rm_width = textwidth(str[right])
+            if mode === :left || (rm_width_right <= rm_width_left || force_other)
+                force_other = false
+                (width += rm_width) <= maxwidth || break
+                rm_width_right += rm_width
+                right = prevind(str, right)
+            else
+                force_other = true
+            end
         end
         if mode ∈ (:right, :center)
-            (width += textwidth(str[left])) <= maxwidth || break
-            left = nextind(str, left)
+            rm_width = textwidth(str[left])
+            if mode === :left || (rm_width_left <= rm_width_right || force_other)
+                force_other = false
+                (width += textwidth(str[left])) <= maxwidth || break
+                rm_width_left += rm_width
+                left = nextind(str, left)
+            else
+                force_other = true
+            end
         end
     end
     return prevind(str, left), nextind(str, right)

@@ -105,6 +105,7 @@ end
     @test ctruncate("🍕🍕 I love 🍕", 10) == "🍕🍕 …e 🍕"
     @test ctruncate("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕[…] 🍕"
     @test ctruncate("abc", 2, "xxxxxx") == "xxxxxx"
+    @test ctruncate("🍕🍕🍕🍕🍕🍕xxxxxxxxxxx", 9) == "🍕🍕…xxxx"
 
     @inferred ctruncate("xxxxx", 5)
     @inferred ctruncate("xxxxx", 3)
