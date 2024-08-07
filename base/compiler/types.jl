@@ -57,8 +57,6 @@ struct VarState
     VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
 end
 
-abstract type ForwardableArgtypes end
-
 struct AnalysisResults
     result
     next::AnalysisResults
@@ -70,16 +68,19 @@ end
 const NULL_ANALYSIS_RESULTS = AnalysisResults(nothing)
 
 """
-    InferenceResult(linfo::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
+    result::InferenceResult
 
 A type that represents the result of running type inference on a chunk of code.
-
-See also [`matching_cache_argtypes`](@ref).
+There are two constructor available:
+- `InferenceResult(mi::MethodInstance, [𝕃::AbstractLattice])` for regular inference,
+  without extended lattice information included in `result.argtypes`.
+- `InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::BitVector)`
+  for constant inference, with extended lattice information included in `result.argtypes`.
 """
 mutable struct InferenceResult
     const linfo::MethodInstance
     const argtypes::Vector{Any}
-    const overridden_by_const::BitVector
+    const overridden_by_const::Union{Nothing,BitVector}
     result                   # extended lattice element if inferred, nothing otherwise
     exc_result               # like `result`, but for the thrown value
     src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
@@ -88,19 +89,16 @@ mutable struct InferenceResult
     effects::Effects         # if optimization is finished
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
-    ci::CodeInstance         # CodeInstance if this result has been added to the cache
-    function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
-        # def = linfo.def
-        # nargs = def isa Method ? Int(def.nargs) : 0
-        # @assert length(cache_argtypes) == nargs
-        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing, nothing,
+    ci::CodeInstance         # CodeInstance if this result may be added to the cache
+    function InferenceResult(mi::MethodInstance, argtypes::Vector{Any}, overridden_by_const::Union{Nothing,BitVector})
+        return new(mi, argtypes, overridden_by_const, nothing, nothing, nothing,
             WorldRange(), Effects(), Effects(), NULL_ANALYSIS_RESULTS, false)
     end
 end
-InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
-InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
-    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
+function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
+    argtypes = matching_cache_argtypes(𝕃, mi)
+    return InferenceResult(mi, argtypes, #=overridden_by_const=#nothing)
+end
 
 function stack_analysis_result!(inf_result::InferenceResult, @nospecialize(result))
     return inf_result.analysis_results = AnalysisResults(result, inf_result.analysis_results)
@@ -208,14 +206,14 @@ struct InferenceParams
 end
 function InferenceParams(
     params::InferenceParams = InferenceParams( # default constructor
-        #=max_methods::Int=# 3,
+        #=max_methods::Int=# BuildSettings.MAX_METHODS,
         #=max_union_splitting::Int=# 4,
         #=max_apply_union_enum::Int=# 8,
         #=max_tuple_splat::Int=# 32,
         #=tuple_complexity_limit_depth::Int=# 3,
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
-        #=unoptimize_throw_blocks::Bool=# true,
+        #=unoptimize_throw_blocks::Bool=# BuildSettings.UNOPTIMIZE_THROW_BLOCKS,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false);
     max_methods::Int = params.max_methods,
@@ -404,36 +402,15 @@ get_inference_world(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
 cache_owner(interp::NativeInterpreter) = nothing
 
-"""
-    already_inferred_quick_test(::AbstractInterpreter, ::MethodInstance)
+engine_reserve(interp::AbstractInterpreter, mi::MethodInstance) = engine_reserve(mi, cache_owner(interp))
+engine_reserve(mi::MethodInstance, @nospecialize owner) = ccall(:jl_engine_reserve, Any, (Any, Any), mi, owner)::CodeInstance
+# engine_fulfill(::AbstractInterpreter, ci::CodeInstance, src::CodeInfo) = ccall(:jl_engine_fulfill, Cvoid, (Any, Any), ci, src) # currently the same as engine_reject, so just use that one
+engine_reject(::AbstractInterpreter, ci::CodeInstance) = ccall(:jl_engine_fulfill, Cvoid, (Any, Ptr{Cvoid}), ci, C_NULL)
 
-For the `NativeInterpreter`, we don't need to do an actual cache query to know if something
-was already inferred. If we reach this point, but the inference flag has been turned off,
-then it's in the cache. This is purely for a performance optimization.
-"""
-already_inferred_quick_test(interp::NativeInterpreter, mi::MethodInstance) = !mi.inInference
-already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) = false
 
-"""
-    lock_mi_inference(::AbstractInterpreter, mi::MethodInstance)
-
-Hint that `mi` is in inference to help accelerate bootstrapping.
-This is particularly used by `NativeInterpreter` and helps us limit the amount of wasted
-work we might do when inference is working on initially inferring itself by letting us
-detect when inference is already in progress and not running a second copy on it.
-This creates a data-race, but the entry point into this code from C (`jl_type_infer`)
-already includes detection and restriction on recursion, so it is hopefully mostly a
-benign problem, since it should really only happen during the first phase of bootstrapping
-that we encounter this flag.
-"""
-lock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
-lock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
-
-"""
-See `lock_mi_inference`.
-"""
-unlock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)
-unlock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
+function already_inferred_quick_test end
+function lock_mi_inference end
+function unlock_mi_inference end
 
 """
     add_remark!(::AbstractInterpreter, sv::InferenceState, remark)

@@ -24,10 +24,12 @@
 #endif
 
 // Figure out the best signals/timers to use for this platform
-#ifdef __APPLE__ // Darwin's mach ports allow signal-free thread management
+#if defined(__APPLE__) // Darwin's mach ports allow signal-free thread management
 #define HAVE_MACH
 #define HAVE_KEVENT
-#else // generic Linux or BSD
+#elif defined(__OpenBSD__)
+#define HAVE_KEVENT
+#else // generic Linux or FreeBSD
 #define HAVE_TIMER
 #endif
 
@@ -83,6 +85,12 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.mc_rsp;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return ctx->uc_mcontext.mc_gpregs.gp_sp;
+#elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
+    const struct sigcontext *ctx = (const struct sigcontext *)_ctx;
+    return ctx->sc_rsp;
 #else
     // TODO Add support for PowerPC(64)?
     return 0;
@@ -145,11 +153,21 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     rsp -= sizeof(void*);
     ctx->uc_mcontext.mc_esp = rsp;
     ctx->uc_mcontext.mc_eip = (uintptr_t)fptr;
+#elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
+    struct sigcontext *ctx = (struct sigcontext *)_ctx;
+    rsp -= sizeof(void*);
+    ctx->sc_rsp = rsp;
+    ctx->sc_rip = fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     ctx->uc_mcontext.sp = rsp;
     ctx->uc_mcontext.regs[29] = 0; // Clear link register (x29)
     ctx->uc_mcontext.pc = (uintptr_t)fptr;
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    ctx->uc_mcontext.mc_gpregs.gp_sp = rsp;
+    ctx->uc_mcontext.mc_gpregs.gp_x[29] = 0; // Clear link register (x29)
+    ctx->uc_mcontext.mc_gpregs.gp_elr = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     uintptr_t target = (uintptr_t)fptr;
@@ -237,8 +255,12 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
         info->si_code == SI_KERNEL ||
 #endif
         info->si_code == SI_QUEUE ||
+#ifdef SI_MESGQ
         info->si_code == SI_MESGQ ||
+#endif
+#ifdef SI_ASYNCIO
         info->si_code == SI_ASYNCIO ||
+#endif
 #ifdef SI_SIGIO
         info->si_code == SI_SIGIO ||
 #endif
@@ -336,6 +358,18 @@ int is_write_fault(void *context) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
 }
+#elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
+// FreeBSD seems not to expose a means of accessing ESR via `ucontext_t` on AArch64.
+// TODO: Is there an alternative approach that can be taken? ESR may become accessible
+// in a future release though.
+int is_write_fault(void *context) {
+    return 0;
+}
+#elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
+int is_write_fault(void *context) {
+    struct sigcontext *ctx = (struct sigcontext *)context;
+    return exc_reg_is_write_fault(ctx->sc_err);
+}
 #else
 #pragma message("Implement this query for consistent PROT_NONE handling")
 int is_write_fault(void *context) {
@@ -385,6 +419,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
     if (ct->eh == NULL)
         sigdie_handler(sig, info, context);
     if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+        stack_overflow_warning();
         jl_throw_in_ctx(ct, jl_stackovf_exception, sig, context);
     }
     else if (jl_is_on_sigstack(ct->ptls, info->si_addr, context)) {
@@ -615,6 +650,17 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     }
 }
 
+#elif defined(__OpenBSD__)
+
+JL_DLLEXPORT int jl_profile_start_timer(void)
+{
+    return -1;
+}
+
+JL_DLLEXPORT void jl_profile_stop_timer(void)
+{
+}
+
 #else
 
 #error no profile tools available
@@ -653,6 +699,9 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     ss.ss_flags = 0;
     ss.ss_size = ssize;
     assert(ssize != 0);
+
+#ifndef _OS_OPENBSD_
+    /* fallback to malloc(), but it isn't possible on OpenBSD */
     if (signal_stack == NULL) {
         signal_stack = malloc(ssize);
         ssize = 0;
@@ -661,6 +710,8 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
         else
             jl_safe_printf("\nwarning: julia signal stack allocated without guard page (launch foreign threads earlier to avoid this warning).\n");
     }
+#endif
+
     if (signal_stack != NULL) {
         ss.ss_sp = signal_stack;
         if (sigaltstack(&ss, NULL) < 0)
@@ -914,16 +965,16 @@ static void *signal_listener(void *arg)
 
                         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[i];
 
-                        // store threadid but add 1 as 0 is preserved to indicate end of block
+                        // META_OFFSET_THREADID store threadid but add 1 as 0 is preserved to indicate end of block
                         bt_data_prof[bt_size_cur++].uintptr = ptls2->tid + 1;
 
-                        // store task id (never null)
+                        // META_OFFSET_TASKID store task id (never null)
                         bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
 
-                        // store cpu cycle clock
+                        // META_OFFSET_CPUCYCLECLOCK store cpu cycle clock
                         bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
-                        // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                        // META_OFFSET_SLEEPSTATE store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
                         bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls2->sleep_check_state) + 1;
 
                         // Mark the end of this block with two 0's
@@ -960,12 +1011,12 @@ static void *signal_listener(void *arg)
         else if (critical) {
             // critical in this case actually means SIGINFO request
 #ifndef SIGINFO // SIGINFO already prints something similar automatically
-            int nrunning = 0;
+            int n_threads_running = 0;
             for (int idx = nthreads; idx-- > 0; ) {
                 jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[idx];
-                nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
+                n_threads_running += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
             }
-            jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, nthreads);
+            jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), n_threads_running, nthreads);
 #endif
 
             jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));

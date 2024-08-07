@@ -576,8 +576,8 @@ end
 @testset "type of sum(::Array{$T}" for T in [UInt8, Int8, Int32, Int64, BigInt]
     result = sum(T[1 2 3; 4 5 6; 7 8 9], dims=2)
     @test result == hcat([6, 15, 24])
-    @test eltype(result) === (T <: Base.SmallSigned ? Int :
-                              T <: Base.SmallUnsigned ? UInt :
+    @test eltype(result) === (T <: Base.BitSignedSmall ? Int :
+                              T <: Base.BitUnsignedSmall ? UInt :
                               T)
 end
 
@@ -585,6 +585,30 @@ end
     B = reshape(3^3:-1:1, (3, 3, 3))
     @test B[argmax(B, dims=[2, 3])] == @inferred(maximum(B, dims=[2, 3]))
     @test B[argmin(B, dims=[2, 3])] == @inferred(minimum(B, dims=[2, 3]))
+end
+
+@testset "careful with @inbounds" begin
+    Base.@propagate_inbounds f(x) = x == 2 ? x[-10000] : x
+    Base.@propagate_inbounds op(x,y) = x[-10000] + y[-10000]
+    for (arr, dims) in (([1,1,2], 1), ([1 1 2], 2), ([ones(Int,256);2], 1))
+        @test_throws BoundsError mapreduce(f, +, arr)
+        @test_throws BoundsError mapreduce(f, +, arr; dims)
+        @test_throws BoundsError mapreduce(f, +, arr; dims, init=0)
+        @test_throws BoundsError mapreduce(identity, op, arr)
+        try
+            #=@test_throws BoundsError=# mapreduce(identity, op, arr; dims)
+        catch ex
+            @test_broken ex isa BoundsError
+        end
+        @test_throws BoundsError mapreduce(identity, op, arr; dims, init=0)
+
+        @test_throws BoundsError findmin(f, arr)
+        @test_throws BoundsError findmin(f, arr; dims)
+
+        @test_throws BoundsError mapreduce(f, max, arr)
+        @test_throws BoundsError mapreduce(f, max, arr; dims)
+        @test_throws BoundsError mapreduce(f, max, arr; dims, init=0)
+    end
 end
 
 @testset "in-place reductions with mismatched dimensionalities" begin

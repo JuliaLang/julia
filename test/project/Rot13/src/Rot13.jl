@@ -7,8 +7,8 @@ end
 
 rot13(str::AbstractString) = map(rot13, str)
 
-function (@main)(ARGS)
-    foreach(arg -> print(rot13(arg), " "), ARGS)
+function (@main)(args)
+    foreach(arg -> print(rot13(arg), " "), args)
     return 0
 end
 

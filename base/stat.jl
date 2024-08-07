@@ -66,7 +66,7 @@ struct StatStruct
 end
 
 @eval function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
-  $(let ex = true
+    $(let ex = true
         for fld in fieldnames(StatStruct)[2:end]
             ex = :(getfield(x, $(QuoteNode(fld))) === getfield(y, $(QuoteNode(fld))) && $ex)
         end
@@ -74,7 +74,7 @@ end
     end)
 end
 @eval function Base.hash(obj::StatStruct, h::UInt)
-  $(quote
+    $(quote
         $(Any[:(h = hash(getfield(obj, $(QuoteNode(fld))), h)) for fld in fieldnames(StatStruct)[2:end]]...)
         return h
     end)
@@ -184,12 +184,17 @@ macro stat_call(sym, arg1type, arg)
 end
 
 stat(fd::OS_HANDLE)         = @stat_call jl_fstat OS_HANDLE fd
-stat(path::AbstractString)  = @stat_call jl_stat  Cstring path
-lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
+function stat(path::AbstractString)
+    # @info "stat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
+    @stat_call jl_stat  Cstring path
+end
+function lstat(path::AbstractString)
+    # @info "lstat($(repr(path)))" exception=(ErrorException("Fake error for backtrace printing"),stacktrace())
+    @stat_call jl_lstat Cstring path
+end
 if RawFD !== OS_HANDLE
     global stat(fd::RawFD)  = stat(Libc._get_osfhandle(fd))
 end
-stat(fd::Integer)           = stat(RawFD(fd))
 
 """
     stat(file)

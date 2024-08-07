@@ -15,9 +15,11 @@ Diagonal(A::Bidiagonal) = Diagonal(A.dv)
 SymTridiagonal(A::Bidiagonal) =
     iszero(A.ev) ? SymTridiagonal(A.dv, A.ev) :
         throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
-Tridiagonal(A::Bidiagonal) =
-    Tridiagonal(A.uplo == 'U' ? fill!(similar(A.ev), 0) : A.ev, A.dv,
-                A.uplo == 'U' ? A.ev : fill!(similar(A.ev), 0))
+function Tridiagonal(A::Bidiagonal)
+    # ensure that the types are identical, even if zero returns a different type
+    z = oftype(A.ev, zero(A.ev))
+    Tridiagonal(A.uplo == 'U' ? z : A.ev, A.dv, A.uplo == 'U' ? A.ev : z)
+end
 
 # conversions from SymTridiagonal to other special matrix types
 Diagonal(A::SymTridiagonal) = Diagonal(A.dv)
@@ -109,9 +111,9 @@ end
 
 # disambiguation between triangular and banded matrices, banded ones "dominate"
 _mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
-    _mul!(C, A, B, MulAddMul(alpha, beta))
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 _mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
-    _mul!(C, A, B, MulAddMul(alpha, beta))
+    @stable_muladdmul _mul!(C, A, B, MulAddMul(alpha, beta))
 
 function *(H::UpperHessenberg, B::Bidiagonal)
     T = promote_op(matprod, eltype(H), eltype(B))
@@ -287,7 +289,7 @@ _small_enough(A::SymTridiagonal) = size(A, 1) <= 2
 function fill!(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, x)
     xT = convert(eltype(A), x)
     (iszero(xT) || _small_enough(A)) && return fillstored!(A, xT)
-    throw(ArgumentError("array of type $(typeof(A)) and size $(size(A)) can
+    throw(ArgumentError(lazy"array of type $(typeof(A)) and size $(size(A)) can
     not be filled with $x, since some of its entries are constrained."))
 end
 
@@ -306,6 +308,92 @@ oneunit(D::Diagonal) = Diagonal(oneunit.(D.diag))
 isdiag(A::HermOrSym{<:Any,<:Diagonal}) = isdiag(parent(A))
 dot(x::AbstractVector, A::RealHermSymComplexSym{<:Real,<:Diagonal}, y::AbstractVector) =
     dot(x, A.data, y)
+
+# O(N) implementations using the banded structure
+function copyto!(dest::BandedMatrix, src::BandedMatrix)
+    if axes(dest) == axes(src)
+        _copyto_banded!(dest, src)
+    else
+        @invoke copyto!(dest::AbstractMatrix, src::AbstractMatrix)
+    end
+    return dest
+end
+function _copyto_banded!(T::Tridiagonal, D::Diagonal)
+    T.d .= D.diag
+    T.dl .= view(D, diagind(D, -1, IndexStyle(D)))
+    T.du .= view(D, diagind(D,  1, IndexStyle(D)))
+    return T
+end
+function _copyto_banded!(SymT::SymTridiagonal, D::Diagonal)
+    issymmetric(D) || throw(ArgumentError("cannot copy a non-symmetric Diagonal matrix to a SymTridiagonal"))
+    SymT.dv .= D.diag
+    _ev = _evview(SymT)
+    _ev .= view(D, diagind(D,  1, IndexStyle(D)))
+    return SymT
+end
+function _copyto_banded!(B::Bidiagonal, D::Diagonal)
+    B.dv .= D.diag
+    B.ev .= view(D, diagind(D,  B.uplo == 'U' ? 1 : -1, IndexStyle(D)))
+    return B
+end
+function _copyto_banded!(D::Diagonal, B::Bidiagonal)
+    isdiag(B) ||
+        throw(ArgumentError("cannot copy a Bidiagonal with a non-zero off-diagonal band to a Diagonal"))
+    D.diag .= B.dv
+    return D
+end
+function _copyto_banded!(D::Diagonal, T::Tridiagonal)
+    isdiag(T) ||
+        throw(ArgumentError("cannot copy a Tridiagonal with a non-zero off-diagonal band to a Diagonal"))
+    D.diag .= T.d
+    return D
+end
+function _copyto_banded!(D::Diagonal, SymT::SymTridiagonal)
+    isdiag(SymT) ||
+        throw(ArgumentError("cannot copy a SymTridiagonal with a non-zero off-diagonal band to a Diagonal"))
+    # we broadcast identity for numbers using the fact that symmetric(x::Number) = x
+    # this potentially allows us to access faster copyto! paths
+    _symmetric = eltype(SymT) <: Number ? identity : symmetric
+    D.diag .= _symmetric.(SymT.dv)
+    return D
+end
+function _copyto_banded!(T::Tridiagonal, B::Bidiagonal)
+    T.d .= B.dv
+    if B.uplo == 'U'
+        T.du .= B.ev
+        T.dl .= view(B, diagind(B, -1, IndexStyle(B)))
+    else
+        T.dl .= B.ev
+        T.du .= view(B, diagind(B,  1, IndexStyle(B)))
+    end
+    return T
+end
+function _copyto_banded!(SymT::SymTridiagonal, B::Bidiagonal)
+    issymmetric(B) || throw(ArgumentError("cannot copy a non-symmetric Bidiagonal matrix to a SymTridiagonal"))
+    SymT.dv .= B.dv
+    _ev = _evview(SymT)
+    _ev .= B.ev
+    return SymT
+end
+function _copyto_banded!(B::Bidiagonal, T::Tridiagonal)
+    if B.uplo == 'U' && !iszero(T.dl)
+        throw(ArgumentError("cannot copy a Tridiagonal with a non-zero subdiagonal to a Bidiagonal with uplo=:U"))
+    elseif B.uplo == 'L' && !iszero(T.du)
+        throw(ArgumentError("cannot copy a Tridiagonal with a non-zero superdiagonal to a Bidiagonal with uplo=:L"))
+    end
+    B.dv .= T.d
+    B.ev .= B.uplo == 'U' ? T.du : T.dl
+    return B
+end
+function _copyto_banded!(B::Bidiagonal, SymT::SymTridiagonal)
+    isdiag(SymT) ||
+        throw(ArgumentError("cannot copy a SymTridiagonal with a non-zero off-diagonal band to a Bidiagonal"))
+    # we broadcast identity for numbers using the fact that symmetric(x::Number) = x
+    # this potentially allows us to access faster copyto! paths
+    _symmetric = eltype(SymT) <: Number ? identity : symmetric
+    B.dv .= _symmetric.(SymT.dv)
+    return B
+end
 
 # equals and approx equals methods for structured matrices
 # SymTridiagonal == Tridiagonal is already defined in tridiag.jl
@@ -446,7 +534,7 @@ end
 
 # factorizations
 function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot = NoPivot(); check::Bool = true)
-    T = choltype(eltype(S))
+    T = choltype(S)
     B = Bidiagonal{T}(diag(S, 0), diag(S, S.uplo == 'U' ? 1 : -1), sym_uplo(S.uplo))
     cholesky!(Hermitian(B, sym_uplo(S.uplo)), NoPivot(); check = check)
 end

@@ -23,6 +23,9 @@ Base.first(::SOneTo) = 1
 Base.last(r::SOneTo) = length(r)
 Base.show(io::IO, r::SOneTo) = print(io, "SOneTo(", length(r), ")")
 
+Broadcast.axistype(a::Base.OneTo, s::SOneTo) = s
+Broadcast.axistype(s::SOneTo, a::Base.OneTo) = s
+
 struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
     function SizedArray{SZ}(data::AbstractArray{T,N}) where {SZ,T,N}
@@ -43,9 +46,24 @@ Base.size(a::SizedArray) = size(typeof(a))
 Base.size(::Type{<:SizedArray{SZ}}) where {SZ} = SZ
 Base.axes(a::SizedArray) = map(SOneTo, size(a))
 Base.getindex(A::SizedArray, i...) = getindex(A.data, i...)
+Base.setindex!(A::SizedArray, v, i...) = setindex!(A.data, v, i...)
 Base.zero(::Type{T}) where T <: SizedArray = SizedArray{size(T)}(zeros(eltype(T), size(T)))
+Base.parent(S::SizedArray) = S.data
 +(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = SizedArray{SZ}(S1.data + S2.data)
 ==(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = S1.data == S2.data
+
+homogenize_shape(t::Tuple) = (_homogenize_shape(first(t)), homogenize_shape(Base.tail(t))...)
+homogenize_shape(::Tuple{}) = ()
+_homogenize_shape(x::Integer) = x
+_homogenize_shape(x::AbstractUnitRange) = length(x)
+const Dims = Union{Integer, Base.OneTo, SOneTo}
+function Base.similar(::Type{A}, shape::Tuple{Dims, Vararg{Dims}}) where {A<:AbstractArray}
+    similar(A, homogenize_shape(shape))
+end
+function Base.similar(::Type{A}, shape::Tuple{SOneTo, Vararg{SOneTo}}) where {A<:AbstractArray}
+    R = similar(A, length.(shape))
+    SizedArray{length.(shape)}(R)
+end
 
 const SizedMatrixLike = Union{SizedMatrix, Transpose{<:Any, <:SizedMatrix}, Adjoint{<:Any, <:SizedMatrix}}
 

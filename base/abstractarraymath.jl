@@ -93,6 +93,70 @@ function _dropdims(A::AbstractArray, dims::Dims)
 end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
+
+"""
+    insertdims(A; dims)
+
+Inverse of [`dropdims`](@ref); return an array with new singleton dimensions
+at every dimension in `dims`.
+
+Repeated dimensions are forbidden and the largest entry in `dims` must be
+less than or equal than `ndims(A) + length(dims)`.
+
+The result shares the same underlying data as `A`, such that the
+result is mutable if and only if `A` is mutable, and setting elements of one
+alters the values of the other.
+
+See also: [`dropdims`](@ref), [`reshape`](@ref), [`vec`](@ref).
+# Examples
+```jldoctest
+julia> x = [1 2 3; 4 5 6]
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+
+julia> insertdims(x, dims=3)
+2×3×1 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2  3
+ 4  5  6
+
+julia> insertdims(x, dims=(1,2,5)) == reshape(x, 1, 1, 2, 3, 1)
+true
+
+julia> dropdims(insertdims(x, dims=(1,2,5)), dims=(1,2,5))
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+```
+
+!!! compat "Julia 1.12"
+    Requires Julia 1.12 or later.
+"""
+insertdims(A; dims) = _insertdims(A, dims)
+function _insertdims(A::AbstractArray{T, N}, dims::NTuple{M, Int}) where {T, N, M}
+    for i in eachindex(dims)
+        1 ≤ dims[i] || throw(ArgumentError("the smallest entry in dims must be ≥ 1."))
+        dims[i] ≤ N+M || throw(ArgumentError("the largest entry in dims must be not larger than the dimension of the array and the length of dims added"))
+        for j = 1:i-1
+            dims[j] == dims[i] && throw(ArgumentError("inserted dims must be unique"))
+        end
+    end
+
+    # acc is a tuple, where the first entry is the final shape
+    # the second entry off acc is a counter for the axes of A
+    inds= Base._foldoneto((acc, i) ->
+                            i ∈ dims
+                                ? ((acc[1]..., Base.OneTo(1)), acc[2])
+                                : ((acc[1]..., axes(A, acc[2])), acc[2] + 1),
+                            ((), 1), Val(N+M))
+    new_shape = inds[1]
+    return reshape(A, new_shape)
+end
+_insertdims(A::AbstractArray, dim::Integer) = _insertdims(A, (Int(dim),))
+
+
+
 ## Unary operators ##
 
 """

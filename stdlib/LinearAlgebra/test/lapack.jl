@@ -9,6 +9,7 @@ using LinearAlgebra: BlasInt
 @test_throws ArgumentError LinearAlgebra.LAPACK.chkside('Z')
 @test_throws ArgumentError LinearAlgebra.LAPACK.chkdiag('Z')
 @test_throws ArgumentError LinearAlgebra.LAPACK.chktrans('Z')
+@test_throws ArgumentError LinearAlgebra.LAPACK.chkvalidparam(1, "job", 2, (0,1))
 
 @testset "syevr" begin
     Random.seed!(123)
@@ -35,6 +36,12 @@ using LinearAlgebra: BlasInt
         @test vals_test ≈ vals
         @test Z_test*(Diagonal(vals)*Z_test') ≈ Asym
         @test_throws DimensionMismatch LAPACK.sygvd!(1, 'V', 'U', copy(Asym), zeros(elty, 6, 6))
+
+        @test_throws "jobz must be one of ('N', 'V'), but 'X' was passed" LAPACK.syevr!('X', Asym)
+        @test_throws "jobz must be one of ('N', 'V'), but 'X' was passed" LAPACK.syev!('X', 'U', Asym)
+        @test_throws "uplo argument must be 'U' (upper) or 'L' (lower), got 'M'" LAPACK.syev!('N', 'M', Asym)
+        @test_throws "jobz must be one of ('N', 'V'), but 'X' was passed" LAPACK.syevd!('X', 'U', Asym)
+        @test_throws "uplo argument must be 'U' (upper) or 'L' (lower), got 'M'" LAPACK.syevd!('N', 'M', Asym)
     end
 end
 
@@ -112,7 +119,9 @@ end
         D = LAPACK.gbtrs!('N',2,1,6,AB,ipiv,D)
         A = diagm(-2 => dl2, -1 => dl, 0 => d, 1 => du)
         @test A\C ≈ D
-        @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,Matrix{elty}(undef,7,6))
+        M = Matrix{elty}(undef,7,6)
+        @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,M)
+        @test_throws ArgumentError LAPACK.gbtrs!('M',2,1,6,AB,ipiv,M)
         @test_throws LinearAlgebra.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(elty,6,6))
     end
 end
@@ -141,9 +150,11 @@ end
         x10, x11 = Vector{LinearAlgebra.BlasInt}.(undef, (10, 11))
         @test_throws DimensionMismatch LAPACK.gels!('N',A10x10,B11x11)
         @test_throws DimensionMismatch LAPACK.gels!('T',A10x10,B11x11)
+        @test_throws ArgumentError LAPACK.gels!('X',A10x10,B11x11)
         @test_throws DimensionMismatch LAPACK.gesv!(A10x10,B11x11)
         @test_throws DimensionMismatch LAPACK.getrs!('N',A10x10,x10,B11x11)
         @test_throws DimensionMismatch LAPACK.getrs!('T',A10x10,x10,B11x11)
+        @test_throws ArgumentError LAPACK.getrs!('X',A10x10,x10,B11x11)
         @test_throws DimensionMismatch LAPACK.getri!(A10x10,x11)
     end
 end
@@ -177,12 +188,20 @@ end
         @test U ≈ lU
         @test S ≈ lS
         @test V' ≈ lVt
+        @test_throws ArgumentError LAPACK.gesvd!('X','S',A)
+        @test_throws ArgumentError LAPACK.gesvd!('S','X',A)
         B = rand(elty,10,10)
         # xggsvd3 replaced xggsvd in LAPACK 3.6.0
         if LAPACK.version() < v"3.6.0"
-            @test_throws DimensionMismatch LAPACK.ggsvd!('S','S','S',A,B)
+            @test_throws DimensionMismatch LAPACK.ggsvd!('N','N','N',A,B)
+            @test_throws ArgumentError LAPACK.ggsvd!('X','N','N',A,B)
+            @test_throws ArgumentError LAPACK.ggsvd!('N','X','N',A,B)
+            @test_throws ArgumentError LAPACK.ggsvd!('N','N','X',A,B)
         else
-            @test_throws DimensionMismatch LAPACK.ggsvd3!('S','S','S',A,B)
+            @test_throws DimensionMismatch LAPACK.ggsvd3!('N','N','N',A,B)
+            @test_throws ArgumentError LAPACK.ggsvd3!('X','N','N',A,B)
+            @test_throws ArgumentError LAPACK.ggsvd3!('N','X','N',A,B)
+            @test_throws ArgumentError LAPACK.ggsvd3!('N','N','X',A,B)
         end
     end
 end
@@ -224,6 +243,7 @@ end
         X = rand(elty,10)
         B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
         @test A\X ≈ Y
+        @test_throws ArgumentError LAPACK.gels!('X',A,X)
     end
 end
 
@@ -252,6 +272,9 @@ end
         fA = eigen(A, sortby=nothing)
         @test fA.values  ≈ Aw
         @test fA.vectors ≈ Avr
+
+        @test_throws ArgumentError LAPACK.geev!('X','V',A)
+        @test_throws ArgumentError LAPACK.geev!('N','X',A)
     end
 end
 
@@ -284,6 +307,7 @@ end
         @test_throws DimensionMismatch LAPACK.gttrs!('N', x11, d, du, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, x11, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, du, x9, y10, x11)
+        @test_throws ArgumentError LAPACK.gttrs!('X', dl, d, du, x9, y10, x11)
         A = lu(Tridiagonal(dl,d,du))
         b  = rand(elty,10,5)
         c = copy(b)
@@ -298,10 +322,17 @@ end
         A = rand(elty,10,10)
         A,tau = LAPACK.gelqf!(A)
         @test_throws DimensionMismatch LAPACK.orglq!(A,tau,11)
-        @test_throws DimensionMismatch LAPACK.ormlq!('R','N',A,tau,rand(elty,11,11))
-        @test_throws DimensionMismatch LAPACK.ormlq!('L','N',A,tau,rand(elty,11,11))
-        @test_throws DimensionMismatch LAPACK.ormlq!('R','N',A,zeros(elty,11),rand(elty,10,10))
-        @test_throws DimensionMismatch LAPACK.ormlq!('L','N',A,zeros(elty,11),rand(elty,10,10))
+        temp = rand(elty,11,11)
+        @test_throws DimensionMismatch LAPACK.ormlq!('R','N',A,tau,temp)
+        @test_throws DimensionMismatch LAPACK.ormlq!('L','N',A,tau,temp)
+        @test_throws ArgumentError LAPACK.ormlq!('X','N',A,tau,temp)
+        @test_throws ArgumentError LAPACK.ormlq!('R','X',A,tau,temp)
+        temp = zeros(elty,11)
+        B = copy(A)
+        @test_throws DimensionMismatch LAPACK.ormlq!('R','N',A,temp,B)
+        @test_throws DimensionMismatch LAPACK.ormlq!('L','N',A,temp,B)
+        @test_throws ArgumentError LAPACK.ormlq!('X','N',A,temp,B)
+        @test_throws ArgumentError LAPACK.ormlq!('L','X',A,temp,B)
 
         B = copy(A)
         C = LAPACK.orglq!(B,tau)
@@ -312,30 +343,51 @@ end
         @test_throws DimensionMismatch LAPACK.orgqr!(A,tau,11)
         B = copy(A)
         @test LAPACK.orgqr!(B,tau) ≈ LAPACK.ormqr!('R','N',A,tau,Matrix{elty}(I, 10, 10))
-        @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,tau,rand(elty,11,11))
-        @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,tau,rand(elty,11,11))
-        @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,zeros(elty,11),rand(elty,10,10))
-        @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,zeros(elty,11),rand(elty,10,10))
+        temp = rand(elty,11,11)
+        @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,tau,temp)
+        @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,tau,temp)
+        @test_throws ArgumentError LAPACK.ormqr!('X','N',A,tau,temp)
+        @test_throws ArgumentError LAPACK.ormqr!('L','X',A,tau,temp)
+        B = copy(A)
+        temp = zeros(elty,11)
+        @test_throws DimensionMismatch LAPACK.ormqr!('R','N',A,temp,B)
+        @test_throws DimensionMismatch LAPACK.ormqr!('L','N',A,temp,B)
+        @test_throws ArgumentError LAPACK.ormqr!('X','N',A,temp,B)
+        @test_throws ArgumentError LAPACK.ormqr!('L','X',A,temp,B)
 
         A = rand(elty,10,10)
         A,tau = LAPACK.geqlf!(A)
         @test_throws DimensionMismatch LAPACK.orgql!(A,tau,11)
         B = copy(A)
         @test LAPACK.orgql!(B,tau) ≈ LAPACK.ormql!('R','N',A,tau,Matrix{elty}(I, 10, 10))
-        @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,tau,rand(elty,11,11))
-        @test_throws DimensionMismatch LAPACK.ormql!('L','N',A,tau,rand(elty,11,11))
-        @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,zeros(elty,11),rand(elty,10,10))
-        @test_throws DimensionMismatch LAPACK.ormql!('L','N',A,zeros(elty,11),rand(elty,10,10))
+        temp = rand(elty,11,11)
+        @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,tau,temp)
+        @test_throws DimensionMismatch LAPACK.ormql!('L','N',A,tau,temp)
+        @test_throws ArgumentError LAPACK.ormql!('X','N',A,tau,temp)
+        @test_throws ArgumentError LAPACK.ormql!('L','X',A,tau,temp)
+        temp = zeros(elty,11)
+        B = copy(A)
+        @test_throws DimensionMismatch LAPACK.ormql!('R','N',A,temp,B)
+        @test_throws DimensionMismatch LAPACK.ormql!('L','N',A,temp,B)
+        @test_throws ArgumentError LAPACK.ormql!('X','N',A,temp,B)
+        @test_throws ArgumentError LAPACK.ormql!('L','X',A,temp,B)
 
         A = rand(elty,10,10)
         A,tau = LAPACK.gerqf!(A)
         @test_throws DimensionMismatch LAPACK.orgrq!(A,tau,11)
         B = copy(A)
         @test LAPACK.orgrq!(B,tau) ≈ LAPACK.ormrq!('R','N',A,tau,Matrix{elty}(I, 10, 10))
-        @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,tau,rand(elty,11,11))
-        @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,tau,rand(elty,11,11))
-        @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,zeros(elty,11),rand(elty,10,10))
-        @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,zeros(elty,11),rand(elty,10,10))
+        temp = rand(elty,11,11)
+        @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,tau,temp)
+        @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,tau,temp)
+        @test_throws ArgumentError LAPACK.ormrq!('X','N',A,tau,temp)
+        @test_throws ArgumentError LAPACK.ormrq!('L','X',A,tau,temp)
+        B = copy(A)
+        temp = zeros(elty,11)
+        @test_throws DimensionMismatch LAPACK.ormrq!('R','N',A,temp,B)
+        @test_throws DimensionMismatch LAPACK.ormrq!('L','N',A,temp,B)
+        @test_throws ArgumentError LAPACK.ormrq!('X','N',A,temp,B)
+        @test_throws ArgumentError LAPACK.ormrq!('L','X',A,temp,B)
 
         A = rand(elty,10,11)
         Q = copy(A)
@@ -351,21 +403,29 @@ end
         T = zeros(elty,10,11)
         @test_throws DimensionMismatch LAPACK.gemqrt!('L','N',V,T,C)
         @test_throws DimensionMismatch LAPACK.gemqrt!('R','N',V,T,C)
+        @test_throws ArgumentError LAPACK.gemqrt!('X','N',V,T,C)
+        @test_throws ArgumentError LAPACK.gemqrt!('R','X',V,T,C)
 
         C = rand(elty,10,10)
         V = rand(elty,11,10)
         T = zeros(elty,10,10)
         @test_throws DimensionMismatch LAPACK.gemqrt!('R','N',V,T,C)
         @test_throws DimensionMismatch LAPACK.gemqrt!('L','N',V,T,C)
+        @test_throws ArgumentError LAPACK.gemqrt!('X','N',V,T,C)
+        @test_throws ArgumentError LAPACK.gemqrt!('L','X',V,T,C)
 
         # test size(T) = (nb,k) ensures 1 <= nb <= k
         T = zeros(elty,10,10)
         V = rand(elty,5,10)
         @test_throws DimensionMismatch LAPACK.gemqrt!('L','N',V,T,C)
+        @test_throws ArgumentError LAPACK.gemqrt!('X','N',V,T,C)
+        @test_throws ArgumentError LAPACK.gemqrt!('L','X',V,T,C)
         C = rand(elty,10,10)
         V = rand(elty,10,10)
         T = zeros(elty,11,10)
         @test_throws DimensionMismatch LAPACK.gemqrt!('R','N',V,T,C)
+        @test_throws ArgumentError LAPACK.gemqrt!('X','N',V,T,C)
+        @test_throws ArgumentError LAPACK.gemqrt!('R','X',V,T,C)
 
         @test_throws DimensionMismatch LAPACK.orghr!(1, 10, C, zeros(elty,11))
     end
@@ -377,8 +437,12 @@ end
         A = A + transpose(A) #symmetric!
         B = copy(A)
         B,ipiv = LAPACK.sytrf!('U',B)
+        @test_throws ArgumentError LAPACK.sytrf!('X',B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv)) rtol=eps(cond(A))
-        @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
+        @test_throws ArgumentError LAPACK.sytri!('X',B,ipiv)
+        temp = rand(elty,11,5)
+        @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,temp)
+        @test_throws ArgumentError LAPACK.sytrs!('X',B,ipiv,temp)
         @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0),zero(BlasInt))
     end
 
@@ -389,7 +453,10 @@ end
         B = copy(A)
         B,ipiv = LAPACK.sytrf_rook!('U', B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U', B, ipiv)) rtol=eps(cond(A))
-        @test_throws DimensionMismatch LAPACK.sytrs_rook!('U', B, ipiv, rand(elty, 11, 5))
+        @test_throws ArgumentError LAPACK.sytri_rook!('X', B, ipiv)
+        temp = rand(elty, 11, 5)
+        @test_throws DimensionMismatch LAPACK.sytrs_rook!('U', B, ipiv, temp)
+        @test_throws ArgumentError LAPACK.sytrs_rook!('X', B, ipiv, temp)
         @test LAPACK.sytrf_rook!('U',zeros(elty, 0, 0)) == (zeros(elty, 0, 0),zeros(BlasInt, 0),zero(BlasInt))
         A = rand(elty, 10, 10)
         A = A + transpose(A) #symmetric!
@@ -398,7 +465,9 @@ end
         cnd = cond(A)
         b,A = LAPACK.sysv_rook!('U', A, b)
         @test b ≈ c rtol=eps(cnd)
-        @test_throws DimensionMismatch LAPACK.sysv_rook!('U',A,rand(elty,11))
+        temp = rand(elty,11)
+        @test_throws DimensionMismatch LAPACK.sysv_rook!('U',A,temp)
+        @test_throws ArgumentError LAPACK.sysv_rook!('X',A,temp)
 
         # syconvf_rook error handling
         # way argument is wrong
@@ -416,8 +485,11 @@ end
         A = A + A' #hermitian!
         B = copy(A)
         B,ipiv = LAPACK.hetrf!('U',B)
-        @test_throws DimensionMismatch LAPACK.hetrs!('U',B,ipiv,rand(elty,11,5))
-        @test_throws DimensionMismatch LAPACK.hetrs_rook!('U',B,ipiv,rand(elty,11,5))
+        temp = rand(elty,11,5)
+        @test_throws DimensionMismatch LAPACK.hetrs!('U',B,ipiv,temp)
+        @test_throws ArgumentError LAPACK.hetrs!('X',B,ipiv,temp)
+        @test_throws DimensionMismatch LAPACK.hetrs_rook!('U',B,ipiv,temp)
+        @test_throws ArgumentError LAPACK.hetrs_rook!('X',B,ipiv,temp)
     end
 end
 
@@ -425,11 +497,21 @@ end
     @testset for elty in (Float32, Float64)
         d = rand(elty,10)
         e = rand(elty,9)
-        @test_throws DimensionMismatch LAPACK.stev!('U',d,rand(elty,11))
-        @test_throws DimensionMismatch LAPACK.stebz!('A','B',zero(elty),zero(elty),0,0,-1.,d,rand(elty,10))
-        @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,rand(elty,11),zero(elty),zero(elty),0,0)
-        @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,11),zeros(elty,10),zeros(BlasInt,10),zeros(BlasInt,10))
-        @test_throws DimensionMismatch LAPACK.stein!(d,e,zeros(elty,11),zeros(BlasInt,10),zeros(BlasInt,10))
+        temp = rand(elty,11)
+        @test_throws DimensionMismatch LAPACK.stev!('N',d,temp)
+        @test_throws ArgumentError LAPACK.stev!('X',d,temp)
+        temp = rand(elty,10)
+        @test_throws DimensionMismatch LAPACK.stebz!('A','B',zero(elty),zero(elty),0,0,-1.,d,temp)
+        @test_throws ArgumentError LAPACK.stebz!('X','B',zero(elty),zero(elty),0,0,-1.,d,temp)
+        @test_throws ArgumentError LAPACK.stebz!('A','X',zero(elty),zero(elty),0,0,-1.,d,temp)
+        temp11 = rand(elty,11)
+        @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,temp11,zero(elty),zero(elty),0,0)
+        @test_throws ArgumentError LAPACK.stegr!('X','A',d,temp11,zero(elty),zero(elty),0,0)
+        @test_throws ArgumentError LAPACK.stegr!('N','X',d,temp11,zero(elty),zero(elty),0,0)
+        tempblasint10 = zeros(BlasInt,10)
+        tempblasint10_2 = zeros(BlasInt,10)
+        @test_throws DimensionMismatch LAPACK.stein!(d,temp11,temp,tempblasint10,tempblasint10_2)
+        @test_throws DimensionMismatch LAPACK.stein!(d,e,temp11,tempblasint10,tempblasint10_2)
     end
 end
 
@@ -439,7 +521,13 @@ end
         A = triu(A)
         B = copy(A)
         @test inv(A) ≈ LAPACK.trtri!('U','N',B)
-        @test_throws DimensionMismatch LAPACK.trtrs!('U','N','N',B,zeros(elty,11,10))
+        @test_throws ArgumentError LAPACK.trtri!('X','N',B)
+        @test_throws ArgumentError LAPACK.trtri!('U','X',B)
+        temp = zeros(elty,11,10)
+        @test_throws DimensionMismatch LAPACK.trtrs!('U','N','N',B,temp)
+        @test_throws ArgumentError LAPACK.trtrs!('X','N','N',B,temp)
+        @test_throws ArgumentError LAPACK.trtrs!('U','X','N',B,temp)
+        @test_throws ArgumentError LAPACK.trtrs!('U','N','X',B,temp)
     end
 end
 
@@ -479,6 +567,8 @@ end
         LinearAlgebra.LAPACK.larf!('L', v,      τ, C1)
         LinearAlgebra.LAPACK.larf!('R', v, conj(τ), C2)
         @test C ≈ C2*C1
+
+        @test_throws ArgumentError LAPACK.larf!('X', v,      τ, C1)
     end
 end
 
@@ -489,6 +579,8 @@ end
         @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,Z,zeros(elty,11,11),Z)
         @test_throws DimensionMismatch LAPACK.tgsen!(zeros(BlasInt,10),Z,Z,Z,zeros(elty,11,11))
         @test_throws DimensionMismatch LAPACK.trsyl!('N','N',Z,Z,zeros(elty,11,11))
+        @test_throws ArgumentError LAPACK.trsyl!('X','N',Z,Z,zeros(elty,11,11))
+        @test_throws ArgumentError LAPACK.trsyl!('N','X',Z,Z,zeros(elty,11,11))
         @test_throws DimensionMismatch LAPACK.tzrzf!(zeros(elty,10,5))
 
         A = triu(rand(elty,4,4))
@@ -508,6 +600,7 @@ end
         b,A = LAPACK.sysv!('U',A,b)
         @test b ≈ c
         @test_throws DimensionMismatch LAPACK.sysv!('U',A,rand(elty,11))
+        @test_throws ArgumentError LAPACK.sysv!('X',A,rand(elty,11))
     end
 end
 
@@ -520,14 +613,17 @@ end
         c = A \ b
         b,A = LAPACK.hesv!('U',A,b)
         @test b ≈ c
-        @test_throws DimensionMismatch LAPACK.hesv!('U',A,rand(elty,11))
+        temp = rand(elty,11)
+        @test_throws DimensionMismatch LAPACK.hesv!('U',A,temp)
+        @test_throws ArgumentError LAPACK.hesv!('X',A,temp)
         A = rand(elty,10,10)
         A = A + A' #hermitian!
         b = rand(elty,10)
         c = A \ b
         b,A = LAPACK.hesv_rook!('U',A,b)
         @test b ≈ c
-        @test_throws DimensionMismatch LAPACK.hesv_rook!('U',A,rand(elty,11))
+        @test_throws DimensionMismatch LAPACK.hesv_rook!('U',A,temp)
+        @test_throws ArgumentError LAPACK.hesv_rook!('X',A,temp)
     end
 end
 
@@ -563,8 +659,12 @@ end
         C = copy(B)
         if elty <: Complex
             @test A\B ≈ LAPACK.pttrs!('U',rdv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,Vector{elty}(undef,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,Matrix{elty}(undef,11,11))
+            tempvec = Vector{elty}(undef,10)
+            tempmat = Matrix{elty}(undef,11,11)
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,tempvec,C)
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,tempmat)
+            @test_throws ArgumentError LAPACK.pttrs!('X',rdv,tempvec,C)
+            @test_throws ArgumentError LAPACK.pttrs!('X',rdv,ev,tempmat)
         else
             @test A\B ≈ LAPACK.pttrs!(rdv,ev,C)
             @test_throws DimensionMismatch LAPACK.pttrs!(rdv,Vector{elty}(undef,10),C)
@@ -591,6 +691,8 @@ end
         offsizemat = Matrix{elty}(undef, n+1, n+1)
         @test_throws DimensionMismatch LAPACK.posv!('U', D, offsizemat)
         @test_throws DimensionMismatch LAPACK.potrs!('U', D, offsizemat)
+        @test_throws ArgumentError LAPACK.posv!('X', D, offsizemat)
+        @test_throws ArgumentError LAPACK.potrs!('X', D, offsizemat)
 
         @test LAPACK.potrs!('U',Matrix{elty}(undef,0,0),elty[]) == elty[]
     end
@@ -613,6 +715,10 @@ end
         B = rand(elty,11,11)
         @test_throws DimensionMismatch LAPACK.gges!('V','V',A,B)
         @test_throws DimensionMismatch LAPACK.gges3!('V','V',A,B)
+        @test_throws ArgumentError LAPACK.gges!('X','V',A,B)
+        @test_throws ArgumentError LAPACK.gges3!('X','V',A,B)
+        @test_throws ArgumentError LAPACK.gges!('V','X',A,B)
+        @test_throws ArgumentError LAPACK.gges3!('V','X',A,B)
     end
 end
 
@@ -632,8 +738,14 @@ end
         select,Vln,Vrn = LAPACK.trevc!('B','S',select,copy(T))
         @test Vrn ≈ v
         @test Vln ≈ Vl
-        @test_throws ArgumentError LAPACK.trevc!('V','S',select,copy(T))
-        @test_throws DimensionMismatch LAPACK.trrfs!('U','N','N',T,rand(elty,10,10),rand(elty,10,11))
+        @test_throws ArgumentError LAPACK.trevc!('V','S',select,T)
+        @test_throws ArgumentError LAPACK.trevc!('R','X',select,T)
+        temp1010 = rand(elty,10,10)
+        temp1011 = rand(elty,10,11)
+        @test_throws DimensionMismatch LAPACK.trrfs!('U','N','N',T,temp1010,temp1011)
+        @test_throws ArgumentError LAPACK.trrfs!('X','N','N',T,temp1010,temp1011)
+        @test_throws ArgumentError LAPACK.trrfs!('U','X','N',T,temp1010,temp1011)
+        @test_throws ArgumentError LAPACK.trrfs!('U','N','X',T,temp1010,temp1011)
     end
 end
 
@@ -693,8 +805,26 @@ end
             B = zeros(elty, n, n)
             LinearAlgebra.LAPACK.lacpy!(B, A, uplo)
             C = uplo == 'L' ? tril(A) : (uplo == 'U' ? triu(A) : A)
-            @test B ≈ C
+            @test B == C
+            B = zeros(elty, n+1, n+1)
+            LinearAlgebra.LAPACK.lacpy!(B, A, uplo)
+            C = uplo == 'L' ? tril(A) : (uplo == 'U' ? triu(A) : A)
+            @test view(B, 1:n, 1:n) == C
         end
+        A = rand(elty, n, n+1)
+        B = zeros(elty, n, n)
+        LinearAlgebra.LAPACK.lacpy!(B, A, 'L')
+        @test B == view(tril(A), 1:n, 1:n)
+        B = zeros(elty, n, n+1)
+        LinearAlgebra.LAPACK.lacpy!(B, A, 'U')
+        @test B == triu(A)
+        A = rand(elty, n+1, n)
+        B = zeros(elty, n, n)
+        LinearAlgebra.LAPACK.lacpy!(B, A, 'U')
+        @test B == view(triu(A), 1:n, 1:n)
+        B = zeros(elty, n+1, n)
+        LinearAlgebra.LAPACK.lacpy!(B, A, 'L')
+        @test B == tril(A)
     end
 end
 
@@ -747,6 +877,26 @@ a = zeros(2,0), zeros(0)
     b = randn(23)
     ipiv = collect(1:20)
     @test_throws DimensionMismatch LinearAlgebra.LAPACK.getrs!('N', A, ipiv, b)
+end
+
+@testset "hetrd ignore non-filled half" begin
+    A = rand(3,3)
+    B = copy(A)
+    B[2,1] = NaN
+    B[3,1] = Inf
+    LAPACK.hetrd!('U', A)
+    LAPACK.hetrd!('U', B)
+    @test UpperTriangular(A) == UpperTriangular(B)
+end
+
+@testset "inference in syev!/syevd!" begin
+    for T in (Float32, Float64), CT in (T, Complex{T})
+        A = rand(CT, 4,4)
+        @inferred (A -> LAPACK.syev!('N', 'U', A))(A)
+        @inferred (A -> LAPACK.syev!('V', 'U', A))(A)
+        @inferred (A -> LAPACK.syevd!('N', 'U', A))(A)
+        @inferred (A -> LAPACK.syevd!('V', 'U', A))(A)
+    end
 end
 
 end # module TestLAPACK

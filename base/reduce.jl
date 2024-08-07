@@ -4,14 +4,6 @@
 
 ###### Generic (map)reduce functions ######
 
-if Int === Int32
-    const SmallSigned = Union{Int8,Int16}
-    const SmallUnsigned = Union{UInt8,UInt16}
-else
-    const SmallSigned = Union{Int8,Int16,Int32}
-    const SmallUnsigned = Union{UInt8,UInt16,UInt32}
-end
-
 abstract type AbstractBroadcasted end
 const AbstractArrayOrBroadcasted = Union{AbstractArray, AbstractBroadcasted}
 
@@ -22,8 +14,8 @@ The reduction operator used in `sum`. The main difference from [`+`](@ref) is th
 integers are promoted to `Int`/`UInt`.
 """
 add_sum(x, y) = x + y
-add_sum(x::SmallSigned, y::SmallSigned) = Int(x) + Int(y)
-add_sum(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) + UInt(y)
+add_sum(x::BitSignedSmall, y::BitSignedSmall) = Int(x) + Int(y)
+add_sum(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) + UInt(y)
 add_sum(x::Real, y::Real)::Real = x + y
 
 """
@@ -33,8 +25,8 @@ The reduction operator used in `prod`. The main difference from [`*`](@ref) is t
 integers are promoted to `Int`/`UInt`.
 """
 mul_prod(x, y) = x * y
-mul_prod(x::SmallSigned, y::SmallSigned) = Int(x) * Int(y)
-mul_prod(x::SmallUnsigned, y::SmallUnsigned) = UInt(x) * UInt(y)
+mul_prod(x::BitSignedSmall, y::BitSignedSmall) = Int(x) * Int(y)
+mul_prod(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
 
 ## foldl && mapfoldl
@@ -305,7 +297,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 guaranteed left or right associativity and invocation of `f` for every value.
 """
 mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
-mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
+mapreduce(f, op, itr, itrs...; kw...) = reduce(op, Generator(f, itr, itrs...); kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -348,11 +340,11 @@ reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitSignedSmall}  = zero(Int)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitUnsignedSmall} = zero(UInt)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitSignedSmall}  = one(Int)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitUnsignedSmall} = one(UInt)
 
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
@@ -402,11 +394,11 @@ reduce_first(::typeof(+), x::Bool) = Int(x)
 reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(add_sum), x::BitSignedSmall)   = Int(x)
+reduce_first(::typeof(add_sum), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
-reduce_first(::typeof(mul_prod), x::SmallSigned)   = Int(x)
-reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
+reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
 
 """
     Base.mapreduce_first(f, op, x)
@@ -480,8 +472,8 @@ elements are not reordered if you use an ordered collection.
 julia> reduce(*, [2; 3; 4])
 24
 
-julia> reduce(*, [2; 3; 4]; init=-1)
--24
+julia> reduce(*, Int[]; init=1)
+1
 ```
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
@@ -646,11 +638,11 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     start = first + 1
     simdstop  = start + chunk_len - 4
     while simdstop <= last - 3
-        @inbounds for i in start:4:simdstop
-            v1 = _fast(op, v1, f(A[i+0]))
-            v2 = _fast(op, v2, f(A[i+1]))
-            v3 = _fast(op, v3, f(A[i+2]))
-            v4 = _fast(op, v4, f(A[i+3]))
+        for i in start:4:simdstop
+            v1 = _fast(op, v1, f(@inbounds(A[i+0])))
+            v2 = _fast(op, v2, f(@inbounds(A[i+1])))
+            v3 = _fast(op, v3, f(@inbounds(A[i+2])))
+            v4 = _fast(op, v4, f(@inbounds(A[i+3])))
         end
         checkbounds(A, simdstop+3)
         start += chunk_len
@@ -1126,7 +1118,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), , [`||`](@ref).
+See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -1164,7 +1156,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), , [`&&`](@ref), [`allunique`](@ref).
+See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), [`&&`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest

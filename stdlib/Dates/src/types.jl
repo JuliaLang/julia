@@ -203,7 +203,7 @@ function totaldays(y, m, d)
 end
 
 # If the year is divisible by 4, except for every 100 years, except for every 400 years
-isleapyear(y) = (y % 4 == 0) && ((y % 100 != 0) || (y % 400 == 0))
+isleapyear(y::Integer) = (y % 4 == 0) && ((y % 100 != 0) || (y % 400 == 0))
 
 # Number of days in month
 const DAYSINMONTH = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
@@ -492,3 +492,8 @@ end
 
 Base.OrderStyle(::Type{<:AbstractTime}) = Base.Ordered()
 Base.ArithmeticStyle(::Type{<:AbstractTime}) = Base.ArithmeticWraps()
+
+# minimal Base.TOML support
+Date(d::Base.TOML.Date) = Date(d.year, d.month, d.day)
+Time(t::Base.TOML.Time) = Time(t.hour, t.minute, t.second, t.ms)
+DateTime(dt::Base.TOML.DateTime) = DateTime(Date(dt.date), Time(dt.time))

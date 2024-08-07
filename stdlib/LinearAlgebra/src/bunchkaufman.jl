@@ -127,6 +127,9 @@ function bunchkaufman!(A::StridedMatrix{<:BlasFloat}, rook::Bool = false; check:
     end
 end
 
+bkcopy_oftype(A, S) = eigencopy_oftype(A, S)
+bkcopy_oftype(A::Symmetric{<:Complex}, S) = Symmetric(copytrito!(similar(parent(A), S, size(A)), A.data, A.uplo), sym_uplo(A.uplo))
+
 """
     bunchkaufman(A, rook::Bool=false; check = true) -> S::BunchKaufman
 
@@ -206,7 +209,7 @@ julia> S.L*S.D*S.L' - A[S.p, S.p]
 ```
 """
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
-    bunchkaufman!(eigencopy_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
+    bunchkaufman!(bkcopy_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
 
 BunchKaufman{T}(B::BunchKaufman) where {T} =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)
@@ -296,6 +299,17 @@ end
 
 Base.propertynames(B::BunchKaufman, private::Bool=false) =
     (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
+
+function Base.:(==)(B1::BunchKaufman, B2::BunchKaufman)
+    # check for the equality between properties instead of fields
+    B1.p == B2.p || return false
+    if B1.uplo == 'L'
+        B1.L == B2.L || return false
+    else
+        B1.U == B2.U || return false
+    end
+    return (B1.D == B2.D)
+end
 
 function getproperties!(B::BunchKaufman{T,<:StridedMatrix}) where {T<:BlasFloat}
     # NOTE: Unlike in the 'getproperty' function, in this function L/U and D are computed in place.
@@ -1529,7 +1543,7 @@ function bunchkaufman(A::AbstractMatrix{TS},
     rook::Bool = false;
     check::Bool = true
     ) where TS <: ClosedScalar{TR} where TR <: ClosedReal
-    return bunchkaufman!(eigencopy_oftype(A, TS), rook; check)
+    return bunchkaufman!(bkcopy_oftype(A, TS), rook; check)
 end
 
 function bunchkaufman(A::AbstractMatrix{TS},
@@ -1551,15 +1565,15 @@ function bunchkaufman(A::AbstractMatrix{TS},
     # We promote input to BigInt to avoid overflow problems
     if TA == Nothing
         if TS <: Integer
-            M = Rational{BigInt}.(eigencopy_oftype(A, TS))
+            M = Rational{BigInt}.(bkcopy_oftype(A, TS))
         else
-            M = Complex{Rational{BigInt}}.(eigencopy_oftype(A, TS))
+            M = Complex{Rational{BigInt}}.(bkcopy_oftype(A, TS))
         end
     else
         if TS <: Integer
-            M = TA(Rational{BigInt}.(eigencopy_oftype(A, TS)), Symbol(A.uplo))
+            M = TA(Rational{BigInt}.(bkcopy_oftype(A, TS)), Symbol(A.uplo))
         else
-            M = TA(Complex{Rational{BigInt}}.(eigencopy_oftype(A, TS)),
+            M = TA(Complex{Rational{BigInt}}.(bkcopy_oftype(A, TS)),
                 Symbol(A.uplo))
         end
     end

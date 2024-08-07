@@ -802,6 +802,9 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
                 if from_macroexpand && extype == LoadError && exc isa Exception
                     Base.depwarn("macroexpand no longer throws a LoadError so `@test_throws LoadError ...` is deprecated and passed without checking the error type!", :do_test_throws)
                     true
+                elseif extype == ErrorException && isa(exc, FieldError)
+                    Base.depwarn(lazy"ErrorException should no longer be used to test field access; FieldError should be used instead!", :do_test_throws)
+                    true
                 else
                     isa(exc, extype)
                 end
@@ -1835,9 +1838,19 @@ function parse_testset_args(args)
         # a standalone symbol is assumed to be the test set we should use
         # the same is true for a symbol that's not exported from a module
         if isa(arg, Symbol) || Base.isexpr(arg, :.)
+            if testsettype !== nothing
+                msg = """Multiple testset types provided to @testset. \
+                    This is deprecated and may error in the future."""
+                Base.depwarn(msg, :testset_multiple_testset_types; force=true)
+            end
             testsettype = esc(arg)
         # a string is the description
         elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head === :string)
+            if desc !== nothing
+                msg = """Multiple descriptions provided to @testset. \
+                    This is deprecated and may error in the future."""
+                Base.depwarn(msg, :testset_multiple_descriptions; force=true)
+            end
             desc = esc(arg)
         # an assignment is an option
         elseif isa(arg, Expr) && arg.head === :(=)
@@ -1900,7 +1913,7 @@ function get_testset_depth()
     return length(testsets)
 end
 
-_args_and_call(args...; kwargs...) = (args[1:end-1], kwargs, args[end](args[1:end-1]...; kwargs...))
+_args_and_call((args..., f)...; kwargs...) = (args, kwargs, f(args...; kwargs...))
 _materialize_broadcasted(f, args...) = Broadcast.materialize(Broadcast.broadcasted(f, args...))
 
 """
@@ -1982,25 +1995,24 @@ function _inferred(ex, mod, allow = :(Union{}))
         quote
             let allow = $(esc(allow))
                 allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
-                $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+                $(if any(@nospecialize(a)->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
                     # Has keywords
                     args = gensym()
                     kwargs = gensym()
                     quote
                         $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                        inftypes = $(gen_call_with_extracted_types(mod, Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                        inftype = $(gen_call_with_extracted_types(mod, Base.infer_return_type, :($(ex.args[1])($(args)...; $(kwargs)...))))
                     end
                 else
                     # No keywords
                     quote
                         args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
                         result = $(esc(ex.args[1]))(args...)
-                        inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
+                        inftype = Base.infer_return_type($(esc(ex.args[1])), Base.typesof(args...))
                     end
                 end)
-                @assert length(inftypes) == 1
                 rettype = result isa Type ? Type{result} : typeof(result)
-                rettype <: allow || rettype == typesplit(inftypes[1], allow) || error("return type $rettype does not match inferred return type $(inftypes[1])")
+                rettype <: allow || rettype == typesplit(inftype, allow) || error("return type $rettype does not match inferred return type $inftype")
                 result
             end
         end

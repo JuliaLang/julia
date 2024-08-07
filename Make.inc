@@ -92,6 +92,9 @@ WITH_DTRACE := 0
 # Enable ITTAPI integration
 WITH_ITTAPI := 0
 
+# Enable NVTX integration
+WITH_NVTX := 0
+
 # Enable Tracy support
 WITH_TRACY := 0
 WITH_TRACY_CALLSTACKS := 0
@@ -482,7 +485,7 @@ endif
 
 FC := $(CROSS_COMPILE)gfortran
 
-# Note: Supporting only macOS Yosemite and above
+# Note: Supporting only macOS Mojave and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 ifneq ($(APPLE_ARCH),arm64)
@@ -492,7 +495,7 @@ MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
-JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
 JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
@@ -501,7 +504,7 @@ JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
 JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
 JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17
+JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
@@ -512,6 +515,11 @@ DEBUGFLAGS_GCC    := $(DEBUGFLAGS_COMMON) -ggdb2
 SHIPFLAGS_COMMON  := -O3
 SHIPFLAGS_CLANG   := $(SHIPFLAGS_COMMON) -g
 SHIPFLAGS_GCC     := $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+
+BOLT_LDFLAGS :=
+
+BOLT_CFLAGS_GCC    :=
+BOLT_CFLAGS_CLANG  :=
 
 ifeq ($(OS), Darwin)
 JCPPFLAGS_CLANG   += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
@@ -529,7 +537,8 @@ JCFLAGS    := $(JCFLAGS_GCC)
 JCPPFLAGS  := $(JCPPFLAGS_GCC)
 JCXXFLAGS  := $(JCXXFLAGS_GCC)
 DEBUGFLAGS := $(DEBUGFLAGS_GCC)
-SHIPFLAGS  := $(SHIPFLAGS_GCC)
+SHIPFLAGS  := $(SHIPFLAGS_GCC) $(BOLT_CFLAGS_GCC)
+BOLT_CFLAGS  := $(BOLT_CFLAGS_GCC)
 endif
 
 ifeq ($(USECLANG),1)
@@ -539,7 +548,8 @@ JCFLAGS    := $(JCFLAGS_CLANG)
 JCPPFLAGS  := $(JCPPFLAGS_CLANG)
 JCXXFLAGS  := $(JCXXFLAGS_CLANG)
 DEBUGFLAGS := $(DEBUGFLAGS_CLANG)
-SHIPFLAGS  := $(SHIPFLAGS_CLANG)
+SHIPFLAGS  := $(SHIPFLAGS_CLANG) $(BOLT_CFLAGS_CLANG)
+BOLT_CFLAGS  := $(BOLT_CFLAGS_CLANG)
 
 ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
@@ -550,7 +560,17 @@ export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 endif
 endif
 
-JLDFLAGS :=
+# Conditional setting of RELRO flag for enhanced security on Linux builds.
+# RELRO (Read-Only Relocations) is a security feature that marks certain sections
+# of the binary as read-only to prevent exploitation techniques like
+# GOT (Global Offset Table) overwriting attacks.
+ifeq ($(OS),Linux)
+    RELRO_FLAG := -Wl,-z,relro
+else
+    RELRO_FLAG :=
+endif
+
+JLDFLAGS := $(RELRO_FLAG)
 
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
@@ -670,7 +690,7 @@ JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
 endif
 endif
 
-ifeq ($(OS), FreeBSD)
+ifneq ($(findstring $(OS),FreeBSD OpenBSD),)
 LOCALBASE ?= /usr/local
 else
 LOCALBASE ?= /usr
@@ -726,7 +746,7 @@ SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
-ifneq ($(findstring $(OS),Linux FreeBSD),)
+ifneq ($(findstring $(OS),Linux FreeBSD OpenBSD),)
 SANITIZE_LDFLAGS += -Wl,--warn-unresolved-symbols
 endif # OS Linux or FreeBSD
 endif # SANITIZE_MEMORY=1
@@ -796,6 +816,11 @@ endif
 ifeq ($(WITH_TIMING_COUNTS), 1)
 JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
+endif
+
+ifeq ($(WITH_NVTX), 1)
+JCXXFLAGS += -DUSE_NVTX
+JCFLAGS += -DUSE_NVTX
 endif
 
 # ===========================================================================
@@ -928,6 +953,15 @@ OPENBLAS_TARGET_ARCH:=POWER8
 BINARY:=64
 # GCC doesn't do -march= on ppc64le
 MARCH=
+endif
+
+# Allow Clang to use CRC instructions (only applicable on AArch64)
+ifneq (,$(findstring aarch64,$(ARCH)))
+ifeq ($(USECLANG),1)
+ifeq (,$(MARCH))
+JCFLAGS += -mcrc
+endif
+endif
 endif
 
 # If we are running on powerpc64 or ppc64, fail out dramatically
@@ -1069,7 +1103,7 @@ JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
 endif
 else
-ifeq ($(OS),Darwin)
+ifneq ($(findstring $(OS),Darwin OpenBSD),)
 LIBUNWIND:=-lunwind
 JCPPFLAGS+=-DLLVMLIBUNWIND
 else
@@ -1268,7 +1302,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.33|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT BOLT
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1374,10 +1408,30 @@ OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 # make it loaded first to
 # prevent from linking to outdated system libs.
 # See #21788
+# TODO: Determine whether the condition here on AArch64 (added in #55089) should actually
+# be `ifneq ($(USE_BINARYBUILDER),0)`. We vendor a correctly versioned libgcc_s when using
+# BinaryBuilder which we want to link in early as noted above, but it could be the case
+# that without BinaryBuilder, regardless of architecture, we need to delay linking libgcc_s
+# to avoid getting the system one.
+ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
+endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
+OSLIBS += -Wl,--export-dynamic -Wl,--undefined-version -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE)
+endif
+
+ifeq ($(OS), OpenBSD)
+JLDFLAGS += -Wl,--Bdynamic
+ifneq ($(SANITIZE),1)
+JLDFLAGS += -Wl,-no-undefined
+endif
+
+JLIBLDFLAGS += -Wl,-Bsymbolic-functions
+
+OSLIBS += -Wl,--no-as-needed -lpthread -lm -lc++abi -lc
+OSLIBS += -Wl,--whole-archive -lcompiler_rt -Wl,--no-whole-archive
+OSLIBS += -Wl,--export-dynamic,--as-needed,--version-script=$(BUILDROOT)/src/julia.expmap
 endif
 
 ifeq ($(OS), Darwin)
@@ -1393,7 +1447,7 @@ ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
-JLDFLAGS += -Wl,--stack,8388608
+JLDFLAGS += -Wl,--stack,8388608 --disable-auto-import --disable-runtime-pseudo-reloc
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
@@ -1487,7 +1541,7 @@ endif
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
-CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+ CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path -sdk macosx)
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix

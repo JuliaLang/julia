@@ -60,6 +60,7 @@ JL_DLLEXPORT jl_sym_t *jl_thunk_sym;
 JL_DLLEXPORT jl_sym_t *jl_foreigncall_sym;
 JL_DLLEXPORT jl_sym_t *jl_as_sym;
 JL_DLLEXPORT jl_sym_t *jl_global_sym;
+JL_DLLEXPORT jl_sym_t *jl_globaldecl_sym;
 JL_DLLEXPORT jl_sym_t *jl_local_sym;
 JL_DLLEXPORT jl_sym_t *jl_list_sym;
 JL_DLLEXPORT jl_sym_t *jl_dot_sym;
@@ -116,7 +117,7 @@ JL_DLLEXPORT jl_sym_t *jl_acquire_sym;
 JL_DLLEXPORT jl_sym_t *jl_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
-
+JL_DLLEXPORT jl_sym_t *jl_uninferred_sym;
 
 static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -195,8 +196,7 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
             mod = *(jl_module_t**)cv_data((cvalue_t*)ptr(argmod));
             JL_GC_PROMISE_ROOTED(mod);
         } else {
-            (void)tosymbol(fl_ctx, argmod, "nothrow-julia-global");
-            if (scmsym_to_julia(fl_ctx, argmod) != jl_thismodule_sym) {
+            if (!iscons(argmod) || !issymbol(car_(argmod)) || scmsym_to_julia(fl_ctx, car_(argmod)) != jl_thismodule_sym) {
                 lerrorf(fl_ctx, fl_ctx->ArgError, "nothrow-julia-global: Unknown globalref module kind");
             }
         }
@@ -213,16 +213,6 @@ static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, ui
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     assert(ctx->module);
     return fixnum(jl_module_next_counter(ctx->module));
-}
-
-static value_t fl_julia_current_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
-{
-    return symbol(fl_ctx, jl_filename);
-}
-
-static value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
-{
-    return fixnum(jl_lineno);
 }
 
 static int jl_is_number(jl_value_t *v)
@@ -257,8 +247,6 @@ static const builtinspec_t julia_flisp_ast_ext[] = {
     { "nothrow-julia-global", fl_nothrow_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
-    { "julia-current-file", fl_julia_current_file },
-    { "julia-current-line", fl_julia_current_line },
     { NULL, NULL }
 };
 
@@ -368,6 +356,7 @@ void jl_init_common_symbols(void)
     jl_opaque_closure_method_sym = jl_symbol("opaque_closure_method");
     jl_const_sym = jl_symbol("const");
     jl_global_sym = jl_symbol("global");
+    jl_globaldecl_sym = jl_symbol("globaldecl");
     jl_local_sym = jl_symbol("local");
     jl_thunk_sym = jl_symbol("thunk");
     jl_toplevel_sym = jl_symbol("toplevel");
@@ -428,6 +417,7 @@ void jl_init_common_symbols(void)
     jl_release_sym = jl_symbol("release");
     jl_acquire_release_sym = jl_symbol("acquire_release");
     jl_sequentially_consistent_sym = jl_symbol("sequentially_consistent");
+    jl_uninferred_sym = jl_symbol("uninferred");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -475,7 +465,7 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
     }
     JL_CATCH {
         // if expression cannot be converted, replace with error expr
-        //jl_(jl_current_exception());
+        //jl_(jl_current_exception(jl_current_task));
         //jlbacktrace();
         jl_expr_t *ex = jl_exprn(jl_error_sym, 1);
         v = (jl_value_t*)ex;
@@ -576,20 +566,16 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             JL_GC_POP();
             return temp;
         }
-        else if (sym == jl_lineinfo_sym && n == 5) {
-            jl_value_t *modu=NULL, *name=NULL, *file=NULL, *linenum=NULL, *inlinedat=NULL;
-            JL_GC_PUSH5(&modu, &name, &file, &linenum, &inlinedat);
+        else if (sym == jl_lineinfo_sym && n == 3) {
+            jl_value_t *file=NULL, *linenum=NULL, *inlinedat=NULL;
+            JL_GC_PUSH3(&file, &linenum, &inlinedat);
             value_t lst = e;
-            modu = scm_to_julia_(fl_ctx, car_(lst), mod);
-            lst = cdr_(lst);
-            name = scm_to_julia_(fl_ctx, car_(lst), mod);
-            lst = cdr_(lst);
             file = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);
             linenum = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);
             inlinedat = scm_to_julia_(fl_ctx, car_(lst), mod);
-            temp = jl_new_struct(jl_lineinfonode_type, modu, name, file, linenum, inlinedat);
+            temp = jl_new_struct(jl_lineinfonode_type, file, linenum, inlinedat);
             JL_GC_POP();
             return temp;
         }
@@ -733,8 +719,20 @@ static int julia_to_scm_noalloc1(fl_context_t *fl_ctx, jl_value_t *v, value_t *r
 
 static value_t julia_to_scm_noalloc2(fl_context_t *fl_ctx, jl_value_t *v, int check_valid) JL_NOTSAFEPOINT
 {
-    if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
-        return fixnum(jl_unbox_long(v));
+    if (jl_is_long(v)) {
+        if (fits_fixnum(jl_unbox_long(v))) {
+            return fixnum(jl_unbox_long(v));
+        } else {
+#ifdef _P64
+            value_t prim = cprim(fl_ctx, fl_ctx->int64type, sizeof(int64_t));
+            *((int64_t*)cp_data((cprim_t*)ptr(prim))) = jl_unbox_long(v);
+#else
+            value_t prim = cprim(fl_ctx, fl_ctx->int32type, sizeof(int32_t));
+            *((int32_t*)cp_data((cprim_t*)ptr(prim))) = jl_unbox_long(v);
+#endif
+            return prim;
+        }
+    }
     if (check_valid) {
         if (jl_is_ssavalue(v))
             lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");
@@ -938,10 +936,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         jl_gc_wb(new_ci, new_ci->slotnames);
         new_ci->slotflags = jl_array_copy(new_ci->slotflags);
         jl_gc_wb(new_ci, new_ci->slotflags);
-        new_ci->codelocs = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->codelocs);
-        jl_gc_wb(new_ci, new_ci->codelocs);
-        new_ci->linetable = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->linetable);
-        jl_gc_wb(new_ci, new_ci->linetable);
         new_ci->ssaflags = jl_array_copy(new_ci->ssaflags);
         jl_gc_wb(new_ci, new_ci->ssaflags);
 
@@ -1146,7 +1140,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
                 margs[0] = jl_cstr_to_string("<macrocall>");
             margs[1] = jl_fieldref(lno, 0); // extract and allocate line number
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
-                                           jl_current_exception()));
+                                           jl_current_exception(ct)));
         }
     }
     ct->world_age = last_age;
@@ -1162,7 +1156,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     jl_expr_t *e = (jl_expr_t*)expr;
     if (e->head == jl_inert_sym ||
         e->head == jl_module_sym ||
-        //e->head == jl_toplevel_sym || // TODO: enable this once julia-expand-macroscope is fixed / removed
+        e->head == jl_toplevel_sym ||
         e->head == jl_meta_sym) {
         return expr;
     }

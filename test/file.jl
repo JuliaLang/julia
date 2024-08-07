@@ -442,8 +442,7 @@ end
                 for pth in ("afile",
                             joinpath("afile", "not_file"),
                             SubString(joinpath(dir, "afile")),
-                            Base.RawFD(-1),
-                            -1)
+                            Base.RawFD(-1))
                     test_stat_error(stat, pth)
                     test_stat_error(lstat, pth)
                 end
@@ -1491,7 +1490,7 @@ mktempdir() do dir
     @test isfile(name1)
     @test isfile(name2)
     namedir = joinpath(dir, "chalk")
-    namepath = joinpath(dir, "chalk","cheese","fresh")
+    namepath = joinpath(dir, "chalk", "cheese", "fresh")
     @test !ispath(namedir)
     @test mkdir(namedir) == namedir
     @test isdir(namedir)
@@ -1500,7 +1499,12 @@ mktempdir() do dir
     @test isdir(namepath)
     @test mkpath(namepath) == namepath
     @test isdir(namepath)
+    # issue 54826
+    namepath_dirpath = joinpath(dir, "x", "y", "z", "")
+    @test mkpath(namepath_dirpath) == namepath_dirpath
 end
+@test mkpath("") == ""
+@test mkpath("/") == "/"
 
 # issue #30588
 @test realpath(".") == realpath(pwd())
@@ -1671,7 +1675,7 @@ else
     )
 end
 
-@testset "chmod/isexecutable/isreadable/iswriteable" begin
+@testset "chmod/isexecutable/isreadable/iswritable" begin
     mktempdir() do dir
         subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
@@ -1688,19 +1692,19 @@ end
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
-        @test Sys.iswriteable(fpath) skip=Sys.iswindows()
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
         chmod(fpath, 0o755)
         @test Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
-        @test Sys.iswriteable(fpath) skip=Sys.iswindows()
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
         chmod(fpath, 0o444)
         @test !Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
-        @test !Sys.iswriteable(fpath)
+        @test !Sys.iswritable(fpath)
         chmod(fpath, 0o244)
         @test !Sys.isexecutable(fpath)
         @test !Sys.isreadable(fpath) skip=Sys.iswindows()
-        @test Sys.iswriteable(fpath) skip=Sys.iswindows()
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
 
         # Ensure that, on Windows, where inheritance is default,
         # chmod still behaves as we expect.
@@ -1708,7 +1712,7 @@ end
             chmod(subdir, 0o666)
             @test !Sys.isexecutable(fpath)
             @test Sys.isreadable(fpath)
-            @test_skip Sys.iswriteable(fpath)
+            @test_skip Sys.iswritable(fpath)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.

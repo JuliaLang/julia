@@ -257,11 +257,10 @@ end
 # avoid adding this to Base
 function equal(ci1::Core.CodeInfo, ci2::Core.CodeInfo)
     return ci1.code == ci2.code &&
-           ci1.codelocs == ci2.codelocs &&
+           ci1.debuginfo == ci2.debuginfo &&
            ci1.ssavaluetypes == ci2.ssavaluetypes &&
            ci1.ssaflags == ci2.ssaflags &&
            ci1.method_for_inference_limit_heuristics == ci2.method_for_inference_limit_heuristics &&
-           ci1.linetable == ci2.linetable &&
            ci1.slotnames == ci2.slotnames &&
            ci1.slotflags == ci2.slotflags &&
            ci1.slottypes == ci2.slottypes
@@ -478,3 +477,26 @@ Base.delete_method(fshadow_m2)
 @test Base.morespecific(fshadow_m2, fshadow_m1)
 @test Base.morespecific(fshadow_m3, fshadow_m1)
 @test !Base.morespecific(fshadow_m2, fshadow_m3)
+
+# Generated functions without edges must have min_world = 1.
+# N.B.: If changing this, move this test to precompile and make sure
+# that the specialization survives revalidation.
+function generated_no_edges_gen(world, args...)
+    src = ccall(:jl_new_code_info_uninit, Ref{Core.CodeInfo}, ())
+    src.code = Any[Core.ReturnNode(nothing)]
+    src.slotnames = Symbol[:self]
+    src.slotflags = UInt8[0x00]
+    src.ssaflags = UInt32[0x00]
+    src.ssavaluetypes = 1
+    src.nargs = 1
+    src.min_world = first(Base._methods(generated_no_edges, Tuple{}, -1, world)).method.primary_world
+
+    return src
+end
+
+@eval function generated_no_edges()
+    $(Expr(:meta, :generated, generated_no_edges_gen))
+    $(Expr(:meta, :generated_only))
+end
+
+@test_throws ErrorException("Generated function result with `edges == nothing` and `max_world == typemax(UInt)` must have `min_world == 1`") generated_no_edges()

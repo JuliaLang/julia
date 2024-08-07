@@ -11,11 +11,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout the JuliaLang/julia repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
       - name: Check spelling with typos
-        #uses: crate-ci/typos@master
+        #uses: crate-ci/typos@c7af4712eda24dd1ef54bd8212973888489eb0ce # v1.23.5
         env:
           GH_TOKEN: "${{ github.token }}"
         run: |

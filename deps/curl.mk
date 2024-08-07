@@ -14,7 +14,7 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp
 endif
 
 ifneq ($(USE_BINARYBUILDER_CURL),1)
-CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
+CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN) -Wl,-rpath,$(build_shlibdir)
 
 # On older Linuces (those that use OpenSSL < 1.1) we include `libpthread` explicitly.
 # It doesn't hurt to include it explicitly elsewhere, so we do so.
@@ -37,7 +37,7 @@ checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 # Disable....almost everything
 CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
 	--without-gnutls --without-libidn2 --without-librtmp \
-	--without-nss --without-libpsl --without-libgsasl --without-fish-functions-dir \
+	--without-libpsl --without-libgsasl --without-fish-functions-dir \
 	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static \
 	--without-gssapi --without-brotli
 # A few things we actually enable
@@ -57,13 +57,12 @@ CURL_TLS_CONFIGURE_FLAGS := --with-mbedtls=$(build_prefix)
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
-$(BUILDDIR)/curl-$(CURL_VER)/source-extracted/curl-memdup.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
-	mkdir -p $(dir $@)
-	cd $(SRCCACHE)/curl-$(CURL_VER) && \
-		patch -p1 -f < $(SRCDIR)/patches/curl-memdup.patch
+$(SRCCACHE)/curl-$(CURL_VER)/curl-8.6.0-build.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/curl-8.6.0-build.patch
 	echo 1 > $@
 
-$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(BUILDDIR)/curl-$(CURL_VER)/source-extracted/curl-memdup.patch-applied
+$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(SRCCACHE)/curl-$(CURL_VER)/curl-8.6.0-build.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-patched

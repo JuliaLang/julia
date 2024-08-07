@@ -11,7 +11,7 @@ include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
-using .BuildKiteTestJSON
+using .BuildkiteTestJSON
 
 (; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
