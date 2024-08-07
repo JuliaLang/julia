@@ -159,7 +159,7 @@ function check()
     interface = USE_BLAS64 ? :ilp64 : :lp64
     if !any(lib.interface == interface for lib in config.loaded_libs)
         interfacestr = uppercase(string(interface))
-        @error("No loaded BLAS libraries were built with $interfacestr support.")
+        println(Core.stderr, "No loaded BLAS libraries were built with $interfacestr support.")
         exit(1)
     end
 end

@@ -211,12 +211,6 @@ end
 # Additional method patches depending on whether user code loads certain stdlibs
 
 let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
-    if :LinearAlgebra in loaded
-        using LinearAlgebra
-        @eval LinearAlgebra.BLAS begin
-            check() = nothing #TODO: this might be unsafe but needs logging macro fixes
-        end
-    end
     if :SparseArrays in loaded
         using SparseArrays
         @eval SparseArrays.CHOLMOD begin
