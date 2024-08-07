@@ -264,7 +264,7 @@ end
 
 function textwidth(c::Char)
     b = bswap(reinterpret(UInt32, c)) # from isascii(c)
-    b < 0x7f && return Int(b >= 0x20); # ASCII fast path
+    b < 0x7f && return Int(b >= 0x20) # ASCII fast path
     ismalformed(c) && return 1
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
