@@ -452,7 +452,12 @@ tests = [
         "x\"s\"in"   => """(macrocall @x_str (string-r "s") "in")"""
         "x\"s\"2"    => """(macrocall @x_str (string-r "s") 2)"""
         "x\"s\"10.0" => """(macrocall @x_str (string-r "s") 10.0)"""
-        #
+        # Cmd macro sufficies
+        "x`s`y"    => """(macrocall @x_cmd (cmdstring-r "s") "y")"""
+        "x`s`end"  => """(macrocall @x_cmd (cmdstring-r "s") "end")"""
+        "x`s`in"   => """(macrocall @x_cmd (cmdstring-r "s") "in")"""
+        "x`s`2"    => """(macrocall @x_cmd (cmdstring-r "s") 2)"""
+        "x`s`10.0" => """(macrocall @x_cmd (cmdstring-r "s") 10.0)"""
     ],
     JuliaSyntax.parse_resword => [
         # In normal_context
