@@ -1217,7 +1217,7 @@ end
 end
 
 @testset "issue #55266" begin
-    for T in (Float32, Float64)
+    for T in (Float16, Float32, Float64)
         @test isapprox(atanh(1+im*floatmin(T)), T(atanh(1+im*big(floatmin(T)))))
     end
 end
