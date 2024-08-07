@@ -4286,9 +4286,10 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             ovflw = ctx.builder.CreateICmpUGE(ctx.builder.CreateAdd(offset, mlen), ctx.builder.CreateNUWAdd(mlen, mlen));
         }
 #endif
-        //Is this change fine
-        boffset = ctx.builder.CreateMul(offset, elsz);
-        newdata = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), data, boffset);
+        // boffset = ctx.builder.CreateMul(offset, elsz);
+        Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jl_tparam1(ref.typ));
+        newdata = emit_bitcast(ctx, data, getPointerTy(ctx.builder.getContext()));
+        newdata = ctx.builder.CreateInBoundsGEP(elty, newdata, offset);
         (void)boffset; // LLVM is very bad at handling GEP with types different from the load
         if (bc) {
             BasicBlock *failBB, *endBB;
