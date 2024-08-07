@@ -21,7 +21,7 @@ export parsestmt,
     build_tree
 
 # Tokenization
-@_public tokenize,
+export tokenize,
     Token,
     untokenize
 
