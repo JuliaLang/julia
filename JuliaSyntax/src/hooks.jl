@@ -45,11 +45,8 @@ function _incomplete_tag(n::SyntaxNode, codelen)
             return :none
         end
     end
-    if kind(c) == K"error" && begin
-                cs = children(c)
-                length(cs) > 0
-            end
-        for cc in cs
+    if kind(c) == K"error" && numchildren(c) > 0
+        for cc in children(c)
             if kind(cc) == K"error"
                 return :other
             end

@@ -124,13 +124,46 @@ JuliaSyntax.SHORT_FORM_FUNCTION_FLAG
 
 ## Syntax trees
 
-Syntax tree types:
+Access to the children of a tree node is provided by the functions
+
+```@docs
+JuliaSyntax.is_leaf
+JuliaSyntax.numchildren
+JuliaSyntax.children
+```
+
+For convenient access to the children, we also provide `node[i]`, `node[i:j]`
+and `node[begin:end]` by implementing `Base.getindex()`, `Base.firstindex()` and
+`Base.lastindex()`. We choose to return a view from `node[i:j]` to make it
+non-allocating.
+
+Tree traversal is supported by using these functions along with the predicates
+such as [`kind`](@ref) listed above.
+
+### Trees referencing the source
 
 ```@docs
 JuliaSyntax.SyntaxNode
+```
+
+Functions applicable to `SyntaxNode` include everything in the sections on
+heads/kinds as well as the accessor functions in the source code handling
+section.
+
+### Relocatable syntax trees
+
+[`GreenNode`](@ref) is a special low level syntax tree: it's "relocatable" in
+the sense that it doesn't carry an absolute position in the source code or even
+a reference to the source text. This allows it to be reused for incremental
+parsing, but does make it a pain to work with directly!
+
+```@docs
 JuliaSyntax.GreenNode
 ```
 
-Functions applicable to syntax trees include everything in the sections on
-heads/kinds as well as the accessor functions in the source code handling
-section.
+Green nodes only have a relative position so implement `span()` instead of
+`byte_range()`:
+
+```@docs
+JuliaSyntax.span
+```
