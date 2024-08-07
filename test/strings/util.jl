@@ -77,12 +77,22 @@ end
     # trust that the user wants the replacement string rather than erroring
     @test ltruncate("abc", 2, "xxxxxx") == "xxxxxx"
 
+    @inferred ltruncate("xxx", 4)
+    @inferred ltruncate("xxx", 2)
+    @inferred ltruncate(@view("xxxxxxx"[1:4]), 4)
+    @inferred ltruncate(@view("xxxxxxx"[1:4]), 2)
+
     @test rtruncate("foo", 4) == "foo"
     @test rtruncate("foo", 3) == "foo"
     @test rtruncate("foo", 2) == "f…"
     @test rtruncate("🍕🍕 I love 🍕", 10) == "🍕🍕 I lo…"
     @test rtruncate("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕 I […]"
     @test rtruncate("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @inferred rtruncate("xxx", 4)
+    @inferred rtruncate("xxx", 2)
+    @inferred rtruncate(@view("xxxxxxx"[1:4]), 4)
+    @inferred rtruncate(@view("xxxxxxx"[1:4]), 2)
 
     @test ctruncate("foo", 4) == "foo"
     @test ctruncate("foo", 3) == "foo"
@@ -95,6 +105,11 @@ end
     @test ctruncate("🍕🍕 I love 🍕", 10) == "🍕🍕 …e 🍕"
     @test ctruncate("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕[…] 🍕"
     @test ctruncate("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @inferred ctruncate("xxxxx", 5)
+    @inferred ctruncate("xxxxx", 3)
+    @inferred ctruncate(@view("xxxxxxx"[1:5]), 5)
+    @inferred ctruncate(@view("xxxxxxx"[1:5]), 3)
 end
 
 # string manipulation
