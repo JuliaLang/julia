@@ -2,7 +2,7 @@
     t = parsestmt(GreenNode, "aa + b")
 
     @test span(t) == 6
-    @test haschildren(t)
+    @test !is_leaf(t)
     @test head(t) == SyntaxHead(K"call", 0x0008)
     @test span.(children(t)) == [2,1,1,1,1]
     @test head.(children(t)) == [

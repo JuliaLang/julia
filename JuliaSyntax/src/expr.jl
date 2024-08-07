@@ -526,7 +526,7 @@ end
 
 function _to_expr(node)
     file = sourcefile(node)
-    if !haschildren(node)
+    if is_leaf(node)
         offset, txtbuf = _unsafe_wrap_substring(sourcetext(file))
         return _leaf_to_Expr(file, txtbuf, head(node), byte_range(node) .+ offset, node)
     end

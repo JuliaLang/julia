@@ -76,7 +76,7 @@ end
 function _to_SyntaxNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
                         raw::GreenNode{SyntaxHead},
                         position::Int, keep_parens::Bool)
-    if !haschildren(raw)
+    if is_leaf(raw)
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
         valrange = position:position + span(raw) - 1
@@ -106,7 +106,7 @@ function _to_SyntaxNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
     end
 end
 
-haschildren(node::TreeNode) = node.children !== nothing
+is_leaf(node::TreeNode) = node.children === nothing
 children(node::TreeNode) = (c = node.children; return c === nothing ? () : c)
 numchildren(node::TreeNode) = (isnothing(node.children) ? 0 : length(node.children))
 
@@ -134,7 +134,7 @@ function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
         posstr *= "$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
     end
     val = node.val
-    nodestr = haschildren(node) ? "[$(untokenize(head(node)))]" :
+    nodestr = !is_leaf(node) ? "[$(untokenize(head(node)))]" :
               isa(val, Symbol) ? string(val) : repr(val)
     treestr = string(indent, nodestr)
     # Add filename if it's changed from the previous node
@@ -144,7 +144,7 @@ function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
         current_filename[] = fname
     end
     println(io, posstr, treestr)
-    if haschildren(node)
+    if !is_leaf(node)
         new_indent = indent*"  "
         for n in children(node)
             _show_syntax_node(io, current_filename, n, new_indent, show_byte_offsets)
@@ -153,7 +153,7 @@ function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
 end
 
 function _show_syntax_node_sexpr(io, node::AbstractSyntaxNode)
-    if !haschildren(node)
+    if is_leaf(node)
         if is_error(node)
             print(io, "(", untokenize(head(node)), ")")
         else
@@ -186,7 +186,7 @@ function Base.show(io::IO, node::AbstractSyntaxNode)
 end
 
 function Base.push!(node::SN, child::SN) where SN<:AbstractSyntaxNode
-    if !haschildren(node)
+    if is_leaf(node)
         error("Cannot add children")
     end
     args = children(node)
@@ -196,7 +196,7 @@ end
 function Base.copy(node::TreeNode)
     # copy the container but not the data (ie, deep copy the tree, shallow copy the data). copy(::Expr) is similar
     # copy "un-parents" the top-level `node` that you're copying
-    newnode = typeof(node)(nothing, haschildren(node) ? typeof(node)[] : nothing, copy(node.data))
+    newnode = typeof(node)(nothing, is_leaf(node) ? nothing : typeof(node)[], copy(node.data))
     for child in children(node)
         newchild = copy(child)
         newchild.parent = newnode
