@@ -808,7 +808,7 @@ end
     @test copyto!(zero(S), T) == T
 
     T2 = Tridiagonal(ones(length(ev)), zero(dv), zero(ev))
-    @test_throws "cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
+    @test_throws "cannot copy an asymmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
 
     @testset "mismatched sizes" begin
         dv2 = [4; @view dv[2:end]]
