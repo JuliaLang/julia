@@ -258,7 +258,7 @@ julia> textwidth('⛵')
 function textwidth(c::AbstractChar)
     ismalformed(c) && return 1
     i = codepoint(c)
-    i < 0x7f && return Int(i >= 0x20); # ASCII fast path
+    i < 0x7f && return Int(i >= 0x20) # ASCII fast path
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), i))
 end
 
