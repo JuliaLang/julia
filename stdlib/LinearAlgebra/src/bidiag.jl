@@ -664,7 +664,7 @@ end
 
 function _mul!(C::AbstractMatrix, A::Bidiagonal, B::Diagonal, _add::MulAddMul)
     require_one_based_indexing(C)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
     _rmul_or_fill!(C, _add.beta)  # see the same use above
@@ -694,7 +694,7 @@ function _mul!(C::AbstractMatrix, A::Bidiagonal, B::Diagonal, _add::MulAddMul)
 end
 
 function _mul!(C::Bidiagonal, A::Bidiagonal, B::Diagonal, _add::MulAddMul)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
@@ -857,7 +857,7 @@ function _dibimul!(C, A, B, _add)
 end
 function _dibimul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add)
     require_one_based_indexing(C)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     iszero(n) && return C
     _rmul_or_fill!(C, _add.beta)  # see the same use above
@@ -887,7 +887,7 @@ function _dibimul!(C::AbstractMatrix, A::Diagonal, B::Bidiagonal, _add)
     C
 end
 function _dibimul!(C::Bidiagonal, A::Diagonal, B::Bidiagonal, _add)
-    check_A_mul_B!_sizes(C, A, B)
+    check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     n == 0 && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
