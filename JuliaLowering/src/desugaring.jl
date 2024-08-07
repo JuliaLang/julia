@@ -121,7 +121,7 @@ end
 function expand_let(ctx, ex)
     scope_type = get(ex, :scope_type, :hard)
     blk = ex[2]
-    if numchildren(ex[1]) == 0 # TODO: Want to use !haschildren(ex[1]) but this doesn't work...
+    if numchildren(ex[1]) == 0
         return @ast ctx ex [K"scope_block"(scope_type=scope_type) blk]
     end
     for binding in Iterators.reverse(children(ex[1]))
@@ -818,7 +818,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         else
             expand_forms_2(ctx, expand_decls(ctx, ex)) # FIXME
         end
-    elseif is_operator(k) && !haschildren(ex)
+    elseif is_operator(k) && is_leaf(ex)
         makeleaf(ctx, ex, K"Identifier", ex.name_val)
     elseif k == K"char" || k == K"var"
         @chk numchildren(ex) == 1
@@ -884,7 +884,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert"
         ex
-    elseif !haschildren(ex)
+    elseif is_leaf(ex)
         ex
     else
         mapchildren(e->expand_forms_2(ctx,e), ctx, ex)

@@ -326,7 +326,7 @@ function copy_attrs!(dest, head::Union{Kind,JuliaSyntax.SyntaxHead}, all=false)
 end
 
 function mapchildren(f, ctx, ex; extra_attrs...)
-    if !haschildren(ex)
+    if is_leaf(ex)
         return ex
     end
     orig_children = children(ex)
@@ -367,7 +367,7 @@ function copy_ast(ctx, ex)
     srcref = s isa NodeId ? copy_ast(ctx, SyntaxTree(ex._graph, s))            :
              s isa Tuple  ? map(i->copy_ast(ctx, SyntaxTree(ex._graph, i)), s) :
              s
-    if haschildren(ex)
+    if !is_leaf(ex)
         cs = SyntaxList(ctx)
         for e in children(ex)
             push!(cs, copy_ast(ctx, e))

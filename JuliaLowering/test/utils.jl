@@ -9,7 +9,7 @@ using JuliaLowering:
     SyntaxGraph, newnode!, ensure_attributes!,
     Kind, SourceRef, SyntaxTree, NodeId,
     makenode, makeleaf, setattr!, sethead!,
-    haschildren, numchildren, children,
+    is_leaf, numchildren, children,
     @ast, flattened_provenance, showprov, LoweringError
 
 function _ast_test_graph()
@@ -38,10 +38,10 @@ macro ast_(tree)
 end
 
 function ~(ex1, ex2)
-    if kind(ex1) != kind(ex2) || haschildren(ex1) != haschildren(ex2)
+    if kind(ex1) != kind(ex2) || is_leaf(ex1) != is_leaf(ex2)
         return false
     end
-    if haschildren(ex1)
+    if is_leaf(ex1)
         if numchildren(ex1) != numchildren(ex2)
             return false
         end
@@ -57,7 +57,7 @@ end
 function _format_as_ast_macro(io, ex, indent)
     k = kind(ex)
     kind_str = repr(k)
-    if haschildren(ex)
+    if !is_leaf(ex)
         println(io, indent, "[", kind_str)
         ind2 = indent*"    "
         for c in children(ex)

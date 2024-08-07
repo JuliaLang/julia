@@ -122,7 +122,7 @@ function set_scope_layer(ctx, ex, layer_id, force)
     elseif k == K"."
         makenode(ctx, ex, ex, set_scope_layer(ctx, ex[1], layer_id, force), ex[2],
                  scope_layer=scope_layer)
-    elseif haschildren(ex)
+    elseif !is_leaf(ex)
         mapchildren(e->set_scope_layer(ctx, e, layer_id, force), ctx, ex;
                     scope_layer=scope_layer)
     else
@@ -192,7 +192,7 @@ end
 # Add a secondary source of provenance to each expression in the tree `ex`.
 function append_sourceref(ctx, ex, secondary_prov)
     srcref = (ex, secondary_prov)
-    if haschildren(ex)
+    if !is_leaf(ex)
         if kind(ex) == K"macrocall"
             makenode(ctx, srcref, ex, children(ex)...)
         else
@@ -225,7 +225,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # FIXME: Move this upstream into JuliaSyntax
         @ast ctx ex (k == K"true")::K"Bool"
     elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName" ||
-            (is_operator(k) && !haschildren(ex)) # <- TODO: fix upstream: make operator *tokens* into identifiers
+            (is_operator(k) && is_leaf(ex)) # <- TODO: fix upstream: make operator *tokens* into identifiers
         layerid = get(ex, :scope_layer, ctx.current_layer.id)
         makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)
     elseif k == K"var" || k == K"char" || k == K"parens"
@@ -252,7 +252,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         expand_macro(ctx, ex)
     elseif k == K"module" || k == K"toplevel" || k == K"inert"
         ex
-    elseif !haschildren(ex)
+    elseif is_leaf(ex)
         ex
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)

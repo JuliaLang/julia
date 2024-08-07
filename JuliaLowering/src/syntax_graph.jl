@@ -81,8 +81,8 @@ function setchildren!(graph::SyntaxGraph, id, children)
     append!(graph.edges, children)
 end
 
-function JuliaSyntax.haschildren(graph::SyntaxGraph, id)
-    first(graph.edge_ranges[id]) > 0
+function JuliaSyntax.is_leaf(graph::SyntaxGraph, id)
+    first(graph.edge_ranges[id]) == 0
 end
 
 function JuliaSyntax.numchildren(graph::SyntaxGraph, id)
@@ -97,7 +97,7 @@ function JuliaSyntax.children(graph::SyntaxGraph, id, r::UnitRange)
     @view graph.edges[graph.edge_ranges[id][r]]
 end
 
-function JuliaSyntax.child(graph::SyntaxGraph, id::NodeId, i::Integer)
+function child(graph::SyntaxGraph, id::NodeId, i::Integer)
     graph.edges[graph.edge_ranges[id][i]]
 end
 
@@ -157,7 +157,7 @@ function _convert_nodes(graph::SyntaxGraph, node::SyntaxNode)
         end
     end
     setattr!(graph, id, source=SourceRef(node.source, node.position, node.raw))
-    if haschildren(node)
+    if !is_leaf(node)
         cs = map(children(node)) do n
             _convert_nodes(graph, n)
         end
@@ -213,7 +213,7 @@ function Base.get(ex::SyntaxTree, name::Symbol, default)
 end
 
 function Base.getindex(ex::SyntaxTree, i::Integer)
-    child(ex, i)
+    SyntaxTree(ex._graph, child(ex._graph, ex._id, i))
 end
 
 function Base.getindex(ex::SyntaxTree, r::UnitRange)
@@ -239,8 +239,8 @@ end
 
 # JuliaSyntax tree API
 
-function JuliaSyntax.haschildren(ex::SyntaxTree)
-    haschildren(ex._graph, ex._id)
+function JuliaSyntax.is_leaf(ex::SyntaxTree)
+    is_leaf(ex._graph, ex._id)
 end
 
 function JuliaSyntax.numchildren(ex::SyntaxTree)
@@ -249,10 +249,6 @@ end
 
 function JuliaSyntax.children(ex::SyntaxTree)
     SyntaxList(ex._graph, children(ex._graph, ex._id))
-end
-
-function JuliaSyntax.child(ex::SyntaxTree, i::Integer)
-    SyntaxTree(ex._graph, child(ex._graph, ex._id, i))
 end
 
 function JuliaSyntax.head(ex::SyntaxTree)
@@ -437,7 +433,7 @@ end
 
 function _show_syntax_tree(io, ex, indent)
     val = get(ex, :value, nothing)
-    nodestr = haschildren(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
+    nodestr = !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
 
     treestr = string(indent, nodestr)
 
@@ -447,7 +443,7 @@ function _show_syntax_tree(io, ex, indent)
     treestr = string(rpad(treestr, 40), "│ $attrstr")
 
     println(io, treestr)
-    if haschildren(ex)
+    if !is_leaf(ex)
         new_indent = indent*"  "
         for n in children(ex)
             _show_syntax_tree(io, n, new_indent)
@@ -462,7 +458,7 @@ function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree)
 end
 
 function _show_syntax_tree_sexpr(io, ex)
-    if !haschildren(ex)
+    if is_leaf(ex)
         if is_error(ex)
             print(io, "(", untokenize(head(ex)), ")")
         else

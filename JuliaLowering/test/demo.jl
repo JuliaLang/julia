@@ -3,7 +3,7 @@
 using JuliaSyntax
 using JuliaLowering
 
-using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, haschildren, children, child, setattr!, sourceref, makenode, sourcetext, showprov, lookup_binding
+using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, is_leaf, children, child, setattr!, sourceref, makenode, sourcetext, showprov, lookup_binding
 
 using JuliaSyntaxFormatter
 

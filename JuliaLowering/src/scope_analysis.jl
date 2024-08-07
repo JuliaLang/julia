@@ -62,7 +62,7 @@ function _find_scope_vars!(assignments, locals, globals, used_names, used_bindin
         push!(used_names, NameKey(ex))
     elseif k == K"BindingId"
         push!(used_bindings, ex.var_id)
-    elseif !haschildren(ex) || is_quoted(k) ||
+    elseif is_leaf(ex) || is_quoted(k) ||
             k in KSet"scope_block lambda module toplevel"
         return
     elseif k == K"local" || k == K"local_def"
@@ -345,7 +345,7 @@ function _resolve_scopes!(ctx, ex)
     if k == K"Identifier"
         id = lookup_var(ctx, NameKey(ex))
         setattr!(ctx.graph, ex._id, var_id=id)
-    elseif !haschildren(ex) || is_quoted(ex) || k == K"toplevel"
+    elseif is_leaf(ex) || is_quoted(ex) || k == K"toplevel"
         return
     # TODO
     # elseif k == K"global"
