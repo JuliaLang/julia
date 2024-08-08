@@ -3666,13 +3666,10 @@ end
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
     io = try
         open(cachefile, "r")
-    catch e
-        if e isa SystemError && e.errno == ENOENT
-            @debug "Rejecting cache file $cachefile for $modkey because it does not exist"
-            return true
-        else
-            rethrow()
-        end
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @debug "Rejecting cache file $cachefile for $modkey because it could not be opened" isfile(cachefile)
+        return true
     end
     try
         checksum = isvalid_cache_header(io)
