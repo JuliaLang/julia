@@ -457,6 +457,11 @@ without adding them to the global method table.
 """
 :@MethodTable
 
+"""
+    Base.Experimental.entrypoint(f, argtypes::Tuple)
+
+Mark a method for inclusion when the `--trim` option is specified.
+"""
 function entrypoint(@nospecialize(f), @nospecialize(argtypes::Tuple))
     entrypoint(Tuple{Core.Typeof(f), argtypes...})
 end

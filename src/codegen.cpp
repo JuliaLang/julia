@@ -2267,7 +2267,7 @@ static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT
     return out;
 }
 
-static void print_stacktrace(jl_codectx_t &ctx, int static_call_graph)
+static void print_stacktrace(jl_codectx_t &ctx, int trim)
 {
     jl_task_t *ct = jl_get_current_task();
     assert(ct);
@@ -2300,17 +2300,16 @@ static void print_stacktrace(jl_codectx_t &ctx, int static_call_graph)
     JL_GC_POP();
     ct->world_age = last_age;
 
-    if (static_call_graph == JL_STATIC_CALL_GRAPH_SAFE) {
+    if (trim == JL_TRIM_SAFE) {
         jl_printf(JL_STDERR,"Aborting compilation due to finding a dynamic dispatch");
         exit(1);
     }
     return;
 }
 
-static int static_call_graph_may_error(int static_call_graph)
+static int trim_may_error(int trim)
 {
-    return (static_call_graph == JL_STATIC_CALL_GRAPH_SAFE) ||
-            (static_call_graph == JL_STATIC_CALL_GRAPH_UNSAFE_WARN);
+    return (trim == JL_TRIM_SAFE) || (trim == JL_TRIM_UNSAFE_WARN);
 }
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
@@ -4448,11 +4447,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *theArgs = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
-                if (static_call_graph_may_error(ctx.params->static_call_graph)) {
+                if (trim_may_error(ctx.params->trim)) {
                     // if we know the return type, we can assume the result is of that type
                     errs() << "ERROR: Dynamic call to Core._apply_iterate detected\n";
                     errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-                    print_stacktrace(ctx, ctx.params->static_call_graph);
+                    print_stacktrace(ctx, ctx.params->trim);
                 }
                 return true;
             }
@@ -5561,7 +5560,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
                         ctx.call_targets[codeinst] = {cc, return_roots, trampoline_decl, specsig};
-                        if (static_call_graph_may_error(ctx.params->static_call_graph))
+                        if (trim_may_error(ctx.params->trim))
                             push_frames(ctx, ctx.linfo, mi);
                     }
                 }
@@ -5569,7 +5568,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         }
     }
     if (!handled) {
-        if (static_call_graph_may_error(ctx.params->static_call_graph)) {
+        if (trim_may_error(ctx.params->trim)) {
             if (lival.constant) {
                 arraylist_push(&new_invokes, lival.constant);
                 push_frames(ctx, ctx.linfo, (jl_method_instance_t*)lival.constant);
@@ -5577,7 +5576,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                 errs() << "Dynamic call to unknown function";
                 errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
 
-                print_stacktrace(ctx, ctx.params->static_call_graph);
+                print_stacktrace(ctx, ctx.params->trim);
             }
         }
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
@@ -5639,11 +5638,11 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
             return mark_julia_type(ctx, oldnew, true, rt);
         }
     }
-    if (static_call_graph_may_error(ctx.params->static_call_graph)) {
+    if (trim_may_error(ctx.params->trim)) {
         errs() << "ERROR: dynamic invoke modify call to";
         jl_(args[0]);
         errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-        print_stacktrace(ctx, ctx.params->static_call_graph);
+        print_stacktrace(ctx, ctx.params->trim);
     }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
@@ -5718,10 +5717,10 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             // special case for some known builtin not handled by emit_builtin_call
             auto it = builtin_func_map().find(builtin_fptr);
             if (it != builtin_func_map().end()) {
-                if (static_call_graph_may_error(ctx.params->static_call_graph) && may_dispatch_builtins().count(builtin_fptr)) {
+                if (trim_may_error(ctx.params->trim) && may_dispatch_builtins().count(builtin_fptr)) {
                     errs() << "ERROR: Dynamic call to builtin" << jl_symbol_name(((jl_datatype_t*)jl_typeof(f.constant))->name->name);
                     errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-                    print_stacktrace(ctx, ctx.params->static_call_graph);
+                    print_stacktrace(ctx, ctx.params->trim);
                 }
                 Value *ret = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
                 setName(ctx.emission_context, ret, it->second->name + "_ret");
@@ -5762,7 +5761,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         }
     }
     int failed_dispatch = !argv[0].constant;
-    if (ctx.params->static_call_graph != JL_STATIC_CALL_GRAPH_NO) {
+    if (ctx.params->trim != JL_TRIM_NO) {
         size_t min_valid = 1;
         size_t max_valid = ~(size_t)0;
         size_t latest_world = jl_get_world_counter(); // TODO: marshal the world age of the compilation here.
@@ -5800,7 +5799,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         JL_GC_POP();
     }
 
-    if (failed_dispatch && static_call_graph_may_error(ctx.params->static_call_graph)) {
+    if (failed_dispatch && trim_may_error(ctx.params->trim)) {
         errs() << "Dynamic call to ";
         jl_jmp_buf *old_buf = jl_get_safe_restore();
         jl_jmp_buf buf;
@@ -5825,7 +5824,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         }
         jl_set_safe_restore(old_buf);
         errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-        print_stacktrace(ctx, ctx.params->static_call_graph);
+        print_stacktrace(ctx, ctx.params->trim);
     }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, n_generic_args, julia_call);
@@ -6971,11 +6970,11 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             ((jl_method_t*)source.constant)->nargs > 0 &&
             jl_is_valid_oc_argtype((jl_tupletype_t*)argt.constant, (jl_method_t*)source.constant);
 
-        if (!can_optimize && static_call_graph_may_error(ctx.params->static_call_graph)) {
+        if (!can_optimize && trim_may_error(ctx.params->trim)) {
             // if we know the return type, we can assume the result is of that type
             errs() << "ERROR: Dynamic call to OpaqueClosure method\n";
             errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-            print_stacktrace(ctx, ctx.params->static_call_graph);
+            print_stacktrace(ctx, ctx.params->trim);
         }
 
         if (can_optimize) {
@@ -7177,7 +7176,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptr
             GlobalVariable::InternalLinkage,
             name, M);
     jl_init_function(f, params.TargetTriple);
-    if (static_call_graph_may_error(params.params->static_call_graph)) {
+    if (trim_may_error(params.params->trim)) {
         arraylist_push(&new_invokes, codeinst->def); // Try t compile this invoke
         // TODO: Debuginfo!
         push_frames(ctx, ctx.linfo, codeinst->def, 1);
@@ -10179,7 +10178,7 @@ void jl_compile_workqueue(
             if (it == params.compiled_functions.end()) {
                 // Reinfer the function. The JIT came along and removed the inferred
                 // method body. See #34993
-                if ((policy != CompilationPolicy::Default || params.params->static_call_graph) &&
+                if ((policy != CompilationPolicy::Default || params.params->trim) &&
                     jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
                     // XXX: SOURCE_MODE_FORCE_SOURCE is wrong here (neither sufficient nor necessary)
                     codeinst = jl_type_infer(codeinst->def, jl_atomic_load_relaxed(&codeinst->max_world), SOURCE_MODE_FORCE_SOURCE);
@@ -10210,7 +10209,7 @@ void jl_compile_workqueue(
         if (proto.specsig) {
             // expected specsig
             if (!preal_specsig) {
-                if (params.params->static_call_graph) {
+                if (params.params->trim) {
                     auto it = params.compiled_functions.find(codeinst); //TODO: What to do about this
                     errs() << "Bailed out to invoke when compiling:";
                     jl_(codeinst->def);
@@ -10423,7 +10422,7 @@ extern "C" void jl_init_llvm(void)
         /* safepoint_on_entry */ 1,
         /* gcstack_arg */ 1,
         /* use_jlplt*/ 1,
-        /* static_call_graph */ 0,
+        /* trim */ 0,
         /* lookup */ jl_rettype_inferred_addr };
     jl_page_size = jl_getpagesize();
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;

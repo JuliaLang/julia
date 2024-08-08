@@ -368,7 +368,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     arraylist_new(&new_invokes, 0);
     size_t compile_for[] = { jl_typeinf_world, _world };
     int worlds = 0;
-    if (jl_options.static_call_graph != JL_STATIC_CALL_GRAPH_NO)
+    if (jl_options.trim != JL_TRIM_NO)
         worlds = 1;
     for (; worlds < 2; worlds++) {
         JL_TIMING(NATIVE_AOT, NATIVE_Codegen);
@@ -397,7 +397,7 @@ compile_mi:
             if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= this_world && this_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
-                if (jl_options.static_call_graph != JL_STATIC_CALL_GRAPH_NO && !codeinst) {
+                if (jl_options.trim != JL_TRIM_NO && !codeinst) {
                     // If we're building a small image, we need to compile everything
                     // to ensure that we have all the information we need.
                     jl_safe_printf("Codegen decided not to compile code root");
@@ -407,7 +407,7 @@ compile_mi:
                 if (codeinst && !params.compiled_functions.count(codeinst) && !data->jl_fvar_map.count(codeinst)) {
                     // now add it to our compilation results
                     // Const returns do not do codegen, but juliac inspects codegen results so make a dummy fvar entry to represent it
-                    if (jl_options.static_call_graph != JL_STATIC_CALL_GRAPH_NO && codeinst->invoke == jl_fptr_const_return_addr) {
+                    if (jl_options.trim != JL_TRIM_NO && codeinst->invoke == jl_fptr_const_return_addr) {
                         data->jl_fvar_map[codeinst] = std::make_tuple((uint32_t)-3, (uint32_t)-3);
                     } else {
                         JL_GC_PROMISE_ROOTED(codeinst->rettype);

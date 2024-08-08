@@ -218,7 +218,7 @@ The following is a complete list of command-line switches available when launchi
 |`--trace-compile-timing`               |If --trace-compile is enabled show how long each took to compile in ms|
 |`--image-codegen`                      |Force generate code in imaging mode|
 |`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
-
+|`--trim={no*|safe|unsafe|unsafe-warn}` |Build a sysimage including only code provably reachable from methods marked by calling `entrypoint`. In unsafe mode, the resulting binary might be missing needed code and can throw errors. With unsafe-warn warnings will be printed for dynamic call sites that might lead to such errors. In safe mode compile-time errors are given instead.|
 
 !!! compat "Julia 1.1"
     In Julia 1.0, the default `--project=@.` option did not search up from the root

@@ -3120,7 +3120,7 @@ JL_DLLEXPORT int jl_add_entrypoint(jl_tupletype_t *types)
     if (mi == NULL)
         return 0;
     JL_GC_PROMISE_ROOTED(mi);
-    if (jl_generating_output() && jl_options.static_call_graph) {
+    if (jl_generating_output() && jl_options.trim) {
         arraylist_push(jl_entrypoint_mis, mi);
     }
     return 1;

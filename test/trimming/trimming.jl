@@ -13,7 +13,7 @@ cflags = Base.shell_split(cflags)
 allflags = readchomp(`$(cmd) $(joinpath(Sys.BINDIR, Base.DATAROOTDIR,"julia", "julia-config.jl")) --allflags`)
 allflags = Base.shell_split(allflags)
 
-cmd = addenv(`$cmd --output-o $img_path --output-incremental=no --strip-ir --strip-metadata --static-call-graph $(joinpath(@__DIR__,"buildscript.jl")) hello.jl --output-exe true`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+cmd = addenv(`$cmd --output-o $img_path --output-incremental=no --strip-ir --strip-metadata --trim $(joinpath(@__DIR__,"buildscript.jl")) hello.jl --output-exe true`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
 
 @test success(cmd)
 
