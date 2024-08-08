@@ -914,4 +914,26 @@ end
     end
 end
 
+@testset "mul with empty arrays" begin
+    A = zeros(5,0)
+    T = Tridiagonal(zeros(0), zeros(0), zeros(0))
+    TL = Tridiagonal(zeros(4), zeros(5), zeros(4))
+    @test size(A * T) == size(A)
+    @test size(TL * A) == size(A)
+    @test size(T * T) == size(T)
+    C = similar(A)
+    @test mul!(C, A, T) == A * T
+    @test mul!(C, TL, A) == TL * A
+    @test mul!(similar(T), T, T) == T * T
+    @test mul!(similar(T, size(T)), T, T) == T * T
+
+    v = zeros(size(T,2))
+    @test size(T * v) == size(v)
+    @test mul!(similar(v), T, v) == T * v
+
+    D = Diagonal(zeros(size(T,2)))
+    @test size(T * D) == size(D * T) == size(D)
+    @test mul!(similar(D), T, D) == mul!(similar(D), D, T) == T * D
+end
+
 end # module TestTridiagonal
