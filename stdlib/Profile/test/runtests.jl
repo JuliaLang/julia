@@ -3,6 +3,10 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+# Some tests intermittently fail on aarch64 Linux only in CI, we skip them for
+# the time being: https://github.com/JuliaLang/julia/issues/54839
+const is_aarch64_linux = Sys.islinux() && Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch64" && get(ENV, "CI", "false") == "true"
+
 @test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
 
 Profile.clear()
@@ -49,7 +53,7 @@ for options in ((format=:tree, C=true),
     iobuf = IOBuffer()
     Profile.print(iobuf; options...)
     str = String(take!(iobuf))
-    @test !isempty(str)
+    @test !isempty(str) skip=is_aarch64_linux
 end
 
 @testset "Profile.print() groupby options" begin
@@ -59,7 +63,7 @@ end
             @testset for threads in Any[1:typemax(Int), 1, 1:1, 1:2, [1,2]]
                 @testset for groupby in Any[:none, :thread, :task, [:thread, :task], [:task, :thread]]
                     Profile.print(iobuf; groupby, threads, format)
-                    @test !isempty(String(take!(iobuf)))
+                    @test !isempty(String(take!(iobuf))) skip=is_aarch64_linux
                 end
             end
         end
@@ -178,10 +182,10 @@ let cmd = Base.julia_cmd()
     end
     s = read(p, String)
     close(t)
-    @test success(p)
+    @test success(p) skip=is_aarch64_linux
     @test !isempty(s)
-    @test occursin("done", s)
-    @test parse(Int, split(s, '\n')[end]) > 100
+    @test occursin("done", s) skip=is_aarch64_linux
+    @test parse(Int, split(s, '\n')[end]) > 100 skip=is_aarch64_linux
 end
 
 if Sys.isbsd() || Sys.islinux()
