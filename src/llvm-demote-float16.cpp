@@ -73,12 +73,23 @@ static bool have_fp16(Function &caller, const Triple &TT) {
 }
 
 static bool have_bf16(Function &caller, const Triple &TT) {
-    if (caller.hasFnAttribute("julia.hasbf16")) {
-        return true;
+    Attribute FSAttr = caller.getFnAttribute("target-features");
+    StringRef FS = "";
+    if (FSAttr.isValid()) {
+        FS = FSAttr.getValueAsString();
+    } else if (jl_ExecutionEngine) {
+        FS = jl_ExecutionEngine->getTargetFeatureString();
+    }
+    if (TT.isAArch64()) {
+        if (FS.find("+bf16") != llvm::StringRef::npos) {
+            return true;
+        }
+    } else if (TT.getArch() == Triple::x86_64) {
+        if (caller.hasFnAttribute("julia.hasbf16")) {
+            return true;
+        }
     }
 
-    // there's no targets that fully support bfloat yet;,
-    // AVX512BF16 only provides conversion and dot product instructions.
     return false;
 }
 
