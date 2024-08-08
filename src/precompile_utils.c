@@ -346,7 +346,8 @@ static void *jl_precompile_trimmed(size_t world)
 {
     // array of MethodInstances and ccallable aliases to include in the output
     jl_array_t *m = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&m);
+    jl_value_t *ccallable = NULL;
+    JL_GC_PUSH2(&m, &ccallable);
     jl_method_instance_t *mi;
     while (1)
     {
@@ -356,7 +357,7 @@ static void *jl_precompile_trimmed(size_t world)
         assert(jl_is_method_instance(mi));
 
         jl_array_ptr_1d_push(m, (jl_value_t*)mi);
-        jl_value_t *ccallable = (jl_value_t *)mi->def.method->ccallable;
+        ccallable = (jl_value_t *)mi->def.method->ccallable;
         if (ccallable)
             jl_array_ptr_1d_push(m, ccallable);
     }

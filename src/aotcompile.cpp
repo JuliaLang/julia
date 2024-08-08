@@ -295,6 +295,7 @@ jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_
     jl_value_t *ci = cgparams.lookup(mi, world, world);
     JL_GC_PROMISE_ROOTED(ci);
     jl_code_instance_t *codeinst = NULL;
+    JL_GC_PUSH1(&codeinst);
     if (ci != jl_nothing && jl_atomic_load_relaxed(&((jl_code_instance_t *)ci)->inferred) != jl_nothing) {
         codeinst = (jl_code_instance_t*)ci;
     }
@@ -312,6 +313,7 @@ jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_
                 jl_mi_cache_insert(mi, codeinst);
         }
     }
+    JL_GC_POP();
     return codeinst;
 }
 
@@ -407,7 +409,7 @@ compile_mi:
                 if (codeinst && !params.compiled_functions.count(codeinst) && !data->jl_fvar_map.count(codeinst)) {
                     // now add it to our compilation results
                     // Const returns do not do codegen, but juliac inspects codegen results so make a dummy fvar entry to represent it
-                    if (jl_options.trim != JL_TRIM_NO && codeinst->invoke == jl_fptr_const_return_addr) {
+                    if (jl_options.trim != JL_TRIM_NO && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) {
                         data->jl_fvar_map[codeinst] = std::make_tuple((uint32_t)-3, (uint32_t)-3);
                     } else {
                         JL_GC_PROMISE_ROOTED(codeinst->rettype);

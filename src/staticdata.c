@@ -1021,7 +1021,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         if (jl_options.trim) {
             if (jl_is_method(v)) {
                 jl_method_t *m = (jl_method_t *)v;
-                if (jl_is_svec(m->specializations))
+                if (jl_is_svec(jl_atomic_load_relaxed(&m->specializations)))
                     jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->specializations), (jl_value_t*)m, 0, 1);
             }
             else if (jl_typetagis(v, jl_typename_type)) {
@@ -2833,6 +2833,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     if (jl_options.trim) {
         jl_rebuild_methtables(&MIs, &new_methtables);
         jl_methtable_t *mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_type_type_mt);
+        JL_GC_PROMISE_ROOTED(mt);
         if (mt != HT_NOTFOUND)
             jl_type_type_mt = mt;
         else
