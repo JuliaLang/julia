@@ -431,30 +431,33 @@ function _value_string(ex)
     return str
 end
 
-function _show_syntax_tree(io, ex, indent)
+function _show_syntax_tree(io, ex, indent, show_kinds)
     val = get(ex, :value, nothing)
     nodestr = !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
 
-    treestr = string(indent, nodestr)
+    treestr = rpad(string(indent, nodestr), 40)
+    if show_kinds && is_leaf(ex)
+        treestr = treestr*" :: "*string(kind(ex))
+    end
 
     std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:source,:var_id])
     attrstr = join([attrsummary(n, getproperty(ex, n))
                     for n in attrnames(ex) if n ∉ std_attrs], ",")
-    treestr = string(rpad(treestr, 40), "│ $attrstr")
+    treestr = string(rpad(treestr, 60), " │ $attrstr")
 
     println(io, treestr)
     if !is_leaf(ex)
         new_indent = indent*"  "
         for n in children(ex)
-            _show_syntax_tree(io, n, new_indent)
+            _show_syntax_tree(io, n, new_indent, show_kinds)
         end
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree)
+function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
     anames = join(string.(attrnames(syntax_graph(ex))), ",")
     println(io, "SyntaxTree with attributes $anames")
-    _show_syntax_tree(io, ex, "")
+    _show_syntax_tree(io, ex, "", show_kinds)
 end
 
 function _show_syntax_tree_sexpr(io, ex)
