@@ -597,6 +597,10 @@ precompile_test_harness(false) do dir
     @test Base.invokelatest(Baz.baz) === 1
     @test Baz === UseBaz.Baz
 
+    # should not throw if the cachefile does not exist
+    @test !isfile("DoesNotExist.ji")
+    @test Base.stale_cachefile("", "DoesNotExist.ji") === true
+
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")
     write(FooBar1_file,
