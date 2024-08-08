@@ -1961,7 +1961,7 @@ static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *t, int check, int not
         t = normalize_unionalls(t);
         p = t;
         jl_value_t *tw = extract_wrapper(t);
-        if (tw && t != tw && jl_types_equal(t, tw))
+        if (tw && t != tw && !jl_has_free_typevars(t) && jl_types_equal(t, tw))
             t = tw;
         p = t;
         check = 0; // remember that checks are already done now
@@ -2045,7 +2045,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             // normalize types equal to wrappers (prepare for Typeofwrapper)
             jl_value_t *tw = extract_wrapper(pi);
             if (tw && tw != pi && (tn != jl_type_typename || jl_typeof(pi) == jl_typeof(tw)) &&
-                    jl_types_equal(pi, tw)) {
+                    !jl_has_free_typevars(pi) && jl_types_equal(pi, tw)) {
                 iparams[i] = tw;
                 if (p) jl_gc_wb(p, tw);
             }
@@ -2717,7 +2717,7 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
             if (valid) {
                 t = normalize_unionalls(t);
                 jl_value_t *tw = extract_wrapper(t);
-                if (tw && t != tw && jl_types_equal(t, tw))
+                if (tw && t != tw && !jl_has_free_typevars(t) && jl_types_equal(t, tw))
                     t = tw;
             }
         }

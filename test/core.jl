@@ -7495,6 +7495,13 @@ struct A43411{S, T}
 end
 @test isbitstype(A43411{(:a,), Tuple{Int}})
 
+# issue #55189
+struct A55189{N}
+    children::NTuple{N,A55189{N}}
+end
+@test fieldtype(A55189{2}, 1) === Tuple{A55189{2}, A55189{2}}
+@assert !isbitstype(A55189{2})
+
 # issue #44614
 struct T44614_1{T}
     m::T
