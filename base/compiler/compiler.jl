@@ -184,8 +184,7 @@ baremodule BuildSettings
 using Core: ARGS, include
 using Core.Compiler: >, getindex, length
 
-MAX_METHODS::Int = 3
-UNOPTIMIZE_THROW_BLOCKS::Bool = true
+global MAX_METHODS::Int = 3
 
 if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
     include(BuildSettings, ARGS[3])

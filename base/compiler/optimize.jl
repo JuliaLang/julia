@@ -23,31 +23,29 @@ const IR_FLAG_INBOUNDS    = one(UInt32) << 0
 const IR_FLAG_INLINE      = one(UInt32) << 1
 # This statement is marked as @noinline by user
 const IR_FLAG_NOINLINE    = one(UInt32) << 2
-# This statement is on a code path that eventually `throw`s.
-const IR_FLAG_THROW_BLOCK = one(UInt32) << 3
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
-const IR_FLAG_REFINED     = one(UInt32) << 4
+const IR_FLAG_REFINED     = one(UInt32) << 3
 # This statement is proven :consistent
-const IR_FLAG_CONSISTENT  = one(UInt32) << 5
+const IR_FLAG_CONSISTENT  = one(UInt32) << 4
 # This statement is proven :effect_free
-const IR_FLAG_EFFECT_FREE = one(UInt32) << 6
+const IR_FLAG_EFFECT_FREE = one(UInt32) << 5
 # This statement is proven :nothrow
-const IR_FLAG_NOTHROW     = one(UInt32) << 7
+const IR_FLAG_NOTHROW     = one(UInt32) << 6
 # This statement is proven :terminates
-const IR_FLAG_TERMINATES  = one(UInt32) << 8
+const IR_FLAG_TERMINATES  = one(UInt32) << 7
 # This statement is proven :noub
-const IR_FLAG_NOUB        = one(UInt32) << 9
+const IR_FLAG_NOUB        = one(UInt32) << 8
 # TODO: Both of these should eventually go away once
 # This statement is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
-const IR_FLAG_EFIIMO      = one(UInt32) << 10
+const IR_FLAG_EFIIMO      = one(UInt32) << 9
 # This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
-const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 11
+const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 10
 # This statement has no users and may be deleted if flags get refined to IR_FLAGS_REMOVABLE
-const IR_FLAG_UNUSED      = one(UInt32) << 12
+const IR_FLAG_UNUSED      = one(UInt32) << 11
 
-const NUM_IR_FLAGS = 13 # sync with julia.h
+const NUM_IR_FLAGS = 12 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
     IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES | IR_FLAG_NOUB
@@ -249,9 +247,8 @@ end
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
-is_stmt_inline(stmt_flag::UInt32)      = has_flag(stmt_flag, IR_FLAG_INLINE)
-is_stmt_noinline(stmt_flag::UInt32)    = has_flag(stmt_flag, IR_FLAG_NOINLINE)
-is_stmt_throw_block(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_THROW_BLOCK)
+is_stmt_inline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_INLINE)
+is_stmt_noinline(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_NOINLINE)
 
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]
@@ -1272,7 +1269,7 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
-                        params::OptimizationParams, error_path::Bool = false)
+                        params::OptimizationParams)
     #=const=# UNKNOWN_CALL_COST = 20
     head = ex.head
     if is_meta_expr_head(head)
@@ -1333,10 +1330,10 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                 return 0
             elseif (f === Core.memoryrefget || f === Core.memoryref_isassigned) && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
-                return isknowntype(atyp) ? 1 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+                return isknowntype(atyp) ? 1 : params.inline_nonleaf_penalty
             elseif f === Core.memoryrefset! && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
-                return isknowntype(atyp) ? 5 : error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+                return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
             end
@@ -1352,7 +1349,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         if extyp === Union{}
             return 0
         end
-        return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+        return params.inline_nonleaf_penalty
     elseif head === :foreigncall
         foreigncall = ex.args[1]
         if foreigncall isa QuoteNode && foreigncall.value === :jl_string_ptr
@@ -1375,7 +1372,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         end
         a = ex.args[2]
         if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, params, error_path))
+            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, params))
         end
         return cost
     elseif head === :copyast
@@ -1389,8 +1386,7 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
-        thiscost = statement_cost(stmt, line, src, sptypes, params,
-                                  is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
+        thiscost = statement_cost(stmt, line, src, sptypes, params)::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
