@@ -7572,7 +7572,7 @@ end
 # issue #31696
 foo31696(x::Int8, y::Int8) = 1
 foo31696(x::T, y::T) where {T <: Int8} = 2
-@test length(methods(foo31696)) == 1
+@test length(methods(foo31696)) == 2
 let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
     b .= a
     @test b[1] == (1,)
