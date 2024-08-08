@@ -11,8 +11,6 @@ import Base.Docs: doc, formatdoc, parsedoc, apropos
 
 using Base: with_output_color, mapany, isdeprecated, isexported
 
-using Base.Filesystem: _readdirx
-
 using InteractiveUtils: subtypes
 
 using Unicode: normalize
@@ -365,7 +363,7 @@ function find_readme(m::Module)::Union{String, Nothing}
     path = dirname(mpath)
     top_path = pkgdir(m)
     while true
-        for entry in _readdirx(path; sort=true)
+        for entry in readdir(DirEntry, path; sort=true)
             isfile(entry) && (lowercase(entry.name) in ["readme.md", "readme"]) || continue
             return entry.path
         end
