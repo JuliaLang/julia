@@ -315,7 +315,7 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 }
 
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt);
-static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, MDNode *tbaa_dest, unsigned alignment, bool isVolatile=false);
+static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, MDNode *tbaa_dest, Align alignment, bool isVolatile=false);
 
 static bool type_is_permalloc(jl_value_t *typ)
 {
@@ -1006,11 +1006,10 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
 }
 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, Value *src,
-                             jl_aliasinfo_t const &src_ai, uint64_t sz, unsigned align_dst, unsigned align_src, bool is_volatile)
+                             jl_aliasinfo_t const &src_ai, uint64_t sz, Align align_dst, Align align_src, bool is_volatile)
 {
     if (sz == 0)
         return;
-    assert(align_dst && "align must be specified");
     #if JL_LLVM_VERSION < 170000
     // If the types are small and simple, use load and store directly.
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
@@ -1053,7 +1052,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
             if (isa<Instruction>(dst) && !dst->hasName())
                 setName(ctx.emission_context, dst, "memcpy_refined_dst");
             auto val = src_ai.decorateInst(ctx.builder.CreateAlignedLoad(directel, src, MaybeAlign(align_src), is_volatile));
-            dst_ai.decorateInst(ctx.builder.CreateAlignedStore(val, dst, Align(align_dst), is_volatile));
+            dst_ai.decorateInst(ctx.builder.CreateAlignedStore(val, dst, align_dst, is_volatile));
             ++SkippedMemcpys;
             return;
         }
@@ -1072,12 +1071,12 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     // above problem won't be as serious.
 
     auto merged_ai = dst_ai.merge(src_ai);
-    ctx.builder.CreateMemCpy(dst, Align(align_dst), src, Align(align_src), sz, is_volatile,
+    ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
                              merged_ai.tbaa, merged_ai.tbaa_struct, merged_ai.scope, merged_ai.noalias);
 }
 
 static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, Value *src,
-                             jl_aliasinfo_t const &src_ai, Value *sz, unsigned align_dst, unsigned align_src, bool is_volatile)
+                             jl_aliasinfo_t const &src_ai, Value *sz, Align align_dst, Align align_src, bool is_volatile)
 {
     if (auto const_sz = dyn_cast<ConstantInt>(sz)) {
         emit_memcpy_llvm(ctx, dst, dst_ai, src, src_ai, const_sz->getZExtValue(), align_dst, align_src, is_volatile);
@@ -1086,20 +1085,20 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     ++EmittedMemcpys;
 
     auto merged_ai = dst_ai.merge(src_ai);
-    ctx.builder.CreateMemCpy(dst, MaybeAlign(align_dst), src, MaybeAlign(align_src), sz, is_volatile,
+    ctx.builder.CreateMemCpy(dst, align_dst, src, align_src, sz, is_volatile,
                              merged_ai.tbaa, merged_ai.tbaa_struct, merged_ai.scope, merged_ai.noalias);
 }
 
 template<typename T1>
 static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, Value *src,
-                        jl_aliasinfo_t const &src_ai, T1 &&sz, unsigned align_dst, unsigned align_src, bool is_volatile=false)
+                        jl_aliasinfo_t const &src_ai, T1 &&sz, Align align_dst, Align align_src, bool is_volatile=false)
 {
     emit_memcpy_llvm(ctx, dst, dst_ai, src, src_ai, sz, align_dst, align_src, is_volatile);
 }
 
 template<typename T1>
 static void emit_memcpy(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const &dst_ai, const jl_cgval_t &src,
-                        T1 &&sz, unsigned align_dst, unsigned align_src, bool is_volatile=false)
+                        T1 &&sz, Align align_dst, Align align_src, bool is_volatile=false)
 {
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, src.tbaa);
     emit_memcpy_llvm(ctx, dst, dst_ai, data_pointer(ctx, src), src_ai, sz, align_dst, align_src, is_volatile);
@@ -1999,7 +1998,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     else if (!alignment)
         alignment = julia_alignment(jltype);
     if (intcast && Order == AtomicOrdering::NotAtomic) {
-        emit_memcpy(ctx, intcast, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), data, jl_aliasinfo_t::fromTBAA(ctx, tbaa), nb, alignment, intcast->getAlign().value());
+        emit_memcpy(ctx, intcast, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), data, jl_aliasinfo_t::fromTBAA(ctx, tbaa), nb, Align(alignment), intcast->getAlign());
     }
     else {
         if (!isboxed && jl_is_genericmemoryref_type(jltype)) {
@@ -2120,12 +2119,15 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         FailOrder = AtomicOrdering::Monotonic;
     unsigned nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
     AllocaInst *intcast = nullptr;
+    Type *intcast_eltyp = nullptr;
+    bool tracked_pointers = isboxed || CountTrackedPointers(elty).count > 0;
     if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
+        intcast_eltyp = elty;
+        elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
         if (!issetfield) {
             intcast = emit_static_alloca(ctx, elty);
             setName(ctx.emission_context, intcast, "atomic_store_box");
         }
-        elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
     }
     Type *realelty = elty;
     if (Order != AtomicOrdering::NotAtomic && isa<IntegerType>(elty)) {
@@ -2134,14 +2136,20 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb2);
     }
     Value *r = nullptr;
-    if (issetfield || isswapfield || isreplacefield || issetfieldonce)  {
-        if (isboxed)
+    if (issetfield || isswapfield || isreplacefield || issetfieldonce)  { // e.g. !ismodifyfield
+        assert(isboxed || rhs.typ == jltype);
+        if (isboxed) {
             r = boxed(ctx, rhs);
-        else if (aliasscope || Order != AtomicOrdering::NotAtomic || CountTrackedPointers(realelty).count) {
-            r = emit_unbox(ctx, realelty, rhs, jltype);
-            if (realelty != elty)
-                r = ctx.builder.CreateZExt(r, elty);
         }
+        else if (intcast) {
+            emit_unbox_store(ctx, rhs, intcast, ctx.tbaa().tbaa_stack, intcast->getAlign());
+            r = ctx.builder.CreateLoad(realelty, intcast);
+        }
+        else if (aliasscope || Order != AtomicOrdering::NotAtomic || tracked_pointers) {
+            r = emit_unbox(ctx, realelty, rhs, jltype);
+        }
+        if (realelty != elty)
+            r = ctx.builder.CreateZExt(r, elty);
     }
     if (isboxed)
         alignment = sizeof(void*);
@@ -2176,7 +2184,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         }
         else {
             assert(Order == AtomicOrdering::NotAtomic && !isboxed && rhs.typ == jltype);
-            emit_unbox_store(ctx, rhs, ptr, tbaa, alignment);
+            emit_unbox_store(ctx, rhs, ptr, tbaa, Align(alignment));
         }
     }
     else if (isswapfield) {
@@ -2223,7 +2231,14 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     Current->addIncoming(instr, SkipBB);
                     ctx.builder.SetInsertPoint(BB);
                 }
-                Compare = emit_unbox(ctx, realelty, cmp, jltype);
+                cmp = update_julia_type(ctx, cmp, jltype);
+                if (intcast) {
+                    emit_unbox_store(ctx, cmp, intcast, ctx.tbaa().tbaa_stack, intcast->getAlign());
+                    Compare = ctx.builder.CreateLoad(realelty, intcast);
+                }
+                else {
+                    Compare = emit_unbox(ctx, realelty, cmp, jltype);
+                }
                 if (realelty != elty)
                     Compare = ctx.builder.CreateZExt(Compare, elty);
             }
@@ -2270,16 +2285,17 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             if (realelty != elty)
                 realCompare = ctx.builder.CreateTrunc(realCompare, realelty);
             if (intcast) {
+                assert(!isboxed);
                 ctx.builder.CreateStore(realCompare, intcast);
-                if (maybe_null_if_boxed)
-                    realCompare = ctx.builder.CreateLoad(intcast->getAllocatedType(), intcast);
+                if (tracked_pointers)
+                    realCompare = ctx.builder.CreateLoad(intcast_eltyp, intcast);
             }
-            if (maybe_null_if_boxed) {
-                Value *first_ptr = isboxed ? Compare : extract_first_ptr(ctx, Compare);
-                if (first_ptr)
-                    null_load_check(ctx, first_ptr, mod, var);
+            if (maybe_null_if_boxed && tracked_pointers) {
+                Value *first_ptr = isboxed ? realCompare : extract_first_ptr(ctx, realCompare);
+                assert(first_ptr);
+                null_load_check(ctx, first_ptr, mod, var);
             }
-            if (intcast)
+            if (intcast && !tracked_pointers)
                 oldval = mark_julia_slot(intcast, jltype, NULL, ctx.tbaa().tbaa_stack);
             else
                 oldval = mark_julia_type(ctx, realCompare, isboxed, jltype);
@@ -2287,11 +2303,18 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             if (isboxed) {
                 r = boxed(ctx, rhs);
             }
-            else if (Order != AtomicOrdering::NotAtomic || CountTrackedPointers(realelty).count) {
-                r = emit_unbox(ctx, realelty, rhs, jltype);
-                if (realelty != elty)
-                    r = ctx.builder.CreateZExt(r, elty);
+            else if (intcast) {
+                emit_unbox_store(ctx, rhs, intcast, ctx.tbaa().tbaa_stack, intcast->getAlign());
+                r = ctx.builder.CreateLoad(realelty, intcast);
+                if (!tracked_pointers) // oldval is a slot, so put the oldval back
+                    ctx.builder.CreateStore(realCompare, intcast);
             }
+            else if (Order != AtomicOrdering::NotAtomic) {
+                assert(!tracked_pointers);
+                r = emit_unbox(ctx, realelty, rhs, jltype);
+            }
+            if (realelty != elty)
+                r = ctx.builder.CreateZExt(r, elty);
             if (needlock)
                 emit_lockstate_value(ctx, needlock, true);
             cmp = oldval;
@@ -2329,7 +2352,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             }
             else {
                 assert(!isboxed && rhs.typ == jltype);
-                emit_unbox_store(ctx, rhs, ptr, tbaa, alignment);
+                emit_unbox_store(ctx, rhs, ptr, tbaa, Align(alignment));
             }
             ctx.builder.CreateBr(DoneBB);
             instr = load;
@@ -2357,9 +2380,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     realinstr = ctx.builder.CreateTrunc(realinstr, realelty);
                 if (intcast) {
                     ctx.builder.CreateStore(realinstr, intcast);
+                    // n.b. this oldval is only used for emit_f_is in this branch, so we know a priori that it does not need a gc-root
                     oldval = mark_julia_slot(intcast, jltype, NULL, ctx.tbaa().tbaa_stack);
                     if (maybe_null_if_boxed)
-                        realinstr = ctx.builder.CreateLoad(intcast->getAllocatedType(), intcast);
+                        realinstr = ctx.builder.CreateLoad(intcast_eltyp, intcast);
                 }
                 else {
                     oldval = mark_julia_type(ctx, realinstr, isboxed, jltype);
@@ -2399,20 +2423,23 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         ctx.builder.SetInsertPoint(DoneBB);
     if (needlock)
         emit_lockstate_value(ctx, needlock, false);
-    if (parent != NULL) {
+    if (parent != NULL && r && tracked_pointers && (!isboxed || !type_is_permalloc(rhs.typ))) {
         if (isreplacefield || issetfieldonce) {
-            // TODO: avoid this branch if we aren't making a write barrier
             BasicBlock *BB = BasicBlock::Create(ctx.builder.getContext(), "xchg_wb", ctx.f);
             DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg_wb", ctx.f);
             ctx.builder.CreateCondBr(Success, BB, DoneBB);
             ctx.builder.SetInsertPoint(BB);
         }
-        if (r) {
-            if (!isboxed)
-                emit_write_multibarrier(ctx, parent, r, rhs.typ);
-            else if (!type_is_permalloc(rhs.typ))
-                emit_write_barrier(ctx, parent, r);
+        if (realelty != elty)
+            r = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, r, realelty));
+        if (intcast) {
+            ctx.builder.CreateStore(r, intcast);
+            r = ctx.builder.CreateLoad(intcast_eltyp, intcast);
         }
+        if (!isboxed)
+            emit_write_multibarrier(ctx, parent, r, rhs.typ);
+        else if (!type_is_permalloc(rhs.typ))
+            emit_write_barrier(ctx, parent, r);
         if (isreplacefield || issetfieldonce) {
             ctx.builder.CreateBr(DoneBB);
             ctx.builder.SetInsertPoint(DoneBB);
@@ -2431,21 +2458,18 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             instr = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, instr, realelty));
         if (intcast) {
             ctx.builder.CreateStore(instr, intcast);
-            instr = nullptr;
+            if (tracked_pointers)
+                instr = ctx.builder.CreateLoad(intcast_eltyp, intcast);
         }
-        if (maybe_null_if_boxed) {
-            if (intcast)
-                instr = ctx.builder.CreateLoad(intcast->getAllocatedType(), intcast);
+        if (maybe_null_if_boxed && tracked_pointers) {
             Value *first_ptr = isboxed ? instr : extract_first_ptr(ctx, instr);
-            if (first_ptr)
-                null_load_check(ctx, first_ptr, mod, var);
-            if (intcast && !first_ptr)
-                instr = nullptr;
+            assert(first_ptr);
+            null_load_check(ctx, first_ptr, mod, var);
         }
-        if (instr)
-            oldval = mark_julia_type(ctx, instr, isboxed, jltype);
-        else
+        if (intcast && !tracked_pointers)
             oldval = mark_julia_slot(intcast, jltype, NULL, ctx.tbaa().tbaa_stack);
+        else
+            oldval = mark_julia_type(ctx, instr, isboxed, jltype);
         if (isreplacefield) {
             Success = ctx.builder.CreateZExt(Success, getInt8Ty(ctx.builder.getContext()));
             const jl_cgval_t argv[2] = {oldval, mark_julia_type(ctx, Success, false, jl_bool_type)};
@@ -2668,7 +2692,7 @@ static jl_cgval_t emit_unionload(jl_codectx_t &ctx, Value *addr, Value *ptindex,
         if (al > 1)
             lv->setAlignment(Align(al));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-        emit_memcpy(ctx, lv, ai, addr, ai, fsz, al, al);
+        emit_memcpy(ctx, lv, ai, addr, ai, fsz, Align(al), Align(al));
         addr = lv;
     }
     return mark_julia_slot(fsz > 0 ? addr : nullptr, jfty, tindex, tbaa);
@@ -3104,11 +3128,11 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t)
 static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt, bool fully_initialized);
 
 static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, MDNode *tbaa,
-                            unsigned alignment = sizeof(void*)) // min alignment in julia's gc is pointer-aligned
+                            Align alignment = Align(sizeof(void*))) // min alignment in julia's gc is pointer-aligned
 {
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
     // newv should already be tagged
-    ai.decorateInst(ctx.builder.CreateAlignedStore(v, newv, Align(alignment)));
+    ai.decorateInst(ctx.builder.CreateAlignedStore(v, newv, alignment));
 }
 
 static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t& v, MDNode *tbaa)
@@ -3116,7 +3140,7 @@ static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t& v,
     // newv should already be tagged
     if (v.ispointer()) {
         unsigned align = std::max(julia_alignment(v.typ), (unsigned)sizeof(void*));
-        emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), align, julia_alignment(v.typ));
+        emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), Align(align), Align(julia_alignment(v.typ)));
     }
     else {
         init_bits_value(ctx, newv, v.V, tbaa);
@@ -3582,7 +3606,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
         if (jl_is_pointerfree(typ)) {
             unsigned alignment = julia_alignment(typ);
             if (!src.ispointer() || src.constant) {
-                emit_unbox_store(ctx, src, dest, tbaa_dst, alignment, isVolatile);
+                emit_unbox_store(ctx, src, dest, tbaa_dst, Align(alignment), isVolatile);
             }
             else {
                 Value *src_ptr = data_pointer(ctx, src);
@@ -3592,7 +3616,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
                 // if (skip) src_ptr = ctx.builder.CreateSelect(skip, dest, src_ptr);
                 auto f = [&] {
                     (void)emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst), src_ptr,
-                                      jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), nb, alignment, alignment, isVolatile);
+                                      jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), nb, Align(alignment), Align(alignment), isVolatile);
                     return nullptr;
                 };
                 if (skip)
@@ -3627,7 +3651,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
                             return;
                         } else {
                             emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst), src_ptr,
-                                        jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), nb, alignment, alignment, isVolatile);
+                                        jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), nb, Align(alignment), Align(alignment), isVolatile);
                         }
                     }
                     ctx.builder.CreateBr(postBB);
@@ -3653,7 +3677,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
             Value *datatype = emit_typeof(ctx, src, false, false);
             Value *copy_bytes = emit_datatype_size(ctx, datatype);
             (void)emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst), data_pointer(ctx, src),
-                              jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), copy_bytes, 1, 1, isVolatile);
+                              jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), copy_bytes, Align(1), Align(1), isVolatile);
             return nullptr;
         };
         if (skip)
@@ -4046,7 +4070,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     } else if (init_as_value) {
                         fval = emit_unbox(ctx, fty, fval_info, jtype);
                     } else {
-                        emit_unbox_store(ctx, fval_info, dest, ctx.tbaa().tbaa_stack, jl_field_align(sty, i));
+                        emit_unbox_store(ctx, fval_info, dest, ctx.tbaa().tbaa_stack, Align(jl_field_align(sty, i)));
                     }
                 }
                 if (init_as_value) {
