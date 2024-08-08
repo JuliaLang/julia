@@ -4150,7 +4150,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             boffset = ctx.builder.CreateMul(offset, elsz);
 #if 0 // TODO: if opaque-pointers?
         newdata = emit_bitcast(ctx, data, getInt8PtrTy(ctx.builder.getContext()));
-        newdata = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), newdata, boffset);
+        newdata = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), newdata, boffset);
 #else
         Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jl_tparam1(ref.typ));
         newdata = emit_bitcast(ctx, data, elty->getPointerTo(0));
