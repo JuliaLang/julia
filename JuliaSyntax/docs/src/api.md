@@ -52,6 +52,7 @@ JuliaSyntax.last_byte
 JuliaSyntax.filename
 JuliaSyntax.source_line
 JuliaSyntax.source_location
+JuliaSyntax.char_range
 JuliaSyntax.sourcetext
 JuliaSyntax.highlight
 ```

@@ -55,6 +55,15 @@
     @test t.position == 13
     @test child(t,1).position == 19
     @test child(t,1).val == :b
+
+    # Unicode character ranges
+    src = "ab + αβ"
+    t = parsestmt(SyntaxNode, src)
+    @test char_range(t[1]) == 1:2
+    @test char_range(t[2]) == 4:4
+    @test char_range(t[3]) == 6:8
+    # conversely, β takes two bytes so char_range(t[3]) != byte_range(t[3])
+    @test byte_range(t[3]) == 6:9
 end
 
 @testset "SyntaxNode pretty printing" begin
