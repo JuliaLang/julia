@@ -9,7 +9,7 @@ export parsestmt, parseall, parseatom
 # Tokenization
 export tokenize, Token, untokenize
 # Source file handling. See also
-#   highlight() sourcetext() source_line() source_location()
+#   highlight() sourcetext() source_line() source_location() char_range()
 export SourceFile
 # Expression heads/kinds. See also
 #   flags() and related predicates.

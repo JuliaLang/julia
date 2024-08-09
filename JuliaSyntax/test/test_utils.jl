@@ -36,7 +36,9 @@ using .JuliaSyntax:
     highlight,
     tokenize,
     untokenize,
-    filename
+    filename,
+    byte_range,
+    char_range
 
 if VERSION < v"1.6"
     # Compat stuff which might not be in Base for older versions

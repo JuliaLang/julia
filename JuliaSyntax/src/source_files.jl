@@ -15,9 +15,22 @@ end
 """
     byte_range(x)
 
-Return the range of bytes which `x` covers in the source text.
+Return the range of bytes which `x` covers in the source text. See also
+[`char_range`](@ref).
 """
 function byte_range
+end
+
+"""
+    char_range(x)
+
+Compute the range in *character indices* over the source text for syntax object
+`x`. If you want to index the source string you need this, rather than
+[`byte_range`](@ref).
+"""
+function char_range(x)
+    br = byte_range(x)
+    first(br):thisind(sourcefile(x), last(br))
 end
 
 """
@@ -232,11 +245,11 @@ function Base.view(source::SourceFile, rng::AbstractUnitRange)
     SubString(source.code, i, j)
 end
 
-function Base.getindex(source::SourceFile, i::Int)
+function Base.getindex(source::SourceFile, i::Integer)
     source.code[i - source.byte_offset]
 end
 
-function Base.thisind(source::SourceFile, i::Int)
+function Base.thisind(source::SourceFile, i::Integer)
     thisind(source.code, i - source.byte_offset) + source.byte_offset
 end
 
