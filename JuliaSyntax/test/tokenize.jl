@@ -198,9 +198,10 @@ end
 end
 
 @testset "tokenizing true/false literals" begin
-    @test tok("somtext true", 3).kind == K"true"
-    @test tok("somtext false", 3).kind == K"false"
+    @test tok("somtext true", 3).kind == K"Bool"
+    @test tok("somtext false", 3).kind == K"Bool"
     @test tok("somtext tr", 3).kind == K"Identifier"
+    @test tok("somtext truething", 3).kind == K"Identifier"
     @test tok("somtext falsething", 3).kind == K"Identifier"
 end
 
@@ -962,9 +963,6 @@ const all_kws = Set([
     "primitive",
     "type",
     "var",
-    # Literals
-    "true",
-    "false",
     # Word-like operators
     "in",
     "isa",
@@ -974,14 +972,14 @@ const all_kws = Set([
 function check_kw_hashes(iter)
     for cs in iter
         str = String([cs...])
-        if Tokenize.simple_hash(str) in keys(Tokenize.kw_hash)
+        if Tokenize.simple_hash(str) in keys(Tokenize._kw_hash)
             @test str in all_kws
         end
     end
 end
 
 @testset "simple_hash" begin
-    @test length(all_kws) == length(Tokenize.kw_hash)
+    @test length(all_kws) == length(Tokenize._kw_hash)
 
     @testset "Length $len keywords" for len in 1:5
         check_kw_hashes(String([cs...]) for cs in Iterators.product(['a':'z' for _ in 1:len]...))

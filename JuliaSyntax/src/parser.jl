@@ -2254,7 +2254,7 @@ function parse_try(ps)
     if peek(ps) == K"else"
         # catch-else syntax: https://github.com/JuliaLang/julia/pull/42211
         #
-        #v1.8: try catch ; else end ==> (try (block) (catch false (block)) (else (block)))
+        #v1.8: try catch ; else end ==> (try (block) (catch □ (block)) (else (block)))
         else_mark = position(ps)
         bump(ps, TRIVIA_FLAG)
         parse_block(ps)
@@ -2262,7 +2262,7 @@ function parse_try(ps)
             #v1.8: try else x finally y end ==> (try (block) (else (error (block x))) (finally (block y)))
             emit(ps, else_mark, K"error", error="Expected `catch` before `else`")
         end
-        #v1.7: try catch ; else end ==> (try (block) (catch false (block)) (else (error (block))))
+        #v1.7: try catch ; else end ==> (try (block) (catch □ (block)) (else (error (block))))
         min_supported_version(v"1.8", ps, else_mark, "`else` after `catch`")
         emit(ps, else_mark, K"else")
     end
@@ -2302,10 +2302,10 @@ function parse_catch(ps::ParseState)
     bump(ps, TRIVIA_FLAG)
     k = peek(ps)
     if k in KSet"NewlineWs ;" || is_closing_token(ps, k)
-        # try x catch end      ==>  (try (block x) (catch false (block)))
-        # try x catch ; y end  ==>  (try (block x) (catch false (block y)))
-        # try x catch \n y end ==>  (try (block x) (catch false (block y)))
-        bump_invisible(ps, K"false")
+        # try x catch end      ==>  (try (block x) (catch □ (block)))
+        # try x catch ; y end  ==>  (try (block x) (catch □ (block y)))
+        # try x catch \n y end ==>  (try (block x) (catch □ (block y)))
+        bump_invisible(ps, K"Placeholder")
     else
         # try x catch e y end   ==>  (try (block x) (catch e (block y)))
         # try x catch $e y end  ==>  (try (block x) (catch ($ e) (block y)))

@@ -635,18 +635,18 @@ tests = [
             "(try (block x) (catch e (block y)) (finally (block z)))"
         ((v=v"1.8",), "try \n x \n catch e \n y \n else z finally \n w end") =>
             "(try (block x) (catch e (block y)) (else (block z)) (finally (block w)))"
-        "try x catch end"       =>  "(try (block x) (catch false (block)))"
-        "try x catch ; y end"   =>  "(try (block x) (catch false (block y)))"
-        "try x catch \n y end"  =>  "(try (block x) (catch false (block y)))"
+        "try x catch end"       =>  "(try (block x) (catch □ (block)))"
+        "try x catch ; y end"   =>  "(try (block x) (catch □ (block y)))"
+        "try x catch \n y end"  =>  "(try (block x) (catch □ (block y)))"
         "try x catch e y end"   =>  "(try (block x) (catch e (block y)))"
         "try x catch \$e y end" =>  "(try (block x) (catch (\$ e) (block y)))"
         "try x catch var\"#\" y end" => "(try (block x) (catch (var #) (block y)))"
         "try x catch e+3 y end" =>  "(try (block x) (catch (error (call-i e + 3)) (block y)))"
         "try x finally y end"   =>  "(try (block x) (finally (block y)))"
         # v1.8 only
-        ((v=v"1.8",), "try catch ; else end") => "(try (block) (catch false (block)) (else (block)))"
+        ((v=v"1.8",), "try catch ; else end") => "(try (block) (catch □ (block)) (else (block)))"
         ((v=v"1.8",), "try else x finally y end") => "(try (block) (else (error (block x))) (finally (block y)))"
-        ((v=v"1.7",), "try catch ; else end")  =>  "(try (block) (catch false (block)) (else (error (block))))"
+        ((v=v"1.7",), "try catch ; else end")  =>  "(try (block) (catch □ (block)) (else (error (block))))"
         # finally before catch :-(
         "try x finally y catch e z end"  =>  "(try (block x) (finally (block y)) (catch e (block z)))"
         "try x end" => "(try (block x) (error-t))"
