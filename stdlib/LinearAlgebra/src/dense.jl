@@ -514,12 +514,38 @@ function (^)(A::AbstractMatrix{T}, p::Integer) where T<:Integer
 end
 function integerpow(A::AbstractMatrix{T}, p) where T
     TT = promote_op(^, T, typeof(p))
-    return (TT == T ? A : convert(AbstractMatrix{TT}, A))^Integer(p)
+    ATT = TT == T ? A : convert(AbstractMatrix{TT}, A)
+    return _integerpow(ATT, p)
 end
+_integerpow(A::AbstractMatrix, p) = A^Integer(p)
+function _integerpow(A::AbstractMatrix, p::Union{Float32, Float64})
+    # For these exponent types, not all values may be converted to Int
+    # We split the exponentiation into parts for which the exponent can be converted to an Int
+    if p < 0
+        return _integerpow(inv(A), -p)
+    end
+    m = typemax(Int)
+    if p <= m
+        return A^Int(p)
+    end
+    # for large numbers, we express A^p as A^(m*q + r) == (A^m)^q * A^r
+    # Here, m may be safely represented as an Int,
+    # and we raise to the power of q by carrying out the decomposition recursively
+    A2 = A^Int(m)
+    q, r = divrem(p, m)
+    if q > 1
+        A2 = integerpow(A2, q)
+    end
+    if !iszero(r)
+        A2 *= A^Int(r)
+    end
+    return A2
+end
+
 function schurpow(A::AbstractMatrix, p)
     if istriu(A)
         # Integer part
-        retmat = A ^ floor(Integer, p)
+        retmat = integerpow(A, floor(p))
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)
@@ -530,7 +556,7 @@ function schurpow(A::AbstractMatrix, p)
     else
         S,Q,d = Schur{Complex}(schur(A))
         # Integer part
-        R = S ^ floor(Integer, p)
+        R = integerpow(S, floor(p))
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)
