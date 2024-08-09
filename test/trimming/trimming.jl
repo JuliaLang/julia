@@ -17,11 +17,15 @@ cmd = addenv(`$cmd --output-o $img_path --output-incremental=no --strip-ir --str
 
 @test success(cmd)
 
-@test success(`cc $(cflags) -g -c -o $init_path $(joinpath(@__DIR__, "init.c"))`)
+cd(@__DIR__) do
+    global CC = chomp(read(`make`, String))
+end
+
+@test success(`$CC $(cflags) -g -c -o $init_path $(joinpath(@__DIR__, "init.c"))`)
 
 julia_libs = Base.shell_split(Base.isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : "-ljulia -ljulia-internal")
 
-@test success(`cc $(allflags) -o $exe_path -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path $(julia_libs)`)
+@test success(`$CC $(allflags) -o $exe_path -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path $(julia_libs)`)
 
 @test readchomp(`$exe_path`) == "Hello, world!"
 

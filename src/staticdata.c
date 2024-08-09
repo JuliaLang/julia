@@ -2840,12 +2840,14 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_type_type_mt = jl_new_method_table(jl_type_type_mt->name, jl_type_type_mt->module);
 
         mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_kwcall_mt);
+        JL_GC_PROMISE_ROOTED(mt);
         if (mt != HT_NOTFOUND)
             jl_kwcall_mt = mt;
         else
             jl_kwcall_mt = jl_new_method_table(jl_kwcall_mt->name, jl_kwcall_mt->module);
 
         mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_nonfunction_mt);
+        JL_GC_PROMISE_ROOTED(mt);
         if (mt != HT_NOTFOUND)
             jl_nonfunction_mt = mt;
         else
