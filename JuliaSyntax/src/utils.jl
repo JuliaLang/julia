@@ -19,7 +19,7 @@ _unsafe_wrap_substring(s) = (s.offset, unsafe_wrap(Vector{UInt8}, s.string))
 #--------------------------------------------------
 #
 # Internal error, used as assertion failure for cases we expect can't happen.
-@noinline function internal_error(strs...)
+@noinline function internal_error(strs::Vararg{String, N}) where {N}
     error("Internal error: ", strs...)
 end
 
@@ -27,7 +27,7 @@ end
 macro check(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
     if isa(msg, AbstractString)
-        msg = msg
+        msg = String(msg)
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         msg = :(string($(esc(msg))))
     else
@@ -133,4 +133,3 @@ function _printstyled(io::IO, text; fgcolor=nothing, bgcolor=nothing, href=nothi
         first = false
     end
 end
-

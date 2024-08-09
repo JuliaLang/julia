@@ -484,7 +484,7 @@ function parse_block(ps::ParseState, down=parse_eq, mark=position(ps))
 end
 
 # Parse a block, but leave emitting the block up to the caller.
-function parse_block_inner(ps::ParseState, down)
+function parse_block_inner(ps::ParseState, down::F) where {F <: Function}
     parse_Nary(ps, down, KSet"NewlineWs ;", KSet"end else elseif catch finally")
 end
 
@@ -1602,7 +1602,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                        ckind == K"vcat"          ? K"typed_vcat"           :
                        ckind == K"comprehension" ? K"typed_comprehension"  :
                        ckind == K"ncat"          ? K"typed_ncat"           :
-                       internal_error("unrecognized kind in parse_cat ", ckind)
+                       internal_error("unrecognized kind in parse_cat ", string(ckind))
                 emit(ps, mark, outk, cflags)
                 check_ncat_compat(ps, mark, ckind)
             end
@@ -2020,7 +2020,7 @@ function parse_resword(ps::ParseState)
     elseif word == K"do"
         bump(ps, TRIVIA_FLAG, error="invalid `do` syntax")
     else
-        internal_error("unhandled reserved word ", word)
+        internal_error("unhandled reserved word ", string(word))
     end
 end
 
