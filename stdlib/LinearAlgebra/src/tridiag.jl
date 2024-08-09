@@ -1045,3 +1045,21 @@ function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
     _evview(A) .= B.du
     return A
 end
+
+# display
+function show(io::IO, T::Tridiagonal)
+    print(io, "Tridiagonal(")
+    show(io, T.dl)
+    print(io, ", ")
+    show(io, T.d)
+    print(io, ", ")
+    show(io, T.du)
+    print(io, ")")
+end
+function show(io::IO, S::SymTridiagonal)
+    print(io, "SymTridiagonal(")
+    show(io, eltype(S) <: Number ? S.dv : view(S, diagind(S, IndexStyle(S))))
+    print(io, ", ")
+    show(io, S.ev)
+    print(io, ")")
+end
