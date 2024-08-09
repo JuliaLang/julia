@@ -3176,20 +3176,15 @@ mutable struct CacheHeaderIncludes
     const modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
+# This method is only called from src/precompile.c and from within a precompilation process.
+# Upon call it is safe to assume that `path` and elements of `DEPOT_PATH` are absolute and normalized.
 function replace_depot_path(path::AbstractString)
-    @static if Sys.iswindows()
-        path = replace(path, Filesystem.path_separator_re=>Filesystem.pathsep())
-    end
     for depot in DEPOT_PATH
         !isdir(depot) && continue
 
         # Strip extraneous pathseps through normalization.
         if isdirpath(depot)
             depot = dirname(depot)
-        end
-
-        @static if Sys.iswindows()
-            depot = replace(depot, Filesystem.path_separator_re=>Filesystem.pathsep())
         end
 
         if startswith(path, string(depot, Filesystem.pathsep())) || path == depot

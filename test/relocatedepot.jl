@@ -70,21 +70,6 @@ if !test_relocated_depot
                 @test Base.replace_depot_path(jlrc) != "@depot-rc2"
                 @test Base.replace_depot_path(jlrc) == jlrc
             end
-            if Sys.iswindows()
-                # windows accepts '\\' and '/' as path separators
-                mktempdir() do dir
-                    jlrc = string(dir, "/", "julia-rc2")
-                    jl   = string(dir, "/", "julia")
-                    mkdir(jl)
-                    push!(DEPOT_PATH, jl)
-                    @test Base.replace_depot_path(jl) == "@depot"
-                    @test Base.replace_depot_path(string(jl,"/"))  == string("@depot","\\")
-                    @test Base.replace_depot_path(string(jl,"\\")) == string("@depot","\\")
-                    @test Base.replace_depot_path(jlrc) != "@depot-rc2"
-                    @test Base.replace_depot_path(jlrc) ==
-                        replace(jlrc, Base.Filesystem.path_separator_re=>"\\")
-                end
-            end
         end
 
     end
