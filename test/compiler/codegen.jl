@@ -966,3 +966,19 @@ end
 let x = Incomplete55396(55396)
     @test x.x === (55396,)
 end
+
+# issue 55208
+
+@noinline function f55208(x, i)
+    z = (i == 0 ? x[1] : x[i])
+    return z isa Core.TypeofBottom
+end
+@test f55208((Union{}, 5, 6, 7), 0)
+
+@noinline function g55208(x, i)
+    z = (i == 0 ? x[1] : x[i])
+    typeof(z)
+end
+@test g55208((Union{}, true, true), 0) === typeof(Union{})
+
+@test string((Core.Union{}, true, true, true)) == "(Union{}, true, true, true)"
