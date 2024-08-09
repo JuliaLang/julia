@@ -13,6 +13,15 @@
          SyntaxHead(K"Identifier", 0x0000)
     ]
 
+    @test numchildren(t) == 5
+    @test !is_leaf(t)
+    @test is_leaf(t[1])
+
+    @test t[1] === children(t)[1]
+    @test t[2:4] == [t[2],t[3],t[4]]
+    @test firstindex(t) == 1
+    @test lastindex(t) == 5
+
     t2 = parsestmt(GreenNode, "aa + b")
     @test t == t2
     @test t !== t2

@@ -23,24 +23,58 @@ As implementation choices, we choose that:
 struct GreenNode{Head}
     head::Head
     span::UInt32
-    args::Union{Nothing,Vector{GreenNode{Head}}}
+    children::Union{Nothing,Vector{GreenNode{Head}}}
 end
 
-function GreenNode(head::Head, span::Integer, args=nothing) where {Head}
-    GreenNode{Head}(head, span, args)
+function GreenNode(head::Head, span::Integer, children=nothing) where {Head}
+    GreenNode{Head}(head, span, children)
 end
 
 # Accessors / predicates
-is_leaf(node::GreenNode)     = isnothing(node.args)
-children(node::GreenNode)    = isnothing(node.args) ? () : node.args
-span(node::GreenNode)        = node.span
+is_leaf(node::GreenNode)     = isnothing(node.children)
+children(node::GreenNode)    = node.children
+numchildren(node::GreenNode) = isnothing(node.children) ? 0 : length(node.children)
 head(node::GreenNode)        = node.head
+
+"""
+    span(node)
+
+Get the number of bytes this node covers in the source text.
+"""
+span(node::GreenNode) = node.span
+
+Base.getindex(node::GreenNode, i::Int) = children(node)[i]
+Base.getindex(node::GreenNode, rng::UnitRange) = view(children(node), rng)
+Base.firstindex(node::GreenNode) = 1
+Base.lastindex(node::GreenNode) = length(children(node))
+
+"""
+Get absolute position and span of the child of `node` at the given tree `path`.
+"""
+function child_position_span(node::GreenNode, path::Int...)
+    n = node
+    p = 1
+    for index in path
+        cs = children(n)
+        for i = 1:index-1
+            p += span(cs[i])
+        end
+        n = cs[index]
+    end
+    return n, p, n.span
+end
+
+function highlight(io::IO, source::SourceFile, node::GreenNode, path::Int...; kws...)
+    _, p, span = child_position_span(node, path...)
+    q = p + span - 1
+    highlight(io, source, p:q; kws...)
+end
 
 Base.summary(node::GreenNode) = summary(node.head)
 
-Base.hash(node::GreenNode, h::UInt) = hash((node.head, node.span, node.args), h)
+Base.hash(node::GreenNode, h::UInt) = hash((node.head, node.span, node.children), h)
 function Base.:(==)(n1::GreenNode, n2::GreenNode)
-    n1.head == n2.head && n1.span == n2.span && n1.args == n2.args
+    n1.head == n2.head && n1.span == n2.span && n1.children == n2.children
 end
 
 # Pretty printing

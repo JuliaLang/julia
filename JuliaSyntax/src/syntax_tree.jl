@@ -106,10 +106,36 @@ function _to_SyntaxNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
     end
 end
 
+"""
+    is_leaf(node)
+
+Determine whether the node is a leaf of the tree. In our trees a "leaf"
+corresponds to a single token in the source text.
+"""
 is_leaf(node::TreeNode) = node.children === nothing
-children(node::TreeNode) = (c = node.children; return c === nothing ? () : c)
+
+"""
+    children(node)
+
+Return an iterable list of children for the node. For leaves, return `nothing`.
+"""
+children(node::TreeNode) = node.children
+
+"""
+    numchildren(node)
+
+Return `length(children(node))` but possibly computed in a more efficient way.
+"""
 numchildren(node::TreeNode) = (isnothing(node.children) ? 0 : length(node.children))
 
+Base.getindex(node::AbstractSyntaxNode, i::Int) = children(node)[i]
+Base.getindex(node::AbstractSyntaxNode, rng::UnitRange) = view(children(node), rng)
+Base.firstindex(node::AbstractSyntaxNode) = 1
+Base.lastindex(node::AbstractSyntaxNode) = length(children(node))
+
+function Base.setindex!(node::SN, x::SN, i::Int) where {SN<:AbstractSyntaxNode}
+    children(node)[i] = x
+end
 
 """
     head(x)
@@ -217,10 +243,12 @@ function Base.copy(node::TreeNode)
     # copy the container but not the data (ie, deep copy the tree, shallow copy the data). copy(::Expr) is similar
     # copy "un-parents" the top-level `node` that you're copying
     newnode = typeof(node)(nothing, is_leaf(node) ? nothing : typeof(node)[], copy(node.data))
-    for child in children(node)
-        newchild = copy(child)
-        newchild.parent = newnode
-        push!(newnode, newchild)
+    if !is_leaf(node)
+        for child in children(node)
+            newchild = copy(child)
+            newchild.parent = newnode
+            push!(newnode, newchild)
+        end
     end
     return newnode
 end
@@ -235,71 +263,4 @@ function build_tree(::Type{SyntaxNode}, stream::ParseStream;
     SyntaxNode(source, green_tree, position=first_byte(stream), keep_parens=keep_parens)
 end
 
-#-------------------------------------------------------------------------------
-# Tree utilities
-
-"""
-    child(node, i1, i2, ...)
-
-Get child at a tree path. If indexing accessed children, it would be
-`node[i1][i2][...]`
-"""
-function child(node, path::Integer...)
-    n = node
-    for index in path
-        n = children(n)[index]
-    end
-    return n
-end
-
-function setchild!(node::SyntaxNode, path, x)
-    n1 = child(node, path[1:end-1]...)
-    n1.children[path[end]] = x
-end
-
-# We can overload multidimensional Base.getindex / Base.setindex! for node
-# types.
-#
-# The justification for this is to view a tree as a multidimensional ragged
-# array, where descending depthwise into the tree corresponds to dimensions of
-# the array.
-#
-# However... this analogy is only good for complete trees at a given depth (=
-# dimension). But the syntax is oh-so-handy!
-function Base.getindex(node::Union{SyntaxNode,GreenNode}, path::Int...)
-    child(node, path...)
-end
-function Base.lastindex(node::Union{SyntaxNode,GreenNode})
-    length(children(node))
-end
-
-function Base.setindex!(node::SyntaxNode, x::SyntaxNode, path::Int...)
-    setchild!(node, path, x)
-end
-
-"""
-Get absolute position and span of the child of `node` at the given tree `path`.
-"""
-function child_position_span(node::GreenNode, path::Int...)
-    n = node
-    p = 1
-    for index in path
-        cs = children(n)
-        for i = 1:index-1
-            p += span(cs[i])
-        end
-        n = cs[index]
-    end
-    return n, p, n.span
-end
-
-function child_position_span(node::SyntaxNode, path::Int...)
-    n = child(node, path...)
-    n, n.position, span(n)
-end
-
-function highlight(io::IO, source::SourceFile, node::GreenNode, path::Int...; kws...)
-    _, p, span = child_position_span(node, path...)
-    q = p + span - 1
-    highlight(io, source, p:q; kws...)
-end
+@deprecate haschildren(x) !is_leaf(x) false
