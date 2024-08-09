@@ -139,61 +139,70 @@ function leaf_string(ex)
 end
 
 function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
-                           indent, show_byte_offsets)
-    fname = filename(node)
+                           indent, show_location, show_kind)
     line, col = source_location(node)
-    posstr = "$(lpad(line, 4)):$(rpad(col,3))│"
-    if show_byte_offsets
-        posstr *= "$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
+    if show_location
+        fname = filename(node)
+        # Add filename if it's changed from the previous node
+        if fname != current_filename[]
+            println(io, indent, " -file- │ ", repr(fname))
+            current_filename[] = fname
+        end
+        posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
+    else
+        posstr = ""
     end
     val = node.val
     nodestr = is_leaf(node) ? leaf_string(node) : "[$(untokenize(head(node)))]"
     treestr = string(indent, nodestr)
-    # Add filename if it's changed from the previous node
-    if fname != current_filename[]
-        #println(io, "# ", fname)
-        treestr = string(rpad(treestr, 40), "│$fname")
-        current_filename[] = fname
+    if show_kind && is_leaf(node)
+        treestr = rpad(treestr, 40)*" :: "*string(kind(node))
     end
     println(io, posstr, treestr)
     if !is_leaf(node)
         new_indent = indent*"  "
         for n in children(node)
-            _show_syntax_node(io, current_filename, n, new_indent, show_byte_offsets)
+            _show_syntax_node(io, current_filename, n, new_indent, show_location, show_kind)
         end
     end
 end
 
-function _show_syntax_node_sexpr(io, node::AbstractSyntaxNode)
+function _show_syntax_node_sexpr(io, node::AbstractSyntaxNode, show_kind)
     if is_leaf(node)
         if is_error(node)
             print(io, "(", untokenize(head(node)), ")")
         else
             print(io, leaf_string(node))
+            if show_kind
+                print(io, "::", kind(node))
+            end
         end
     else
         print(io, "(", untokenize(head(node)))
         first = true
         for n in children(node)
             print(io, ' ')
-            _show_syntax_node_sexpr(io, n)
+            _show_syntax_node_sexpr(io, n, show_kind)
             first = false
         end
         print(io, ')')
     end
 end
 
-function Base.show(io::IO, ::MIME"text/plain", node::AbstractSyntaxNode; show_byte_offsets=false)
-    println(io, "line:col│$(show_byte_offsets ? " byte_range  │" : "") tree                                   │ file_name")
-    _show_syntax_node(io, Ref(""), node, "", show_byte_offsets)
+function Base.show(io::IO, ::MIME"text/plain", node::AbstractSyntaxNode; show_location=false, show_kind=true)
+    println(io, "SyntaxNode:")
+    if show_location
+        println(io, "line:col│ byte_range  │ tree")
+    end
+    _show_syntax_node(io, Ref(""), node, "", show_location, show_kind)
 end
 
-function Base.show(io::IO, ::MIME"text/x.sexpression", node::AbstractSyntaxNode)
-    _show_syntax_node_sexpr(io, node)
+function Base.show(io::IO, ::MIME"text/x.sexpression", node::AbstractSyntaxNode; show_kind=false)
+    _show_syntax_node_sexpr(io, node, show_kind)
 end
 
 function Base.show(io::IO, node::AbstractSyntaxNode)
-    _show_syntax_node_sexpr(io, node)
+    _show_syntax_node_sexpr(io, node, false)
 end
 
 function Base.push!(node::SN, child::SN) where SN<:AbstractSyntaxNode

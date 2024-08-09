@@ -22,10 +22,9 @@
     # as `lastindex(t, 2)` isn't well defined
 
     @test sprint(show, t) == "(call-i (call-i a * b) + c)"
-    str = sprint(show, MIME("text/plain"), t)
-    # These tests are deliberately quite relaxed to avoid being too specific about display style
-    @test occursin("line:col", str)
-    @test occursin("call-i", str)
+    @test sprint(io->show(io, MIME("text/x.sexpression"), t, show_kind=true)) ==
+        "(call-i (call-i a::Identifier *::* b::Identifier) +::+ c::Identifier)"
+
     @test sprint(highlight, child(t, 1, 3)) == "a*b + c\n# ╙"
     @test sprint(highlight, t.source, t.raw, 1, 3) == "a*b + c\n# ╙"
 
@@ -69,30 +68,45 @@ end
 @testset "SyntaxNode pretty printing" begin
     t = parsestmt(SyntaxNode, "f(a*b,\n  c)", filename="foo.jl")
     @test sprint(show, MIME("text/plain"), t) == """
-    line:col│ tree                                   │ file_name
-       1:1  │[call]                                  │foo.jl
-       1:1  │  f
-       1:3  │  [call-i]
-       1:3  │    a
-       1:4  │    *
-       1:5  │    b
-       2:3  │  c
-    """
-    @test sprint(io->show(io, MIME("text/plain"), t, show_byte_offsets=true)) == """
-    line:col│ byte_range  │ tree                                   │ file_name
-       1:1  │     1:11    │[call]                                  │foo.jl
-       1:1  │     1:1     │  f
-       1:3  │     3:5     │  [call-i]
-       1:3  │     3:3     │    a
-       1:4  │     4:4     │    *
-       1:5  │     5:5     │    b
-       2:3  │    10:10    │  c
+    SyntaxNode:
+    [call]
+      f                                      :: Identifier
+      [call-i]
+        a                                    :: Identifier
+        *                                    :: *
+        b                                    :: Identifier
+      c                                      :: Identifier
     """
 
-    t,_ = parsestmt(SyntaxNode, "begin a end\nbegin b end", 13)
-    @test sprint(show, MIME("text/plain"), t) == """
-    line:col│ tree                                   │ file_name
-       1:1  │[block]
-       1:7  │  b
+    @test sprint(io->show(io, MIME("text/plain"), t, show_location=true)) == """
+    SyntaxNode:
+    line:col│ byte_range  │ tree
+     -file- │ "foo.jl"
+       1:1  │     1:11    │[call]
+       1:1  │     1:1     │  f                                      :: Identifier
+       1:3  │     3:5     │  [call-i]
+       1:3  │     3:3     │    a                                    :: Identifier
+       1:4  │     4:4     │    *                                    :: *
+       1:5  │     5:5     │    b                                    :: Identifier
+       2:3  │    10:10    │  c                                      :: Identifier
+    """
+
+    @test sprint(io->show(io, MIME("text/plain"), t, show_kind=false)) == """
+    SyntaxNode:
+    [call]
+      f
+      [call-i]
+        a
+        *
+        b
+      c
+    """
+
+    t,_ = parsestmt(SyntaxNode, "begin a end\nbegin b end", 13, first_line=100)
+    @test sprint(io->show(io, MIME("text/plain"), t, show_location=true)) == """
+    SyntaxNode:
+    line:col│ byte_range  │ tree
+     100:1  │    13:23    │[block]
+     100:7  │    19:19    │  b                                      :: Identifier
     """
 end
