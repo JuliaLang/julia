@@ -3666,7 +3666,13 @@ end
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{String,Int},Nothing}=nothing, stalecheck::Bool=true)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
-    io = open(cachefile, "r")
+    io = try
+        open(cachefile, "r")
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @debug "Rejecting cache file $cachefile for $modkey because it could not be opened" isfile(cachefile)
+        return true
+    end
     try
         checksum = isvalid_cache_header(io)
         if iszero(checksum)
