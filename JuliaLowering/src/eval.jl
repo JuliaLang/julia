@@ -1,7 +1,7 @@
 function lower(mod::Module, ex)
     ctx1, ex1 = expand_forms_1(mod, ex)
     ctx2, ex2 = expand_forms_2(ctx1, ex1)
-    ctx3, ex3 = resolve_scopes!(ctx2, ex2)
+    ctx3, ex3 = resolve_scopes(ctx2, ex2)
     ctx4, ex4 = linearize_ir(ctx3, ex3)
     ex4
 end
@@ -178,7 +178,7 @@ end
 
 function to_lowered_expr(mod, bindings, ex)
     k = kind(ex)
-    if is_literal(k) || k == K"Bool"
+    if is_literal(k)
         ex.value
     elseif k == K"core"
         GlobalRef(Core, Symbol(ex.name_val))
@@ -227,6 +227,12 @@ function to_lowered_expr(mod, bindings, ex)
         Core.GotoNode(ex[1].id)
     elseif k == K"gotoifnot"
         Core.GotoIfNot(to_lowered_expr(mod, bindings, ex[1]), ex[2].id)
+    elseif k == K"method"
+        name = ex[1]
+        @chk kind(name) == K"Symbol"
+        namesym = Symbol(name.name_val)
+        cs = map(e->to_lowered_expr(mod, bindings, e), ex[2:end])
+        Expr(:method, namesym, cs...)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -236,7 +242,6 @@ function to_lowered_expr(mod, bindings, ex)
         # foreigncall new_opaque_closure lambda
         head = k == K"call"   ? :call   :
                k == K"="      ? :(=)    :
-               k == K"method" ? :method :
                k == K"global" ? :global :
                k == K"const"  ? :const  :
                nothing

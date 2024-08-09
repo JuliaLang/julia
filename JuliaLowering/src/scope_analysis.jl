@@ -198,7 +198,7 @@ function init_binding(ctx, varkey::NameKey, kind::Symbol, is_ambiguous_local=fal
 end
 
 # Analyze identifier usage within a scope, adding all newly discovered
-# identifiers to ctx.bindings and constructing a lookup table from identifier
+# identifiers to ctx.bindings and returning a lookup table from identifier
 # names to their variable IDs
 function analyze_scope(ctx, ex, scope_type, lambda_info)
     parentscope = isempty(ctx.scope_stack) ? nothing : ctx.scope_stack[end]
@@ -340,16 +340,18 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     return ScopeInfo(in_toplevel_thunk, is_soft_scope, is_hard_scope, var_ids, lambda_locals)
 end
 
-function _resolve_scopes!(ctx, ex)
+function _resolve_scopes(ctx, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier"
         id = lookup_var(ctx, NameKey(ex))
-        setattr!(ctx.graph, ex._id, var_id=id)
+        @ast ctx ex id::K"BindingId"
     elseif is_leaf(ex) || is_quoted(ex) || k == K"toplevel"
-        return
+        ex
     # TODO
     # elseif k == K"global"
+    #     ex
     # elseif k == K"local"
+    #     nothing_(ctx, ex)
     # elseif require_existing_local
     # elseif locals # return Dict of locals
     # elseif islocal
@@ -357,44 +359,47 @@ function _resolve_scopes!(ctx, ex)
         lambda_info = ex.lambda_info
         scope = analyze_scope(ctx, ex, nothing, lambda_info)
         push!(ctx.scope_stack, scope)
-        # Resolve args and static parameters so that variable IDs get pushed
-        # back into the original tree (not required for downstream processing)
-        for a in lambda_info.args
-            _resolve_scopes!(ctx, a)
-        end
-        for a in lambda_info.static_parameters
-            _resolve_scopes!(ctx, a)
-        end
-        for e in children(ex)
-            _resolve_scopes!(ctx, e)
-        end
+        arg_bindings = _resolve_scopes(ctx, lambda_info.args)
+        sparm_bindings = _resolve_scopes(ctx, lambda_info.static_parameters)
+        body = _resolve_scopes(ctx, only(children(ex)))
         pop!(ctx.scope_stack)
-        setattr!(ctx.graph, ex._id, lambda_locals=scope.lambda_locals)
+        # TODO: add a lambda locals field to lambda_info or make a new struct
+        # containing the additional info ??
+        new_info = LambdaInfo(arg_bindings, sparm_bindings,
+                              lambda_info.ret_var, lambda_info.is_toplevel_thunk)
+        makenode(ctx, ex, K"lambda", body; lambda_info=new_info, lambda_locals=scope.lambda_locals)
     elseif k == K"scope_block"
         scope = analyze_scope(ctx, ex, ex.scope_type, nothing)
         push!(ctx.scope_stack, scope)
+        body = SyntaxList(ctx)
         for e in children(ex)
-            _resolve_scopes!(ctx, e)
+            push!(body, _resolve_scopes(ctx, e))
         end
+        body
         pop!(ctx.scope_stack)
+        @ast ctx ex [K"block" body...]
     else
-        for e in children(ex)
-            _resolve_scopes!(ctx, e)
-        end
+        mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
     end
-    ex
 end
 
-function resolve_scopes!(ctx::ScopeResolutionContext, ex)
+function _resolve_scopes(ctx, exs::AbstractVector)
+    out = SyntaxList(ctx)
+    for e in exs
+        push!(out, _resolve_scopes(ctx, e))
+    end
+    out
+end
+
+function resolve_scopes(ctx::ScopeResolutionContext, ex)
     thunk = makenode(ctx, ex, K"lambda", ex;
                      lambda_info=LambdaInfo(SyntaxList(ctx), SyntaxList(ctx), nothing, true))
-    _resolve_scopes!(ctx, thunk)
-    return thunk
+    return _resolve_scopes(ctx, thunk)
 end
 
-function resolve_scopes!(ctx::DesugaringContext, ex)
+function resolve_scopes(ctx::DesugaringContext, ex)
     ctx2 = ScopeResolutionContext(ctx)
-    res = resolve_scopes!(ctx2, reparent(ctx2, ex))
+    res = resolve_scopes(ctx2, reparent(ctx2, ex))
     ctx2, res
 end
 

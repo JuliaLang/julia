@@ -29,13 +29,14 @@ function formatsrc(ex; kws...)
     Text(JuliaSyntaxFormatter.formatsrc(ex; kws...))
 end
 
-function annotate_scopes(mod, ex)
-    ex = ensure_attributes(ex, var_id=Int)
-    ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex)
-    ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
-    ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
-    ex
-end
+# Currently broken - need to push info back onto src
+# function annotate_scopes(mod, ex)
+#     ex = ensure_attributes(ex, var_id=Int)
+#     ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(mod, ex)
+#     ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
+#     ctx3, ex_scoped = JuliaLowering.resolve_scopes(ctx2, ex_desugar)
+#     ex
+# end
 
 #-------------------------------------------------------------------------------
 # Demos of the prototype
@@ -159,13 +160,6 @@ M.@recursive 3
 """
 
 # src = """
-# begin
-#     M.@set_a_global 1000
-#     M.a_global
-# end
-# """
-
-# src = """
 # M.@set_global_in_parent "bent hygiene!"
 # """
 
@@ -251,19 +245,59 @@ end
 
 src = """
 for i in [3,1,2]
-    println("i = ", i)
+    println("i = ", i, ", j = ", j)
+end
+"""
+
+# src = """
+# @ccall f()::T
+# """
+#
+# src = """
+# begin
+#     a = 1
+#     xs = [:(a),]
+#     x = :(:(\$(\$(xs...))))
+# end
+# """
+
+# src = """
+# try
+#     a
+# catch exc
+#     b
+# end
+# """
+
+src = """
+let
+    a = []
+    for i = 1:2, j = 3:4
+        push!(a, (i,j))
+        i = 100
+    end
+    a
 end
 """
 
 src = """
-@ccall f()::T
+begin
+    function f(x)
+        y = x + 1
+        "hi", x, y
+    end
+
+    f(1)
+end
 """
 
 src = """
 begin
-    a = 1
-    xs = [:(a),]
-    x = :(:(\$(\$(xs...))))
+    local a, b, c
+    if a
+        b
+    end
+    c
 end
 """
 
@@ -280,7 +314,7 @@ ctx1, ex_macroexpand = JuliaLowering.expand_forms_1(in_mod, ex)
 ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
 @info "Desugared" ex_desugar formatsrc(ex_desugar, color_by=:scope_layer)
 
-ctx3, ex_scoped = JuliaLowering.resolve_scopes!(ctx2, ex_desugar)
+ctx3, ex_scoped = JuliaLowering.resolve_scopes(ctx2, ex_desugar)
 @info "Resolved scopes" ex_scoped formatsrc(ex_scoped, color_by=:var_id)
 
 ctx4, ex_compiled = JuliaLowering.linearize_ir(ctx3, ex_scoped)

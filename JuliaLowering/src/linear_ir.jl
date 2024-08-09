@@ -50,18 +50,27 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
                     Dict{String,NodeId}(), ctx.mod)
 end
 
+# FIXME: BindingId subsumes many things so need to assess what that means for these predicates.
+# BindingId can be
+#   - local variable (previously K"Identifier")
+#   - implicit global variables in current module (previously K"Identifier")
+#   - globalref - from macros
+#
+# BindingId could also subsume
+#   - top,core
+
 function is_valid_body_ir_argument(ex)
     is_valid_ir_argument(ex) && return true
     return false
     # FIXME
     k = kind(ex)
-    return k == K"Identifier" && # Arguments are always defined slots
+    return k == K"BindingId" && # Arguments are always defined slots
         TODO("vinfo-table stuff")
 end
 
 function is_simple_arg(ex)
     k = kind(ex)
-    return is_simple_atom(ex) || k == K"Identifier" || k == K"quote" || k == K"inert" ||
+    return is_simple_atom(ex) || k == K"BindingId" || k == K"quote" || k == K"inert" ||
            k == K"top" || k == K"core" || k == K"globalref" || k == K"outerref"
 end
 
@@ -81,7 +90,7 @@ end
 function is_valid_ir_rvalue(ctx, lhs, rhs)
     return is_ssa(ctx, lhs) ||
            is_valid_ir_argument(rhs) ||
-           (kind(lhs) == K"Identifier" &&
+           (kind(lhs) == K"BindingId" &&
             # FIXME: add: splatnew isdefined invoke cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref
             kind(rhs) in KSet"new the_exception call foreigncall")
 end
@@ -233,9 +242,8 @@ end
 # TODO: Is it ok to return `nothing` if we have no value in some sense?
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
-    if k == K"Identifier" || is_literal(k) || k == K"BindingId" || k == K"quote" || k == K"inert" ||
-            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" || k == K"Placeholder" ||
-            k == K"Bool"
+    if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
+            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" || k == K"Placeholder"
         # TODO: other kinds: copyast the_exception $ globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall
         if needs_value && k == K"Placeholder"
             # TODO: ensure outterref, globalref work here
@@ -246,7 +254,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             ex
         else
-            if k == K"Identifier"
+            if k == K"BindingId" && !is_ssa(ctx, ex)
                 emit(ctx, ex) # keep identifiers for undefined-var checking
             end
             nothing
@@ -445,35 +453,30 @@ end
 # flisp: renumber-stuff
 function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     k = kind(ex)
-    if k == K"Identifier"
-        id = ex.var_id
-        slot_id = get(slot_rewrites, id, nothing)
-        if !isnothing(slot_id)
-            makeleaf(ctx, ex, K"slot"; var_id=slot_id)
-        else
-            # TODO: look up any static parameters
-            info = lookup_binding(ctx, id)
-            if info.kind === :global
-                makeleaf(ctx, ex, K"globalref", ex.name_val, mod=info.mod)
-            else
-                TODO(ex, "Identifier which is not a slot or global?")
-            end
-        end
-    elseif k == K"outerref" || k == K"meta"
-        TODO(ex, "_renumber $k")
-    elseif is_literal(k) || is_quoted(k) || k == K"global"
-        ex
-    elseif k == K"BindingId"
-        # TODO: This case should replace K"Identifier" completely. For now only
-        # SSA variables go through here. Instead, we should branch on ssa_rewrites.
+    if k == K"BindingId"
         id = ex.var_id
         if haskey(ssa_rewrites, id)
             makeleaf(ctx, ex, K"SSAValue"; var_id=ssa_rewrites[id])
         else
             slot_id = get(slot_rewrites, id, nothing)
-            @assert !isnothing(slot_id)
-            makeleaf(ctx, ex, K"slot"; var_id=slot_id)
+            if !isnothing(slot_id)
+                makeleaf(ctx, ex, K"slot"; var_id=slot_id)
+            else
+                # TODO: look up any static parameters
+                # TODO: Should we defer rewriting globals to globalref until
+                # CodeInfo generation?
+                info = lookup_binding(ctx, id)
+                if info.kind === :global
+                    makeleaf(ctx, ex, K"globalref", info.name, mod=info.mod)
+                else
+                    TODO(ex, "Bindings of kind $(info.kind)")
+                end
+            end
         end
+    elseif k == K"outerref" || k == K"meta"
+        TODO(ex, "_renumber $k")
+    elseif is_literal(k) || is_quoted(k)
+        ex
     elseif k == K"enter"
         TODO(ex, "_renumber $k")
     elseif k == K"goto"

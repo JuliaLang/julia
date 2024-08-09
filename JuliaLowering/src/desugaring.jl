@@ -127,8 +127,7 @@ function expand_let(ctx, ex)
     for binding in Iterators.reverse(children(ex[1]))
         kb = kind(binding)
         if is_sym_decl(kb)
-            blk = @ast ctx ex [
-                K"scope_block"(scope_type=scope_type)
+            blk = @ast ctx ex [K"scope_block"(scope_type=scope_type)
                 [K"local" binding]
                 blk
             ]
@@ -140,6 +139,7 @@ function expand_let(ctx, ex)
                     K"block"
                     tmp=rhs
                     [K"scope_block"(ex, scope_type=scope_type)
+                        # TODO: Use single child for scope_block?
                         [K"local_def"(lhs) lhs] # TODO: Use K"local" with attr?
                         [K"="(rhs)
                             decl_var(lhs)
@@ -464,7 +464,7 @@ function expand_function_def(ctx, ex, docs)
         if !is_valid_name(name)
             throw(LoweringError(name, "Invalid function name"))
         end
-        return @ast ctx ex [K"method" name]
+        return @ast ctx ex [K"method" name=>K"Symbol"]
     elseif kind(name) == K"call"
         callex = name
         body = ex[2]
@@ -551,9 +551,9 @@ function expand_function_def(ctx, ex, docs)
         end
         @ast ctx ex [
             K"block"
-            func = [K"method" function_name]
+            func = [K"method" function_name=>K"Symbol"]
             [K"method"
-                function_name
+                function_name=>K"Symbol"
                 preamble
                 [K"lambda"(body, lambda_info=LambdaInfo(arg_names, static_parameters, ret_var, false))
                     body

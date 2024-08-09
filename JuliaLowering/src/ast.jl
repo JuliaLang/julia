@@ -62,14 +62,14 @@ end
 _node_id(ex::NodeId) = ex
 _node_id(ex::SyntaxTree) = ex._id
 
-_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_same_graph(graph, ex); ex._id)
+_node_id(graph::SyntaxGraph, ex::SyntaxTree) = (check_compatible_graph(graph, ex); ex._id)
 
 _node_ids(graph::SyntaxGraph) = ()
 _node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)
 _node_ids(graph::SyntaxGraph, c, cs...) = (_node_id(graph, c), _node_ids(graph, cs...)...)
 _node_ids(graph::SyntaxGraph, cs::SyntaxList, cs1...) = (_node_ids(graph, cs...)..., _node_ids(graph, cs1...)...)
 function _node_ids(graph::SyntaxGraph, cs::SyntaxList)
-    check_same_graph(graph, cs)
+    check_compatible_graph(graph, cs)
     cs.ids
 end
 

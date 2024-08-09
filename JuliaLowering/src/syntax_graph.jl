@@ -179,6 +179,12 @@ function check_same_graph(x, y)
     end
 end
 
+function check_compatible_graph(x, y)
+    if !is_compatible_graph(x, y)
+        error("Incompatible syntax graphs")
+    end
+end
+
 function is_compatible_graph(x, y)
     syntax_graph(x).edges === syntax_graph(y).edges
 end
