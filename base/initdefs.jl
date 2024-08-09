@@ -438,6 +438,11 @@ function atexit(f::Function)
 end
 
 function _atexit(exitcode::Cint)
+    # this current task shouldn't be scheduled anywhere, but if it was (because
+    # this exit came from a signal for example), then try to clear that state
+    # to minimize scheduler issues later
+    ct = current_task()
+    q = ct.queue; q === nothing || list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
     # Don't hold the lock around the iteration, just in case any other thread executing in
     # parallel tries to register a new atexit hook while this is running. We don't want to
     # block that thread from proceeding, and we can allow it to register its hook which we
