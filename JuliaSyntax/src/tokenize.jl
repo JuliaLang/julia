@@ -1319,8 +1319,10 @@ function lex_identifier(l::Lexer, c)
 
     if n > MAX_KW_LENGTH
         emit(l, K"Identifier")
+    elseif h == _true_hash || h == _false_hash
+        emit(l, K"Bool")
     else
-        emit(l, get(kw_hash, h, K"Identifier"))
+        emit(l, get(_kw_hash, h, K"Identifier"))
     end
 end
 
@@ -1374,8 +1376,6 @@ K"while",
 K"in",
 K"isa",
 K"where",
-K"true",
-K"false",
 
 K"abstract",
 K"as",
@@ -1387,6 +1387,8 @@ K"type",
 K"var",
 ]
 
-const kw_hash = Dict(simple_hash(lowercase(string(kw))) => kw for kw in kws)
+const _true_hash = simple_hash("true")
+const _false_hash = simple_hash("false")
+const _kw_hash = Dict(simple_hash(lowercase(string(kw))) => kw for kw in kws)
 
 end # module

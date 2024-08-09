@@ -125,6 +125,19 @@ byte_range(node::AbstractSyntaxNode) = node.position:(node.position + span(node)
 
 sourcefile(node::AbstractSyntaxNode) = node.source
 
+function leaf_string(ex)
+    if !is_leaf(ex)
+        throw(ArgumentError("_value_string should be used for leaf nodes only"))
+    end
+    k = kind(ex)
+    value = ex.val
+    # TODO: Dispatch on kind extension module (??)
+    return k == K"Placeholder" ? "□"*string(value) :
+           is_identifier(k)    ? string(value)     :
+           value isa Symbol    ? string(value)     : # see parse_julia_literal for other cases which go here
+           repr(value)
+end
+
 function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
                            indent, show_byte_offsets)
     fname = filename(node)
@@ -134,8 +147,7 @@ function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
         posstr *= "$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
     end
     val = node.val
-    nodestr = !is_leaf(node) ? "[$(untokenize(head(node)))]" :
-              isa(val, Symbol) ? string(val) : repr(val)
+    nodestr = is_leaf(node) ? leaf_string(node) : "[$(untokenize(head(node)))]"
     treestr = string(indent, nodestr)
     # Add filename if it's changed from the previous node
     if fname != current_filename[]
@@ -157,8 +169,7 @@ function _show_syntax_node_sexpr(io, node::AbstractSyntaxNode)
         if is_error(node)
             print(io, "(", untokenize(head(node)), ")")
         else
-            val = node.val
-            print(io, val isa Symbol ? string(val) : repr(val))
+            print(io, leaf_string(node))
         end
     else
         print(io, "(", untokenize(head(node)))

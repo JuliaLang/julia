@@ -197,6 +197,7 @@ register_kinds!(JuliaSyntax, 0, [
     # Identifiers
     "BEGIN_IDENTIFIERS"
         "Identifier"
+        "Placeholder" # Used for empty catch variables, and all-underscore identifiers in lowering
         # Macro names are modelled as special kinds of identifiers because the full
         # macro name may not appear as characters in the source: The `@` may be
         # detached from the macro name as in `@A.x` (ugh!!), or have a _str or _cmd
@@ -253,6 +254,7 @@ register_kinds!(JuliaSyntax, 0, [
     "END_KEYWORDS"
 
     "BEGIN_LITERAL"
+        "Bool"
         "Integer"
         "BinInt"
         "HexInt"
@@ -262,8 +264,6 @@ register_kinds!(JuliaSyntax, 0, [
         "String"
         "Char"
         "CmdString"
-        "true"
-        "false"
     "END_LITERAL"
 
     "BEGIN_DELIMITERS"
@@ -1067,7 +1067,7 @@ register_kinds!(JuliaSyntax, 0, [
 
     # Special tokens
     "TOMBSTONE"    # Empty placeholder for kind to be filled later
-    "None"         # Placeholder; never emitted by lexer
+    "None"         # Never emitted by lexer/parser
     "EndMarker"    # EOF
 
     "BEGIN_ERRORS"
@@ -1097,6 +1097,7 @@ const _nonunique_kind_names = Set([
     K"Whitespace"
     K"NewlineWs"
     K"Identifier"
+    K"Placeholder"
 
     K"ErrorEofMultiComment"
     K"ErrorInvalidNumericConstant"
@@ -1169,6 +1170,7 @@ const _token_error_descriptions = Dict{Kind, String}(
 
 #-------------------------------------------------------------------------------
 # Predicates
+is_identifier(k::Kind) = K"BEGIN_IDENTIFIERS" <= k <= K"END_IDENTIFIERS"
 is_contextual_keyword(k::Kind) = K"BEGIN_CONTEXTUAL_KEYWORDS" <= k <= K"END_CONTEXTUAL_KEYWORDS"
 is_error(k::Kind) = K"BEGIN_ERRORS" <= k <= K"END_ERRORS" || k == K"ErrorInvalidOperator" || k == K"Error**"
 is_keyword(k::Kind) = K"BEGIN_KEYWORDS" <= k <= K"END_KEYWORDS"
@@ -1177,6 +1179,7 @@ is_literal(k::Kind) = K"BEGIN_LITERAL" <= k <= K"END_LITERAL"
 is_operator(k::Kind) = K"BEGIN_OPS" <= k <= K"END_OPS"
 is_word_operator(k::Kind) = (k == K"in" || k == K"isa" || k == K"where")
 
+is_identifier(k) = is_identifier(kind(k))
 is_contextual_keyword(k) = is_contextual_keyword(kind(k))
 is_error(k) = is_error(kind(k))
 is_keyword(k) = is_keyword(kind(k))

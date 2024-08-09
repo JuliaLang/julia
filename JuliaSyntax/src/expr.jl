@@ -326,6 +326,10 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
                 args = Any[args[1], a2a...]
             end
         end
+    elseif k == K"catch"
+        if kind(childheads[1]) == K"Placeholder"
+            args[1] = false
+        end
     elseif k == K"try"
         # Try children in source order:
         #   try_block catch_var catch_block else_block finally_block
