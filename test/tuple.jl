@@ -850,3 +850,5 @@ end
         end
     end
 end
+
+@test NTuple == Core.Compiler.return_type(reverse, Tuple{NTuple})
