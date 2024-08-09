@@ -1051,7 +1051,7 @@ function Base.show(io::IO, e::Effects)
     print(io, ',')
     printstyled(io, effectbits_letter(e, :nonoverlayed, 'o'); color=effectbits_color(e, :nonoverlayed))
     print(io, ',')
-    printstyled(io, effectbits_letter(e, :no_return_type_call, 'r'); color=effectbits_color(e, :no_return_type_call))
+    printstyled(io, effectbits_letter(e, :nortcall, 'r'); color=effectbits_color(e, :nortcall))
     print(io, ')')
 end
 

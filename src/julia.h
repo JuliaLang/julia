@@ -271,7 +271,7 @@ typedef union __jl_purity_overrides_t {
         uint16_t ipo_noub                : 1;
         uint16_t ipo_noub_if_noinbounds  : 1;
         uint16_t ipo_consistent_overlay  : 1;
-        uint16_t ipo_no_return_type_call : 1;
+        uint16_t ipo_nortcall            : 1;
     } overrides;
     uint16_t bits;
 } _jl_purity_overrides_t;

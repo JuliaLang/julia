@@ -49,7 +49,7 @@ struct EffectsOverride
     noub::Bool
     noub_if_noinbounds::Bool
     consistent_overlay::Bool
-    no_return_type_call::Bool
+    nortcall::Bool
 end
 function EffectsOverride(
     override::EffectsOverride =
@@ -64,7 +64,7 @@ function EffectsOverride(
     noub::Bool = override.noub,
     noub_if_noinbounds::Bool = override.noub_if_noinbounds,
     consistent_overlay::Bool = override.consistent_overlay,
-    no_return_type_call::Bool = override.no_return_type_call)
+    nortcall::Bool = override.nortcall)
     return EffectsOverride(
         consistent,
         effect_free,
@@ -76,7 +76,7 @@ function EffectsOverride(
         noub,
         noub_if_noinbounds,
         consistent_overlay,
-        no_return_type_call)
+        nortcall)
 end
 const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
 

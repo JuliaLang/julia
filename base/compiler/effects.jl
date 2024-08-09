@@ -58,7 +58,7 @@ following meanings:
     methods are `:consistent` with their non-overlayed original counterparts
     (see [`Base.@assume_effects`](@ref) for the exact definition of `:consistenct`-cy).
   * `ALWAYS_FALSE`: this method may invoke overlayed methods.
-- `no_return_type_call::Bool`: this method does not call `Core.Compiler.return_type`,
+- `nortcall::Bool`: this method does not call `Core.Compiler.return_type`,
   and it is guaranteed that any other methods this method might call also do not call
   `Core.Compiler.return_type`.
 
@@ -106,7 +106,7 @@ The output represents the state of different effect properties in the following 
     - `+o` (green): `ALWAYS_TRUE`
     - `-o` (red): `ALWAYS_FALSE`
     - `?o` (yellow): `CONSISTENT_OVERLAY`
-9. `:no_return_type_call` (`r`):
+9. `:nortcall` (`r`):
     - `+r` (green): `true`
     - `-r` (red): `false`
 """
@@ -119,7 +119,7 @@ struct Effects
     inaccessiblememonly::UInt8
     noub::UInt8
     nonoverlayed::UInt8
-    no_return_type_call::Bool
+    nortcall::Bool
     function Effects(
         consistent::UInt8,
         effect_free::UInt8,
@@ -129,7 +129,7 @@ struct Effects
         inaccessiblememonly::UInt8,
         noub::UInt8,
         nonoverlayed::UInt8,
-        no_return_type_call::Bool)
+        nortcall::Bool)
         return new(
             consistent,
             effect_free,
@@ -139,7 +139,7 @@ struct Effects
             inaccessiblememonly,
             noub,
             nonoverlayed,
-            no_return_type_call)
+            nortcall)
     end
 end
 
@@ -183,7 +183,7 @@ function Effects(effects::Effects = _EFFECTS_UNKNOWN;
     inaccessiblememonly::UInt8 = effects.inaccessiblememonly,
     noub::UInt8 = effects.noub,
     nonoverlayed::UInt8 = effects.nonoverlayed,
-    no_return_type_call::Bool = effects.no_return_type_call)
+    nortcall::Bool = effects.nortcall)
     return Effects(
         consistent,
         effect_free,
@@ -193,7 +193,7 @@ function Effects(effects::Effects = _EFFECTS_UNKNOWN;
         inaccessiblememonly,
         noub,
         nonoverlayed,
-        no_return_type_call)
+        nortcall)
 end
 
 function is_better_effects(new::Effects, old::Effects)
@@ -258,9 +258,9 @@ function is_better_effects(new::Effects, old::Effects)
     elseif new.nonoverlayed != old.nonoverlayed
         return false
     end
-    if new.no_return_type_call
-        any_improved |= !old.no_return_type_call
-    elseif new.no_return_type_call != old.no_return_type_call
+    if new.nortcall
+        any_improved |= !old.nortcall
+    elseif new.nortcall != old.nortcall
         return false
     end
     return any_improved
@@ -276,7 +276,7 @@ function merge_effects(old::Effects, new::Effects)
         merge_effectbits(old.inaccessiblememonly, new.inaccessiblememonly),
         merge_effectbits(old.noub, new.noub),
         merge_effectbits(old.nonoverlayed, new.nonoverlayed),
-        merge_effectbits(old.no_return_type_call, new.no_return_type_call))
+        merge_effectbits(old.nortcall, new.nortcall))
 end
 
 function merge_effectbits(old::UInt8, new::UInt8)
@@ -296,18 +296,18 @@ is_inaccessiblememonly(effects::Effects) = effects.inaccessiblememonly === ALWAY
 is_noub(effects::Effects)                = effects.noub === ALWAYS_TRUE
 is_noub_if_noinbounds(effects::Effects)  = effects.noub === NOUB_IF_NOINBOUNDS
 is_nonoverlayed(effects::Effects)        = effects.nonoverlayed === ALWAYS_TRUE
-is_no_return_type_call(effects::Effects) = effects.no_return_type_call
+is_nortcall(effects::Effects)            = effects.nortcall
 
 # implies `is_notaskstate` & `is_inaccessiblememonly`, but not explicitly checked here
-is_foldable(effects::Effects, check_return_type_call::Bool=false) =
+is_foldable(effects::Effects, check_rtcall::Bool=false) =
     is_consistent(effects) &&
     (is_noub(effects) || is_noub_if_noinbounds(effects)) &&
     is_effect_free(effects) &&
     is_terminates(effects) &&
-    (!check_return_type_call || is_no_return_type_call(effects))
+    (!check_rtcall || is_nortcall(effects))
 
-is_foldable_nothrow(effects::Effects, check_return_type_call::Bool=false) =
-    is_foldable(effects, check_return_type_call) &&
+is_foldable_nothrow(effects::Effects, check_rtcall::Bool=false) =
+    is_foldable(effects, check_rtcall) &&
     is_nothrow(effects)
 
 # TODO add `is_noub` here?
@@ -338,7 +338,7 @@ function encode_effects(e::Effects)
            ((e.inaccessiblememonly % UInt32) << 8)  |
            ((e.noub                % UInt32) << 10) |
            ((e.nonoverlayed        % UInt32) << 12) |
-           ((e.no_return_type_call % UInt32) << 14)
+           ((e.nortcall            % UInt32) << 14)
 end
 
 function decode_effects(e::UInt32)
@@ -366,7 +366,7 @@ function encode_effects_override(eo::EffectsOverride)
     eo.noub                && (e |= (0x0001 << 7))
     eo.noub_if_noinbounds  && (e |= (0x0001 << 8))
     eo.consistent_overlay  && (e |= (0x0001 << 9))
-    eo.no_return_type_call && (e |= (0x0001 << 10))
+    eo.nortcall            && (e |= (0x0001 << 10))
     return e
 end
 

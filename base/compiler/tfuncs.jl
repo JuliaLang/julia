@@ -2871,7 +2871,7 @@ end
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
-    UNKNOWN = CallMeta(Type, Any, Effects(EFFECTS_THROWS; no_return_type_call=false), NoCallInfo())
+    UNKNOWN = CallMeta(Type, Any, Effects(EFFECTS_THROWS; nortcall=false), NoCallInfo())
     if !(2 <= length(argtypes) <= 3)
         return UNKNOWN
     end
@@ -2901,7 +2901,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
 
     # effects are not an issue if we know this statement will get removed, but if it does not get removed,
     # then this could be recursively re-entering inference (via concrete-eval), which will not terminate
-    RT_CALL_EFFECTS = Effects(EFFECTS_TOTAL; no_return_type_call=false)
+    RT_CALL_EFFECTS = Effects(EFFECTS_TOTAL; nortcall=false)
 
     if contains_is(argtypes_vec, Union{})
         return CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo())

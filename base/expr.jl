@@ -505,7 +505,7 @@ The following `setting`s are supported.
 - `:inaccessiblememonly`
 - `:noub`
 - `:noub_if_noinbounds`
-- `:no_return_type_call`
+- `:nortcall`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -675,9 +675,9 @@ any other effect assertions (such as `:consistent` or `:effect_free`) as well, b
 not model this, and they assume the absence of undefined behavior.
 
 ---
-## `:no_return_type_call`
+## `:nortcall`
 
-The `:no_return_type_call` setting asserts that the method does not call `Core.Compiler.return_type`,
+The `:nortcall` setting asserts that the method does not call `Core.Compiler.return_type`,
 and that any other methods this method might call also do not call `Core.Compiler.return_type`.
 
 !!! note
@@ -698,7 +698,7 @@ currently equivalent to the following `setting`s:
 - `:effect_free`
 - `:terminates_globally`
 - `:noub`
-- `:no_return_type_call`
+- `:nortcall`
 
 !!! note
     This list in particular does not include `:nothrow`. The compiler will still
@@ -732,7 +732,7 @@ the following other `setting`s:
 - `:notaskstate`
 - `:inaccessiblememonly`
 - `:noub`
-- `:no_return_type_call`
+- `:nortcall`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -811,17 +811,17 @@ function compute_assumed_setting(override::EffectsOverride, @nospecialize(settin
     elseif setting === :noub_if_noinbounds
         return EffectsOverride(override; noub_if_noinbounds = val)
     elseif setting === :foldable
-        consistent = effect_free = terminates_globally = noub = no_return_type_call = val
-        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub, no_return_type_call)
+        consistent = effect_free = terminates_globally = noub = nortcall = val
+        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub, nortcall)
     elseif setting === :removable
         effect_free = nothrow = terminates_globally = val
         return EffectsOverride(override; effect_free, nothrow, terminates_globally)
     elseif setting === :total
         consistent = effect_free = nothrow = terminates_globally = notaskstate =
-            inaccessiblememonly = noub = no_return_type_call = val
+            inaccessiblememonly = noub = nortcall = val
         return EffectsOverride(override;
             consistent, effect_free, nothrow, terminates_globally, notaskstate,
-            inaccessiblememonly, noub, no_return_type_call)
+            inaccessiblememonly, noub, nortcall)
     end
     return nothing
 end
