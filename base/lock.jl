@@ -556,3 +556,59 @@ end
     import .Base: Event
     export Event
 end
+
+const _NOT_CALLED = Ptr{Nothing}(0)
+const _STARTED = Ptr{Nothing}(1)
+const _DONE = Ptr{Nothing}(2)
+
+"""
+    Once()
+
+Create a `Once` object that can be used to execute a callback exactly once across all executions of the program.
+The callback is executed by calling `call_once!`. This is similar to `pthread_once` in POSIX.
+
+```
+    const once = Once()
+    foo() = println("This will be printed exactly once")
+    call_once!(once, foo)
+    call_once!(once, foo) # does nothing
+```
+
+!!! compat "Julia 1.12"
+    This functionality requires at least Julia 1.12
+"""
+mutable struct Once
+    @atomic done::Ptr{Nothing} # Ptr is used so it resets during precompilation
+    lock::Threads.Event #Ideally would be a Futex
+    Once() = new(_NOT_CALLED, Threads.Event(false))
+end
+
+"""
+    call_once!(once::Once, f::Function)
+
+    Execute the callback `f` if it's the first time `call_once!` is called on this `Once` object.
+
+    !!! compat "Julia 1.12"
+        This functionality requires at least Julia 1.12
+"""
+@inline function call_once!(once::Once, f::F) where {F <: Function} #TODO: Do we want this specialization
+    if (@atomic :acquire once.done) == _DONE #Make sure this is the right atomic
+        return
+    end
+    call_once_slow_path!(once, f)
+    return
+end
+
+@noinline function call_once_slow_path!(once::Once, f::F) where {F <: Function}
+    if (@atomicreplace :acquire_release once.done _NOT_CALLED => _STARTED).success #TODO: Split into slow path function
+        try
+            f()
+        finally #What if we error
+            @atomic :release once.done = _DONE
+            notify(once.lock)
+        end
+    else
+        wait(once.lock)
+    end
+    return
+end

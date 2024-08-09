@@ -366,3 +366,21 @@ end
         @test jl_setaffinity(0, mask, cpumasksize) == 0
     end
 end
+
+@testset "Once" begin
+    mutable struct MyRandomCounter
+        @atomic x::Int
+    end
+    const cnt = MyRandomCounter(0)
+    const once = Once()
+    function foo()
+        sleep(1)
+        @atomic :monotonic cnt.x += 1
+    end
+    @sync begin
+        Threads.@spawn call_once!(once, foo)
+        Threads.@spawn call_once!(once, foo) # does nothing
+    end
+    @test cnt.x == 1
+
+end
