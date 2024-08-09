@@ -221,9 +221,6 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier" && all(==('_'), ex.name_val)
         @ast ctx ex ex=>K"Placeholder"
-    elseif k == K"true" || k == K"false"
-        # FIXME: Move this upstream into JuliaSyntax
-        @ast ctx ex (k == K"true")::K"Bool"
     elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName" ||
             (is_operator(k) && is_leaf(ex)) # <- TODO: fix upstream: make operator *tokens* into identifiers
         layerid = get(ex, :scope_layer, ctx.current_layer.id)

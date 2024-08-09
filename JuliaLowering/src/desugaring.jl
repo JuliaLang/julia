@@ -288,8 +288,6 @@ end
 function match_try(ex)
     @chk numchildren(ex) > 1 "Invalid `try` form"
     try_ = ex[1]
-    catch_and_exc = nothing
-    exc_var = nothing
     catch_ = nothing
     finally_ = nothing
     else_ = nothing
@@ -297,12 +295,7 @@ function match_try(ex)
         k = kind(e)
         if k == K"catch" && isnothing(catch_)
             @chk numchildren(e) == 2 "Invalid `catch` form"
-            if !(kind(e[1]) == K"Bool" && e[1].value === false)
-                # TODO: Fix this strange AST wart upstream?
-                exc_var = e[1]
-            end
-            catch_ = e[2]
-            catch_and_exc = e
+            catch_ = e
         elseif k == K"else" && isnothing(else_)
             @chk numchildren(e) == 1
             else_ = e[1]
@@ -313,11 +306,11 @@ function match_try(ex)
             throw(LoweringError(ex, "Invalid clause in `try` form"))
         end
     end
-    (try_, catch_and_exc, exc_var, catch_, else_, finally_)
+    (try_, catch_, else_, finally_)
 end
 
 function expand_try(ctx, ex)
-    (try_, catch_and_exc, exc_var, catch_, else_, finally_) = match_try(ex)
+    (try_, catch_, else_, finally_) = match_try(ex)
 
     if !isnothing(finally_)
         # TODO: check unmatched symbolic gotos in try.
@@ -328,16 +321,15 @@ function expand_try(ctx, ex)
     if isnothing(catch_)
         try_block = try_body
     else
-        if !isnothing(exc_var) && !is_identifier_like(exc_var)
+        exc_var = catch_[1]
+        catch_block = catch_[2]
+        if !is_identifier_like(exc_var)
             throw(LoweringError(exc_var, "Expected an identifier as exception variable"))
         end
         try_block = @ast ctx ex [K"trycatchelse"
             try_body
-            [K"scope_block"(catch_and_exc, scope_type=:neutral)
-                if !isnothing(exc_var)
-                    if !is_identifier_like(exc_var)
-                        throw(LoweringError(exc_var, "Expected an identifier as exception variable"))
-                    end
+            [K"scope_block"(catch_, scope_type=:neutral)
+                if kind(exc_var) != K"Placeholder"
                     [K"block"
                         [K"="(exc_var) exc_var [K"the_exception"]]
                         catch_
