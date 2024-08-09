@@ -1,6 +1,6 @@
 using Test
 
-# We need a relative include here as JuliaSyntax my come from Base.
+# We need a relative include here as JuliaSyntax may come from Base.
 using .JuliaSyntax:
     # Parsing
     ParseStream,
@@ -23,14 +23,15 @@ using .JuliaSyntax:
     # Node inspection
     kind,
     flags,
+    EMPTY_FLAGS, TRIVIA_FLAG, INFIX_FLAG,
     head,
     span,
     SyntaxHead,
     is_trivia,
     sourcetext,
     is_leaf,
+    numchildren,
     children,
-    child,
     fl_parseall,
     fl_parse,
     highlight,

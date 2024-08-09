@@ -1,12 +1,6 @@
 using JuliaSyntax
 using Test
 
-using JuliaSyntax: SourceFile
-
-using JuliaSyntax: GreenNode, SyntaxNode,
-    flags, EMPTY_FLAGS, TRIVIA_FLAG, INFIX_FLAG,
-    children, child, setchild!, SyntaxHead
-
 include("test_utils.jl")
 include("test_utils_tests.jl")
 include("fuzz_test.jl")

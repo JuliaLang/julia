@@ -3,33 +3,35 @@
     tt = "a*b + c"
     t = parsestmt(SyntaxNode, tt)
 
-    @test sourcetext(child(t, 1))    == "a*b"
-    @test sourcetext(child(t, 1, 1)) == "a"
-    @test sourcetext(child(t, 1, 2)) == "*"
-    @test sourcetext(child(t, 1, 3)) == "b"
-    @test sourcetext(child(t, 2))    == "+"
-    @test sourcetext(child(t, 3))    == "c"
+    @test sourcetext(t[1])    == "a*b"
+    @test sourcetext(t[1][1]) == "a"
+    @test sourcetext(t[1][2]) == "*"
+    @test sourcetext(t[1][3]) == "b"
+    @test sourcetext(t[2])    == "+"
+    @test sourcetext(t[3])    == "c"
 
-    @test JuliaSyntax.first_byte(child(t, 2)) == findfirst(==('+'), tt)
-    @test JuliaSyntax.source_line(child(t, 3)) == 1
-    @test source_location(child(t, 3)) == (1, 7)
+    @test JuliaSyntax.first_byte(t[2]) == findfirst(==('+'), tt)
+    @test JuliaSyntax.source_line(t[3]) == 1
+    @test source_location(t[3]) == (1, 7)
 
     # Child indexing
-    @test t[1]    === child(t, 1)
-    @test t[1, 1] === child(t, 1, 1)
-    @test t[end]  === child(t, 3)
-    # Unfortunately, can't make t[1, end] work
-    # as `lastindex(t, 2)` isn't well defined
+    @test t[end] === t[3]
+    @test sourcetext.(t[2:3]) == ["+", "c"]
+    @test sourcetext.(t[2:end]) == ["+", "c"]
+    @test firstindex(t) == 1
+    @test lastindex(t) == 3
+    @test !is_leaf(t)
+    @test is_leaf(t[3])
 
     @test sprint(show, t) == "(call-i (call-i a * b) + c)"
     @test sprint(io->show(io, MIME("text/x.sexpression"), t, show_kind=true)) ==
         "(call-i (call-i a::Identifier *::* b::Identifier) +::+ c::Identifier)"
 
-    @test sprint(highlight, child(t, 1, 3)) == "a*b + c\n# ╙"
+    @test sprint(highlight, t[1][3]) == "a*b + c\n# ╙"
     @test sprint(highlight, t.source, t.raw, 1, 3) == "a*b + c\n# ╙"
 
     # Pass-through field access
-    node = child(t, 1, 1)
+    node = t[1][1]
     @test node.val === :a
     # The specific error text has evolved over Julia versions. Check that it involves `SyntaxData` and immutability
     e = try node.val = :q catch e e end
@@ -40,20 +42,20 @@
     ct = copy(t)
     ct.data = nothing
     @test ct.data === nothing && t.data !== nothing
-    @test child(ct, 1).parent === ct
-    @test child(ct, 1) !== child(t, 1)
+    @test ct[1].parent === ct
+    @test ct[1] !== t[1]
 
     node = parsestmt(SyntaxNode, "f()")
     push!(node, parsestmt(SyntaxNode, "x"))
     @test length(children(node)) == 2
     node[2] = parsestmt(SyntaxNode, "y")
-    @test sourcetext(child(node, 2)) == "y"
+    @test sourcetext(node[2]) == "y"
 
     # SyntaxNode with offsets
     t,_ = parsestmt(SyntaxNode, "begin a end\nbegin b end", 13)
     @test t.position == 13
-    @test child(t,1).position == 19
-    @test child(t,1).val == :b
+    @test t[1].position == 19
+    @test t[1].val == :b
 
     # Unicode character ranges
     src = "ab + αβ"
