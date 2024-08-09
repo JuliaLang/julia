@@ -1417,8 +1417,6 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
             ((jl_datatype_t*)ftype)->name->mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_type_type_mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_nonfunction_mt) {
-        n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->module->name);
-        n += jl_printf(s, ".");
         n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->mt->name);
     }
     else {
