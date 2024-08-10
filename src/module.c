@@ -238,7 +238,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
     if (bpart->kind != BINDING_KIND_GLOBAL && bpart->kind != BINDING_KIND_CONST && bpart->kind != BINDING_KIND_CONST_IMPORT) {
         if (jl_bpart_is_some_guard(bpart)) {
             check_safe_newbinding(m, var);
-            if (!alloc)
+            if (!alloc && bpart->kind != BINDING_KIND_DECLARED)
                 jl_errorf("Global %s.%s does not exist and cannot be assigned. Declare it using `global` before attempting assignment.", jl_symbol_name(m->name), jl_symbol_name(var));
             bpart->kind = BINDING_KIND_GLOBAL;
             jl_atomic_store_relaxed(&bpart->restriction, (jl_value_t*)jl_any_type);

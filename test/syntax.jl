@@ -3948,3 +3948,12 @@ module ReplacementContainer
 end
 @test ReplacementContainer.Old !== ReplacementContainer.ReplaceMe
 @test ReplacementContainer.ReplaceMe.x === 2
+
+# Setglobal of previously declared global
+module DeclareSetglobal
+    using Test
+    @test_throws ErrorException setglobal!(@__MODULE__, :DeclareMe, 1)
+    global DeclareMe
+    setglobal!(@__MODULE__, :DeclareMe, 1)
+    @test DeclareMe === 1
+end
