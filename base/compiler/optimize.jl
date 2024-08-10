@@ -42,13 +42,16 @@ const IR_FLAG_NOUB        = one(UInt32) << 8
 const IR_FLAG_EFIIMO      = one(UInt32) << 9
 # This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 10
+# This statement is :nortcall
+const IR_FLAG_NORTCALL    = one(UInt32) << 11
 # This statement has no users and may be deleted if flags get refined to IR_FLAGS_REMOVABLE
-const IR_FLAG_UNUSED      = one(UInt32) << 11
+const IR_FLAG_UNUSED      = one(UInt32) << 12
 
-const NUM_IR_FLAGS = 12 # sync with julia.h
+const NUM_IR_FLAGS = 13 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
-    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES | IR_FLAG_NOUB
+    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW |
+    IR_FLAG_TERMINATES | IR_FLAG_NOUB | IR_FLAG_NORTCALL
 
 const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES
 
@@ -77,6 +80,9 @@ function flags_for_effects(effects::Effects)
     end
     if is_noub(effects)
         flags |= IR_FLAG_NOUB
+    end
+    if is_nortcall(effects)
+        flags |= IR_FLAG_NORTCALL
     end
     return flags
 end
@@ -583,26 +589,28 @@ mutable struct PostOptAnalysisState
     all_nothrow::Bool
     all_noub::Bool
     any_conditional_ub::Bool
+    nortcall::Bool
     function PostOptAnalysisState(result::InferenceResult, ir::IRCode)
         inconsistent = BitSetBoundedMinPrioritySet(length(ir.stmts))
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
         lazypostdomtree = LazyPostDomtree(ir)
         lazyagdomtree = LazyAugmentedDomtree(ir)
         return new(result, ir, inconsistent, tpdum, lazypostdomtree, lazyagdomtree, Int[],
-                   true, true, nothing, true, true, false)
+                   true, true, nothing, true, true, false, true)
     end
 end
 
 give_up_refinements!(sv::PostOptAnalysisState) =
     sv.all_retpaths_consistent = sv.all_effect_free = sv.effect_free_if_argmem_only =
-    sv.all_nothrow = sv.all_noub = false
+    sv.all_nothrow = sv.all_noub = sv.nortcall = false
 
 function any_refinable(sv::PostOptAnalysisState)
     effects = sv.result.ipo_effects
     return ((!is_consistent(effects) & sv.all_retpaths_consistent) |
             (!is_effect_free(effects) & sv.all_effect_free) |
             (!is_nothrow(effects) & sv.all_nothrow) |
-            (!is_noub(effects) & sv.all_noub))
+            (!is_noub(effects) & sv.all_noub) |
+            (!is_nortcall(effects) & sv.nortcall))
 end
 
 struct GetNativeEscapeCache{CodeCache}
@@ -647,7 +655,8 @@ function refine_effects!(interp::AbstractInterpreter, sv::PostOptAnalysisState)
         effect_free = sv.all_effect_free ? ALWAYS_TRUE :
                       sv.effect_free_if_argmem_only === true ? EFFECT_FREE_IF_INACCESSIBLEMEMONLY : effects.effect_free,
         nothrow = sv.all_nothrow ? true : effects.nothrow,
-        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub)
+        noub = sv.all_noub ? (sv.any_conditional_ub ? NOUB_IF_NOINBOUNDS : ALWAYS_TRUE) : effects.noub,
+        nortcall = sv.nortcall ? true : effects.nortcall)
     return true
 end
 
@@ -770,6 +779,13 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
             sv.any_conditional_ub = true
         else
             sv.all_noub = false
+        end
+    end
+    if !has_flag(flag, IR_FLAG_NORTCALL)
+        # if a function call that might invoke `Core.Compiler.return_type` has been deleted,
+        # there's no need to taint with `:nortcall`, allowing concrete evaluation
+        if isexpr(stmt, :call) || isexpr(stmt, :invoke)
+            sv.nortcall = false
         end
     end
 end
