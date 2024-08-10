@@ -3939,9 +3939,12 @@ end
 # Module Replacement
 module ReplacementContainer
     module ReplaceMe
+        const x = 1
     end
     const Old = ReplaceMe
     module ReplaceMe
+        const x = 2
     end
 end
 @test ReplacementContainer.Old !== ReplacementContainer.ReplaceMe
+@test ReplacementContainer.ReplaceMe.x === 2

@@ -169,7 +169,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
                 if (jl_generating_output())
                     jl_errorf("cannot replace module %s during compilation", jl_symbol_name(name));
                 jl_printf(JL_STDERR, "WARNING: replacing module %s.\n", jl_symbol_name(name));
-                old = jl_atomic_exchange(&b->value, (jl_value_t*)newm);
+                old = jl_atomic_exchange(&bpart->restriction, (jl_value_t*)newm);
             }
             jl_gc_wb(bpart, newm);
             if (old != NULL) {
