@@ -135,6 +135,7 @@ min(::Any,     ::Missing) = missing
 max(::Missing, ::Missing) = missing
 max(::Missing, ::Any)     = missing
 max(::Any,     ::Missing) = missing
+clamp(::Missing, lo, hi) = missing
 
 missing_conversion_msg(@nospecialize T) =
     LazyString("cannot convert a missing value to type ", T, ": use Union{", T, ", Missing} instead")

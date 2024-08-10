@@ -102,6 +102,7 @@ New library features
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
 * `Lockable` is now exported ([#54595])
+* New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
 
 Standard library changes
 ------------------------
@@ -169,6 +170,10 @@ Deprecated or removed
 
 External dependencies
 ---------------------
+
+- The terminal info database, `terminfo`, is now vendored by default, providing a better
+  REPL user experience when `terminfo` is not available on the system. Julia can be built
+  without vendoring the database using the Makefile option `WITH_TERMINFO=0`. ([#55411])
 
 Tooling Improvements
 --------------------

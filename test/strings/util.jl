@@ -67,6 +67,52 @@ end
     @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
 end
 
+@testset "string truncation (ltruncate, rtruncate, ctruncate)" begin
+    @test ltruncate("foo", 4) == "foo"
+    @test ltruncate("foo", 3) == "foo"
+    @test ltruncate("foo", 2) == "…o"
+    @test ltruncate("🍕🍕 I love 🍕", 10) == "…I love 🍕" # handle wide emojis
+    @test ltruncate("🍕🍕 I love 🍕", 10, "[…]") == "[…]love 🍕"
+    # when the replacement string is longer than the trunc
+    # trust that the user wants the replacement string rather than erroring
+    @test ltruncate("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @inferred ltruncate("xxx", 4)
+    @inferred ltruncate("xxx", 2)
+    @inferred ltruncate(@view("xxxxxxx"[1:4]), 4)
+    @inferred ltruncate(@view("xxxxxxx"[1:4]), 2)
+
+    @test rtruncate("foo", 4) == "foo"
+    @test rtruncate("foo", 3) == "foo"
+    @test rtruncate("foo", 2) == "f…"
+    @test rtruncate("🍕🍕 I love 🍕", 10) == "🍕🍕 I lo…"
+    @test rtruncate("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕 I […]"
+    @test rtruncate("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @inferred rtruncate("xxx", 4)
+    @inferred rtruncate("xxx", 2)
+    @inferred rtruncate(@view("xxxxxxx"[1:4]), 4)
+    @inferred rtruncate(@view("xxxxxxx"[1:4]), 2)
+
+    @test ctruncate("foo", 4) == "foo"
+    @test ctruncate("foo", 3) == "foo"
+    @test ctruncate("foo", 2) == "f…"
+    @test ctruncate("foo", 2; prefer_left=true) == "f…"
+    @test ctruncate("foo", 2; prefer_left=false) == "…o"
+    @test ctruncate("foobar", 6) == "foobar"
+    @test ctruncate("foobar", 5) == "fo…ar"
+    @test ctruncate("foobar", 4) == "fo…r"
+    @test ctruncate("🍕🍕 I love 🍕", 10) == "🍕🍕 …e 🍕"
+    @test ctruncate("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕[…] 🍕"
+    @test ctruncate("abc", 2, "xxxxxx") == "xxxxxx"
+    @test ctruncate("🍕🍕🍕🍕🍕🍕xxxxxxxxxxx", 9) == "🍕🍕…xxxx"
+
+    @inferred ctruncate("xxxxx", 5)
+    @inferred ctruncate("xxxxx", 3)
+    @inferred ctruncate(@view("xxxxxxx"[1:5]), 5)
+    @inferred ctruncate(@view("xxxxxxx"[1:5]), 3)
+end
+
 # string manipulation
 @testset "lstrip/rstrip/strip" begin
     @test strip("") == ""

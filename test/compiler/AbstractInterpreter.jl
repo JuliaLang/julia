@@ -176,7 +176,6 @@ end == Val{6}
 @newinterp Issue48097Interp
 @MethodTable ISSUE_48097_MT
 CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), ISSUE_48097_MT)
-CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
 function CC.concrete_eval_eligible(interp::Issue48097Interp,
     @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
     ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter,
