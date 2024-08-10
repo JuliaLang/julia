@@ -303,7 +303,7 @@ julia> lowercase('Ö')
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
     T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
 
-lowercase(c::AnnotatedChar) = AnnotatedChar(lowercase(c.char), annotations(c))
+lowercase(c::AnnotatedChar) = AnnotatedChar(lowercase(c.char), c.annotations)
 
 """
     uppercase(c::AbstractChar)
@@ -324,7 +324,7 @@ julia> uppercase('ê')
 uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
 
-uppercase(c::AnnotatedChar) = AnnotatedChar(uppercase(c.char), annotations(c))
+uppercase(c::AnnotatedChar) = AnnotatedChar(uppercase(c.char), c.annotations)
 
 """
     titlecase(c::AbstractChar)
@@ -349,7 +349,7 @@ julia> uppercase('ǆ')
 titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
 
-titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), annotations(c))
+titlecase(c::AnnotatedChar) = AnnotatedChar(titlecase(c.char), c.annotations)
 
 ############################################################################
 
