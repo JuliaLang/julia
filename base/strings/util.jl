@@ -615,8 +615,6 @@ end
 
 # return whether textwidth(str) <= maxwidth
 function check_textwidth(str::AbstractString, maxwidth::Integer)
-    maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
-
     # check efficiently for early return if str is less wide than maxwidth
     total_width = 0
     for c in str
@@ -632,6 +630,7 @@ function string_truncate_boundaries(
             replacement::Union{AbstractString,AbstractChar},
             ::Val{mode},
             prefer_left::Bool = true) where {mode}
+    maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
     check_textwidth(str, maxwidth) && return nothing
 
     l0, _ = left, right = firstindex(str), lastindex(str)
