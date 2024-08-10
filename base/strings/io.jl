@@ -210,7 +210,7 @@ function show(
         # one line in collection, seven otherwise
         get(io, :typeinfo, nothing) === nothing && (limit *= 7)
     end
-    limit -= 2 # quote chars
+    limit = max(0, limit-2) # quote chars
 
     # early out for short strings
     check_textwidth(str, limit) && return show(io, str)

@@ -893,11 +893,11 @@ end
 
     @testset "default elision limit" begin
         r = replstr("x"^1000)
-        @test length(r) == 7*80
-        @test r == repr("x"^271) * " ⋯ 459 bytes ⋯ " * repr("x"^270)
+        @test length(r) == 7*80-1
+        @test r == repr("x"^270) * " ⋯ 460 bytes ⋯ " * repr("x"^270)
         r = replstr(["x"^1000])
         @test length(r) < 120
-        @test r == "1-element Vector{String}:\n " * repr("x"^31) * " ⋯ 939 bytes ⋯ " * repr("x"^30)
+        @test r == "1-element Vector{String}:\n " * repr("x"^30) * " ⋯ 940 bytes ⋯ " * repr("x"^30)
     end
 end
 
