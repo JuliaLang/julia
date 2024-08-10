@@ -1034,7 +1034,7 @@ end
             @test B * B ≈ M * M
             @test mul!(similar(B, size(B)), B, B) ≈ M * M
 
-            for m in 1:6
+            for m in 0:6
                 AL = rand(m,n)
                 AR = rand(n,m)
                 @test AL * B ≈ AL * M
