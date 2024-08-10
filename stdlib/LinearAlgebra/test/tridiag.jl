@@ -970,4 +970,48 @@ end
     @test sprint(show, S) == "SymTridiagonal($(repr(diag(S))), $(repr(diag(S,1))))"
 end
 
+@testset "mul for small matrices" begin
+    @testset for n in 0:4
+        for T in (
+                Tridiagonal(rand(max(n-1,0)), rand(n), rand(max(n-1,0))),
+                SymTridiagonal(rand(n), rand(max(n-1,0))),
+                )
+            M = Matrix(T)
+            @test T * T ≈ M * M
+            @test mul!(similar(T, size(T)), T, T) ≈ M * M
+
+            for m in 0:6
+                AR = rand(n,m)
+                AL = rand(m,n)
+                @test AL * T ≈ AL * M
+                @test T * AR ≈ M * AR
+                @test mul!(similar(AL), AL, T) ≈ AL * M
+                @test mul!(similar(AR), T, AR) ≈ M * AR
+            end
+
+            v = rand(n)
+            @test T * v ≈ M * v
+            @test mul!(similar(v), T, v) ≈ M * v
+
+            D = Diagonal(rand(n))
+            @test T * D ≈ M * D
+            @test D * T ≈ D * M
+            @test mul!(Tridiagonal(similar(T)), D, T) ≈ D * M
+            @test mul!(Tridiagonal(similar(T)), T, D) ≈ M * D
+            @test mul!(similar(T, size(T)), D, T) ≈ D * M
+            @test mul!(similar(T, size(T)), T, D) ≈ M * D
+
+            B = Bidiagonal(rand(n), rand(max(0, n-1)), :U)
+            @test T * B ≈ M * B
+            @test B * T ≈ B * M
+            if n <= 2
+                @test mul!(Tridiagonal(similar(T)), B, T) ≈ B * M
+                @test mul!(Tridiagonal(similar(T)), T, B) ≈ M * B
+                @test mul!(similar(T, size(T)), B, T) ≈ B * M
+                @test mul!(similar(T, size(T)), T, B) ≈ M * B
+            end
+        end
+    end
+end
+
 end # module TestTridiagonal
