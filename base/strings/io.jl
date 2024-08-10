@@ -229,7 +229,7 @@ function show(
     n = tail - afterhead # skipped code units
     replacement = skip_text(n)
     t = ncodeunits(replacement) # length of replacement (textwidth == ncodeunits here)
-    @views if 4t ≤ n || t ≤ n && t ≤ textwidth(str[afterhead:tail])
+    @views if 4t ≤ n || t ≤ n && t ≤ textwidth(str[afterhead:prevind(str,tail)])
         show(io, str[begin:head])
         printstyled(io, replacement; color=:light_yellow, bold=true)
         show(io, str[tail:end])
