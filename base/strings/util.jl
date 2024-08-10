@@ -615,7 +615,7 @@ end
 
 # return whether textwidth(str) <= maxwidth
 function check_textwidth(str::AbstractString, maxwidth::Integer)
-    # check efficiently for early return if str is less wide than maxwidth
+    # check efficiently for early return if str is wider than maxwidth
     total_width = 0
     for c in str
         total_width += textwidth(c)
