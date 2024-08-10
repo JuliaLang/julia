@@ -432,7 +432,7 @@ julia> repeat([1, 2, 3], 2, 3)
  3  3  3
 ```
 """
-function repeat(A::AbstractArray, counts...)
+function repeat(A::AbstractArray, counts::Integer...)
     return repeat(A, outer=counts)
 end
 
