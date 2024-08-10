@@ -757,6 +757,44 @@ function _mul!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, _add::MulA
         end
         return C
     end
+    _mul_bitrisym!(C, A, B, _add)
+end
+function _mul_bitrisym!(C::AbstractVecOrMat, A::Bidiagonal, B::AbstractVecOrMat, _add::MulAddMul)
+    nA = size(A,1)
+    nB = size(B,2)
+    d = B.dv
+    if A.uplo == 'U'
+        u = B.ev
+        @inbounds begin
+            for j = 1:nB
+                b₀, b₊ = B[1, j], B[2, j]
+                _modify!(_add, d[1]*b₀ + u[1]*b₊, C, (1, j))
+                for i = 2:nA - 1
+                    b₀, b₊ = b₊, B[i + 1, j]
+                    _modify!(_add, d[i]*b₀ + u[i]*b₊, C, (i, j))
+                end
+                _modify!(_add, d[nA]*b₊, C, (nA, j))
+            end
+        end
+    else
+        l = B.ev
+        @inbounds begin
+            for j = 1:nB
+                b₀, b₊ = B[1, j], B[2, j]
+                _modify!(_add, d[1]*b₀, C, (1, j))
+                for i = 2:nA - 1
+                    b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
+                    _modify!(_add, l[i - 1]*b₋ + d[i]*b₀, C, (i, j))
+                end
+                _modify!(_add, l[nA - 1]*b₀ + d[nA]*b₊, C, (nA, j))
+            end
+        end
+    end
+    C
+end
+function _mul_bitrisym!(C::AbstractVecOrMat, A::TriSym, B::AbstractVecOrMat, _add::MulAddMul)
+    nA = size(A,1)
+    nB = size(B,2)
     l = _diag(A, -1)
     d = _diag(A, 0)
     u = _diag(A, 1)
