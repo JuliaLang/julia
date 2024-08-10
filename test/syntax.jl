@@ -3957,3 +3957,21 @@ module DeclareSetglobal
     setglobal!(@__MODULE__, :DeclareMe, 1)
     @test DeclareMe === 1
 end
+
+# Binding type of const (N.B.: This may change in the future)
+module ConstBindingType
+    using Test
+    const x = 1
+    @test Core.get_binding_type(@__MODULE__, :x) === Any
+end
+
+# Explicit import may resolve using failed
+module UsingFailedExplicit
+    using Test
+    module A; export x; x = 1; end
+    module B; export x; x = 2; end
+    using .A, .B
+    @test_throws UndefVarError x
+    using .A: x as x
+    @test x === 1
+end

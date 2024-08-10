@@ -523,8 +523,13 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var)
     }
     if (jl_bpart_is_some_guard(bpart))
         return jl_nothing;
-    if (jl_bpart_is_some_constant(bpart))
-        return jl_typeof(jl_atomic_load_relaxed(&bpart->restriction));
+    if (jl_bpart_is_some_constant(bpart)) {
+        // TODO: We would like to return the type of the constant, but
+        // currently code relies on this returning any to bypass conversion
+        // before an attempted assignment to a constant.
+        // return jl_typeof(jl_atomic_load_relaxed(&bpart->restriction));
+        return (jl_value_t*)jl_any_type;
+    }
     return jl_atomic_load_relaxed(&bpart->restriction);
 }
 
@@ -652,7 +657,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname,
             return;
         }
         jl_binding_partition_t *btopart = jl_get_binding_partition(bto, jl_current_task->world_age);
-        if (btopart->kind == BINDING_KIND_GUARD || btopart->kind == BINDING_KIND_IMPLICIT) {
+        if (btopart->kind == BINDING_KIND_GUARD || btopart->kind == BINDING_KIND_IMPLICIT || btopart->kind == BINDING_KIND_FAILED) {
             btopart->kind = (explici != 0) ? BINDING_KIND_IMPORTED : BINDING_KIND_EXPLICIT;
             jl_atomic_store_relaxed(&btopart->restriction, (jl_value_t*)b);
             bto->deprecated |= b->deprecated; // we already warned about this above, but we might want to warn at the use sites too
@@ -979,10 +984,15 @@ jl_value_t *jl_check_binding_wr(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t 
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     assert(!jl_bpart_is_some_guard(bpart) && !jl_bpart_is_some_import(bpart));
     if (jl_bpart_is_some_constant(bpart)) {
-        if (rhs == jl_atomic_load_relaxed(&bpart->restriction))
+        jl_value_t *old = jl_atomic_load_relaxed(&bpart->restriction);
+        if (rhs == old)
             return NULL;
-        jl_errorf("invalid redefinition of constant %s.%s",
-                    jl_symbol_name(mod->name), jl_symbol_name(var));
+        if (jl_typeof(rhs) == jl_typeof(old))
+            jl_errorf("invalid redefinition of constant %s.%s. This redefinition may be permitted using the `const` keyword.",
+                        jl_symbol_name(mod->name), jl_symbol_name(var));
+        else
+            jl_errorf("invalid redefinition of constant %s.%s.",
+                jl_symbol_name(mod->name), jl_symbol_name(var));
     }
     jl_value_t *old_ty = jl_atomic_load_relaxed(&bpart->restriction);
     if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty) {

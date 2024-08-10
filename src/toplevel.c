@@ -720,11 +720,17 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl
     jl_declare_constant(b);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     if (jl_atomic_load_relaxed(&bpart->restriction)) {
-        if (jl_egal(val, jl_atomic_load_relaxed(&bpart->restriction)))
+        jl_value_t *old = jl_atomic_load_relaxed(&bpart->restriction);
+        if (jl_egal(val, old))
             return bpart;
-        jl_errorf("invalid redefinition of constant %s.%s",
-            jl_symbol_name(b->globalref->mod->name),
-            jl_symbol_name(b->globalref->name));
+        if (jl_typeof(val) != jl_typeof(old) || jl_is_type(val) || jl_is_module(val))
+            jl_errorf("invalid redefinition of constant %s.%s",
+                jl_symbol_name(b->globalref->mod->name),
+                jl_symbol_name(b->globalref->name));
+        else
+            jl_safe_printf("WARNING: redefinition of constant %s.%s. This may fail, cause incorrect answers, or produce other errors.\n",
+                jl_symbol_name(b->globalref->mod->name),
+                jl_symbol_name(b->globalref->name));
     }
     jl_atomic_store_relaxed(&bpart->restriction, val);
     jl_gc_wb(bpart, val);
