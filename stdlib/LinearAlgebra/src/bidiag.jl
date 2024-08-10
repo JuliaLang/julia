@@ -817,17 +817,17 @@ function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAdd
     (iszero(m) || iszero(n)) && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     @inbounds if B.uplo == 'U'
+        for j in n:-1:2, i in 1:m
+            _modify!(_add, A[i,j] * B.dv[j] + A[i,j-1] * B.ev[j-1], C, (i, j))
+        end
         for i in 1:m
-            for j in n:-1:2
-                _modify!(_add, A[i,j] * B.dv[j] + A[i,j-1] * B.ev[j-1], C, (i, j))
-            end
             _modify!(_add, A[i,1] * B.dv[1], C, (i, 1))
         end
     else # uplo == 'L'
+        for j in 1:n-1, i in 1:m
+            _modify!(_add, A[i,j] * B.dv[j] + A[i,j+1] * B.ev[j], C, (i, j))
+        end
         for i in 1:m
-            for j in 1:n-1
-                _modify!(_add, A[i,j] * B.dv[j] + A[i,j+1] * B.ev[j], C, (i, j))
-            end
             _modify!(_add, A[i,n] * B.dv[n], C, (i, n))
         end
     end
