@@ -613,22 +613,26 @@ function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{Ab
     end
 end
 
-function string_truncate_boundaries(
-            str::AbstractString,
-            maxwidth::Integer,
-            replacement::Union{AbstractString,AbstractChar},
-            ::Val{mode},
-            prefer_left::Bool = true) where {mode}
-
+# return whether textwidth(str) <= maxwidth
+function check_textwidth(str::AbstractString, maxwidth::Integer)
     maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
 
     # check efficiently for early return if str is less wide than maxwidth
     total_width = 0
     for c in str
         total_width += textwidth(c)
-        total_width > maxwidth && break
+        total_width > maxwidth && return false
     end
-    total_width <= maxwidth && return nothing
+    return true
+end
+
+function string_truncate_boundaries(
+            str::AbstractString,
+            maxwidth::Integer,
+            replacement::Union{AbstractString,AbstractChar},
+            ::Val{mode},
+            prefer_left::Bool = true) where {mode}
+    check_textwidth(str, maxwidth) && return nothing
 
     l0, _ = left, right = firstindex(str), lastindex(str)
     width = textwidth(replacement)
