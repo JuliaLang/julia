@@ -1020,4 +1020,37 @@ end
     @test_throws "cannot set entry" B[1,2] = 4
 end
 
+@testset "mul for small matrices" begin
+    @testset for n in 0:4
+        D = Diagonal(rand(n))
+        v = rand(n)
+        @testset for uplo in (:L, :U)
+            B = Bidiagonal(rand(n), rand(max(n-1,0)), uplo)
+            M = Matrix(B)
+
+            @test B * v ≈ M * v
+            @test mul!(similar(v), B, v) ≈ M * v
+
+            @test B * B ≈ M * M
+            @test mul!(similar(B, size(B)), B, B) ≈ M * M
+
+            for m in 1:6
+                AL = rand(m,n)
+                AR = rand(n,m)
+                @test AL * B ≈ AL * M
+                @test B * AR ≈ M * AR
+                @test mul!(similar(AL), AL, B) ≈ AL * M
+                @test mul!(similar(AR), B, AR) ≈ M * AR
+            end
+
+            @test B * D ≈ M * D
+            @test D * B ≈ D * M
+            @test mul!(similar(B), B, D) ≈ M * D
+            @test mul!(similar(B), B, D) ≈ M * D
+            @test mul!(similar(B, size(B)), D, B) ≈ D * M
+            @test mul!(similar(B, size(B)), B, D) ≈ M * D
+        end
+    end
+end
+
 end # module TestBidiagonal

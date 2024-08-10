@@ -565,7 +565,13 @@ _mul!(C::AbstractMatrix, A::BiTriSym, B::Bidiagonal, _add::MulAddMul) =
 function _bibimul!(C, A, B, _add)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    if n <= 3
+        # naive multiplication
+        for I in CartesianIndices(C)
+            _modify!(_add, sum(A[I[1], k] * B[k, I[2]] for k in axes(A,2)), C, I)
+        end
+        return C
+    end
     # We use `_rmul_or_fill!` instead of `_modify!` here since using
     # `_modify!` in the following loop will not update the
     # off-diagonal elements for non-zero beta.
@@ -737,7 +743,14 @@ function _mul!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, _add::MulA
     end
     iszero(nA) && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
-    nA <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    if nA <= 3
+        # naive multiplication
+        for I in CartesianIndices(C)
+            col = Base.tail(Tuple(I))
+            _modify!(_add, sum(A[I[1], k] * B[k, col...] for k in axes(A,2)), C, I)
+        end
+        return C
+    end
     l = _diag(A, -1)
     d = _diag(A, 0)
     u = _diag(A, 1)
@@ -758,11 +771,12 @@ end
 function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul)
     require_one_based_indexing(C, A)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     n = size(A,1)
     m = size(B,2)
-    if n <= 3 || m <= 1
-        return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    (iszero(_add.alpha) || iszero(m)) && return _rmul_or_fill!(C, _add.beta)
+    if m == 1
+        B11 = B[1,1]
+        return mul!(C, A, B11, _add.alpha, _add.beta)
     end
     Bl = _diag(B, -1)
     Bd = _diag(B, 0)
@@ -793,11 +807,9 @@ end
 function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal, _add::MulAddMul)
     require_one_based_indexing(C, A)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
-    if size(A, 1) <= 3 || size(B, 2) <= 1
-        return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
-    end
     m, n = size(A)
+    (iszero(m) || iszero(n)) && return C
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     @inbounds if B.uplo == 'U'
         for i in 1:m
             for j in n:-1:2
@@ -824,7 +836,12 @@ function _dibimul!(C, A, B, _add)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
-    n <= 3 && return mul!(C, Array(A), Array(B), _add.alpha, _add.beta)
+    if n <= 3
+        for I in CartesianIndices(C)
+            _modify!(_add, A.diag[I[1]] * B[I[1], I[2]], C, I)
+        end
+        return C
+    end
     _rmul_or_fill!(C, _add.beta)  # see the same use above
     iszero(_add.alpha) && return C
     Ad = A.diag
