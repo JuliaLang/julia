@@ -228,57 +228,118 @@ function expand_dot(ctx, ex)
     )
 end
 
+function foreach_lhs_var(f::Function, ex)
+    k = kind(ex)
+    if k == K"Identifier"
+        f(ex)
+    elseif k == K"Placeholder"
+        # Ignored
+    else
+        TODO(ex, "LHS vars")
+    end
+end
+
 function expand_for(ctx, ex)
     iterspecs = ex[1]
 
     @chk kind(iterspecs) == K"iteration"
-    @chk numchildren(iterspecs) == 1
 
-    iterspec = iterspecs[1]
-    iter_var = iterspec[1]
-    iter_ex = iterspec[2]
+    # Loop variables not declared `outer` are reassigned for each iteration of
+    # the innermost loop in case the user assigns them to something else.
+    # (Maybe we should filter these to remove vars not assigned in the loop?
+    # But that would ideally happen after the variable analysis pass, not
+    # during desugaring.)
+    copied_vars = SyntaxList(ctx)
+    for iterspec in iterspecs[1:end-1]
+        @chk kind(iterspec) == K"in"
+        lhs = iterspec[1]
+        if kind(lhs) != K"outer"
+            foreach_lhs_var(lhs) do var
+                @chk kind(var) == K"Identifier"
+                push!(copied_vars, @ast ctx var [K"=" var var])
+            end
+        end
+    end
 
-    # TODO: multiple iteration variables
-    @assert is_identifier_like(iter_var)
+    loop = ex[2]
+    for i in numchildren(iterspecs):-1:1
+        iterspec = iterspecs[i]
+        lhs = iterspec[1]
 
-    next = new_mutable_var(ctx, iterspec, "next")
-    state = ssavar(ctx, iterspec, "state")
-    collection = ssavar(ctx, iter_ex, "collection")
+        outer = kind(lhs) == K"outer"
+        lhs_local_defs = SyntaxList(ctx)
+        lhs_outer_defs = SyntaxList(ctx)
+        if outer
+            lhs = lhs[1]
+        end
+        foreach_lhs_var(lhs) do var
+            if outer
+                push!(lhs_outer_defs, @ast ctx var var)
+            else
+                push!(lhs_local_defs, @ast ctx var [K"local" var])
+            end
+        end
 
-    # Inner body
-    inner_body = ex[2]
-    body = @ast ctx inner_body [K"block"
-        [K"=" [K"tuple" iter_var state] next]
-        inner_body
-    ]
-    body = @ast ctx inner_body [K"break_block"
-        "loop_cont"::K"symbolic_label"
-        [K"let"(scope_type=:neutral)
-             [K"block"
-                 # TODO: copied-vars
-             ]
-             body
+        iter_ex = iterspec[2]
+        next = new_mutable_var(ctx, iterspec, "next")
+        state = ssavar(ctx, iterspec, "state")
+        collection = ssavar(ctx, iter_ex, "collection")
+
+        # Assign iteration vars and next state
+        body = @ast ctx iterspec [K"block"
+            lhs_local_defs...
+            [K"=" [K"tuple" lhs state] next]
+            loop
         ]
-    ]
 
-    # Nearly all this machinery is lowering of the iteration specification, so
-    # most gets attributed to `iterspec`.
-    loop = @ast ctx ex [K"block"
-        [K"="(iter_ex) collection iter_ex]
-        # next = top.iterate(collection)
-        [K"="(iterspec) next [K"call" "iterate"::K"top" collection]]
-        # TODO if outer require-existing-local
-        [K"if"(iterspec) # if next !== nothing
-            [K"call"(iterspec) "not_int"::K"top" [K"call" "==="::K"core" next "nothing"::K"core"]]
-            [K"_do_while"(ex)
-                [K"block"
-                    body
-                    [K"="(iterspec) next [K"call" "iterate"::K"top" collection state]]
+        body = if i == numchildren(iterspecs)
+            # Innermost loop gets the continue label and copied vars
+            @ast ctx ex [K"break_block"
+                "loop_cont"::K"symbolic_label"
+                [K"let"(scope_type=:neutral)
+                     [K"block"
+                         copied_vars...
+                     ]
+                     body
                 ]
-                [K"call"(iterspec) "not_int"::K"top" [K"call" "==="::K"core" next "nothing"::K"core"]]
+            ]
+        else
+            # Outer loops get a scope block to contain the iteration vars
+            @ast ctx ex [K"scope_block"(scope_type=:neutral)
+                body
+            ]
+        end
+
+        loop = @ast ctx ex [K"block"
+            if outer
+                [K"assert"
+                    "require_existing_locals"::K"Symbol"
+                    lhs_outer_defs...
+                ]
+            end
+            [K"="(iter_ex) collection iter_ex]
+            # First call to iterate is unrolled
+            #   next = top.iterate(collection)
+            [K"="(iterspec) next [K"call" "iterate"::K"top" collection]]
+            [K"if"(iterspec) # if next !== nothing
+                [K"call"(iterspec)
+                    "not_int"::K"top"
+                    [K"call" "==="::K"core" next "nothing"::K"core"]
+                ]
+                [K"_do_while"(ex)
+                    [K"block"
+                        body
+                        # Advance iterator
+                        [K"="(iterspec) next [K"call" "iterate"::K"top" collection state]]
+                    ]
+                    [K"call"(iterspec)
+                        "not_int"::K"top"
+                        [K"call" "==="::K"core" next "nothing"::K"core"]
+                    ]
+                ]
             ]
         ]
-    ]
+    end
 
     @ast ctx ex [K"break_block" "loop_exit"::K"symbolic_label"
         loop
@@ -344,7 +405,6 @@ function expand_try(ctx, ex)
         ]
     end
 
-    # Add finally block
     if isnothing(finally_)
         try_block
     else

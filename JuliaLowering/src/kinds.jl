@@ -7,6 +7,9 @@ function _register_kinds()
             # Compiler metadata hints
             "meta"
             "extension"
+            # Semantic assertions used by lowering. The content of an assertion
+            # is not considered to be quoted, so use K"Symbol" inside where necessary.
+            "assert"
             # A literal Julia value of any kind, as might be inserted by the AST
             # during macro expansion
             "Value"
@@ -21,9 +24,6 @@ function _register_kinds()
             "SSAValue"
             # Unique identifying integer for bindings (of variables, constants, etc)
             "BindingId"
-            # Scope expressions `(hygienic_scope ex s)` mean `ex` should be
-            # interpreted as being in scope `s`.
-            "hygienic_scope"
             # Various heads harvested from flisp lowering.
             # (TODO: May or may not need all these - assess later)
             "break_block"
@@ -35,7 +35,6 @@ function _register_kinds()
             "top"
             "core"
             "toplevel_butfirst"
-            "thunk"
             "lambda"
             "moved_local"
             "the_exception"

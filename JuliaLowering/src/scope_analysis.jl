@@ -56,7 +56,7 @@ struct NameKey
 end
 
 #-------------------------------------------------------------------------------
-function _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, ex)
+function _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, required_locals, ex)
     k = kind(ex)
     if k == K"Identifier"
         push!(used_names, NameKey(ex))
@@ -69,16 +69,20 @@ function _find_scope_vars!(assignments, locals, globals, used_names, used_bindin
         get!(locals, NameKey(ex[1]), ex)
     elseif k == K"global"
         get!(globals, NameKey(ex[1]), ex)
+    elseif is_assertion(ex, "require_existing_locals")
+        for v in ex[2:end]
+            get!(required_locals, NameKey(v), v)
+        end
     # elseif k == K"method" TODO static parameters
     elseif k == K"="
         v = decl_var(ex[1])
         if !(kind(v) in KSet"BindingId globalref outerref Placeholder")
             get!(assignments, NameKey(v), v)
         end
-        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, ex[2])
+        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, required_locals, ex[2])
     else
         for e in children(ex)
-            _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, e)
+            _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, required_locals, e)
         end
     end
 end
@@ -94,8 +98,9 @@ function find_scope_vars(ex)
     globals = Dict{NameKey,ExT}()
     used_names = Set{NameKey}()
     used_bindings = Set{IdTag}()
+    required_locals = Dict{NameKey,ExT}()
     for e in children(ex)
-        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, e)
+        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, required_locals, e)
     end
 
     # Sort by key so that id generation is deterministic
@@ -104,8 +109,9 @@ function find_scope_vars(ex)
     globals = sort(collect(pairs(globals)), by=first)
     used_names = sort(collect(used_names))
     used_bindings = sort(collect(used_bindings))
+    required_locals = sort(collect(pairs(required_locals)), by=first)
 
-    return assignments, locals, globals, used_names, used_bindings
+    return assignments, locals, globals, used_names, used_bindings, required_locals
 end
 
 function Base.isless(a::NameKey, b::NameKey)
@@ -206,7 +212,7 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     is_toplevel = !isnothing(lambda_info) && lambda_info.is_toplevel_thunk
     in_toplevel_thunk = is_toplevel || (!is_outer_lambda_scope && parentscope.in_toplevel_thunk)
 
-    assignments, locals, globals, used, used_bindings = find_scope_vars(ex)
+    assignments, locals, globals, used, used_bindings, required_locals = find_scope_vars(ex)
 
     # Create new lookup table for variables in this scope which differ from the
     # parent scope.
@@ -320,6 +326,16 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
         if lookup_var(ctx, varkey) === nothing
             # Add other newly discovered identifiers as globals
             init_binding(ctx, varkey, :global)
+        end
+    end
+
+    # Check that any required locals are present
+    for (varkey,e) in required_locals
+        vk = haskey(var_ids, varkey) ?
+             lookup_binding(ctx, var_ids[varkey]).kind :
+             var_kind(ctx, varkey, true)
+        if vk !== :local
+            throw(LoweringError(e, "`outer` annotations must match with a local variable in an outer scope but no such variable was found"))
         end
     end
 

@@ -259,6 +259,12 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             nothing
         end
+    elseif k == K"assert"
+        # Elide these - they're no longer required.
+        if needs_value
+            throw(LoweringError(ex, "misplaced semantic assertion"))
+        end
+        nothing
     elseif k == K"call"
         # TODO k ∈ splatnew foreigncall cfunction new_opaque_closure cglobal
         args = compile_args(ctx, children(ex))
