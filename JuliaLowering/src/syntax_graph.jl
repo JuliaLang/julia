@@ -425,7 +425,7 @@ function _value_string(ex)
         idstr = replace(string(id),
                         "0"=>"₀", "1"=>"₁", "2"=>"₂", "3"=>"₃", "4"=>"₄",
                         "5"=>"₅", "6"=>"₆", "7"=>"₇", "8"=>"₈", "9"=>"₉")
-        str = "$(str).$idstr"
+        str = "$(str)$idstr"
     end
     if k == K"slot" || k == K"BindingId"
         p = provenance(ex)[1]
