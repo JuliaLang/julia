@@ -38,6 +38,7 @@ public clear,
     Allocs
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
+import Base: AnnotatedString
 using StyledStrings: @styled_str
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
@@ -67,7 +68,7 @@ function _peek_report()
     iob = IOBuffer()
     ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stderr, String(take!(iob)))
+    Base.print(stderr, read(seekstart(iob), AnnotatedString))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)
@@ -899,7 +900,7 @@ function indent(depth::Int)
 end
 
 # mimics Stacktraces
-const PACKAGE_FIXEDCOLORS = Dict{String, Any}("@Base" => :light_black, "@Core" => :light_black)
+const PACKAGE_FIXEDCOLORS = Dict{String, Any}("@Base" => :gray, "@Core" => :gray)
 
 function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,Tuple{String,String}}, showpointer::Bool)
     nindent = min(cols>>1, level)
@@ -908,7 +909,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    strs = Vector{Base.AnnotatedString{String}}(undef, length(frames))
+    strs = Vector{AnnotatedString{String}}(undef, length(frames))
     showextra = false
     if level > nindent
         nextra = level - nindent
@@ -1118,7 +1119,7 @@ end
 function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat, is_subsection::Bool) where T
     maxes = maxstats(bt)
     filenamemap = Dict{Symbol,Tuple{String,String}}()
-    worklist = [(bt, 0, 0, "")]
+    worklist = [(bt, 0, 0, AnnotatedString(""))]
     if !is_subsection
         Base.print(io, "Overhead ╎ [+additional indent] Count File:Line; Function\n")
         Base.print(io, "=========================================================\n")
@@ -1151,7 +1152,7 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
             count = down.count
             count < fmt.mincount && continue
             count < noisefloor && continue
-            str = strs[i]
+            str = strs[i]::AnnotatedString
             noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
             pushfirst!(worklist, (down, level + 1, noisefloor_down, str))
         end
