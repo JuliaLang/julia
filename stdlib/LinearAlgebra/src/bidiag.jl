@@ -588,12 +588,6 @@ function _bibimul!(C, A, B, _add)
     # off-diagonal elements for non-zero beta.
     _rmul_or_fill!(C, _add.beta)
     iszero(_add.alpha) && return C
-    Al = _diag(A, -1)
-    Ad = _diag(A, 0)
-    Au = _diag(A, 1)
-    Bl = _diag(B, -1)
-    Bd = _diag(B, 0)
-    Bu = _diag(B, 1)
     @inbounds begin
         # first row of C
         C[1,1] += _add(A[1,1]*B[1,1] + A[1, 2]*B[2, 1])
@@ -604,6 +598,31 @@ function _bibimul!(C, A, B, _add)
         C[2,2] += _add(A[2,1]*B[1,2] + A[2,2]*B[2,2] + A[2,3]*B[3,2])
         C[2,3] += _add(A[2,2]*B[2,3] + A[2,3]*B[3,3])
         C[2,4] += _add(A[2,3]*B[3,4])
+    end
+    # middle rows
+    __bibimul!(C, A, B, _add)
+    @inbounds begin
+        # row before last of C
+        C[n-1,n-3] += _add(A[n-1,n-2]*B[n-2,n-3])
+        C[n-1,n-2] += _add(A[n-1,n-1]*B[n-1,n-2] + A[n-1,n-2]*B[n-2,n-2])
+        C[n-1,n-1] += _add(A[n-1,n-2]*B[n-2,n-1] + A[n-1,n-1]*B[n-1,n-1] + A[n-1,n]*B[n,n-1])
+        C[n-1,n  ] += _add(A[n-1,n-1]*B[n-1,n  ] + A[n-1,  n]*B[n  ,n  ])
+        # last row of C
+        C[n,n-2] += _add(A[n,n-1]*B[n-1,n-2])
+        C[n,n-1] += _add(A[n,n-1]*B[n-1,n-1] + A[n,n]*B[n,n-1])
+        C[n,n  ] += _add(A[n,n-1]*B[n-1,n  ] + A[n,n]*B[n,n  ])
+    end # inbounds
+    C
+end
+function __bibimul!(C, A, B, _add)
+    n = size(A,1)
+    Al = _diag(A, -1)
+    Ad = _diag(A, 0)
+    Au = _diag(A, 1)
+    Bl = _diag(B, -1)
+    Bd = _diag(B, 0)
+    Bu = _diag(B, 1)
+    @inbounds begin
         for j in 3:n-2
             Ajj₋1   = Al[j-1]
             Ajj     = Ad[j]
@@ -623,16 +642,192 @@ function _bibimul!(C, A, B, _add)
             C[j, j+1] += _add(Ajj  *Bjj₊1   + Ajj₊1*Bj₊1j₊1)
             C[j, j+2] += _add(Ajj₊1*Bj₊1j₊2)
         end
-        # row before last of C
-        C[n-1,n-3] += _add(A[n-1,n-2]*B[n-2,n-3])
-        C[n-1,n-2] += _add(A[n-1,n-1]*B[n-1,n-2] + A[n-1,n-2]*B[n-2,n-2])
-        C[n-1,n-1] += _add(A[n-1,n-2]*B[n-2,n-1] + A[n-1,n-1]*B[n-1,n-1] + A[n-1,n]*B[n,n-1])
-        C[n-1,n  ] += _add(A[n-1,n-1]*B[n-1,n  ] + A[n-1,  n]*B[n  ,n  ])
-        # last row of C
-        C[n,n-2] += _add(A[n,n-1]*B[n-1,n-2])
-        C[n,n-1] += _add(A[n,n-1]*B[n-1,n-1] + A[n,n]*B[n,n-1])
-        C[n,n  ] += _add(A[n,n-1]*B[n-1,n  ] + A[n,n]*B[n,n  ])
-    end # inbounds
+    end
+    C
+end
+function __bibimul!(C, A, B::Bidiagonal, _add)
+    n = size(A,1)
+    Al = _diag(A, -1)
+    Ad = _diag(A, 0)
+    Au = _diag(A, 1)
+    if B.uplo == 'U'
+        Bd = _diag(B, 0)
+        Bu = _diag(B, 1)
+        @inbounds begin
+            for j in 3:n-2
+                Ajj₋1   = Al[j-1]
+                Ajj     = Ad[j]
+                Ajj₊1   = Au[j]
+                Bj₋1j₋1 = Bd[j-1]
+                Bj₋1j   = Bu[j-1]
+                Bjj     = Bd[j]
+                Bjj₊1   = Bu[j]
+                Bj₊1j₊1 = Bd[j+1]
+                Bj₊1j₊2 = Bu[j+1]
+                C[j, j-1] += _add(Ajj₋1*Bj₋1j₋1)
+                C[j, j  ] += _add(Ajj₋1*Bj₋1j   + Ajj*Bjj       + Ajj₊1*Bj₊1j)
+                C[j, j+1] += _add(Ajj  *Bjj₊1   + Ajj₊1*Bj₊1j₊1)
+                C[j, j+2] += _add(Ajj₊1*Bj₊1j₊2)
+            end
+        end
+    else # B.uplo == 'L'
+        Bl = _diag(B, -1)
+        Bd = _diag(B, 0)
+        @inbounds begin
+            for j in 3:n-2
+                Ajj₋1   = Al[j-1]
+                Ajj     = Ad[j]
+                Ajj₊1   = Au[j]
+                Bj₋1j₋2 = Bl[j-2]
+                Bj₋1j₋1 = Bd[j-1]
+                Bjj₋1   = Bl[j-1]
+                Bjj     = Bd[j]
+                Bj₊1j   = Bl[j]
+                Bj₊1j₊1 = Bd[j+1]
+                C[j,j-2]  += _add( Ajj₋1*Bj₋1j₋2)
+                C[j, j-1] += _add(Ajj₋1*Bj₋1j₋1 + Ajj*Bjj₋1)
+                C[j, j  ] += _add(Ajj*Bjj       + Ajj₊1*Bj₊1j)
+                C[j, j+1] += _add(Ajj₊1*Bj₊1j₊1)
+            end
+        end
+    end
+    C
+end
+function __bibimul!(C, A::Bidiagonal, B, _add)
+    n = size(A,1)
+    Bl = _diag(B, -1)
+    Bd = _diag(B, 0)
+    Bu = _diag(B, 1)
+    if A.uplo == 'U'
+        Ad = _diag(A, 0)
+        Au = _diag(A, 1)
+        @inbounds begin
+            for j in 3:n-2
+                Ajj     = Ad[j]
+                Ajj₊1   = Au[j]
+                Bj₋1j₋2 = Bl[j-2]
+                Bj₋1j₋1 = Bd[j-1]
+                Bj₋1j   = Bu[j-1]
+                Bjj₋1   = Bl[j-1]
+                Bjj     = Bd[j]
+                Bjj₊1   = Bu[j]
+                Bj₊1j   = Bl[j]
+                Bj₊1j₊1 = Bd[j+1]
+                Bj₊1j₊2 = Bu[j+1]
+                C[j, j-1] += _add(Ajj*Bjj₋1)
+                C[j, j  ] += _add(Ajj*Bjj       + Ajj₊1*Bj₊1j)
+                C[j, j+1] += _add(Ajj  *Bjj₊1   + Ajj₊1*Bj₊1j₊1)
+                C[j, j+2] += _add(Ajj₊1*Bj₊1j₊2)
+            end
+        end
+    else # A.uplo == 'L'
+        Al = _diag(A, -1)
+        Ad = _diag(A, 0)
+        @inbounds begin
+            for j in 3:n-2
+                Ajj₋1   = Al[j-1]
+                Ajj     = Ad[j]
+                Bj₋1j₋2 = Bl[j-2]
+                Bj₋1j₋1 = Bd[j-1]
+                Bj₋1j   = Bu[j-1]
+                Bjj₋1   = Bl[j-1]
+                Bjj     = Bd[j]
+                Bjj₊1   = Bu[j]
+                Bj₊1j   = Bl[j]
+                Bj₊1j₊1 = Bd[j+1]
+                Bj₊1j₊2 = Bu[j+1]
+                C[j,j-2]  += _add( Ajj₋1*Bj₋1j₋2)
+                C[j, j-1] += _add(Ajj₋1*Bj₋1j₋1 + Ajj*Bjj₋1)
+                C[j, j  ] += _add(Ajj₋1*Bj₋1j   + Ajj*Bjj)
+                C[j, j+1] += _add(Ajj  *Bjj₊1)
+            end
+        end
+    end
+    C
+end
+function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
+    n = size(A,1)
+    if A.uplo == 'U' && B.uplo == 'U'
+        Ad = _diag(A, 0)
+        Au = _diag(A, 1)
+        Bd = _diag(B, 0)
+        Bu = _diag(B, 1)
+        @inbounds begin
+            for j in 3:n-2
+                Ajj     = Ad[j]
+                Ajj₊1   = Au[j]
+                Bj₋1j₋1 = Bd[j-1]
+                Bj₋1j   = Bu[j-1]
+                Bjj     = Bd[j]
+                Bjj₊1   = Bu[j]
+                Bj₊1j₊1 = Bd[j+1]
+                Bj₊1j₊2 = Bu[j+1]
+                C[j, j  ] += _add(Ajj*Bjj)
+                C[j, j+1] += _add(Ajj  *Bjj₊1   + Ajj₊1*Bj₊1j₊1)
+                C[j, j+2] += _add(Ajj₊1*Bj₊1j₊2)
+            end
+        end
+    elseif A.uplo == 'U' && B.uplo == 'L'
+        Ad = _diag(A, 0)
+        Au = _diag(A, 1)
+        Bl = _diag(B, -1)
+        Bd = _diag(B, 0)
+        @inbounds begin
+            for j in 3:n-2
+                Ajj     = Ad[j]
+                Ajj₊1   = Au[j]
+                Bj₋1j₋2 = Bl[j-2]
+                Bj₋1j₋1 = Bd[j-1]
+                Bjj₋1   = Bl[j-1]
+                Bjj     = Bd[j]
+                Bj₊1j   = Bl[j]
+                Bj₊1j₊1 = Bd[j+1]
+                C[j, j-1] += _add(Ajj*Bjj₋1)
+                C[j, j  ] += _add(Ajj*Bjj       + Ajj₊1*Bj₊1j)
+                C[j, j+1] += _add(Ajj₊1*Bj₊1j₊1)
+            end
+        end
+    elseif A.uplo == 'L' && B.uplo == 'U'
+        Al = _diag(A, -1)
+        Ad = _diag(A, 0)
+        Bd = _diag(B, 0)
+        Bu = _diag(B, 1)
+        @inbounds begin
+            for j in 3:n-2
+                Ajj₋1   = Al[j-1]
+                Ajj     = Ad[j]
+                Bj₋1j₋1 = Bd[j-1]
+                Bj₋1j   = Bu[j-1]
+                Bjj     = Bd[j]
+                Bjj₊1   = Bu[j]
+                Bj₊1j₊1 = Bd[j+1]
+                Bj₊1j₊2 = Bu[j+1]
+                C[j, j-1] += _add(Ajj₋1*Bj₋1j₋1)
+                C[j, j  ] += _add(Ajj₋1*Bj₋1j   + Ajj*Bjj)
+                C[j, j+1] += _add(Ajj  *Bjj₊1)
+            end
+        end
+    else # A.uplo == 'L' && B.uplo == 'L'
+        Al = _diag(A, -1)
+        Ad = _diag(A, 0)
+        Bl = _diag(B, -1)
+        Bd = _diag(B, 0)
+        @inbounds begin
+            for j in 3:n-2
+                Ajj₋1   = Al[j-1]
+                Ajj     = Ad[j]
+                Bj₋1j₋2 = Bl[j-2]
+                Bj₋1j₋1 = Bd[j-1]
+                Bjj₋1   = Bl[j-1]
+                Bjj     = Bd[j]
+                Bj₊1j   = Bl[j]
+                Bj₊1j₊1 = Bd[j+1]
+                C[j,j-2]  += _add( Ajj₋1*Bj₋1j₋2)
+                C[j, j-1] += _add(Ajj₋1*Bj₋1j₋1 + Ajj*Bjj₋1)
+                C[j, j  ] += _add(Ajj*Bjj)
+            end
+        end
+    end
     C
 end
 

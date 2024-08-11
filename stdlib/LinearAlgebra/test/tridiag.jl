@@ -979,6 +979,7 @@ end
             M = Matrix(T)
             @test T * T ≈ M * M
             @test mul!(similar(T, size(T)), T, T) ≈ M * M
+            @test mul!(ones(size(T)), T, T, 2, 4) ≈ M * M * 2 .+ 4
 
             for m in 0:6
                 AR = rand(n,m)
@@ -987,6 +988,8 @@ end
                 @test T * AR ≈ M * AR
                 @test mul!(similar(AL), AL, T) ≈ AL * M
                 @test mul!(similar(AR), T, AR) ≈ M * AR
+                @test mul!(ones(size(AL)), AL, T, 2, 4) ≈ AL * M * 2 .+ 4
+                @test mul!(ones(size(AR)), T, AR, 2, 4) ≈ M * AR * 2 .+ 4
             end
 
             v = rand(n)
@@ -1000,15 +1003,21 @@ end
             @test mul!(Tridiagonal(similar(T)), T, D) ≈ M * D
             @test mul!(similar(T, size(T)), D, T) ≈ D * M
             @test mul!(similar(T, size(T)), T, D) ≈ M * D
+            @test mul!(ones(size(T)), D, T, 2, 4) ≈ D * M * 2 .+ 4
+            @test mul!(ones(size(T)), T, D, 2, 4) ≈ M * D * 2 .+ 4
 
-            B = Bidiagonal(rand(n), rand(max(0, n-1)), :U)
-            @test T * B ≈ M * B
-            @test B * T ≈ B * M
-            if n <= 2
-                @test mul!(Tridiagonal(similar(T)), B, T) ≈ B * M
-                @test mul!(Tridiagonal(similar(T)), T, B) ≈ M * B
+            for uplo in (:U, :L)
+                B = Bidiagonal(rand(n), rand(max(0, n-1)), uplo)
+                @test T * B ≈ M * B
+                @test B * T ≈ B * M
+                if n <= 2
+                    @test mul!(Tridiagonal(similar(T)), B, T) ≈ B * M
+                    @test mul!(Tridiagonal(similar(T)), T, B) ≈ M * B
+                end
                 @test mul!(similar(T, size(T)), B, T) ≈ B * M
                 @test mul!(similar(T, size(T)), T, B) ≈ M * B
+                @test mul!(ones(size(T)), B, T, 2, 4) ≈ B * M * 2 .+ 4
+                @test mul!(ones(size(T)), T, B, 2, 4) ≈ M * B * 2 .+ 4
             end
         end
     end
