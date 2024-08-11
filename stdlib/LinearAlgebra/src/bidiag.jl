@@ -553,7 +553,8 @@ end
 # function to get the internally stored vectors for Bidiagonal and [Sym]Tridiagonal
 # to avoid allocations in _mul! below (#24324, #24578)
 _diag(A::Tridiagonal, k) = k == -1 ? A.dl : k == 0 ? A.d : A.du
-_diag(A::SymTridiagonal, k) = k == 0 ? A.dv : A.ev
+_diag(A::SymTridiagonal{<:Number}, k) = k == 0 ? A.dv : A.ev
+_diag(A::SymTridiagonal, k) = k == 0 ? view(A, diagind(A, IndexStyle(A))) : view(A, diagind(A, 1, IndexStyle(A)))
 function _diag(A::Bidiagonal, k)
     if k == 0
         return A.dv
