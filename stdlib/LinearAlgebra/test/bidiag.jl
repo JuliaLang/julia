@@ -1030,9 +1030,11 @@ end
 
             @test B * v ≈ M * v
             @test mul!(similar(v), B, v) ≈ M * v
+            @test mul!(ones(size(v)), B, v, 2, 3) ≈ M * v * 2 .+ 3
 
             @test B * B ≈ M * M
             @test mul!(similar(B, size(B)), B, B) ≈ M * M
+            @test mul!(ones(size(B)), B, B, 2, 4) ≈ M * M * 2 .+ 4
 
             for m in 0:6
                 AL = rand(m,n)
@@ -1041,6 +1043,8 @@ end
                 @test B * AR ≈ M * AR
                 @test mul!(similar(AL), AL, B) ≈ AL * M
                 @test mul!(similar(AR), B, AR) ≈ M * AR
+                @test mul!(ones(size(AL)), AL, B, 2, 4) ≈ AL * M * 2 .+ 4
+                @test mul!(ones(size(AR)), B, AR, 2, 4) ≈ M * AR * 2 .+ 4
             end
 
             @test B * D ≈ M * D
@@ -1049,7 +1053,19 @@ end
             @test mul!(similar(B), B, D) ≈ M * D
             @test mul!(similar(B, size(B)), D, B) ≈ D * M
             @test mul!(similar(B, size(B)), B, D) ≈ M * D
+            @test mul!(ones(size(B)), D, B, 2, 4) ≈ D * M * 2 .+ 4
+            @test mul!(ones(size(B)), B, D, 2, 4) ≈ M * D * 2 .+ 4
         end
+        BL = Bidiagonal(rand(n), rand(max(0, n-1)), :L)
+        ML = Matrix(BL)
+        BU = Bidiagonal(rand(n), rand(max(0, n-1)), :U)
+        MU = Matrix(BU)
+        T = Tridiagonal(zeros(max(0, n-1)), zeros(n), zeros(max(0, n-1)))
+        @test mul!(T, BL, BU) ≈ ML * MU
+        @test mul!(T, BU, BL) ≈ MU * ML
+        T = Tridiagonal(ones(max(0, n-1)), ones(n), ones(max(0, n-1)))
+        @test mul!(copy(T), BL, BU, 2, 3) ≈ ML * MU * 2 + T * 3
+        @test mul!(copy(T), BU, BL, 2, 3) ≈ MU * ML * 2 + T * 3
     end
 end
 
