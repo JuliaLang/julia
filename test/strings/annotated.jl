@@ -65,9 +65,9 @@ end
     chr = Base.AnnotatedChar('c')
     @test chr == Base.AnnotatedChar(chr.char, Pair{Symbol, Any}[])
     str = Base.AnnotatedString("hmm", [(1:1, :attr => "h0h0"),
-                               (1:2, :attr => "h0m1"),
-                               (2:3, :attr => "m1m2")])
-    @test str[1] == Base.AnnotatedChar('h', Pair{Symbol, Any}[:attr => "h0h0"])
+                                       (1:2, :attr => "h0m1"),
+                                       (2:3, :attr => "m1m2")])
+    @test str[1] == Base.AnnotatedChar('h', Pair{Symbol, Any}[:attr => "h0h0", :attr => "h0m1"])
     @test str[2] == Base.AnnotatedChar('m', Pair{Symbol, Any}[:attr => "h0m1", :attr => "m1m2"])
     @test str[3] == Base.AnnotatedChar('m', Pair{Symbol, Any}[:attr => "m1m2"])
 end
