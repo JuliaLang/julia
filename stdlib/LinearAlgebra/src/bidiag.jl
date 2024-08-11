@@ -665,7 +665,7 @@ function __bibimul!(C, A, B::Bidiagonal, _add)
                 Bj₊1j₊1 = Bd[j+1]
                 Bj₊1j₊2 = Bu[j+1]
                 C[j, j-1] += _add(Ajj₋1*Bj₋1j₋1)
-                C[j, j  ] += _add(Ajj₋1*Bj₋1j   + Ajj*Bjj       + Ajj₊1*Bj₊1j)
+                C[j, j  ] += _add(Ajj₋1*Bj₋1j   + Ajj*Bjj)
                 C[j, j+1] += _add(Ajj  *Bjj₊1   + Ajj₊1*Bj₊1j₊1)
                 C[j, j+2] += _add(Ajj₊1*Bj₊1j₊2)
             end
@@ -705,9 +705,6 @@ function __bibimul!(C, A::Bidiagonal, B, _add)
             for j in 3:n-2
                 Ajj     = Ad[j]
                 Ajj₊1   = Au[j]
-                Bj₋1j₋2 = Bl[j-2]
-                Bj₋1j₋1 = Bd[j-1]
-                Bj₋1j   = Bu[j-1]
                 Bjj₋1   = Bl[j-1]
                 Bjj     = Bd[j]
                 Bjj₊1   = Bu[j]
@@ -733,9 +730,6 @@ function __bibimul!(C, A::Bidiagonal, B, _add)
                 Bjj₋1   = Bl[j-1]
                 Bjj     = Bd[j]
                 Bjj₊1   = Bu[j]
-                Bj₊1j   = Bl[j]
-                Bj₊1j₊1 = Bd[j+1]
-                Bj₊1j₊2 = Bu[j+1]
                 C[j,j-2]  += _add( Ajj₋1*Bj₋1j₋2)
                 C[j, j-1] += _add(Ajj₋1*Bj₋1j₋1 + Ajj*Bjj₋1)
                 C[j, j  ] += _add(Ajj₋1*Bj₋1j   + Ajj*Bjj)
@@ -756,8 +750,6 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
             for j in 3:n-2
                 Ajj     = Ad[j]
                 Ajj₊1   = Au[j]
-                Bj₋1j₋1 = Bd[j-1]
-                Bj₋1j   = Bu[j-1]
                 Bjj     = Bd[j]
                 Bjj₊1   = Bu[j]
                 Bj₊1j₊1 = Bd[j+1]
@@ -776,8 +768,6 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
             for j in 3:n-2
                 Ajj     = Ad[j]
                 Ajj₊1   = Au[j]
-                Bj₋1j₋2 = Bl[j-2]
-                Bj₋1j₋1 = Bd[j-1]
                 Bjj₋1   = Bl[j-1]
                 Bjj     = Bd[j]
                 Bj₊1j   = Bl[j]
@@ -800,8 +790,6 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
                 Bj₋1j   = Bu[j-1]
                 Bjj     = Bd[j]
                 Bjj₊1   = Bu[j]
-                Bj₊1j₊1 = Bd[j+1]
-                Bj₊1j₊2 = Bu[j+1]
                 C[j, j-1] += _add(Ajj₋1*Bj₋1j₋1)
                 C[j, j  ] += _add(Ajj₋1*Bj₋1j   + Ajj*Bjj)
                 C[j, j+1] += _add(Ajj  *Bjj₊1)
@@ -820,8 +808,6 @@ function __bibimul!(C, A::Bidiagonal, B::Bidiagonal, _add)
                 Bj₋1j₋1 = Bd[j-1]
                 Bjj₋1   = Bl[j-1]
                 Bjj     = Bd[j]
-                Bj₊1j   = Bl[j]
-                Bj₊1j₊1 = Bd[j+1]
                 C[j,j-2]  += _add( Ajj₋1*Bj₋1j₋2)
                 C[j, j-1] += _add(Ajj₋1*Bj₋1j₋1 + Ajj*Bjj₋1)
                 C[j, j  ] += _add(Ajj*Bjj)
