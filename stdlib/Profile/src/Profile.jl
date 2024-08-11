@@ -813,7 +813,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
     for i in eachindex(lilist)
         li = lilist[i]
         maxline = max(maxline, li.line)
-        maxfunc = max(maxfunc, length(funcnames[i]))
+        maxfunc = max(maxfunc, textwidth(funcnames[i]))
         maxfile = max(maxfile, sum(textwidth, pkgnames_filenames[i]) + 1)
     end
     wline = max(5, ndigits(maxline))
@@ -945,7 +945,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                         fname)
                 end
                 pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
-                remaining_path = ltruncate(filename, widthfile - length(pkgname) - 1)
+                remaining_path = ltruncate(filename, widthfile - textwidth(pkgname) - 1)
                 strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ",
                     styled"{$pkgcolor:$pkgname}",
                     !isempty(pkgname) && !startswith(remaining_path, "/") ? "/" : "",
