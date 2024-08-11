@@ -846,7 +846,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
             isempty(file) && (file = "[unknown file]")
             pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
             Base.printstyled(io, pkgname, color=pkgcolor)
-            file_trunc = rtruncto(file, wfile)
+            file_trunc = ltruncate(file, wfile)
             wpad = wfile - textwidth(pkgname)
             if !isempty(pkgname) && !startswith(file_trunc, "/")
                 Base.print(io, "/")
@@ -859,7 +859,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
                 fname = sprint(show_spec_linfo, li)
             end
             isempty(fname) && (fname = "[unknown function]")
-            Base.print(io, ltruncto(fname, wfunc))
+            Base.print(io, rtruncate(fname, wfunc))
         end
         println(io)
     end
@@ -945,7 +945,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                         fname)
                 end
                 pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
-                remaining_path = rtruncto(filename, widthfile - length(pkgname) - 1)
+                remaining_path = ltruncate(filename, widthfile - length(pkgname) - 1)
                 strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ",
                     styled"{$pkgcolor:$pkgname}",
                     !isempty(pkgname) && !startswith(remaining_path, "/") ? "/" : "",
@@ -958,7 +958,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
         else
             strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
         end
-        strs[i] = ltruncto(strs[i], cols)
+        strs[i] = rtruncate(strs[i], cols)
     end
     return strs
 end
@@ -1212,37 +1212,7 @@ function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoFlatDict)
     return [(v[i], k[i]) for i in p]
 end
 
-# Utilities
-function rtruncto(str::AbstractString, w::Int, replace_str::AbstractString = "…")
-    if textwidth(str) <= w
-        return str
-    else
-        i, acclen = firstindex(str), textwidth(replace_str)
-        while acclen + textwidth(str[i]) <= w && i < lastindex(str)
-            acclen += textwidth(str[i])
-            i = nextind(str, i)
-        end
-        return str[firstindex(str):prevind(str, i)] * replace_str
-    end
-end
-
-function ltruncto(str::AbstractString, w::Int, replace_str::AbstractString = "…")
-    if textwidth(str) <= w
-        return str
-    else
-        i, acclen = lastindex(str), textwidth(replace_str)
-        while acclen + textwidth(str[i]) <= w && i > firstindex(str)
-            acclen += textwidth(str[i])
-            i = prevind(str, i)
-        end
-        return replace_str * str[nextind(str, i):lastindex(str)]
-    end
-end
-
-
-
-
-truncto(str::Symbol, w::Int) = truncto(string(str), w)
+## Utilities
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
