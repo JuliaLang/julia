@@ -40,11 +40,10 @@ See also [`AnnotatedChar`](@ref), [`annotatedstring`](@ref),
 [`annotations`](@ref), and [`annotate!`](@ref).
 
 !!! warning
-    While the constructors are part of the Base public API, the fields
-    of `AnnotatedString` are not. This is to allow for potential future
+    While the constructors are part of the `StyledStrings` public API, the
+    fields of `AnnotatedString` are not. This is to allow for potential future
     changes in the implementation of this type. Instead use the
-    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter
-    functions.
+    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter functions.
 
 # Constructors
 
@@ -82,11 +81,10 @@ See also: [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
 and `annotate!`.
 
 !!! warning
-    While the constructors are part of the Base public API, the fields
-    of `AnnotatedChar` are not. This it to allow for potential future
+    While the constructors are part of the `StyledStrings` public API, the
+    fields of `AnnotatedChar` are not. This it to allow for potential future
     changes in the implementation of this type. Instead use the
-    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter
-    functions.
+    [`annotations`](@ref), and [`annotate!`](@ref) getter/setter functions.
 
 # Constructors
 
