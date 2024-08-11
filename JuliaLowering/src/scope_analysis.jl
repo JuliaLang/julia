@@ -1,15 +1,4 @@
-# Lowering pass 3: analyze scopes (passes 2/3 in flisp code)
-#
-# This pass analyzes the names (variables/constants etc) used in scopes
-#
-# This pass records information about variables used by closure conversion.
-# finds which variables are assigned or captured, and records variable
-# type declarations.
-#
-# This info is recorded by setting the second argument of `lambda` expressions
-# in-place to
-#   (var-info-lst captured-var-infos ssavalues static_params)
-# where var-info-lst is a list of var-info records
+# Lowering pass 3: analyze scopes (passes 2+3 in flisp code)
 
 #-------------------------------------------------------------------------------
 # AST traversal functions - useful for performing non-recursive AST traversals
@@ -413,6 +402,20 @@ function resolve_scopes(ctx::ScopeResolutionContext, ex)
     return _resolve_scopes(ctx, thunk)
 end
 
+"""
+This pass analyzes scopes and the names (locals/globals etc) used within them.
+
+Names of kind `K"Identifier"` are transformed into binding identifiers of
+kind `K"BindingId"`. The associated `Bindings` table in the context records
+metadata about each binding.
+
+This pass also records the set of binding IDs are locals within the enclosing
+lambda form.
+
+TODO: This pass should also record information about variables used by closure
+conversion, find which variables are assigned or captured, and record variable
+type declarations.
+"""
 function resolve_scopes(ctx::DesugaringContext, ex)
     ctx2 = ScopeResolutionContext(ctx)
     res = resolve_scopes(ctx2, reparent(ctx2, ex))

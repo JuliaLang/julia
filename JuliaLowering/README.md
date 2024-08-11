@@ -44,7 +44,8 @@ Lowering has five symbolic simplification passes:
    number of syntactic forms.
 3. Scope analysis - analyzing identifier names used in the code to discover
    local variables, closure captures, and associate global variables to the
-   appropriate module.
+   appropriate module. Transform all names (kind `K"Identifier"`) into binding
+   IDs (kind `K"BindingId"`) which can be looked up in a table of bindings.
 4. Closure conversion - convert closures to types and deal with captured
    variables efficiently where possible.
 5. Flattening to linear IR - convert code in hierarchical tree form to a
