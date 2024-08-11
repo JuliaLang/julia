@@ -26,21 +26,38 @@ end
 
 if !test_relocated_depot
 
-    @testset "insert @depot tag in path" begin
+    @testset "edge cases when inserting @depot tag in path" begin
 
+        # insert @depot only once for first match
         test_harness() do
             mktempdir() do dir
                 pushfirst!(DEPOT_PATH, dir)
-                path = dir*dir
                 if Sys.iswindows()
                     # dirs start with a drive letter instead of a path separator
-                    @test Base.replace_depot_path(path) == path
+                    path = dir*Base.Filesystem.pathsep()*dir
+                    @test Base.replace_depot_path(path) == "@depot"*Base.Filesystem.pathsep()*dir
                 else
+                    path = dir*dir
                     @test Base.replace_depot_path(path) == "@depot"*dir
                 end
             end
+
+            # 55340
+            empty!(DEPOT_PATH)
+            mktempdir() do dir
+                jlrc = joinpath(dir, "julia-rc2")
+                jl   = joinpath(dir, "julia")
+                mkdir(jl)
+                push!(DEPOT_PATH, jl)
+                @test Base.replace_depot_path(jl) == "@depot"
+                @test Base.replace_depot_path(string(jl,Base.Filesystem.pathsep())) ==
+                            string("@depot",Base.Filesystem.pathsep())
+                @test Base.replace_depot_path(jlrc) != "@depot-rc2"
+                @test Base.replace_depot_path(jlrc) == jlrc
+            end
         end
 
+        # deal with and without trailing path separators
         test_harness() do
             mktempdir() do dir
                 pushfirst!(DEPOT_PATH, dir)
@@ -54,21 +71,6 @@ if !test_relocated_depot
                 @test startswith(Base.replace_depot_path(path), tag)
                 popfirst!(DEPOT_PATH)
                 @test !startswith(Base.replace_depot_path(path), tag)
-            end
-        end
-
-        # 55340
-        test_harness(empty_depot_path=true) do
-            mktempdir() do dir
-                jlrc = joinpath(dir, "julia-rc2")
-                jl   = joinpath(dir, "julia")
-                mkdir(jl)
-                push!(DEPOT_PATH, jl)
-                @test Base.replace_depot_path(jl) == "@depot"
-                @test Base.replace_depot_path(string(jl,Base.Filesystem.pathsep())) ==
-                            string("@depot",Base.Filesystem.pathsep())
-                @test Base.replace_depot_path(jlrc) != "@depot-rc2"
-                @test Base.replace_depot_path(jlrc) == jlrc
             end
         end
 
