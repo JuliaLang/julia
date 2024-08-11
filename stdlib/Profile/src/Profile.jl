@@ -679,7 +679,7 @@ function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
     !isempty(data) && has_meta(data) && error("input already has metadata")
     cpu_clock_cycle = UInt64(99)
     data_with_meta = similar(data, 0)
-    for i = 1:length(data)
+    for i in eachindex(data)
         val = data[i]
         if iszero(val)
             # META_OFFSET_THREADID, META_OFFSET_TASKID, META_OFFSET_CPUCYCLECLOCK, META_OFFSET_SLEEPSTATE
@@ -810,7 +810,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
     maxline = 1
     maxfile = 6
     maxfunc = 10
-    for i in 1:length(lilist)
+    for i in eachindex(lilist)
         li = lilist[i]
         maxline = max(maxline, li.line)
         maxfunc = max(maxfunc, length(funcnames[i]))
@@ -830,7 +830,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
             rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " Function")
     println(io, lpad("=====", wcounts, " "), " ", lpad("========", wself, " "), " ",
             rpad("====", wfile, " "), " ", lpad("====", wline, " "), " ========")
-    for i = 1:length(n)
+    for i in eachindex(n)
         n[i] < fmt.mincount && continue
         li = lilist[i]
         Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
@@ -915,7 +915,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
         nindent -= ndigits(nextra) + 2
         showextra = true
     end
-    for i = 1:length(frames)
+    for i in eachindex(frames)
         frame = frames[i]
         li = frame.frame
         stroverhead = lpad(frame.overhead > 0 ? string(frame.overhead) : "", ndigoverhead, " ")
