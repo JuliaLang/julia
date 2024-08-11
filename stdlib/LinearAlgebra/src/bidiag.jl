@@ -758,9 +758,9 @@ end
 function _mul_bitrisym!(C::AbstractVecOrMat, A::Bidiagonal, B::AbstractVecOrMat, _add::MulAddMul)
     nA = size(A,1)
     nB = size(B,2)
-    d = B.dv
+    d = A.dv
     if A.uplo == 'U'
-        u = B.ev
+        u = A.ev
         @inbounds begin
             for j = 1:nB
                 b₀, b₊ = B[1, j], B[2, j]
@@ -773,7 +773,7 @@ function _mul_bitrisym!(C::AbstractVecOrMat, A::Bidiagonal, B::AbstractVecOrMat,
             end
         end
     else
-        l = B.ev
+        l = A.ev
         @inbounds begin
             for j = 1:nB
                 b₀, b₊ = B[1, j], B[2, j]
