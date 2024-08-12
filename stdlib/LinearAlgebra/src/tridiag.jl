@@ -173,7 +173,7 @@ adjoint(S::SymTridiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}})
 
 permutedims(S::SymTridiagonal) = S
 function permutedims(S::SymTridiagonal, perm)
-    Base.checkdims_perm(S, S, perm)
+    Base.checkdims_perm(axes(S), axes(S), perm)
     NTuple{2}(perm) == (2, 1) ? permutedims(S) : S
 end
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
@@ -639,7 +639,7 @@ adjoint(S::Tridiagonal{<:Number, <:Base.ReshapedArray{<:Number,1,<:Adjoint}}) =
 transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
 permutedims(T::Tridiagonal) = Tridiagonal(T.du, T.d, T.dl)
 function permutedims(T::Tridiagonal, perm)
-    Base.checkdims_perm(T, T, perm)
+    Base.checkdims_perm(axes(T), axes(T), perm)
     NTuple{2}(perm) == (2, 1) ? permutedims(T) : T
 end
 Base.copy(aS::Adjoint{<:Any,<:Tridiagonal}) = (S = aS.parent; Tridiagonal(map(x -> copy.(adjoint.(x)), (S.du, S.d, S.dl))...))
@@ -1044,4 +1044,22 @@ function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
     A.dv .= B.d
     _evview(A) .= B.du
     return A
+end
+
+# display
+function show(io::IO, T::Tridiagonal)
+    print(io, "Tridiagonal(")
+    show(io, T.dl)
+    print(io, ", ")
+    show(io, T.d)
+    print(io, ", ")
+    show(io, T.du)
+    print(io, ")")
+end
+function show(io::IO, S::SymTridiagonal)
+    print(io, "SymTridiagonal(")
+    show(io, eltype(S) <: Number ? S.dv : view(S, diagind(S, IndexStyle(S))))
+    print(io, ", ")
+    show(io, S.ev)
+    print(io, ")")
 end

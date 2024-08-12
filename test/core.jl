@@ -7495,6 +7495,13 @@ struct A43411{S, T}
 end
 @test isbitstype(A43411{(:a,), Tuple{Int}})
 
+# issue #55189
+struct A55189{N}
+    children::NTuple{N,A55189{N}}
+end
+@test fieldtype(A55189{2}, 1) === Tuple{A55189{2}, A55189{2}}
+@assert !isbitstype(A55189{2})
+
 # issue #44614
 struct T44614_1{T}
     m::T
@@ -7565,7 +7572,7 @@ end
 # issue #31696
 foo31696(x::Int8, y::Int8) = 1
 foo31696(x::T, y::T) where {T <: Int8} = 2
-@test length(methods(foo31696)) == 1
+@test length(methods(foo31696)) == 2
 let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
     b .= a
     @test b[1] == (1,)

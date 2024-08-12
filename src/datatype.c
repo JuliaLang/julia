@@ -1254,7 +1254,7 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* pre-
     }
     else if (nb == 1) {
         uint8_t *y8 = (uint8_t*)y;
-        assert(!dt->layout->flags.haspadding);
+        assert(dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding);
         if (dt == et) {
             *y8 = *(uint8_t*)expected;
             uint8_t z8 = *(uint8_t*)src;
@@ -1267,7 +1267,7 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* pre-
     }
     else if (nb == 2) {
         uint16_t *y16 = (uint16_t*)y;
-        assert(!dt->layout->flags.haspadding);
+        assert(dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding);
         if (dt == et) {
             *y16 = *(uint16_t*)expected;
             uint16_t z16 = *(uint16_t*)src;
@@ -1285,7 +1285,7 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* pre-
             uint32_t z32 = zext_read32(src, nb);
             while (1) {
                 success = jl_atomic_cmpswap((_Atomic(uint32_t)*)dst, y32, z32);
-                if (success || !dt->layout->flags.haspadding || !jl_egal__bits(y, expected, dt))
+                if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt))
                     break;
             }
         }
@@ -1302,7 +1302,7 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* pre-
             uint64_t z64 = zext_read64(src, nb);
             while (1) {
                 success = jl_atomic_cmpswap((_Atomic(uint64_t)*)dst, y64, z64);
-                if (success || !dt->layout->flags.haspadding || !jl_egal__bits(y, expected, dt))
+                if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt))
                     break;
             }
         }
@@ -1320,7 +1320,7 @@ JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y /* pre-
             jl_uint128_t z128 = zext_read128(src, nb);
             while (1) {
                 success = jl_atomic_cmpswap((_Atomic(jl_uint128_t)*)dst, y128, z128);
-                if (success || !dt->layout->flags.haspadding || !jl_egal__bits(y, expected, dt))
+                if (success || (dt->layout->flags.isbitsegal && !dt->layout->flags.haspadding) || !jl_egal__bits(y, expected, dt))
                     break;
             }
         }
@@ -2014,7 +2014,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
         else {
             char *px = lock(p, parent, needlock, isatomic);
             int success = memcmp(px, (char*)r, fsz) == 0;
-            if (!success && ((jl_datatype_t*)rty)->layout->flags.haspadding)
+            if (!success && (!((jl_datatype_t*)rty)->layout->flags.isbitsegal || ((jl_datatype_t*)rty)->layout->flags.haspadding))
                 success = jl_egal__bits((jl_value_t*)px, r, (jl_datatype_t*)rty);
             if (success) {
                 if (isunion) {
@@ -2129,7 +2129,7 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
         success = (rty == jl_typeof(expected));
         if (success) {
             success = memcmp((char*)r, (char*)expected, rsz) == 0;
-            if (!success && ((jl_datatype_t*)rty)->layout->flags.haspadding)
+            if (!success && (!((jl_datatype_t*)rty)->layout->flags.isbitsegal || ((jl_datatype_t*)rty)->layout->flags.haspadding))
                 success = jl_egal__bits(r, expected, (jl_datatype_t*)rty);
         }
         *((uint8_t*)r + fsz) = success ? 1 : 0;
