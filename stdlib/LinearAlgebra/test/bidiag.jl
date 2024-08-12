@@ -1021,7 +1021,7 @@ end
 end
 
 @testset "mul for small matrices" begin
-    @testset for n in 0:4
+    @testset for n in 0:6
         D = Diagonal(rand(n))
         v = rand(n)
         @testset for uplo in (:L, :U)
@@ -1066,6 +1066,24 @@ end
         T = Tridiagonal(ones(max(0, n-1)), ones(n), ones(max(0, n-1)))
         @test mul!(copy(T), BL, BU, 2, 3) ≈ ML * MU * 2 + T * 3
         @test mul!(copy(T), BU, BL, 2, 3) ≈ MU * ML * 2 + T * 3
+    end
+
+    n = 4
+    arr = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    for B in (
+            Bidiagonal(fill(arr,n), fill(arr,n-1), :L),
+            Bidiagonal(fill(arr,n), fill(arr,n-1), :U),
+            )
+        @test B * B ≈ Matrix(B) * Matrix(B)
+        BL = Bidiagonal(fill(arr,n), fill(arr,n-1), :L)
+        BU = Bidiagonal(fill(arr,n), fill(arr,n-1), :U)
+        @test BL * B ≈ Matrix(BL) * Matrix(B)
+        @test BU * B ≈ Matrix(BU) * Matrix(B)
+        @test B * BL ≈ Matrix(B) * Matrix(BL)
+        @test B * BU ≈ Matrix(B) * Matrix(BU)
+        D = Diagonal(fill(arr,n))
+        @test D * B ≈ Matrix(D) * Matrix(B)
+        @test B * D ≈ Matrix(B) * Matrix(D)
     end
 end
 
