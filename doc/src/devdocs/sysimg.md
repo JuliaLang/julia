@@ -136,9 +136,8 @@ getglobal(Base, Symbol(readchomp(stdin)))(1)
 
 This code reads a function name from `stdin` and calls the named function from Base on the value
 `1`. In this case it is impossible to predict which function will be called, so no functions
-can reliably be considered "unused". Most real-world programs do not do things like this (but
-notice that Julia's own interactive REPL is an example of a program that *does* use this kind
-of reflection).
+can reliably be considered "unused". With some noteworthy exceptions (Julia's own REPL being
+one of them), most real-world programs do not do things like this.
 
 Less extreme cases occur, for example, when there are type instabilities that make it impossible
 for the compiler to predict which method will be called. However, if code is well-typed and does
