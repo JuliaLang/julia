@@ -424,7 +424,6 @@ include("weakkeydict.jl")
 
 # ScopedValues
 include("scopedvalues.jl")
-import .ScopedValues
 
 # metaprogramming
 include("meta.jl")
