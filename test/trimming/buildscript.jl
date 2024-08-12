@@ -4,7 +4,7 @@ inputfile = ARGS[1]
 output_type = ARGS[2]
 add_ccallables = ARGS[3] == "true"
 
-# Initialize some things not usually initialized when output is request
+# Initialize some things not usually initialized when output is requested
 Sys.__init__()
 Base.init_depot_path()
 Base.init_load_path()
