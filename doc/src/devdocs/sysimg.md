@@ -161,7 +161,8 @@ since those options remove information not needed in a small binary meant for de
   types are not known. All printing should use a specific IO object with a known type.
   The easiest substitution is to use `print(Core.stdout, x)` instead of `print(x)` or
   `print(stdout, x)`.
-- Follow our [Performance Tips](@ref) to improve type-inferrability.
+- Use tools like `JET`, `Cthulhu`, and/or `SnoopCompile` to identify failures of type-inference, and
+  follow our [Performance Tips](@ref) to fix them.
 
 ### Compatibility concerns
 
