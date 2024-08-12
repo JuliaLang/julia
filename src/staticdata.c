@@ -329,9 +329,6 @@ static arraylist_t deser_sym;
 
 static htable_t serialization_order; // to break cycles, mark all objects that are serialized
 static htable_t nullptrs;
-#ifdef DEBUG_RETAINERS
-static htable_t retainers; // for debug: used to track which parent object caused each obj to be put in the sysimage
-#endif
 // FIFO queue for objects to be serialized. Anything requiring fixup upon deserialization
 // must be "toplevel" in this queue. For types, parameters and field types must appear
 // before the "wrapper" type so they can be properly recached against the running system.
@@ -773,68 +770,19 @@ static uintptr_t jl_fptr_id(void *fptr)
 }
 
 // `jl_queue_for_serialization` adds items to `serialization_order`
-#define jl_queue_for_serialization(s, v, p) jl_queue_for_serialization_((s), (jl_value_t*)(v), (jl_value_t*)(p), 1, 0)
-static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, jl_value_t *p, int recursive, int immediate) JL_GC_DISABLED;
-
-#ifdef DEBUG_RETAINERS
-static void print_retainers(jl_value_t *v) JL_GC_DISABLED
-{
-    fprintf(stderr, "retained by: \n");
-    while (1) {
-        v = (jl_value_t *)ptrhash_get(&retainers, v);
-        if (v == NULL || v == HT_NOTFOUND)
-            return;
-
-        ios_t buf;
-        ios_mem(&buf, IOS_INLSIZE);
-        buf.growable = 0; // Restrict to inline buffer to avoid massive output
-
-        jl_static_show((JL_STREAM*)&buf, v);
-        if (buf.size >= buf.maxsize - 1) {
-            memset(&buf.buf[IOS_INLSIZE - 4], '.', 3);
-            buf.buf[IOS_INLSIZE - 1] = '\0';
-        } else {
-            buf.buf[buf.size] = '\0';
-            buf.size += 1;
-        }
-        for (int i = 0; i < IOS_INLSIZE; i++) {
-            if (buf.buf[i] == '\n') buf.buf[i] = ' ';
-        }
-
-        if (ptrhash_get(&retainers, v) == NULL)
-            fprintf(stderr, " └ %s", buf.buf);
-        else
-            fprintf(stderr, " ├ %s", buf.buf);
-
-
-        ios_t tbuf;
-        ios_mem(&tbuf, IOS_INLSIZE);
-        buf.growable = 0; // Restrict to inline buffer to avoid massive output
-
-        jl_static_show((JL_STREAM*)&tbuf, jl_typeof(v));
-        if (tbuf.size >= buf.maxsize - 1) {
-            memset(&tbuf.buf[IOS_INLSIZE - 4], '.', 3);
-            tbuf.buf[IOS_INLSIZE - 1] = '\0';
-        } else {
-            tbuf.buf[buf.size] = '\0';
-            tbuf.size += 1;
-        }
-        tbuf.buf[tbuf.size - 1] = '\0';
-        fprintf(stderr, "::%s\n", tbuf.buf);
-    }
-}
-#endif
+#define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
+static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED;
 
 static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_t *m) JL_GC_DISABLED
 {
-    jl_queue_for_serialization(s, m->name, m);
-    jl_queue_for_serialization(s, m->parent, m);
+    jl_queue_for_serialization(s, m->name);
+    jl_queue_for_serialization(s, m->parent);
     if (jl_options.trim) {
-        jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), (jl_value_t*)m, 0, 1);
+        jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), 0, 1);
     } else {
-        jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindings), m);
+        jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindings));
     }
-    jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindingkeyset), m);
+    jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindingkeyset));
     if (jl_options.strip_metadata || jl_options.trim) {
         jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
         for (size_t i = 0; i < jl_svec_len(table); i++) {
@@ -857,14 +805,14 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
                      // ... or point to Base functions accessed by the runtime
                      (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
                                               !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
-                    jl_queue_for_serialization(s, b, m);
+                    jl_queue_for_serialization(s, b);
                 }
             }
         }
     }
 
     for (size_t i = 0; i < m->usings.len; i++) {
-        jl_queue_for_serialization(s, (jl_value_t*)m->usings.items[i], m);
+        jl_queue_for_serialization(s, (jl_value_t*)m->usings.items[i]);
     }
 }
 
@@ -879,7 +827,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-    jl_queue_for_serialization_(s, (jl_value_t*)t, v, 1, immediate);
+    jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate);
     const jl_datatype_layout_t *layout = t->layout;
 
     if (!recursive)
@@ -888,7 +836,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (s->incremental && jl_is_datatype(v) && immediate) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
         // ensure all type parameters are recached
-        jl_queue_for_serialization_(s, (jl_value_t*)dt->parameters, v, 1, 1);
+        jl_queue_for_serialization_(s, (jl_value_t*)dt->parameters, 1, 1);
         if (jl_is_datatype_singleton(dt) && needs_uniquing(dt->instance)) {
             assert(jl_needs_serialization(s, dt->instance)); // should be true, since we visited dt
             // do not visit dt->instance for our template object as it leads to unwanted cycles here
@@ -902,9 +850,9 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_value_t *def = mi->def.value;
         if (needs_uniquing(v)) {
             // we only need 3 specific fields of this (the rest are not used)
-            jl_queue_for_serialization(s, mi->def.value, v);
-            jl_queue_for_serialization(s, mi->specTypes, v);
-            jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals, v);
+            jl_queue_for_serialization(s, mi->def.value);
+            jl_queue_for_serialization(s, mi->specTypes);
+            jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
             goto done_fields;
         }
         else if (jl_is_method(def) && jl_object_in_image(def)) {
@@ -927,8 +875,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (s->incremental && jl_is_binding(v)) {
         if (needs_uniquing(v)) {
             jl_binding_t *b = (jl_binding_t*)v;
-            jl_queue_for_serialization(s, b->globalref->mod, NULL);
-            jl_queue_for_serialization(s, b->globalref->name, NULL);
+            jl_queue_for_serialization(s, b->globalref->mod);
+            jl_queue_for_serialization(s, b->globalref->name);
             goto done_fields;
         }
     }
@@ -941,8 +889,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (jl_is_typename(v)) {
         jl_typename_t *tn = (jl_typename_t*)v;
         // don't recurse into several fields (yet)
-        jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&tn->cache), v, 0, 1);
-        jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&tn->linearcache), v, 0, 1);
+        jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&tn->cache), 0, 1);
+        jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&tn->linearcache), 0, 1);
         if (s->incremental) {
             assert(!jl_object_in_image((jl_value_t*)tn->module));
             assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
@@ -974,25 +922,25 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         size_t i, l = jl_svec_len(v);
         jl_value_t **data = jl_svec_data(v);
         for (i = 0; i < l; i++) {
-            jl_queue_for_serialization_(s, data[i], v, 1, immediate);
+            jl_queue_for_serialization_(s, data[i], 1, immediate);
         }
     }
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
         jl_value_t *mem = get_replaceable_field((jl_value_t**)&ar->ref.mem, 1);
-        jl_queue_for_serialization_(s, mem, v, 1, immediate);
+        jl_queue_for_serialization_(s, mem, 1, immediate);
     }
     else if (jl_is_genericmemory(v)) {
         jl_genericmemory_t *m = (jl_genericmemory_t*)v;
         const char *data = (const char*)m->ptr;
         if (jl_genericmemory_how(m) == 3) {
-            jl_queue_for_serialization_(s, jl_genericmemory_data_owner_field(v), v, 1, immediate);
+            jl_queue_for_serialization_(s, jl_genericmemory_data_owner_field(v), 1, immediate);
         }
         else if (layout->flags.arrayelem_isboxed) {
             size_t i, l = m->length;
             for (i = 0; i < l; i++) {
                 jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[i], 1);
-                jl_queue_for_serialization_(s, fld, v, 1, immediate);
+                jl_queue_for_serialization_(s, fld, 1, immediate);
             }
         }
         else if (layout->first_ptr >= 0) {
@@ -1003,7 +951,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 for (j = 0; j < np; j++) {
                     uint32_t ptr = jl_ptr_offset(t, j);
                     jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], 1);
-                    jl_queue_for_serialization_(s, fld, v, 1, immediate);
+                    jl_queue_for_serialization_(s, fld, 1, immediate);
                 }
                 data += elsz;
             }
@@ -1022,7 +970,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             if (jl_is_method(v)) {
                 jl_method_t *m = (jl_method_t *)v;
                 if (jl_is_svec(jl_atomic_load_relaxed(&m->specializations)))
-                    jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->specializations), (jl_value_t*)m, 0, 1);
+                    jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->specializations), 0, 1);
             }
             else if (jl_typetagis(v, jl_typename_type)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
@@ -1041,7 +989,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             uint32_t ptr = jl_ptr_offset(t, i);
             int mutabl = t->name->mutabl;
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
-            jl_queue_for_serialization_(s, fld, v, 1, immediate);
+            jl_queue_for_serialization_(s, fld, 1, immediate);
         }
     }
 
@@ -1064,7 +1012,7 @@ done_fields: ;
         if (*bp != (void*)-2) {
             // if super is already on the stack of things to handle when this returns, do
             // not try to handle it now
-            jl_queue_for_serialization_(s, (jl_value_t*)dt->super, v, 1, immediate);
+            jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, immediate);
         }
         immediate = 0;
         char *data = (char*)jl_data_ptr(v);
@@ -1075,13 +1023,13 @@ done_fields: ;
                 continue; // skip the super field, since it might not be quite validly ordered
             int mutabl = 1;
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
-            jl_queue_for_serialization_(s, fld, v, 1, immediate);
+            jl_queue_for_serialization_(s, fld, 1, immediate);
         }
     }
 }
 
 
-static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, jl_value_t *retainer, int recursive, int immediate) JL_GC_DISABLED
+static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED
 {
     if (!jl_needs_serialization(s, v))
         return;
@@ -1374,7 +1322,7 @@ static void record_memoryrefs_inside(jl_serializer_state *s, jl_datatype_t *t, s
 static void record_gvars(jl_serializer_state *s, arraylist_t *globals) JL_NOTSAFEPOINT
 {
     for (size_t i = 0; i < globals->len; i++)
-        jl_queue_for_serialization(s, globals->items[i], /* retainer */ NULL);
+        jl_queue_for_serialization(s, globals->items[i]);
 }
 
 static void record_external_fns(jl_serializer_state *s, arraylist_t *external_fns) JL_NOTSAFEPOINT
@@ -2862,9 +2810,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
     }
     htable_new(&serialization_order, 25000);
-#ifdef DEBUG_RETAINERS
-    htable_new(&retainers, 25000);
-#endif
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
     arraylist_new(&serialization_queue, 0);
@@ -2931,14 +2876,14 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         if (worklist == NULL) {
             for (i = 0; tags[i] != NULL; i++) {
                 jl_value_t *tag = *tags[i];
-                jl_queue_for_serialization(&s, tag, /* retainer */ NULL);
+                jl_queue_for_serialization(&s, tag);
             }
-            jl_queue_for_serialization(&s, s.ptls->root_task->tls, /* retainer */ NULL);
+            jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         }
         else {
             // Queue the worklist itself as the first item we serialize
-            jl_queue_for_serialization(&s, worklist, /* retainer */ NULL);
-            jl_queue_for_serialization(&s, jl_module_init_order, /* retainer */ NULL);
+            jl_queue_for_serialization(&s, worklist);
+            jl_queue_for_serialization(&s, jl_module_init_order);
             // Classify the CodeInstances with respect to their need for validation
             classify_callers(&s.callers_with_edges, edges);
         }
@@ -2947,14 +2892,14 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             assert(ext_targets);
             assert(edges);
             // Queue method extensions
-            jl_queue_for_serialization(&s, extext_methods, /* retainer */ NULL);
+            jl_queue_for_serialization(&s, extext_methods);
             // Queue the new specializations
-            jl_queue_for_serialization(&s, new_ext_cis, /* retainer */ NULL);
+            jl_queue_for_serialization(&s, new_ext_cis);
             // Queue the new roots
-            jl_queue_for_serialization(&s, method_roots_list, /* retainer */ NULL);
+            jl_queue_for_serialization(&s, method_roots_list);
             // Queue the edges
-            jl_queue_for_serialization(&s, ext_targets, /* retainer */ NULL);
-            jl_queue_for_serialization(&s, edges, /* retainer */ NULL);
+            jl_queue_for_serialization(&s, ext_targets);
+            jl_queue_for_serialization(&s, edges);
         }
         jl_serialize_reachable(&s);
         // step 1.2: ensure all gvars are part of the sysimage too
@@ -2975,8 +2920,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                     global_roots_keyset = jl_idset_put_idx(global_roots_list, global_roots_keyset, idx);
                 }
             }
-            jl_queue_for_serialization(&s, global_roots_list, /* retainer */ NULL);
-            jl_queue_for_serialization(&s, global_roots_keyset, /* retainer */ NULL);
+            jl_queue_for_serialization(&s, global_roots_list);
+            jl_queue_for_serialization(&s, global_roots_keyset);
             jl_serialize_reachable(&s);
         }
         // step 1.4: prune (garbage collect) some special weak references from
@@ -3165,9 +3110,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&gvars);
     arraylist_free(&external_fns);
     htable_free(&field_replace);
-#ifdef DEBUG_RETAINERS
-    htable_free(&retainers);
-#endif
     htable_free(&serialization_order);
     htable_free(&nullptrs);
     htable_free(&symbol_table);
