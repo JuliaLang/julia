@@ -152,8 +152,13 @@ time showing the location of the call. For testing purposes, it is possible to s
 errors by specifying `--trim=unsafe` or `--trim=unsafe-warn`. Then you will get a system
 image built, but it may crash at run time if needed code is not present.
 
-It typically makes sense to specify `--strip-ir` and `--strip-metadata` along with `--trim`,
-since those options remove information not needed in a small binary meant for deployment.
+It typically makes sense to specify `--strip-ir` along with `--trim`, since trimmed binaries
+are fully compiled and therefore don't need Julia IR. At some point we may make `--trim` imply
+`--strip-ir`, but for now we have kept them orthogonal.
+
+To get the smallest possible binary, it will also help to specify `--strip-metadata` and
+run the Unix `strip` utility. However, those steps remove Julia-specific and native (DWARF format)
+debug info, respectively, and so will make debugging more difficult.
 
 ### Common problems
 
@@ -172,11 +177,18 @@ and so are only applied when trimming is requested (this is done by an external 
 currently maintained inside the test suite as `test/trimming/buildscript.jl`).
 Therefore in many cases trimming will require you to opt in to new variants of Base and some
 standard libraries.
+
 If you want to use trimming, it is important to set up continuous integration testing that
 performs a trimmed build and fully tests the resulting program.
 Fortunately, if your program successfully compiles with `--trim` then it is very likely to work
 the same as it did before. However, CI is needed to ensure that your program continues to build
 with trimming as you develop it.
+
+Package authors may wish to test that their package is "trimming safe", however this is impossible
+in general. Trimming is only expected to work given concrete entry points such as `main()` and
+library entry points meant to be called from outside Julia. For generic packages, existing tests
+for type stability like `@inferred` and `JET` are about as close as you can get to checking
+trim compatibility.
 
 Trimming also introduces new compatibility issues between minor versions of Julia. At this time,
 we are not able to guarantee that a program that can be trimmed in one version of Julia
