@@ -971,7 +971,7 @@ end
 end
 
 @testset "mul for small matrices" begin
-    @testset for n in 0:4
+    @testset for n in 0:6
         for T in (
                 Tridiagonal(rand(max(n-1,0)), rand(n), rand(max(n-1,0))),
                 SymTridiagonal(rand(n), rand(max(n-1,0))),
@@ -1020,6 +1020,24 @@ end
                 @test mul!(ones(size(T)), T, B, 2, 4) ≈ M * B * 2 .+ 4
             end
         end
+    end
+
+    n = 4
+    arr = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    for T in (
+            SymTridiagonal(fill(arr,n), fill(arr,n-1)),
+            Tridiagonal(fill(arr,n-1), fill(arr,n), fill(arr,n-1)),
+            )
+        @test T * T ≈ Matrix(T) * Matrix(T)
+        BL = Bidiagonal(fill(arr,n), fill(arr,n-1), :L)
+        BU = Bidiagonal(fill(arr,n), fill(arr,n-1), :U)
+        @test BL * T ≈ Matrix(BL) * Matrix(T)
+        @test BU * T ≈ Matrix(BU) * Matrix(T)
+        @test T * BL ≈ Matrix(T) * Matrix(BL)
+        @test T * BU ≈ Matrix(T) * Matrix(BU)
+        D = Diagonal(fill(arr,n))
+        @test D * T ≈ Matrix(D) * Matrix(T)
+        @test T * D ≈ Matrix(T) * Matrix(D)
     end
 end
 
