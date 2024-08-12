@@ -188,6 +188,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     assert(jl_is_module(mod) && jl_is_symbol(name));
     jl_binding_t *b = (jl_binding_t*)jl_gc_alloc(ct->ptls, sizeof(jl_binding_t), jl_binding_type);
     jl_atomic_store_relaxed(&b->value, NULL);
+    jl_atomic_store_relaxed(&b->partitions, NULL);
     b->globalref = NULL;
     b->exportp = 0;
     b->publicp = 0;
