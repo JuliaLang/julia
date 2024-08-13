@@ -1253,7 +1253,7 @@ end
     Profile.take_heap_snapshot(filepath::String, all_one::Bool=false;
                                redact_data::Bool=true, streaming::Bool=false)
     Profile.take_heap_snapshot(all_one::Bool=false; redact_data:Bool=true,
-                               dir::String=nothing)
+                               dir::String=nothing, streaming::Bool=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
 Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
@@ -1327,7 +1327,7 @@ function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_dat
         end
     end
 end
-function take_heap_snapshot(all_one::Bool=false; redact_data::Bool=true, dir::Union{Nothing,S}=nothing) where {S <: AbstractString}
+function take_heap_snapshot(all_one::Bool=false; redact_data::Bool=true, dir::Union{Nothing,S}=nothing, streaming::Bool=false) where {S <: AbstractString}
     fname = "$(getpid())_$(time_ns()).heapsnapshot"
     if isnothing(dir)
         wd = pwd()
@@ -1342,7 +1342,7 @@ function take_heap_snapshot(all_one::Bool=false; redact_data::Bool=true, dir::Un
     else
         fpath = joinpath(expanduser(dir), fname)
     end
-    return take_heap_snapshot(fpath, all_one; redact_data=redact_data)
+    return take_heap_snapshot(fpath, all_one; redact_data=redact_data, streaming=streaming)
 end
 
 """
