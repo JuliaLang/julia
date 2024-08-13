@@ -276,14 +276,14 @@ end
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
     fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; const x = \"redact_this\"; print(Profile.take_heap_snapshot())"`, String)
     end
 
     @test isfile(fname)
 
-    open(fname) do fs
-        @test readline(fs) != ""
-    end
+    sshot = read(fname, String)
+    @test sshot != ""
+    @test !contains(sshot, "redact_this")
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)
