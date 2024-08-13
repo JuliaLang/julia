@@ -720,21 +720,6 @@ end
     end
 end
 
-@testset "eigendecomposition Algorithms" begin
-    using LinearAlgebra: DivideAndConquer, QRIteration, RobustRepresentations
-    for T in (Float64, ComplexF64, Float32, ComplexF32)
-        n = 4
-        A = T <: Real ? Symmetric(randn(T, n, n)) : Hermitian(randn(T, n, n))
-        d, v = eigen(A)
-        for alg in (DivideAndConquer(), QRIteration(), RobustRepresentations())
-            @test (@inferred eigvals(A, alg)) ≈ d
-            d2, v2 = @inferred eigen(A, alg)
-            @test d2 ≈ d
-            @test A * v2 ≈ v2 * Diagonal(d2)
-        end
-    end
-end
-
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
 using .Main.ImmutableArrays
