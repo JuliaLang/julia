@@ -1456,6 +1456,11 @@ end
         @test all(a[end-length(args)+1:end] .== args)
 end
 
+@testset "Check sizehint!($a)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+        @test sizehint!(a, 10) === a
+end
+
 @testset "splatting into hvcat" begin
     t = (1, 2)
     @test [t...; 3 4] == [1 2; 3 4]
