@@ -101,6 +101,7 @@ function __init__()
 end
 
 using Base.Meta, Sockets, StyledStrings
+using JuliaSyntaxHighlighting
 import InteractiveUtils
 
 export
@@ -108,6 +109,8 @@ export
     BasicREPL,
     LineEditREPL,
     StreamREPL
+
+public TerminalMenus
 
 import Base:
     AbstractDisplay,
@@ -127,7 +130,7 @@ include("options.jl")
 
 include("LineEdit.jl")
 using .LineEdit
-import ..LineEdit:
+import .LineEdit:
     CompletionProvider,
     HistoryProvider,
     add_history,
@@ -507,12 +510,19 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
-        show(io, mime, x[])
+        show_repl(io, mime, x[])
         println(io)
     end
     return nothing
 end
+
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
+
+show_repl(io::IO, mime::MIME"text/plain", x) = show(io, mime, x)
+
+show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
+    print(io, JuliaSyntaxHighlighting.highlight(
+        sprint(show, ex, context=IOContext(io, :color => false))))
 
 function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
@@ -752,6 +762,7 @@ struct LatexCompletions <: CompletionProvider end
 
 function active_module() # this method is also called from Base
     isdefined(Base, :active_repl) || return Main
+    Base.active_repl === nothing && return Main
     return active_module(Base.active_repl::AbstractREPL)
 end
 active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
@@ -1793,7 +1804,7 @@ module Numbered
 
 using ..REPL
 
-__current_ast_transforms() = isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+__current_ast_transforms() = Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
 function repl_eval_counter(hp)
     return length(hp.history) - hp.start_idx
@@ -1855,13 +1866,13 @@ end
 
 function __current_ast_transforms(backend)
     if backend === nothing
-        isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+        Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
     else
         backend.ast_transforms
     end
 end
 
-function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+function numbered_prompt!(repl::LineEditREPL=Base.active_repl::LineEditREPL, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)

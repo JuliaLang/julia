@@ -18,16 +18,8 @@
 #include "julia.h"
 #include "julia_threads.h"
 #include "julia_internal.h"
-#include "threading.h"
-#ifndef _OS_WINDOWS_
-#include <sys/mman.h>
-#if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
-#define MAP_ANONYMOUS MAP_ANON
-#endif
-#endif
 #include "julia_assert.h"
-#include "gc-heap-snapshot.h"
-#include "gc-alloc-profiler.h"
+#include "threading.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,9 +32,6 @@ extern "C" {
 #endif
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2)
 #define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
-
-#define jl_malloc_tag ((void*)0xdeadaa01)
-#define jl_singleton_tag ((void*)0xdeadaa02)
 
 // Used by GC_DEBUG_ENV
 typedef struct {
@@ -61,34 +50,6 @@ typedef struct {
     jl_alloc_num_t other;
     jl_alloc_num_t print;
 } jl_gc_debug_env_t;
-
-// This struct must be kept in sync with the Julia type of the same name in base/timing.jl
-typedef struct {
-    int64_t     allocd;
-    int64_t     deferred_alloc;
-    int64_t     freed;
-    uint64_t    malloc;
-    uint64_t    realloc;
-    uint64_t    poolalloc;
-    uint64_t    bigalloc;
-    uint64_t    freecall;
-    uint64_t    total_time;
-    uint64_t    total_allocd;
-    size_t      interval;
-    int         pause;
-    int         full_sweep;
-    uint64_t    max_pause;
-    uint64_t    max_memory;
-    uint64_t    time_to_safepoint;
-    uint64_t    max_time_to_safepoint;
-    uint64_t    total_time_to_safepoint;
-    uint64_t    sweep_time;
-    uint64_t    mark_time;
-    uint64_t    total_sweep_time;
-    uint64_t    total_mark_time;
-    uint64_t    last_full_sweep;
-    uint64_t    last_incremental_sweep;
-} jl_gc_num_t;
 
 // Array chunks (work items representing suffixes of
 // large arrays of pointers left to be marked)
@@ -145,12 +106,11 @@ JL_EXTENSION typedef struct _bigval_t {
     // must be 64-byte aligned here, in 32 & 64 bit modes
 } bigval_t;
 
-// data structure for tracking malloc'd arrays and genericmemory.
-
-typedef struct _mallocarray_t {
-    jl_value_t *a;
-    struct _mallocarray_t *next;
-} mallocarray_t;
+// data structure for tracking malloc'd genericmemory.
+typedef struct _mallocmemory_t {
+    jl_genericmemory_t *a; // lowest bit is tagged if this is aligned memory
+    struct _mallocmemory_t *next;
+} mallocmemory_t;
 
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
@@ -441,14 +401,9 @@ STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 }
 #endif
 
-extern jl_gc_num_t gc_num;
 extern bigval_t *oldest_generation_of_bigvals;
-extern arraylist_t finalizer_list_marked;
-extern arraylist_t to_finalize;
 extern int64_t buffered_pages;
 extern int gc_first_tid;
-extern int gc_n_threads;
-extern jl_ptls_t* gc_all_tls_states;
 extern gc_heapstatus_t gc_heap_stats;
 
 STATIC_INLINE int gc_first_parallel_collector_thread_id(void) JL_NOTSAFEPOINT
@@ -476,6 +431,16 @@ STATIC_INLINE int gc_ith_parallel_collector_thread_id(int i) JL_NOTSAFEPOINT
 STATIC_INLINE int gc_is_parallel_collector_thread(int tid) JL_NOTSAFEPOINT
 {
     return tid >= gc_first_tid && tid <= gc_last_parallel_collector_thread_id();
+}
+
+STATIC_INLINE int gc_is_concurrent_collector_thread(int tid) JL_NOTSAFEPOINT
+{
+    if (jl_n_sweepthreads == 0) {
+        return 0;
+    }
+    int last_parallel_collector_thread_id = gc_last_parallel_collector_thread_id();
+    int concurrent_collector_thread_id = last_parallel_collector_thread_id + 1;
+    return tid == concurrent_collector_thread_id;
 }
 
 STATIC_INLINE int gc_random_parallel_collector_thread_id(jl_ptls_t ptls) JL_NOTSAFEPOINT
@@ -514,33 +479,6 @@ STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOIN
     return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
 }
 
-STATIC_INLINE int gc_marked(uintptr_t bits) JL_NOTSAFEPOINT
-{
-    return (bits & GC_MARKED) != 0;
-}
-
-STATIC_INLINE int gc_old(uintptr_t bits) JL_NOTSAFEPOINT
-{
-    return (bits & GC_OLD) != 0;
-}
-
-STATIC_INLINE uintptr_t gc_set_bits(uintptr_t tag, int bits) JL_NOTSAFEPOINT
-{
-    return (tag & ~(uintptr_t)3) | bits;
-}
-
-STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
-{
-    return ((uintptr_t)v) & mask;
-}
-
-STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
-{
-    return (void*)(((uintptr_t)v) & ~mask);
-}
-
-NOINLINE uintptr_t gc_get_stack_ptr(void);
-
 FORCE_INLINE void gc_big_object_unlink(const bigval_t *node) JL_NOTSAFEPOINT
 {
     assert(node != oldest_generation_of_bigvals);
@@ -567,11 +505,13 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
     sentinel_node->next = node;
 }
 
+extern uv_mutex_t gc_perm_lock;
 extern uv_mutex_t gc_threads_lock;
 extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
 extern _Atomic(int) gc_n_threads_sweeping;
+extern _Atomic(int) n_threads_running;
 extern uv_barrier_t thread_init_done;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;
@@ -586,6 +526,7 @@ void jl_gc_debug_init(void);
 
 // GC pages
 
+extern uv_mutex_t gc_pages_lock;
 void jl_gc_init_page(void) JL_NOTSAFEPOINT;
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
 void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;

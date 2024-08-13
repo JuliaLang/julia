@@ -821,7 +821,7 @@ function ^(A::Symmetric{<:Real}, p::Real)
     if all(λ -> λ ≥ 0, F.values)
         return Symmetric((F.vectors * Diagonal((F.values).^p)) * F.vectors')
     else
-        return Symmetric((F.vectors * Diagonal((complex(F.values)).^p)) * F.vectors')
+        return Symmetric((F.vectors * Diagonal(complex.(F.values).^p)) * F.vectors')
     end
 end
 function ^(A::Symmetric{<:Complex}, p::Real)
@@ -853,7 +853,7 @@ function ^(A::Hermitian{T}, p::Real) where T
             return Hermitian(retmat)
         end
     else
-        return (F.vectors * Diagonal((complex(F.values).^p))) * F.vectors'
+        return (F.vectors * Diagonal((complex.(F.values).^p))) * F.vectors'
     end
 end
 
@@ -983,7 +983,7 @@ for func in (:log, :sqrt)
                 end
                 return Hermitian(retmat)
             else
-                retmat = (F.vectors * Diagonal(($func).(complex(F.values)))) * F.vectors'
+                retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
                 return retmat
             end
         end

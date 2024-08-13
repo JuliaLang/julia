@@ -264,11 +264,15 @@ const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing)
 LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
 
 
-struct TOMLCache
-    p::TOML.Parser
+struct TOMLCache{Dates}
+    p::TOML.Parser{Dates}
     d::Dict{String, CachedTOMLDict}
 end
-const TOML_CACHE = TOMLCache(TOML.Parser(), Dict{String, Dict{String, Any}}())
+TOMLCache(p::TOML.Parser) = TOMLCache(p, Dict{String, CachedTOMLDict}())
+# TODO: Delete this converting constructor once Pkg stops using it
+TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, convert(Dict{String, CachedTOMLDict}, d))
+
+const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
@@ -818,14 +822,15 @@ end
 # given a project directory (implicit env from LOAD_PATH) and a name,
 # find an entry point for `name`, and see if it has an associated project file
 function entry_point_and_project_file(dir::String, name::String)::Union{Tuple{Nothing,Nothing},Tuple{String,Nothing},Tuple{String,String}}
-    path = normpath(joinpath(dir, "$name.jl"))
-    isfile_casesensitive(path) && return path, nothing
     dir_name = joinpath(dir, name)
     path, project_file = entry_point_and_project_file_inside(dir_name, name)
     path === nothing || return path, project_file
     dir_jl = dir_name * ".jl"
     path, project_file = entry_point_and_project_file_inside(dir_jl, name)
     path === nothing || return path, project_file
+    # check for less likely case with a bare file and no src directory last to minimize stat calls
+    path = normpath(joinpath(dir, "$name.jl"))
+    isfile_casesensitive(path) && return path, nothing
     return nothing, nothing
 end
 
@@ -1121,13 +1126,8 @@ function cache_file_entry(pkg::PkgId)
         uuid === nothing ? pkg.name : package_slug(uuid)
 end
 
-# for use during running the REPL precompilation subprocess script, given we don't
-# want it to pick up caches that already exist for other optimization levels
-const ignore_compiled_cache = PkgId[]
-
 function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
     paths = String[]
-    pkg in ignore_compiled_cache && return paths
     entrypath, entryfile = cache_file_entry(pkg)
     for path in DEPOT_PATH
         path = joinpath(path, entrypath)
@@ -3047,7 +3047,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 end
             end
             # this is atomic according to POSIX (not Win32):
-            rename(tmppath, cachefile; force=true)
+            # but force=true means it will fall back to non atomic
+            # move if the initial rename fails.
+            mv(tmppath, cachefile; force=true)
             return cachefile, ocachefile
         end
     finally
@@ -3066,7 +3068,7 @@ end
 
 function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0)
     try
-        rename(tmppath_so, ocachefile; force=true)
+        mv(tmppath_so, ocachefile; force=true)
     catch e
         e isa IOError || rethrow()
         # If `rm` was called on a dir containing a loaded DLL, we moved it to temp for cleanup
@@ -3664,7 +3666,13 @@ end
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{String,Int},Nothing}=nothing, stalecheck::Bool=true)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
-    io = open(cachefile, "r")
+    io = try
+        open(cachefile, "r")
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @debug "Rejecting cache file $cachefile for $modkey because it could not be opened" isfile(cachefile)
+        return true
+    end
     try
         checksum = isvalid_cache_header(io)
         if iszero(checksum)
@@ -3810,7 +3818,7 @@ end
                 end
                 if !ispath(f)
                     _f = fixup_stdlib_path(f)
-                    if isfile(_f) && startswith(_f, Sys.STDLIB)
+                    if _f != f && isfile(_f) && startswith(_f, Sys.STDLIB)
                         continue
                     end
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"
@@ -3832,13 +3840,14 @@ end
                         return true
                     end
                 else
-                    fsize = filesize(f)
+                    fstat = stat(f)
+                    fsize = filesize(fstat)
                     if fsize != fsize_req
                         @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
                         record_reason(reasons, "include_dependency fsize change")
                         return true
                     end
-                    hash = isdir(f) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
+                    hash = isdir(fstat) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
                     if hash != hash_req
                         @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
                         record_reason(reasons, "include_dependency fhash change")

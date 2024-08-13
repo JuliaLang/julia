@@ -173,4 +173,10 @@ end
     @test D.vectors ≈ D32.vectors
 end
 
+@testset "complex Symmetric" begin
+    S = Symmetric(rand(ComplexF64,2,2))
+    λ, v = eigen(S)
+    @test S * v ≈ v * Diagonal(λ)
+end
+
 end # module TestSymmetricEigen

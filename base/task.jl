@@ -813,6 +813,14 @@ macro sync_add(expr)
     end
 end
 
+throwto_repl_task(@nospecialize val) = throwto(getfield(active_repl_backend, :backend_task)::Task, val)
+
+function is_repl_running()
+    return isdefined(Base, :active_repl_backend) &&
+        (getfield(active_repl_backend, :backend_task)::Task)._state === task_state_runnable &&
+        getfield(active_repl_backend, :in_eval)
+end
+
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
     # `finish_task` sets `sigatomic` before entering this function
@@ -834,10 +842,8 @@ function task_done_hook(t::Task)
     end
 
     if err && !handled && Threads.threadid() == 1
-        if isa(result, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result) # this terminates the task
+        if isa(result, InterruptException) && isempty(Workqueue) && is_repl_running()
+            throwto_repl_task(result)
         end
     end
     # Clear sigatomic before waiting
@@ -848,11 +854,8 @@ function task_done_hook(t::Task)
         # If an InterruptException happens while blocked in the event loop, try handing
         # the exception to the REPL task since the current task is done.
         # issue #19467
-        if Threads.threadid() == 1 &&
-            isa(e, InterruptException) && isdefined(Base, :active_repl_backend) &&
-            active_repl_backend.backend_task._state === task_state_runnable && isempty(Workqueue) &&
-            active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, e)
+        if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue) && is_repl_running()
+            throwto_repl_task(e)
         else
             rethrow()
         end

@@ -1436,6 +1436,15 @@ using .Main.OffsetArrays
     end
 end
 
+@testset "Check push!($a, $args...)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        push!(a, args...)
+        @test length(a) == length(orig) + length(args)
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
 @testset "splatting into hvcat" begin
     t = (1, 2)
     @test [t...; 3 4] == [1 2; 3 4]
@@ -1783,6 +1792,9 @@ end
     @test_throws ArgumentError stack([1:3, 4:6]; dims=0)
     @test_throws ArgumentError stack([1:3, 4:6]; dims=3)
     @test_throws ArgumentError stack(abs2, 1:3; dims=2)
+
+    @test stack(["hello", "world"]) isa Matrix{Char}
+    @test_throws DimensionMismatch stack(["hello", "world!"])  # had a bug in error printing
 
     # Empty
     @test_throws ArgumentError stack(())

@@ -9,7 +9,7 @@ function tag_list(repo::GitRepo)
     ensure_initialized()
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_tag_list, libgit2), Cint,
-                 (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, repo.ptr)
+                 (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, repo)
     res = convert(Vector{String}, sa_ref[])
     free(sa_ref)
     res
@@ -23,7 +23,7 @@ Remove the git tag `tag` from the repository `repo`.
 function tag_delete(repo::GitRepo, tag::AbstractString)
     ensure_initialized()
     @check ccall((:git_tag_delete, libgit2), Cint,
-                  (Ptr{Cvoid}, Cstring), repo.ptr, tag)
+                  (Ptr{Cvoid}, Cstring), repo, tag)
 end
 
 """
@@ -48,7 +48,7 @@ function tag_create(repo::GitRepo, tag::AbstractString, commit::Union{AbstractSt
             ensure_initialized()
             @check ccall((:git_tag_create, libgit2), Cint,
                  (Ptr{GitHash}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}, Ptr{SignatureStruct}, Cstring, Cint),
-                  oid_ptr, repo.ptr, tag, commit_obj.ptr, git_sig.ptr, msg, Cint(force))
+                  oid_ptr, repo, tag, commit_obj, git_sig, msg, Cint(force))
         end
     end
     return oid_ptr[]
