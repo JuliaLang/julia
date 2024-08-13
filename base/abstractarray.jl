@@ -3532,7 +3532,7 @@ function push!(a::AbstractVector{T}, item) where T
     itemT = item isa T ? item : convert(T, item)::T
     new_length = length(a) + 1
     resize!(a, new_length)
-    a[new_length] = itemT
+    a[end] = itemT
     return a
 end
 
@@ -3540,7 +3540,7 @@ end
 function push!(a::AbstractVector{Any}, @nospecialize x)
     new_length = length(a) + 1
     resize!(a, new_length)
-    a[new_length] = x
+    a[end] = x
     return a
 end
 function push!(a::AbstractVector{Any}, @nospecialize x...)
@@ -3548,8 +3548,9 @@ function push!(a::AbstractVector{Any}, @nospecialize x...)
     na = length(a)
     nx = length(x)
     resize!(a, na + nx)
+    e = lastindex(a) - nx
     for i = 1:nx
-        a[na+i] = x[i]
+        a[e+i] = x[i]
     end
     return a
 end
