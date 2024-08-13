@@ -441,7 +441,6 @@ extern jl_gc_num_t gc_num;
 extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
-extern int64_t buffered_pages;
 extern int gc_first_tid;
 extern int gc_n_threads;
 extern jl_ptls_t* gc_all_tls_states;
