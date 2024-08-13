@@ -179,4 +179,21 @@ end
     @test S * v ≈ v * Diagonal(λ)
 end
 
+@testset "eigvals/eigen alg" begin
+    n = 4
+    S = Symmetric(rand(n,n))
+    λ1 = eigvals(S, alg=LinearAlgebra.DivideAndConquer())
+    λ2 = eigvals(S, alg=LinearAlgebra.RobustRepresentations())
+    λ3 = eigvals(S, alg=LinearAlgebra.QRIteration())
+    @test λ1 ≈ λ2 ≈ λ3
+
+    λ1, v1 = eigen(S, alg=LinearAlgebra.DivideAndConquer())
+    λ2, v2 = eigen(S, alg=LinearAlgebra.RobustRepresentations())
+    λ3, v3 = eigen(S, alg=LinearAlgebra.QRIteration())
+    @test λ1 ≈ λ2 ≈ λ3
+    @test S * v1 ≈ v1 * Diagonal(λ1)
+    @test S * v2 ≈ v2 * Diagonal(λ1)
+    @test S * v3 ≈ v3 * Diagonal(λ1)
+end
+
 end # module TestSymmetricEigen
