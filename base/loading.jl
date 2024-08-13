@@ -3005,7 +3005,13 @@ end
     return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded)
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String; ignore_loaded::Bool = false)
-    io = open(cachefile, "r")
+    io = try
+        open(cachefile, "r")
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @debug "Rejecting cache file $cachefile for $modkey because it could not be opened" isfile(cachefile)
+        return true
+    end
     try
         checksum = isvalid_cache_header(io)
         if iszero(checksum)

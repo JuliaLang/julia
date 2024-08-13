@@ -1,7 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Profiling support, main entry point is the [`@profile`](@ref) macro.
+    Profile
+
+Profiling support.
+
+## CPU profiling
+- `@profile foo()` to profile a specific call.
+- `Profile.print()` to print the report.
+- `Profile.clear()` to clear the buffer.
+- Send a $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") signal to the process to automatically trigger a profile and print.
+
+## Memory profiling
+- `Profile.Allocs.@profile [sample_rate=0.1] foo()` to sample allocations within a specific call. A sample rate of 1.0 will record everything; 0.0 will record nothing.
+- `Profile.Allocs.print()` to print the report.
+- `Profile.Allocs.clear()` to clear the buffer.
+
+## Heap profiling
+- `Profile.take_heap_snapshot()` to record a `.heapsnapshot` record of the heap.
+- Set `JULIA_PROFILE_PEEK_HEAP_SNAPSHOT=true` to capture a heap snapshot when signal $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") is sent.
 """
 module Profile
 
@@ -475,7 +492,7 @@ end
 # based on the package ecosystem
 function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
     return get!(filenamecache, spath) do
-        path = string(spath)
+        path = Base.fixup_stdlib_path(string(spath))
         if isabspath(path)
             if ispath(path)
                 # try to replace the file-system prefix with a short "@Module" one,
@@ -651,7 +668,7 @@ function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
     for i = 1:length(data)
         val = data[i]
         if iszero(val)
-            # (threadid, taskid, cpu_cycle_clock, thread_sleeping)
+            # META_OFFSET_THREADID, META_OFFSET_TASKID, META_OFFSET_CPUCYCLECLOCK, META_OFFSET_SLEEPSTATE
             push!(data_with_meta, threadid, taskid, cpu_clock_cycle+=1, false+1, 0, 0)
         else
             push!(data_with_meta, val)

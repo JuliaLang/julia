@@ -1025,25 +1025,34 @@ end
 
 ### from abstractarray.jl
 
-# In the common case where we have two views into the same parent, aliasing checks
-# are _much_ easier and more important to get right
-function mightalias(A::SubArray{T,<:Any,P}, B::SubArray{T,<:Any,P}) where {T,P}
-    if !_parentsmatch(A.parent, B.parent)
-        # We cannot do any better than the usual dataids check
-        return !_isdisjoint(dataids(A), dataids(B))
+function mightalias(A::SubArray, B::SubArray)
+    # There are three ways that SubArrays might _problematically_ alias one another:
+    #   1. The parents are the same we can conservatively check if the indices might overlap OR
+    #   2. The parents alias eachother in a more complicated manner (and we can't trace indices) OR
+    #   3. One's parent is used in the other's indices
+    # Note that it's ok for just the indices to alias each other as those should not be mutated,
+    # so we can always do better than the default !_isdisjoint(dataids(A), dataids(B))
+    if isbits(A.parent) || isbits(B.parent)
+        return false # Quick out for immutables
+    elseif _parentsmatch(A.parent, B.parent)
+        # Each SubArray unaliases its own parent from its own indices upon construction, so if
+        # the two parents are the same, then by construction one cannot alias the other's indices
+        # and therefore this is the only test we need to perform:
+        return _indicesmightoverlap(A.indices, B.indices)
+    else
+        A_parent_ids = dataids(A.parent)
+        B_parent_ids = dataids(B.parent)
+        return !_isdisjoint(A_parent_ids, B_parent_ids) ||
+            !_isdisjoint(A_parent_ids, _splatmap(dataids, B.indices)) ||
+            !_isdisjoint(B_parent_ids, _splatmap(dataids, A.indices))
     end
-    # Now we know that A.parent === B.parent. This means that the indices of A
-    # and B are the same length and indexing into the same dimensions. We can
-    # just walk through them and check for overlaps: O(ndims(A)). We must finally
-    # ensure that the indices don't alias with either parent
-    return _indicesmightoverlap(A.indices, B.indices) ||
-        !_isdisjoint(dataids(A.parent), _splatmap(dataids, B.indices)) ||
-        !_isdisjoint(dataids(B.parent), _splatmap(dataids, A.indices))
 end
+# Test if two arrays are backed by exactly the same memory in exactly the same order
 _parentsmatch(A::AbstractArray, B::AbstractArray) = A === B
-# Two reshape(::Array)s of the same size aren't `===` because they have different headers
-_parentsmatch(A::Array, B::Array) = pointer(A) == pointer(B) && size(A) == size(B)
+_parentsmatch(A::DenseArray, B::DenseArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && size(A) == size(B)
+_parentsmatch(A::StridedArray, B::StridedArray) = elsize(A) == elsize(B) && pointer(A) == pointer(B) && strides(A) == strides(B)
 
+# Given two SubArrays with the same parent, check if the indices might overlap (returning true if unsure)
 _indicesmightoverlap(A::Tuple{}, B::Tuple{}) = true
 _indicesmightoverlap(A::Tuple{}, B::Tuple) = error("malformed subarray")
 _indicesmightoverlap(A::Tuple, B::Tuple{}) = error("malformed subarray")

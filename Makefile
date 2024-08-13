@@ -649,7 +649,7 @@ win-extras:
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_SIZE := llvm-size$(EXE)
 else
-LLVM_SIZE := $(build_depsbindir)/llvm-size$(EXE)
+LLVM_SIZE := PATH=$(build_bindir):$$PATH; $(build_depsbindir)/llvm-size$(EXE)
 endif
 build-stats:
 ifeq ($(USE_BINARYBUILDER_LLVM),1)

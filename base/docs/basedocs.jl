@@ -1335,7 +1335,11 @@ Usually `begin` will not be necessary, since keywords such as [`function`](@ref)
 implicitly begin blocks of code. See also [`;`](@ref).
 
 `begin` may also be used when indexing to represent the first index of a
-collection or the first index of a dimension of an array.
+collection or the first index of a dimension of an array. For example,
+`a[begin]` is the first element of an array `a`.
+
+!!! compat "Julia 1.4"
+    Use of `begin` as an index requires Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -1396,8 +1400,20 @@ kw"struct"
     mutable struct
 
 `mutable struct` is similar to [`struct`](@ref), but additionally allows the
-fields of the type to be set after construction. See the manual section on
-[Composite Types](@ref) for more information.
+fields of the type to be set after construction.
+
+Individual fields of a mutable struct can be marked as `const` to make them immutable:
+
+```julia
+mutable struct Baz
+    a::Int
+    const b::Float64
+end
+```
+!!! compat "Julia 1.8"
+    The `const` keyword for fields of mutable structs requires at least Julia 1.8.
+
+See the manual section on [Composite Types](@ref) for more information.
 """
 kw"mutable struct"
 
@@ -1747,7 +1763,8 @@ The task will run in the "world age" from the parent at construction when [`sche
 !!! warning
     By default tasks will have the sticky bit set to true `t.sticky`. This models the
     historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
-    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
     bit manually to `false`.
 
 # Examples

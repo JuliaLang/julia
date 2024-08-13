@@ -72,7 +72,6 @@
 #include <llvm/Transforms/Scalar/SROA.h>
 #include <llvm/Transforms/Scalar/SimpleLoopUnswitch.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
-#include <llvm/Transforms/Scalar/WarnMissedTransforms.h>
 #include <llvm/Transforms/Utils/InjectTLIMappings.h>
 #include <llvm/Transforms/Vectorize/LoopVectorize.h>
 #include <llvm/Transforms/Vectorize/SLPVectorizer.h>
@@ -568,7 +567,6 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
         if (O.getSpeedupLevel() >= 2) {
             buildVectorPipeline(FPM, PB, O, options);
         }
-        FPM.addPass(WarnMissedTransformationsPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
     buildIntrinsicLoweringPipeline(MPM, PB, O, options);

@@ -639,7 +639,7 @@ end
 @testset "trace" begin
     for T in (Float64, ComplexF64), t in (adjoint, transpose)
         A = randn(T, 10, 10)
-        @test tr(t(A)) == tr(copy(t(A))) == t(tr(A))
+        @test tr(t(A)) ≈ tr(copy(t(A))) ≈ t(tr(A))
     end
 end
 

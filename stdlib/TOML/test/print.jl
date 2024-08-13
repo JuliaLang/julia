@@ -140,3 +140,13 @@ d = "hello"
 a = 2
 b = 9.9
 """
+
+# multiline strings (#55083)
+s = """
+a = \"\"\"lorem ipsum
+
+
+
+alpha\"\"\"
+"""
+@test roundtrip(s)

@@ -113,6 +113,13 @@ end
 Wrap an expression in a [`Task`](@ref) without executing it, and return the [`Task`](@ref). This only
 creates a task, and does not run it.
 
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
+
 # Examples
 ```jldoctest
 julia> a1() = sum(i for i in 1:1000);
@@ -825,6 +832,13 @@ the woken task.
 !!! warning
     It is incorrect to use `schedule` on an arbitrary `Task` that has already been started.
     See [the API reference](@ref low-level-schedule-wait) for more information.
+
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on, and when scheduled will make the task that they were scheduled
+    from sticky. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
 
 # Examples
 ```jldoctest

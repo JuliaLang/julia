@@ -710,7 +710,7 @@ void jl_init_threading(void)
     jl_atomic_store_release(&jl_all_tls_states, (jl_ptls_t*)calloc(jl_all_tls_states_size, sizeof(jl_ptls_t)));
     jl_atomic_store_release(&jl_n_threads, jl_all_tls_states_size);
     jl_n_gcthreads = ngcthreads;
-    gc_first_tid = nthreads;
+    gc_first_tid = nthreads + nthreadsi;
 }
 
 static uv_barrier_t thread_init_done;

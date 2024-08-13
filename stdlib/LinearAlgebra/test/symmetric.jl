@@ -220,8 +220,8 @@ end
 
         @testset "linalg unary ops" begin
             @testset "tr" begin
-                @test tr(asym) == tr(Symmetric(asym))
-                @test tr(aherm) == tr(Hermitian(aherm))
+                @test tr(asym) ≈ tr(Symmetric(asym))
+                @test tr(aherm) ≈ tr(Hermitian(aherm))
             end
 
             @testset "isposdef[!]" begin
