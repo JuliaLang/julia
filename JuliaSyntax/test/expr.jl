@@ -65,6 +65,21 @@
                           :body,
                      ),
                 )
+
+            @test parseall("a\n\nx") ==
+                Expr(:toplevel,
+                    LineNumberNode(1),
+                    :a,
+                    LineNumberNode(3),
+                    :x
+                )
+            @test parseall("a\n\nx;y") ==
+                Expr(:toplevel,
+                    LineNumberNode(1),
+                    :a,
+                    LineNumberNode(3),
+                    Expr(:toplevel, :x, :y)
+                )
         end
 
         @testset "Function definition lines" begin

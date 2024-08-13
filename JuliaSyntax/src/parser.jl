@@ -462,6 +462,7 @@ function parse_toplevel(ps::ParseState)
             bump_trivia(ps)
             break
         else
+            bump_trivia(ps)
             parse_stmts(ps)
         end
     end
