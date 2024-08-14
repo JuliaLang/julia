@@ -221,7 +221,7 @@ function lookup_binding_partition(world::UInt, b::Union{GlobalRef, Core.Binding}
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
 end
 
-binding_kind(bpart::Core.BindingPartition) = bpart.flags & 0xf
+binding_kind(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_kind, UInt8, (Any,), bpart)
 binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(get_world_counter(), GlobalRef(m, s)))
 
 """

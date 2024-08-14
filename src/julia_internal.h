@@ -860,7 +860,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred);
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
-STATIC_INLINE enum jl_partition_kind decode_restriction_kind(ptr_kind_union_t pku) JL_NOTSAFEPOINT
+EXTERN_INLINE_DECLARE enum jl_partition_kind decode_restriction_kind(ptr_kind_union_t pku) JL_NOTSAFEPOINT
 {
 #ifdef _P64
     uint8_t bits = (pku & 0x7);
@@ -923,6 +923,10 @@ EXTERN_INLINE_DECLARE jl_binding_partition_t *jl_get_binding_partition(jl_bindin
         return NULL;
     assert(jl_is_binding(b));
     return jl_atomic_load_relaxed(&b->partitions);
+}
+
+EXTERN_INLINE_DECLARE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT {
+    return decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction));
 }
 
 STATIC_INLINE ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT;
