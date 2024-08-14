@@ -1339,7 +1339,7 @@ struct Splat{F} <: Function
     Splat(f) = new{Core.Typeof(f)}(f)
 end
 (s::Splat)(args) = s.f(args...)
-show(io::IO, s::Splat) = print(io, "splat(", s.f, ')')
+show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
 ## in and related operators
 
