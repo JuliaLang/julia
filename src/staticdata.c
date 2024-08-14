@@ -1577,13 +1577,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             jl_value_t *restriction_val = decode_restriction_value(pku);
             static_assert(offsetof(jl_binding_partition_t, restriction) == 0, "BindingPartition layout mismatch");
             write_pointerfield(s, restriction_val);
-            static_assert(offsetof(jl_binding_partition_t, min_world) == sizeof(void*), "BindingPartition layout mismatch");
+            write_uint(f, decode_restriction_kind(pku)); // This will be moved back into place during deserialization (if necessary)
+            static_assert(offsetof(jl_binding_partition_t, min_world) == 2*sizeof(void*), "BindingPartition layout mismatch");
             write_uint(f, bpart->min_world);
-            static_assert(offsetof(jl_binding_partition_t, max_world) == 2*sizeof(void*), "BindingPartition layout mismatch");
+            static_assert(offsetof(jl_binding_partition_t, max_world) == 3*sizeof(void*), "BindingPartition layout mismatch");
             write_uint(f, jl_atomic_load_relaxed(&bpart->max_world));
-            static_assert(offsetof(jl_binding_partition_t, next) == 3*sizeof(void*), "BindingPartition layout mismatch");
+            static_assert(offsetof(jl_binding_partition_t, next) == 4*sizeof(void*), "BindingPartition layout mismatch");
             write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&bpart->next));
-            write_uint(f, pku & 0x7); // This will be moved back into place during deserialization
             static_assert(sizeof(jl_binding_partition_t) == 5*sizeof(void*), "BindingPartition layout mismatch");
         }
         else {
@@ -3586,6 +3586,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 mod->usings.items = newitems;
             }
             // Move the binding bits back to their correct place
+#ifdef _P64
             jl_svec_t *table = jl_atomic_load_relaxed(&mod->bindings);
             for (size_t i = 0; i < jl_svec_len(table); i++) {
                 jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
@@ -3595,6 +3596,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 jl_atomic_store_relaxed(&bpart->restriction, jl_atomic_load_relaxed(&bpart->restriction) | bpart->reserved);
                 bpart->reserved = 0;
             }
+#endif
         }
         else {
             abort();

@@ -642,8 +642,12 @@ enum jl_partition_kind {
     BINDING_KIND_GUARD        = 0x8
 };
 
+#ifdef _P64
 // Union of a ptr and a 3 bit field.
 typedef uintptr_t ptr_kind_union_t;
+#else
+typedef struct { jl_value_t *val; size_t kind; } ptr_kind_union_t;
+#endif
 typedef struct _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
@@ -655,13 +659,17 @@ typedef struct _jl_binding_partition_t {
      *   jl_binding_t *imported;
      * } restriction;
      *
-     * Currently: Low 3 bits hold ->kind
+     * Currently: Low 3 bits hold ->kind on _P64 to avoid needing >8 byte atomics
      */
     _Atomic(ptr_kind_union_t) restriction;
+#ifdef _P64
+    size_t reserved; // Reserved for ->kind. Currently this holds the low bits of ->restriction during serialization
+#else
+    // Covered by the ptr_kind_union_t;
+#endif
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t*) next;
-    size_t reserved; // Reserved for ->kind. Currently this holds the low bits of ->restriction during serialization
 } jl_binding_partition_t;
 
 typedef struct _jl_binding_t {

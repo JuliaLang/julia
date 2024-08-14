@@ -862,6 +862,7 @@ JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *sourc
 
 STATIC_INLINE enum jl_partition_kind decode_restriction_kind(ptr_kind_union_t pku) JL_NOTSAFEPOINT
 {
+#ifdef _P64
     uint8_t bits = (pku & 0x7);
     jl_value_t *val = (jl_value_t*)(pku & ~0x7);
 
@@ -870,22 +871,34 @@ STATIC_INLINE enum jl_partition_kind decode_restriction_kind(ptr_kind_union_t pk
     }
 
     return (enum jl_partition_kind)bits;
+#else
+    return (enum jl_partition_kind)pku.kind;
+#endif
 }
 
 STATIC_INLINE jl_value_t *decode_restriction_value(ptr_kind_union_t pku) JL_NOTSAFEPOINT
 {
+#ifdef _P64
     jl_value_t *val = (jl_value_t*)(pku & ~0x7);
     return val;
+#else
+    return pku.val;
+#endif
 }
 
 STATIC_INLINE ptr_kind_union_t encode_restriction(jl_value_t *val, enum jl_partition_kind kind) JL_NOTSAFEPOINT
 {
+#ifdef _P64
     if (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED)
         assert(val == NULL);
     if (kind == BINDING_KIND_GUARD)
         kind = BINDING_KIND_IMPLICIT;
     assert((((uintptr_t)val) & 0x7) == 0);
     return ((ptr_kind_union_t)val) | kind;
+#else
+    ptr_kind_union_t ret = { val, kind };
+    return ret;
+#endif
 }
 
 STATIC_INLINE int jl_bkind_is_some_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {

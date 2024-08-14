@@ -177,7 +177,9 @@ static jl_binding_partition_t *new_binding_partition(void)
     bpart->min_world = 0;
     jl_atomic_store_relaxed(&bpart->max_world, (size_t)-1);
     jl_atomic_store_relaxed(&bpart->next, NULL);
+#ifdef _P64
     bpart->reserved = 0;
+#endif
     return bpart;
 }
 
