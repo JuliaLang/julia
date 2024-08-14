@@ -3223,7 +3223,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     }
     assert(bnd);
     Value *bp = NULL;
-    // bpart was updated in place - this will change will full partition
+    // bpart was updated in place - this will change with full partition
     pku = jl_atomic_load_acquire(&bpart->restriction);
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
         // Redo the lookup at runtime
