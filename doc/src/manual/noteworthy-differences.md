@@ -65,6 +65,8 @@ may trip up Julia users accustomed to MATLAB:
     similar to Python's bitwise operators (unlike C). They can operate on scalars or element-wise
     across arrays and can be used to combine logical arrays, but note the difference in order of operations:
     parentheses may be required (e.g., to select elements of `A` equal to 1 or 2 use `(A .== 1) .| (A .== 2)`).
+    Alternatively, the operators [`&&`](@ref) and [`||`](@ref) can be used to achieve control flow precedence
+    (similar to Matlab's '|' and '&') and avoid the need for parentheses, as in `A .== 1 .|| A .== 2`.
   * In Julia, the elements of a collection can be passed as arguments to a function using the splat
     operator `...`, as in `xs=[1,2]; f(xs...)`.
   * Julia's [`svd`](@ref) returns singular values as a vector instead of as a dense diagonal matrix.
