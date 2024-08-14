@@ -1430,7 +1430,7 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
     }
 }
 
-int64_t buffered_pages = 0;
+_Atomic(int64_t) buffered_pages = 0;
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
 static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
@@ -1461,8 +1461,8 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
         // the eager one uses less memory.
         // FIXME - need to do accounting on a per-thread basis
         // on quick sweeps, keep a few pages empty but allocated for performance
-        if (!current_sweep_full && buffered_pages <= default_collect_interval / GC_PAGE_SZ) {
-            buffered_pages++;
+        if (!current_sweep_full && jl_atomic_load_relaxed(&buffered_pages) <= default_collect_interval / GC_PAGE_SZ) {
+            jl_atomic_fetch_add_relaxed(&buffered_pages, 1);
             keep_as_local_buffer = 1;
         }
     #endif
@@ -1756,7 +1756,7 @@ void gc_free_pages(void)
 static void gc_sweep_pool(void)
 {
     gc_time_pool_start();
-    buffered_pages = 0;
+    jl_atomic_store_relaxed(&buffered_pages, 0);
 
     // For the benefit of the analyzer, which doesn't know that gc_n_threads
     // doesn't change over the course of this function
@@ -1800,7 +1800,7 @@ static void gc_sweep_pool(void)
         jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_buffered.bottom);
         while (pg != NULL) {
             jl_gc_pagemeta_t *pg2 = pg->next;
-            buffered_pages++;
+            jl_atomic_fetch_add_relaxed(&buffered_pages, 1);
             pg = pg2;
         }
     }
