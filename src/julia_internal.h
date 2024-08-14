@@ -880,6 +880,9 @@ STATIC_INLINE jl_value_t *decode_restriction_value(ptr_kind_union_t pku) JL_NOTS
 {
 #ifdef _P64
     jl_value_t *val = (jl_value_t*)(pku & ~0x7);
+    // This is a little bit of a lie at the moment - it is one of the things that
+    // can go wrong with binding replacement.
+    JL_GC_PROMISE_ROOTED(val);
     return val;
 #else
     return pku.val;
@@ -922,6 +925,9 @@ EXTERN_INLINE_DECLARE jl_binding_partition_t *jl_get_binding_partition(jl_bindin
     return jl_atomic_load_relaxed(&b->partitions);
 }
 
+STATIC_INLINE ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT;
+
+#ifndef __clang_analyzer__
 STATIC_INLINE ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
 {
     while (1) {
@@ -934,6 +940,7 @@ STATIC_INLINE ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_bi
         *bpart = jl_get_binding_partition(*bnd, world);
     }
 }
+#endif
 
 STATIC_INLINE int is_anonfn_typename(char *name)
 {

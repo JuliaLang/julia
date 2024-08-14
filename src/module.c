@@ -467,6 +467,7 @@ static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *
             return NULL;
         assert(from);
         JL_GC_PROMISE_ROOTED(from); // gc-analysis does not understand output parameters
+        JL_GC_PROMISE_ROOTED(b2);
         if (b2->deprecated) {
             if (jl_get_binding_value(b2) == jl_nothing) {
                 // silently skip importing deprecated values assigned to nothing (to allow later mutation)
@@ -846,6 +847,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
         ssize_t idx = jl_smallintset_lookup(bindingkeyset, bindingkey_eq, var, (jl_value_t*)bindings, hv, 0); // acquire
         if (idx != -1) {
             jl_binding_t *b = (jl_binding_t*)jl_svecref(bindings, idx); // relaxed
+            JL_GC_PROMISE_ROOTED(b);
             if (locked)
                 JL_UNLOCK(&m->lock);
             return b;
