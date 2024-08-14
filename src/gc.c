@@ -1128,13 +1128,6 @@ void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
         jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
 }
 
-void jl_gc_count_freed(size_t sz) JL_NOTSAFEPOINT
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    jl_atomic_store_relaxed(&ptls->gc_num.freed,
-        jl_atomic_load_relaxed(&ptls->gc_num.freed) + sz);
-}
-
 static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
 {
     int gc_n_threads;
