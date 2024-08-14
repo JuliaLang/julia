@@ -224,10 +224,15 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         // Assignment does not create bindings in foreign modules (#54678)
                         jl_binding_t *b = jl_get_module_binding(mod, name, 1);
                         jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-                        if (jl_bpart_is_some_guard(bpart)) {
-                            bpart->kind = BINDING_KIND_GLOBAL;
-                            jl_atomic_store_relaxed(&bpart->restriction, (jl_value_t*)jl_any_type);
-                            jl_gc_wb(bpart, jl_any_type);
+                        ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+                        while (1) {
+                            if (!jl_bkind_is_some_guard(decode_restriction_kind(pku)))
+                                break;
+                            ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
+                            if (jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku)) {
+                                jl_gc_wb(bpart, jl_any_type);
+                                break;
+                            }
                         }
                     }
                 }
@@ -1153,7 +1158,7 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b)
         return gf;
     }
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    if (!jl_bpart_is_some_guard(bpart))
+    if (!jl_bkind_is_some_guard(decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction))))
         jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(b->globalref->name));
     gf = (jl_value_t*)jl_new_generic_function(b->globalref->name, b->globalref->mod);
     jl_declare_constant_val(b, gf);

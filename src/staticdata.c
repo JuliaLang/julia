@@ -350,6 +350,18 @@ arraylist_t eytzinger_idxs;
 static uintptr_t img_min;
 static uintptr_t img_max;
 
+// HT_NOTFOUND is a valid integer ID, so we store the integer ids mangled.
+// This pair of functions mangles/demanges
+static size_t from_seroder_entry(void *entry)
+{
+    return (size_t)((char*)entry - (char*)HT_NOTFOUND - 1);
+}
+
+static void *to_seroder_entry(size_t idx)
+{
+    return (void*)((char*)HT_NOTFOUND + 1 + idx);
+}
+
 static int ptr_cmp(const void *l, const void *r)
 {
     uintptr_t left = *(const uintptr_t*)l;
@@ -563,6 +575,8 @@ enum RefTags {
     SysimageLinkage,    // reference to the sysimage (from pkgimage)
     ExternalLinkage     // reference to some other pkgimage
 };
+
+#define SYS_EXTERNAL_LINK_UNIT sizeof(void*)
 
 // calling conventions for internal entry points.
 // this is used to set the method-instance->invoke field
@@ -923,14 +937,17 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     else if (jl_typetagis(v, jl_module_tag << 4)) {
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
     }
+    else if (jl_is_binding_partition(v)) {
+        jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
+        jl_queue_for_serialization_(s, decode_restriction_value(jl_atomic_load_relaxed(&bpart->restriction)), 1, immediate);
+        jl_queue_for_serialization_(s, get_replaceable_field((jl_value_t**)&bpart->next, 0), 1, immediate);
+    }
     else if (layout->nfields > 0) {
         char *data = (char*)jl_data_ptr(v);
         size_t i, np = layout->npointers;
         for (i = 0; i < np; i++) {
             uint32_t ptr = jl_ptr_offset(t, i);
             int mutabl = t->name->mutabl;
-            if (jl_is_binding_partition(v) && jl_bpart_is_some_constant(((jl_binding_partition_t*)v)) && i == 0) // value field depends on constp field
-                mutabl = 0;
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
             jl_queue_for_serialization_(s, fld, 1, immediate);
         }
@@ -944,7 +961,7 @@ done_fields: ;
     arraylist_push(&serialization_queue, (void*) v);
     size_t idx = serialization_queue.len - 1;
     assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
-    *bp = (void*)((char*)HT_NOTFOUND + 1 + idx);
+    *bp = to_seroder_entry(idx);
 
     // DataType is very unusual, in that some of the fields need to be pre-order, and some
     // (notably super) must not be (even if `jl_queue_for_serialization_` would otherwise
@@ -1065,8 +1082,8 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
         // We found the sysimg/pkg that this item links against
         // Compute the relocation code
         size_t offset = (uintptr_t)v - (uintptr_t)jl_linkage_blobs.items[2*i];
-        offset /= sizeof(void*);
-        assert(offset < ((uintptr_t)1 << DEPS_IDX_OFFSET) && "offset to external image too large");
+        assert((offset % SYS_EXTERNAL_LINK_UNIT) == 0);
+        offset /= SYS_EXTERNAL_LINK_UNIT;
         assert(n_linkage_blobs() == jl_array_nrows(s->buildid_depmods_idxs));
         size_t depsidx = jl_array_data(s->buildid_depmods_idxs, uint32_t)[i]; // map from build_id_idx -> deps_idx
         assert(depsidx < INT32_MAX);
@@ -1078,6 +1095,7 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
         jl_array_grow_end(link_ids, 1);
         uint32_t *link_id_data  = jl_array_data(link_ids, uint32_t);  // wait until after the `grow`
         link_id_data[jl_array_nrows(link_ids) - 1] = depsidx;
+        assert(offset < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to external image too large");
         return ((uintptr_t)ExternalLinkage << RELOC_TAG_OFFSET) + offset;
     }
     return 0;
@@ -1090,19 +1108,19 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
 static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) JL_NOTSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
-    void *idx = HT_NOTFOUND;
     if (jl_is_symbol(v)) {
         void **pidx = ptrhash_bp(&symbol_table, v);
-        idx = *pidx;
+        void *idx = *pidx;
         if (idx == HT_NOTFOUND) {
             size_t l = strlen(jl_symbol_name((jl_sym_t*)v));
             write_uint32(s->symbols, l);
             ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), l + 1);
             size_t offset = ++nsym_tag;
             assert(offset < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many symbols");
-            idx = (void*)((char*)HT_NOTFOUND + ((uintptr_t)SymbolRef << RELOC_TAG_OFFSET) + offset);
+            idx = to_seroder_entry(offset - 1);
             *pidx = idx;
         }
+        return ((uintptr_t)SymbolRef << RELOC_TAG_OFFSET) + from_seroder_entry(idx);
     }
     else if (v == (jl_value_t*)s->ptls->root_task) {
         return (uintptr_t)TagRef << RELOC_TAG_OFFSET;
@@ -1130,17 +1148,15 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         assert(item && "no external linkage identified");
         return item;
     }
+    void *idx = ptrhash_get(&serialization_order, v);
     if (idx == HT_NOTFOUND) {
-        idx = ptrhash_get(&serialization_order, v);
-        if (idx == HT_NOTFOUND) {
-            jl_(jl_typeof(v));
-            jl_(v);
-        }
-        assert(idx != HT_NOTFOUND && "object missed during jl_queue_for_serialization pass");
-        assert(idx != (void*)(uintptr_t)-1 && "object missed during jl_insert_into_serialization_queue pass");
-        assert(idx != (void*)(uintptr_t)-2 && "object missed during jl_insert_into_serialization_queue pass");
+        jl_(jl_typeof(v));
+        jl_(v);
     }
-    return (char*)idx - 1 - (char*)HT_NOTFOUND;
+    assert(idx != HT_NOTFOUND && "object missed during jl_queue_for_serialization pass");
+    assert(idx != (void*)(uintptr_t)-1 && "object missed during jl_insert_into_serialization_queue pass");
+    assert(idx != (void*)(uintptr_t)-2 && "object missed during jl_insert_into_serialization_queue pass");
+    return ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + from_seroder_entry(idx);
 }
 
 
@@ -1555,6 +1571,21 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             ios_write(s->const_data, (char*)pdata, nb);
             write_pointer(f);
         }
+        else if (jl_is_binding_partition(v)) {
+            jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
+            ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+            jl_value_t *restriction_val = decode_restriction_value(pku);
+            static_assert(offsetof(jl_binding_partition_t, restriction) == 0, "BindingPartition layout mismatch");
+            write_pointerfield(s, restriction_val);
+            static_assert(offsetof(jl_binding_partition_t, min_world) == sizeof(void*), "BindingPartition layout mismatch");
+            write_uint(f, bpart->min_world);
+            static_assert(offsetof(jl_binding_partition_t, max_world) == 2*sizeof(void*), "BindingPartition layout mismatch");
+            write_uint(f, jl_atomic_load_relaxed(&bpart->max_world));
+            static_assert(offsetof(jl_binding_partition_t, next) == 3*sizeof(void*), "BindingPartition layout mismatch");
+            write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&bpart->next));
+            write_uint(f, pku & 0x7); // This will be moved back into place during deserialization
+            static_assert(sizeof(jl_binding_partition_t) == 5*sizeof(void*), "BindingPartition layout mismatch");
+        }
         else {
             // Generic object::DataType serialization by field
             const char *data = (const char*)v;
@@ -1581,8 +1612,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             for (i = 0; i < np; i++) {
                 size_t offset = jl_ptr_offset(t, i) * sizeof(jl_value_t*);
                 int mutabl = t->name->mutabl;
-                if (jl_is_binding_partition(v) && jl_bpart_is_some_constant((jl_binding_partition_t*)v) && i == 0) // value field depends on constp field
-                    mutabl = 0;
                 jl_value_t *fld = get_replaceable_field((jl_value_t**)&data[offset], mutabl);
                 size_t fld_pos = offset + reloc_offset;
                 if (fld != NULL) {
@@ -1758,7 +1787,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     }
                 }
                 void *superidx = ptrhash_get(&serialization_order, dt->super);
-                if (s->incremental && superidx != HT_NOTFOUND && (char*)superidx - 1 - (char*)HT_NOTFOUND > item && needs_uniquing((jl_value_t*)dt->super))
+                if (s->incremental && superidx != HT_NOTFOUND && from_seroder_entry(superidx) > item && needs_uniquing((jl_value_t*)dt->super))
                     arraylist_push(&s->uniquing_super, dt->super);
             }
             else if (jl_is_typename(v)) {
@@ -1952,7 +1981,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         assert(s->buildid_depmods_idxs && depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
         assert(2*i < jl_linkage_blobs.len);
-        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*sizeof(void*);
+        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     case ExternalLinkage: {
         assert(link_ids);
@@ -1963,7 +1992,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         assert(depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
         assert(2*i < jl_linkage_blobs.len);
-        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*sizeof(void*);
+        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     }
     abort();
@@ -2347,11 +2376,11 @@ static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
 
     void *idx = ptrhash_get(&serialization_order, cache);
     assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
-    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == cache);
+    assert(serialization_queue.items[from_seroder_entry(idx)] == cache);
     cache = cache_rehash_set(cache, sz);
     // redirect all references to the old cache to relocate to the new cache object
     ptrhash_put(&serialization_order, cache, idx);
-    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = cache;
+    serialization_queue.items[from_seroder_entry(idx)] = cache;
     return cache;
 }
 
@@ -3555,6 +3584,16 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 void **newitems = (void**)malloc_s(mod->usings.max * sizeof(void*));
                 memcpy(newitems, mod->usings.items, mod->usings.len * sizeof(void*));
                 mod->usings.items = newitems;
+            }
+            // Move the binding bits back to their correct place
+            jl_svec_t *table = jl_atomic_load_relaxed(&mod->bindings);
+            for (size_t i = 0; i < jl_svec_len(table); i++) {
+                jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
+                if ((jl_value_t*)b == jl_nothing)
+                    continue;
+                jl_binding_partition_t *bpart = b->partitions;
+                jl_atomic_store_relaxed(&bpart->restriction, jl_atomic_load_relaxed(&bpart->restriction) | bpart->reserved);
+                bpart->reserved = 0;
             }
         }
         else {

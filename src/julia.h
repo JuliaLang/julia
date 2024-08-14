@@ -611,16 +611,16 @@ typedef struct _jl_weakref_t {
     jl_value_t *value;
 } jl_weakref_t;
 
-enum jl_kind_kind {
-    // Global: This binding partition is a global variable.
-    //  -> restriction holds the type restriction
-    BINDING_KIND_GLOBAL       = 0x0,
+enum jl_partition_kind {
     // Constant: This binding partition is a constant declared using `const`
     //  ->restriction holds the constant value
-    BINDING_KIND_CONST        = 0x1,
+    BINDING_KIND_CONST        = 0x0,
     // Import Constant: This binding partition is a constant declared using `import A`
     //  ->restriction holds the constant value
-    BINDING_KIND_CONST_IMPORT = 0x2,
+    BINDING_KIND_CONST_IMPORT = 0x1,
+    // Global: This binding partition is a global variable.
+    //  -> restriction holds the type restriction
+    BINDING_KIND_GLOBAL       = 0x2,
     // Implicit: The binding was implicitly import from a `using`'d module.
     //  ->restriction holds the imported binding
     BINDING_KIND_IMPLICIT     = 0x3,
@@ -642,6 +642,8 @@ enum jl_kind_kind {
     BINDING_KIND_GUARD        = 0x8
 };
 
+// Union of a ptr and a 3 bit field.
+typedef uintptr_t ptr_kind_union_t;
 typedef struct _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
@@ -652,13 +654,14 @@ typedef struct _jl_binding_partition_t {
      *   // For ->kind in (BINDING_KIND_IMPLICIT, BINDING_KIND_EXPLICIT, BINDING_KIND_IMPORT)
      *   jl_binding_t *imported;
      * } restriction;
+     *
+     * Currently: Low 3 bits hold ->kind
      */
-    _Atomic(jl_value_t *) restriction;
+    _Atomic(ptr_kind_union_t) restriction;
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t*) next;
-    uint8_t kind:4; // enum jl_binding_kind
-    uint8_t padding:4;
+    size_t reserved; // Reserved for ->kind. Currently this holds the low bits of ->restriction during serialization
 } jl_binding_partition_t;
 
 typedef struct _jl_binding_t {
@@ -1975,6 +1978,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);

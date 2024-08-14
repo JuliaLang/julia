@@ -3150,8 +3150,9 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_binding_partition_type =
         jl_new_datatype(jl_symbol("BindingPartition"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(5, "restriction", "min_world", "max_world", "next", "flags"),
-                        jl_svec(5, jl_any_type, jl_ulong_type, jl_ulong_type, jl_any_type/*jl_binding_partition_type*/, jl_uint8_type),
+                        jl_perm_symsvec(5, "restriction", "min_world", "max_world", "next", "reserved"),
+                        jl_svec(5, jl_any_type /* jl_voidpointer_type - Special GC-supported union of Any and flags*/,
+                        jl_ulong_type, jl_ulong_type, jl_any_type/*jl_binding_partition_type*/, jl_uint8_type ),
                         jl_emptysvec, 0, 1, 0);
     const static uint32_t binding_partition_atomicfields[] = { 0x000d }; // Set fields 1, 3, 4 as atomic
     jl_binding_partition_type->name->atomicfields = binding_partition_atomicfields;
@@ -3718,6 +3719,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_code_instance_type->types, 15, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 16, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 1, jl_globalref_type);
+    jl_svecset(jl_binding_partition_type->types, 0, jl_voidpointer_type);
     jl_svecset(jl_binding_partition_type->types, 3, jl_binding_partition_type);
 
     jl_compute_field_offsets(jl_datatype_type);
@@ -3730,6 +3732,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_unionall_type);
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
+    jl_compute_field_offsets(jl_binding_partition_type);
 
     // override ismutationfree for builtin types that are mutable for identity
     jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;
