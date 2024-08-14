@@ -707,16 +707,17 @@ macro testintersect(a, b, result)
     a = esc(a)
     b = esc(b)
     result = esc(result)
-    Base.remove_linenums!(quote
+    # use a manual macrocall expression since Test will examine this __source__ value
+    return quote
         # test real intersect
-        @test $cmp(_type_intersect($a, $b), $result)
-        @test $cmp(_type_intersect($b, $a), $result)
+        $(Expr(:macrocall, :var"@test", __source__, :($cmp(_type_intersect($a, $b), $result))))
+        $(Expr(:macrocall, :var"@test", __source__, :($cmp(_type_intersect($b, $a), $result))))
         # test simplified intersect
         if !($result === Union{})
-            @test typeintersect($a, $b) != Union{}
-            @test typeintersect($b, $a) != Union{}
+            $(Expr(:macrocall, :var"@test", __source__, :(typeintersect($a, $b) != Union{})))
+            $(Expr(:macrocall, :var"@test", __source__, :(typeintersect($b, $a) != Union{})))
         end
-    end)
+    end
 end
 
 abstract type IT4805_2{N, T} end
@@ -2267,31 +2268,46 @@ let S = Tuple{Integer, U} where {II<:Array, U<:Tuple{Vararg{II, 1}}}
     @testintersect(S, Tuple{Int, U} where {N, U<:Tuple{Any,Any,Vararg{Any,N}}}, Union{})
 end
 
+function equal_envs(env1, env2)
+    length(env1) == length(env2) || return false
+    for i = 1:length(env1)
+        a = env1[i]
+        b = env2[i]
+        if a isa TypeVar
+            if !(b isa TypeVar && a.name == b.name && a.lb == b.lb && a.ub == b.ub)
+                return false
+            end
+        elseif !(a == b)
+            return false
+        end
+    end
+    return true
+end
+
 # issue #43064
 let
-    env_tuple(@nospecialize(x), @nospecialize(y)) = (intersection_env(x, y)[2]...,)
-    all_var(x::UnionAll) = (x.var, all_var(x.body)...)
-    all_var(x::DataType) = ()
+    env_tuple(@nospecialize(x), @nospecialize(y)) = intersection_env(x, y)[2]
     TT0 = Tuple{Type{T},Union{Real,Missing,Nothing}} where {T}
     TT1 = Union{Type{Int8},Type{Int16}}
     @test env_tuple(Tuple{TT1,Missing}, TT0) ===
           env_tuple(Tuple{TT1,Nothing}, TT0) ===
-          env_tuple(Tuple{TT1,Int}, TT0) === all_var(TT0)
+          env_tuple(Tuple{TT1,Int}, TT0) ===
+          Core.svec(TT0.var)
 
     TT0 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T1,T2}
     TT1 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T2,T1}
     TT2 = Tuple{Union{Int,Int8},Union{Int,Int8},Int}
     TT3 = Tuple{Int,Union{Int,Int8},Int}
-    @test env_tuple(TT2, TT0) === all_var(TT0)
-    @test env_tuple(TT2, TT1) === all_var(TT1)
-    @test env_tuple(TT3, TT0) === Base.setindex(all_var(TT0), Int, 1)
-    @test env_tuple(TT3, TT1) === Base.setindex(all_var(TT1), Int, 2)
+    @test equal_envs(env_tuple(TT2, TT0), Core.svec(TypeVar(:T1, Union{Int, Int8}), TypeVar(:T2, Union{Int, Int8})))
+    @test equal_envs(env_tuple(TT2, TT1), Core.svec(TypeVar(:T2, Union{Int, Int8}), TypeVar(:T1, Union{Int, Int8})))
+    @test equal_envs(env_tuple(TT3, TT0), Core.svec(Int, TypeVar(:T2, Union{Int, Int8})))
+    @test equal_envs(env_tuple(TT3, TT1), Core.svec(TypeVar(:T2, Union{Int, Int8}), Int))
 
     TT0 = Tuple{T1,T2,T1,Union{Real,Missing,Nothing}} where {T1,T2}
     TT1 = Tuple{T1,T2,T1,Union{Real,Missing,Nothing}} where {T2,T1}
     TT2 = Tuple{Int,Union{Int,Int8},Int,Int}
-    @test env_tuple(TT2, TT0) === Base.setindex(all_var(TT0), Int, 1)
-    @test env_tuple(TT2, TT1) === Base.setindex(all_var(TT1), Int, 2)
+    @test equal_envs(env_tuple(TT2, TT0), Core.svec(Int, TypeVar(:T2, Union{Int, Int8})))
+    @test equal_envs(env_tuple(TT2, TT1), Core.svec(TypeVar(:T2, Union{Int, Int8}), Int))
 end
 
 #issue #46735
@@ -2685,4 +2701,23 @@ let S = Tuple{Val{<:T}, Union{Int,T}} where {T},
     T = Tuple{Union{Int,T}, Val{<:T}} where {T}
     @testintersect(S, T, !Union{})
     @test !Base.has_free_typevars(typeintersect(S, T))
+end
+
+#issue 55230
+let T1 = NTuple{12, Union{Val{1}, Val{2}, Val{3}, Val{4}, Val{5}, Val{6}}}
+    T2 = Tuple{<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any}
+    @test T1 <: T2
+    T2 = Tuple{<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Val}
+    @test T1 <: T2
+    T2 = Tuple{<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Real}
+    @test !(T1 <: T2)
+    T2 = Tuple{<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Union{Val,Real}}
+    @test T1 <: T2
+    T2 = Tuple{<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Union{String,Real}}
+    @test !(T1 <: T2)
+    T2 = Tuple{<:Union{Val,Real},<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any}
+    @test T1 <: T2
+    T2 = Tuple{<:Union{String,Real},<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any,<:Any}
+    @test !(T1 <: T2)
+    @test Tuple{Union{Val{1},Val{2}}} <: Tuple{S} where {T, S<:Val{T}}
 end
