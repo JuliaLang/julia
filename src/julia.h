@@ -646,9 +646,9 @@ enum jl_partition_kind {
 // Union of a ptr and a 3 bit field.
 typedef uintptr_t ptr_kind_union_t;
 #else
-typedef struct { jl_value_t *val; size_t kind; } ptr_kind_union_t;
+typedef struct __attribute__((aligned(8))) { jl_value_t *val; size_t kind; } ptr_kind_union_t;
 #endif
-typedef struct _jl_binding_partition_t {
+typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
      *   // For ->kind == BINDING_KIND_GLOBAL
@@ -670,6 +670,9 @@ typedef struct _jl_binding_partition_t {
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t*) next;
+#ifndef _P64
+    size_t padding;
+#endif
 } jl_binding_partition_t;
 
 typedef struct _jl_binding_t {

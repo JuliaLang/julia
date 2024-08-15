@@ -1584,7 +1584,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             write_uint(f, jl_atomic_load_relaxed(&bpart->max_world));
             static_assert(offsetof(jl_binding_partition_t, next) == 4*sizeof(void*), "BindingPartition layout mismatch");
             write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&bpart->next));
+#ifdef _P64
             static_assert(sizeof(jl_binding_partition_t) == 5*sizeof(void*), "BindingPartition layout mismatch");
+#else
+            static_assert(sizeof(jl_binding_partition_t) == 6*sizeof(void*), "BindingPartition layout mismatch");
+#endif
         }
         else {
             // Generic object::DataType serialization by field
