@@ -1358,7 +1358,15 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 
         if (s->incremental) {
             if (needs_uniquing(v)) {
-                if (jl_is_method_instance(v)) {
+                if (jl_typetagis(v, jl_binding_type)) {
+                    jl_binding_t *b = (jl_binding_t*)v;
+                    if (b->globalref == NULL)
+                        jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
+                    write_pointerfield(s, (jl_value_t*)b->globalref->mod);
+                    write_pointerfield(s, (jl_value_t*)b->globalref->name);
+                    continue;
+                }
+                else if (jl_is_method_instance(v)) {
                     assert(f == s->s);
                     jl_method_instance_t *mi = (jl_method_instance_t*)v;
                     write_pointerfield(s, mi->def.value);
@@ -1380,11 +1388,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             }
             else if (needs_recaching(v)) {
                 arraylist_push(jl_is_datatype(v) ? &s->fixup_types : &s->fixup_objs, (void*)reloc_offset);
-            }
-            else if (jl_typetagis(v, jl_binding_type)) {
-                jl_binding_t *b = (jl_binding_t*)v;
-                if (b->globalref == NULL)
-                    jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
             }
         }
 

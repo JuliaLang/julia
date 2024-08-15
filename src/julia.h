@@ -670,8 +670,8 @@ typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
 
 typedef struct _jl_binding_t {
     JL_DATA_TYPE
-    _Atomic(jl_value_t*) value;
     jl_globalref_t *globalref;  // cached GlobalRef for this binding
+    _Atomic(jl_value_t*) value;
     _Atomic(jl_binding_partition_t*) partitions;
     uint8_t declared:1;
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
