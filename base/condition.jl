@@ -138,7 +138,7 @@ function wait(c::GenericCondition; first::Bool=false)
     try
         return wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         rethrow()
     finally
         relockall(c.lock, token)
