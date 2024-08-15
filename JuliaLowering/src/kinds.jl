@@ -43,6 +43,7 @@ function _register_kinds()
             "globalref"
             "outerref"
             "enter"
+            "pop_exception"
             "leave"
             "label"
             "symbolic_label"

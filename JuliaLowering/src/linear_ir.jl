@@ -30,7 +30,7 @@ end
 Context for creating linear IR.
 
 One of these is created per lambda expression to flatten the body down to
-linear IR.
+a sequence of statements (linear IR).
 """
 struct LinearIRContext{GraphType} <: AbstractLoweringContext
     graph::GraphType
@@ -41,13 +41,15 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     lambda_locals::Set{IdTag}
     return_type::Union{Nothing,NodeId}
     break_labels::Dict{String, NodeId}
+    handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+    catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
     mod::Module
 end
 
 function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
     LinearIRContext(ctx.graph, SyntaxList(ctx.graph), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_locals, return_type,
-                    Dict{String,NodeId}(), ctx.mod)
+                    Dict{String,NodeId}(), SyntaxList(ctx), SyntaxList(ctx), ctx.mod)
 end
 
 # FIXME: BindingId subsumes many things so need to assess what that means for these predicates.
@@ -133,6 +135,7 @@ function emit_return(ctx, srcref, ex)
     if isnothing(ex)
         return
     end
+    # TODO: Mark implicit returns as having no location??
     # TODO: return type handling
     # TODO: exception stack handling
     # returning lambda directly is needed for @generated
@@ -234,6 +237,140 @@ function new_mutable_var(ctx::LinearIRContext, srcref, name)
     var
 end
 
+# Exception handlers are lowered using the following special forms
+#
+#   (= tok (enter catch_label dynscope))
+#     push exception handler with catch block at `catch_label` and dynamic
+#     scope `dynscope`, yielding a token which is used by leave/pop_exception.
+#     `dynscope` is only used for the special tryfinally form without
+#     associated source level syntax (see the `@with` macro)
+#
+#   (leave tok)
+#     pop exception handler associated to `tok`. Each `enter` must be matched
+#     with a `leave` on every non-exceptional program path, including implicit
+#     returns generated in tail position. Multiple tokens can be supplied to
+#     pop multiple handlers using `(leave tok1 tok2 ...)`.
+#
+#   (pop_exception tok) - pop exception stack back to state of associated enter
+#
+function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
+    @chk numchildren(ex) <= 3
+    try_block = ex[1]
+    catch_block = ex[2]
+    else_block = numchildren(ex) == 2 ? nothing : ex[3]
+    finally_block = nothing # fixme
+
+    catch_label = make_label(ctx, catch_block)
+    end_label = !in_tail_pos || !isnothing(finally_block) ? make_label(ctx, ex) : nothing
+    result_var = needs_value && !in_tail_pos ? new_mutable_var(ctx, ex, "result_var") : nothing
+
+    # Exception handler block prefix
+    handler_token = ssavar(ctx, ex, "handler_token")
+    emit(ctx, @ast ctx ex [K"="
+        handler_token
+        [K"enter" catch_label]  # TODO: dynscope
+    ])
+    push!(ctx.handler_token_stack, handler_token)
+    # Try block code.
+    try_val = compile(ctx, try_block, needs_value, false)
+
+    # Exception handler block postfix (1)
+    # if in_tail_pos
+    #     if isnothing(else_block)
+    #         if !isnothing(try_val)
+    #             emit_return(ctx, try_val)
+    #         end
+    #     else
+    #         if !isnothing(try_val)
+    #             emit(ctx, try_val)
+    #         end
+    #         emit(ctx, @ast ctx ex [K"leave" handler_token])
+    #     end
+    # else
+    #     if needs_value && !isnothing(try_val)
+    #         emit_assignment(ctx, result_var, try_val)
+    #     end
+    #     emit(ctx, @ast ctx ex [K"leave" handler_token])
+    #     if isnothing(else_block)
+    #         emit(ctx, @ast ctx ex [K"goto" end_label])
+    #     end
+    # end
+    # pop!(ctx.handler_token_stack, handler_token)
+    #
+    # # Else block
+    # if !isnothing(else_block)
+    #     else_val = compile(ctx, else_block, needs_value, in_tail_pos)
+    #     if !in_tail_pos
+    #         if needs_value && !isnothing(else_val)
+    #             emit_assignment(ctx, result_var, else_val)
+    #         end
+    #         emit(ctx, @ast ctx ex [K"goto" end_label])
+    #     end
+    #
+    #     # More confusing form which should be equiv:
+    #     # if !isnothing(result_var) && !isnothing(else_val)
+    #     #     emit_assignment(ctx, result_var, else_val)
+    #     # end
+    #     # if !isnothing(end_label)
+    #     #     emit(ctx, @ast ctx ex [K"goto" end_label])
+    #     # end
+    # end
+
+    # Exception handler block postfix
+    if isnothing(else_block)
+        if in_tail_pos
+            if !isnothing(try_val)
+                emit_return(ctx, try_val, try_val)
+            end
+        else
+            if needs_value && !isnothing(try_val)
+                emit_assignment(ctx, ex, result_var, try_val)
+            end
+            emit(ctx, @ast ctx ex [K"leave" handler_token])
+        end
+        pop!(ctx.handler_token_stack)
+    else
+        if !isnothing(try_val) && (in_tail_pos || needs_value)
+            emit(ctx, try_val) # TODO: Only for any side effects ?
+        end
+        emit(ctx, @ast ctx ex [K"leave" handler_token])
+        pop!(ctx.handler_token_stack)
+        # Else block code
+        else_val = compile(ctx, else_block, needs_value, in_tail_pos)
+        if !in_tail_pos
+            if needs_value && !isnothing(else_val)
+                emit_assignment(ctx, ex, result_var, else_val)
+            end
+        end
+    end
+    if !in_tail_pos
+        emit(ctx, @ast ctx ex [K"goto" end_label])
+    end
+
+    # Emit either catch or finally block. A combined try/catch/finally block
+    # was split into separate trycatchelse and tryfinally blocks earlier.
+
+    emit(ctx, catch_label)
+    if !isnothing(finally_block)
+        TODO(finally_block, "finally")
+    else
+        push!(ctx.catch_token_stack, handler_token)
+        # Exceptional control flow enters here
+        catch_val = compile(ctx, catch_block, needs_value, in_tail_pos)
+        if !isnothing(result_var) && !isnothing(catch_val)
+            emit_assignment(ctx, ex, result_var, catch_val)
+        end
+        if !in_tail_pos
+            emit(ctx, @ast ctx ex [K"pop_exception" handler_token])
+            emit(ctx, end_label)
+        else
+            # <- pop_exception done in emit_return
+        end
+        pop!(ctx.catch_token_stack)
+    end
+    result_var
+end
+
 # This pass behaves like an interpreter on the given code.
 # To perform stateful operations, it calls `emit` to record that something
 # needs to be done. In value position, it returns an expression computing
@@ -243,8 +380,9 @@ end
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
-            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" || k == K"Placeholder"
-        # TODO: other kinds: copyast the_exception $ globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall
+            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" ||
+            k == K"Placeholder" || k == K"the_exception"
+        # TODO: other kinds: copyast $ globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall
         if needs_value && k == K"Placeholder"
             # TODO: ensure outterref, globalref work here
             throw(LoweringError(ex, "all-underscore identifiers are write-only and their values cannot be used in expressions"))
@@ -261,6 +399,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"assert"
         # Elide these - they're no longer required.
+        # TODO: Elide in scope_analysis instead?
         if needs_value
             throw(LoweringError(ex, "misplaced semantic assertion"))
         end
@@ -380,6 +519,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             val
         end
+    elseif k == K"trycatchelse" # || k == K"tryfinally"
+        compile_try(ctx, ex, needs_value, in_tail_pos)
     elseif k == K"method"
         # TODO
         # throw(LoweringError(ex,
@@ -483,17 +624,8 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         TODO(ex, "_renumber $k")
     elseif is_literal(k) || is_quoted(k)
         ex
-    elseif k == K"enter"
-        TODO(ex, "_renumber $k")
-    elseif k == K"goto"
-        @ast ctx ex [K"goto"
-            label_table[ex[1].id]::K"label"
-        ]
-    elseif k == K"gotoifnot"
-        @ast ctx ex [K"gotoifnot"
-            _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex[1])
-            label_table[ex[2].id]::K"label"
-        ]
+    elseif k == K"label"
+        @ast ctx ex label_table[ex.id]::K"label"
     elseif k == K"lambda"
         ex
     else
@@ -591,7 +723,7 @@ function linearize_ir(ctx, ex)
     # required to call reparent() ...
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
                            Ref(0), false, Set{IdTag}(), nothing,
-                           Dict{String,NodeId}(), ctx.mod)
+                           Dict{String,NodeId}(), SyntaxList(graph), SyntaxList(graph), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     setattr!(graph, res._id, bindings=ctx.bindings)
     _ctx, res

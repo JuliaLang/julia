@@ -393,10 +393,10 @@ function expand_try(ctx, ex)
                 if kind(exc_var) != K"Placeholder"
                     [K"block"
                         [K"="(exc_var) exc_var [K"the_exception"]]
-                        catch_
+                        catch_block
                     ]
                 else
-                    catch_
+                    catch_block
                 end
             ]
             if !isnothing(else_)
@@ -900,7 +900,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             ]
         end
     elseif k == K"try"
-        expand_try(ctx, ex)
+        expand_forms_2(ctx, expand_try(ctx, ex))
     elseif k == K"tuple"
         # TODO: named tuples
         expand_forms_2(ctx, @ast ctx ex [K"call" 

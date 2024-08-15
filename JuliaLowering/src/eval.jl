@@ -227,6 +227,11 @@ function to_lowered_expr(mod, bindings, ex)
         Core.GotoNode(ex[1].id)
     elseif k == K"gotoifnot"
         Core.GotoIfNot(to_lowered_expr(mod, bindings, ex[1]), ex[2].id)
+    elseif k == K"enter"
+        catch_idx = ex[1].id
+        numchildren(ex) == 1 ?
+            Core.EnterNode(catch_idx) :
+            Core.EnterNode(catch_idx, to_lowered_expr(ex[2]))
     elseif k == K"method"
         name = ex[1]
         @chk kind(name) == K"Symbol"
@@ -244,6 +249,9 @@ function to_lowered_expr(mod, bindings, ex)
                k == K"="      ? :(=)    :
                k == K"global" ? :global :
                k == K"const"  ? :const  :
+               k == K"leave"  ? :leave  :
+               k == K"the_exception"  ? :the_exception  :
+               k == K"pop_exception"  ? :pop_exception  :
                nothing
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")
