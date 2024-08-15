@@ -382,7 +382,7 @@ end
         """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
-    t._state = 66
+    @atomic t._state = 66
     newstderr = redirect_stderr()
     try
         errstream = @async read(newstderr[1], String)
