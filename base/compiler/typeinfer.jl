@@ -449,6 +449,9 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     if is_effect_overridden(override, :consistent_overlay)
         ipo_effects = Effects(ipo_effects; nonoverlayed=CONSISTENT_OVERLAY)
     end
+    if is_effect_overridden(override, :nortcall)
+        ipo_effects = Effects(ipo_effects; nortcall=true)
+    end
     return ipo_effects
 end
 
@@ -1118,7 +1121,7 @@ const SOURCE_MODE_FORCE_SOURCE = 0x2
 
 function ci_has_source(code::CodeInstance)
     inf = @atomic :monotonic code.inferred
-    return isa(inf, CodeInfo) || isa(inf, String)
+    return code.owner === nothing ? (isa(inf, CodeInfo) || isa(inf, String)) : inf !== nothing
 end
 
 """

@@ -5,7 +5,7 @@
   utilities for walking the stack and looking up information about code addresses
 */
 #include <inttypes.h>
-#include "gc.h"
+#include "gc-stock.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"

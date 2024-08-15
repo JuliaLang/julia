@@ -53,6 +53,9 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
+typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+
 dotgetproperty(x, f) = getproperty(x, f)
 
 getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))

@@ -245,7 +245,8 @@ end
 Locate the terminfo file for `term`, return `nothing` if none could be found.
 
 The lookup policy is described in `terminfo(5)` "Fetching Compiled
-Descriptions".
+Descriptions". A terminfo database is included by default with Julia and is
+taken to be the first entry of `@TERMINFO_DIRS@`.
 """
 function find_terminfo_file(term::String)
     isempty(term) && return
@@ -261,6 +262,7 @@ function find_terminfo_file(term::String)
         append!(terminfo_dirs,
                 replace(split(ENV["TERMINFO_DIRS"], ':'),
                         "" => "/usr/share/terminfo"))
+    push!(terminfo_dirs, normpath(Sys.BINDIR, DATAROOTDIR, "terminfo"))
     Sys.isunix() &&
         push!(terminfo_dirs, "/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo")
     for dir in terminfo_dirs
@@ -268,8 +270,15 @@ function find_terminfo_file(term::String)
             return joinpath(dir, chr, term)
         elseif isfile(joinpath(dir, chrcode, term))
             return joinpath(dir, chrcode, term)
+        elseif isfile(joinpath(dir, lowercase(chr), lowercase(term)))
+            # The vendored terminfo database is fully lowercase to avoid issues on
+            # case-sensitive filesystems. On Unix-like systems, terminfo files with
+            # different cases are hard links to one another, so this is still
+            # correct for non-vendored terminfo, just redundant.
+            return joinpath(dir, lowercase(chr), lowercase(term))
         end
     end
+    return nothing
 end
 
 """

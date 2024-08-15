@@ -2,9 +2,9 @@
 
 #include "gc-heap-snapshot.h"
 
+#include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
-#include "gc.h"
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
@@ -183,7 +183,8 @@ struct HeapSnapshot {
 // when snapshotting is on.
 int gc_heap_snapshot_enabled = 0;
 HeapSnapshot *g_snapshot = nullptr;
-extern jl_mutex_t heapsnapshot_lock;
+// mutex for gc-heap-snapshot.
+jl_mutex_t heapsnapshot_lock;
 
 void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &snapshot, char all_one);
 void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one);

@@ -943,7 +943,7 @@ Consider the printed output from the following:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async write(stdout, string(i), " Foo ", " Bar ")
+           Threads.@spawn write(stdout, string(i), " Foo ", " Bar ")
        end
 123 Foo  Foo  Foo  Bar  Bar  Bar
 ```
@@ -956,7 +956,7 @@ in the above example results in:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async println(stdout, string(i), " Foo ", " Bar ")
+           Threads.@spawn println(stdout, string(i), " Foo ", " Bar ")
        end
 1 Foo  Bar
 2 Foo  Bar
@@ -969,7 +969,7 @@ You can lock your writes with a `ReentrantLock` like this:
 julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
-           @async begin
+           Threads.@spawn begin
                lock(l)
                try
                    write(stdout, string(i), " Foo ", " Bar ")

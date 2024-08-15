@@ -686,7 +686,7 @@ let
     @test @inferred wrapperT(ReflectionExample{T, Int64} where T) == ReflectionExample
     @test @inferred wrapperT(ReflectionExample) == ReflectionExample
     @test @inferred wrapperT(Union{ReflectionExample{Union{},1},ReflectionExample{Float64,1}}) == ReflectionExample
-    @test_throws(ErrorException("typename does not apply to unions whose components have different typenames"),
+    @test_throws(Core.TypeNameError(Union{Int, Float64}),
                  Base.typename(Union{Int, Float64}))
 end
 

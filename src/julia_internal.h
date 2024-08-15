@@ -17,6 +17,8 @@
 #include <uv.h>
 #include <llvm-c/Types.h>
 #include <llvm-c/Orc.h>
+#include <llvm-version.h>
+
 #if !defined(_WIN32)
 #include <unistd.h>
 #else
@@ -96,6 +98,26 @@ JL_DLLIMPORT void *__tsan_create_fiber(unsigned flags);
 JL_DLLIMPORT void *__tsan_get_current_fiber(void);
 JL_DLLIMPORT void __tsan_destroy_fiber(void *fiber);
 JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
+#endif
+
+#ifndef _OS_WINDOWS_
+    #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
+        #define MAX_ALIGN 8
+    #elif defined(_CPU_AARCH64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)))
+    // int128 is 16 bytes aligned on aarch64 and on x86 with LLVM >= 18
+        #define MAX_ALIGN 16
+    #elif defined(_P64)
+    // Generically we assume MAX_ALIGN is sizeof(void*)
+        #define MAX_ALIGN 8
+    #else
+        #define MAX_ALIGN 4
+    #endif
+#else
+    #if JL_LLVM_VERSION >= 180000
+        #define MAX_ALIGN 16
+    #else
+        #define MAX_ALIGN 8
+    #endif
 #endif
 
 #ifndef alignof
@@ -311,7 +333,7 @@ static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, 
     memcpy(dst, jl_assume_aligned(src, sizeof(void*)), nb);
 }
 
-// -- gc.c -- //
+// -- GC -- //
 
 #define GC_CLEAN  0 // freshly allocated
 #define GC_MARKED 1 // reachable and young
@@ -350,11 +372,6 @@ jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset,
                                    int osize);
 jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize) JL_NOTSAFEPOINT;
-extern uv_mutex_t gc_perm_lock;
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
-    unsigned align, unsigned offset) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero,
-    unsigned align, unsigned offset) JL_NOTSAFEPOINT;
 void gc_sweep_sysimg(void);
 
 
@@ -547,17 +564,6 @@ STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
-STATIC_INLINE jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT
-{
-    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    unsigned align = (sz == 0 ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
-                                                 sizeof(void*) * 2 : 16));
-    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
-                                                              sizeof(void*) % align);
-    uintptr_t tag = (uintptr_t)ty;
-    o->header = tag | GC_OLD_MARKED;
-    return jl_valueof(o);
-}
 jl_value_t *jl_permbox8(jl_datatype_t *t, uintptr_t tag, uint8_t x);
 jl_value_t *jl_permbox32(jl_datatype_t *t, uintptr_t tag, uint32_t x);
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
@@ -593,14 +599,6 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 #endif
 #endif
 
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);
-
-JL_DLLEXPORT void JL_NORETURN jl_throw_out_of_memory_error(void);
-
-
-JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int64_t jl_gc_sync_total_bytes(int64_t offset) JL_NOTSAFEPOINT;
-void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT;
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT;
 size_t jl_genericmemory_nbytes(jl_genericmemory_t *a) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
@@ -948,9 +946,7 @@ void jl_init_tasks(void) JL_GC_DISABLED;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi);
 void jl_init_serializer(void);
-void jl_gc_init(void);
 void jl_init_uv(void);
-void jl_init_thread_heap(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void jl_init_int32_int64_cache(void);
 JL_DLLEXPORT void jl_init_options(void);
 
@@ -960,7 +956,6 @@ extern JL_DLLEXPORT ssize_t jl_tls_offset;
 extern JL_DLLEXPORT const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
-void jl_start_gc_threads(void);
 
 // Whether the GC is running
 extern uv_mutex_t safepoint_lock;
@@ -1303,6 +1298,9 @@ STATIC_INLINE size_t jl_excstack_next(jl_excstack_t *stack, size_t itr) JL_NOTSA
 void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                       jl_bt_element_t *bt_data, size_t bt_size);
+
+// System util to get maximum RSS
+JL_DLLEXPORT size_t jl_maxrss(void);
 
 //--------------------------------------------------
 // congruential random number generator
@@ -1699,6 +1697,7 @@ void jl_write_malloc_log(void);
 #  define jl_unreachable() ((void)jl_assume(0))
 #endif
 
+extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 
 // Tools for locally disabling spurious compiler warnings
