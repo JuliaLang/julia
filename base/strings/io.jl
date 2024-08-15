@@ -208,7 +208,12 @@ function show(
         get(io, :limit, false)::Bool || return show(io, str)
         limit = max(20, displaysize(io)[2])
         # one line in collection, seven otherwise
-        get(io, :typeinfo, nothing) === nothing && (limit *= 7)
+        if get(io, :typeinfo, nothing) === nothing
+            limit *= 7
+        else
+            # strings in collections are typically indented one space
+            limit -= 1
+        end
     end
 
     # early out for short strings

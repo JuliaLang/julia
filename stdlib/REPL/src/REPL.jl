@@ -510,6 +510,7 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
         end
+        io = IOContext(io, :displaysize => displaysize(outstream(d.repl)))
         show_repl(io, mime, x[])
         println(io)
     end
