@@ -1577,16 +1577,17 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             jl_value_t *restriction_val = decode_restriction_value(pku);
             static_assert(offsetof(jl_binding_partition_t, restriction) == 0, "BindingPartition layout mismatch");
             write_pointerfield(s, restriction_val);
-            write_uint(f, decode_restriction_kind(pku)); // This will be moved back into place during deserialization (if necessary)
-            static_assert(offsetof(jl_binding_partition_t, min_world) == 2*sizeof(void*), "BindingPartition layout mismatch");
+#ifndef _P64
+            write_uint(f, decode_restriction_kind(pku));
+#endif
             write_uint(f, bpart->min_world);
-            static_assert(offsetof(jl_binding_partition_t, max_world) == 3*sizeof(void*), "BindingPartition layout mismatch");
             write_uint(f, jl_atomic_load_relaxed(&bpart->max_world));
-            static_assert(offsetof(jl_binding_partition_t, next) == 4*sizeof(void*), "BindingPartition layout mismatch");
             write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&bpart->next));
 #ifdef _P64
+            write_uint(f, decode_restriction_kind(pku)); // This will be moved back into place during deserialization (if necessary)
             static_assert(sizeof(jl_binding_partition_t) == 5*sizeof(void*), "BindingPartition layout mismatch");
 #else
+            write_uint(f, 0);
             static_assert(sizeof(jl_binding_partition_t) == 6*sizeof(void*), "BindingPartition layout mismatch");
 #endif
         }

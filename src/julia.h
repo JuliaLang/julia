@@ -662,17 +662,10 @@ typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
      * Currently: Low 3 bits hold ->kind on _P64 to avoid needing >8 byte atomics
      */
     _Atomic(ptr_kind_union_t) restriction;
-#ifdef _P64
-    size_t reserved; // Reserved for ->kind. Currently this holds the low bits of ->restriction during serialization
-#else
-    // Covered by the ptr_kind_union_t;
-#endif
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t*) next;
-#ifndef _P64
-    size_t padding;
-#endif
+    size_t reserved; // Reserved for ->kind. Currently this holds the low bits of ->restriction during serialization
 } jl_binding_partition_t;
 
 typedef struct _jl_binding_t {

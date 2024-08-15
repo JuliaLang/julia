@@ -360,9 +360,6 @@ static int eq_bindings(jl_binding_partition_t *owner, jl_binding_t *alias, size_
     if (owner == alias_bpart)
         return 1;
     ptr_kind_union_t alias_pku = jl_walk_binding_inplace(&alias, &alias_bpart, world);
-    if (decode_restriction_kind(alias_pku) == BINDING_KIND_GLOBAL ||
-        jl_bkind_is_some_guard(decode_restriction_kind(alias_pku)))
-        return 0;
     if (jl_bkind_is_some_constant(decode_restriction_kind(owner_pku)) &&
         jl_bkind_is_some_constant(decode_restriction_kind(alias_pku)) &&
         decode_restriction_value(owner_pku) &&
