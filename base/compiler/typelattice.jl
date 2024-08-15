@@ -469,8 +469,13 @@ end
 @nospecializeinfer function ⊑(lattice::PartialsLattice, @nospecialize(a), @nospecialize(b))
     if isa(a, PartialStruct)
         if isa(b, PartialStruct)
-            if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
-                return false
+            a.typ <: b.typ || return false
+            if length(a.fields) ≠ length(b.fields)
+                if !(isvarargtype(a.fields[end]) || isvarargtype(b.fields[end]))
+                    length(a.fields) ≥ length(b.fields) || return false
+                else
+                    return false
+                end
             end
             for i in 1:length(b.fields)
                 af = a.fields[i]
@@ -493,8 +498,7 @@ end
         return isa(b, Type) && a.typ <: b
     elseif isa(b, PartialStruct)
         if isa(a, Const)
-            nf = nfields(a.val)
-            nf == length(b.fields) || return false
+            n_initialized(a) ≥ length(b.fields) || return false
             widea = widenconst(a)::DataType
             wideb = widenconst(b)
             wideb′ = unwrap_unionall(wideb)::DataType
@@ -504,8 +508,10 @@ end
             if wideb′.name !== Tuple.name && !(widea <: wideb)
                 return false
             end
+            nf = nfields(a.val)
             for i in 1:nf
                 isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
+                i > length(b.fields) && break
                 bfᵢ = b.fields[i]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)
