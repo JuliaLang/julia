@@ -166,6 +166,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     m->length = nel;
     jl_genericmemory_data_owner_field(m) = own_buffer ? (jl_value_t*)m : NULL;
     if (own_buffer) {
+        PTR_PIN(m);
         int isaligned = 0;  // TODO: allow passing memalign'd buffers
         jl_gc_track_malloced_genericmemory(ct->ptls, m, isaligned);
         size_t allocated_bytes = memory_block_usable_size(data, isaligned);
