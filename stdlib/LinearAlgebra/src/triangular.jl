@@ -2743,6 +2743,14 @@ end
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)
+function eigvecs(A::AbstractTriangular{T}) where {T<:BlasFloat}
+    Ac = eigencopy_oftype(A, T)
+    # Avoid a stack-overflow if the type doesn't change
+    if Ac isa typeof(A)
+        throw(ArgumentError(lazy"eigvecs type $(typeof(A)) not supported. Please submit a pull request."))
+    end
+    return eigvecs(Ac)
+end
 function eigvecs(A::AbstractTriangular{T}) where T
     TT = promote_type(T, Float32)
     if TT <: BlasFloat
@@ -2771,7 +2779,8 @@ function logabsdet(A::Union{UpperTriangular{T},LowerTriangular{T}}) where T
 end
 
 eigen(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
-
+eigencopy_oftype(A::UpperOrUnitUpperTriangular, T) = UpperTriangular(eigencopy_oftype(A.data, T))
+eigencopy_oftype(A::LowerOrUnitLowerTriangular, T) = LowerTriangular(eigencopy_oftype(A.data, T))
 # Generic singular systems
 for func in (:svd, :svd!, :svdvals)
     @eval begin

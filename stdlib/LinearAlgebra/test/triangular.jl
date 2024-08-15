@@ -1194,4 +1194,11 @@ end
     end
 end
 
+@testset "eigvecs for AbstractTriangular" begin
+    U = UpperTriangular(SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2)))
+    V = eigvecs(U)
+    λ = eigvals(U)
+    @test U * V ≈ V * Diagonal(λ)
+end
+
 end # module TestTriangular
