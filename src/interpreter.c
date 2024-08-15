@@ -232,6 +232,11 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
+        int allow_import = 1;
+        if (nargs == 2) {
+            assert(jl_is_bool(args[1]) && "malformed IR");
+            allow_import = args[1] == jl_true;
+        }
         if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
@@ -239,10 +244,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             defined = s->locals[n - 1] != NULL;
         }
         else if (jl_is_globalref(sym)) {
-            defined = jl_boundp(jl_globalref_mod(sym), jl_globalref_name(sym));
+            defined = jl_boundp(jl_globalref_mod(sym), jl_globalref_name(sym), allow_import);
         }
         else if (jl_is_symbol(sym)) {
-            defined = jl_boundp(s->module, (jl_sym_t*)sym);
+            defined = jl_boundp(s->module, (jl_sym_t*)sym, allow_import);
         }
         else if (jl_is_expr(sym) && ((jl_expr_t*)sym)->head == jl_static_parameter_sym) {
             ssize_t n = jl_unbox_long(jl_exprarg(sym, 0));
@@ -627,6 +632,18 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 else if (head == jl_toplevel_sym) {
                     jl_value_t *res = jl_toplevel_eval(s->module, stmt);
                     s->locals[jl_source_nslots(s->src) + s->ip] = res;
+                }
+                else if (head == jl_globaldecl_sym) {
+                    jl_value_t *val = eval_value(jl_exprarg(stmt, 1), s);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
+                    jl_declare_global(s->module, jl_exprarg(stmt, 0), val);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
+                }
+                else if (head == jl_const_sym) {
+                    jl_value_t *val = jl_expr_nargs(stmt) == 1 ? NULL : eval_value(jl_exprarg(stmt, 1), s);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
+                    jl_eval_const_decl(s->module, jl_exprarg(stmt, 0), val);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);

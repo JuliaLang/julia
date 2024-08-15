@@ -1278,7 +1278,7 @@ JL_CALLABLE(jl_f_isdefined)
             order = jl_memory_order_unordered;
         if (order < jl_memory_order_unordered)
             jl_atomic_error("isdefined: module binding cannot be accessed non-atomically");
-        int bound = jl_boundp(m, s); // seq_cst always
+        int bound = jl_boundp(m, s, 1); // seq_cst always
         return bound ? jl_true : jl_false;
     }
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
@@ -1382,27 +1382,6 @@ JL_CALLABLE(jl_f_get_binding_type)
         return jl_atomic_load_relaxed(&b->ty);
     }
     return ty;
-}
-
-JL_CALLABLE(jl_f_set_binding_type)
-{
-    JL_NARGS(set_binding_type!, 2, 3);
-    jl_module_t *m = (jl_module_t*)args[0];
-    jl_sym_t *s = (jl_sym_t*)args[1];
-    JL_TYPECHK(set_binding_type!, module, (jl_value_t*)m);
-    JL_TYPECHK(set_binding_type!, symbol, (jl_value_t*)s);
-    jl_value_t *ty = nargs == 2 ? (jl_value_t*)jl_any_type : args[2];
-    JL_TYPECHK(set_binding_type!, type, ty);
-    jl_binding_t *b = jl_get_binding_wr(m, s, 0);
-    jl_value_t *old_ty = NULL;
-    if (jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty)) {
-        jl_gc_wb(b, ty);
-    }
-    else if (nargs != 2 && !jl_types_equal(ty, old_ty)) {
-        jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
-                  jl_symbol_name(m->name), jl_symbol_name(s));
-    }
-    return jl_nothing;
 }
 
 JL_CALLABLE(jl_f_swapglobal)
@@ -2105,6 +2084,12 @@ static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layou
         return references_name(((jl_uniontype_t*)p)->a, name, affects_layout, freevars) ||
                references_name(((jl_uniontype_t*)p)->b, name, affects_layout, freevars);
     }
+    if (jl_is_vararg(p)) {
+        jl_value_t *T = ((jl_vararg_t*)p)->T;
+        jl_value_t *N = ((jl_vararg_t*)p)->N;
+        return (T && references_name(T, name, affects_layout, freevars)) ||
+               (N && references_name(N, name, affects_layout, freevars));
+    }
     if (jl_is_typevar(p))
         return 0; // already checked by unionall, if applicable
     if (jl_is_datatype(p)) {
@@ -2416,7 +2401,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_getglobal = add_builtin_func("getglobal", jl_f_getglobal);
     jl_builtin_setglobal = add_builtin_func("setglobal!", jl_f_setglobal);
     add_builtin_func("get_binding_type", jl_f_get_binding_type);
-    add_builtin_func("set_binding_type!", jl_f_set_binding_type);
     jl_builtin_swapglobal = add_builtin_func("swapglobal!", jl_f_swapglobal);
     jl_builtin_replaceglobal = add_builtin_func("replaceglobal!", jl_f_replaceglobal);
     jl_builtin_modifyglobal = add_builtin_func("modifyglobal!", jl_f_modifyglobal);

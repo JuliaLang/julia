@@ -308,30 +308,46 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     return args[0];
 }
 
-void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
+void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
+{
+    jl_value_t *old_ty = NULL;
+    if (jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty)) {
+        jl_gc_wb(b, ty);
+    }
+    else if (error && !jl_types_equal(ty, old_ty)) {
+        jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
+                  jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
+    }
+}
+
+void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
     // create uninitialized mutable binding for "global x" decl sometimes or probably
+    jl_module_t *gm;
+    jl_sym_t *gs;
+    assert(!jl_is_expr(arg)); // Should have been resolved before this
+    if (jl_is_globalref(arg)) {
+        gm = jl_globalref_mod(arg);
+        gs = jl_globalref_name(arg);
+    }
+    else {
+        assert(jl_is_symbol(arg));
+        gm = m;
+        gs = (jl_sym_t*)arg;
+    }
+    if (!jl_binding_resolved_p(gm, gs) || set_type) {
+        jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
+        if (set_type) {
+            jl_binding_set_type(b, set_type, 1);
+        }
+    }
+}
+
+void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type)
+{
     size_t i, l = jl_array_nrows(ex->args);
     for (i = 0; i < l; i++) {
         jl_value_t *arg = jl_exprarg(ex, i);
-        jl_module_t *gm;
-        jl_sym_t *gs;
-        if (jl_is_globalref(arg)) {
-            gm = jl_globalref_mod(arg);
-            gs = jl_globalref_name(arg);
-        }
-        else {
-            assert(jl_is_symbol(arg));
-            gm = m;
-            gs = (jl_sym_t*)arg;
-        }
-        if (!jl_binding_resolved_p(gm, gs)) {
-            jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
-            if (set_type) {
-                jl_value_t *old_ty = NULL;
-                // maybe set the type too, perhaps
-                jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
-            }
-        }
+        jl_declare_global(m, arg, NULL);
     }
 }
 
@@ -568,6 +584,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == jl_public_sym ||
          ((jl_expr_t*)e)->head == jl_thunk_sym ||
          ((jl_expr_t*)e)->head == jl_global_sym ||
+         ((jl_expr_t*)e)->head == jl_globaldecl_sym ||
          ((jl_expr_t*)e)->head == jl_const_sym ||
          ((jl_expr_t*)e)->head == jl_toplevel_sym ||
          ((jl_expr_t*)e)->head == jl_error_sym ||
@@ -704,6 +721,33 @@ static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, con
     JL_GC_POP();
 }
 
+JL_DLLEXPORT void jl_declare_constant_val(jl_binding_t *b, jl_module_t *gm, jl_sym_t *gs, jl_value_t *val)
+{
+    jl_declare_constant(b, gm, gs);
+    jl_checked_assignment(b, gm, gs, val);
+}
+
+JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val)
+{
+    jl_module_t *gm;
+    jl_sym_t *gs;
+    if (jl_is_globalref(arg)) {
+        gm = jl_globalref_mod(arg);
+        gs = jl_globalref_name(arg);
+    }
+    else {
+        assert(jl_is_symbol(arg));
+        gm = m;
+        gs = (jl_sym_t*)arg;
+    }
+    jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
+    if (val) {
+        jl_declare_constant_val(b, gm, gs, val);
+    } else {
+        jl_declare_constant(b, gm, gs);
+    }
+}
+
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno)
 {
     jl_task_t *ct = jl_current_task;
@@ -748,7 +792,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
 
     jl_method_instance_t *mfunc = NULL;
     jl_code_info_t *thk = NULL;
-    JL_GC_PUSH3(&mfunc, &thk, &ex);
+    jl_value_t *root = NULL;
+    JL_GC_PUSH4(&mfunc, &thk, &ex, &root);
 
     size_t last_age = ct->world_age;
     if (!expanded && jl_needs_lowering(e)) {
@@ -776,14 +821,14 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             if (jl_is_expr(a) && ((jl_expr_t*)a)->head == jl_dot_sym) {
                 name = NULL;
                 jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "using");
-                jl_module_t *u = import;
-                if (name != NULL)
-                    u = (jl_module_t*)jl_eval_global_var(import, name);
                 if (from) {
                     // `using A: B` and `using A: B.c` syntax
                     jl_module_use(m, import, name);
                 }
                 else {
+                    jl_module_t *u = import;
+                    if (name != NULL)
+                        u = (jl_module_t*)jl_eval_global_var(import, name);
                     if (!jl_is_module(u))
                         jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,
                             "invalid using path: \"%s\" does not name a module",
@@ -880,25 +925,16 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         return jl_nothing;
     }
     else if (head == jl_global_sym) {
-        jl_eval_global_expr(m, ex, 0);
+        size_t i, l = jl_array_nrows(ex->args);
+        for (i = 0; i < l; i++) {
+            jl_value_t *arg = jl_exprarg(ex, i);
+            jl_declare_global(m, arg, NULL);
+        }
         JL_GC_POP();
         return jl_nothing;
     }
     else if (head == jl_const_sym) {
-        jl_sym_t *arg = (jl_sym_t*)jl_exprarg(ex, 0);
-        jl_module_t *gm;
-        jl_sym_t *gs;
-        if (jl_is_globalref(arg)) {
-            gm = jl_globalref_mod(arg);
-            gs = jl_globalref_name(arg);
-        }
-        else {
-            assert(jl_is_symbol(arg));
-            gm = m;
-            gs = (jl_sym_t*)arg;
-        }
-        jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
-        jl_declare_constant(b, gm, gs);
+        jl_eval_const_decl(m, jl_exprarg(ex, 0), NULL);
         JL_GC_POP();
         return jl_nothing;
     }
@@ -955,7 +991,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
-            (void)jl_type_infer(mfunc, world, 0, SOURCE_MODE_NOT_REQUIRED);
+            (void)jl_type_infer(mfunc, world, SOURCE_MODE_NOT_REQUIRED);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
         ct->world_age = last_age;
@@ -1038,7 +1074,7 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
     JL_GC_PUSH1(&li);
     jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
     jl_task_t *ct = jl_current_task;
-    jl_code_instance_t *ci = jl_type_infer(li, ct->world_age, 0, SOURCE_MODE_NOT_REQUIRED);
+    jl_code_instance_t *ci = jl_type_infer(li, ct->world_age, SOURCE_MODE_NOT_REQUIRED);
     JL_GC_POP();
     if (ci)
         return ci->rettype;

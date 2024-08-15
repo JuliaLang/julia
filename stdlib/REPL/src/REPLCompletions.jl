@@ -136,8 +136,9 @@ function appendmacro!(syms, macros, needle, endchar)
 end
 
 function append_filtered_mod_names!(ffunc::Function, suggestions::Vector{Completion},
-                                    mod::Module, name::String)
-    ssyms = names(mod; all=true, imported=true, usings=true)
+                                    mod::Module, name::String, complete_internal_only::Bool)
+    imported = usings = !complete_internal_only
+    ssyms = names(mod; all=true, imported, usings)
     filter!(ffunc, ssyms)
     macros = filter(x -> startswith(String(x), "@" * name), ssyms)
     syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
@@ -151,34 +152,37 @@ end
 
 # REPL Symbol Completions
 function complete_symbol!(suggestions::Vector{Completion},
-                          @nospecialize(ex), name::String, context_module::Module;
-                          complete_modules_only::Bool=false)
-    mod = context_module
-
-    lookup_module = true
-    t = Union{}
-    val = nothing
-    if ex !== nothing
-        res = repl_eval_ex(ex, context_module)
+                          @nospecialize(prefix), name::String, context_module::Module;
+                          complete_modules_only::Bool=false,
+                          shift::Bool=false)
+    local mod, t, val
+    complete_internal_only = false
+    if prefix !== nothing
+        res = repl_eval_ex(prefix, context_module)
         res === nothing && return Completion[]
         if res isa Const
             val = res.val
             if isa(val, Module)
                 mod = val
+                if !shift
+                    # when module is explicitly accessed, show internal bindings that are
+                    # defined by the module, unless shift key is pressed
+                    complete_internal_only = true
+                end
             else
-                lookup_module = false
                 t = typeof(val)
             end
         else
-            lookup_module = false
             t = CC.widenconst(res)
         end
+    else
+        mod = context_module
     end
 
-    if lookup_module
+    if @isdefined(mod) # lookup names available within the module
         let modname = nameof(mod),
             is_main = mod===Main
-            append_filtered_mod_names!(suggestions, mod, name) do s::Symbol
+            append_filtered_mod_names!(suggestions, mod, name, complete_internal_only) do s::Symbol
                 if Base.isdeprecated(mod, s)
                     return false
                 elseif s === modname
@@ -191,7 +195,7 @@ function complete_symbol!(suggestions::Vector{Completion},
                 return true
             end
         end
-    elseif val !== nothing # looking for a property of an instance
+    elseif @isdefined(val) # looking for a property of an instance
         try
             for property in propertynames(val, false)
                 # TODO: support integer arguments (#36872)
@@ -201,7 +205,7 @@ function complete_symbol!(suggestions::Vector{Completion},
             end
         catch
         end
-    elseif field_completion_eligible(t)
+    elseif @isdefined(t) && field_completion_eligible(t)
         # Looking for a member of a type
         add_field_completions!(suggestions, name, t)
     end
@@ -291,7 +295,10 @@ function maybe_spawn_cache_PATH()
     @lock PATH_cache_lock begin
         PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
         time() < next_cache_update && return
-        PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
+        PATH_cache_task = Threads.@spawn begin
+            REPLCompletions.cache_PATH()
+            @lock PATH_cache_lock PATH_cache_task = nothing # release memory when done
+        end
         Base.errormonitor(PATH_cache_task)
     end
 end
@@ -549,8 +556,7 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
-                                 aggressive_constant_propagation=true,
-                                 unoptimize_throw_blocks=false),
+                                 aggressive_constant_propagation=true),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
         return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
@@ -893,8 +899,11 @@ const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "
 
 # Aux function to detect whether we're right after a using or import keyword
 function get_import_mode(s::String)
+    # allow all of these to start with leading whitespace and macros like @eval and @eval(
+    # ^\s*(?:@\w+\s*(?:\(\s*)?)?
+
     # match simple cases like `using |` and `import  |`
-    mod_import_match_simple = match(r"^\b(using|import)\s*$", s)
+    mod_import_match_simple = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s*$", s)
     if mod_import_match_simple !== nothing
         if mod_import_match_simple[1] == "using"
             return :using_module
@@ -903,7 +912,7 @@ function get_import_mode(s::String)
         end
     end
     # match module import statements like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`
-    mod_import_match = match(r"^\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
+    mod_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
     if mod_import_match !== nothing
         if mod_import_match.captures[1] == "using"
             return :using_module
@@ -912,7 +921,7 @@ function get_import_mode(s::String)
         end
     end
     # now match explicit name import statements like `using Foo: |` and `import Foo: bar, baz|`
-    name_import_match = match(r"^\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
+    name_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
     if name_import_match !== nothing
         if name_import_match[1] == "using"
             return :using_name
@@ -1033,7 +1042,8 @@ function identify_possible_method_completion(partial, last_idx)
 end
 
 # Provide completion for keyword arguments in function calls
-function complete_keyword_argument(partial, last_idx, context_module)
+function complete_keyword_argument(partial::String, last_idx::Int, context_module::Module;
+                                   shift::Bool=false)
     frange, ex, wordrange, = identify_possible_method_completion(partial, last_idx)
     fail = Completion[], 0:-1, frange
     ex.head === :call || is_broadcasting_expr(ex) || return fail
@@ -1070,7 +1080,7 @@ function complete_keyword_argument(partial, last_idx, context_module)
 
     # Only add these if not in kwarg space. i.e. not in `foo(; `
     if kwargs_flag == 0
-        complete_symbol!(suggestions, nothing, last_word, context_module)
+        complete_symbol!(suggestions, #=prefix=#nothing, last_word, context_module; shift)
         complete_keyval!(suggestions, last_word)
     end
 
@@ -1104,8 +1114,8 @@ function complete_identifiers!(suggestions::Vector{Completion},
                                context_module::Module, string::String, name::String,
                                pos::Int, separatorpos::Int, startpos::Int;
                                comp_keywords::Bool=false,
-                               complete_modules_only::Bool=false)
-    ex = nothing
+                               complete_modules_only::Bool=false,
+                               shift::Bool=false)
     if comp_keywords
         complete_keyword!(suggestions, name)
         complete_keyval!(suggestions, name)
@@ -1113,8 +1123,8 @@ function complete_identifiers!(suggestions::Vector{Completion},
     if separatorpos > 1 && (string[separatorpos] == '.' || string[separatorpos] == ':')
         s = string[1:prevind(string, separatorpos)]
         # First see if the whole string up to `pos` is a valid expression. If so, use it.
-        ex = Meta.parse(s, raise=false, depwarn=false)
-        if isexpr(ex, :incomplete)
+        prefix = Meta.parse(s, raise=false, depwarn=false)
+        if isexpr(prefix, :incomplete)
             s = string[startpos:pos]
             # Heuristic to find the start of the expression. TODO: This would be better
             # done with a proper error-recovering parser.
@@ -1146,11 +1156,11 @@ function complete_identifiers!(suggestions::Vector{Completion},
             if something(findlast(in(non_identifier_chars), s), 0) < something(findlast(isequal('.'), s), 0)
                 lookup_name, name = rsplit(s, ".", limit=2)
                 name = String(name)
-                ex = Meta.parse(lookup_name, raise=false, depwarn=false)
+                prefix = Meta.parse(lookup_name, raise=false, depwarn=false)
             end
-            isexpr(ex, :incomplete) && (ex = nothing)
-        elseif isexpr(ex, (:using, :import))
-            arglast = ex.args[end] # focus on completion to the last argument
+            isexpr(prefix, :incomplete) && (prefix = nothing)
+        elseif isexpr(prefix, (:using, :import))
+            arglast = prefix.args[end] # focus on completion to the last argument
             if isexpr(arglast, :.)
                 # We come here for cases like:
                 # - `string`: "using Mod1.Mod2.M"
@@ -1159,7 +1169,7 @@ function complete_identifiers!(suggestions::Vector{Completion},
                 # Now we transform `ex` to `:(Mod1.Mod2)` to allow `complete_symbol!` to
                 # complete for inner modules whose name starts with `M`.
                 # Note that `complete_modules_only=true` is set within `completions`
-                ex = nothing
+                prefix = nothing
                 firstdot = true
                 for arg = arglast.args
                     if arg === :.
@@ -1170,36 +1180,38 @@ function complete_identifiers!(suggestions::Vector{Completion},
                             context_module = parentmodule(context_module)
                         end
                     elseif arg isa Symbol
-                        if ex === nothing
-                            ex = arg
+                        if prefix === nothing
+                            prefix = arg
                         else
-                            ex = Expr(:., ex, QuoteNode(arg))
+                            prefix = Expr(:., prefix, QuoteNode(arg))
                         end
                     else # invalid expression
-                        ex = nothing
+                        prefix = nothing
                         break
                     end
                 end
             end
-        elseif isexpr(ex, :call) && length(ex.args) > 1
+        elseif isexpr(prefix, :call) && length(prefix.args) > 1
             isinfix = s[end] != ')'
             # A complete call expression that does not finish with ')' is an infix call.
             if !isinfix
                 # Handle infix call argument completion of the form bar + foo(qux).
                 frange, end_of_identifier = find_start_brace(@view s[1:prevind(s, end)])
-                isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == ex.args[end]
+                isinfix = Meta.parse(@view(s[frange[1]:end]), raise=false, depwarn=false) == prefix.args[end]
             end
             if isinfix
-                ex = ex.args[end]
+                prefix = prefix.args[end]
             end
-        elseif isexpr(ex, :macrocall) && length(ex.args) > 1
+        elseif isexpr(prefix, :macrocall) && length(prefix.args) > 1
             # allow symbol completions within potentially incomplete macrocalls
             if s[end] ≠ '`' && s[end] ≠ ')'
-                ex = ex.args[end]
+                prefix = prefix.args[end]
             end
         end
+    else
+        prefix = nothing
     end
-    complete_symbol!(suggestions, ex, name, context_module; complete_modules_only)
+    complete_symbol!(suggestions, prefix, name, context_module; complete_modules_only, shift)
     return suggestions
 end
 
@@ -1265,7 +1277,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         separatorpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
         name = string[startpos:pos]
         complete_identifiers!(suggestions, context_module, string, name,
-                              pos, separatorpos, startpos)
+                              pos, separatorpos, startpos;
+                              shift)
         return sort!(unique!(completion_text, suggestions), by=completion_text), (separatorpos+1):pos, true
     elseif inc_tag === :cmd
         # TODO: should this call shell_completions instead of partially reimplementing it?
@@ -1395,7 +1408,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     end
 
     # Check whether we can complete a keyword argument in a function call
-    kwarg_completion, wordrange = complete_keyword_argument(partial, pos, context_module)
+    kwarg_completion, wordrange = complete_keyword_argument(partial, pos, context_module; shift)
     isempty(wordrange) || return kwarg_completion, wordrange, !isempty(kwarg_completion)
 
     startpos = nextind(string, something(findprev(in(non_identifier_chars), string, pos), 0))
@@ -1461,7 +1474,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     complete_identifiers!(suggestions, context_module, string, name,
                           pos, separatorpos, startpos;
-                          comp_keywords, complete_modules_only)
+                          comp_keywords, complete_modules_only, shift)
     return sort!(unique!(completion_text, suggestions), by=completion_text), namepos:pos, true
 end
 

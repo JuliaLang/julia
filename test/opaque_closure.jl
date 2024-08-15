@@ -151,26 +151,33 @@ end # module test_world_age
 
 function maybe_vararg(isva::Bool)
     T = isva ? Vararg{Int} : Int
-    @opaque Tuple{T} (x...)->x
+    @opaque Tuple{T}->_ (x...)->x
 end
 @test maybe_vararg(false)(1) == (1,)
 @test_throws MethodError maybe_vararg(false)(1,2,3)
 @test maybe_vararg(true)(1) == (1,)
 @test maybe_vararg(true)(1,2,3) == (1,2,3)
-@test (@opaque Tuple{Int, Int} (a, b, x...)->x)(1,2) === ()
-@test (@opaque Tuple{Int, Int} (a, x...)->x)(1,2) === (2,)
-@test (@opaque Tuple{Int, Vararg{Int}} (a, x...)->x)(1,2,3,4) === (2,3,4)
+@test (@opaque Tuple{Int, Int}->_ (a, b, x...)->x)(1,2) === ()
+@test (@opaque Tuple{Int, Int}->Tuple{} (a, b, x...)->x)(1,2) === ()
+@test (@opaque _->Tuple{Vararg{Int}} (a, b, x...)->x)(1,2) === ()
+@test (@opaque Tuple{Int, Int}->_ (a, x...)->x)(1,2) === (2,)
+@test (@opaque Tuple{Int, Int}->Tuple{Int} (a, x...)->x)(1,2) === (2,)
+@test (@opaque _->Tuple{Vararg{Int}} (a, x...)->x)(1,2) === (2,)
+@test (@opaque Tuple{Int, Vararg{Int}}->_ (a, x...)->x)(1,2,3,4) === (2,3,4)
+@test (@opaque Tuple{Int, Vararg{Int}}->Tuple{Vararg{Int}} (a, x...)->x)(1,2,3,4) === (2,3,4)
 @test (@opaque (a::Int, x::Int...)->x)(1,2,3) === (2,3)
+@test (@opaque _->Tuple{Vararg{Int}} (a::Int, x::Int...)->x)(1,2,3) === (2,3)
+@test (@opaque _->_ (a::Int, x::Int...)->x)(1,2,3) === (2,3)
 
-@test_throws ErrorException (@opaque Tuple{Vararg{Int}} x->x)
-@test_throws ErrorException (@opaque Tuple{Int, Vararg{Int}} x->x)
-@test_throws ErrorException (@opaque Tuple{Int, Int} x->x)
-@test_throws ErrorException (@opaque Tuple{Any} (x,y)->x)
-@test_throws ErrorException (@opaque Tuple{Vararg{Int}} (x,y...)->x)
-@test_throws ErrorException (@opaque Tuple{Int} (x,y,z...)->x)
+@test_throws ErrorException (@opaque Tuple{Vararg{Int}}->_ x->x)
+@test_throws ErrorException (@opaque Tuple{Int, Vararg{Int}}->_ x->x)
+@test_throws ErrorException (@opaque Tuple{Int, Int}->_ x->x)
+@test_throws ErrorException (@opaque Tuple{Any}->_ (x,y)->x)
+@test_throws ErrorException (@opaque Tuple{Vararg{Int}}->_ (x,y...)->x)
+@test_throws ErrorException (@opaque Tuple{Int}->_ (x,y,z...)->x)
 
 # cannot specify types both on arguments and separately
-@test_throws ErrorException @eval @opaque Tuple{Any} (x::Int)->x
+@test_throws ErrorException @eval @opaque Tuple{Any}->_ (x::Int)->x
 
 # Vargarg in complied mode
 mk_va_opaque() = @opaque (x...)->x
@@ -178,7 +185,7 @@ mk_va_opaque() = @opaque (x...)->x
 @test mk_va_opaque()(1,2) == (1,2)
 
 # OpaqueClosure show method
-@test repr(@opaque x->Base.inferencebarrier(1)) == "(::Any)::Any->◌"
+@test repr(@opaque x->Base.inferencebarrier(1)) == "(::Any)->◌::Any"
 
 # Opaque closure in CodeInfo returned from generated functions
 let ci = @code_lowered const_int()

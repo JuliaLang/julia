@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base: delete
+
 @test_throws TypeError NamedTuple{1,Tuple{}}
 @test_throws TypeError NamedTuple{(),1}
 @test_throws TypeError NamedTuple{(:a,1),Tuple{Int}}
@@ -282,6 +284,11 @@ end
 abstr_nt_22194_3()
 @test Base.return_types(abstr_nt_22194_3, ()) == Any[Any]
 
+@test delete((a=1,), :a) == NamedTuple()
+@test delete((a=1, b=2), :a) == (b=2,)
+@test delete((a=1, b=2, c=3), :b) == (a=1, c=3)
+@test delete((a=1, b=2, c=3), :z) == (a=1, b=2, c=3)
+
 @test Base.structdiff((a=1, b=2), (b=3,)) == (a=1,)
 @test Base.structdiff((a=1, b=2, z=20), (b=3,)) == (a=1, z=20)
 @test Base.structdiff((a=1, b=2, z=20), (b=3, q=20, z=1)) == (a=1,)
@@ -398,14 +405,14 @@ for f in (Base.merge, Base.structdiff)
         fallback_func(a::NamedTuple, b::NamedTuple) = @invoke f(a::NamedTuple, b::NamedTuple)
         @testset let eff = Base.infer_effects(fallback_func)
             @test Core.Compiler.is_foldable(eff)
-            @test eff.nonoverlayed
+            @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(fallback_func)) == NamedTuple
         # test if `max_methods = 4` setting works as expected
         general_func(a::NamedTuple, b::NamedTuple) = f(a, b)
         @testset let eff = Base.infer_effects(general_func)
             @test Core.Compiler.is_foldable(eff)
-            @test eff.nonoverlayed
+            @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(general_func)) == NamedTuple
     end

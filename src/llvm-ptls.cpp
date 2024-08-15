@@ -95,12 +95,12 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         if (offset) {
             SmallVector<Type*, 0> args(0);
             args.push_back(offset->getType());
-            auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(builder.getContext()), args, false),
+            auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), args, false),
                                      dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
             tls = builder.CreateCall(tp, {offset}, "pgcstack");
         }
         else {
-            auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(insertBefore->getContext()), false),
+            auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), false),
                                      const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}",
                                      false);
             tls = builder.CreateCall(tp, {}, "tls_pgcstack");
@@ -126,11 +126,10 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         }
         if (!offset)
             offset = ConstantInt::getSigned(T_size, jl_tls_offset);
-        auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(builder.getContext()), false), asm_str, "=r", false);
+        auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), false), asm_str, "=r", false);
         tls = builder.CreateCall(tp, {}, "thread_ptr");
         tls = builder.CreateGEP(Type::getInt8Ty(builder.getContext()), tls, {offset}, "tls_ppgcstack");
     }
-    tls = builder.CreateBitCast(tls, T_pppjlvalue->getPointerTo());
     return builder.CreateLoad(T_pppjlvalue, tls, "tls_pgcstack");
 }
 

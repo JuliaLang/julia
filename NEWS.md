@@ -6,6 +6,15 @@ New language features
 
 - A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
   find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
+- the `@atomic(...)` macro family supports now the reference assignment syntax, e.g.
+  `@atomic :monotonic v[3] += 4` modifies `v[3]` atomically with monotonic ordering semantics. ([#54707])
+  The supported syntax allows
+  - atomic fetch (`x = @atomic v[3]`),
+  - atomic set (`@atomic v[3] = 4`),
+  - atomic modify (`@atomic v[3] += 2`),
+  - atomic set once (`@atomiconce v[3] = 2`),
+  - atomic swap (`x = @atomicswap v[3] = 2`), and
+  - atomic replace (`x = @atomicreplace v[3] 2=>5`).
 
 Language changes
 ----------------
@@ -34,6 +43,8 @@ Compiler/Runtime improvements
   `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
   IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
 
+- A new exception `FieldError` is now introduced to raise/handle `getfield` exceptions. Previously `getfield` exception was captured by fallback generic exception `ErrorException`. Now that `FieldError` is more specific `getfield` related exceptions that can occur should use `FieldError` exception instead. ([#54504])
+
 Command-line option changes
 ---------------------------
 
@@ -52,12 +63,17 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* There are new `Makefile`s to build Julia and LLVM using the Binary Optimization and Layout Tool (BOLT), see  `contrib/bolt` and `contrib/pgo-lto-bolt` ([#54107]).
+
 New library functions
 ---------------------
 
 * `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
+* `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
+* `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`
+* The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
 
 New library features
 --------------------
@@ -78,19 +94,29 @@ New library features
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `escape_string` takes additional keyword arguments `ascii=true` (to escape all
+  non-ASCII characters) and `fullhex=true` (to require full 4/8-digit hex numbers
+  for u/U escapes, e.g. for C compatibility) [#55099]).
 * `filter` can now act on a `NamedTuple` ([#50795]).
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
+* `Lockable` is now exported ([#54595])
+* New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
 
 Standard library changes
 ------------------------
 
 * `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
+* `fd` returns a `RawFD` instead of an `Int` ([#55080]).
 
 #### StyledStrings
 
 #### JuliaSyntaxHighlighting
+
+* A new standard library for applying syntax highlighting to Julia code, this
+  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
+  that creates an `AnnotatedString` with syntax highlighting applied.
 
 #### Package Manager
 
@@ -117,6 +143,9 @@ Standard library changes
   complete names that have been explicitly `using`-ed. ([#54610])
 - REPL completions can now complete input lines like `[import|using] Mod: xxx|` e.g.
   complete `using Base.Experimental: @op` to `using Base.Experimental: @opaque`. ([#54719])
+- the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
+  and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
+  in the REPL will now issue a warning the first time occurs. ([#54872])
 
 #### SuiteSparse
 
@@ -141,6 +170,10 @@ Deprecated or removed
 
 External dependencies
 ---------------------
+
+- The terminal info database, `terminfo`, is now vendored by default, providing a better
+  REPL user experience when `terminfo` is not available on the system. Julia can be built
+  without vendoring the database using the Makefile option `WITH_TERMINFO=0`. ([#55411])
 
 Tooling Improvements
 --------------------

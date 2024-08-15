@@ -143,11 +143,9 @@ Random.seed!(1)
 
     @testset "show" begin
         BD = Bidiagonal(dv, ev, :U)
-        dstring = sprint(Base.print_matrix,BD.dv')
-        estring = sprint(Base.print_matrix,BD.ev')
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n super:$estring"
+        @test sprint(show,BD) == "Bidiagonal($(repr(dv)), $(repr(ev)), :U)"
         BD = Bidiagonal(dv,ev,:L)
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n sub:$estring"
+        @test sprint(show,BD) == "Bidiagonal($(repr(dv)), $(repr(ev)), :L)"
     end
 
     @testset for uplo in (:U, :L)
@@ -931,6 +929,95 @@ end
     B = Bidiagonal(dv, ev, :U)
     @test_throws "invalid index" B[3, true]
     @test B[1,2] == B[Int8(1),UInt16(2)] == B[big(1), Int16(2)]
+end
+
+@testset "rmul!/lmul! with banded matrices" begin
+    dv, ev = rand(4), rand(3)
+    for A in (Bidiagonal(dv, ev, :U), Bidiagonal(dv, ev, :L))
+        @testset "$(nameof(typeof(B)))" for B in (
+                                Bidiagonal(dv, ev, :U),
+                                Bidiagonal(dv, ev, :L),
+                                Diagonal(dv)
+                        )
+            @test_throws ArgumentError rmul!(B, A)
+            @test_throws ArgumentError lmul!(A, B)
+        end
+    end
+    @testset "non-commutative" begin
+        S32 = SizedArrays.SizedArray{(3,2)}(rand(3,2))
+        S33 = SizedArrays.SizedArray{(3,3)}(rand(3,3))
+        S22 = SizedArrays.SizedArray{(2,2)}(rand(2,2))
+        for uplo in (:L, :U)
+            B = Bidiagonal(fill(S32, 4), fill(S32, 3), uplo)
+            D = Diagonal(fill(S22, size(B,2)))
+            @test rmul!(copy(B), D) ≈ B * D
+            D = Diagonal(fill(S33, size(B,1)))
+            @test lmul!(D, copy(B)) ≈ D * B
+        end
+
+        B = Bidiagonal(fill(S33, 4), fill(S33, 3), :U)
+        D = Diagonal(fill(S32, 4))
+        @test lmul!(B, Array(D)) ≈ B * D
+        B = Bidiagonal(fill(S22, 4), fill(S22, 3), :U)
+        @test rmul!(Array(D), B) ≈ D * B
+    end
+end
+
+@testset "mul with Diagonal" begin
+    for n in 0:4
+        dv, ev = rand(n), rand(max(n-1,0))
+        d = rand(n)
+        for uplo in (:U, :L)
+            A = Bidiagonal(dv, ev, uplo)
+            D = Diagonal(d)
+            M = Matrix(A)
+            S = similar(A, size(A))
+            @test A * D ≈ mul!(S, A, D) ≈ M * D
+            @test D * A ≈ mul!(S, D, A) ≈ D * M
+            @test mul!(copy(S), D, A, 2, 2) ≈ D * M * 2 + S * 2
+            @test mul!(copy(S), A, D, 2, 2) ≈ M * D * 2 + S * 2
+
+            A2 = Bidiagonal(dv, zero(ev), uplo)
+            M2 = Array(A2)
+            S2 = Bidiagonal(copy(dv), copy(ev), uplo == (:U) ? (:L) : (:U))
+            MS2 = Array(S2)
+            @test mul!(copy(S2), D, A2) ≈ D * M2
+            @test mul!(copy(S2), A2, D) ≈ M2 * D
+            @test mul!(copy(S2), A2, D, 2, 2) ≈ M2 * D * 2 + MS2 * 2
+            @test mul!(copy(S2), D, A2, 2, 2) ≈ D * M2 * 2 + MS2 * 2
+        end
+    end
+
+    t1 = SizedArrays.SizedArray{(2,3)}([1 2 3; 3 4 5])
+    t2 = SizedArrays.SizedArray{(3,2)}([1 2; 3 4; 5 6])
+    dv, ev, d = fill(t1, 4), fill(2t1, 3), fill(t2, 4)
+    for uplo in (:U, :L)
+        A = Bidiagonal(dv, ev, uplo)
+        D = Diagonal(d)
+        @test A * D ≈ Array(A) * Array(D)
+        @test D * A ≈ Array(D) * Array(A)
+    end
+end
+
+@testset "conversion to Tridiagonal for immutable bands" begin
+    n = 4
+    dv = FillArrays.Fill(3, n)
+    ev = FillArrays.Fill(2, n-1)
+    z = FillArrays.Fill(0, n-1)
+    dvf = FillArrays.Fill(Float64(3), n)
+    evf = FillArrays.Fill(Float64(2), n-1)
+    zf = FillArrays.Fill(Float64(0), n-1)
+    B = Bidiagonal(dv, ev, :U)
+    @test Tridiagonal{Int}(B) === Tridiagonal(B) === Tridiagonal(z, dv, ev)
+    @test Tridiagonal{Float64}(B) === Tridiagonal(zf, dvf, evf)
+    B = Bidiagonal(dv, ev, :L)
+    @test Tridiagonal{Int}(B) === Tridiagonal(B) === Tridiagonal(ev, dv, z)
+    @test Tridiagonal{Float64}(B) === Tridiagonal(evf, dvf, zf)
+end
+
+@testset "off-band indexing error" begin
+    B = Bidiagonal(Vector{BigInt}(undef, 4), Vector{BigInt}(undef,3), :L)
+    @test_throws "cannot set entry" B[1,2] = 4
 end
 
 end # module TestBidiagonal

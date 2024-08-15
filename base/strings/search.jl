@@ -12,6 +12,16 @@ abstract type AbstractPattern end
 
 nothing_sentinel(i) = i == 0 ? nothing : i
 
+function last_utf8_byte(c::Char)
+    u = reinterpret(UInt32, c)
+    shift = ((4 - ncodeunits(c)) * 8) & 31
+    (u >> shift) % UInt8
+end
+
+# Whether the given byte is guaranteed to be the only byte in a Char
+# This holds even in the presence of invalid UTF8
+is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
+
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::Union{String, SubString{String}}, i::Integer)
     if i < 1 || i > sizeof(s)
@@ -109,6 +119,35 @@ function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
         _rsearch(a,UInt8(b),i)
     else
         _rsearch(a,codeunits(string(b)),i).start
+    end
+end
+
+function findall(
+    pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
+    s::Union{String, SubString{String}}
+)
+    c = Char(pred.x)::Char
+    byte = last_utf8_byte(c)
+    ncu = ncodeunits(c)
+
+    # If only one byte, and can't be part of another Char: Forward to memchr.
+    is_standalone_byte(byte) && return findall(==(byte), codeunits(s))
+    result = Int[]
+    i = firstindex(s)
+    while true
+        i = _search(s, byte, i)
+        iszero(i) && return result
+        i += 1
+        index = i - ncu
+        # If the char is invalid, it's possible that its first byte is
+        # inside another char. If so, indexing into the string will throw an
+        # error, so we need to check for valid indices.
+        isvalid(s, index) || continue
+        # We use iterate here instead of indexing, because indexing wastefully
+        # checks for valid index. It would be better if there was something like
+        # try_getindex(::String, ::Int) we could use.
+        char = first(something(iterate(s, index)))
+        pred(char) && push!(result, index)
     end
 end
 

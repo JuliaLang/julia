@@ -227,10 +227,19 @@ end
 @nospecs shift_tfunc(𝕃::AbstractLattice, x, y) = shift_tfunc(widenlattice(𝕃), x, y)
 @nospecs shift_tfunc(::JLTypeLattice, x, y) = widenconst(x)
 
+function not_tfunc(𝕃::AbstractLattice, @nospecialize(b))
+    if isa(b, Conditional)
+        return Conditional(b.slot, b.elsetype, b.thentype)
+    elseif isa(b, Const)
+        return Const(not_int(b.val))
+    end
+    return math_tfunc(𝕃, b)
+end
+
 add_tfunc(and_int, 2, 2, and_int_tfunc, 1)
 add_tfunc(or_int, 2, 2, or_int_tfunc, 1)
 add_tfunc(xor_int, 2, 2, math_tfunc, 1)
-add_tfunc(not_int, 1, 1, math_tfunc, 0) # usually used as not_int(::Bool) to negate a condition
+add_tfunc(not_int, 1, 1, not_tfunc, 0) # usually used as not_int(::Bool) to negate a condition
 add_tfunc(shl_int, 2, 2, shift_tfunc, 1)
 add_tfunc(lshr_int, 2, 2, shift_tfunc, 1)
 add_tfunc(ashr_int, 2, 2, shift_tfunc, 1)
@@ -1098,7 +1107,7 @@ end
 end
 
 @nospecs function _getfield_tfunc(𝕃::AnyMustAliasesLattice, s00, name, setfield::Bool)
-    return _getfield_tfunc(widenlattice(𝕃), widenmustalias(s00), name, setfield)
+    return _getfield_tfunc(widenlattice(𝕃), widenmustalias(s00), widenmustalias(name), setfield)
 end
 
 @nospecs function _getfield_tfunc(𝕃::PartialsLattice, s00, name, setfield::Bool)
@@ -2862,7 +2871,7 @@ end
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
-    UNKNOWN = CallMeta(Type, Any, EFFECTS_THROWS, NoCallInfo())
+    UNKNOWN = CallMeta(Type, Any, Effects(EFFECTS_THROWS; nortcall=false), NoCallInfo())
     if !(2 <= length(argtypes) <= 3)
         return UNKNOWN
     end
@@ -2890,8 +2899,12 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         return UNKNOWN
     end
 
+    # effects are not an issue if we know this statement will get removed, but if it does not get removed,
+    # then this could be recursively re-entering inference (via concrete-eval), which will not terminate
+    RT_CALL_EFFECTS = Effects(EFFECTS_TOTAL; nortcall=false)
+
     if contains_is(argtypes_vec, Union{})
-        return CallMeta(Const(Union{}), Union{}, EFFECTS_TOTAL, NoCallInfo())
+        return CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo())
     end
 
     # Run the abstract_call without restricting abstract call
@@ -2909,25 +2922,25 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     rt = widenslotwrapper(call.rt)
     if isa(rt, Const)
         # output was computed to be constant
-        return CallMeta(Const(typeof(rt.val)), Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Const(typeof(rt.val)), Union{}, RT_CALL_EFFECTS, info)
     end
     rt = widenconst(rt)
     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
         # output cannot be improved so it is known for certain
-        return CallMeta(Const(rt), Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
     elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
         # conservatively express uncertainty of this result
         # in two ways: both as being a subtype of this, and
         # because of LimitedAccuracy causes
-        return CallMeta(Type{<:rt}, Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
     elseif isa(tt, Const) || isconstType(tt)
         # input arguments were known for certain
         # XXX: this doesn't imply we know anything about rt
-        return CallMeta(Const(rt), Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
     elseif isType(rt)
-        return CallMeta(Type{rt}, Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{rt}, Union{}, RT_CALL_EFFECTS, info)
     else
-        return CallMeta(Type{<:rt}, Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
     end
 end
 

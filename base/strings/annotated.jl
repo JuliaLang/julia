@@ -164,7 +164,7 @@ lastindex(s::AnnotatedString) = lastindex(s.string)
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        AnnotatedChar(s.string[i], map(last, annotations(s, i)))
+        AnnotatedChar(s.string[i], Pair{Symbol, Any}[last(x) for x in annotations(s, i)])
     else
         string_index_err(s, i)
     end
@@ -593,6 +593,7 @@ function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{U
         for i in reverse(axes(annotations, 1))
             annot = annotations[i]
             first(first(annot)) == 1 || continue
+            i <= length(io.annotations) || continue
             if last(annot) == last(last(io.annotations))
                 valid_run = true
                 for runlen in 1:i
@@ -638,7 +639,7 @@ read(io::AnnotatedIOBuffer, ::Type{AnnotatedString}) = read(io, AnnotatedString{
 function read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{T}}) where {T <: AbstractChar}
     pos = position(io)
     char = read(io.io, T)
-    annots = [annot for (range, annot) in io.annotations if pos+1 in range]
+    annots = Pair{Symbol, Any}[annot for (range, annot) in io.annotations if pos+1 in range]
     AnnotatedChar(char, annots)
 end
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{AbstractChar}}) = read(io, AnnotatedChar{Char})

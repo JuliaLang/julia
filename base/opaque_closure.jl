@@ -18,11 +18,23 @@ the argument type may be fixed length even if the function is variadic.
     This interface is experimental and subject to change or removal without notice.
 """
 macro opaque(ex)
-    esc(Expr(:opaque_closure, ex))
+    esc(Expr(:opaque_closure, nothing, nothing, nothing, ex))
 end
 
 macro opaque(ty, ex)
-    esc(Expr(:opaque_closure, ty, ex))
+    if Base.isexpr(ty, :->)
+        (AT, body) = ty.args
+        filter!((n)->!isa(n, Core.LineNumberNode), body.args)
+        if !Base.isexpr(body, :block) || length(body.args) != 1
+            error("Opaque closure type must be specified in the form Tuple{T,U...}->RT")
+        end
+        RT = only(body.args)
+    else
+        error("Opaque closure type must be specified in the form Tuple{T,U...}->RT")
+    end
+    AT = (AT !== :_) ? AT : nothing
+    RT = (RT !== :_) ? RT : nothing
+    return esc(Expr(:opaque_closure, AT, RT, RT, ex))
 end
 
 # OpaqueClosure construction from pre-inferred CodeInfo/IRCode

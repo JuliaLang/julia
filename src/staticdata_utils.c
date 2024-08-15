@@ -209,6 +209,17 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     return found;
 }
 
+static int is_relocatable_ci(htable_t *relocatable_ext_cis, jl_code_instance_t *ci)
+{
+    if (!ci->relocatability)
+        return 0;
+    jl_method_instance_t *mi = ci->def;
+    jl_method_t *m = mi->def.method;
+    if (!ptrhash_has(relocatable_ext_cis, ci) && jl_object_in_image((jl_value_t*)m) && (!jl_is_method(m) || jl_object_in_image((jl_value_t*)m->module)))
+        return 0;
+    return 1;
+}
+
 // Given the list of CodeInstances that were inferred during the build, select
 // those that are (1) external, (2) still valid, (3) are inferred to be called
 // from the worklist or explicitly added by a `precompile` statement, and
@@ -258,7 +269,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
 }
 
 // New roots for external methods
-static void jl_collect_new_roots(jl_array_t *roots, jl_array_t *new_ext_cis, uint64_t key)
+static void jl_collect_new_roots(htable_t *relocatable_ext_cis, jl_array_t *roots, jl_array_t *new_ext_cis, uint64_t key)
 {
     htable_t mset;
     htable_new(&mset, 0);
@@ -269,6 +280,7 @@ static void jl_collect_new_roots(jl_array_t *roots, jl_array_t *new_ext_cis, uin
         jl_method_t *m = ci->def->def.method;
         assert(jl_is_method(m));
         ptrhash_put(&mset, (void*)m, (void*)m);
+        ptrhash_put(relocatable_ext_cis, (void*)ci, (void*)ci);
     }
     int nwithkey;
     void *const *table = mset.table;

@@ -13,7 +13,10 @@ function term(io::IO, content::Vector, cols)
     term(io, content[end], cols)
 end
 
-term(io::IO, md::MD, columns = cols(io)) = term(io, md.content, columns)
+function term(io::IO, md::MD, columns = cols(io))
+    md = insert_hlines(md)
+    return term(io, md.content, columns)
+end
 
 function term(io::IO, md::Paragraph, columns)
     lines = wraplines(annotprint(terminline, md.content), columns-2margin)
@@ -39,6 +42,8 @@ function term(io::IO, md::Admonition, columns)
         Symbol(md.category)
     elseif md.category == "compat"
         :bright_cyan
+    elseif md.category == "todo"
+        :magenta
     else
         :default
     end

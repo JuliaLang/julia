@@ -57,10 +57,8 @@ New developers may find the notes in
 [CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md)
 helpful to start contributing to the Julia codebase.
 
-### External Resources
+### Learning Julia
 
-- [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
-- [**Twitter**](https://twitter.com/JuliaLanguage)
 - [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
@@ -94,7 +92,7 @@ and then use the command prompt to change into the resulting julia directory. By
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.10.3
+    git checkout v1.10.4
 
 To build the `julia` executable, run `make` from within the julia directory.
 

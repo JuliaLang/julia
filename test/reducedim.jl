@@ -587,6 +587,30 @@ end
     @test B[argmin(B, dims=[2, 3])] == @inferred(minimum(B, dims=[2, 3]))
 end
 
+@testset "careful with @inbounds" begin
+    Base.@propagate_inbounds f(x) = x == 2 ? x[-10000] : x
+    Base.@propagate_inbounds op(x,y) = x[-10000] + y[-10000]
+    for (arr, dims) in (([1,1,2], 1), ([1 1 2], 2), ([ones(Int,256);2], 1))
+        @test_throws BoundsError mapreduce(f, +, arr)
+        @test_throws BoundsError mapreduce(f, +, arr; dims)
+        @test_throws BoundsError mapreduce(f, +, arr; dims, init=0)
+        @test_throws BoundsError mapreduce(identity, op, arr)
+        try
+            #=@test_throws BoundsError=# mapreduce(identity, op, arr; dims)
+        catch ex
+            @test_broken ex isa BoundsError
+        end
+        @test_throws BoundsError mapreduce(identity, op, arr; dims, init=0)
+
+        @test_throws BoundsError findmin(f, arr)
+        @test_throws BoundsError findmin(f, arr; dims)
+
+        @test_throws BoundsError mapreduce(f, max, arr)
+        @test_throws BoundsError mapreduce(f, max, arr; dims)
+        @test_throws BoundsError mapreduce(f, max, arr; dims, init=0)
+    end
+end
+
 @testset "in-place reductions with mismatched dimensionalities" begin
     B = reshape(1:24, 4, 3, 2)
     for R in (fill(0, 4), fill(0, 4, 1), fill(0, 4, 1, 1))

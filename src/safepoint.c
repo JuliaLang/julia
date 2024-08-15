@@ -267,12 +267,12 @@ void jl_safepoint_wait_thread_resume(void)
         uv_cond_broadcast(&safepoint_cond_begin);
         uv_mutex_unlock(&safepoint_lock);
         uv_mutex_lock(&ct->ptls->sleep_lock);
+        while (jl_atomic_load_relaxed(&ct->ptls->suspend_count))
+            uv_cond_wait(&ct->ptls->wake_signal, &ct->ptls->sleep_lock);
     }
-    while (jl_atomic_load_relaxed(&ct->ptls->suspend_count))
-        uv_cond_wait(&ct->ptls->wake_signal, &ct->ptls->sleep_lock);
-    // must while still holding the mutex_unlock, so we know other threads in
-    // jl_safepoint_suspend_thread will observe this thread in the correct GC
-    // state, and not still stuck in JL_GC_STATE_WAITING
+    // must exit gc while still holding the mutex_unlock, so we know other
+    // threads in jl_safepoint_suspend_thread will observe this thread in the
+    // correct GC state, and not still stuck in JL_GC_STATE_WAITING
     jl_atomic_store_release(&ct->ptls->gc_state, state);
     uv_mutex_unlock(&ct->ptls->sleep_lock);
 }
@@ -290,12 +290,20 @@ int jl_safepoint_suspend_thread(int tid, int waitstate)
     if (0 > tid || tid >= jl_atomic_load_acquire(&jl_n_threads))
         return 0;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+    if (ct2 == NULL) {
+        // this thread is not alive yet or already dead
+        return 0;
+    }
+    uv_mutex_lock(&safepoint_lock);
     uv_mutex_lock(&ptls2->sleep_lock);
     int16_t suspend_count = jl_atomic_load_relaxed(&ptls2->suspend_count) + 1;
     jl_atomic_store_relaxed(&ptls2->suspend_count, suspend_count);
     if (suspend_count == 1) { // first to suspend
         jl_safepoint_enable(3);
         jl_atomic_store_relaxed(&ptls2->safepoint, (size_t*)(jl_safepoint_pages + jl_page_size * 3 + sizeof(void*)));
+        if (jl_atomic_load(&_threadedregion) != 0 || tid == jl_atomic_load_relaxed(&io_loop_tid))
+            jl_wake_libuv(); // our integration with libuv right now doesn't handle except by waking it
     }
     uv_mutex_unlock(&ptls2->sleep_lock);
     if (waitstate) {
@@ -305,7 +313,9 @@ int jl_safepoint_suspend_thread(int tid, int waitstate)
             // not, so assume it is running GC and wait for GC to finish first.
             // It will be unable to reenter helping with GC because we have
             // changed its safepoint page.
+            uv_mutex_unlock(&safepoint_lock);
             jl_set_gc_and_wait();
+            uv_mutex_lock(&safepoint_lock);
         }
         while (jl_atomic_load_acquire(&ptls2->suspend_count) != 0) {
             int8_t state2 = jl_atomic_load_acquire(&ptls2->gc_state);
@@ -313,9 +323,10 @@ int jl_safepoint_suspend_thread(int tid, int waitstate)
                 break;
             if (waitstate == 3 && state2 == JL_GC_STATE_WAITING)
                 break;
-            jl_cpu_pause(); // yield (wait for safepoint_cond_begin, for example)?
+            uv_cond_wait(&safepoint_cond_begin, &safepoint_lock);
         }
     }
+    uv_mutex_unlock(&safepoint_lock);
     return suspend_count;
 }
 
@@ -326,6 +337,11 @@ int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
     if (0 > tid || tid >= jl_atomic_load_acquire(&jl_n_threads))
         return 0;
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+    if (ct2 == NULL) {
+        // this thread is not alive yet or already dead
+        return 0;
+    }
     uv_mutex_lock(&safepoint_lock);
     uv_mutex_lock(&ptls2->sleep_lock);
     int16_t suspend_count = jl_atomic_load_relaxed(&ptls2->suspend_count);
@@ -338,6 +354,7 @@ int jl_safepoint_resume_thread(int tid) JL_NOTSAFEPOINT
 #ifdef _OS_DARWIN_
         jl_safepoint_resume_thread_mach(ptls2, tid);
 #endif
+        uv_cond_broadcast(&safepoint_cond_begin);
     }
     if (suspend_count != 0) {
         jl_atomic_store_relaxed(&ptls2->suspend_count, suspend_count - 1);

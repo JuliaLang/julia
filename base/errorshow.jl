@@ -43,6 +43,15 @@ function showerror(io::IO, ex::Meta.ParseError)
     end
 end
 
+function showerror(io::IO, ex::Core.TypeNameError)
+    print(io, "TypeNameError: ")
+    if isa(ex.a, Union)
+        print(io, "typename does not apply to unions whose components have different typenames")
+    else
+        print(io, "typename does not apply to this type")
+    end
+end
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
@@ -196,7 +205,7 @@ function showerror(io::IO, ex::CanonicalIndexError)
     print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
 end
 
-typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
+typesof(@nospecialize args...) = Tuple{Any[Core.Typeof(arg) for arg in args]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
     if a.name === b.name
@@ -273,7 +282,7 @@ function showerror(io::IO, ex::MethodError)
         arg_types_param = arg_types_param[3:end]
         san_arg_types_param = san_arg_types_param[3:end]
         keys = kwt.parameters[1]::Tuple
-        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in 1:length(keys)]
+        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in eachindex(keys)]
         arg_types = rewrap_unionall(Tuple{arg_types_param...}, arg_types)
     end
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -694,7 +703,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
     frame_counter = 1
-    for i in 1:length(displayed_stackframes)
+    for i in eachindex(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
 
         print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
@@ -768,7 +777,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
     if n > 1
-        printstyled(io, " (repeats $n times)"; color=:light_black)
+        printstyled(io, " (repeats $n times)"; color=Base.warn_color(), bold=true)
     end
     println(io)
 
@@ -871,7 +880,7 @@ end
 function _collapse_repeated_frames(trace)
     kept_frames = trues(length(trace))
     last_frame = nothing
-    for i in 1:length(trace)
+    for i in eachindex(trace)
         frame::StackFrame, _ = trace[i]
         if last_frame !== nothing && frame.file == last_frame.file && frame.line == last_frame.line
             #=
@@ -916,7 +925,7 @@ function _collapse_repeated_frames(trace)
                 end
                 if length(last_params) > length(params)
                     issame = true
-                    for i = 1:length(params)
+                    for i = eachindex(params)
                         issame &= params[i] == last_params[i]
                     end
                     if issame
