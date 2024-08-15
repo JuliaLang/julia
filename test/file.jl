@@ -937,7 +937,11 @@ end
             # rename to child of a file
             mkdir(d1)
             write(f2, "foo")
-            @test Base.UV_ENOTDIR == rename_errorcodes(d1, joinpath(f2, "subdir"))
+            if Sys.iswindows()
+                @test Base.UV_EINVAL == rename_errorcodes(d1, joinpath(f2, "subdir"))
+            else
+                @test Base.UV_ENOTDIR == rename_errorcodes(d1, joinpath(f2, "subdir"))
+            end
             # replace a file with a directory
             if !Sys.iswindows()
                 @test Base.UV_ENOTDIR == rename_errorcodes(d1, f2)
@@ -965,10 +969,17 @@ end
             mkdir(d2)
             write(subd2f1, b"data")
             write(f1, b"otherdata")
-            @test Base.UV_EISDIR == rename_errorcodes(f1, d1)
-            @test Base.UV_EISDIR == rename_errorcodes(f1, d2)
-            @test rename_errorcodes(d1, d2) ∈ (Base.UV_ENOTEMPTY, Base.UV_EEXIST)
-            @test rename_errorcodes(subd2f1, d2) ∈ (Base.UV_ENOTEMPTY, Base.UV_EEXIST)
+            if Sys.iswindows()
+                @test Base.UV_EACCES == rename_errorcodes(f1, d1)
+                @test Base.UV_EACCES == rename_errorcodes(f1, d2)
+                @test Base.UV_EACCES == rename_errorcodes(d1, d2)
+                @test Base.UV_EACCES == rename_errorcodes(subd2f1, d2)
+            else
+                @test Base.UV_EISDIR == rename_errorcodes(f1, d1)
+                @test Base.UV_EISDIR == rename_errorcodes(f1, d2)
+                @test rename_errorcodes(d1, d2) ∈ (Base.UV_ENOTEMPTY, Base.UV_EEXIST)
+                @test rename_errorcodes(subd2f1, d2) ∈ (Base.UV_ENOTEMPTY, Base.UV_EEXIST, Base.UV_EISDIR)
+            end
             rm(f1)
             rm(d1)
             rm(d2; recursive=true)
@@ -1016,7 +1027,7 @@ end
                 open(f2) do handle2
                     if Sys.iswindows()
                         # currently this doesn't work on windows
-                        @test Base.UV_EACCES == rename_errorcodes(f1, f2)
+                        @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
                     else
                         Base.rename(f1, f2)
                         @test !ispath(f1)
@@ -1036,7 +1047,7 @@ end
             open(f1) do handle1
                 if Sys.iswindows()
                     # currently this doesn't work on windows
-                    @test Base.UV_EACCES == rename_errorcodes(f1, f2)
+                    @test Base.UV_EBUSY == rename_errorcodes(f1, f2)
                 else
                     Base.rename(f1, f2)
                     @test !ispath(f1)
