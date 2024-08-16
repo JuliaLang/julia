@@ -1570,7 +1570,7 @@ function deserialize(s::AbstractSerializer, ::Type{Task})
     t.storage = deserialize(s)
     state = deserialize(s)
     if state === :runnable
-       @atomic :release t._state = Base.task_state_runnable
+        @atomic :release t._state = Base.task_state_runnable
     elseif state === :done
         @atomic :release t._state = Base.task_state_done
     elseif state === :failed
