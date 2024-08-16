@@ -917,13 +917,13 @@ STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFE
 }
 
 EXTERN_INLINE_DECLARE jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT {
-    if (b && jl_is_globalref(b))
-        b = ((jl_globalref_t*)b)->binding;
     if (!b)
         return NULL;
     assert(jl_is_binding(b));
     return jl_atomic_load_relaxed(&b->partitions);
 }
+
+JL_DLLEXPORT jl_binding_partition_t *jl_get_globalref_partition(jl_globalref_t *gr, size_t world) JL_NOTSAFEPOINT;
 
 EXTERN_INLINE_DECLARE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT {
     return decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction));

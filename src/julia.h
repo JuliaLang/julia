@@ -621,20 +621,19 @@ enum jl_partition_kind {
     // Global: This binding partition is a global variable.
     //  -> restriction holds the type restriction
     BINDING_KIND_GLOBAL       = 0x2,
-    // Implicit: The binding was implicitly import from a `using`'d module.
+    // Implicit: The binding was implicitly imported from a `using`'d module.
     //  ->restriction holds the imported binding
     BINDING_KIND_IMPLICIT     = 0x3,
     // Explicit: The binding was explicitly `using`'d by name
     //  ->restriction holds the imported binding
     BINDING_KIND_EXPLICIT     = 0x4,
-    // Imported: The binding was explicitly `using`'d by name
+    // Imported: The binding was explicitly `import`'d by name
     //  ->restriction holds the imported binding
     BINDING_KIND_IMPORTED     = 0x5,
     // Failed: We attempted to import the binding, but the import was ambiguous
     //  ->restriction is NULL.
     BINDING_KIND_FAILED       = 0x6,
     // Declared: The binding was declared using `global` or similar
-    // Failed: We attempted to import the binding, but the import was ambiguous
     //  ->restriction is NULL.
     BINDING_KIND_DECLARED     = 0x7,
     // Guard: The binding was looked at, but no global or import was resolved at the time
@@ -1980,9 +1979,8 @@ JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_s
 JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs);
 JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs);
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);

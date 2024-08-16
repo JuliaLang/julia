@@ -217,12 +217,16 @@ const BINDING_KIND_FAILED       = 0x6
 const BINDING_KIND_DECLARED     = 0x7
 const BINDING_KIND_GUARD        = 0x8
 
-function lookup_binding_partition(world::UInt, b::Union{GlobalRef, Core.Binding})
+function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
 end
 
+function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+    ccall(:jl_get_globalref_partition, Ref{Core.BindingPartition}, (Any, UInt), gr, world)
+end
+
 binding_kind(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_kind, UInt8, (Any,), bpart)
-binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(get_world_counter(), GlobalRef(m, s)))
+binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))
 
 """
     fieldname(x::DataType, i::Integer)

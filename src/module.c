@@ -15,7 +15,19 @@ extern "C" {
 // In this translation unit and this translation unit only emit this symbol `extern` for use by julia
 EXTERN_INLINE_DEFINE jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT;
 EXTERN_INLINE_DEFINE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
-EXTERN_INLINE_DEFINE enum jl_partition_kind decode_restriction_kind(ptr_kind_union_t pku) JL_NOTSAFEPOINT;
+extern inline enum jl_partition_kind decode_restriction_kind(ptr_kind_union_t pku) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT jl_binding_partition_t *jl_get_globalref_partition(jl_globalref_t *gr, size_t world) JL_NOTSAFEPOINT
+{
+    if (!gr)
+        return NULL;
+    jl_binding_t *b = NULL;
+    if (gr)
+        b = ((jl_globalref_t*)b)->binding;
+    if (!b)
+        b = jl_get_module_binding(gr->mod, gr->name, 0);
+    return jl_get_binding_partition(b, world);
+}
 
 JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_names)
 {
@@ -166,9 +178,11 @@ static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_bin
     jl_task_t *ct = jl_current_task;
     jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
     g->mod = mod;
-    jl_gc_wb(g, g->mod);
+    jl_gc_wb_fresh(g, g->mod);
     g->name = name;
+    jl_gc_wb_fresh(g, g->name);
     g->binding = b;
+    jl_gc_wb_fresh(g, g->binding);
     return g;
 }
 
@@ -198,6 +212,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->deprecated = 0;
     JL_GC_PUSH1(&b);
     b->globalref = jl_new_globalref(mod, name, b);
+    jl_gc_wb(b, b->globalref);
     jl_binding_partition_t *bpart = new_binding_partition();
     jl_atomic_store_relaxed(&b->partitions, bpart);
     jl_gc_wb(b, bpart);
@@ -249,7 +264,7 @@ retry:
             ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
             if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku))
                 goto retry;
-            jl_gc_wb(bpart, jl_any_type);
+            jl_gc_wb_knownold(bpart, jl_any_type);
         } else {
             jl_module_t *from = jl_binding_dbgmodule(b, m, var);
             if (from == m)
@@ -445,6 +460,7 @@ static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *
         b = jl_get_module_binding(m, var, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+retry:
     if (decode_restriction_kind(pku) == BINDING_KIND_FAILED)
         return NULL;
     if (decode_restriction_kind(pku) == BINDING_KIND_DECLARED) {
@@ -475,7 +491,8 @@ static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *
         }
         // do a full import to prevent the result of this lookup from
         // changing, for example if this var is assigned to later.
-        jl_atomic_store_release(&bpart->restriction, encode_restriction((jl_value_t*)b2, BINDING_KIND_IMPLICIT));
+        if (!jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction((jl_value_t*)b2, BINDING_KIND_IMPLICIT)))
+            goto retry;
         if (b2->deprecated) {
             b->deprecated = 1; // we will warn about this below, but we might want to warn at the use sites too
             if (m != jl_main_module && m != jl_base_module &&
@@ -996,7 +1013,7 @@ jl_value_t *jl_check_binding_wr(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t 
     assert(!jl_bkind_is_some_guard(decode_restriction_kind(pku)) && !jl_bkind_is_some_import(decode_restriction_kind(pku)));
     if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
         jl_value_t *old = decode_restriction_value(pku);
-        if (rhs == old)
+        if (jl_egal(rhs, old))
             return NULL;
         if (jl_typeof(rhs) == jl_typeof(old))
             jl_errorf("invalid redefinition of constant %s.%s. This redefinition may be permitted using the `const` keyword.",
@@ -1059,22 +1076,6 @@ JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod
     if (jl_atomic_cmpswap(&b->value, &old, rhs))
         jl_gc_wb(b, rhs);
     return old;
-}
-
-JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b)
-{
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    while (1) {
-        if (jl_bkind_is_some_constant(decode_restriction_kind(pku)))
-            return;
-        if (!jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
-            jl_errorf("cannot declare %s.%s constant; it already has a value",
-                    jl_symbol_name(b->globalref->mod->name), jl_symbol_name(b->globalref->name));
-        }
-        if (jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction(NULL, BINDING_KIND_CONST)))
-            return;
-    }
 }
 
 JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)

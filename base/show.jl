@@ -1013,14 +1013,10 @@ end
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
 function isvisible(sym::Symbol, parent::Module, from::Module)
-    isdeprecated(parent, sym) && return false
-    if isconst(from, sym) && isconst(parent, sym)
-        isdefined(from, sym) || return false
-        return getglobal(from, sym) === getglobal(parent, sym)
-    end
-    owner = ccall(:jl_binding_owner, Ref{Core.Binding}, (Any, Any), parent, sym)
-    from_owner = ccall(:jl_binding_owner, Ref{Core.Binding}, (Any, Any), from, sym)
+    owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), parent, sym)
+    from_owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), from, sym)
     return owner !== C_NULL && from_owner === owner &&
+        !isdeprecated(parent, sym) &&
         isdefined(from, sym) # if we're going to return true, force binding resolution
 end
 
