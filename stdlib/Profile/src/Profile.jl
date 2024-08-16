@@ -1327,7 +1327,7 @@ function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_dat
         end
     end
 end
-function take_heap_snapshot(all_one::Bool=false; redact_data::Bool=true, dir::Union{Nothing,S}=nothing, streaming::Bool=false) where {S <: AbstractString}
+function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing, kwargs...) where {S <: AbstractString}
     fname = "$(getpid())_$(time_ns()).heapsnapshot"
     if isnothing(dir)
         wd = pwd()
@@ -1342,7 +1342,7 @@ function take_heap_snapshot(all_one::Bool=false; redact_data::Bool=true, dir::Un
     else
         fpath = joinpath(expanduser(dir), fname)
     end
-    return take_heap_snapshot(fpath, all_one; redact_data=redact_data, streaming=streaming)
+    return take_heap_snapshot(fpath, all_one; kwargs...)
 end
 
 """
