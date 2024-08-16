@@ -5789,9 +5789,16 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
                 jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
                 jl_method_instance_t *mi = jl_method_match_to_mi(match, latest_world, min_valid, max_valid, 0);
                 if (!mi) {
-                    new_invokes.len = len;
-                    failed_dispatch = 1;
-                    break;
+                    if (jl_array_nrows(matches) == 1) {
+                        // if the method match is not compileable, but there is only one, fall back to
+                        // unspecialized implementation
+                        mi = jl_get_unspecialized(match->method);
+                    }
+                    else {
+                        new_invokes.len = len;
+                        failed_dispatch = 1;
+                        break;
+                    }
                 }
                 arraylist_push(&new_invokes, mi);
             }
