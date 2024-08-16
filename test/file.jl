@@ -932,7 +932,11 @@ end
             rm(f1)
             # attempt to make a directory a subdirectory of itself
             mkdir(d1)
-            @test Base.UV_EINVAL == rename_errorcodes(d1, joinpath(d1, "subdir"))
+            if Sys.iswindows()
+                @test rename_errorcodes(d1, joinpath(d1, "subdir")) ∈ (Base.UV_EINVAL, Base.UV_EBUSY)
+            else
+                @test Base.UV_EINVAL == rename_errorcodes(d1, joinpath(d1, "subdir"))
+            end
             rm(d1)
             # rename to child of a file
             mkdir(d1)
