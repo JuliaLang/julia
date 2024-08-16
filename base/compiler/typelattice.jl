@@ -469,8 +469,13 @@ end
 @nospecializeinfer function ⊑(lattice::PartialsLattice, @nospecialize(a), @nospecialize(b))
     if isa(a, PartialStruct)
         if isa(b, PartialStruct)
-            if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
-                return false
+            a.typ <: b.typ || return false
+            if length(a.fields) ≠ length(b.fields)
+                if !(isvarargtype(a.fields[end]) || isvarargtype(b.fields[end]))
+                    length(a.fields) ≥ length(b.fields) || return false
+                else
+                    return false
+                end
             end
             for i in 1:length(b.fields)
                 af = a.fields[i]
@@ -493,19 +498,25 @@ end
         return isa(b, Type) && a.typ <: b
     elseif isa(b, PartialStruct)
         if isa(a, Const)
-            nf = nfields(a.val)
-            nf == length(b.fields) || return false
             widea = widenconst(a)::DataType
             wideb = widenconst(b)
             wideb′ = unwrap_unionall(wideb)::DataType
             widea.name === wideb′.name || return false
-            # We can skip the subtype check if b is a Tuple, since in that
-            # case, the ⊑ of the elements is sufficient.
-            if wideb′.name !== Tuple.name && !(widea <: wideb)
-                return false
+            if wideb′.name === Tuple.name
+                # We can skip the subtype check if b is a Tuple, since in that
+                # case, the ⊑ of the elements is sufficient.
+                # But for tuple comparisons, we need their lengths to be the same for now.
+                # TODO improve accuracy for cases when `b` contains vararg element
+                nfields(a.val) == length(b.fields) || return false
+            else
+                widea <: wideb || return false
+                # for structs we need to check that `a` has more information than `b` that may be partially initialized
+                n_initialized(a) ≥ length(b.fields) || return false
             end
+            nf = nfields(a.val)
             for i in 1:nf
                 isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
+                i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct
                 bfᵢ = b.fields[i]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)

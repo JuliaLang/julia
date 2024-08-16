@@ -4754,6 +4754,14 @@ end
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
+    let init = Base.ImmutableDict{Any,Any}(1,2)
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(getfield(init,1)), Any, Any])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test length(c.fields) == 3
+    end
     let init = Base.ImmutableDict{Number,Number}()
         a = Const(init)
         b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
@@ -4766,6 +4774,7 @@ end
         b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
         @test c.fields[2] === Number
         @test c.fields[3] === ComplexF64
     end
@@ -4774,8 +4783,39 @@ end
         b = PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
         @test c.fields[2] === Complex
         @test c.fields[3] === Complex
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = PartialStruct(T, Any[T])
+        b = PartialStruct(T, Any[T, Number, Number])
+        @test b ⊑ a
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test length(c.fields) == 1
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = PartialStruct(T, Any[T])
+        b = Const(T())
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = Const(T())
+        b = PartialStruct(T, Any[T])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = Const(T())
+        b = Const(T(1,2))
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
     end
 
     global const ginit43784 = Base.ImmutableDict{Any,Any}()
@@ -4808,6 +4848,31 @@ end
     @test a == Tuple
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
     @test a == Tuple
+end
+
+let ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
+    ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    Const, PartialStruct = Core.Const, Core.PartialStruct
+
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
+    @test !(Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test !(Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
+    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]))
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}])) broken=true
+    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]))
+    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+
+    t = Const((false, false)) ⊔ Const((false, true))
+    @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
+    t = t ⊔ Const((false, false, 0))
+    @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
 end
 
 # Test that a function-wise `@max_methods` works as expected
