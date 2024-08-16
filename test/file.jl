@@ -1000,6 +1000,23 @@ end
             rm(f2)
         end
 
+        @testset "replacing file with itself" begin
+            write(f1, b"data")
+            Base.rename(f1, f1)
+            @test read(f1) == b"data"
+            hardlink(f1, h1)
+            Base.rename(f1, h1)
+            if Sys.iswindows()
+                # On Windows f1 gets deleted
+                @test !ispath(f1)
+            else
+                @test read(f1) == b"data"
+            end
+            @test read(h1) == b"data"
+            rm(h1)
+            rm(f1; force=true)
+        end
+
         @testset "replacing existing file in different directories" begin
             mkdir(d1)
             mkdir(d2)

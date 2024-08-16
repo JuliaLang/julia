@@ -1193,6 +1193,7 @@ Specifically, currently on Windows:
 1. `rename` will fail if `oldpath` or `newpath` are opened files.
 2. `rename` will fail if `newpath` is an existing directory.
 3. `rename` may work if `newpath` is a file and `oldpath` is a directory.
+4. `rename` may remove `oldpath` if it is a hardlink to `newpath`.
 
 See also: [`mv`](@ref).
 
