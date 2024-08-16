@@ -1309,7 +1309,7 @@ JL_DLLEXPORT size_t jl_maxrss(void);
 //TODO: utilize https://github.com/openssl/openssl/blob/master/crypto/rand/rand_uniform.c#L13-L99
 // for better performance, it does however require making users expect a 32bit random number.
 
-STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT // Open interval [0, max)
 {
     if (max < 2)
         return 0;
