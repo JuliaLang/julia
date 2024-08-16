@@ -26,18 +26,18 @@ Return a random UInt32 in the range `1:max` except if max is 0, in that case ret
 """
 cong(max::UInt32) = iszero(max) ? UInt32(0) : jl_rand_ptls(max) + UInt32(1) #TODO: make sure users don't use 0 and remove this check
 
+const rngseed_offset = unsafe_load(cglobal(:jl_ptls_rng_offset, Cint))
+
 """
     jl_rand_ptls(max::UInt32)
 Return a random UInt32 in the range `0:max-1` using the thread-local RNG
 state. Max must be greater than 0.
 """
 Base.@assume_effects :removable :inaccessiblememonly :notaskstate function jl_rand_ptls(max::UInt32)
-    # Are these effects correct? We are technically lying to the compiler
-    # Though these are the same lies we tell to say that an unexcaped allocation has no effects
     ptls = Base.unsafe_convert(Ptr{UInt64}, Core.getptls())
-    rngseed = Base.unsafe_load(ptls, 2) # TODO: What's the best way to do this for 32bit.
+    rngseed = Base.unsafe_load(ptls + rngseed_offset)
     val, seed = rand_uniform_max_int32(max, rngseed)
-    Base.unsafe_store!(ptls, seed, 2)
+    Base.unsafe_store!(ptls + rngseed_offset, seed)
     return val % UInt32
 end
 

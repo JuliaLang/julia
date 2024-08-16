@@ -159,5 +159,6 @@
     XX(jl_options, jl_options_t) \
     XX(jl_task_gcstack_offset, int) \
     XX(jl_task_ptls_offset, int) \
+    XX(jl_ptls_rng_offset, int) \
 
 // end of file
