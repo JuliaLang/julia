@@ -921,30 +921,32 @@ function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
 end
 
 const StickyWorkqueue = IntrusiveLinkedListSynchronized{Task}
-global Workqueues::Memory{StickyWorkqueue} = Memory{StickyWorkqueue}([StickyWorkqueue()]) # TODO: Is the extra allocation here worth extra code
+global Workqueues::Memory{StickyWorkqueue} = Memory{StickyWorkqueue}([StickyWorkqueue()])
 const Workqueue = (@atomic :acquire Base.Workqueues)[1] # default work queue is thread 1 // TODO: deprecate this variable
 
 function workqueue_for(tid::Int)
     qs = @atomic :acquire Base.Workqueues
     if length(qs) >= tid && isassigned(qs, tid)
-        return @inbounds qs[tid] # This assumes that threads don't get deleted and that once an index in set
-                                # all following Workqueue Memorys have the same queues at those indices
+        return @inbounds qs[tid] # This assumes that threads don't get deleted and that once an index is set
+                                 # all following Workqueue Memorys have the same queues at those indices
     end
     while length(qs) < tid
+        # slow path to allocate it
         nt = Threads.maxthreadid()
         @assert tid <= nt
-        new_qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs)
-        if (@atomicreplace :acquire_release :monotonic Base.Workqueues qs => new_qs).success
+        new_qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs) # This overallocates by nt-1
+        xchg = @atomicreplace :acquire_release :acquire Base.Workqueues qs => new_qs
+        if xchg.success
             qs = new_qs
             break
         else
-            qs = @atomic :acquire Base.Workqueues
+            qs = xchg.old
         end
     end
     if !isassigned(qs, tid)
         @inbounds qs[tid] = StickyWorkqueue()
     end
-    return @inbounds qs[tid] # This assumes that threads don't get deleted and that once an index in set
+    return @inbounds qs[tid]
 end
 
 function enq_work(t::Task)
