@@ -2144,9 +2144,9 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                                         (ta, tid != -1 && ta == gc_all_tls_states[tid]->root_task));
                 }
         #ifdef COPY_STACKS
-                void *stkbuf = ta->stkbuf;
-                if (stkbuf && ta->copy_stack) {
-                    gc_setmark_buf_(ptls, stkbuf, bits, ta->bufsz);
+                void *stkbuf = ta->ctx.stkbuf;
+                if (stkbuf && ta->ctx.copy_stack) {
+                    gc_setmark_buf_(ptls, stkbuf, bits, ta->ctx.bufsz);
                     // For gc_heap_snapshot_record:
                     // TODO: attribute size of stack
                     // TODO: edge to stack data
@@ -2159,12 +2159,12 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 uintptr_t lb = 0;
                 uintptr_t ub = (uintptr_t)-1;
         #ifdef COPY_STACKS
-                if (stkbuf && ta->copy_stack && !ta->ptls) {
+                if (stkbuf && ta->ctx.copy_stack && !ta->ptls) {
                     int16_t tid = jl_atomic_load_relaxed(&ta->tid);
                     assert(tid >= 0);
                     jl_ptls_t ptls2 = gc_all_tls_states[tid];
                     ub = (uintptr_t)ptls2->stackbase;
-                    lb = ub - ta->copy_stack;
+                    lb = ub - ta->ctx.copy_stack;
                     offset = (uintptr_t)stkbuf - lb;
                 }
         #endif
