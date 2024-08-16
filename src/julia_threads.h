@@ -206,10 +206,7 @@ typedef struct _jl_tls_states_t {
 #endif
 } jl_tls_states_t;
 
-#ifndef JL_LIBRARY_EXPORTS
-// deprecated (only for external consumers)
 JL_DLLEXPORT void *jl_get_ptls_states(void);
-#endif
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
