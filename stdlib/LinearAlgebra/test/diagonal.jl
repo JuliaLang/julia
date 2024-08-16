@@ -1352,4 +1352,10 @@ end
     end
 end
 
+@testset "symmetric" begin
+    D = Diagonal(1:4)
+    @test LinearAlgebra.symmetric(D) == D
+    @test LinearAlgebra.symmetric_type(typeof(D)) == typeof(D)
+end
+
 end # module TestDiagonal

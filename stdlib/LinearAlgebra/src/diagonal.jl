@@ -1038,3 +1038,6 @@ end
 
 uppertriangular(D::Diagonal) = D
 lowertriangular(D::Diagonal) = D
+
+symmetric(D::Diagonal{<:Number}) = D
+symmetric_type(::Type{T}) where {T<:Diagonal{<:Number}} = T
