@@ -12,7 +12,7 @@ struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     end
 end
 """
-    Symmetric(A, uplo=:U)
+    Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
 
 Construct a `Symmetric` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
 triangle of the matrix `A`.
@@ -63,7 +63,7 @@ function Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
 end
 
 """
-    symmetric(A, uplo=:U)
+    symmetric(A, uplo::Symbol=:U)
 
 Construct a symmetric view of `A`. If `A` is a matrix, `uplo` controls whether the upper
 (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
@@ -105,7 +105,7 @@ struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     end
 end
 """
-    Hermitian(A, uplo=:U)
+    Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
 
 Construct a `Hermitian` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
 triangle of the matrix `A`.
@@ -153,7 +153,7 @@ function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
 end
 
 """
-    hermitian(A, uplo=:U)
+    hermitian(A, uplo::Symbol=:U)
 
 Construct a hermitian view of `A`. If `A` is a matrix, `uplo` controls whether the upper
 (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
@@ -998,7 +998,7 @@ function cbrt(A::HermOrSym{<:Real})
 end
 
 """
-    hermitianpart(A, uplo=:U) -> Hermitian
+    hermitianpart(A::AbstractMatrix, uplo::Symbol=:U) -> Hermitian
 
 Return the Hermitian part of the square matrix `A`, defined as `(A + A') / 2`, as a
 [`Hermitian`](@ref) matrix. For real matrices `A`, this is also known as the symmetric part
@@ -1014,7 +1014,7 @@ See also [`hermitianpart!`](@ref) for the corresponding in-place operation.
 hermitianpart(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(_hermitianpart(A), uplo)
 
 """
-    hermitianpart!(A, uplo=:U) -> Hermitian
+    hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) -> Hermitian
 
 Overwrite the square matrix `A` in-place with its Hermitian part `(A + A') / 2`, and return
 [`Hermitian(A, uplo)`](@ref). For real matrices `A`, this is also known as the symmetric
