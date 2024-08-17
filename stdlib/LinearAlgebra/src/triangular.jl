@@ -2792,8 +2792,6 @@ function logabsdet(A::Union{UpperTriangular{T},LowerTriangular{T}}) where T
 end
 
 eigen(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
-eigencopy_oftype(A::UpperOrUnitUpperTriangular, T) = UpperTriangular(eigencopy_oftype(A.data, T))
-eigencopy_oftype(A::LowerOrUnitLowerTriangular, T) = LowerTriangular(eigencopy_oftype(A.data, T))
 # Generic singular systems
 for func in (:svd, :svd!, :svdvals)
     @eval begin
