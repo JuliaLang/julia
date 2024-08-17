@@ -171,7 +171,10 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
         end
         parse!(stream; rule=options)
         if options === :statement
-            bump_trivia(stream)
+            bump_trivia(stream; skip_newlines=false)
+            if peek(stream) == K"NewlineWs"
+                bump(stream)
+            end
         end
 
         if any_error(stream)

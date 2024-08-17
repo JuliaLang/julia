@@ -11,7 +11,7 @@ function _unwrap_parse_error(core_hook_result)
 end
 
 @testset "Hooks for Core integration" begin
-    @testset "whitespace parsing" begin
+    @testset "whitespace and comment parsing" begin
         @test JuliaSyntax.core_parser_hook("", "somefile", 1, 0, :statement) == Core.svec(nothing, 0)
         @test JuliaSyntax.core_parser_hook("", "somefile", 1, 0, :statement) == Core.svec(nothing, 0)
 
@@ -20,6 +20,16 @@ end
 
         @test JuliaSyntax.core_parser_hook(" x \n", "somefile", 1, 0, :statement) == Core.svec(:x,4)
         @test JuliaSyntax.core_parser_hook(" x \n", "somefile", 1, 0, :atom)      == Core.svec(:x,2)
+
+        # https://github.com/JuliaLang/JuliaSyntax.jl/issues/316#issuecomment-1870294857
+        stmtstr =
+            """
+            plus(a, b) = a + b
+
+            # Issue #81
+            f() = nothing
+            """
+        @test JuliaSyntax.core_parser_hook(stmtstr, "somefile", 1, 0, :statement)[2] == 19
     end
 
     @testset "filename and lineno" begin
