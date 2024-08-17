@@ -36,9 +36,18 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
         return new(s, i-1, nextind(s,j)-i)
     end
+    function SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where T<:AbstractString
+        @boundscheck if !(i == j == 0)
+            si, sj = i + 1, prevind(s, j + i + 1)
+            @inbounds isvalid(s, si) || string_index_err(s, si)
+            @inbounds isvalid(s, sj) || string_index_err(s, sj)
+        end
+        new(s, i, j)
+    end
 end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
+@propagate_inbounds SubString(s::T, i::Int, j::Int, v::Val{:noshift}) where {T<:AbstractString} = SubString{T}(s, i, j, v)
 @propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
 @propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
@@ -100,25 +109,19 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
-byte_string_classify(s::SubString{String}) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
-
-isvalid(::Type{String}, s::SubString{String}) = byte_string_classify(s) ≠ 0
-isvalid(s::SubString{String}) = isvalid(String, s)
-
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
+parent(s::SubString) = s.string
+parentindices(s::SubString) = (s.offset + 1 : thisind(s.string, s.offset + s.ncodeunits),)
+
 function ==(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
-    s = sizeof(a)
-    s == sizeof(b) && 0 == _memcmp(a, b, s)
+    sizeof(a) == sizeof(b) && _memcmp(a, b) == 0
 end
 
 function cmp(a::SubString{String}, b::SubString{String})
-    na = sizeof(a)
-    nb = sizeof(b)
-    c = _memcmp(a, b, min(na, nb))
-    return c < 0 ? -1 : c > 0 ? +1 : cmp(na, nb)
+    c = _memcmp(a, b)
+    return c < 0 ? -1 : c > 0 ? +1 : cmp(sizeof(a), sizeof(b))
 end
 
 # don't make unnecessary copies when passing substrings to C functions
@@ -136,6 +139,8 @@ function hash(s::SubString{String}, h::UInt)
     h += memhash_seed
     ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
 end
+
+_isannotated(::SubString{T}) where {T} = _isannotated(T)
 
 """
     reverse(s::AbstractString) -> AbstractString
@@ -209,19 +214,30 @@ end
     return n
 end
 
-@inline function __unsafe_string!(out, s::Union{String, SubString{String}}, offs::Integer)
+@assume_effects :nothrow @inline function __unsafe_string!(out, s::String, offs::Integer)
     n = sizeof(s)
     GC.@preserve s out unsafe_copyto!(pointer(out, offs), pointer(s), n)
     return n
 end
 
-@inline function __unsafe_string!(out, s::Symbol, offs::Integer)
+@inline function __unsafe_string!(out, s::SubString{String}, offs::Integer)
+    n = sizeof(s)
+    GC.@preserve s out unsafe_copyto!(pointer(out, offs), pointer(s), n)
+    return n
+end
+
+@assume_effects :nothrow @inline function __unsafe_string!(out, s::Symbol, offs::Integer)
     n = sizeof(s)
     GC.@preserve s out unsafe_copyto!(pointer(out, offs), unsafe_convert(Ptr{UInt8},s), n)
     return n
 end
 
-function string(a::Union{Char, String, SubString{String}, Symbol}...)
+# nothrow needed here because for v in a can't prove the indexing is inbounds.
+@assume_effects :foldable :nothrow string(a::Union{Char, String, Symbol}...) = _string(a...)
+
+string(a::Union{Char, String, SubString{String}, Symbol}...) = _string(a...)
+
+function _string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
         # 4 types is too many for automatic Union-splitting, so we split manually
@@ -250,6 +266,10 @@ function string(a::Union{Char, String, SubString{String}, Symbol}...)
     return out
 end
 
+# don't assume effects for general integers since we cannot know their implementation
+# not nothrow because r<0 throws
+@assume_effects :foldable repeat(s::String, r::BitInteger) = @invoke repeat(s::String, r::Integer)
+
 function repeat(s::Union{String, SubString{String}}, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     r == 0 && return ""
@@ -258,7 +278,7 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     out = _string_n(n*r)
     if n == 1 # common case: repeating a single-byte string
         @inbounds b = codeunit(s, 1)
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
+        memset(unsafe_convert(Ptr{UInt8}, out), b, r)
     else
         for i = 0:r-1
             GC.@preserve s out unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)

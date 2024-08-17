@@ -268,7 +268,6 @@ end
 @test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
 @test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
 
-
 @test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
 @test repr(Expr(:using, Expr(:(.), :A),
                         Expr(:(.), :B))) == ":(using A, B)"
@@ -285,6 +284,10 @@ end
                          Expr(:(.), :D))) == ":(import A, B.C, D)"
 @test repr(Expr(:import, Expr(:(.), :A, :B),
                          Expr(:(.), :C, :D))) == ":(import A.B, C.D)"
+
+# https://github.com/JuliaLang/julia/issues/49168
+@test repr(:(using A: (..))) == ":(using A: (..))"
+@test repr(:(using A: (..) as twodots)) == ":(using A: (..) as twodots)"
 
 # range syntax
 @test_repr "1:2"
@@ -323,7 +326,7 @@ end
             # line meta
             if d < 0
                 # line meta
-                error(\"dimension size must be nonnegative (got \$d)\")
+                error(\"dimension size must be non-negative (got \$d)\")
             end
             # line meta
             n *= d
@@ -520,6 +523,13 @@ end
 # Hidden macro names
 @test sprint(show, Expr(:macrocall, Symbol("@#"), nothing, :a)) == ":(@var\"#\" a)"
 
+# Test that public expressions are rendered nicely
+# though they are hard to create with quotes because public is not a context dependant keyword
+@test sprint(show, Expr(:public, Symbol("@foo"))) == ":(public @foo)"
+@test sprint(show, Expr(:public, :f,:o,:o)) == ":(public f, o, o)"
+s = sprint(show, :(module A; public x; end))
+@test match(r"^:\(module A\n  #= .* =#\n  #= .* =#\n  public x\n  end\)$", s) !== nothing
+
 # PR #38418
 module M1 var"#foo#"() = 2 end
 @test occursin("M1.var\"#foo#\"", sprint(show, M1.var"#foo#", context = :module=>@__MODULE__))
@@ -630,7 +640,7 @@ end
 @test_repr "::@m(x, y) + z"
 @test_repr "[@m(x) y z]"
 @test_repr "[@m(x) y; z]"
-@test_repr "let @m(x), y=z; end"
+test_repr("let @m(x), y=z; end", true)
 
 @test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
 @test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
@@ -693,7 +703,7 @@ let oldout = stdout, olderr = stderr
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test fetch(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
         @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
@@ -786,6 +796,14 @@ let ms = methods(S45879)
     @test ms isa Base.MethodList
     @test length(ms) == 0
     @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
+end
+
+function f49475(a=12.0; b) end
+let ms = methods(f49475)
+    @test length(ms) == 2
+    repr1 = sprint(show, "text/plain", ms[1])
+    repr2 = sprint(show, "text/plain", ms[2])
+    @test occursin("f49475(; ...)", repr1) || occursin("f49475(; ...)", repr2)
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
@@ -998,6 +1016,9 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
+
+# Printing of :(function (x...) end)
+@test startswith(replstr(Meta.parse("function (x...) end")), ":(function (x...,)")
 
 # Printing of macro definitions
 @test sprint(show, :(macro m end)) == ":(macro m end)"
@@ -1229,70 +1250,73 @@ end
 @testset "PR 17117: print_array" begin
     s = IOBuffer(Vector{UInt8}(), read=true, write=true)
     Base.print_array(s, [1, 2, 3])
-    @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
+    @test String(take!(s)) == " 1\n 2\n 3"
     close(s)
     s2 = IOBuffer(Vector{UInt8}(), read=true, write=true)
     z = zeros(0,0,0,0,0,0,0,0)
     Base.print_array(s2, z)
-    @test String(resize!(s2.data, s2.size)) == ""
+    @test String(take!(s2)) == ""
     close(s2)
 end
 
-let repr = sprint(dump, :(x = 1))
-    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
-end
-let repr = sprint(dump, Pair{String,Int64})
-    @test repr == "Pair{String, Int64} <: Any\n  first::String\n  second::Int64\n"
-end
-let repr = sprint(dump, Tuple)
-    @test repr == "Tuple <: Any\n"
-end
-let repr = sprint(dump, Int64)
-    @test repr == "Int64 <: Signed\n"
-end
-let repr = sprint(dump, Any)
-    @test length(repr) == 4
-    @test occursin(r"^Any\n", repr)
-    @test endswith(repr, '\n')
-end
-let repr = sprint(dump, Integer)
-    @test occursin("Integer <: Real", repr)
-    @test !occursin("Any", repr)
-end
-let repr = sprint(dump, Union{Integer, Float32})
-    @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
-end
 module M30442
     struct T end
 end
-let repr = sprint(show, Union{String, M30442.T})
-    @test repr == "Union{$(curmod_prefix)M30442.T, String}" ||
-          repr == "Union{String, $(curmod_prefix)M30442.T}"
-end
-let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
-    @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
-end
-let repr = sprint(dump, Core.svec())
-    @test repr == "empty SimpleVector\n"
-end
-let repr = sprint(dump, sin)
-    @test repr == "sin (function of type typeof(sin))\n"
-end
-let repr = sprint(dump, Test)
-    @test repr == "Module Test\n"
-end
-let repr = sprint(dump, nothing)
-    @test repr == "Nothing nothing\n"
-end
-let a = Vector{Any}(undef, 10000)
-    a[2] = "elemA"
-    a[4] = "elemB"
-    a[11] = "elemC"
-    repr = sprint(dump, a; context=(:limit => true), sizehint=0)
-    @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
-end
-@test occursin("NamedTuple", sprint(dump, NamedTuple))
+@testset "Dump types" begin
+    let repr = sprint(dump, :(x = 1))
+        @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
+    end
+    let repr = sprint(dump, Pair{String,Int64})
+        @test repr == "struct Pair{String, Int64} <: Any\n  first::String\n  second::Int64\n"
+    end
+    let repr = sprint(dump, Tuple)
+        @test repr == "Tuple <: Any\n"
+    end
+    let repr = sprint(dump, Int64)
+        @test repr == "primitive type Int64 <: Signed\n"
+    end
+    let repr = sprint(dump, Any)
+        @test repr == "abstract type Any\n"
+    end
+    let repr = sprint(dump, Integer)
+        @test occursin("abstract type Integer <: Real", repr)
+        @test !occursin("Any", repr)
+    end
+    let repr = sprint(dump, Union{Integer, Float32})
+        @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
+    end
 
+    let repr = sprint(show, Union{String, M30442.T})
+        @test repr == "Union{$(curmod_prefix)M30442.T, String}" ||
+              repr == "Union{String, $(curmod_prefix)M30442.T}"
+    end
+    let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
+        @test repr == "Ptr{UInt8}($(Base.repr(UInt(1))))\n"
+    end
+    let repr = sprint(dump, Core.svec())
+        @test repr == "empty SimpleVector\n"
+    end
+    let repr = sprint(dump, sin)
+        @test repr == "sin (function of type typeof(sin))\n"
+    end
+    let repr = sprint(dump, Test)
+        @test repr == "Module Test\n"
+    end
+    let repr = sprint(dump, nothing)
+        @test repr == "Nothing nothing\n"
+    end
+    let a = Vector{Any}(undef, 10000)
+        a[2] = "elemA"
+        a[4] = "elemB"
+        a[11] = "elemC"
+        repr = sprint(dump, a; context=(:limit => true), sizehint=0)
+        @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
+    end
+    @test occursin("NamedTuple", sprint(dump, NamedTuple))
+
+    # issue 36495, dumping a partial NamedTupled shouldn't error
+    @test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
+end
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
 
@@ -1347,19 +1371,36 @@ test_repr("(:).a")
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
 @test repr(Tuple{String, Int64, Int64, Int64}) == "Tuple{String, Int64, Int64, Int64}"
 @test repr(Tuple{String, Int64, Int64, Int64, Int64}) == "Tuple{String, Vararg{Int64, 4}}"
+@test repr(NTuple) == "NTuple{N, T} where {N, T}"
+@test repr(Tuple{NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "NTuple{5, NTuple{N, T} where T} where N"
+@test repr(Tuple{Float64, NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "Tuple{Float64, Vararg{NTuple{N, T} where T, 5}} where N"
+
+# Test printing of NamedTuples using the macro syntax
+@test repr(@NamedTuple{kw::Int64}) == "@NamedTuple{kw::Int64}"
+@test repr(@NamedTuple{kw::Union{Float64, Int64}, kw2::Int64}) == "@NamedTuple{kw::Union{Float64, Int64}, kw2::Int64}"
+@test repr(@NamedTuple{kw::@NamedTuple{kw2::Int64}}) == "@NamedTuple{kw::@NamedTuple{kw2::Int64}}"
+@test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
+@test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
+@test repr(@NamedTuple{var"#"::Int64}) == "@NamedTuple{var\"#\"::Int64}"
+
+# Test general printing of `Base.Pairs` (it should not use the `@Kwargs` macro syntax)
+@test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Tuple{Symbol}, @NamedTuple{init::$Int}}"
 
 @testset "issue #42931" begin
-    @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
+    @test repr(NTuple{4, :A}) == "Tuple{:A, :A, :A, :A}"
     @test repr(NTuple{3, :A}) == "Tuple{:A, :A, :A}"
     @test repr(NTuple{2, :A}) == "Tuple{:A, :A}"
     @test repr(NTuple{1, :A}) == "Tuple{:A}"
     @test repr(NTuple{0, :A}) == "Tuple{}"
 
     @test repr(Tuple{:A, :A, :A, :B}) == "Tuple{:A, :A, :A, :B}"
-    @test repr(Tuple{:A, :A, :A, :A}) == "NTuple{4, :A}"
+    @test repr(Tuple{:A, :A, :A, :A}) == "Tuple{:A, :A, :A, :A}"
     @test repr(Tuple{:A, :A, :A}) == "Tuple{:A, :A, :A}"
     @test repr(Tuple{:A}) == "Tuple{:A}"
     @test repr(Tuple{}) == "Tuple{}"
+
+    @test repr(Tuple{Vararg{N, 10}} where N) == "NTuple{10, N} where N"
+    @test repr(Tuple{Vararg{10, N}} where N) == "Tuple{Vararg{10, N}} where N"
 end
 
 # Test that REPL/mime display of invalid UTF-8 data doesn't throw an exception:
@@ -1422,12 +1463,20 @@ end
 @test static_shown(:+) == ":+"
 @test static_shown(://) == "://"
 @test static_shown(://=) == "://="
-@test static_shown(Symbol("")) == "Symbol(\"\")"
-@test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
-@test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
+@test static_shown(Symbol("")) == ":var\"\""
+@test static_shown(Symbol("a/b")) == ":var\"a/b\""
+@test static_shown(Symbol("a-b")) == ":var\"a-b\""
 @test static_shown(UnionAll) == "UnionAll"
-
 @test static_shown(QuoteNode(:x)) == ":(:x)"
+@test static_shown(:!) == ":!"
+@test static_shown("\"") == "\"\\\"\""
+@test static_shown("\$") == "\"\\\$\""
+@test static_shown("\\") == "\"\\\\\""
+@test static_shown("a\x80b") == "\"a\\x80b\""
+@test static_shown("a\x80\$\\b") == "\"a\\x80\\\$\\\\b\""
+@test static_shown(GlobalRef(Main, :var"a#b")) == "Main.var\"a#b\""
+@test static_shown(GlobalRef(Main, :+)) == "Main.:(+)"
+@test static_shown((a = 3, ! = 4, var"a b" = 5)) == "(a=3, (!)=4, var\"a b\"=5)"
 
 # PR #38049
 @test static_shown(sum) == "Base.sum"
@@ -1827,8 +1876,8 @@ end
     # issue #27747
     let t = (x = Integer[1, 2],)
         v = [t, t]
-        @test showstr(v) == "NamedTuple{(:x,), Tuple{Vector{Integer}}}[(x = [1, 2],), (x = [1, 2],)]"
-        @test replstr(v) == "2-element Vector{NamedTuple{(:x,), Tuple{Vector{Integer}}}}:\n (x = [1, 2],)\n (x = [1, 2],)"
+        @test showstr(v) == "@NamedTuple{x::Vector{Integer}}[(x = [1, 2],), (x = [1, 2],)]"
+        @test replstr(v) == "2-element Vector{@NamedTuple{x::Vector{Integer}}}:\n (x = [1, 2],)\n (x = [1, 2],)"
     end
 
     # issue #25857
@@ -1844,6 +1893,7 @@ end
 
     @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
     @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer, Integer}[1 => 2]"
+    @test showstr([(a=1,)]) == "[(a = 1,)]"
     @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer, Integer}(1 => 2)"
     @test showstr(Dict(true=>false)) == "Dict{Bool, Bool}(1 => 0)"
     @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
@@ -1932,12 +1982,12 @@ end
 end
 
 @testset "Intrinsic printing" begin
-    @test sprint(show, Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
-    @test repr(Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
+    @test sprint(show, Core.Intrinsics.cglobal) == "Core.Intrinsics.cglobal"
+    @test repr(Core.Intrinsics.cglobal) == "Core.Intrinsics.cglobal"
     let io = IOBuffer()
-        show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
+        show(io, MIME"text/plain"(), Core.Intrinsics.cglobal)
         str = String(take!(io))
-        @test occursin("arraylen", str)
+        @test occursin("cglobal", str)
         @test occursin("(intrinsic function", str)
     end
     @test string(Core.Intrinsics.add_int) == "add_int"
@@ -2012,6 +2062,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             r = 1
             s = try
                 r = 2
+                Base.inferencebarrier(false) && error()
                 "BYE"
             catch
                 r = 3
@@ -2025,7 +2076,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
 end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
+    src.debuginfo = Core.DebugInfo(src.debuginfo.def) # IRCode printing defaults to incomplete line info printing, so turn it off completely for CodeInfo too
     let source_slotnames = String["my_fun28173", "x"],
         repr_ir = split(repr(ir, context = :SOURCE_SLOTNAMES=>source_slotnames), '\n'),
         repr_ir = "CodeInfo(\n" * join((l[4:end] for l in repr_ir), "\n") * ")" # remove line numbers
@@ -2035,8 +2086,8 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test all(isspace, pop!(lines1))
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(1), Val{1}), false)
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(QuoteNode(2), Val{2}), true)
-    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
-    Core.Compiler.insert_node!(ir, length(ir.stmts.inst), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.stmt), Core.Compiler.NewInstruction(QuoteNode(3), Val{3}), false)
+    Core.Compiler.insert_node!(ir, length(ir.stmts.stmt), Core.Compiler.NewInstruction(QuoteNode(4), Val{4}), true)
     lines2 = split(repr(ir), '\n')
     @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
@@ -2048,9 +2099,9 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     end
     @test popfirst!(lines2) == "   │          $(QuoteNode(2))"
     @test pop!(lines2) == "   └───       \$(QuoteNode(4))"
-    @test pop!(lines1) == "17 └───       return %18"
-    @test pop!(lines2) == "   │          return %18"
-    @test pop!(lines2) == "17 │          \$(QuoteNode(3))"
+    @test pop!(lines1) == "18 └───       return %21"
+    @test pop!(lines2) == "   │          return %21"
+    @test pop!(lines2) == "18 │          \$(QuoteNode(3))"
     @test lines1 == lines2
 
     # verbose linetable
@@ -2058,6 +2109,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
     @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+
+    # Test that a bad :invoke doesn't cause an error during printing
+    Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)
+    io = IOBuffer()
+    Base.IRShow.show_ir(io, ir)
+    seekstart(io)
+    @test contains(String(take!(io)), "Expr(:invoke, nothing")
 end
 
 # Verify that extra instructions at the end of the IR
@@ -2065,7 +2123,7 @@ end
 # with as unnamed "!" BB.
 let src = code_typed(gcd, (Int, Int), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    push!(ir.stmts.inst, Core.Compiler.ReturnNode())
+    push!(ir.stmts.stmt, Core.Compiler.ReturnNode())
     lines = split(sprint(show, ir), '\n')
     @test all(isspace, pop!(lines))
     @test pop!(lines) == "   !!! ──       unreachable::#UNDEF"
@@ -2121,6 +2179,20 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
     @test repr([true, false]) == "Bool[1, 0]" == repr(BitVector([true, false]))
     @test_repr "Bool[1, 0]"
 end
+
+@testset "Unions with Bool (#39590)" begin
+    @test repr([missing, false]) == "Union{Missing, Bool}[missing, 0]"
+    @test_repr "Union{Bool, Nothing}[1, 0, nothing]"
+end
+
+# issue #26847
+@test_repr "Union{Missing, Float32}[1.0]"
+
+# intersection of #45396 and #48822
+@test_repr "Union{Missing, Rational{Int64}}[missing, 1//2, 2]"
+
+# Don't go too far with #48822
+@test_repr "Union{String, Bool}[true]"
 
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char, Char}}[('a', 'b')]"
@@ -2427,9 +2499,9 @@ end
 
     # replace an instruction
     add_stmt = ir.stmts[1]
-    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:stmt].args[1], add_stmt[:stmt].args[2], 999), Int)
     node = Core.Compiler.insert_node!(ir, 1, inst)
-    Core.Compiler.setindex!(add_stmt, node, :inst)
+    Core.Compiler.setindex!(add_stmt, node, :stmt)
 
     # the new node should be colored green (as it's uncompacted IR),
     # and its uses shouldn't be colored at all (since they're just plain valid references)
@@ -2440,7 +2512,7 @@ end
     @test contains(str, "%1 = %6")
 
     # if we insert an invalid node, it should be colored appropriately
-    Core.Compiler.setindex!(add_stmt, Core.Compiler.SSAValue(node.id+1), :inst)
+    Core.Compiler.setindex!(add_stmt, Core.Compiler.SSAValue(node.id+1), :stmt)
     str = sprint(; context=:color=>true) do io
         show(io, ir)
     end
@@ -2598,4 +2670,38 @@ end
 
     ir = Core.Compiler.complete(compact)
     verify_display(ir)
+end
+
+let buf = IOBuffer()
+    Base.show_tuple_as_call(buf, Symbol(""), Tuple{Function,Any})
+    @test String(take!(buf)) == "(::Function)(::Any)"
+end
+
+module Issue49382
+    abstract type Type49382 end
+end
+using .Issue49382
+(::Type{Issue49382.Type49382})() = 1
+@test sprint(show, methods(Issue49382.Type49382)) isa String
+
+# Showing of bad SlotNumber in Expr(:toplevel)
+let lowered = Meta.lower(Main, Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(x = 1)), :(y = 1))))
+    ci = lowered.args[1]
+    @assert isa(ci, Core.CodeInfo)
+    @test !isempty(ci.slotnames)
+    @assert ci.code[1].head === :toplevel
+    ci.code[1].args[1] = :($(Core.SlotNumber(1)) = 1)
+    # Check that this gets printed as `_1 = 1` not `y = 1`
+    @test contains(sprint(show, ci), "_1 = 1")
+end
+
+# Pointers should be reprable
+@test is_juliarepr(pointer([1]))
+@test is_juliarepr(Ptr{Vector{Complex{Float16}}}(UInt(0xdeadbeef)))
+
+# Toplevel MethodInstance with undef :uninferred
+let topmi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
+    topmi.specTypes = Tuple{}
+    topmi.def = Main
+    @test contains(repr(topmi), "Toplevel MethodInstance")
 end

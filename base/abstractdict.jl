@@ -12,6 +12,8 @@ struct KeyError <: Exception
     key
 end
 
+KeyTypeError(K, key) = TypeError(:var"dict key", K, key)
+
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::AbstractDict, k) = in(k, keys(d))
@@ -218,7 +220,7 @@ Dict{Int64, Int64} with 3 entries:
 function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
         if haslength(d) && haslength(other)
-            sizehint!(d, length(d) + length(other))
+            sizehint!(d, length(d) + length(other); shrink = false)
         end
         for (k,v) in other
             d[k] = v
@@ -299,7 +301,7 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype(::Type{<:AbstractDict{K,V}}) where {K,V} = K
+keytype(::Type{<:AbstractDict{K}}) where {K} = K
 keytype(a::AbstractDict) = keytype(typeof(a))
 
 """
@@ -313,7 +315,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype(::Type{<:AbstractDict{K,V}}) where {K,V} = V
+valtype(::Type{<:AbstractDict{<:Any,V}}) where {V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 
 """
@@ -414,7 +416,7 @@ end
 Update `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
-# Example
+# Examples
 ```jldoctest
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
 Dict{Int64, String} with 3 entries:
@@ -536,12 +538,12 @@ function hash(a::AbstractDict, h::UInt)
     hash(hv, h)
 end
 
-function getindex(t::AbstractDict, key)
+function getindex(t::AbstractDict{<:Any,V}, key) where V
     v = get(t, key, secret_table_token)
     if v === secret_table_token
         throw(KeyError(key))
     end
-    return v
+    return v::V
 end
 
 # t[k1,k2,ks...] is syntactic sugar for t[(k1,k2,ks...)].  (Note
@@ -560,8 +562,6 @@ function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
 end
 
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
-push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
-push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
 # AbstractDicts are convertible
 convert(::Type{T}, x::T) where {T<:AbstractDict} = x
@@ -578,6 +578,55 @@ end
 _tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<(top_set_bit(x-one(T)))
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
+
+# This error is thrown if `grow_to!` cannot validate the contents of the iterator argument to it, which it does by testing the iteration protocol (isiterable) on it each time it is about to start iteration on it
+_throw_dict_kv_error() = throw(ArgumentError("AbstractDict(kv): kv needs to be an iterator of 2-tuples or pairs"))
+
+function grow_to!(dest::AbstractDict, itr)
+    applicable(iterate, itr) || _throw_dict_kv_error()
+    y = iterate(itr)
+    y === nothing && return dest
+    kv, st = y
+    applicable(iterate, kv) || _throw_dict_kv_error()
+    k = iterate(kv)
+    k === nothing && _throw_dict_kv_error()
+    k, kvst = k
+    v = iterate(kv, kvst)
+    v === nothing && _throw_dict_kv_error()
+    v, kvst = v
+    iterate(kv, kvst) === nothing || _throw_dict_kv_error()
+    if !(dest isa AbstractDict{typeof(k), typeof(v)})
+        dest = empty(dest, typeof(k), typeof(v))
+    end
+    dest[k] = v
+    return grow_to!(dest, itr, st)
+end
+
+function grow_to!(dest::AbstractDict{K,V}, itr, st) where {K, V}
+    y = iterate(itr, st)
+    while y !== nothing
+        kv, st = y
+        applicable(iterate, kv) || _throw_dict_kv_error()
+        kst = iterate(kv)
+        kst === nothing && _throw_dict_kv_error()
+        k, kvst = kst
+        vst = iterate(kv, kvst)
+        vst === nothing && _throw_dict_kv_error()
+        v, kvst = vst
+        iterate(kv, kvst) === nothing || _throw_dict_kv_error()
+        if isa(k, K) && isa(v, V)
+            dest[k] = v
+        else
+            new = empty(dest, promote_typejoin(K, typeof(k)), promote_typejoin(V, typeof(v)))
+            merge!(new, dest)
+            new[k] = v
+            return grow_to!(new, itr, st)
+        end
+        y = iterate(itr, st)
+    end
+    return dest
+end
+
 
 dict_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
 dict_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)

@@ -99,8 +99,8 @@ listed after the ending quote, to change its behaviour:
 - `m` treats the `^` and `\$` tokens as matching the start and end of individual lines, as
   opposed to the whole string.
 - `s` allows the `.` modifier to match newlines.
-- `x` enables "comment mode": whitespace is enabled except when escaped with `\\`, and `#`
-  is treated as starting a comment.
+- `x` enables "free-spacing mode": whitespace between regex tokens is ignored except when escaped with `\\`,
+   and `#` in the regex is treated as starting a comment (which is ignored to the line ending).
 - `a` enables ASCII mode (disables `UTF` and `UCP` modes). By default `\\B`, `\\b`, `\\D`,
   `\\d`, `\\S`, `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With
   this option, these sequences only match ASCII characters. This includes `\\u` also, which
@@ -167,7 +167,7 @@ abstract type AbstractMatch end
 """
     RegexMatch <: AbstractMatch
 
-A type representing a single match to a `Regex` found in a string.
+A type representing a single match to a [`Regex`](@ref) found in a string.
 Typically created from the [`match`](@ref) function.
 
 The `match` field stores the substring of the entire matched string.
@@ -185,8 +185,13 @@ If a group was not captured, `nothing` will be yielded instead of a substring.
 
 Methods that accept a `RegexMatch` object are defined for [`iterate`](@ref),
 [`length`](@ref), [`eltype`](@ref), [`keys`](@ref keys(::RegexMatch)), [`haskey`](@ref), and
-[`getindex`](@ref), where keys are the the names or numbers of a capture group.
+[`getindex`](@ref), where keys are the names or numbers of a capture group.
 See [`keys`](@ref keys(::RegexMatch)) for more information.
+
+`Tuple(m)`, `NamedTuple(m)`, and `Dict(m)` can be used to construct more flexible collection types from `RegexMatch` objects.
+
+!!! compat "Julia 1.11"
+    Constructing NamedTuples and Dicts from RegexMatches requires Julia 1.11
 
 # Examples
 ```jldoctest
@@ -210,15 +215,25 @@ julia> hr, min, ampm = m; # destructure capture groups by iteration
 
 julia> hr
 "11"
+
+julia> Dict(m)
+Dict{Any, Union{Nothing, SubString{String}}} with 3 entries:
+  "hour"   => "11"
+  3        => nothing
+  "minute" => "30"
 ```
 """
-struct RegexMatch <: AbstractMatch
-    match::SubString{String}
-    captures::Vector{Union{Nothing,SubString{String}}}
+struct RegexMatch{S<:AbstractString} <: AbstractMatch
+    match::SubString{S}
+    captures::Vector{Union{Nothing,SubString{S}}}
     offset::Int
     offsets::Vector{Int}
     regex::Regex
 end
+
+RegexMatch(match::SubString{S}, captures::Vector{Union{Nothing,SubString{S}}},
+           offset::Union{Int, UInt}, offsets::Vector{Int}, regex::Regex) where {S<:AbstractString} =
+    RegexMatch{S}(match, captures, offset, offsets, regex)
 
 """
     keys(m::RegexMatch) -> Vector
@@ -284,6 +299,9 @@ end
 iterate(m::RegexMatch, args...) = iterate(m.captures, args...)
 length(m::RegexMatch) = length(m.captures)
 eltype(m::RegexMatch) = eltype(m.captures)
+
+NamedTuple(m::RegexMatch) = NamedTuple{Symbol.(Tuple(keys(m)))}(values(m))
+Dict(m::RegexMatch) = Dict(pairs(m))
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
@@ -377,9 +395,13 @@ end
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
 Search for the first match of the regular expression `r` in `s` and return a [`RegexMatch`](@ref)
-object containing the match, or nothing if the match failed. The matching substring can be
-retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
-`m.captures` The optional `idx` argument specifies an index at which to start the search.
+object containing the match, or nothing if the match failed.
+The optional `idx` argument specifies an index at which to start the search.
+The matching substring can be retrieved by accessing `m.match`, the captured sequences can be retrieved by accessing `m.captures`.
+The resulting [`RegexMatch`](@ref) object can be used to construct other collections: e.g. `Tuple(m)`, `NamedTuple(m)`.
+
+!!! compat "Julia 1.11"
+    Constructing NamedTuples and Dicts requires Julia 1.11
 
 # Examples
 ```jldoctest
@@ -423,15 +445,42 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
     return result
 end
 
+function _annotatedmatch(m::RegexMatch{S}, str::AnnotatedString{S}) where {S<:AbstractString}
+    RegexMatch{AnnotatedString{S}}(
+        (@inbounds SubString{AnnotatedString{S}}(
+            str, m.match.offset, m.match.ncodeunits, Val(:noshift))),
+        Union{Nothing,SubString{AnnotatedString{S}}}[
+            if !isnothing(cap)
+                (@inbounds SubString{AnnotatedString{S}}(
+                    str, cap.offset, cap.ncodeunits, Val(:noshift)))
+            end for cap in m.captures],
+        m.offset, m.offsets, m.regex)
+end
+
+function match(re::Regex, str::AnnotatedString)
+    m = match(re, str.string)
+    if !isnothing(m)
+        _annotatedmatch(m, str)
+    end
+end
+
+function match(re::Regex, str::AnnotatedString, idx::Integer, add_opts::UInt32=UInt32(0))
+    m = match(re, str.string, idx, add_opts)
+    if !isnothing(m)
+        _annotatedmatch(m, str)
+    end
+end
+
 match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
 match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
-    "regex matching is only available for the String type; use String(s) to convert"
+    "regex matching is only available for the String and AnnotatedString types; use String(s) to convert"
 ))
 
 findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
 
 # TODO: return only start index and update deprecation
-function _findnext_re(re::Regex, str::Union{String,SubString}, idx::Integer, match_data::Ptr{Cvoid})
+# duck-type str so that external UTF-8 string packages like StringViews can hook in
+function _findnext_re(re::Regex, str, idx::Integer, match_data::Ptr{Cvoid})
     if idx > nextind(str,lastindex(str))
         throw(BoundsError())
     end
@@ -670,18 +719,19 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     end
 end
 
-struct RegexMatchIterator
+struct RegexMatchIterator{S <: AbstractString}
     regex::Regex
-    string::String
+    string::S
     overlap::Bool
 
-    function RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false)
-        new(regex, string, ovr)
-    end
+    RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false) =
+        new{String}(regex, String(string), ovr)
+    RegexMatchIterator(regex::Regex, string::AnnotatedString, ovr::Bool=false) =
+        new{AnnotatedString{String}}(regex, AnnotatedString(String(string.string), string.annotations), ovr)
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
-eltype(::Type{RegexMatchIterator}) = RegexMatch
-IteratorSize(::Type{RegexMatchIterator}) = SizeUnknown()
+eltype(::Type{<:RegexMatchIterator}) = RegexMatch
+IteratorSize(::Type{<:RegexMatchIterator}) = SizeUnknown()
 
 function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
     opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
@@ -726,7 +776,7 @@ julia> rx = r"a.a"
 r"a.a"
 
 julia> m = eachmatch(rx, "a1a2a3a")
-Base.RegexMatchIterator(r"a.a", "a1a2a3a", false)
+Base.RegexMatchIterator{String}(r"a.a", "a1a2a3a", false)
 
 julia> collect(m)
 2-element Vector{RegexMatch}:

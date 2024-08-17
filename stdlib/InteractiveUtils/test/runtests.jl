@@ -138,6 +138,11 @@ tag = "ANY"
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
+@testset "code_warntype OpaqueClosure" begin
+    g = Base.Experimental.@opaque Tuple{Float64}->_ x -> 0.0
+    @test warntype_hastag(g, Tuple{Float64}, "::Float64")
+end
+
 end # module WarnType
 
 # Adds test for PR #17636
@@ -229,7 +234,7 @@ module Tmp14173
 end
 varinfo(Tmp14173) # warm up
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 100000)
+@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 125000)
 
 # PR #24997: test that `varinfo` doesn't fail when encountering `missing`
 module A
@@ -279,14 +284,50 @@ let x..y = 0
     @test (@which 1..2).name === :..
 end
 
+# issue #53691
+let a = -1
+    @test (@which 2^a).name === :^
+    @test (@which 2^0x1).name === :^
+end
+
+let w = Vector{Any}(undef, 9)
+    @testset "@which x^literal" begin
+        w[1] = @which 2^0
+        w[2] = @which 2^1
+        w[3] = @which 2^2
+        w[4] = @which 2^3
+        w[5] = @which 2^-1
+        w[6] = @which 2^-2
+        w[7] = @which 2^10
+        w[8] = @which big(2.0)^1
+        w[9] = @which big(2.0)^-1
+        @test all(getproperty.(w, :name) .=== :literal_pow)
+        @test length(Set(w)) == length(w) # all methods distinct
+    end
+end
+
+# PR 53713
+if Int === Int64
+    # literal_pow only for exponents x: -2^63 <= x < 2^63 #53860 (all Int)
+    @test (@which 2^-9223372036854775809).name === :^
+    @test (@which 2^-9223372036854775808).name === :literal_pow
+    @test (@which 2^9223372036854775807).name === :literal_pow
+    @test (@which 2^9223372036854775808).name === :^
+elseif Int === Int32
+    # literal_pow only for exponents x: -2^31 <= x < 2^31 #53860 (all Int)
+    @test (@which 2^-2147483649).name === :^
+    @test (@which 2^-2147483648).name === :literal_pow
+    @test (@which 2^2147483647).name === :literal_pow
+    @test (@which 2^2147483648).name === :^
+end
+
 # issue #13464
 try
     @which x = 1
     error("unexpected")
 catch err13464
-    @test startswith(err13464.msg, "expression is not a function call, or is too complex")
+    @test startswith(err13464.msg, "expression is not a function call")
 end
-
 module MacroTest
 export @macrotest
 macro macrotest(x::Int, y::Symbol) end
@@ -330,7 +371,9 @@ let _true = Ref(true), f, g, h
 end
 
 # manually generate a broken function, which will break codegen
-# and make sure Julia doesn't crash
+# and make sure Julia doesn't crash (when using a non-asserts build)
+is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+if !is_asserts()
 @eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
@@ -345,39 +388,43 @@ _true = true
 # and show that we can still work around it
 @noinline g_broken_code() = _true ? 0 : h_broken_code()
 @noinline h_broken_code() = (g_broken_code(); f_broken_code())
-let err = tempname(),
+let errf = tempname(),
     old_stderr = stderr,
-    new_stderr = open(err, "w")
+    new_stderr = open(errf, "w")
     try
         redirect_stderr(new_stderr)
+        @test occursin("f_broken_code", sprint(code_native, h_broken_code, ()))
         println(new_stderr, "start")
         flush(new_stderr)
-        @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        @test_throws "could not compile the specified method" sprint(code_native, f_broken_code, ())
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
-        @eval @test g_broken_code() == 0
+        @test invokelatest(g_broken_code) == 0
     finally
+        Libc.flush_cstdio()
         redirect_stderr(old_stderr)
         close(new_stderr)
-        let errstr = read(err, String)
+        let errstr = read(errf, String)
             @test startswith(errstr, """start
-                end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
-                ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
-            @test !endswith(errstr, "\nend\n") || errstr
+            @test endswith(errstr, "\nend\n") || errstr
         end
-        rm(err)
+        rm(errf)
     end
+end
 end
 
 # Issue #33163
 A33163(x; y) = x + y
 B33163(x) = x
-@test (@code_typed A33163(1, y=2))[1].inferred
-@test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
-@test !(@code_typed optimize=false B33163(1))[1].inferred
+let
+    (@code_typed A33163(1, y=2))[1]
+    (@code_typed optimize=false A33163(1, y=2))[1]
+    (@code_typed optimize=false B33163(1))[1]
+end
 
 @test_throws MethodError (@code_lowered wrongkeyword=true 3 + 4)
 
@@ -411,10 +458,11 @@ a14637 = A14637(0)
 @test (@code_typed max.(1 .+ 3, 5 - 7))[2] == Int
 f36261(x,y) = 3x + 4y
 A36261 = Float64[1.0, 2.0, 3.0]
-@test (@code_typed f36261.(A36261, pi))[1].inferred
-@test (@code_typed f36261.(A36261, 1 .+ pi))[1].inferred
-@test (@code_typed f36261.(A36261, 1 + pi))[1].inferred
-
+let
+    @code_typed f36261.(A36261, pi)[1]
+    @code_typed f36261.(A36261, 1 .+ pi)[1]
+    @code_typed f36261.(A36261, 1 + pi)[1]
+end
 
 module ReflectionTest
 using Test, Random, InteractiveUtils
@@ -640,7 +688,8 @@ end
 # macro options should accept both literals and variables
 let
     opt = false
-    @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
+    @test length(first(@code_typed optimize=opt sum(1:10)).code) ==
+        length((@code_lowered sum(1:10)).code)
 end
 
 @testset "@time_imports" begin
@@ -700,6 +749,9 @@ end
 @testset "code_llvm on opaque_closure" begin
     let ci = code_typed(+, (Int, Int))[1][1]
         ir = Core.Compiler.inflate_ir(ci)
+        ir.argtypes[1] = Tuple{}
+        @test ir.debuginfo.def === nothing
+        ir.debuginfo.def = Symbol(@__FILE__)
         oc = Core.OpaqueClosure(ir)
         @test (code_llvm(devnull, oc, Tuple{Int, Int}); true)
         let io = IOBuffer()
@@ -718,4 +770,10 @@ end
             @test (@code_native a[begin:end]) === nothing
         end
     end
+end
+
+@test Base.infer_effects(sin, (Int,)) == InteractiveUtils.@infer_effects sin(42)
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(InteractiveUtils))
 end

@@ -3,15 +3,15 @@
 ## [Building the Julia system image](@id Building-the-Julia-system-image)
 
 Julia ships with a preparsed system image containing the contents of the `Base` module, named
-`sys.ji`.  This file is also precompiled into a shared library called `sys.{so,dll,dylib}` on
-as many platforms as possible, so as to give vastly improved startup times.  On systems that do
+`sys.ji`. This file is also precompiled into a shared library called `sys.{so,dll,dylib}` on
+as many platforms as possible, so as to give vastly improved startup times. On systems that do
 not ship with a precompiled system image file, one can be generated from the source files shipped
 in Julia's `DATAROOTDIR/julia/base` folder.
 
 Julia will by default generate its system image on half of the available system threads. This
-may be controlled by the [`JULIA_IMAGE_THREADS`](@ref env-image-threads) environment variable.
+may be controlled by the [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) environment variable.
 
-This operation is useful for multiple reasons.  A user may:
+This operation is useful for multiple reasons. A user may:
 
   * Build a precompiled shared library system image on a platform that did not ship with one, thereby
     improving startup times.
@@ -34,13 +34,16 @@ based on available CPU features.
 ### Specifying multiple system image targets
 
 A multi-microarchitecture system image can be enabled by passing multiple targets
-during system image compilation. This can be done either with the `JULIA_CPU_TARGET` make option
+during system image compilation. This can be done either with the [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) make option
 or with the `-C` command line option when running the compilation command manually.
 Multiple targets are separated by `;` in the option string.
 The syntax for each target is a CPU name followed by multiple features separated by `,`.
 All features supported by LLVM are supported and a feature can be disabled with a `-` prefix.
 (`+` prefix is also allowed and ignored to be consistent with LLVM syntax).
 Additionally, a few special features are supported to control the function cloning behavior.
+
+!!! note
+    It is good practice to specify either `clone_all` or `base(<n>)` for every target apart from the first one. This makes it explicit which targets have all functions cloned, and which targets are based on other targets. If this is not done, the default behavior is to not clone every function, and to use the first target's function definition as the fallback when not cloning a function.
 
 1. `clone_all`
 
@@ -81,11 +84,11 @@ generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)
 This creates a system image with three separate targets; one for a generic `x86_64`
 processor, one with a `sandybridge` ISA (explicitly excluding `xsaveopt`) that explicitly
 clones all functions, and one targeting the `haswell` ISA, based off of the `sandybridge`
-sysimg version, and also excluding `rdrnd`.  When a Julia implementation loads the
+sysimg version, and also excluding `rdrnd`. When a Julia implementation loads the
 generated sysimg, it will check the host processor for matching CPU capability flags,
-enabling the highest ISA level possible.  Note that the base level (`generic`) requires
+enabling the highest ISA level possible. Note that the base level (`generic`) requires
 the `cx16` instruction, which is disabled in some virtualization software and must be
-enabled for the `generic` target to be loaded.  Alternatively, a sysimg could be generated
+enabled for the `generic` target to be loaded. Alternatively, a sysimg could be generated
 with the target `generic,-cx16` for greater compatibility, however note that this may cause
 performance and stability problems in some code.
 

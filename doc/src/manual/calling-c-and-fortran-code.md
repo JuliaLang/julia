@@ -253,10 +253,14 @@ to the specified type. For example, the following call:
 will behave as if it were written like this:
 
 ```julia
-@ccall "libfoo".foo(
-    Base.unsafe_convert(Int32, Base.cconvert(Int32, x))::Int32,
-    Base.unsafe_convert(Float64, Base.cconvert(Float64, y))::Float64
+c_x = Base.cconvert(Int32, x)
+c_y = Base.cconvert(Float64, y)
+GC.@preserve c_x c_y begin
+    @ccall "libfoo".foo(
+        Base.unsafe_convert(Int32, c_x)::Int32,
+        Base.unsafe_convert(Float64, c_y)::Float64
     )::Cvoid
+end
 ```
 
 [`Base.cconvert`](@ref) normally just calls [`convert`](@ref), but can be defined to return an
@@ -995,12 +999,12 @@ A table of translations between the macro and function interfaces is given below
 | `@ccall "mylib".f(a::Cint, b::Cdouble)::Cvoid`                               | `ccall((:f, "mylib"), Cvoid, (Cint, Cdouble), (a, b))`                      |
 | `@ccall $fptr.f()::Cvoid`                                                    | `ccall(fptr, f, Cvoid, ())`                                                 |
 | `@ccall printf("%s = %d\n"::Cstring ; "foo"::Cstring, foo::Cint)::Cint`      | `<unavailable>`                                                             |
-| `@ccall printf("%s = %d\n"::Cstring ; "2 + 2"::Cstring, "5"::Cstring)::Cint` | `ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")`    |
+| `@ccall printf("%s = %s\n"::Cstring ; "2 + 2"::Cstring, "5"::Cstring)::Cint` | `ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")`    |
 | `<unavailable>`                                                              | `ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))` |
 
 ## [Calling Convention](@id calling-convention)
 
-The second argument to `ccall` (immediatel preceding return type) can optionally
+The second argument to `ccall` (immediately preceding return type) can optionally
 be a calling convention specifier (the `@ccall` macro currently does not support
 giving a calling convention). Without any specifier, the platform-default C
 calling convention is used. Other supported conventions are: `stdcall`, `cdecl`,
@@ -1118,9 +1122,7 @@ For more details on how to pass callbacks to C libraries, see this [blog post](h
 
 ## C++
 
-For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++
-bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
-
+For tools to create C++ bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
 
 
 [^1]: Non-library function calls in both C and Julia can be inlined and thus may have

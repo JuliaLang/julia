@@ -39,21 +39,24 @@ static void walk_print_cb(uv_handle_t *h, void *arg)
     const char *type = uv_handle_type_name(h->type);
     if (!type)
         type = "<unknown>";
+    size_t resource_id; // fits an int or pid_t on Unix, HANDLE or PID on Windows
     uv_os_fd_t fd;
     if (h->type == UV_PROCESS)
-        fd = uv_process_get_pid((uv_process_t*)h);
-    else if (uv_fileno(h, &fd))
-        fd = (uv_os_fd_t)-1;
+        resource_id = (size_t)uv_process_get_pid((uv_process_t*)h);
+    else if (uv_fileno(h, &fd) == 0)
+        resource_id = (size_t)fd;
+    else
+        resource_id = -1;
     const char *pad = "                "; // 16 spaces
-    int npad = fd == -1 ? 0 : snprintf(NULL, 0, "%zd", (size_t)fd);
+    int npad = resource_id == -1 ? 0 : snprintf(NULL, 0, "%zd", resource_id);
     if (npad < 0)
         npad = 0;
     npad += strlen(type);
     pad += npad < strlen(pad) ? npad : strlen(pad);
-    if (fd == -1)
-        jl_safe_printf(" %s   %s@%p->%p\n", type,             pad, (void*)h, (void*)h->data);
+    if (resource_id == -1)
+        jl_safe_printf(" %s   %s%p->%p\n", type,             pad, (void*)h, (void*)h->data);
     else
-        jl_safe_printf(" %s[%zd] %s@%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s[%zd] %s%p->%p\n", type, resource_id, pad, (void*)h, (void*)h->data);
 }
 
 static void wait_empty_func(uv_timer_t *t)
@@ -63,32 +66,38 @@ static void wait_empty_func(uv_timer_t *t)
     if (!uv_loop_alive(t->loop))
         return;
     jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
-                   " TYPE[FD/PID]       @UV_HANDLE_T->DATA\n",
+                   " Handle type        uv_handle_t->data\n",
                    (size_t)uv_os_getpid());
     uv_walk(jl_io_loop, walk_print_cb, NULL);
+    if (jl_generating_output() && jl_options.incremental) {
+        jl_safe_printf("This means that a package has started a background task or event source that has not finished running. For precompilation to complete successfully, the event source needs to be closed explicitly. See the developer documentation on fixing precompilation hangs for more help.\n");
+    }
     jl_gc_collect(JL_GC_FULL);
 }
 
 void jl_wait_empty_begin(void)
 {
     JL_UV_LOCK();
-    if (wait_empty_worker.type != UV_TIMER && jl_io_loop) {
-        // try to purge anything that is just waiting for cleanup
-        jl_io_loop->stop_flag = 0;
-        uv_run(jl_io_loop, UV_RUN_NOWAIT);
-        uv_timer_init(jl_io_loop, &wait_empty_worker);
+    if (jl_io_loop) {
+        if (wait_empty_worker.type != UV_TIMER) {
+            // try to purge anything that is just waiting for cleanup
+            jl_io_loop->stop_flag = 0;
+            uv_run(jl_io_loop, UV_RUN_NOWAIT);
+            uv_timer_init(jl_io_loop, &wait_empty_worker);
+            uv_unref((uv_handle_t*)&wait_empty_worker);
+        }
+        // make sure this is running
         uv_update_time(jl_io_loop);
         uv_timer_start(&wait_empty_worker, wait_empty_func, 10, 15000);
-        uv_unref((uv_handle_t*)&wait_empty_worker);
     }
     JL_UV_UNLOCK();
 }
-
 void jl_wait_empty_end(void)
 {
-    JL_UV_LOCK();
-    uv_close((uv_handle_t*)&wait_empty_worker, NULL);
-    JL_UV_UNLOCK();
+    // n.b. caller must be holding jl_uv_mutex
+    if (wait_empty_worker.type == UV_TIMER)
+        // make sure this timer is stopped, but not destroyed in case the user calls jl_wait_empty_begin again
+        uv_timer_stop(&wait_empty_worker);
 }
 
 
@@ -112,7 +121,7 @@ void jl_init_uv(void)
 {
     uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
     uv_unref((uv_handle_t*)&signal_async);
-    JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
+    JL_MUTEX_INIT(&jl_uv_mutex, "jl_uv_mutex"); // a file-scope initializer can be used instead
 }
 
 _Atomic(int) jl_uv_n_waiters = 0;
@@ -130,11 +139,17 @@ void JL_UV_LOCK(void)
     }
 }
 
+/**
+ * @brief Begin an IO lock.
+ */
 JL_DLLEXPORT void jl_iolock_begin(void)
 {
     JL_UV_LOCK();
 }
 
+/**
+ * @brief End an IO lock.
+ */
 JL_DLLEXPORT void jl_iolock_end(void)
 {
     JL_UV_UNLOCK();
@@ -173,9 +188,12 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         ct->world_age = last_age;
         return;
     }
-    if (handle == (uv_handle_t*)&signal_async || handle == (uv_handle_t*)&wait_empty_worker)
+    if (handle == (uv_handle_t*)&wait_empty_worker)
+        handle->type = UV_UNKNOWN_HANDLE;
+    else if (handle == (uv_handle_t*)&signal_async)
         return;
-    free(handle);
+    else
+        free(handle);
 }
 
 static void jl_uv_flush_close_callback(uv_write_t *req, int status)
@@ -218,9 +236,16 @@ static void uv_flush_callback(uv_write_t *req, int status)
     free(req);
 }
 
-// Turn a normal write into a blocking write (primarily for use from C and gdb).
-// Warning: This calls uv_run, so it can have unbounded side-effects.
-// Be care where you call it from! - the libuv loop is also not reentrant.
+/**
+ * @brief Flush a UV stream.
+ *
+ * Primarily used from C and gdb to convert a normal write operation on a UV stream
+ * into a blocking write. It calls uv_run, which can have unbounded side-effects.
+ * Caution is advised as the location from where this function is called is critical
+ * due to the non-reentrancy of the libuv loop.
+ *
+ * @param stream A pointer to `uv_stream_t` representing the stream to flush.
+ */
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream)
 {
     if (stream == (void*)STDIN_FILENO ||
@@ -252,27 +277,115 @@ JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream)
 
 // getters and setters
 // TODO: check if whoever calls these is thread-safe
+/**
+ * @brief Get the process ID of a UV process.
+ *
+ * @param p A pointer to `uv_process_t` representing the UV process.
+ * @return The process ID.
+ */
 JL_DLLEXPORT int jl_uv_process_pid(uv_process_t *p) { return p->pid; }
+
+/**
+ * @brief Get the data associated with a UV process.
+ *
+ * @param p A pointer to `uv_process_t` representing the UV process.
+ * @return A pointer to the process data.
+ */
 JL_DLLEXPORT void *jl_uv_process_data(uv_process_t *p) { return p->data; }
+
+/**
+ * @brief Get the base pointer of a UV buffer.
+ *
+ * @param buf A constant pointer to `uv_buf_t` representing the UV buffer.
+ * @return A pointer to the base of the buffer.
+ */
 JL_DLLEXPORT void *jl_uv_buf_base(const uv_buf_t *buf) { return buf->base; }
+
+/**
+ * @brief Get the length of a UV buffer.
+ *
+ * @param buf A constant pointer to `uv_buf_t` representing the UV buffer.
+ * @return The length of the buffer as `size_t`.
+ */
 JL_DLLEXPORT size_t jl_uv_buf_len(const uv_buf_t *buf) { return buf->len; }
+
+/**
+ * @brief Set the base pointer of a UV buffer.
+ *
+ * @param buf A pointer to `uv_buf_t` representing the UV buffer.
+ * @param b A pointer to `char` representing the new base of the buffer.
+ */
 JL_DLLEXPORT void jl_uv_buf_set_base(uv_buf_t *buf, char *b) { buf->base = b; }
+
+/**
+ * @brief Set the length of a UV buffer.
+ *
+ * @param buf A pointer to `uv_buf_t` representing the UV buffer.
+ * @param n The new length of the buffer as `size_t`.
+ */
 JL_DLLEXPORT void jl_uv_buf_set_len(uv_buf_t *buf, size_t n) { buf->len = n; }
+
+/**
+ * @brief Get the handle associated with a UV connect request.
+ *
+ * @param connect A pointer to `uv_connect_t` representing the connect request.
+ * @return A pointer to the associated handle.
+ */
 JL_DLLEXPORT void *jl_uv_connect_handle(uv_connect_t *connect) { return connect->handle; }
+
+/**
+ * @brief Get the file descriptor from a UV file structure.
+ *
+ * @param f A pointer to `jl_uv_file_t` representing the UV file.
+ * @return The file descriptor as `uv_os_fd_t`.
+ */
 JL_DLLEXPORT uv_os_fd_t jl_uv_file_handle(jl_uv_file_t *f) { return f->file; }
+
+/**
+ * @brief Get the data field from a UV request.
+ *
+ * @param req A pointer to `uv_req_t` representing the request.
+ * @return A pointer to the data associated with the request.
+ */
 JL_DLLEXPORT void *jl_uv_req_data(uv_req_t *req) { return req->data; }
+
+/**
+ * @brief Set the data field of a UV request.
+ *
+ * @param req A pointer to `uv_req_t` representing the request.
+ * @param data A pointer to the data to be associated with the request.
+ */
 JL_DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data) { req->data = data; }
+
+/**
+ * @brief Get the data field from a UV handle.
+ *
+ * @param handle A pointer to `uv_handle_t` representing the handle.
+ * @return A pointer to the data associated with the handle.
+ */
 JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data; }
+
+/**
+ * @brief Get the handle associated with a UV write request.
+ *
+ * @param req A pointer to `uv_write_t` representing the write request.
+ * @return A pointer to the handle associated with the write request.
+ */
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
-extern _Atomic(unsigned) _threadedregion;
-
+/**
+ * @brief Process pending UV events.
+ *
+ * See also `uv_run` in the libuv documentation for status code enumeration.
+ *
+ * @return An integer indicating the status of the event processing.
+ */
 JL_DLLEXPORT int jl_process_events(void)
 {
     jl_task_t *ct = jl_current_task;
     uv_loop_t *loop = jl_io_loop;
     jl_gc_safepoint_(ct->ptls);
-    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == 0)) {
+    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == jl_atomic_load_relaxed(&io_loop_tid))) {
         if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             JL_PROBE_RT_START_PROCESS_EVENTS(ct);
             loop->stop_flag = 0;
@@ -293,6 +406,11 @@ static void jl_proc_exit_cleanup_cb(uv_process_t *process, int64_t exit_status, 
     uv_close((uv_handle_t*)process, (uv_close_cb)&free);
 }
 
+/**
+ * @brief Close a UV handle.
+ *
+ * @param handle A pointer to `uv_handle_t` that needs to be closed.
+ */
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
     JL_UV_LOCK();
@@ -326,6 +444,11 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     JL_UV_UNLOCK();
 }
 
+/**
+ * @brief Forcefully close a UV handle.
+ *
+ * @param handle A pointer to `uv_handle_t` to be forcefully closed.
+ */
 JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
 {
     if (!uv_is_closing(handle)) { // avoid double-closing the stream
@@ -337,12 +460,23 @@ JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
     }
 }
 
+/**
+ * @brief Associate a Julia structure with a UV handle.
+ *
+ * @param handle A pointer to `uv_handle_t` to be associated with a Julia structure.
+ * @param data Additional parameters representing the Julia structure to be associated.
+ */
 JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
                                                jl_value_t *data)
 {
     handle->data = data;
 }
 
+/**
+ * @brief Disassociate a Julia structure from a UV handle.
+ *
+ * @param handle A pointer to `uv_handle_t` from which the Julia structure will be disassociated.
+ */
 JL_DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
 {
     handle->data = NULL;
@@ -350,6 +484,29 @@ JL_DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
 
 #define UV_HANDLE_CLOSED 0x02
 
+/**
+ * @brief Spawn a new process.
+ *
+ * Spawns a new process to execute external programs or scripts within the context of the Julia application.
+ *
+ * @param name A C string representing the name or path of the executable to spawn.
+ * @param argv An array of C strings representing the arguments for the process. The array should be null-terminated.
+ * @param loop A pointer to `uv_loop_t` representing the event loop where the process is registered.
+ * @param proc A pointer to `uv_process_t` where the details of the spawned process are stored.
+ * @param stdio An array of `uv_stdio_container_t` representing the file descriptors for standard input, output, and error.
+ * @param nstdio An integer representing the number of elements in the stdio array.
+ * @param flags A uint32_t representing process creation flags.
+          See also `enum uv_process_flags` in the libuv documentation.
+ * @param env An array of C strings for setting environment variables. The array should be null-terminated.
+ * @param cwd A C string representing the current working directory for the process.
+ * @param cpumask A C string representing the CPU affinity mask for the process.
+          See also the `cpumask` field of the `uv_process_options_t` structure in the libuv documentation.
+ * @param cpumask_size The size of the cpumask.
+ * @param cb A function pointer to `uv_exit_cb` which is the callback function to be called upon process exit.
+ *
+ * @return An integer indicating the success or failure of the spawn operation. A return value of 0 indicates success,
+ *         while a non-zero value indicates an error.
+ */
 JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
                           uv_stdio_container_t *stdio, int nstdio,
@@ -478,7 +635,7 @@ JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
 {
     jl_task_t *ct = jl_get_current_task();
     // TODO: fix this cheating
-    if (jl_get_safe_restore() || ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0)
+    if (jl_get_safe_restore() || ct == NULL || jl_atomic_load_relaxed(&ct->tid) != jl_atomic_load_relaxed(&io_loop_tid))
 #ifdef _OS_WINDOWS_
         return WriteFile(handle, data, len, NULL, NULL);
 #else
@@ -504,25 +661,6 @@ JL_DLLEXPORT int jl_fs_read(uv_os_fd_t handle, char *data, size_t len)
     int ret = uv_fs_read(unused_uv_loop_arg, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
-}
-
-JL_DLLEXPORT int jl_fs_read_byte(uv_os_fd_t handle)
-{
-    uv_fs_t req;
-    unsigned char c;
-    uv_buf_t buf[1];
-    buf[0].base = (char*)&c;
-    buf[0].len = 1;
-    int ret = uv_fs_read(unused_uv_loop_arg, &req, handle, buf, 1, -1, NULL);
-    uv_fs_req_cleanup(&req);
-    switch (ret) {
-    case -1: return ret;
-    case  0: jl_eof_error();
-    case  1: return (int)c;
-    default:
-        assert(0 && "jl_fs_read_byte: Invalid return value from uv_fs_read");
-        return -1;
-    }
 }
 
 JL_DLLEXPORT int jl_fs_close(uv_os_fd_t handle)
@@ -578,7 +716,7 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
 
     // TODO: Hack to make CoreIO thread-safer
     jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0) {
+    if (ct == NULL || jl_atomic_load_relaxed(&ct->tid) != jl_atomic_load_relaxed(&io_loop_tid)) {
         if (stream == JL_STDOUT) {
             fd = UV_STDOUT_FD;
         }
@@ -973,31 +1111,39 @@ static inline int ishexchar(char c)
 
 JL_DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
 {
-    if (pipe->type != UV_NAMED_PIPE) return 0;
+    char namebuf[0];
     size_t len = 0;
-    if (uv_pipe_getpeername(pipe, NULL, &len) != UV_ENOBUFS) return 0;
+    if (pipe->type != UV_NAMED_PIPE)
+        return 0;
+    if (uv_pipe_getpeername(pipe, namebuf, &len) != UV_ENOBUFS)
+        return 0;
     char *name = (char*)alloca(len + 1);
-    if (uv_pipe_getpeername(pipe, name, &len)) return 0;
+    if (uv_pipe_getpeername(pipe, name, &len))
+        return 0;
     name[len] = '\0';
     // return true if name matches regex:
     // ^\\\\?\\pipe\\(msys|cygwin)-[0-9a-z]{16}-[pt]ty[1-9][0-9]*-
     //jl_printf(JL_STDERR,"pipe_name: %s\n", name);
     int n = 0;
-    if (!strncmp(name,"\\\\?\\pipe\\msys-",14))
+    if (!strncmp(name, "\\\\?\\pipe\\msys-", 14))
         n = 14;
-    else if (!strncmp(name,"\\\\?\\pipe\\cygwin-",16))
+    else if (!strncmp(name, "\\\\?\\pipe\\cygwin-", 16))
         n = 16;
     else
         return 0;
     //jl_printf(JL_STDERR,"prefix pass\n");
     name += n;
     for (int n = 0; n < 16; n++)
-        if (!ishexchar(*name++)) return 0;
+        if (!ishexchar(*name++))
+            return 0;
     //jl_printf(JL_STDERR,"hex pass\n");
-    if ((*name++)!='-') return 0;
-    if (*name != 'p' && *name != 't') return 0;
+    if ((*name++)!='-')
+        return 0;
+    if (*name != 'p' && *name != 't')
+        return 0;
     name++;
-    if (*name++ != 't' || *name++ != 'y') return 0;
+    if (*name++ != 't' || *name++ != 'y')
+        return 0;
     //jl_printf(JL_STDERR,"tty pass\n");
     return 1;
 }

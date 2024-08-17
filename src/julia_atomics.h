@@ -57,6 +57,15 @@ enum jl_memory_order {
 };
 
 /**
+ * Cache line size
+*/
+#if (defined(_CPU_AARCH64_) && defined(_OS_DARWIN_)) || defined(_CPU_PPC64_)  // Apple silicon and PPC7+ have 128 byte cache lines
+#define JL_CACHE_BYTE_ALIGNMENT 128
+#else
+#define JL_CACHE_BYTE_ALIGNMENT 64
+#endif
+
+/**
  * Thread synchronization primitives:
  *
  * These roughly follows the c11/c++11 memory model and the act as memory
@@ -79,8 +88,8 @@ enum jl_memory_order {
  * `mfence`. GCC 11 did switch to this representation. See #48123
  */
 #if defined(_CPU_X86_64_) && \
-	((defined(__GNUC__) && __GNUC__ < 11) || \
-	 (defined(__clang__)))
+    ((defined(__GNUC__) && __GNUC__ < 11) || \
+     (defined(__clang__)))
     #define jl_fence() __asm__ volatile("lock orq $0 , (%rsp)")
 #else
     #define jl_fence() atomic_thread_fence(memory_order_seq_cst)
@@ -165,6 +174,11 @@ bool jl_atomic_cmpswap_acqrel(std::atomic<T> *ptr, T *expected, S val)
 {
      return std::atomic_compare_exchange_strong_explicit<T>(ptr, expected, val, memory_order_acq_rel, memory_order_acquire);
 }
+template<class T, class S>
+bool jl_atomic_cmpswap_release(std::atomic<T> *ptr, T *expected, S val)
+{
+     return std::atomic_compare_exchange_strong_explicit<T>(ptr, expected, val, memory_order_release, memory_order_relaxed);
+}
 #define jl_atomic_cmpswap_relaxed(ptr, expected, val) jl_atomic_cmpswap_explicit(ptr, expected, val, memory_order_relaxed)
 template<class T, class S>
 T jl_atomic_exchange(std::atomic<T> *ptr, S desired)
@@ -176,6 +190,7 @@ T jl_atomic_exchange_explicit(std::atomic<T> *ptr, S desired, std::memory_order 
 {
      return std::atomic_exchange_explicit<T>(ptr, desired, order);
 }
+#define jl_atomic_exchange_release(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_reease)
 #define jl_atomic_exchange_relaxed(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_relaxed)
 extern "C" {
 #else
@@ -196,11 +211,15 @@ extern "C" {
     atomic_compare_exchange_strong(obj, expected, desired)
 #  define jl_atomic_cmpswap_relaxed(obj, expected, desired) \
     atomic_compare_exchange_strong_explicit(obj, expected, desired, memory_order_relaxed, memory_order_relaxed)
-#define jl_atomic_cmpswap_acqrel(obj, expected, desired) \
+#  define jl_atomic_cmpswap_release(obj, expected, desired) \
+    atomic_compare_exchange_strong_explicit(obj, expected, desired, memory_order_release, memory_order_relaxed)
+#  define jl_atomic_cmpswap_acqrel(obj, expected, desired) \
     atomic_compare_exchange_strong_explicit(obj, expected, desired, memory_order_acq_rel, memory_order_acquire)
 // TODO: Maybe add jl_atomic_cmpswap_weak for spin lock
 #  define jl_atomic_exchange(obj, desired)       \
     atomic_exchange(obj, desired)
+#  define jl_atomic_exchange_release(obj, desired)      \
+    atomic_exchange_explicit(obj, desired, memory_order_release)
 #  define jl_atomic_exchange_relaxed(obj, desired)      \
     atomic_exchange_explicit(obj, desired, memory_order_relaxed)
 #  define jl_atomic_store(obj, val)                     \
@@ -247,6 +266,7 @@ extern "C" {
 #define _Atomic(T) T
 
 #undef jl_atomic_exchange
+#undef jl_atomic_exchange_release
 #undef jl_atomic_exchange_relaxed
 #define jl_atomic_exchange(obj, desired) \
     (__extension__({ \
@@ -255,10 +275,12 @@ extern "C" {
             *p__analyzer__ = (desired); \
             temp__analyzer__; \
         }))
+#define jl_atomic_exchange_release jl_atomic_exchange
 #define jl_atomic_exchange_relaxed jl_atomic_exchange
 
 #undef jl_atomic_cmpswap
 #undef jl_atomic_cmpswap_acqrel
+#undef jl_atomic_cmpswap_release
 #undef jl_atomic_cmpswap_relaxed
 #define jl_atomic_cmpswap(obj, expected, desired) \
     (__extension__({ \
@@ -273,6 +295,7 @@ extern "C" {
             eq__analyzer__; \
         }))
 #define jl_atomic_cmpswap_acqrel jl_atomic_cmpswap
+#define jl_atomic_cmpswap_release jl_atomic_cmpswap
 #define jl_atomic_cmpswap_relaxed jl_atomic_cmpswap
 
 #undef jl_atomic_store

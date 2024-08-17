@@ -1,6 +1,13 @@
 using Test
 using Profile: Allocs
 
+Allocs.clear()
+let iobuf = IOBuffer()
+    for format in (:tree, :flat)
+        Test.@test_logs (:warn, r"^There were no samples collected\.") Allocs.print(iobuf; format, C=true)
+    end
+end
+
 @testset "alloc profiler doesn't segfault" begin
     res = Allocs.@profile sample_rate=1.0 begin
         # test the allocations during compilation
@@ -13,6 +20,20 @@ using Profile: Allocs
     @test first_alloc.size > 0
     @test length(first_alloc.stacktrace) > 0
     @test length(string(first_alloc.type)) > 0
+
+    # test printing options
+    for options in ((format=:tree, C=true),
+                    (format=:tree, maxdepth=2),
+                    (format=:flat, C=true),
+                    (),
+                    (format=:flat, sortedby=:count),
+                    (format=:tree, recur=:flat),
+                   )
+        iobuf = IOBuffer()
+        Allocs.print(iobuf; options...)
+        str = String(take!(iobuf))
+        @test !isempty(str)
+    end
 end
 
 @testset "alloc profiler works when there are multiple tasks on multiple threads" begin
@@ -120,4 +141,40 @@ end
 
     @test length(prof.allocs) >= 1
     @test length([a for a in prof.allocs if a.type == String]) >= 1
+end
+
+@testset "alloc profiler catches allocs from codegen" begin
+    @eval begin
+        struct MyType x::Int; y::Int end
+        Base.:(+)(n::Number, x::MyType) = n + x.x + x.y
+        foo(a, x) = a[1] + x
+        wrapper(a) = foo(a, MyType(0,1))
+    end
+    a = Any[1,2,3]
+    # warmup
+    wrapper(a)
+
+    @eval Allocs.@profile sample_rate=1 wrapper($a)
+
+    prof = Allocs.fetch()
+    Allocs.clear()
+
+    @test length(prof.allocs) >= 1
+    @test length([a for a in prof.allocs if a.type == MyType]) >= 1
+end
+
+@testset "alloc profiler catches allocs from buffer resize" begin
+    f(a) = for _ in 1:100; push!(a, 1); end
+    f(Int[])
+    resize!(Int[], 1)
+    a = Int[]
+    Allocs.clear()
+    Allocs.@profile sample_rate=1 f(a)
+    Allocs.@profile sample_rate=1 resize!(a, 1_000_000) # 4MB
+    prof = Allocs.fetch()
+    Allocs.clear()
+
+    @test 3 <= length(prof.allocs) <= 10
+    @test length([a for a in prof.allocs if a.type === Allocs.BufferType]) == 1
+    @test length([a for a in prof.allocs if a.type === Memory{Int}]) >= 2
 end

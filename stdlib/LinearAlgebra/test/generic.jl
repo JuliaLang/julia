@@ -12,6 +12,11 @@ using .Main.Quaternions
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :DualNumbers) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "DualNumbers.jl"))
+using .Main.DualNumbers
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
 
 Random.seed!(123)
 
@@ -75,33 +80,21 @@ n = 5 # should be odd
         X = fill(x, 1, 1)
         @test logabsdet(x)[1] ≈ logabsdet(X)[1]
         @test logabsdet(x)[2] ≈ logabsdet(X)[2]
+        # Diagonal, upper, and lower triangular matrices
+        chksign(s1, s2) = if elty <: Real s1 == s2 else s1 ≈ s2 end
+        D = Matrix(Diagonal(A))
+        v, s = logabsdet(D)
+        @test v ≈ log(abs(det(D))) && chksign(s, sign(det(D)))
+        R = triu(A)
+        v, s = logabsdet(R)
+        @test v ≈ log(abs(det(R))) && chksign(s, sign(det(R)))
+        L = tril(A)
+        v, s = logabsdet(L)
+        @test v ≈ log(abs(det(L))) && chksign(s, sign(det(L)))
     end
 
     @testset "det with nonstandard Number type" begin
-        struct MyDual{T<:Real} <: Real
-            val::T
-            eps::T
-        end
-        Base.:+(x::MyDual, y::MyDual) = MyDual(x.val + y.val, x.eps + y.eps)
-        Base.:*(x::MyDual, y::MyDual) = MyDual(x.val * y.val, x.eps * y.val + y.eps * x.val)
-        Base.:/(x::MyDual, y::MyDual) = x.val / y.val
-        Base.:(==)(x::MyDual, y::MyDual) = x.val == y.val && x.eps == y.eps
-        Base.zero(::MyDual{T}) where {T} = MyDual(zero(T), zero(T))
-        Base.zero(::Type{MyDual{T}}) where {T} = MyDual(zero(T), zero(T))
-        Base.one(::MyDual{T}) where {T} = MyDual(one(T), zero(T))
-        Base.one(::Type{MyDual{T}}) where {T} = MyDual(one(T), zero(T))
-        # the following line is required for BigFloat, IDK why it doesn't work via
-        # promote_rule like for all other types
-        Base.promote_type(::Type{MyDual{BigFloat}}, ::Type{BigFloat}) = MyDual{BigFloat}
-        Base.promote_rule(::Type{MyDual{T}}, ::Type{S}) where {T,S<:Real} =
-            MyDual{promote_type(T, S)}
-        Base.promote_rule(::Type{MyDual{T}}, ::Type{MyDual{S}}) where {T,S} =
-            MyDual{promote_type(T, S)}
-        Base.convert(::Type{MyDual{T}}, x::MyDual) where {T} =
-            MyDual(convert(T, x.val), convert(T, x.eps))
-        if elty <: Real
-            @test det(triu(MyDual.(A, zero(A)))) isa MyDual
-        end
+        elty <: Real && @test det(Dual.(triu(A), zero(A))) isa Dual
     end
 end
 
@@ -269,6 +262,24 @@ end
     @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
+@testset "norm of transpose/adjoint equals norm of parent #32739" begin
+    for t in (transpose, adjoint), elt in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
+        # Vector/matrix of scalars
+        for sz in ((2,), (2, 3))
+            A = rand(elt, sz...)
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Aᵀ))
+        end
+
+        # Vector/matrix of vectors/matrices
+        for sz_outer in ((2,), (2, 3)), sz_inner in ((3,), (1, 2))
+            A = [rand(elt, sz_inner...) for _ in CartesianIndices(sz_outer)]
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Matrix.(Aᵀ)))
+        end
+    end
+end
+
 @testset "rotate! and reflect!" begin
     x = rand(ComplexF64, 10)
     y = rand(ComplexF64, 10)
@@ -372,6 +383,7 @@ end
         [1.0 2.0 3.0; 4.0 5.0 6.0], # 2-dim
         rand(1,2,3),                # higher dims
         rand(1,2,3,4),
+        Dual.(randn(2,3), randn(2,3)),
         OffsetArray([-1,0], (-2,))  # no index 1
     )
         @test normalize(arr) == normalize!(copy(arr))
@@ -559,8 +571,15 @@ end
     @test_broken ismissing(norm(x, 0))
 end
 
+@testset "avoid stackoverflow of norm on AbstractChar" begin
+    @test_throws ArgumentError norm('a')
+    @test_throws ArgumentError norm(['a', 'b'])
+    @test_throws ArgumentError norm("s")
+    @test_throws ArgumentError norm(["s", "t"])
+end
+
 @testset "peakflops" begin
-    @test LinearAlgebra.peakflops() > 0
+    @test LinearAlgebra.peakflops(1024, eltype=Float32, ntrials=2) > 0
 end
 
 @testset "NaN handling: Issue 28972" begin
@@ -594,6 +613,12 @@ end
     end
 end
 
+@testset "avoid stackoverflow in dot" begin
+    @test_throws "cannot evaluate dot recursively" dot('a', 'c')
+    @test_throws "cannot evaluate dot recursively" dot('a', 'b':'c')
+    @test_throws "x and y are of different lengths" dot(1, 1:2)
+end
+
 @testset "generalized dot #32739" begin
     for elty in (Int, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
         n = 10
@@ -625,6 +650,79 @@ end
 @testset "condskeel #34512" begin
     A = rand(3, 3)
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
+end
+
+@testset "copytrito!" begin
+    n = 10
+    @testset "square" begin
+        for A in (rand(n, n), rand(Int8, n, n)), uplo in ('L', 'U')
+            for AA in (A, view(A, reverse.(axes(A))...))
+                C = uplo == 'L' ? tril(AA) : triu(AA)
+                for B in (zeros(n, n), zeros(n+1, n+2))
+                    copytrito!(B, AA, uplo)
+                    @test view(B, 1:n, 1:n) == C
+                end
+            end
+        end
+    end
+    @testset "wide" begin
+        for A in (rand(n, 2n), rand(Int8, n, 2n))
+            for AA in (A, view(A, reverse.(axes(A))...))
+                C = tril(AA)
+                for (M, N) in ((n, n), (n+1, n), (n, n+1), (n+1, n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'L')
+                    @test view(B, 1:n, 1:n) == view(C, 1:n, 1:n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n-1, 2n), AA, 'L')
+                C = triu(AA)
+                for (M, N) in ((n, 2n), (n+1, 2n), (n, 2n+1), (n+1, 2n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'U')
+                    @test view(B, 1:n, 1:2n) == view(C, 1:n, 1:2n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n+1, 2n-1), AA, 'U')
+            end
+        end
+    end
+    @testset "tall" begin
+        for A in (rand(2n, n), rand(Int8, 2n, n))
+            for AA in (A, view(A, reverse.(axes(A))...))
+                C = triu(AA)
+                for (M, N) in ((n, n), (n+1, n), (n, n+1), (n+1, n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'U')
+                    @test view(B, 1:n, 1:n) == view(C, 1:n, 1:n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n-1, n+1), AA, 'U')
+                C = tril(AA)
+                for (M, N) in ((2n, n), (2n, n+1), (2n+1, n), (2n+1, n+1))
+                    B = zeros(M, N)
+                    copytrito!(B, AA, 'L')
+                    @test view(B, 1:2n, 1:n) == view(C, 1:2n, 1:n)
+                end
+                @test_throws DimensionMismatch copytrito!(zeros(n-1, n+1), AA, 'L')
+            end
+        end
+    end
+    @testset "aliasing" begin
+        M = Matrix(reshape(1:36, 6, 6))
+        A = view(M, 1:5, 1:5)
+        A2 = Matrix(A)
+        B = view(M, 2:6, 2:6)
+        copytrito!(B, A, 'U')
+        @test UpperTriangular(B) == UpperTriangular(A2)
+    end
+end
+
+@testset "immutable arrays" begin
+    A = FillArrays.Fill(big(3), (4, 4))
+    M = Array(A)
+    @test triu(A) == triu(M)
+    @test triu(A, -1) == triu(M, -1)
+    @test tril(A) == tril(M)
+    @test tril(A, 1) == tril(M, 1)
+    @test det(A) == det(M)
 end
 
 end # module TestGeneric

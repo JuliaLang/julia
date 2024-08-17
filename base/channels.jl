@@ -59,7 +59,7 @@ Channel(sz=0) = Channel{Any}(sz)
 
 # special constructors
 """
-    Channel{T=Any}(func::Function, size=0; taskref=nothing, spawn=false)
+    Channel{T=Any}(func::Function, size=0; taskref=nothing, spawn=false, threadpool=nothing)
 
 Create a new task from `func`, bind it to a new channel of type
 `T` and size `size`, and schedule the task, all in a single call.
@@ -70,8 +70,13 @@ The channel is automatically closed when the task terminates.
 If you need a reference to the created task, pass a `Ref{Task}` object via
 the keyword argument `taskref`.
 
-If `spawn = true`, the Task created for `func` may be scheduled on another thread
+If `spawn=true`, the `Task` created for `func` may be scheduled on another thread
 in parallel, equivalent to creating a task via [`Threads.@spawn`](@ref).
+
+If `spawn=true` and the `threadpool` argument is not set, it defaults to `:default`.
+
+If the `threadpool` argument is set (to `:default` or `:interactive`), this implies
+that `spawn=true` and the new Task is spawned to the specified threadpool.
 
 Return a `Channel`.
 
@@ -117,6 +122,9 @@ true
     In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
     those constructors are deprecated.
 
+!!! compat "Julia 1.9"
+    The `threadpool=` argument was added in Julia 1.9.
+
 ```jldoctest
 julia> chnl = Channel{Char}(1, spawn=true) do ch
            for c in "hello world"
@@ -129,12 +137,18 @@ julia> String(collect(chnl))
 "hello world"
 ```
 """
-function Channel{T}(func::Function, size=0; taskref=nothing, spawn=false) where T
+function Channel{T}(func::Function, size=0; taskref=nothing, spawn=false, threadpool=nothing) where T
     chnl = Channel{T}(size)
     task = Task(() -> func(chnl))
+    if threadpool === nothing
+        threadpool = :default
+    else
+        spawn = true
+    end
     task.sticky = !spawn
     bind(chnl, task)
     if spawn
+        Threads._spawn_set_thrpool(task, threadpool)
         schedule(task) # start it on (potentially) another thread
     else
         yield(task) # immediately start it, yielding the current thread
@@ -149,17 +163,17 @@ Channel(func::Function, args...; kwargs...) = Channel{Any}(func, args...; kwargs
 # of course not deprecated.)
 # We use `nothing` default values to check which arguments were set in order to throw the
 # deprecation warning if users try to use `spawn=` with `ctype=` or `csize=`.
-function Channel(func::Function; ctype=nothing, csize=nothing, taskref=nothing, spawn=nothing)
+function Channel(func::Function; ctype=nothing, csize=nothing, taskref=nothing, spawn=nothing, threadpool=nothing)
     # The spawn= keyword argument was added in Julia v1.3, and cannot be used with the
     # deprecated keyword arguments `ctype=` or `csize=`.
-    if (ctype !== nothing || csize !== nothing) && spawn !== nothing
-        throw(ArgumentError("Cannot set `spawn=` in the deprecated constructor `Channel(f; ctype=Any, csize=0)`. Please use `Channel{T=Any}(f, size=0; taskref=nothing, spawn=false)` instead!"))
+    if (ctype !== nothing || csize !== nothing) && (spawn !== nothing || threadpool !== nothing)
+        throw(ArgumentError("Cannot set `spawn=` or `threadpool=` in the deprecated constructor `Channel(f; ctype=Any, csize=0)`. Please use `Channel{T=Any}(f, size=0; taskref=nothing, spawn=false, threadpool=nothing)` instead!"))
     end
     # Set the actual default values for the arguments.
     ctype === nothing && (ctype = Any)
     csize === nothing && (csize = 0)
     spawn === nothing && (spawn = false)
-    return Channel{ctype}(func, csize; taskref=taskref, spawn=spawn)
+    return Channel{ctype}(func, csize; taskref=taskref, spawn=spawn, threadpool=threadpool)
 end
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
@@ -183,7 +197,8 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 * [`put!`](@ref) on a closed channel.
 * [`take!`](@ref) and [`fetch`](@ref) on an empty, closed channel.
 """
-function close(c::Channel, excp::Exception=closed_exception())
+close(c::Channel) = close(c, closed_exception()) # nospecialize on default arg seems to confuse makedocs
+function close(c::Channel, @nospecialize(excp::Exception))
     lock(c)
     try
         c.excp = excp
@@ -196,7 +211,28 @@ function close(c::Channel, excp::Exception=closed_exception())
     end
     nothing
 end
-isopen(c::Channel) = ((@atomic :monotonic c.state) === :open)
+
+# Use acquire here to pair with release store in `close`, so that subsequent `isready` calls
+# are forced to see `isready == true` if they see `isopen == false`. This means users must
+# call `isopen` before `isready` if you are using the race-y APIs (or call `iterate`, which
+# does this right for you).
+isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
+
+"""
+    empty!(c::Channel)
+
+Empty a Channel `c` by calling `empty!` on the internal buffer.
+Return the empty channel.
+"""
+function Base.empty!(c::Channel)
+    @lock c begin
+        ndrop = length(c.data)
+        empty!(c.data)
+        _increment_n_avail(c, -ndrop)
+        notify(c.cond_put)
+    end
+    return c
+end
 
 """
     bind(chnl::Channel, task::Task)
@@ -252,6 +288,7 @@ Stacktrace:
 """
 function bind(c::Channel, task::Task)
     T = Task(() -> close_chnl_on_taskdone(task, c))
+    T.sticky = false
     _wait2(task, T)
     return c
 end
@@ -482,7 +519,7 @@ end
 Determines whether a [`Channel`](@ref) has a value stored in it.
 Returns immediately, does not block.
 
-For unbuffered channels returns `true` if there are tasks waiting on a [`put!`](@ref).
+For unbuffered channels, return `true` if there are tasks waiting on a [`put!`](@ref).
 
 # Examples
 
@@ -521,6 +558,47 @@ function n_avail(c::Channel)
     # Lock-free equivalent to `length(c.data) + length(c.cond_put.waitq)`
     @atomic :monotonic c.n_avail_items
 end
+
+"""
+    isfull(c::Channel)
+
+Determines if a [`Channel`](@ref) is full, in the sense
+that calling `put!(c, some_value)` would have blocked.
+Returns immediately, does not block.
+
+Note that it may frequently be the case that `put!` will
+not block after this returns `true`. Users must take
+precautions not to accidentally create live-lock bugs
+in their code by calling this method, as these are
+generally harder to debug than deadlocks. It is also
+possible that `put!` will block after this call
+returns `false`, if there are multiple producer
+tasks calling `put!` in parallel.
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1); # capacity = 1
+
+julia> isfull(c)
+false
+
+julia> put!(c, 1);
+
+julia> isfull(c)
+true
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel(); # capacity = 0
+
+julia> isfull(c) # unbuffered channel is always full
+true
+```
+"""
+isfull(c::Channel) = n_avail(c) ≥ c.sz_max
 
 lock(c::Channel) = lock(c.cond_take)
 lock(f, c::Channel) = lock(f, c.cond_take)

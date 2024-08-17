@@ -22,6 +22,8 @@ See also [`fld`](@ref) and [`cld`](@ref), which are special cases of this functi
 
 # Examples:
 ```jldoctest
+julia> div(4, 3, RoundToZero) # Matches div(4, 3)
+1
 julia> div(4, 3, RoundDown) # Matches fld(4, 3)
 1
 julia> div(4, 3, RoundUp) # Matches cld(4, 3)

@@ -21,5 +21,14 @@
 /SparseArrays
 /SHA-*
 /SHA
+/LazyArtifacts-*
+/LazyArtifacts
+/Distributed-*
+/Distributed
+/StyledStrings-*
+/StyledStrings
+/JuliaSyntaxHighlighting-*
+/JuliaSyntaxHighlighting
 /*_jll/StdlibArtifacts.toml
 /*/Manifest.toml
+/*.image

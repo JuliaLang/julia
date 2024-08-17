@@ -42,6 +42,13 @@ extern "C" {
 #endif
 
 #if defined(_COMPILER_ASAN_ENABLED_)
+#if __GLIBC__
+#include <dlfcn.h>
+// Bypass the ASAN longjmp wrapper - we are unpoisoning the stack ourselves,
+// since ASAN normally unpoisons far too much.
+// c.f. interceptor in jl_dlopen as well
+void (*real_siglongjmp)(jmp_buf _Buf, int _Value) = NULL;
+#endif
 static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_task_t *from, jl_task_t *to) {
     if (to->copy_stack)
         __sanitizer_start_switch_fiber(&from->ctx.asan_fake_stack, (char*)ptls->stackbase-ptls->stacksize, ptls->stacksize);
@@ -127,18 +134,11 @@ static inline void sanitizer_finish_switch_fiber(jl_task_t *last, jl_task_t *cur
 #define ROOT_TASK_STACK_ADJUSTMENT 3000000
 #endif
 
-#ifdef JL_HAVE_ASYNCIFY
-// Switching logic is implemented in JavaScript
-#define STATIC_OR_JS JL_DLLEXPORT
-#else
-#define STATIC_OR_JS static
-#endif
-
 static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT;
-STATIC_OR_JS void jl_set_fiber(jl_ucontext_t *t);
-STATIC_OR_JS void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
-STATIC_OR_JS void jl_start_fiber_swap(jl_ucontext_t *savet, jl_ucontext_t *t);
-STATIC_OR_JS void jl_start_fiber_set(jl_ucontext_t *t);
+static void jl_set_fiber(jl_ucontext_t *t);
+static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
+static void jl_start_fiber_swap(jl_ucontext_t *savet, jl_ucontext_t *t);
+static void jl_start_fiber_set(jl_ucontext_t *t);
 
 #ifdef ALWAYS_COPY_STACKS
 # ifndef COPY_STACKS
@@ -197,7 +197,7 @@ static void JL_NO_ASAN JL_NO_MSAN memcpy_stack_a16(uint64_t *to, uint64_t *from,
     memcpy_noasan((char*)to_addr, (char*)from_addr, shadow_nb);
     memcpy_a16_noasan(jl_assume_aligned(to, 16), jl_assume_aligned(from, 16), nb);
 #elif defined(_COMPILER_MSAN_ENABLED_)
-# warning This function is imcompletely implemented for MSAN (TODO).
+# warning This function is incompletely implemented for MSAN (TODO).
     memcpy((char*)jl_assume_aligned(to, 16), (char*)jl_assume_aligned(from, 16), nb);
 #else
     memcpy((char*)jl_assume_aligned(to, 16), (char*)jl_assume_aligned(from, 16), nb);
@@ -272,7 +272,7 @@ JL_NO_ASAN static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *l
         return;
     if (r != 0 || returns != 1)
         abort();
-#elif defined(JL_HAVE_ASM) || defined(JL_HAVE_SIGALTSTACK) || defined(_OS_WINDOWS_)
+#elif defined(JL_HAVE_ASM) || defined(_OS_WINDOWS_)
     if (jl_setjmp(lastt->ctx.copy_ctx.uc_mcontext, 0))
         return;
 #else
@@ -290,18 +290,17 @@ JL_NO_ASAN static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *l
 /* Rooted by the base module */
 static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
-void JL_NORETURN jl_finish_task(jl_task_t *t)
+void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
-    jl_task_t *ct = jl_current_task;
     JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
-    if (jl_atomic_load_relaxed(&t->_isexception))
-        jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
+    if (jl_atomic_load_relaxed(&ct->_isexception))
+        jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);
     else
-        jl_atomic_store_release(&t->_state, JL_TASK_STATE_DONE);
-    if (t->copy_stack) { // early free of stkbuf
-        asan_free_copy_stack(t->stkbuf, t->bufsz);
-        t->stkbuf = NULL;
+        jl_atomic_store_release(&ct->_state, JL_TASK_STATE_DONE);
+    if (ct->copy_stack) { // early free of stkbuf
+        asan_free_copy_stack(ct->stkbuf, ct->bufsz);
+        ct->stkbuf = NULL;
     }
     // ensure that state is cleared
     ct->ptls->in_finalizer = 0;
@@ -315,12 +314,12 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
             jl_atomic_store_release(&task_done_hook_func, done);
     }
     if (done != NULL) {
-        jl_value_t *args[2] = {done, (jl_value_t*)t};
+        jl_value_t *args[2] = {done, (jl_value_t*)ct};
         JL_TRY {
             jl_apply(args, 2);
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_current_exception(), ct);
+            jl_no_exc_handler(jl_current_exception(ct), ct);
         }
     }
     jl_gc_debug_critical_error();
@@ -646,13 +645,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     int finalizers_inhibited = ptls->finalizers_inhibited;
     ptls->finalizers_inhibited = 0;
 
-#ifdef ENABLE_TIMINGS
-    jl_timing_block_t *blk = ptls->timing_stack;
-    if (blk)
-        jl_timing_block_stop(blk);
-    ptls->timing_stack = NULL;
-#endif
-
+    jl_timing_block_t *blk = jl_timing_block_task_exit(ct, ptls);
     ctx_switch(ct);
 
 #ifdef MIGRATE_TASKS
@@ -672,15 +665,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
            0 != ct->ptls &&
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
-
-#ifdef ENABLE_TIMINGS
-    assert(ptls->timing_stack == NULL);
-    ptls->timing_stack = blk;
-    if (blk)
-        jl_timing_block_start(blk);
-#else
-    (void)ct;
-#endif
+    jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -702,7 +687,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     // NULL exception objects are used when rethrowing. we don't have a handler to process
     // the exception stack, so at least report the exception at the top of the stack.
     if (!e)
-        e = jl_current_exception();
+        e = jl_current_exception(ct);
 
     jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
     jl_static_show((JL_STREAM*)STDERR_FILENO, e);
@@ -719,30 +704,30 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack()                                                    \
         jl_timing_block_t *cur_block = ptls->timing_stack;                     \
         while (cur_block && eh->timing_stack != cur_block) {                   \
-            cur_block = jl_pop_timing_block(cur_block);                        \
+            cur_block = jl_timing_block_pop(cur_block);                        \
         }                                                                      \
         assert(cur_block == eh->timing_stack);
 #else
 #define pop_timings_stack() /* Nothing */
 #endif
 
-#define throw_internal_body()                                                  \
+#define throw_internal_body(altstack)                                          \
     assert(!jl_get_safe_restore());                                            \
     jl_ptls_t ptls = ct->ptls;                                                 \
     ptls->io_wait = 0;                                                         \
-    JL_GC_PUSH1(&exception);                                                   \
     jl_gc_unsafe_enter(ptls);                                                  \
     if (exception) {                                                           \
         /* The temporary ptls->bt_data is rooted by special purpose code in the\
            GC. This exists only for the purpose of preserving bt_data until we \
            set ptls->bt_size=0 below. */                                       \
-        jl_push_excstack(&ct->excstack, exception,                             \
-                          ptls->bt_data, ptls->bt_size);                       \
+        jl_push_excstack(ct, &ct->excstack, exception,                         \
+                         ptls->bt_data, ptls->bt_size);                        \
         ptls->bt_size = 0;                                                     \
     }                                                                          \
     assert(ct->excstack && ct->excstack->top);                                 \
     jl_handler_t *eh = ct->eh;                                                 \
     if (eh != NULL) {                                                          \
+        if (altstack) ptls->sig_exception = NULL;                              \
         pop_timings_stack()                                                    \
         asan_unpoison_task_stack(ct, &eh->eh_ctx);                             \
         jl_longjmp(eh->eh_ctx, 1);                                             \
@@ -755,23 +740,21 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
 {
 CFI_NORETURN
-    throw_internal_body()
+    JL_GC_PUSH1(&exception);
+    throw_internal_body(0);
     jl_unreachable();
 }
 
-#ifdef _COMPILER_ASAN_ENABLED_
 /* On the signal stack, we don't want to create any asan frames, but we do on the
    normal, stack, so we split this function in two, depending on which context
-   we're calling it in */
-JL_NO_ASAN static void JL_NORETURN throw_internal_altstack(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
+   we're calling it in. This also lets us avoid making a GC frame on the altstack,
+   which might end up getting corrupted if we recur here through another signal. */
+JL_NO_ASAN static void JL_NORETURN throw_internal_altstack(jl_task_t *ct, jl_value_t *exception)
 {
 CFI_NORETURN
-    throw_internal_body()
+    throw_internal_body(1);
     jl_unreachable();
 }
-#else
-#define throw_internal_altstack throw_internal
-#endif
 
 // record backtrace and raise an error
 JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
@@ -813,7 +796,7 @@ CFI_NORETURN
     }
     jl_ptls_t ptls = ct->ptls;
     jl_value_t *e = ptls->sig_exception;
-    ptls->sig_exception = NULL;
+    JL_GC_PROMISE_ROOTED(e);
     throw_internal_altstack(ct, e);
 }
 
@@ -866,34 +849,227 @@ uint64_t jl_genrandom(uint64_t rngState[4]) JL_NOTSAFEPOINT
     return res;
 }
 
-void jl_rng_split(uint64_t to[4], uint64_t from[4]) JL_NOTSAFEPOINT
+/*
+The jl_rng_split function forks a task's RNG state in a way that is essentially
+guaranteed to avoid collisions between the RNG streams of all tasks. The main
+RNG is the xoshiro256++ RNG whose state is stored in rngState[0..3]. There is
+also a small internal RNG used for task forking stored in rngState[4]. This
+state is used to iterate a linear congruential generator (LCG), which is then
+combined with xoshiro256's state and put through four different variations of
+the strongest PCG output function, referred to as PCG-RXS-M-XS-64 [1].
+
+The goal of jl_rng_split is to perturb the state of each child task's RNG in
+such a way that for an entire tree of tasks spawned starting with a given root
+task state, no two tasks have the same RNG state. Moreover, we want to do this
+in a way that is deterministic and repeatable based on (1) the root task's seed,
+(2) how many random numbers are generated, and (3) the task tree structure. The
+RNG state of a parent task is allowed to affect the initial RNG state of a child
+task, but the mere fact that a child was spawned should not alter the RNG output
+of the parent. This second requirement rules out using the main RNG to seed
+children: if we use the main RNG, we either advance it, which affects the
+parent's RNG stream or, if we don't advance it, then every child would have an
+identical RNG stream. Therefore some separate state must be maintained and
+changed upon forking a child task while leaving the main RNG state unchanged.
+
+The basic approach is a generalization and simplification of that used in the
+DotMix [2] and SplitMix [3] RNG systems: each task is uniquely identified by a
+sequence of "pedigree" numbers, indicating where in the task tree it was
+spawned. This vector of pedigree coordinates is then reduced to a single value
+by computing a "dot product" with a shared vector of random weights. I write
+"dot product" in quotes because what we use is not an actual dot product. The
+linear dot product construction used in both DotMix and SplitMix was found by
+@foobar_iv2 [4] to allow easy construction of linear relationships between the
+main RNG states of tasks, which was in turn reflected in observable linear
+relationships between the outputs of their RNGs. This relationship was between a
+minimum of four tasks, so doesn't constitute a collision, per se, but is clearly
+undesirable and highlights a hazard of the plain dot product construction.
+
+As in DotMix and SplitMix, each task is assigned unique task "pedigree"
+coordinates. Our pedigree construction is a bit different and uses only binary
+coordinates rather than arbitrary integers. Each pedigree is an infinite
+sequence of ones and zeros with only finitely many ones. Each task has a "fork
+index": the root task has index 0; the fork index of the jth child task of a
+parent task with fork index i is i+j. The root task's coordinates are all zeros;
+each child task's coordinates are the same as its parents except at its fork
+index, where the parent has a zero while the child has a one; each task's
+coordinates after its fork index are all zeros. The last common ancestor of two
+tasks has coordinates that are the longest common prefix of their coordinates.
+
+Also as in DotMix and SplitMix, we generate a sequence of pseudorandom "weights"
+to combine with the coordinates of each task. This sequence is common across all
+tasks, and different mix values for tasks stem entirely from task coordinates
+being different. In DotMix and SplitMix the mix function is a literal dot
+product: the pseudorandom weights are multiplied by corresponding task
+coordinate and summed. While this does provably make collisions as unlikely as
+random seeding, this linear construction can be used to create linearly
+correlated states between more than two tasks. However, it turns out that the
+compression mixing construction need not be linear, nor commutative, nor
+associative. In fact, the mixing function need only be bijective in both
+arguments. This allows us to use a much more non-trivial mixing function and
+avoid any linear or other obvious correlations between related sets of tasks.
+
+We maintain an LCG in rngState[4] to generate pseudorandom weights. An LCG by
+itself is a very bad RNG, but we combine this one with xoshiro256 state
+registers in a non-trivial way and then apply the PCG-RXS-M-XS-64 output
+function to that. Even if the xoshiro256 states are all zeros, which they should
+never be, the output would be the same as PCG-RXS-M-XS-64, which is a solid
+statistical RNG. Each time a child is forked, we update the LCG in both parent
+and child tasks, corresponding to increasing the fork index. In the parent,
+that's all we have to do -- the main RNG state remains unchanged. Recall that
+spawning a child should not affect subsequent RNG draws in the parent. The next
+time the parent forks a child, the mixing weight used will be different. In the
+child, we use the LCG state to perturb the child's main RNG state registers,
+rngState[0..3].
+
+To generalize SplitMix's optimized dot product construction, we also compute
+each task's compression function value incrementally by combining the parent's
+compression value with pseudorandom weight corresponding with the child's fork
+index. Formally, if the parent's compression value is c then we can compute the
+child's compression value as c′ = f(c, wᵢ) where w is the vector of pseudorandom
+weights. What is f? It can be any function that is bijective in each argument
+for all values of the other argument:
+
+    * For all c: w ↦ f(c, w) is bijective
+    * For all w: c ↦ f(c, w) is bijective
+
+The proof that these requirements are sufficient to ensure collision resistance
+is in the linked discussion [4]. DotMix/SplitMix are a special case where f is
+just addition. Instead we use a much less simple mixing function:
+
+    1. We use (2c+1)(2w+1)÷2 % 2^64 to mix the bits of c and w
+    2. We then apply the PCG-RXS-M-XS-64 output function
+
+The first step thoroughly mixes the bits of the previous compression value and
+the pseudorandom weight value using multiplication, which is non-commutative
+with xoshiro's operations (xor, shift, rotate). This mixing function is a
+bijection on each argument witnessed by these inverses:
+
+    * c′ ↦ (2c′+1)(2w+1)⁻¹÷2 % 2^64
+    * w′ ↦ (2c+1)⁻¹(2w′+1)÷2 % 2^64
+
+Here (2w+1)⁻¹ is the modular inverse of (2w+1) mod 2^64, guaranteed to exist
+since 2w+1 is odd. The second PCG output step is a bijection and designed to be
+significantly non-linear -- non-linear enough to mask the linearity of the LCG
+that drives the PCG-RXS-M-XS-64 RNG and allows it to pass statistical RNG test
+suites despite having the same size state and output. In particular, since this
+mixing function is highly non-associative and non-linear, we (hopefully) don't
+have any discernible relationship between these values:
+
+    * c₀₀ = c
+    * c₁₀ = f(c, wᵢ)
+    * c₀₁ = f(c, wⱼ)
+    * c₁₁ = f(f(c, wᵢ), wⱼ)
+
+When f is simply `+` then these have a very obvious linear relationship:
+
+    c₀₀ + c₁₁ == c₁₀ + c₀₁
+
+This relationship holds regardless of what wᵢ and wⱼ are and allows easy
+creation of correlated tasks with the way we were previously using the
+DotMix/SplitMix construction. SplitMix itself does not output the raw dot
+product, probably because the authors were aware of this linearity issue;
+instead: they apply the MurmurHash3 finalizer to the dot-product to get an
+output that masks linear relationships. I had failed to understand the
+importance of that finalizer. One possible fix for our task splitting
+correlation issue would have been to also apply a non-linear finalizer
+(MurmurHash3 is one of the best) to our dot product before using it to perturb
+the xoshiro256 state. There are two problems with that fix, however:
+
+1. It requires accumulating the dot product somewhere. The old approach
+   accumulates dot products directly in the xoshiro registers; if we were to
+   accumulate and then finalize, the dot product has to be stored somewhere
+   in each task. We want our tasks to be as small as possible, so adding
+   another 64-bit field that we never change would be unfortunate.
+
+2. We still need to apply the PCG finalizer to the internal LCG in order to
+   generate dot product weights. SplitMix uses a shared static array of
+   1024 pre-generated random weights; we could do the same, but that limits
+   the number of task splits to a max of 1024 before weights have to be
+   reused. We can't use the LCG directly because it's highly linear and we
+   need four variations of the internal RNG stream for the four xoshiro256
+   registers. That means we'd have to apply the PCG finalizer, add it to
+   our dot product accumulator field in the child task, then apply the
+   MurmurHash3 finalizer to that dot product and use the result to purturb
+   the main RNG state.
+
+We avoid both problems by recognizing that the mixing function can be much less
+simple while still allowing the essential collision resistance proof to go
+through. We replace addition with a highly non-linear, non-associative mixing
+function that includes the PCG output function. This allows us to continue to use
+the xoshiro state registers for mixing function accumulation as well as for its
+primary purpose. It also obviates the need for double finalization: it would
+have been disastrous to use LCG state directly as weights for a linear
+construction like SplitMix, but using it as the input to a non-linear mixer that
+includes the strongest PCG output function is reasonable (and precisely what
+PCG-RXS-M-XS-64 does). Since the output of the mixing function is already
+non-linearly finalized, there's no need to apply yet another finalizer.
+
+Since there are four xoshiro256 registers that we want to behave independently
+as mix accumulators, we use four different variations on the mixing function,
+keyed by register index (0-3). Each variation first xors the LCG state with a
+different random constant before combining that value above with the old
+register state via multiplication. The PCG-RXS-M-XS-64 output function is then
+applied to that mixed state, with a different multiplier constant for each
+variation / register index. Xor is used in the first step since we multiply the
+result with the state immediately after and multiplication distributes over `+`
+and commutes with `*`, making both suspect options. Multiplication doesn't
+distribute over or commute with xor. We also use a different odd multiplier in
+PCG-RXS-M-XS-64 for each RNG register. These four sources of variation
+(different initial state, different xor constants, different xoshiro256 state,
+different PCG multipliers) are hopefully sufficient for each of the four outputs
+to behave statistically independently, in the sense that even if two different
+tasks happen to have a state collision in one 64-bit register, it is highly
+improbable that all four registers collide at the same time, giving an actual
+main RNG state collision.
+
+[1]: https://www.pcg-random.org/pdf/hmc-cs-2014-0905.pdf
+
+[2]: http://supertech.csail.mit.edu/papers/dprng.pdf
+
+[3]: https://gee.cs.oswego.edu/dl/papers/oopsla14.pdf
+
+[4]:
+https://discourse.julialang.org/t/linear-relationship-between-xoshiro-tasks/110454
+*/
+void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT
 {
-    /* TODO: consider a less ad-hoc construction
-       Ideally we could just use the output of the random stream to seed the initial
-       state of the child. Out of an overabundance of caution we multiply with
-       effectively random coefficients, to break possible self-interactions.
+    // load and advance the internal LCG state
+    uint64_t x = src[4];
+    src[4] = dst[4] = x * 0xd1342543de82ef95 + 1;
+    // high spectrum multiplier from https://arxiv.org/abs/2001.05304
 
-       It is not the goal to mix bits -- we work under the assumption that the
-       source is well-seeded, and its output looks effectively random.
-       However, xoshiro has never been studied in the mode where we seed the
-       initial state with the output of another xoshiro instance.
+    // random xor constants
+    static const uint64_t a[4] = {
+        0x214c146c88e47cb7,
+        0xa66d8cc21285aafa,
+        0x68c7ef2d7b1a54d4,
+        0xb053a7d7aa238c61
+    };
+    // random odd multipliers
+    static const uint64_t m[4] = {
+        0xaef17502108ef2d9, // standard PCG multiplier
+        0xf34026eeb86766af,
+        0x38fd70ad58dd9fbb,
+        0x6677f9b93ab0c04d
+    };
 
-       Constants have nothing up their sleeve:
-       0x02011ce34bce797f == hash(UInt(1))|0x01
-       0x5a94851fb48a6e05 == hash(UInt(2))|0x01
-       0x3688cf5d48899fa7 == hash(UInt(3))|0x01
-       0x867b4bb4c42e5661 == hash(UInt(4))|0x01
-    */
-    to[0] = 0x02011ce34bce797f * jl_genrandom(from);
-    to[1] = 0x5a94851fb48a6e05 * jl_genrandom(from);
-    to[2] = 0x3688cf5d48899fa7 * jl_genrandom(from);
-    to[3] = 0x867b4bb4c42e5661 * jl_genrandom(from);
+    // PCG-RXS-M-XS-64 output with four variants
+    for (int i = 0; i < 4; i++) {
+        uint64_t c = src[i];
+        uint64_t w = x ^ a[i];
+        c += w*(2*c + 1); // c = (2c+1)(2w+1)÷2 % 2^64 (double bijection)
+        c ^= c >> ((c >> 59) + 5);
+        c *= m[i];
+        c ^= c >> 43;
+        dst[i] = c;
+    }
 }
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
+    jl_set_typetagof(t, jl_task_tag, 0);
     JL_PROBE_RT_NEW_TASK(ct, t);
     t->copy_stack = 0;
     if (ssize == 0) {
@@ -924,8 +1100,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->result = jl_nothing;
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
-    // Inherit logger state from parent task
-    t->logstate = ct->logstate;
+    // Inherit scope from parent task
+    t->scope = ct->scope;
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
@@ -940,8 +1116,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
-    t->reentrant_inference = 0;
-    t->inference_start_time = 0;
+    jl_timing_task_init(t);
 
 #ifdef COPY_STACKS
     if (!t->copy_stack) {
@@ -972,47 +1147,6 @@ JL_DLLEXPORT jl_task_t *jl_get_current_task(void)
     return pgcstack == NULL ? NULL : container_of(pgcstack, jl_task_t, gcstack);
 }
 
-
-#ifdef JL_HAVE_ASYNCIFY
-JL_DLLEXPORT jl_ucontext_t *task_ctx_ptr(jl_task_t *t)
-{
-    return &t->ctx.ctx;
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_root_task(void)
-{
-    jl_task_t *ct = jl_current_task;
-    return (jl_value_t*)ct->ptls->root_task;
-}
-
-JL_DLLEXPORT void jl_task_wait()
-{
-    static jl_function_t *wait_func = NULL;
-    if (!wait_func) {
-        wait_func = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("wait"));
-    }
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_get_world_counter();
-    jl_apply(&wait_func, 1);
-    ct->world_age = last_age;
-}
-
-JL_DLLEXPORT void jl_schedule_task(jl_task_t *task)
-{
-    static jl_function_t *sched_func = NULL;
-    if (!sched_func) {
-        sched_func = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("schedule"));
-    }
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_get_world_counter();
-    jl_value_t *args[] = {(jl_value_t*)sched_func, (jl_value_t*)task};
-    jl_apply(args, 2);
-    ct->world_age = last_age;
-}
-#endif
-
 // Do one-time initializations for task system
 void jl_init_tasks(void) JL_GC_DISABLED
 {
@@ -1033,13 +1167,24 @@ void jl_init_tasks(void) JL_GC_DISABLED
         exit(1);
     }
 #endif
+#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
+    void *libc_handle = dlopen("libc.so.6", RTLD_NOW | RTLD_NOLOAD);
+    if (libc_handle) {
+        *(void**)&real_siglongjmp = dlsym(libc_handle, "siglongjmp");
+        dlclose(libc_handle);
+    }
+    if (real_siglongjmp == NULL) {
+        jl_safe_printf("failed to get real siglongjmp\n");
+        exit(1);
+    }
+#endif
 }
 
 #if defined(_COMPILER_ASAN_ENABLED_)
-STATIC_OR_JS void NOINLINE JL_NORETURN _start_task(void);
+static void NOINLINE JL_NORETURN _start_task(void);
 #endif
 
-STATIC_OR_JS void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void)
+static void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void)
 {
 CFI_NORETURN
 #if defined(_COMPILER_ASAN_ENABLED_)
@@ -1054,7 +1199,8 @@ CFI_NORETURN
     sanitizer_finish_switch_fiber(ptls->previous_task, ct);
     _start_task();
 }
-STATIC_OR_JS void NOINLINE JL_NORETURN _start_task(void)
+
+static void NOINLINE JL_NORETURN _start_task(void)
 {
 CFI_NORETURN
 #endif
@@ -1077,9 +1223,10 @@ CFI_NORETURN
 
     ct->started = 1;
     JL_PROBE_RT_START_TASK(ct);
+    jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
-        jl_push_excstack(&ct->excstack, ct->result,
+        jl_push_excstack(ct, &ct->excstack, ct->result,
                          ptls->bt_data, ptls->bt_size);
         res = ct->result;
     }
@@ -1089,11 +1236,11 @@ CFI_NORETURN
                 ptls->defer_signal = 0;
                 jl_sigint_safepoint(ptls);
             }
-            JL_TIMING(ROOT);
+            JL_TIMING(ROOT, ROOT);
             res = jl_apply(&ct->start, 1);
         }
         JL_CATCH {
-            res = jl_current_exception();
+            res = jl_current_exception(ct);
             jl_atomic_store_relaxed(&ct->_isexception, 1);
             goto skip_pop_exception;
         }
@@ -1363,115 +1510,6 @@ JL_NO_ASAN static void jl_start_fiber_set(jl_ucontext_t *t)
 }
 #endif
 
-#if defined(JL_HAVE_SIGALTSTACK)
-#if defined(_COMPILER_TSAN_ENABLED_)
-#error TSAN support not currently implemented for this tasking model
-#endif
-
-static void start_basefiber(int sig)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
-        start_task(); // sanitizer_finish_switch_fiber is part of start_task
-}
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
-{
-    stack_t uc_stack, osigstk;
-    struct sigaction sa, osa;
-    sigset_t set, oset;
-    void *stk = jl_malloc_stack(ssize, owner);
-    if (stk == NULL)
-        return NULL;
-    // setup
-    jl_ptls_t ptls = jl_current_task->ptls;
-    _jl_ucontext_t base_ctx;
-    memcpy(&base_ctx, &ptls->base_ctx, sizeof(base_ctx));
-    sigfillset(&set);
-    if (pthread_sigmask(SIG_BLOCK, &set, &oset) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("pthread_sigmask failed");
-    }
-    uc_stack.ss_sp = stk;
-    uc_stack.ss_size = *ssize;
-    uc_stack.ss_flags = 0;
-    if (sigaltstack(&uc_stack, &osigstk) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaltstack failed");
-    }
-    memset(&sa, 0, sizeof(sa));
-    sigemptyset(&sa.sa_mask);
-    sa.sa_handler = start_basefiber;
-    sa.sa_flags = SA_ONSTACK;
-    if (sigaction(SIGUSR2, &sa, &osa) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaction failed");
-    }
-    // emit signal
-    pthread_kill(pthread_self(), SIGUSR2); // initializes jl_basectx
-    sigdelset(&set, SIGUSR2);
-    sigsuspend(&set);
-    // cleanup
-    if (sigaction(SIGUSR2, &osa, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaction failed");
-    }
-    if (osigstk.ss_size < MINSTKSZ && (osigstk.ss_flags | SS_DISABLE))
-       osigstk.ss_size = MINSTKSZ;
-    if (sigaltstack(&osigstk, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("sigaltstack failed");
-    }
-    if (pthread_sigmask(SIG_SETMASK, &oset, NULL) != 0) {
-       jl_free_stack(stk, *ssize);
-       jl_error("pthread_sigmask failed");
-    }
-    if (&ptls->base_ctx != t) {
-        memcpy(&t, &ptls->base_ctx, sizeof(base_ctx));
-        memcpy(&ptls->base_ctx, &base_ctx, sizeof(base_ctx)); // restore COPY_STACKS context
-    }
-    return (char*)stk;
-}
-static void jl_start_fiber_set(jl_ucontext_t *t) {
-    jl_longjmp(t->ctx.uc_mcontext, 1); // (doesn't return)
-}
-static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
-{
-    assert(lastt);
-    if (lastt && jl_setjmp(lastt->ctx.uc_mcontext, 0))
-        return;
-    tsan_switch_to_ctx(t);
-    jl_start_fiber_set(t);
-}
-static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
-{
-    if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
-        return;
-    tsan_switch_to_ctx(t);
-    jl_start_fiber_set(t); // doesn't return
-}
-static void jl_set_fiber(jl_ucontext_t *t)
-{
-    jl_longjmp(t->ctx.uc_mcontext, 1);
-}
-#endif
-
-#if defined(JL_HAVE_ASYNCIFY)
-#if defined(_COMPILER_TSAN_ENABLED_)
-#error TSAN support not currently implemented for this tasking model
-#endif
-
-static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT
-{
-    void *stk = jl_malloc_stack(ssize, owner);
-    if (stk == NULL)
-        return NULL;
-    t->stackbottom = stk;
-    t->stacktop = ((char*)stk) + *ssize;
-    return (char*)stk;
-}
-// jl_*_fiber implemented in js
-#endif
-
 // Initialize a root task using the given stack.
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 {
@@ -1490,6 +1528,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     if (jl_nothing == NULL) // make a placeholder
         jl_nothing = jl_gc_permobj(0, jl_nothing_type);
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
+    jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));
     void *stack = stack_lo;
     size_t ssize = (char*)stack_hi - (char*)stack_lo;
@@ -1509,6 +1548,12 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
         ct->stkbuf = stack;
         ct->bufsz = ssize;
     }
+
+#ifdef USE_TRACY
+    char *unique_string = (char *)malloc(strlen("Root") + 1);
+    strcpy(unique_string, "Root");
+    ct->name = unique_string;
+#endif
     ct->started = 1;
     ct->next = jl_nothing;
     ct->queue = jl_nothing;
@@ -1518,7 +1563,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
-    ct->logstate = jl_nothing;
+    ct->scope = jl_nothing;
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;
@@ -1528,13 +1573,12 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
-    ct->reentrant_inference = 0;
-    ct->inference_start_time = 0;
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);
     jl_set_pgcstack(&ct->gcstack);
     assert(jl_current_task == ct);
+    assert(jl_current_task->ptls == ptls);
 
 #ifdef _COMPILER_TSAN_ENABLED_
     ct->ctx.tsan_state = __tsan_get_current_fiber();
@@ -1542,6 +1586,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 #ifdef _COMPILER_ASAN_ENABLED_
     ct->ctx.asan_fake_stack = NULL;
 #endif
+
+    jl_timing_block_task_enter(ct, ptls, NULL);
 
 #ifdef COPY_STACKS
     // initialize the base_ctx from which all future copy_stacks will be copies
@@ -1556,12 +1602,15 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 #endif
         if (jl_setjmp(ptls->copy_stack_ctx.uc_mcontext, 0))
             start_task(); // sanitizer_finish_switch_fiber is part of start_task
-        return ct;
     }
-    ssize = JL_STACK_SIZE;
-    char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
-    ptls->stackbase = stkbuf + ssize;
-    ptls->stacksize = ssize;
+    else {
+        ssize = JL_STACK_SIZE;
+        char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
+        if (stkbuf != NULL) {
+            ptls->stackbase = stkbuf + ssize;
+            ptls->stacksize = ssize;
+        }
+    }
 #endif
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)

@@ -3,6 +3,9 @@
 using Base: findprevnot, findnextnot
 using Random, LinearAlgebra, Test
 
+isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
+using .Main.SizedArrays
+
 tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
 tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::SubArray{Bool,N1,BitArray{N2}}, r2::SubArray{Bool,N1,<:Union{BitArray{N2},Array{Bool,N2}}}) where {N1,N2} = true
@@ -82,6 +85,25 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
     @test !isassigned(b, length(b) + 1)
 end
 
+@testset "trues and falses with custom axes" begin
+    for ax in ((SizedArrays.SOneTo(2),), (SizedArrays.SOneTo(2), Base.OneTo(2)))
+        t = trues(ax)
+        if all(x -> x isa SizedArrays.SOneTo, ax)
+            @test t isa SizedArrays.SizedArray && parent(t) isa BitArray
+        else
+            @test t isa BitArray
+        end
+        @test all(t)
+
+        f = falses(ax)
+        if all(x -> x isa SizedArrays.SOneTo, ax)
+            @test t isa SizedArrays.SizedArray && parent(t) isa BitArray
+        else
+            @test t isa BitArray
+        end
+        @test !any(f)
+    end
+end
 
 @testset "Conversions for size $sz" for (sz, T) in allsizes
     b1 = rand!(falses(sz...))
@@ -1538,6 +1560,21 @@ timesofar("reductions")
                 end
             end
         end
+    end
+    @testset "Issue #50780, map! bitarray map! where dest aliases source" begin
+        a = BitVector([1,0])
+        b = map(!, a)
+        map!(!, a, a) # a .= !.a
+        @test a == b == BitVector([0,1])
+
+        a = BitVector([1,0])
+        c = map(|, a, b)
+        map!(|, a, a, b)
+        @test c == a == BitVector([1, 1])
+
+        a = BitVector([1,0])
+        map!(|, b, a, b)
+        @test c == b == BitVector([1, 1])
     end
 end
 

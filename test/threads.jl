@@ -312,7 +312,7 @@ close(proc.in)
         if ( !success(proc) ) || ( timeout )
             @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
         end
-        if Sys.iswindows()
+        if Sys.iswindows() || Sys.isapple()
             # Known failure: https://github.com/JuliaLang/julia/issues/43124
             @test_skip success(proc)
         else
@@ -326,4 +326,43 @@ end
     @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
     @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
+end
+
+@testset "rand_ptls underflow" begin
+    @test Base.Partr.cong(UInt32(0)) == 0
+end
+
+@testset "num_stack_mappings metric" begin
+    @test @ccall(jl_get_num_stack_mappings()::Cint) >= 1
+    # There must be at least two: one for the root test task and one for the async task:
+    @test fetch(@async(@ccall(jl_get_num_stack_mappings()::Cint))) >= 2
+end
+
+@testset "Base.Threads docstrings" begin
+    @test isempty(Docs.undocumented_names(Threads))
+end
+
+@testset "wait failed task" begin
+    @testset "wait without throw keyword" begin
+        t = Threads.@spawn error("Error")
+        @test_throws TaskFailedException wait(t)
+    end
+
+    @testset "wait with throw=false" begin
+        t = Threads.@spawn error("Error")
+        wait(t; throw=false)
+        @test istaskfailed(t)
+    end
+end
+
+@testset "jl_*affinity" begin
+    cpumasksize = @ccall uv_cpumask_size()::Cint
+    if cpumasksize > 0 # otherwise affinities are not supported on the platform (UV_ENOTSUP)
+        jl_getaffinity = (tid, mask, cpumasksize) -> ccall(:jl_getaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        jl_setaffinity = (tid, mask, cpumasksize) -> ccall(:jl_setaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        mask = zeros(Cchar, cpumasksize)
+        @test jl_getaffinity(0, mask, cpumasksize) == 0
+        @test !all(iszero, mask)
+        @test jl_setaffinity(0, mask, cpumasksize) == 0
+    end
 end

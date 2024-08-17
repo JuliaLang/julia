@@ -6,6 +6,7 @@
 
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Instructions.h>
 
 #include <utility>
@@ -45,6 +46,8 @@ namespace jl_alloc {
         bool hasaggr:1;
         bool multiloc:1;
         bool hasload:1;
+        // The alloc has a unboxed object at this offset.
+        bool hasunboxed:1;
         llvm::Type *elty;
         llvm::SmallVector<MemOp,4> accesses;
         Field(uint32_t size, llvm::Type *elty)
@@ -53,6 +56,7 @@ namespace jl_alloc {
               hasaggr(false),
               multiloc(false),
               hasload(false),
+              hasunboxed(false),
               elty(elty)
         {
         }
@@ -86,11 +90,16 @@ namespace jl_alloc {
         bool returned:1;
         // The object is used in an error function
         bool haserror:1;
+        // For checking attributes of "uninitialized" or "zeroed" or unknown
+        llvm::AllocFnKind allockind;
 
         // The alloc has a Julia object reference not in an explicit field.
         bool has_unknown_objref:1;
         // The alloc has an aggregate Julia object reference not in an explicit field.
         bool has_unknown_objrefaggr:1;
+
+        // The alloc has an unboxed object at an unknown offset.
+        bool has_unknown_unboxed:1;
 
         void reset()
         {
@@ -104,12 +113,15 @@ namespace jl_alloc {
             hasunknownmem = false;
             returned = false;
             haserror = false;
+            allockind = llvm::AllocFnKind::Unknown;
             has_unknown_objref = false;
             has_unknown_objrefaggr = false;
+            has_unknown_unboxed = false;
             uses.clear();
             preserves.clear();
             memops.clear();
         }
+        void dump(llvm::raw_ostream &OS);
         void dump();
         bool addMemOp(llvm::Instruction *inst, unsigned opno, uint32_t offset, llvm::Type *elty,
                       bool isstore, const llvm::DataLayout &DL);
@@ -136,6 +148,7 @@ namespace jl_alloc {
         //will not be considered. Defaults to nullptr, which means all uses of the allocation
         //are considered
         const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set;
+        llvm::OptimizationRemarkEmitter *ORE = nullptr;
 
         EscapeAnalysisOptionalArgs() = default;
 
@@ -143,9 +156,14 @@ namespace jl_alloc {
             this->valid_set = valid_set;
             return *this;
         }
+
+        EscapeAnalysisOptionalArgs &with_optimization_remark_emitter(decltype(ORE) ORE) {
+            this->ORE = ORE;
+            return *this;
+        }
     };
 
-    void runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
+    void runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
 }
 
 

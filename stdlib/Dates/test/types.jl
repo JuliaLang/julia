@@ -41,6 +41,7 @@ end
     @test Dates.isleapyear(-1) == false
     @test Dates.isleapyear(4) == true
     @test Dates.isleapyear(-4) == true
+    @test_throws MethodError Dates.isleapyear(Dates.Year(1992))
 end
 # Create "test" check manually
 y = Dates.Year(1)
@@ -72,6 +73,12 @@ ms = Dates.Millisecond(1)
     @test Dates.DateTime(Dates.Second(10), Dates.Month(2), y, Dates.Hour(4)) == Dates.DateTime(1, 2, 1, 4, 0, 10)
     @test Dates.DateTime(Dates.Year(1), Dates.Month(2), Dates.Day(1),
                          Dates.Hour(4), Dates.Second(10)) == Dates.DateTime(1, 2, 1, 4, 0, 10)
+end
+
+@testset "DateTime construction from Date and Time" begin
+    @test Dates.DateTime(Dates.Date(2023, 08, 07), Dates.Time(12)) == Dates.DateTime(2023, 08, 07, 12, 0, 0, 0)
+    @test_throws InexactError Dates.DateTime(Dates.Date(2023, 08, 07), Dates.Time(12, 0, 0, 0, 42))
+    @test_throws InexactError Dates.DateTime(Dates.Date(2023, 08, 07), Dates.Time(12, 0, 0, 0, 0, 42))
 end
 
 @testset "Date construction by parts" begin
@@ -271,6 +278,11 @@ end
     @test typeof(datetime) == DateTime
     @test datetime == Dates.DateTime(1999, 2, 10, 5, 30, 14)
 
+end
+
+@testset "timer" begin
+    @test hasmethod(Timer, (Period,))
+    @test hasmethod(Timer, (Function, Period))
 end
 
 @testset "timedwait" begin

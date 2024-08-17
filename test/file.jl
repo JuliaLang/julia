@@ -31,6 +31,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
+    @test map(o->o.names, Base.Filesystem._readdirx(dirlink)) == map(o->o.names, Base.Filesystem._readdirx(subdir))
+    @test realpath.(Base.Filesystem._readdirx(dirlink)) == realpath.(Base.Filesystem._readdirx(subdir))
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -38,6 +40,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
+    @test Base.Filesystem._readdirx(relsubdirlink) == Base.Filesystem._readdirx(subdir2)
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
@@ -56,6 +59,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mkdir(new_dir)
     touch(foo_file)
     @test readdir(new_dir) == readdir(nedlink)
+    @test realpath.(Base.Filesystem._readdirx(new_dir)) == realpath.(Base.Filesystem._readdirx(nedlink))
 
     rm(foo_file)
     rm(new_dir)
@@ -123,6 +127,9 @@ end
         end
     end
     @test_throws ArgumentError tempname(randstring())
+end
+@testset "tempname with suffix" begin
+    @test !isfile(tempname(suffix = "_foo.txt"))
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -355,7 +362,7 @@ chmod(file, filemode(file) | 0o222)
 @test filesize(file) == 0
 
 # issue #26685
-@test !isfile("http://google.com")
+@test !isfile("https://google.com")
 
 if Sys.iswindows()
     permissions = 0o444
@@ -435,8 +442,7 @@ end
                 for pth in ("afile",
                             joinpath("afile", "not_file"),
                             SubString(joinpath(dir, "afile")),
-                            Base.RawFD(-1),
-                            -1)
+                            Base.RawFD(-1))
                     test_stat_error(stat, pth)
                     test_stat_error(lstat, pth)
                 end
@@ -598,6 +604,17 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "invalid read/write flags" begin
+    @test try
+        open("this file is not expected to exist", read=false, write=false)
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test endswith(sprint(showerror, e), "Invalid argument")
+        true
+    end
+end
+
 @testset "quoting filenames" begin
     @test try
         open("this file is not expected to exist")
@@ -626,9 +643,11 @@ end
     MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:9
         local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
-        @test withenv(var => tmp) do
-            tempdir()
-        end == tmp
+        no_error_logging() do
+            @test withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        end
     end
 end
 
@@ -1012,7 +1031,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
         @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
+        @test_throws Base._UVError("rename($(repr(nonexisting_src)), $(repr(dst)))", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
 end
 
@@ -1253,7 +1272,7 @@ let f = open(file, "w")
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
-        f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:open, Cint, (Cstring, Cint, UInt32...), file, Base.Filesystem.JL_O_RDONLY))
     end
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
@@ -1425,6 +1444,10 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
+            @test issorted(Base.Filesystem._readdirx())
+            @test map(o->o.name, Base.Filesystem._readdirx()) == readdir()
+            @test map(o->o.path, Base.Filesystem._readdirx()) == readdir(join=true)
+            @test count(isfile, readdir(join=true)) == count(isfile, Base.Filesystem._readdirx())
         end
     end
 end
@@ -1467,7 +1490,7 @@ mktempdir() do dir
     @test isfile(name1)
     @test isfile(name2)
     namedir = joinpath(dir, "chalk")
-    namepath = joinpath(dir, "chalk","cheese","fresh")
+    namepath = joinpath(dir, "chalk", "cheese", "fresh")
     @test !ispath(namedir)
     @test mkdir(namedir) == namedir
     @test isdir(namedir)
@@ -1476,7 +1499,12 @@ mktempdir() do dir
     @test isdir(namepath)
     @test mkpath(namepath) == namepath
     @test isdir(namepath)
+    # issue 54826
+    namepath_dirpath = joinpath(dir, "x", "y", "z", "")
+    @test mkpath(namepath_dirpath) == namepath_dirpath
 end
+@test mkpath("") == ""
+@test mkpath("/") == "/"
 
 # issue #30588
 @test realpath(".") == realpath(pwd())
@@ -1625,23 +1653,66 @@ end
     end
 end
 
-@testset "chmod/isexecutable" begin
+if Sys.isunix()
+    @testset "mkfifo" begin
+        mktempdir() do dir
+            path = Libc.mkfifo(joinpath(dir, "fifo"))
+            @sync begin
+                @async write(path, "hello")
+                cat_exec = `$(Base.julia_cmd()) --startup-file=no -e "write(stdout, read(ARGS[1]))"`
+                @test read(`$cat_exec $path`, String) == "hello"
+            end
+
+            existing_file = joinpath(dir, "existing")
+            write(existing_file, "")
+            @test_throws SystemError Libc.mkfifo(existing_file)
+        end
+    end
+else
+    @test_throws(
+        "mkfifo: Operation not supported",
+        Libc.mkfifo(joinpath(pwd(), "dummy_path")),
+    )
+end
+
+@testset "chmod/isexecutable/isreadable/iswritable" begin
     mktempdir() do dir
-        mkdir(joinpath(dir, "subdir"))
+        subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
 
-        # Test that we can actually set the executable bit on all platforms.
+        @test !ispath(subdir)
+        mkdir(subdir)
+        @test ispath(subdir)
+
+        @test !ispath(fpath)
         touch(fpath)
+        @test ispath(fpath)
+
+        # Test that we can actually set the executable/readable/writeable bit on all platforms.
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
         chmod(fpath, 0o755)
         @test Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
+        chmod(fpath, 0o444)
+        @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test !Sys.iswritable(fpath)
+        chmod(fpath, 0o244)
+        @test !Sys.isexecutable(fpath)
+        @test !Sys.isreadable(fpath) skip=Sys.iswindows()
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
 
         # Ensure that, on Windows, where inheritance is default,
         # chmod still behaves as we expect.
         if Sys.iswindows()
-            chmod(joinpath(dir, "subdir"), 0o666)
-            @test Sys.isexecutable(fpath)
+            chmod(subdir, 0o666)
+            @test !Sys.isexecutable(fpath)
+            @test Sys.isreadable(fpath)
+            @test_skip Sys.iswritable(fpath)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
@@ -1660,6 +1731,28 @@ if Sys.iswindows()
     tmp = mkdir(tempname("C:\\"))
     @test rm(tmp) === nothing
 end
+end
+
+# Unusually for structs, we test this explicitly because the fields of StatStruct
+# is part of its documentation, and therefore cannot change.
+@testset "StatStruct has promised fields" begin
+    f, io = mktemp()
+    s = stat(f)
+    @test s isa Base.StatStruct
+
+    @test s.desc isa Union{String, Base.OS_HANDLE}
+    @test s.size isa Int64
+    @test s.device isa UInt
+    @test s.inode isa UInt
+    @test s.mode isa UInt
+    @test s.nlink isa Int
+    @test s.uid isa UInt
+    @test s.gid isa UInt
+    @test s.rdev isa UInt
+    @test s.blksize isa Int64
+    @test s.blocks isa Int64
+    @test s.mtime isa Float64
+    @test s.ctime isa Float64
 end
 
 @testset "StatStruct show's extended details" begin

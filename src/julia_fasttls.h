@@ -3,6 +3,13 @@
 #ifndef JL_FASTTLS_H
 #define JL_FASTTLS_H
 
+#ifdef __cplusplus
+#include <atomic>
+#define _Atomic(T) std::atomic<T>
+#else
+#include <stdatomic.h>
+#endif
+
 // Thread-local storage access
 
 #ifdef __cplusplus
@@ -25,6 +32,7 @@ typedef jl_gcframe_t **(jl_get_pgcstack_func)(void);
 #if !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
 #define JULIA_DEFINE_FAST_TLS                                                                   \
 static __attribute__((tls_model("local-exec"))) __thread jl_gcframe_t **jl_pgcstack_localexec;  \
+JL_DLLEXPORT _Atomic(char) jl_pgcstack_static_semaphore;                                        \
 JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack_static(void)                                        \
 {                                                                                               \
     return jl_pgcstack_localexec;                                                               \

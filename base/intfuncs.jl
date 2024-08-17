@@ -198,6 +198,7 @@ julia> gcdx(240, 46)
 """
 Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
     T = promote_type(typeof(a), typeof(b))
+    a == b == 0 && return (zero(T), zero(T), zero(T))
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
@@ -218,7 +219,7 @@ gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
 # multiplicative inverse of n mod m, error if none
 
 """
-    invmod(n, m)
+    invmod(n::Integer, m::Integer)
 
 Take the inverse of `n` modulo `m`: `y` such that ``n y = 1 \\pmod m``,
 and ``div(y,m) = 0``. This will throw an error if ``m = 0``, or if
@@ -257,6 +258,43 @@ function invmod(n::Integer, m::Integer)
     return mod(x, m)
 end
 
+"""
+    invmod(n::Integer, T) where {T <: Base.BitInteger}
+    invmod(n::T) where {T <: Base.BitInteger}
+
+Compute the modular inverse of `n` in the integer ring of type `T`, i.e. modulo
+`2^N` where `N = 8*sizeof(T)` (e.g. `N = 32` for `Int32`). In other words these
+methods satisfy the following identities:
+```
+n * invmod(n) == 1
+(n * invmod(n, T)) % T == 1
+(n % T) * invmod(n, T) == 1
+```
+Note that `*` here is modular multiplication in the integer ring, `T`.
+
+Specifying the modulus implied by an integer type as an explicit value is often
+inconvenient since the modulus is by definition too big to be represented by the
+type.
+
+The modular inverse is computed much more efficiently than the general case
+using the algorithm described in https://arxiv.org/pdf/2204.04342.pdf.
+
+!!! compat "Julia 1.11"
+    The `invmod(n)` and `invmod(n, T)` methods require Julia 1.11 or later.
+"""
+invmod(n::Integer, ::Type{T}) where {T<:BitInteger} = invmod(n % T)
+
+function invmod(n::T) where {T<:BitInteger}
+    isodd(n) || throw(DomainError(n, "Argument must be odd."))
+    x = (3*n ⊻ 2) % T
+    y = (1 - n*x) % T
+    for _ = 1:trailing_zeros(2*sizeof(T))
+        x *= y + true
+        y *= y
+    end
+    return x
+end
+
 # ^ for any x supporting *
 to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
@@ -265,21 +303,22 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
 @noinline throw_domerr_powbysq(::Integer, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nMake x or ", p, " a float by adding a zero decimal ",
-    "(e.g., 2.0^", p, " or 2^", float(p), " instead of 2^", p, ")",
+    "(e.g., 2.0^", p, " or 2^", float(p), " instead of 2^", p, ") ",
     "or write 1/x^", -p, ", float(x)^", p, ", x^float(", p, ") or (x//1)^", p, ".")))
 @noinline throw_domerr_powbysq(::AbstractMatrix, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer matrix x to a negative power ", p, ".",
     "\nMake x a float matrix by adding a zero decimal ",
-    "(e.g., [2.0 1.0;1.0 0.0]^", p, " instead of [2 1;1 0]^", p, ")",
+    "(e.g., [2.0 1.0;1.0 0.0]^", p, " instead of [2 1;1 0]^", p, ") ",
     "or write float(x)^", p, " or Rational.(x)^", p, ".")))
-@assume_effects :terminates_locally function power_by_squaring(x_, p::Integer)
+# The * keyword supports `*=checked_mul` for `checked_pow`
+@assume_effects :terminates_locally function power_by_squaring(x_, p::Integer; mul=*)
     x = to_power_type(x_)
     if p == 1
         return copy(x)
     elseif p == 0
         return one(x)
     elseif p == 2
-        return x*x
+        return mul(x, x)
     elseif p < 0
         isone(x) && return copy(x)
         isone(-x) && return iseven(p) ? one(x) : copy(x)
@@ -288,16 +327,16 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
     t = trailing_zeros(p) + 1
     p >>= t
     while (t -= 1) > 0
-        x *= x
+        x = mul(x, x)
     end
     y = x
     while p > 0
         t = trailing_zeros(p) + 1
         p >>= t
         while (t -= 1) >= 0
-            x *= x
+            x = mul(x, x)
         end
-        y *= x
+        y = mul(y, x)
     end
     return y
 end
@@ -558,7 +597,7 @@ function bit_ndigits0z(x::Base.BitUnsigned64)
 end
 function bit_ndigits0z(x::UInt128)
     n = 0
-    while x > 0x8ac7230489e80000
+    while x > 0x8ac7230489e80000 # 10e18
         x = div(x,0x8ac7230489e80000)
         n += 19
     end
@@ -704,7 +743,7 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 function bin(x::Unsigned, pad::Int, neg::Bool)
     m = top_set_bit(x)
     n = neg + max(pad, m)
-    a = StringVector(n)
+    a = StringMemory(n)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
     #     @inbounds a[n - i] = 0x30 + (((x >> i) % UInt8)::UInt8 & 0x1)
     # end
@@ -724,50 +763,98 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
         x >>= 0x1
         i -= 1
     end
-    if neg; @inbounds a[1]=0x2d; end
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
     m = div(top_set_bit(x) + 2, 3)
     n = neg + max(pad, m)
-    a = StringVector(n)
+    a = StringMemory(n)
     i = n
     while i > neg
         @inbounds a[i] = 0x30 + ((x % UInt8)::UInt8 & 0x7)
         x >>= 0x3
         i -= 1
     end
-    if neg; @inbounds a[1]=0x2d; end
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 
 # 2-digit decimal characters ("00":"99")
-const _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
+const _dec_d100 = UInt16[
+# generating expression: UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
+#    0 0,    0 1,    0 2,    0 3, and so on in little-endian
+  0x3030, 0x3130, 0x3230, 0x3330, 0x3430, 0x3530, 0x3630, 0x3730, 0x3830, 0x3930,
+  0x3031, 0x3131, 0x3231, 0x3331, 0x3431, 0x3531, 0x3631, 0x3731, 0x3831, 0x3931,
+  0x3032, 0x3132, 0x3232, 0x3332, 0x3432, 0x3532, 0x3632, 0x3732, 0x3832, 0x3932,
+  0x3033, 0x3133, 0x3233, 0x3333, 0x3433, 0x3533, 0x3633, 0x3733, 0x3833, 0x3933,
+  0x3034, 0x3134, 0x3234, 0x3334, 0x3434, 0x3534, 0x3634, 0x3734, 0x3834, 0x3934,
+  0x3035, 0x3135, 0x3235, 0x3335, 0x3435, 0x3535, 0x3635, 0x3735, 0x3835, 0x3935,
+  0x3036, 0x3136, 0x3236, 0x3336, 0x3436, 0x3536, 0x3636, 0x3736, 0x3836, 0x3936,
+  0x3037, 0x3137, 0x3237, 0x3337, 0x3437, 0x3537, 0x3637, 0x3737, 0x3837, 0x3937,
+  0x3038, 0x3138, 0x3238, 0x3338, 0x3438, 0x3538, 0x3638, 0x3738, 0x3838, 0x3938,
+  0x3039, 0x3139, 0x3239, 0x3339, 0x3439, 0x3539, 0x3639, 0x3739, 0x3839, 0x3939
+]
+
+function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
+    i = olength
+    while i >= 2
+        d, c = divrem(digits, 0x64)
+        digits = oftype(digits, d)
+        @inbounds d100 = _dec_d100[(c % Int) + 1]
+        @inbounds buf[pos + i - 2] = d100 % UInt8
+        @inbounds buf[pos + i - 1] = (d100 >> 0x8) % UInt8
+        i -= 2
+    end
+    if i == 1
+        @inbounds buf[pos] = UInt8('0') + rem(digits, 0xa) % UInt8
+        i -= 1
+    end
+    return pos + olength
+end
+
+function append_nine_digits(digits::Unsigned, buf, pos::Int)
+    if digits == 0
+        for _ = 1:9
+            @inbounds buf[pos] = UInt8('0')
+            pos += 1
+        end
+        return pos
+    end
+    return @inline append_c_digits(9, digits, buf, pos) # force loop-unrolling on the length
+end
+
+function append_c_digits_fast(olength::Int, digits::Unsigned, buf, pos::Int)
+    i = olength
+    # n.b. olength may be larger than required to print all of `digits` (and will be padded
+    # with zeros), but the printed number will be undefined if it is smaller, and may include
+    # bits of both the high and low bytes.
+    maxpow10 = 0x3b9aca00 # 10e9 as UInt32
+    while i > 9 && digits > typemax(UInt)
+        # do everything in cheap math chunks, using the processor's native math size
+        d, c = divrem(digits, maxpow10)
+        digits = oftype(digits, d)
+        append_nine_digits(c % UInt32, buf, pos + i - 9)
+        i -= 9
+    end
+    append_c_digits(i, digits % UInt, buf, pos)
+    return pos + olength
+end
+
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
-    a = StringVector(n)
-    i = n
-    @inbounds while i >= 2
-        d, r = divrem(x, 0x64)
-        d100 = _dec_d100[(r % Int)::Int + 1]
-        a[i-1] = d100 % UInt8
-        a[i] = (d100 >> 0x8) % UInt8
-        x = oftype(x, d)
-        i -= 2
-    end
-    if i > neg
-        @inbounds a[i] = 0x30 + (rem(x, 0xa) % UInt8)::UInt8
-    end
-    if neg; @inbounds a[1]=0x2d; end
+    a = StringMemory(n)
+    append_c_digits_fast(n, x, a, 1)
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     m = 2 * sizeof(x) - (leading_zeros(x) >> 2)
     n = neg + max(pad, m)
-    a = StringVector(n)
+    a = StringMemory(n)
     i = n
     while i >= 2
         b = (x % UInt8)::UInt8
@@ -781,7 +868,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         d = (x % UInt8)::UInt8 & 0xf
         @inbounds a[i] = d + ifelse(d > 0x9, 0x57, 0x30)
     end
-    if neg; @inbounds a[1]=0x2d; end
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 
@@ -794,7 +881,7 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
     b = (base % Int)::Int
     digits = abs(b) <= 36 ? base36digits : base62digits
     n = neg + ndigits(x, base=b, pad=pad)
-    a = StringVector(n)
+    a = StringMemory(n)
     i = n
     @inbounds while i > neg
         if b > 0
@@ -806,7 +893,7 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
         end
         i -= 1
     end
-    if neg; @inbounds a[1]=0x2d; end
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 
@@ -854,7 +941,8 @@ string(b::Bool) = b ? "true" : "false"
 """
     bitstring(n)
 
-A string giving the literal bit representation of a primitive type.
+A string giving the literal bit representation of a primitive type
+(in bigendian order, i.e. most-significant bit first).
 
 See also [`count_ones`](@ref), [`count_zeros`](@ref), [`digits`](@ref).
 
@@ -868,9 +956,9 @@ julia> bitstring(2.2)
 ```
 """
 function bitstring(x::T) where {T}
-    isprimitivetype(T) || throw(ArgumentError("$T not a primitive type"))
+    isprimitivetype(T) || throw(ArgumentError(LazyString(T, " not a primitive type")))
     sz = sizeof(T) * 8
-    str = StringVector(sz)
+    str = StringMemory(sz)
     i = sz
     @inbounds while i >= 4
         b = UInt32(sizeof(T) == 1 ? bitcast(UInt8, x) : trunc_int(UInt8, x))
@@ -890,7 +978,7 @@ end
 
 Return an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
-higher indices, such that `n == sum(digits[k]*base^(k-1) for k=1:length(digits))`.
+higher indices, such that `n == sum(digits[k]*base^(k-1) for k in 1:length(digits))`.
 
 See also [`ndigits`](@ref), [`digits!`](@ref),
 and for base 2 also [`bitstring`](@ref), [`count_ones`](@ref).
@@ -968,7 +1056,7 @@ julia> digits!([2, 2, 2, 2, 2, 2], 10, base = 2)
 function digits!(a::AbstractVector{T}, n::Integer; base::Integer = 10) where T<:Integer
     2 <= abs(base) || throw(DomainError(base, "base must be ≥ 2 or ≤ -2"))
     hastypemax(T) && abs(base) - 1 > typemax(T) &&
-        throw(ArgumentError("type $T too small for base $base"))
+        throw(ArgumentError(LazyString("type ", T, " too small for base ", base)))
     isempty(a) && return a
 
     if base > 0
@@ -1047,7 +1135,7 @@ julia> factorial(big(21))
 * [Factorial](https://en.wikipedia.org/wiki/Factorial) on Wikipedia.
 """
 function factorial(n::Integer)
-    n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
+    n < 0 && throw(DomainError(n, "`n` must be non-negative."))
     f::typeof(n*n) = 1
     for i::typeof(n*n) = 2:n
         f *= i
@@ -1111,12 +1199,13 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
-        x == xt || throw(OverflowError(LazyString("binomial(", n0, ", ", k0, " overflows")))
+        x == xt || throw(OverflowError(LazyString("binomial(", n0, ", ", k0, ") overflows")))
         rr += one(T)
         nn += one(T)
     end
     copysign(x, sgn)
 end
+binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
 
 """
     binomial(x::Number, k::Integer)
@@ -1148,3 +1237,102 @@ function binomial(x::Number, k::Integer)
     # and instead divide each term by i, to avoid spurious overflow.
     return prod(i -> (x-(i-1))/i, OneTo(k), init=oneunit(x)/one(k))
 end
+
+"""
+    clamp(x, lo, hi)
+
+Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo`. Arguments
+are promoted to a common type.
+
+See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` as the first argument requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
+3-element Vector{BigFloat}:
+ 3.141592653589793238462643383279502884197169399375105820974944592307816406286198
+ 2.0
+ 9.0
+
+julia> clamp.([11, 8, 5], 10, 6)  # an example where lo > hi
+3-element Vector{Int64}:
+  6
+  6
+ 10
+```
+"""
+function clamp(x::X, lo::L, hi::H) where {X,L,H}
+    T = promote_type(X, L, H)
+    return (x > hi) ? convert(T, hi) : (x < lo) ? convert(T, lo) : convert(T, x)
+end
+
+"""
+    clamp(x, T)::T
+
+Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
+
+See also [`trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> clamp(200, Int8)
+127
+
+julia> clamp(-200, Int8)
+-128
+
+julia> trunc(Int, 4pi^2)
+39
+```
+"""
+function clamp(x, ::Type{T}) where {T<:Integer}
+    # delegating to clamp(x, typemin(T), typemax(T)) would promote types
+    # this way, we avoid unnecessary conversions
+    # think of, e.g., clamp(big(2) ^ 200, Int16)
+    lo = typemin(T)
+    hi = typemax(T)
+    return (x > hi) ? hi : (x < lo) ? lo : convert(T, x)
+end
+
+
+"""
+    clamp!(array::AbstractArray, lo, hi)
+
+Restrict values in `array` to the specified range, in-place.
+See also [`clamp`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` entries in `array` require at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> row = collect(-4:4)';
+
+julia> clamp!(row, 0, Inf)
+1×9 adjoint(::Vector{Int64}) with eltype Int64:
+ 0  0  0  0  0  1  2  3  4
+
+julia> clamp.((-4:4)', 0, Inf)
+1×9 Matrix{Float64}:
+ 0.0  0.0  0.0  0.0  0.0  1.0  2.0  3.0  4.0
+```
+"""
+function clamp!(x::AbstractArray, lo, hi)
+    @inbounds for i in eachindex(x)
+        x[i] = clamp(x[i], lo, hi)
+    end
+    x
+end
+
+"""
+    clamp(x::Integer, r::AbstractUnitRange)
+
+Clamp `x` to lie within range `r`.
+
+!!! compat "Julia 1.6"
+     This method requires at least Julia 1.6.
+"""
+clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))
