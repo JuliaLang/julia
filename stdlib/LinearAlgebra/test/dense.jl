@@ -1285,4 +1285,10 @@ end
     @test eltype(A) == eltype(T)
 end
 
+@testset "tr for block matrices" begin
+    S = [1 2; 3 4]
+    M = fill(S, 3, 3)
+    @test tr(M) == 3S
+end
+
 end # module TestDense
