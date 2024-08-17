@@ -966,3 +966,6 @@ end
 let x = Incomplete55396(55396)
     @test x.x === (55396,)
 end
+
+# Core.getptls() special handling
+@test !occursin("call ptr @jlplt", get_llvm(Core.getptls, Tuple{})) #It should lower to a direct load of the ptls and not a ccall

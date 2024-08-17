@@ -980,7 +980,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
         end
     end
     mi = result.edge
-    if mi !== nothing && is_foldable(effects)
+    if mi !== nothing && is_foldable(effects, #=check_rtcall=#true)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             if (is_nonoverlayed(interp) || is_nonoverlayed(effects) ||
                 # Even if overlay methods are involved, when `:consistent_overlay` is
@@ -2910,8 +2910,9 @@ function override_effects(effects::Effects, override::EffectsOverride)
         notaskstate = override.notaskstate ? true : effects.notaskstate,
         inaccessiblememonly = override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
         noub = override.noub ? ALWAYS_TRUE :
-               (override.noub_if_noinbounds && effects.noub !== ALWAYS_TRUE) ? NOUB_IF_NOINBOUNDS :
-               effects.noub)
+            (override.noub_if_noinbounds && effects.noub !== ALWAYS_TRUE) ? NOUB_IF_NOINBOUNDS :
+            effects.noub,
+        nortcall = override.nortcall ? true : effects.nortcall)
 end
 
 isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
