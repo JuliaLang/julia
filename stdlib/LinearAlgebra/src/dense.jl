@@ -373,7 +373,7 @@ diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 function tr(A::Matrix{T}) where T
     checksquare(A)
     isempty(A) && return zero(T)
-    sum(A[i] for i in diagind(A))
+    reduce(+, (A[i] for i in diagind(A)))
 end
 
 _kronsize(A::AbstractMatrix, B::AbstractMatrix) = map(*, size(A), size(B))
