@@ -2792,6 +2792,7 @@ function logabsdet(A::Union{UpperTriangular{T},LowerTriangular{T}}) where T
 end
 
 eigen(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
+
 # Generic singular systems
 for func in (:svd, :svd!, :svdvals)
     @eval begin
