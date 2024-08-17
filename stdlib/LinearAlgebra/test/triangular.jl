@@ -16,6 +16,22 @@ using .Main.SizedArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+# custom AbstractTriangular type
+struct MyUpperTriangular{T, A<:AbstractMatrix{T}} <: LinearAlgebra.AbstractTriangular{T}
+    data :: A
+end
+Base.size(A::MyUpperTriangular) = size(A.data)
+Base.getindex(A::MyUpperTriangular, i::Int, j::Int) = UpperTriangular(A.data)[i,j]
+LinearAlgebra.rmul!(M::Matrix, A::MyUpperTriangular) = rmul!(M, UpperTriangular(A.data))
+LinearAlgebra.lmul!(A::MyUpperTriangular, M::AbstractMatrix) = lmul!(UpperTriangular(A.data), M)
+struct MyLowerTriangular{T, A<:AbstractMatrix{T}} <: LinearAlgebra.AbstractTriangular{T}
+    data :: A
+end
+Base.size(A::MyLowerTriangular) = size(A.data)
+Base.getindex(A::MyLowerTriangular, i::Int, j::Int) = LowerTriangular(A.data)[i,j]
+LinearAlgebra.rmul!(M::AbstractMatrix, A::MyLowerTriangular) = rmul!(M, LowerTriangular(A.data))
+LinearAlgebra.lmul!(A::MyLowerTriangular, M::AbstractMatrix) = lmul!(LowerTriangular(A.data), M)
+
 debug && println("Triangular matrices")
 
 n = 9
@@ -1197,7 +1213,8 @@ end
 @testset "eigvecs for AbstractTriangular" begin
     S = SizedArrays.SizedArray{(3,3)}(reshape(1:9,3,3))
     for T in (UpperTriangular, UnitUpperTriangular,
-                LowerTriangular, UnitLowerTriangular)
+                LowerTriangular, UnitLowerTriangular,
+                MyUpperTriangular, MyLowerTriangular)
         U = T(S)
         V = eigvecs(U)
         λ = eigvals(U)
