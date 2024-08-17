@@ -2743,13 +2743,26 @@ end
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)
-function eigvecs(A::AbstractTriangular{T}) where {T<:BlasFloat}
-    Ac = eigencopy_oftype(A, T)
-    # Avoid a stack-overflow if the type doesn't change
-    if Ac isa typeof(A)
-        throw(ArgumentError(lazy"eigvecs type $(typeof(A)) not supported. Please submit a pull request."))
+# in general, we convert the parent to a matrix to avail the StridedMatrix methods
+for (T, k) in ((:UpperTriangular, 0), (:UnitUpperTriangular, 1))
+    @eval function eigvecs(A::$T{<:BlasFloat})
+        d = convert(Matrix, triu(A.data, $k))
+        return eigvecs($T(d))
     end
-    return eigvecs(Ac)
+end
+for (T, k) in ((:LowerTriangular, 0), (:UnitLowerTriangular, -1))
+    @eval function eigvecs(A::$T{<:BlasFloat})
+        d = convert(Matrix, tril(A.data, $k))
+        return eigvecs($T(d))
+    end
+end
+# fallback for unknown types
+function eigvecs(A::AbstractTriangular{<:BlasFloat})
+    if istriu(A)
+        eigvecs(UpperTriangular(Matrix(A)))
+    else # istril(A)
+        eigvecs(LowerTriangular(Matrix(A)))
+    end
 end
 function eigvecs(A::AbstractTriangular{T}) where T
     TT = promote_type(T, Float32)
