@@ -2186,3 +2186,7 @@ end
     copyto!(A, 1, x, 1)
     @test A == axes(A,1)
 end
+
+@testset "reshape with Integer sizes" begin
+    @test reshape(1:4, big(2), big(2)) == reshape(1:4, 2, 2)
+end
