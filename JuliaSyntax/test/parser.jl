@@ -371,6 +371,7 @@ tests = [
         "@x(a, b)"   =>  "(macrocall-p @x a b)"
         "A.@x(y)"    =>  "(macrocall-p (. A @x) y)"
         "A.@x(y).z"  =>  "(. (macrocall-p (. A @x) y) z)"
+        "f(y for x = xs; a)" => "(call f (generator y (iteration (in x xs))) (parameters a))"
         # do
         "f() do\nend"         =>  "(call f (do (tuple) (block)))"
         "f() do ; body end"   =>  "(call f (do (tuple) (block body)))"
@@ -435,6 +436,7 @@ tests = [
         "A.@S{a}" => "(macrocall (. A @S) (braces a))"
         "@S{a}.b" => "(. (macrocall @S (braces a)) b)"
         "S{a,b}"  => "(curly S a b)"
+        "T{y for x = xs; a}" => "(curly T (generator y (iteration (in x xs))) (parameters a))"
         # String macros
         "x\"str\""   => """(macrocall @x_str (string-r "str"))"""
         "x`str`"     => """(macrocall @x_cmd (cmdstring-r "str"))"""
@@ -729,6 +731,9 @@ tests = [
         "(a=1;)"      =>  "(block-p (= a 1))"
         "(a;b;;c)"    =>  "(block-p a b c)"
         "(a=1; b=2)"  =>  "(block-p (= a 1) (= b 2))"
+        # Following is an error for flisp compatibility. But it could be
+        # allowed as valid block syntax in the future?
+        "(y for x = xs; a)" => "(parens (generator y (iteration (in x xs))) (error-t ✘ a))"
         # Parentheses used for grouping
         "(a * b)"     =>  "(parens (call-i a * b))"
         "(a=1)"       =>  "(parens (= a 1))"
@@ -1075,6 +1080,11 @@ parsestmt_test_specs = [
     "x in'``\$" => "(call-i x in (call-i (juxtapose (char '`' (error-t)) (cmdstring-r (error-t))) \$ (error)))"
     "var\"#\"`str`" => "(juxtapose (var # (error-t)) (cmdstring-r \"str\"))"
     "var\"#\"\"str\"" => "(juxtapose (var # (error-t)) (error-t) (string \"str\"))"
+
+    # trailing junk in generators (issue #407)
+    "(x for x = xs a)"      =>  "(parens (generator x (iteration (in x xs))) (error-t a))"
+    "(x for x = xs a, b)"   =>  "(parens (generator x (iteration (in x xs))) (error-t a ✘ b))"
+    "f(x for x = xs a)"     =>  "(call f (generator x (iteration (in x xs))) (error-t a))"
 ]
 
 @testset "Parser does not crash on broken code" begin
