@@ -554,8 +554,8 @@ static Value *julia_to_native(
     // pass the address of an alloca'd thing, not a box
     // since those are immutable.
     Value *slot = emit_static_alloca(ctx, to);
-    unsigned align = julia_alignment(jlto);
-    cast<AllocaInst>(slot)->setAlignment(Align(align));
+    Align align(julia_alignment(jlto));
+    cast<AllocaInst>(slot)->setAlignment(align);
     setName(ctx.emission_context, slot, "native_convert_buffer");
     if (!jvinfo.ispointer()) {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, jvinfo.tbaa);
@@ -1671,9 +1671,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
         return ghostValue(ctx, jl_nothing_type);
     }
-    else if (is_libjulia_func("jl_get_ptls_states")) {
+    else if (is_libjulia_func(jl_get_ptls_states)) {
         ++CCALL_STAT(jl_get_ptls_states);
-        assert(lrt == ctx.types().T_size);
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, get_current_ptls(ctx), retboxed, rt, unionall, static_rt);
@@ -2108,7 +2107,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
                     llvmf = NULL;
             }
-            else if (f_name.startswith("llvm.")) {
+            else if (f_name.starts_with("llvm.")) {
                 // compute and verify auto-mangling for intrinsic name
                 auto ID = Function::lookupIntrinsicID(f_name);
                 if (ID != Intrinsic::not_intrinsic) {
@@ -2230,7 +2229,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 Value *strct = emit_allocobj(ctx, (jl_datatype_t*)rt, true);
                 setName(ctx.emission_context, strct, "ccall_ret_box");
                 MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
-                int boxalign = julia_alignment(rt);
+                Align boxalign(julia_alignment(rt));
                 // copy the data from the return value to the new struct
                 const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
                 auto resultTy = result->getType();
@@ -2240,8 +2239,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     // When this happens, cast through memory.
                     auto slot = emit_static_alloca(ctx, resultTy);
                     setName(ctx.emission_context, slot, "type_pun_slot");
-                    slot->setAlignment(Align(boxalign));
-                    ctx.builder.CreateAlignedStore(result, slot, Align(boxalign));
+                    slot->setAlignment(boxalign);
+                    ctx.builder.CreateAlignedStore(result, slot, boxalign);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
                     emit_memcpy(ctx, strct, ai, slot, ai, rtsz, boxalign, boxalign);
                 }

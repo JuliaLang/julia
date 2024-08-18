@@ -404,6 +404,12 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     jl_fence();
     uv_mutex_unlock(&tls_lock);
 
+#if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
+    // ensures libunwind TLS space for this thread is allocated eagerly
+    // to make unwinding async-signal-safe even when using thread local caches.
+    unw_ensure_tls();
+#endif
+
     return ptls;
 }
 
@@ -458,8 +464,6 @@ void jl_safepoint_resume_all_threads(jl_task_t *ct)
 
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-
-void jl_free_thread_gc_state(jl_ptls_t ptls);
 
 static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
