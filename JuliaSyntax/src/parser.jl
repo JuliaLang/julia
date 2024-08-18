@@ -2706,7 +2706,7 @@ end
 function parse_call_arglist(ps::ParseState, closer)
     ps = ParseState(ps, for_generator=true)
 
-    parse_brackets(ps, closer) do _, _, _, _
+    parse_brackets(ps, closer, false) do _, _, _, _
         return (needs_parameters=true,)
     end
 end
@@ -3123,7 +3123,7 @@ end
 #
 # flisp: parts of parse-paren- and parse-arglist
 function parse_brackets(after_parse::Function,
-                        ps::ParseState, closing_kind)
+                        ps::ParseState, closing_kind, generator_is_last=true)
     ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,
@@ -3159,18 +3159,22 @@ function parse_brackets(after_parse::Function,
             if num_subexprs == 1
                 had_splat = peek_behind(ps).kind == K"..."
             end
-            t = peek_token(ps, skip_newlines=true)
-            k = kind(t)
+            k = peek(ps, skip_newlines=true)
+            if k == K"for"
+                # Generator syntax
+                # (x for a in as)  ==>  (parens (generator x (iteration (in a as))))
+                parse_generator(ps, mark)
+                if generator_is_last
+                    break
+                end
+                k = peek(ps, skip_newlines=true)
+            end
             if k == K","
                 had_commas = true
                 bump(ps, TRIVIA_FLAG)
             elseif k == K";" || k == closing_kind
                 # Handled above
                 continue
-            elseif k == K"for"
-                # Generator syntax
-                # (x for a in as)  ==>  (parens (generator x (iteration (in a as))))
-                parse_generator(ps, mark)
             else
                 # Error - recovery done when consuming closing_kind
                 break
