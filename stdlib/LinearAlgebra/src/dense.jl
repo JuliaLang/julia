@@ -371,12 +371,9 @@ diagm(v::AbstractVector) = diagm(0 => v)
 diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 
 function tr(A::Matrix{T}) where T
-    n = checksquare(A)
-    t = zero(T)
-    @inbounds @simd for i in 1:n
-        t += A[i,i]
-    end
-    t
+    checksquare(A)
+    isempty(A) && return zero(T)
+    reduce(+, (A[i] for i in diagind(A)))
 end
 
 _kronsize(A::AbstractMatrix, B::AbstractMatrix) = map(*, size(A), size(B))
