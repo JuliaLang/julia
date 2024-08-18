@@ -159,7 +159,7 @@ end
             (Int(quo), iszero(rem))
         end
     end::Tuple{Int,Bool}
-    is_exact || throw2(A, dims)
+    is_exact || throw2(len, dims)
     (pre..., sz, post...)::Tuple{Int,Vararg{Int}}
 end
 @inline function _reshape_uncolon(A, dims::Tuple{Vararg{Union{Integer, Colon}}})
@@ -168,7 +168,7 @@ end
     _any_colon(post...) && throw1(dims)
     len = length(A)
     pr = prod((pre..., post...))
-    iszero(pr) && throw2(A, dims)
+    iszero(pr) && throw2(len, dims)
     (quo, rem) = divrem(len, pr)
     sz, is_exact = quo, iszero(rem)
     is_exact || throw2(len, dims)
