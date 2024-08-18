@@ -557,6 +557,8 @@ Base.reshape(A::OffsetArray, inds::Tuple{OffsetAxis,Vararg{OffsetAxis}}) =
     OffsetArray(_reshape(parent(A), inds), map(_toaxis, inds))
 # And for non-offset axes, we can just return a reshape of the parent directly
 Base.reshape(A::OffsetArray, inds::Tuple{Union{Integer,Base.OneTo},Vararg{Union{Integer,Base.OneTo}}}) = _reshape_nov(A, inds)
+Base.reshape(A::OffsetArray, inds::Tuple{Integer,Vararg{Integer}}) = _reshape_nov(A, inds)
+Base.reshape(A::OffsetArray, inds::Tuple{Union{Colon, Integer}, Vararg{Union{Colon, Integer}}}) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetArray, inds::Dims) = _reshape_nov(A, inds)
 Base.reshape(A::OffsetVector, ::Colon) = A
 Base.reshape(A::OffsetVector, ::Tuple{Colon}) = A
