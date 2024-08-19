@@ -235,19 +235,13 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
     uint64_t arm_text_addr = 0;
     size_t arm_text_len = 0;
     for (auto &section: Object.sections()) {
-        bool istext = false;
-        if (section.isText()) {
-            istext = true;
-        }
-        else {
-            auto sName = section.getName();
-            if (!sName)
-                continue;
-            if (sName.get() != ".ARM.exidx") {
-                continue;
-            }
-        }
-        uint64_t loadaddr = getLoadAddress(section.getName().get());
+        auto sName = section.getName();
+        if (!sName)
+            continue;
+        bool istext = section.isText();
+        if (!istext && sName.get() != ".ARM.exidx")
+            continue;
+        uint64_t loadaddr = getLoadAddress(sName.get());
         size_t seclen = section.getSize();
         if (istext) {
             arm_text_addr = loadaddr;

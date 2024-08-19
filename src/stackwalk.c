@@ -986,7 +986,14 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         memset(&c, 0, sizeof(c));
      #if defined(_OS_LINUX_) && defined(__GLIBC__)
         __jmp_buf *mctx = &t->ctx.ctx.uc_mcontext->__jmpbuf;
+      #if defined(_CPU_ARM_)
+        // The libunwind-arm.h header defines its own copy of `ucontext_t` instead
+        // of using the platform definition directly.
+        // https://github.com/libunwind/libunwind/blob/fbaa4d5b0c47a4129ff7e514bdecc284635b36e9/include/libunwind-arm.h#L258-L266
+        mcontext_t *mc = (mcontext_t *)&c;
+      #else
         mcontext_t *mc = &c.uc_mcontext;
+      #endif
       #if defined(_CPU_X86_)
         // https://github.com/bminor/glibc/blame/master/sysdeps/i386/__longjmp.S
         // https://github.com/bminor/glibc/blame/master/sysdeps/i386/jmpbuf-offsets.h

@@ -363,7 +363,10 @@ JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crc, const char *buf, size_t len)
 {
     return jl_crc32c(crc, buf, len);
 }
-#define jl_crc32c_sw jl_crc32c
+#ifdef jl_crc32c_sw
+#undef jl_crc32c_sw // it might be redefined as ijl_crc32c_sw
+#endif
+#define jl_crc32c_sw jl_crc32c // for the rest of the file, rename it to ijl_crc32c instead
 #endif
 
 #ifdef crc32c_dispatch
