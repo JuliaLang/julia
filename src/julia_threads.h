@@ -159,10 +159,9 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
     struct _jl_timing_block_t *timing_stack;
+    // This is the location of our copy_stack
     void *stackbase;
     size_t stacksize;
-    // This is needed to support always_copy_stacks:
-    jl_stack_context_t copy_stack_ctx;
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
