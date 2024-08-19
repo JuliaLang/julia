@@ -327,38 +327,6 @@ baremodule TypeDomainIntegers
         function Base.isless((@nospecialize l::TypeDomainInteger), @nospecialize r::TypeDomainInteger)
             l < r
         end
-        function Base.:(==)((@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
-            i = convert(Int, l)
-            i == r
-        end
-        function Base.isequal((@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
-            i = convert(Int, l)
-            isequal(i, r)
-        end
-        function Base.:(<)((@nospecialize l::TypeDomainInteger), @nospecialize r::Real)
-            i = convert(Int, l)
-            i < r
-        end
-        function Base.isless((@nospecialize l::TypeDomainInteger), @nospecialize r::Real)
-            i = convert(Int, l)
-            isless(i, r)
-        end
-        function Base.:(==)((@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
-            i = convert(Int, r)
-            l == i
-        end
-        function Base.isequal((@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
-            i = convert(Int, r)
-            isequal(l, i)
-        end
-        function Base.:(<)((@nospecialize l::Real), @nospecialize r::TypeDomainInteger)
-            i = convert(Int, r)
-            l < i
-        end
-        function Base.isless((@nospecialize l::Real), @nospecialize r::TypeDomainInteger)
-            i = convert(Int, r)
-            isless(l, i)
-        end
         function Base.one(@nospecialize unused::Type{<:TypeDomainInteger})
             natural_successor(zero())
         end
@@ -410,7 +378,23 @@ baremodule TypeDomainIntegers
                 end
             end
         end
-        function Base.:(+)((@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
+        function Base.:(-)(@nospecialize n::TypeDomainInteger)
+            negated(n)
+        end
+    end
+
+    baremodule BaseHelpers
+        using ..Basic, ..LazyMinus
+        using Base: convert, <, +, -, *, ==, !, @nospecialize
+        function apply_n_t(func, (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
+            i = convert(Int, r)
+            func(l, i)
+        end
+        function apply_t_n(func, (@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
+            i = convert(Int, l)
+            func(i, r)
+        end
+        function apply_n_t(::typeof(+), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
                 let pos = negated(r), posm1 = natural_predecessor(pos)
                     if posm1 isa PositiveIntegerUpperBound
@@ -434,14 +418,14 @@ baremodule TypeDomainIntegers
                 end
             end
         end
-        function Base.:(+)((@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
+        function apply_t_n(::typeof(+), (@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
             # addition is commutative
-            r + l
+            apply_n_t(+, r, l)
         end
-        function Base.:(-)((@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
-            l + negated(r)
+        function apply_n_t(::typeof(-), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
+            apply_n_t(+, l, negated(r))
         end
-        function Base.:(-)((@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
+        function apply_t_n(::typeof(-), (@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
             if l isa NegativeInteger
                 convert(Int, l) - r
             else
@@ -459,7 +443,7 @@ baremodule TypeDomainIntegers
                 end
             end
         end
-        function Base.:(*)((@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
+        function apply_n_t(::typeof(*), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
                 let pos = negated(r), posm1 = natural_predecessor(pos)
                     if posm1 isa PositiveIntegerUpperBound
@@ -483,7 +467,7 @@ baremodule TypeDomainIntegers
                 end
             end
         end
-        function Base.:(*)((@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
+        function apply_t_n(::typeof(*), (@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
             if l isa NegativeInteger
                 let pos = negated(l), posm1 = natural_predecessor(pos)
                     if posm1 isa PositiveIntegerUpperBound
@@ -506,9 +490,6 @@ baremodule TypeDomainIntegers
                     zero()
                 end
             end
-        end
-        function Base.:(-)(@nospecialize n::TypeDomainInteger)
-            negated(n)
         end
     end
 
