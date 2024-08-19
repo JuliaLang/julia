@@ -207,6 +207,9 @@ External dependencies
 
 * The libuv library has been updated from a base of v1.44.2 to v1.48.0 ([#49937]).
 * `tput` is no longer called to check terminal capabilities; it has been replaced with a pure-Julia terminfo parser ([#50797]).
+- The terminal info database, `terminfo`, is now vendored by default, providing a better
+  REPL user experience when `terminfo` is not available on the system. Julia can be built
+  without vendoring the database using the Makefile option `WITH_TERMINFO=0`. ([#55411])
 
 Tooling Improvements
 --------------------

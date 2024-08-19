@@ -903,3 +903,16 @@ function foonopreds()
     pkgid.uuid !== nothing ? pkgid.uuid : false
 end
 @test foonopreds() !== nothing
+
+# issue 55396
+struct Incomplete55396
+  x::Tuple{Int}
+  y::Int
+  @noinline Incomplete55396(x::Int) = new((x,))
+end
+let x = Incomplete55396(55396)
+    @test x.x === (55396,)
+end
+
+# Core.getptls() special handling
+@test !occursin("call ptr @jlplt", get_llvm(Core.getptls, Tuple{})) #It should lower to a direct load of the ptls and not a ccall

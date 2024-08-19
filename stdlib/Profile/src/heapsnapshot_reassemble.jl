@@ -99,40 +99,42 @@ function assemble_snapshot(in_prefix, io::IO)
 
     orphans = Set{UInt}() # nodes that have no incoming edges
     # Parse nodes with empty edge counts that we need to fill later
-    nodes_file = open(string(in_prefix, ".nodes"), "r")
-    for i in 1:length(nodes)
-        node_type = read(nodes_file, Int8)
-        node_name_idx = read(nodes_file, UInt)
-        id = read(nodes_file, UInt)
-        self_size = read(nodes_file, Int)
-        @assert read(nodes_file, Int) == 0 # trace_node_id
-        @assert read(nodes_file, Int8) == 0 # detachedness
+    open(string(in_prefix, ".nodes"), "r") do nodes_file
+        for i in 1:length(nodes)
+            node_type = read(nodes_file, Int8)
+            node_name_idx = read(nodes_file, UInt)
+            id = read(nodes_file, UInt)
+            self_size = read(nodes_file, Int)
+            @assert read(nodes_file, Int) == 0 # trace_node_id
+            @assert read(nodes_file, Int8) == 0 # detachedness
 
-        nodes.type[i] = node_type
-        nodes.name_idx[i] = node_name_idx
-        nodes.id[i] = id
-        nodes.self_size[i] = self_size
-        nodes.edge_count[i] = 0 # edge_count
-        # populate the orphans set with node index
-        push!(orphans, i-1)
+            nodes.type[i] = node_type
+            nodes.name_idx[i] = node_name_idx
+            nodes.id[i] = id
+            nodes.self_size[i] = self_size
+            nodes.edge_count[i] = 0 # edge_count
+            # populate the orphans set with node index
+            push!(orphans, i-1)
+        end
     end
 
     # Parse the edges to fill in the edge counts for nodes and correct the to_node offsets
-    edges_file = open(string(in_prefix, ".edges"), "r")
-    for i in 1:length(nodes.edges)
-        edge_type = read(edges_file, Int8)
-        edge_name_or_index = read(edges_file, UInt)
-        from_node = read(edges_file, UInt)
-        to_node = read(edges_file, UInt)
+    open(string(in_prefix, ".edges"), "r") do edges_file
+        for i in 1:length(nodes.edges)
+            edge_type = read(edges_file, Int8)
+            edge_name_or_index = read(edges_file, UInt)
+            from_node = read(edges_file, UInt)
+            to_node = read(edges_file, UInt)
 
-        nodes.edges.type[i] = edge_type
-        nodes.edges.name_or_index[i] = edge_name_or_index
-        nodes.edges.to_pos[i] = to_node * k_node_number_of_fields # 7 fields per node, the streaming format doesn't multiply the offset by 7
-        nodes.edge_count[from_node + 1] += UInt32(1)  # C and JSON use 0-based indexing
-        push!(nodes.edge_idxs[from_node + 1], i) # Index into nodes.edges
-        # remove the node from the orphans if it has at least one incoming edge
-        if to_node in orphans
-            delete!(orphans, to_node)
+            nodes.edges.type[i] = edge_type
+            nodes.edges.name_or_index[i] = edge_name_or_index
+            nodes.edges.to_pos[i] = to_node * k_node_number_of_fields # 7 fields per node, the streaming format doesn't multiply the offset by 7
+            nodes.edge_count[from_node + 1] += UInt32(1)  # C and JSON use 0-based indexing
+            push!(nodes.edge_idxs[from_node + 1], i) # Index into nodes.edges
+            # remove the node from the orphans if it has at least one incoming edge
+            if to_node in orphans
+                delete!(orphans, to_node)
+            end
         end
     end
 

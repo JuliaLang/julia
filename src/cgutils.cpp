@@ -3800,8 +3800,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             else {
                 strct = emit_static_alloca(ctx, lt);
                 setName(ctx.emission_context, strct, arg_typename);
-                if (nargs < nf)
-                    promotion_point = ctx.builder.CreateStore(ctx.builder.CreateFreeze(UndefValue::get(lt)), strct);
                 if (tracked.count)
                     undef_derived_strct(ctx, strct, sty, ctx.tbaa().tbaa_stack);
             }
@@ -3957,6 +3955,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                 Align(1)));
                     }
                 }
+            }
+            if (promotion_point && nargs < nf) {
+                assert(!init_as_value);
+                IRBuilderBase::InsertPoint savedIP = ctx.builder.saveIP();
+                ctx.builder.SetInsertPoint(promotion_point);
+                promotion_point = cast<FreezeInst>(ctx.builder.CreateFreeze(UndefValue::get(lt)));
+                ctx.builder.CreateStore(promotion_point, strct);
+                ctx.builder.restoreIP(savedIP);
             }
             if (type_is_ghost(lt))
                 return mark_julia_const(ctx, sty->instance);
@@ -4144,7 +4150,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             boffset = ctx.builder.CreateMul(offset, elsz);
 #if 0 // TODO: if opaque-pointers?
         newdata = emit_bitcast(ctx, data, getInt8PtrTy(ctx.builder.getContext()));
-        newdata = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), newdata, boffset);
+        newdata = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), newdata, boffset);
 #else
         Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jl_tparam1(ref.typ));
         newdata = emit_bitcast(ctx, data, elty->getPointerTo(0));

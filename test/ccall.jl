@@ -1937,3 +1937,8 @@ end
 
 # issue #52025
 @test Base.unsafe_convert(Ptr{Ptr{Cchar}}, Base.cconvert(Ptr{Ptr{Cchar}}, map(pointer, ["ab"]))) isa Ptr{Ptr{Cchar}}
+
+#issue #54725
+for A in (reinterpret(UInt, [0]), reshape([0, 0], 1, 2))
+    @test pointer(A) == Base.unsafe_convert(Ptr{Cvoid}, A) == Base.unsafe_convert(Ptr{Int}, A)
+end
