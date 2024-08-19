@@ -16,7 +16,8 @@ baremodule TypeDomainIntegers
         end
         baremodule UpperBounds
             using ..RecursiveStep
-            abstract type A{P <: recursive_step(Any)} end
+            const s = Integer
+            abstract type A{P <: recursive_step(s)} <: s    end
             abstract type B{P <: recursive_step(A)} <: A{P} end
         end
         const NonnegativeIntegerUpperBound = UpperBounds.B
@@ -61,7 +62,7 @@ baremodule TypeDomainIntegers
         using ..Basic
         using Base: @nospecialize
         export NegativeInteger, TypeDomainInteger, negated
-        struct NegativeInteger{X<:PositiveInteger}
+        struct NegativeInteger{X<:PositiveInteger} <: Integer
             x::X
         end
         const TypeDomainInteger = Union{NonnegativeInteger,NegativeInteger}
