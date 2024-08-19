@@ -99,7 +99,22 @@ baremodule TypeDomainIntegers
         const int_zero = I(0)
         const int_plus_one = I(1)
         function interoperable(@nospecialize n::TypeDomainInteger)
-            I(n)
+            if n isa NegativeInteger
+                I(n)
+            else
+                n = n::NonnegativeInteger
+                if n isa PositiveIntegerUpperBound
+                    let p = natural_predecessor(n)
+                        if p isa PositiveIntegerUpperBound
+                            I(n)
+                        else
+                            true
+                        end
+                    end
+                else
+                    false
+                end
+            end
         end
         function incremented(n::I)
             checked_add(n, int_plus_one)::I
