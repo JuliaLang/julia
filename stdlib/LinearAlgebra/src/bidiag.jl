@@ -435,8 +435,76 @@ const BiTri = Union{Bidiagonal,Tridiagonal}
 @inline _mul!(C::AbstractMatrix, A::AbstractMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
 @inline _mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
 
-lmul!(A::Bidiagonal, B::AbstractVecOrMat) = @inline _mul!(B, A, B, MulAddMul())
-rmul!(B::AbstractMatrix, A::Bidiagonal) = @inline _mul!(B, B, A, MulAddMul())
+# B .= A * B
+function lmul!(A::Bidiagonal, B::AbstractVecOrMat)
+    _muldiag_size_check(A, B)
+    (; dv, ev) = A
+    if A.uplo == 'U'
+        for k in axes(B,2)
+            for i in axes(ev,1)
+                B[i,k] = dv[i] * B[i,k] + ev[i] * B[i+1,k]
+            end
+            B[end,k] = dv[end] * B[end,k]
+        end
+    else
+        for k in axes(B,2)
+            for i in reverse(axes(dv,1)[2:end])
+                B[i,k] = dv[i] * B[i,k] + ev[i-1] * B[i-1,k]
+            end
+            B[1,k] = dv[1] * B[1,k]
+        end
+    end
+    return B
+end
+# B .= D * B
+function lmul!(D::Diagonal, B::Bidiagonal)
+    _muldiag_size_check(D, B)
+    (; dv, ev) = B
+    isL = B.uplo == 'L'
+    dv[1] = D.diag[1] * dv[1]
+    for i in axes(ev,1)
+        ev[i] = D.diag[i + isL] * ev[i]
+        dv[i+1] = D.diag[i+1] * dv[i+1]
+    end
+    return B
+end
+# B .= B * A
+function rmul!(B::AbstractMatrix, A::Bidiagonal)
+    _muldiag_size_check(A, B)
+    (; dv, ev) = A
+    if A.uplo == 'U'
+        for k in reverse(axes(dv,1)[2:end])
+            for i in axes(B,1)
+                B[i,k] = B[i,k] * dv[k] + B[i,k-1] * ev[k-1]
+            end
+        end
+        for i in axes(B,1)
+            B[i,1] *= dv[1]
+        end
+    else
+        for k in axes(ev,1)
+            for i in axes(B,1)
+                B[i,k] = B[i,k] * dv[k] + B[i,k+1] * ev[k]
+            end
+        end
+        for i in axes(B,1)
+            B[i,end] *= dv[end]
+        end
+    end
+    return B
+end
+# B .= B * D
+function rmul!(B::Bidiagonal, D::Diagonal)
+    _muldiag_size_check(B, D)
+    (; dv, ev) = B
+    isU = B.uplo == 'U'
+    dv[1] *= D.diag[1]
+    for i in axes(ev,1)
+        ev[i] *= D.diag[i + isU]
+        dv[i+1] *= D.diag[i+1]
+    end
+    return B
+end
 
 function check_A_mul_B!_sizes(C, A, B)
     mA, nA = size(A)
