@@ -1,7 +1,6 @@
-use crate::api::{mmtk_get_obj_size, mmtk_object_is_managed_by_mmtk};
+use crate::api::mmtk_get_obj_size;
 use crate::julia_scanning::{
-    jl_array_typename, jl_method_type, jl_module_type, jl_simplevector_type, jl_string_type,
-    jl_task_type, mmtk_jl_array_len, mmtk_jl_array_ndimwords, mmtk_jl_tparam0, mmtk_jl_typeof,
+    ijl_small_typeof, jl_genericmemory_typename, mmtk_jl_genericmemory_how, mmtk_jl_typeof,
     mmtk_jl_typetagof,
 };
 use crate::{julia_types::*, UPCALLS};
@@ -61,6 +60,8 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         semantics: CopySemantics,
         copy_context: &mut GCWorkerCopyContext<JuliaVM>,
     ) -> ObjectReference {
+        trace!("Attempting to copy object {}", from);
+
         let bytes = Self::get_current_size(from);
         let from_addr = from.to_raw_address();
         let from_start = Self::ref_to_object_start(from);
@@ -85,14 +86,14 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         }
         let to_obj = unsafe { ObjectReference::from_raw_address_unchecked(dst + header_offset) };
 
-        trace!("Copying object from {} to {}", from, to_obj);
-
         copy_context.post_copy(to_obj, bytes, semantics);
+
+        trace!("Copied object {} into {}", from, to_obj);
 
         unsafe {
             let vt = mmtk_jl_typeof(from.to_raw_address());
 
-            if (*vt).name == jl_array_typename {
+            if (*vt).name == jl_genericmemory_typename {
                 ((*UPCALLS).update_inlined_array)(from.to_raw_address(), to_obj.to_raw_address())
             }
         }
@@ -123,7 +124,9 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
     fn get_current_size(object: ObjectReference) -> usize {
         // not being called by objects in LOS
         debug_assert!(!is_object_in_los(&object));
-        unsafe { get_so_object_size(object) }
+
+        let obj_size = unsafe { get_so_object_size(object) };
+        obj_size
     }
 
     fn get_size_when_copied(_object: ObjectReference) -> usize {
@@ -178,135 +181,132 @@ pub fn is_object_in_los(object: &ObjectReference) -> bool {
 #[inline(always)]
 pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
     let obj_address = object.to_raw_address();
+    let mut vtag = mmtk_jl_typetagof(obj_address);
+    let mut vtag_usize = vtag.as_usize();
+
+    if vtag_usize == JULIA_BUFF_TAG {
+        return mmtk_get_obj_size(object);
+    }
+
+    if vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_datatype_tag as usize) << 4)
+        || vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_unionall_tag as usize) << 4)
+        || vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_uniontype_tag as usize) << 4)
+        || vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_tvar_tag as usize) << 4)
+        || vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_vararg_tag as usize) << 4)
+    {
+        // these objects have pointers in them, but no other special handling
+        // so we want these to fall through to the end
+        vtag_usize = ijl_small_typeof[vtag.as_usize() / std::mem::size_of::<Address>()] as usize;
+        vtag = Address::from_usize(vtag_usize);
+    } else if vtag_usize < ((mmtk_jl_small_typeof_tags_mmtk_jl_max_tags as usize) << 4) {
+        if vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_simplevector_tag as usize) << 4) {
+            let length = (*obj_address.to_ptr::<mmtk_jl_svec_t>()).length as usize;
+            let dtsz =
+                length * std::mem::size_of::<Address>() + std::mem::size_of::<mmtk_jl_svec_t>();
+
+            debug_assert!(
+                dtsz + JULIA_HEADER_SIZE <= 2032,
+                "size {} greater than minimum!",
+                dtsz + JULIA_HEADER_SIZE
+            );
+
+            return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
+        } else if vtag_usize
+            == ((mmtk_jl_small_typeof_tags_mmtk_jl_module_tag as usize) << 4) as usize
+        {
+            let dtsz = std::mem::size_of::<mmtk_jl_module_t>();
+            debug_assert!(
+                dtsz + JULIA_HEADER_SIZE <= 2032,
+                "size {} greater than minimum!",
+                dtsz + JULIA_HEADER_SIZE
+            );
+
+            return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
+        } else if vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_task_tag as usize) << 4) {
+            let dtsz = std::mem::size_of::<mmtk_jl_task_t>();
+            debug_assert!(
+                dtsz + JULIA_HEADER_SIZE <= 2032,
+                "size {} greater than minimum!",
+                dtsz + JULIA_HEADER_SIZE
+            );
+
+            return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
+        } else if vtag_usize == ((mmtk_jl_small_typeof_tags_mmtk_jl_string_tag as usize) << 4) {
+            let length = object.to_raw_address().load::<usize>();
+            let dtsz = length + std::mem::size_of::<usize>() + 1;
+
+            debug_assert!(
+                dtsz + JULIA_HEADER_SIZE <= 2032,
+                "size {} greater than minimum!",
+                dtsz + JULIA_HEADER_SIZE
+            );
+
+            // NB: Strings are aligned to 8 and not to 16
+            return llt_align(dtsz + JULIA_HEADER_SIZE, 8);
+        } else {
+            let vt = ijl_small_typeof[vtag_usize / std::mem::size_of::<Address>()];
+            let layout = (*vt).layout;
+            let dtsz = (*layout).size as usize;
+            debug_assert!(
+                dtsz + JULIA_HEADER_SIZE <= 2032,
+                "size {} greater than minimum!",
+                dtsz + JULIA_HEADER_SIZE
+            );
+
+            return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
+        }
+    } else {
+        let vt = vtag.to_ptr::<mmtk_jl_datatype_t>();
+        let type_tag = mmtk_jl_typetagof(vtag);
+
+        if type_tag.as_usize() != ((mmtk_jl_small_typeof_tags_mmtk_jl_datatype_tag as usize) << 4)
+            || (*vt).smalltag() != 0
+        {
+            panic!(
+                "GC error (probable corruption) - !jl_is_datatype(vt) = {}; vt->smalltag = {}, vt = {:?}",
+                type_tag.as_usize() != ((mmtk_jl_small_typeof_tags_mmtk_jl_datatype_tag as usize) << 4),
+                (*(vtag.to_ptr::<mmtk_jl_datatype_t>())).smalltag() != 0,
+                vt
+            );
+        }
+    }
+
     let obj_type = mmtk_jl_typeof(obj_address);
+    let vt = vtag.to_ptr::<mmtk_jl_datatype_t>();
 
-    if obj_type as usize == JULIA_BUFF_TAG {
-        mmtk_get_obj_size(object)
-    } else if (*obj_type).name == jl_array_typename {
-        let a = obj_address.to_ptr::<mmtk_jl_array_t>();
-        let osize = match (*a).flags.how_custom() {
-            0 => {
-                let a_ndims_words = mmtk_jl_array_ndimwords(mmtk_jl_array_ndims(a));
-                let mut dtsz = std::mem::size_of::<mmtk_jl_array_t>()
-                    + a_ndims_words * std::mem::size_of::<usize>();
-                let data = (*a).data;
-                let data_addr = Address::from_mut_ptr(data);
-
-                if mmtk_object_is_managed_by_mmtk(data_addr.as_usize()) {
-                    let pre_data_bytes = (data_addr.as_usize()
-                        - (*a).offset as usize * (*a).elsize as usize)
-                        - a as usize;
-
-                    if pre_data_bytes > 0 {
-                        // a->data is allocated after a
-                        dtsz = pre_data_bytes;
-                        dtsz += mmtk_jl_array_nbytes(a);
-                    }
-                    if dtsz + JULIA_HEADER_SIZE > 2032 {
-                        // if it's too large to be inlined (a->data and a are disjoint objects)
-                        dtsz = std::mem::size_of::<mmtk_jl_array_t>()
-                            + a_ndims_words * std::mem::size_of::<usize>();
-                    }
-                }
-                debug_assert!(
-                    dtsz + JULIA_HEADER_SIZE <= 2032,
-                    "size {} greater than minimum!",
-                    dtsz + JULIA_HEADER_SIZE
-                );
-
-                llt_align(dtsz + JULIA_HEADER_SIZE, 16)
+    assert_eq!(obj_type, vt);
+    if (*vt).name == jl_genericmemory_typename {
+        let m = obj_address.to_ptr::<mmtk_jl_genericmemory_t>();
+        let how = mmtk_jl_genericmemory_how(m);
+        let res = if how == 0 {
+            let layout = (*(mmtk_jl_typetagof(obj_address).to_ptr::<mmtk_jl_datatype_t>())).layout;
+            let mut sz = (*layout).size as usize * (*m).length as usize;
+            if (*layout).flags.arrayelem_isunion() != 0 {
+                sz += (*m).length as usize;
             }
-            1 | 2 => {
-                let a_ndims_words = mmtk_jl_array_ndimwords(mmtk_jl_array_ndims(a));
-                let dtsz = std::mem::size_of::<mmtk_jl_array_t>()
-                    + a_ndims_words * std::mem::size_of::<usize>();
 
-                debug_assert!(
-                    dtsz + JULIA_HEADER_SIZE <= 2032,
-                    "size {} greater than minimum!",
-                    dtsz + JULIA_HEADER_SIZE
-                );
-
-                llt_align(dtsz + JULIA_HEADER_SIZE, 16)
-            }
-            3 => {
-                let a_ndims_words = mmtk_jl_array_ndimwords(mmtk_jl_array_ndims(a));
-                let dtsz = std::mem::size_of::<mmtk_jl_array_t>()
-                    + a_ndims_words * std::mem::size_of::<usize>()
-                    + std::mem::size_of::<Address>();
-                debug_assert!(
-                    dtsz + JULIA_HEADER_SIZE <= 2032,
-                    "size {} greater than minimum!",
-                    dtsz + JULIA_HEADER_SIZE
-                );
-
-                llt_align(dtsz + JULIA_HEADER_SIZE, 16)
-            }
-            _ => unreachable!(),
+            let dtsz = llt_align(std::mem::size_of::<mmtk_jl_genericmemory_t>(), 16);
+            llt_align(sz + dtsz + JULIA_HEADER_SIZE, 16)
+        } else {
+            let dtsz =
+                std::mem::size_of::<mmtk_jl_genericmemory_t>() + std::mem::size_of::<Address>();
+            llt_align(dtsz + JULIA_HEADER_SIZE, 16)
         };
 
-        osize as usize
-    } else if obj_type == jl_simplevector_type {
-        let length = (*obj_address.to_ptr::<mmtk_jl_svec_t>()).length as usize;
-        let dtsz = length * std::mem::size_of::<Address>() + std::mem::size_of::<mmtk_jl_svec_t>();
+        debug_assert!(res <= 2032, "size {} greater than minimum!", res);
 
-        debug_assert!(
-            dtsz + JULIA_HEADER_SIZE <= 2032,
-            "size {} greater than minimum!",
-            dtsz + JULIA_HEADER_SIZE
-        );
-
-        llt_align(dtsz + JULIA_HEADER_SIZE, 16)
-    } else if obj_type == jl_module_type {
-        let dtsz = std::mem::size_of::<mmtk_jl_module_t>();
-        debug_assert!(
-            dtsz + JULIA_HEADER_SIZE <= 2032,
-            "size {} greater than minimum!",
-            dtsz + JULIA_HEADER_SIZE
-        );
-
-        llt_align(dtsz + JULIA_HEADER_SIZE, 16)
-    } else if obj_type == jl_task_type {
-        let dtsz = std::mem::size_of::<mmtk_jl_task_t>();
-        debug_assert!(
-            dtsz + JULIA_HEADER_SIZE <= 2032,
-            "size {} greater than minimum!",
-            dtsz + JULIA_HEADER_SIZE
-        );
-
-        llt_align(dtsz + JULIA_HEADER_SIZE, 16)
-    } else if obj_type == jl_string_type {
-        let length = object.to_raw_address().load::<usize>();
-        let dtsz = length + std::mem::size_of::<usize>() + 1;
-
-        debug_assert!(
-            dtsz + JULIA_HEADER_SIZE <= 2032,
-            "size {} greater than minimum!",
-            dtsz + JULIA_HEADER_SIZE
-        );
-
-        // NB: Strings are aligned to 8 and not to 16
-        llt_align(dtsz + JULIA_HEADER_SIZE, 8)
-    } else if obj_type == jl_method_type {
-        let dtsz = std::mem::size_of::<mmtk_jl_method_t>();
-        debug_assert!(
-            dtsz + JULIA_HEADER_SIZE <= 2032,
-            "size {} greater than minimum!",
-            dtsz + JULIA_HEADER_SIZE
-        );
-
-        llt_align(dtsz + JULIA_HEADER_SIZE, 16)
-    } else {
-        let layout = (*obj_type).layout;
-        let dtsz = (*layout).size as usize;
-        debug_assert!(
-            dtsz + JULIA_HEADER_SIZE <= 2032,
-            "size {} greater than minimum!",
-            dtsz + JULIA_HEADER_SIZE
-        );
-
-        llt_align(dtsz + JULIA_HEADER_SIZE, 16)
+        return res;
     }
+
+    let layout = (*vt).layout;
+    let dtsz = (*layout).size as usize;
+    debug_assert!(
+        dtsz + JULIA_HEADER_SIZE <= 2032,
+        "size {} greater than minimum!",
+        dtsz + JULIA_HEADER_SIZE
+    );
+
+    return llt_align(dtsz + JULIA_HEADER_SIZE, 16);
 }
 
 #[inline(always)]
@@ -327,42 +327,7 @@ pub unsafe fn llt_align(size: usize, align: usize) -> usize {
 }
 
 #[inline(always)]
-pub unsafe fn mmtk_jl_array_nbytes(a: *const mmtk_jl_array_t) -> usize {
-    let mut sz;
-
-    let isbitsunion = mmtk_jl_array_isbitunion(a);
-
-    if mmtk_jl_array_ndims(a) == 1 {
-        let elsize_is_one = if (*a).elsize == 1 && !isbitsunion {
-            1
-        } else {
-            0
-        };
-        sz = (*a).elsize as usize * (*a).__bindgen_anon_1.maxsize + elsize_is_one;
-    } else {
-        sz = (*a).elsize as usize * (*a).length;
-    }
-
-    if isbitsunion {
-        sz += mmtk_jl_array_len(a);
-    }
-
-    sz
-}
-
-#[inline(always)]
-pub unsafe fn mmtk_jl_array_ndims(a: *const mmtk_jl_array_t) -> u32 {
-    (*a).flags.ndims_custom() as u32
-}
-
-#[inline(always)]
-pub unsafe fn mmtk_jl_array_isbitunion(a: *const mmtk_jl_array_t) -> bool {
-    ((*a).flags.ptrarray_custom()) == 0
-        && mmtk_jl_is_uniontype(mmtk_jl_tparam0(mmtk_jl_typeof(Address::from_ptr(a))))
-}
-
-#[inline(always)]
 pub unsafe fn mmtk_jl_is_uniontype(t: *const mmtk_jl_datatype_t) -> bool {
     mmtk_jl_typetagof(Address::from_ptr(t)).as_usize()
-        == (mmtk_jlsmall_typeof_tags_mmtk_jl_uniontype_tag << 4) as usize
+        == (mmtk_jl_small_typeof_tags_mmtk_jl_uniontype_tag << 4) as usize
 }

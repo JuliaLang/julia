@@ -79,8 +79,8 @@ impl Scanning<JuliaVM> for VMScanning {
         // need to iterate over live tasks as well to process their shadow stacks
         // we should not set the task themselves as roots as we will know which ones are still alive after GC
         let mut i = 0;
-        while i < ptls.heap.live_tasks.len {
-            let mut task_address = Address::from_ptr(ptls.heap.live_tasks.items);
+        while i < ptls.gc_tls.heap.live_tasks.len {
+            let mut task_address = Address::from_ptr(ptls.gc_tls.heap.live_tasks.items);
             task_address = task_address.shift::<Address>(i as isize);
             let task = unsafe { task_address.load::<*const mmtk_jl_task_t>() };
             root_scan_task(task, false);

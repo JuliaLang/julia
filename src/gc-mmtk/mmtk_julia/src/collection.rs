@@ -50,7 +50,13 @@ impl Collection<JuliaVM> for VMCollection {
         let end = unsafe { ((*UPCALLS).jl_hrtime)() };
         trace!("gc_end = {}", end);
         let gc_time = end - GC_START.load(Ordering::Relaxed);
-        unsafe { ((*UPCALLS).update_gc_time)(gc_time) }
+        unsafe {
+            ((*UPCALLS).update_gc_stats)(
+                gc_time,
+                crate::api::mmtk_used_bytes(),
+                is_current_gc_nursery(),
+            )
+        }
 
         AtomicBool::store(&BLOCK_FOR_GC, false, Ordering::SeqCst);
         AtomicBool::store(&WORLD_HAS_STOPPED, false, Ordering::SeqCst);

@@ -53,7 +53,6 @@ pub(crate) fn get_abi_structs_checksum_rust() -> usize {
     print_sizeof!(mmtk::Mutator<crate::JuliaVM>)
         ^ print_sizeof!(mmtk__jl_taggedvalue_bits)
         ^ print_sizeof!(mmtk_jl_taggedvalue_t)
-        ^ print_sizeof!(mmtk_jl_array_flags_t)
         ^ print_sizeof!(mmtk_jl_datatype_layout_t)
         ^ print_sizeof!(mmtk_jl_typename_t)
         ^ print_sizeof!(mmtk_jl_svec_t)
@@ -80,9 +79,7 @@ pub(crate) fn get_abi_structs_checksum_rust() -> usize {
 
 // The functions below allow accessing the values of bitfields without performing a for loop
 use crate::{
-    julia_types::{
-        __BindgenBitfieldUnit, mmtk__jl_task_t, mmtk_jl_array_flags_t, mmtk_jl_datatype_layout_t,
-    },
+    julia_types::{__BindgenBitfieldUnit, mmtk__jl_task_t, mmtk_jl_datatype_layout_t},
     JuliaVM,
 };
 
@@ -90,40 +87,11 @@ impl mmtk_jl_datatype_layout_t {
     #[inline]
     pub fn fielddesc_type_custom(&self) -> u16 {
         let fielddesc_type_raw: u16 = unsafe {
-            ::std::mem::transmute::<__BindgenBitfieldUnit<[u8; 2usize]>, u16>(self._bitfield_1)
+            ::std::mem::transmute::<__BindgenBitfieldUnit<[u8; 2usize]>, u16>(
+                self.flags._bitfield_1,
+            )
         };
         fielddesc_type_raw >> 1 & 0b11
-    }
-}
-
-impl mmtk_jl_array_flags_t {
-    #[inline]
-    pub fn how_custom(&self) -> u16 {
-        let how_raw: u16 = unsafe {
-            ::std::mem::transmute::<__BindgenBitfieldUnit<[u8; 2usize]>, u16>(self._bitfield_1)
-        };
-        how_raw & 0b11
-    }
-    #[inline]
-    pub fn ndims_custom(&self) -> u16 {
-        let ndims_raw: u16 = unsafe {
-            ::std::mem::transmute::<__BindgenBitfieldUnit<[u8; 2usize]>, u16>(self._bitfield_1)
-        };
-        ndims_raw >> 2 & 0b111_111_111
-    }
-    #[inline]
-    pub fn ptrarray_custom(&self) -> u16 {
-        let ptrarray_raw: u16 = unsafe {
-            ::std::mem::transmute::<__BindgenBitfieldUnit<[u8; 2usize]>, u16>(self._bitfield_1)
-        };
-        ptrarray_raw >> 12 & 0b1
-    }
-    #[inline]
-    pub fn hasptr_custom(&self) -> u16 {
-        let hasptr_raw: u16 = unsafe {
-            ::std::mem::transmute::<__BindgenBitfieldUnit<[u8; 2usize]>, u16>(self._bitfield_1)
-        };
-        hasptr_raw >> 13 & 0b1
     }
 }
 

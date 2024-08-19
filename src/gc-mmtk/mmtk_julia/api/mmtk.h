@@ -72,14 +72,13 @@ extern uintptr_t JULIA_MALLOC_BYTES;
 typedef struct {
     void (* scan_julia_exc_obj) (void* obj, void* closure, ProcessSlotFn process_slot);
     void* (* get_stackbase) (int16_t tid);
-    void (* mmtk_jl_run_finalizers) (void* tls);
     void (* jl_throw_out_of_memory_error) (void);
-    void (* sweep_malloced_array) (void);
+    void (* sweep_malloced_memory) (void);
     void (* sweep_stack_pools) (void);
     void (* wait_in_a_safepoint) (void);
     void (* exit_from_safepoint) (int8_t old_state);
     uint64_t (* jl_hrtime) (void);
-    void (* update_gc_time) (uint64_t);
+    void (* update_gc_stats) (uint64_t, size_t, bool);
     uintptr_t (* get_abi_structs_checksum_c) (void);
     void* (* get_thread_finalizer_list) (void* tls);
     void* (* get_to_finalize_list)(void);
@@ -89,6 +88,8 @@ typedef struct {
     void (*scan_vm_specific_roots)(RootsWorkClosure* closure);
     void (*update_inlined_array) (void* from, void* to);
     void (*prepare_to_collect)(void);
+    void* (* get_owner_address)(void* m);
+    size_t (* mmtk_genericmemory_how)(void* m);
 } Julia_Upcalls;
 
 /**
