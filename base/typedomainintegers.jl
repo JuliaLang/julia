@@ -386,19 +386,22 @@ baremodule TypeDomainIntegers
     baremodule BaseHelpers
         using ..Basic, ..LazyMinus
         using Base: convert, <, +, -, *, ==, !, @nospecialize
+        function interoperable(@nospecialize n::TypeDomainInteger)
+            convert(Int, n)
+        end
         function apply_n_t(func, (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
-            i = convert(Int, r)
+            i = interoperable(r)
             func(l, i)
         end
         function apply_t_n(func, (@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
-            i = convert(Int, l)
+            i = interoperable(l)
             func(i, r)
         end
         function apply_n_t(::typeof(+), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
                 let pos = negated(r), posm1 = natural_predecessor(pos)
                     if posm1 isa PositiveIntegerUpperBound
-                        l - convert(Int, pos)
+                        l - interoperable(pos)
                     else
                         l - true
                     end
@@ -408,7 +411,7 @@ baremodule TypeDomainIntegers
                 if r isa PositiveIntegerUpperBound
                     let p = natural_predecessor(r)
                         if p isa PositiveIntegerUpperBound
-                            l + convert(Int, r)
+                            l + interoperable(r)
                         else
                             l + true
                         end
@@ -427,13 +430,13 @@ baremodule TypeDomainIntegers
         end
         function apply_t_n(::typeof(-), (@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
             if l isa NegativeInteger
-                convert(Int, l) - r
+                interoperable(l) - r
             else
                 l = l::NonnegativeInteger
                 if l isa PositiveIntegerUpperBound
                     let p = natural_predecessor(l)
                         if p isa PositiveIntegerUpperBound
-                            convert(Int, l) - r
+                            interoperable(l) - r
                         else
                             true - r
                         end
@@ -447,7 +450,7 @@ baremodule TypeDomainIntegers
             if r isa NegativeInteger
                 let pos = negated(r), posm1 = natural_predecessor(pos)
                     if posm1 isa PositiveIntegerUpperBound
-                        l * convert(Int, r)
+                        l * interoperable(r)
                     else
                         -l
                     end
@@ -457,7 +460,7 @@ baremodule TypeDomainIntegers
                 if r isa PositiveIntegerUpperBound
                     let p = natural_predecessor(r)
                         if p isa PositiveIntegerUpperBound
-                            l * convert(Int, r)
+                            l * interoperable(r)
                         else
                             l
                         end
@@ -471,7 +474,7 @@ baremodule TypeDomainIntegers
             if l isa NegativeInteger
                 let pos = negated(l), posm1 = natural_predecessor(pos)
                     if posm1 isa PositiveIntegerUpperBound
-                        convert(Int, l) * r
+                        interoperable(l) * r
                     else
                         -r
                     end
@@ -481,7 +484,7 @@ baremodule TypeDomainIntegers
                 if l isa PositiveIntegerUpperBound
                     let p = natural_predecessor(l)
                         if p isa PositiveIntegerUpperBound
-                            convert(Int, l) * r
+                            interoperable(l) * r
                         else
                             r
                         end
