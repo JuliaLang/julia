@@ -419,6 +419,13 @@ compile_mi:
                         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
                         if (result_m)
                             params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
+                        else if (jl_options.trim != JL_TRIM_NO) {
+                            // if we're building a small image, we need to compile everything
+                            // to ensure that we have all the information we need.
+                            jl_safe_printf("codegen failed to compile code root");
+                            jl_(mi);
+                            abort();
+                        }
                     }
                 }
             } else if (this_world != jl_typeinf_world) {
