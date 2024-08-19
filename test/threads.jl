@@ -366,3 +366,49 @@ end
         @test jl_setaffinity(0, mask, cpumasksize) == 0
     end
 end
+
+@testset "io_thread" begin
+    function io_thread_test()
+        # This test creates a thread that does IO and then blocks the main julia thread
+        # This test hangs if you don't spawn an IO thread.
+        # It hanging or not is technically a race but I haven't seen julia win that race yet.
+        cmd = """
+        Base.Experimental.make_io_thread()
+        function callback()::Cvoid
+            println("Running a command")
+            run(`echo 42`)
+            return
+        end
+        function call_on_thread(callback::Ptr{Nothing})
+            tid = UInt[0]
+            threadwork = @cfunction function(arg::Ptr{Cvoid})
+                current_task().donenotify = Base.ThreadSynchronizer()
+                Base.errormonitor(current_task())
+                println("Calling Julia from thread")
+                ccall(arg, Cvoid, ())
+                nothing
+            end Cvoid (Ptr{Cvoid},)
+            err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, callback::Ptr{Cvoid})::Cint
+            err == 0 || Base.uv_error("uv_thread_create", err)
+            err = @ccall uv_thread_join(tid::Ptr{UInt})::Cint
+            err == 0 || Base.uv_error("uv_thread_join", err)
+            return
+        end
+        function main()
+            callback_ptr = @cfunction(callback, Cvoid, ())
+            call_on_thread(callback_ptr)
+            println("Done")
+        end
+        main()
+
+        """
+        proc = run(pipeline(`$(Base.julia_cmd()) -e $cmd`), wait=false)
+        sleep(2) # Is there a better way to do this?
+        if process_running(proc)
+            kill(proc)
+            throw(ErrorException("Process did not exit in time"))
+        end
+        return true
+    end
+    @test io_thread_test()
+end
