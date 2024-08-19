@@ -80,8 +80,27 @@ baremodule TypeDomainIntegers
         end
     end
 
-    baremodule RecursiveAlgorithms
+    baremodule Interoperability
         using ..Basic, ..LazyMinus
+        using Base: checked_add, @nospecialize
+        export interoperable, incremented, decremented, I, int_minus_one, int_zero, int_plus_one
+        const I = Int8
+        const int_minus_one = I(-1)
+        const int_zero = I(0)
+        const int_plus_one = I(1)
+        function interoperable(@nospecialize n::TypeDomainInteger)
+            I(n)
+        end
+        function incremented(n::I)
+            checked_add(n, int_plus_one)::I
+        end
+        function decremented(n::I)
+            checked_add(n, int_minus_one)::I
+        end
+    end
+
+    baremodule RecursiveAlgorithms
+        using ..Basic, ..LazyMinus, ..Interoperability
         using Base: !, +, -, <, @assume_effects, @inline, @nospecialize
         export subtracted, added, to_int, from_int, is_even, multiplied, is_less
         @assume_effects :foldable function is_less((@nospecialize l::NonnegativeInteger), @nospecialize r::NonnegativeInteger)
@@ -128,21 +147,21 @@ baremodule TypeDomainIntegers
         @assume_effects :foldable function to_int(@nospecialize o::NonnegativeInteger)
             if o isa PositiveIntegerUpperBound
                 let p = natural_predecessor(o), t = @inline to_int(p)
-                    t::Int + 1
+                    incremented(t)
                 end
             else
-                0
-            end::Int
+                int_zero
+            end::I
         end
         struct ConvertNaturalToNegativeException <: Exception end
-        @assume_effects :foldable function from_int(n::Int)
-            if n < 0
+        @assume_effects :foldable function from_int(n::I)
+            if n < int_zero
                 throw(ConvertNaturalToNegativeException())
             end
-            ret = if n === 0
+            ret = if n === int_zero
                 zero()
             else
-                let v = n - 1, p = @inline from_int(v)
+                let v = decremented(n), p = @inline from_int(v)
                     p = p::NonnegativeInteger
                     natural_successor(p)
                 end
@@ -176,7 +195,7 @@ baremodule TypeDomainIntegers
     end
 
     baremodule BaseOverloads
-        using ..Basic, ..RecursiveAlgorithms, ..LazyMinus
+        using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..Interoperability
         using Base: Base, convert, <, +, -, *, ==, isequal, isless, !, @nospecialize
         function Base.zero(@nospecialize unused::Type{<:TypeDomainInteger})
             zero()
@@ -219,7 +238,7 @@ baremodule TypeDomainIntegers
         function Base.convert((@nospecialize unused::TypeDomainIntegerType), n::Bool)
             from_bool(n)
         end
-        function Base.convert(::Type{Int}, @nospecialize o::TypeDomainInteger)
+        function Base.convert(::Type{I}, @nospecialize o::TypeDomainInteger)
             if o isa NegativeInteger
                 -to_int(negated(o))
             else
@@ -227,27 +246,27 @@ baremodule TypeDomainIntegers
                 to_int(o)
             end
         end
-        function Base.convert(::Type{NonnegativeInteger}, n::Int)
+        function Base.convert(::Type{NonnegativeInteger}, n::I)
             from_int(n)
         end
-        function Base.convert(::Type{TypeDomainInteger}, n::Int)
-            if n < 0
+        function Base.convert(::Type{TypeDomainInteger}, n::I)
+            if n < int_zero
                 negated(from_int(-n))
             else
                 from_int(n)
             end
         end
-        function NonnegativeInteger(n::Union{Bool,Int})
+        function NonnegativeInteger(n::Union{Bool,I})
             convert(NonnegativeInteger, n)
         end
-        function TypeDomainInteger(n::Union{Bool,Int})
+        function TypeDomainInteger(n::Union{Bool,I})
             convert(TypeDomainInteger, n)
         end
         function Bool(@nospecialize n::ZeroOrOne)
             to_bool(n)
         end
-        function Int(@nospecialize n::TypeDomainInteger)
-            convert(Int, n)
+        function I(@nospecialize n::TypeDomainInteger)
+            convert(I, n)
         end
         function Base.:(-)((@nospecialize l::TypeDomainInteger), @nospecialize r::TypeDomainInteger)
             n = negated(r)
@@ -384,11 +403,8 @@ baremodule TypeDomainIntegers
     end
 
     baremodule BaseHelpers
-        using ..Basic, ..LazyMinus
+        using ..Basic, ..LazyMinus, ..Interoperability
         using Base: convert, <, +, -, *, ==, !, @nospecialize
-        function interoperable(@nospecialize n::TypeDomainInteger)
-            convert(Int, n)
-        end
         function apply_n_t(func, (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             i = interoperable(r)
             func(l, i)
