@@ -911,4 +911,15 @@ end
     @test LinearAlgebra.hermitian(A, :L) === Hermitian(A, :L)
 end
 
+@testset "tr for block matrices" begin
+    m = [1 2; 3 4]
+    for b in (m, m * (1 + im))
+        M = fill(b, 3, 3)
+        for ST in (Symmetric, Hermitian)
+            S = ST(M)
+            @test tr(S) == sum(diag(S))
+        end
+    end
+end
+
 end # module TestSymmetric
