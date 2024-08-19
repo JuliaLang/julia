@@ -862,21 +862,21 @@ for op in (:+, :-)
     end
 end
 
-function kron(A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron(A::UpperTriangular{<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:StridedMaybeAdjOrTransMat})
     C = UpperTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
-function kron(A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron(A::LowerTriangular{<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:StridedMaybeAdjOrTransMat})
     C = LowerTriangular(Matrix{promote_op(*, eltype(A), eltype(B))}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
 
-function kron!(C::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron!(C::UpperTriangular{<:StridedMaybeAdjOrTransMat}, A::UpperTriangular{<:StridedMaybeAdjOrTransMat}, B::UpperTriangular{<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _triukron!(C.data, A.data, B.data)
     return C
 end
-function kron!(C::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:Number,<:StridedMaybeAdjOrTransMat})
+function kron!(C::LowerTriangular{<:StridedMaybeAdjOrTransMat}, A::LowerTriangular{<:StridedMaybeAdjOrTransMat}, B::LowerTriangular{<:StridedMaybeAdjOrTransMat})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _trilkron!(C.data, A.data, B.data)
     return C
@@ -895,7 +895,7 @@ function _triukron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = 1:(l-1)
-                    C[inB+l, jnB+k] = zero(eltype(C))
+                    C[inB+l, jnB+k] = zero(C[1])
                 end
             end
         end
@@ -927,7 +927,7 @@ function _trilkron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = (l+1):n_B
-                    C[inB+l, jnB+k] = zero(eltype(C))
+                    C[inB+l, jnB+k] = zero(C[1])
                 end
             end
         end
