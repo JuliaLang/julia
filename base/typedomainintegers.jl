@@ -6,7 +6,7 @@ baremodule TypeDomainIntegers
         export
             natural_successor, natural_predecessor,
             NonnegativeInteger, PositiveInteger, PositiveIntegerUpperBound,
-            with_refined_type, zero
+            zero
         baremodule RecursiveStep
             using Base: @nospecialize
             export recursive_step
@@ -40,18 +40,15 @@ baremodule TypeDomainIntegers
             global function new_nonnegative_integer(p::P) where {P<:recursive_step(NonnegativeInteger)}
                 t_p = P::DataType
                 r = new{t_p}(p)
-                with_refined_type(r)
+                r::NonnegativeInteger
             end
-        end
-        function with_refined_type(@nospecialize r::NonnegativeInteger)
-            r
         end
         function natural_successor(o::NonnegativeInteger)
             new_nonnegative_integer(o)::PositiveInteger
         end
         function natural_predecessor(o::PositiveInteger)
             r = o.predecessor
-            with_refined_type(r)
+            r::NonnegativeInteger
         end
         function zero()
             new_nonnegative_integer(nothing)
@@ -126,7 +123,7 @@ baremodule TypeDomainIntegers
             else
                 l
             end
-            with_refined_type(ret)
+            ret::NonnegativeInteger
         end
         @assume_effects :foldable function to_int(@nospecialize o::NonnegativeInteger)
             if o isa PositiveIntegerUpperBound
@@ -146,11 +143,11 @@ baremodule TypeDomainIntegers
                 zero()
             else
                 let v = n - 1, p = @inline from_int(v)
-                    p = with_refined_type(p)
+                    p = p::NonnegativeInteger
                     natural_successor(p)
                 end
             end
-            with_refined_type(ret)
+            ret::NonnegativeInteger
         end
         @assume_effects :foldable function is_even(@nospecialize o::NonnegativeInteger)
             if o isa PositiveIntegerUpperBound
@@ -191,7 +188,7 @@ baremodule TypeDomainIntegers
             if n isa NegativeInteger
                 false
             else
-                n = with_refined_type(n)
+                n = n::NonnegativeInteger
                 if n isa PositiveIntegerUpperBound
                     false
                 else
