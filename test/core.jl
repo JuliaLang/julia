@@ -8265,3 +8265,25 @@ end
 @test Tuple{Vararg{Int}} === Union{Tuple{Int}, Tuple{}, Tuple{Int, Int, Vararg{Int}}}
 @test (Tuple{Vararg{T}} where T) === (Union{Tuple{T, T, Vararg{T}}, Tuple{}, Tuple{T}} where T)
 @test_broken (Tuple{Vararg{T}} where T) === Union{Tuple{T, T, Vararg{T}} where T, Tuple{}, Tuple{T} where T}
+
+@testset "Immutable Field Error" begin
+    module MutabilityStructs
+    struct Foo
+        a
+    end
+    mutable struct MFoo
+        a
+    end
+    mutable struct Bar
+        const a
+        b
+    end
+    end
+    foo = MutabilityStructs.Foo(:a)
+    mfoo = MutabilityStructs.MFoo(:a)
+    bar = MutabilityStructs.Bar(:a, :b)
+    @test_throws ImmutableFieldError foo.a = 0
+    @test mfoo.a = true
+    @test_throws ImmutableFieldError bar.a = 0
+    @test bar.b = true
+end

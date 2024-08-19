@@ -982,12 +982,8 @@ enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, char loading, 
 
 static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st, jl_value_t *v, jl_value_t *arg, int mutabl)
 {
-    if (mutabl) {
-        if (st == jl_module_type)
-            jl_error("cannot assign variables in other modules");
-        if (!st->name->mutabl)
-            jl_errorf("%s: immutable struct of type %s cannot be changed", name, jl_symbol_name(st->name->name));
-    }
+    if (mutabl && st == jl_module_type)
+        jl_error("cannot assign variables in other modules");
     size_t idx;
     if (jl_is_long(arg)) {
         idx = jl_unbox_long(arg) - 1;
@@ -1002,10 +998,8 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
         jl_value_t *t = jl_type_union(ts, 2);
         jl_type_error("getfield", t, arg);
     }
-    if (mutabl && jl_field_isconst(st, idx)) {
-        jl_errorf("%s: const field .%s of type %s cannot be changed", name,
-                jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
-    }
+    if (mutabl && (!st->name->mutabl || jl_field_isconst(st, idx)))
+        jl_immutable_field_error(st, (jl_sym_t*)jl_svecref(jl_field_names(st), idx));
     return idx;
 }
 
