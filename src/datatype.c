@@ -2192,7 +2192,7 @@ inline int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *parent, jl_valu
     }
     else {
         char *px = lock(p, parent, needlock, isatomic);
-        success = undefref_check(rty, (jl_value_t*)px) != NULL;
+        success = undefref_check(rty, (jl_value_t*)px) == NULL;
         if (success)
             memassign_safe(hasptr, px, rhs, fsz);
         unlock(p, parent, needlock, isatomic);

@@ -1388,3 +1388,10 @@ end
         end
     end
 end
+
+@testset "transcode" begin
+    str = "αβγ"
+    @test transcode(String, transcode(UInt16, str)) == str
+    @test transcode(String, transcode(UInt16, transcode(UInt8, str))) == str
+    @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+end

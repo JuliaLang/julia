@@ -1437,12 +1437,28 @@ using .Main.OffsetArrays
 end
 
 @testset "Check push!($a, $args...)" for
-    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
     args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
         orig = copy(a)
         push!(a, args...)
         @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
         @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check append!($a, $args)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        append!(a, args)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check sizehint!($a)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+        @test sizehint!(a, 10) === a
 end
 
 @testset "splatting into hvcat" begin

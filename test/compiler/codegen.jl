@@ -967,8 +967,10 @@ let x = Incomplete55396(55396)
     @test x.x === (55396,)
 end
 
-# issue 55208
+# Core.getptls() special handling
+@test !occursin("call ptr @jlplt", get_llvm(Core.getptls, Tuple{})) #It should lower to a direct load of the ptls and not a ccall
 
+# issue 55208
 @noinline function f55208(x, i)
     z = (i == 0 ? x[1] : x[i])
     return z isa Core.TypeofBottom

@@ -319,6 +319,7 @@ test_field_orderings(ARefxy{Union{Nothing,Missing}}(nothing, missing), nothing, 
 test_field_orderings(ARefxy{Union{Nothing,Int}}(nothing, 123_1), nothing, 123_1)
 test_field_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
 test_field_orderings(Complex{Real}(10, 30), Complex{Real}(20, 40))
+test_field_orderings(Complex{Rational{Integer}}(10, 30), Complex{Rational{Integer}}(20, 40))
 test_field_orderings(10.0, 20.0)
 test_field_orderings(NaN, Inf)
 
