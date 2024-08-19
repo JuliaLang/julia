@@ -384,8 +384,8 @@ endif
 	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
 
 	# Set .jl sources as read-only to match package directories
-	find $(DESTDIR)$(datarootdir)/julia/base -name \*.jl -exec chmod 0444 {}
-	find $(DESTDIR)$(datarootdir)/julia/test -name \*.jl -exec chmod 0444 {}
+	find $(DESTDIR)$(datarootdir)/julia/base -name \*.jl -exec chmod 0444 '{}' \;
+	find $(DESTDIR)$(datarootdir)/julia/test -name \*.jl -exec chmod 0444 '{}' \;
 
 	# Copy documentation
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
