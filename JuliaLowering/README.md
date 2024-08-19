@@ -253,6 +253,53 @@ TODO: Write more here...
 * [Towards the Essence of Hygiene](https://michaeldadams.org/papers/hygiene/hygiene-2015-popl-authors-copy.pdf) - a paper by Michael Adams
 * [Bindings as sets of scopes](https://www-old.cs.utah.edu/plt/scope-sets/) - a description of Racket's scope set mechanism by Matthew Flatt
 
+## Lowering of exception handlers
+
+Exception handling involves a careful interplay between lowering and the Julia
+runtime. The forms `enter`, `leave` and `pop_exception` dynamically modify the
+exception-related state on the `Task`; lowering and the runtime work together
+to maintain correct invariants for this state.
+
+Lowering of exception handling must ensure that
+
+* Each `enter` is matched with a `leave` on every possible non-exceptional
+  program path (including implicit returns generated in tail position).
+* Each `catch` block which is entered and handles the exception - by exiting
+  via a non-exceptional program path - is matched with a `pop_exception`
+* Each `finally` block runs, regardless of the way it's entered - either by
+  normal program flow, an exception, early `return` or a jump out of an inner
+  context via `break`/`continue`/`goto` etc.
+
+The following special forms are emitted into the IR:
+
+* `(= tok (enter catch_label dynscope))` -
+  push exception handler with catch block at `catch_label` and dynamic
+  scope `dynscope`, yielding a token which is used by `leave` and
+  `pop_exception`. `dynscope` is only used in the special `tryfinally` form
+  without associated source level syntax (see the `@with` macro)
+* `(leave tok)` -
+    pop exception handler back to the state of the `tok` from the associated
+    `enter`. Multiple tokens can be supplied to pop multiple handlers using
+    `(leave tok1 tok2 ...)`.
+* `(pop_exception tok)` - pop exception stack back to state of associated enter
+
+When an `enter` is encountered, the runtime pushes a new handler onto the
+`Task`'s exception handler stack which will jump to `catch_label` when an
+exception occurs.
+
+There are two ways that the exception-related task state can be restored
+
+1. By encountering a `leave` which will restore the handler state with `tok`.
+2. By throwing an exception. In this case the runtime will pop one handler
+   automatically and jump to the catch label with the new exception pushed
+   onto the exception stack. On this path the exception stack state must be
+   restored back to the associated `enter` by encountering `pop_exception`.
+
+Note that the handler and exception stack represent two distinct types of
+exception-related state restoration which need to happen. Note also that the
+"handler state restoration" actually includes several pieces of runtime state
+including GC flags - see `jl_eh_restore_state` in the runtime for that.
+
 ## Julia's existing lowering implementation
 
 ### How does macro expansion work?

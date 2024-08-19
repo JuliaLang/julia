@@ -237,22 +237,35 @@ function new_mutable_var(ctx::LinearIRContext, srcref, name)
     var
 end
 
-# Exception handlers are lowered using the following special forms
+# Lowering of exception handling must ensure that
+#
+# * Each `enter` is matched with a `leave` on every possible non-exceptional
+#   program path (including implicit returns generated in tail position).
+# * Each catch block which is entered and handles the exception - by exiting
+#   via a non-exceptional program path - leaves the block with `pop_exception`.
+# * Each `finally` block runs, regardless of any early `return` or jumps
+#   via `break`/`continue`/`goto` etc.
+#
+# These invariants are upheld by tracking the nesting using
+# `handler_token_stack` and `catch_token_stack` and using these when emitting
+# any control flow (return / goto) which leaves the associated block.
+#
+# The following special forms are emitted into the IR:
 #
 #   (= tok (enter catch_label dynscope))
 #     push exception handler with catch block at `catch_label` and dynamic
-#     scope `dynscope`, yielding a token which is used by leave/pop_exception.
-#     `dynscope` is only used for the special tryfinally form without
-#     associated source level syntax (see the `@with` macro)
+#     scope `dynscope`, yielding a token which is used by `leave` and
+#     `pop_exception`. `dynscope` is only used in the special `tryfinally` form
+#     without associated source level syntax (see the `@with` macro)
 #
 #   (leave tok)
-#     pop exception handler associated to `tok`. Each `enter` must be matched
-#     with a `leave` on every non-exceptional program path, including implicit
-#     returns generated in tail position. Multiple tokens can be supplied to
-#     pop multiple handlers using `(leave tok1 tok2 ...)`.
+#     pop exception handler back to the state of the `tok` from the associated
+#     `enter`. Multiple tokens can be supplied to pop multiple handlers using
+#     `(leave tok1 tok2 ...)`.
 #
 #   (pop_exception tok) - pop exception stack back to state of associated enter
 #
+# See the devdocs for further discussion.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     @chk numchildren(ex) <= 3
     try_block = ex[1]
@@ -273,49 +286,6 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     push!(ctx.handler_token_stack, handler_token)
     # Try block code.
     try_val = compile(ctx, try_block, needs_value, false)
-
-    # Exception handler block postfix (1)
-    # if in_tail_pos
-    #     if isnothing(else_block)
-    #         if !isnothing(try_val)
-    #             emit_return(ctx, try_val)
-    #         end
-    #     else
-    #         if !isnothing(try_val)
-    #             emit(ctx, try_val)
-    #         end
-    #         emit(ctx, @ast ctx ex [K"leave" handler_token])
-    #     end
-    # else
-    #     if needs_value && !isnothing(try_val)
-    #         emit_assignment(ctx, result_var, try_val)
-    #     end
-    #     emit(ctx, @ast ctx ex [K"leave" handler_token])
-    #     if isnothing(else_block)
-    #         emit(ctx, @ast ctx ex [K"goto" end_label])
-    #     end
-    # end
-    # pop!(ctx.handler_token_stack, handler_token)
-    #
-    # # Else block
-    # if !isnothing(else_block)
-    #     else_val = compile(ctx, else_block, needs_value, in_tail_pos)
-    #     if !in_tail_pos
-    #         if needs_value && !isnothing(else_val)
-    #             emit_assignment(ctx, result_var, else_val)
-    #         end
-    #         emit(ctx, @ast ctx ex [K"goto" end_label])
-    #     end
-    #
-    #     # More confusing form which should be equiv:
-    #     # if !isnothing(result_var) && !isnothing(else_val)
-    #     #     emit_assignment(ctx, result_var, else_val)
-    #     # end
-    #     # if !isnothing(end_label)
-    #     #     emit(ctx, @ast ctx ex [K"goto" end_label])
-    #     # end
-    # end
-
     # Exception handler block postfix
     if isnothing(else_block)
         if in_tail_pos
