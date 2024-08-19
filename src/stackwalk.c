@@ -83,7 +83,7 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         skip--;
     }
 #endif
-#if !defined(_OS_WINDOWS_)
+#if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     jl_set_safe_restore(&buf);

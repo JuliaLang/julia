@@ -223,6 +223,17 @@ JL_NO_ASAN static void NOINLINE JL_NORETURN restore_stack(jl_task_t *t, jl_ptls_
     }
     void *_y = t->ctx.stkbuf;
     assert(_x != NULL && _y != NULL);
+#if defined(_OS_WINDOWS_)
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+    void *volatile *return_address = (void *volatile *)__builtin_frame_address(0) + 1;
+    assert(*return_address == __builtin_return_address(0));
+    *return_address = NULL;
+#else
+#warning profiling may segfault in this build
+#endif
+#else
+CFI_NORETURN
+#endif
     memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
 
 #if defined(_OS_WINDOWS_)
@@ -237,10 +248,12 @@ JL_NO_ASAN static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *l
 {
     assert(t->ctx.copy_stack && !lastt->ctx.copy_stack);
     size_t nb = t->ctx.copy_stack;
-    char *_x = (char*)ptls->stackbase - nb;
-    void *_y = t->ctx.stkbuf;
-    assert(_x != NULL && _y != NULL);
-    memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
+    if (nb > 1) {
+        char *_x = (char*)ptls->stackbase - nb;
+        void *_y = t->ctx.stkbuf;
+        assert(_x != NULL && _y != NULL);
+        memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb);
+    }
 #if defined(_OS_WINDOWS_)
     // jl_swapcontext and setjmp are the same on Windows, so we can just use swapcontext directly
     tsan_switch_to_ctx(&t->ctx);
@@ -596,12 +609,18 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
             ctx.copy_stack = 0;
             ctx.started = 0;
             if (always_copy_stacks) {
+                if (lastt->ctx.copy_stack || killed) {
     #if defined(_OS_WINDOWS_)
-                jl_setcontext(&ptls->copy_stack_ctx);
+                    jl_setcontext(&ptls->copy_stack_ctx);
     #else
-                jl_longjmp(ptls->copy_stack_ctx.uc_mcontext, 1);
+                    jl_longjmp(ptls->copy_stack_ctx.uc_mcontext, 1);
     #endif
-                abort(); // unreachable
+                    abort(); // unreachable
+                }
+                else {
+                    t->ctx.copy_ctx = &ptls->copy_stack_ctx;
+                    restore_stack2(t, ptls, lastt);
+                }
             }
             else if (lastt->ctx.copy_stack || killed) {
                 // copy_stack resumes at the jl_setjmp earlier in this function, so don't swap here
@@ -1214,6 +1233,7 @@ CFI_NORETURN
 #endif
     jl_ptls_t ptls = ct->ptls;
     sanitizer_finish_switch_fiber(&ptls->previous_task->ctx, &ct->ctx);
+    ct->ctx.ctx = NULL;
     _start_task();
 }
 
@@ -1518,6 +1538,81 @@ JL_NO_ASAN static void jl_start_fiber_set(jl_ucontext_t *t)
 }
 #endif
 
+static void NOINLINE init_always_copy_stacks(jl_stack_context_t *copy_stack_ctx)
+{
+CFI_NORETURN // Try to prevent the unwinder from seeing our caller before we get a chance to
+             // destroy the frame next time we return here. If JL_HAS_ASM is defined, it
+             // actually might be better to call jl_start_fiber_set with appropriate values
+             // for the stack, so that we don't have to temporarily run with the undefined
+             // stack contents present after the jl_setjmp returns 1.
+    if (!jl_setjmp(copy_stack_ctx->uc_mcontext, 0))
+        return;
+#if defined(JL_HAVE_ASM) || defined(_OS_WINDOWS_)
+    uintptr_t fn = (uintptr_t)&start_task; // sanitizer_finish_switch_fiber is part of start_task
+#ifdef _CPU_X86_64_
+    asm volatile (
+        " movq %0, %%rax;\n"
+        " xorq %%rbp, %%rbp;\n"
+        " push %%rbp;\n" // instead of RSP
+        " jmpq *%%rax;\n" // call `fn` with fake stack frame
+        " ud2"
+        : : "r"(fn) : "memory" );
+#elif defined(_CPU_X86_)
+    asm volatile (
+        " movl %0, %%eax;\n"
+        " xorl %%ebp, %%ebp;\n"
+        " push %%ebp;\n" // instead of ESP
+        " jmpl *%%eax;\n" // call `fn` with fake stack frame
+        " ud2"
+        : : "r"(fn) : "memory" );
+#elif defined(_CPU_AARCH64_)
+    asm volatile(
+        " mov x29, xzr;\n" // Clear link register (x29) and frame pointer
+        " mov x30, xzr;\n" // (x30) to terminate unwinder.
+        " br %0;\n" // call `fn` with fake stack frame
+        " brk #0x1" // abort
+        : : "r"(fn) : "memory" );
+#elif defined(_CPU_ARM_)
+    // A "i" constraint on `&start_task` works only on clang and not on GCC.
+    asm(" mov lr, #0;\n" // Clear link register (lr) and frame pointer
+        " mov fp, #0;\n" // (fp) to terminate unwinder.
+        " bx %0;\n" // call `fn` with fake stack frame.  While `bx` can change
+                    // the processor mode to thumb, this will never happen
+                    // because all our addresses are word-aligned.
+        " udf #0" // abort
+        : : "r"(fn) : "memory" );
+#elif defined(_CPU_PPC64_)
+    // N.B.: There is two iterations of the PPC64 ABI.
+    // v2 is current and used here. Make sure you have the
+    // correct version of the ABI reference when working on this code.
+    asm volatile(
+        // Move stack (-0x30 for initial stack frame) to stack pointer
+        " addi 1, 1, -0x30;\n"
+        // Build stack frame
+        // Skip local variable save area
+        " std 2, 0x28(1);\n" // Save TOC
+        // Clear link editor/compiler words
+        " std 0, 0x20(1);\n"
+        " std 0, 0x18(1);\n"
+        // Clear LR/CR save area
+        " std 0, 0x10(1);\n"
+        " std 0, 0x8(1);\n"
+        " std 0, 0x0(1); \n" // Clear back link to terminate unwinder
+        " mtlr 0; \n"        // Clear link register
+        " mr 12, %1; \n"     // Set up target global entry point
+        " mtctr 12; \n"      // Move jump target to counter register
+        " bctr; \n"          // branch to counter (lr update disabled)
+        " trap; \n"
+        : : "r"(fn) : "memory");
+#else
+#error JL_HAVE_ASM defined but not implemented for this CPU type
+#endif
+    __builtin_unreachable();
+#else
+    start_task();
+#endif
+}
+
 // Initialize a root task using the given stack.
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 {
@@ -1608,8 +1703,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
         ptls->copy_stack_ctx.uc_stack.ss_sp = stack_hi;
         ptls->copy_stack_ctx.uc_stack.ss_size = ssize;
 #endif
-        if (jl_setjmp(ptls->copy_stack_ctx.uc_mcontext, 0))
-            start_task(); // sanitizer_finish_switch_fiber is part of start_task
+        init_always_copy_stacks(&ptls->copy_stack_ctx);
     }
     else {
         size_t bufsz = JL_STACK_SIZE;
