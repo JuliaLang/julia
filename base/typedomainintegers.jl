@@ -1,4 +1,4 @@
-baremodule TypeDomainNaturalNumbers
+baremodule TypeDomainIntegers
     baremodule Basic
         using Base: @nospecialize
         export
