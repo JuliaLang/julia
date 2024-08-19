@@ -1093,7 +1093,11 @@ end
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
 
 Return an iterator that walks the directory tree of a directory.
-The iterator returns a tuple containing `(rootpath, dirs, files)`.
+
+The iterator returns a tuple containing `(path, dirs, files)`.
+Each iteration `path` will change to the next directory in the tree;
+then `dirs` and `files` will be vectors containing the directories and files
+in the current `path` directory.
 The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
@@ -1103,14 +1107,14 @@ See also: [`readdir`](@ref).
 
 # Examples
 ```julia
-for (root, dirs, files) in walkdir(".")
-    println("Directories in \$root")
+for (path, dirs, files) in walkdir(".")
+    println("Directories in \$path")
     for dir in dirs
-        println(joinpath(root, dir)) # path to directories
+        println(joinpath(path, dir)) # path to directories
     end
-    println("Files in \$root")
+    println("Files in \$path")
     for file in files
-        println(joinpath(root, file)) # path to files
+        println(joinpath(path, file)) # path to files
     end
 end
 ```
@@ -1120,18 +1124,18 @@ julia> mkpath("my/test/dir");
 
 julia> itr = walkdir("my");
 
-julia> (root, dirs, files) = first(itr)
+julia> (path, dirs, files) = first(itr)
 ("my", ["test"], String[])
 
-julia> (root, dirs, files) = first(itr)
+julia> (path, dirs, files) = first(itr)
 ("my/test", ["dir"], String[])
 
-julia> (root, dirs, files) = first(itr)
+julia> (path, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
 """
-function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
-    function _walkdir(chnl, root)
+function walkdir(path; topdown=true, follow_symlinks=false, onerror=throw)
+    function _walkdir(chnl, path)
         tryf(f, p) = try
                 f(p)
             catch err
@@ -1143,7 +1147,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
                 end
                 return
             end
-        entries = tryf(_readdirx, root)
+        entries = tryf(_readdirx, path)
         entries === nothing && return
         dirs = Vector{String}()
         files = Vector{String}()
@@ -1157,17 +1161,17 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         end
 
         if topdown
-            push!(chnl, (root, dirs, files))
+            push!(chnl, (path, dirs, files))
         end
         for dir in dirs
-            _walkdir(chnl, joinpath(root, dir))
+            _walkdir(chnl, joinpath(path, dir))
         end
         if !topdown
-            push!(chnl, (root, dirs, files))
+            push!(chnl, (path, dirs, files))
         end
         nothing
     end
-    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, root))
+    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, path))
 end
 
 function unlink(p::AbstractString)
