@@ -1102,7 +1102,6 @@ The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `IOError` as argument.
-The returned iterator is implemented as a [`Channel`](@ref).
 
 See also: [`readdir`](@ref).
 
@@ -1123,8 +1122,7 @@ end
 ```julia-repl
 julia> mkpath("my/test/dir");
 
-julia> itr = walkdir("my")
-Channel{Tuple{String, Vector{String}, Vector{String}}}(0) (1 item available)
+julia> itr = walkdir("my");
 
 julia> (path, dirs, files) = first(itr)
 ("my", ["test"], String[])
