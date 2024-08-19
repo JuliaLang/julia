@@ -82,9 +82,19 @@ baremodule TypeDomainIntegers
 
     baremodule Interoperability
         using ..Basic, ..LazyMinus
-        using Base: checked_add, @nospecialize
+        using Base: checked_add, map, @nospecialize
         export interoperable, incremented, decremented, I, int_minus_one, int_zero, int_plus_one
         const I = Int8
+        const other_types = (
+            Int16, Int32, Int64, Int128,
+            UInt8, UInt16, UInt32, UInt64, UInt128,
+            Float16, Float32, Float64,
+        )
+        const OtherTypes = Union{other_types...,}
+        const OtherTypesType = let f = x -> Type{x}
+            t = map(f, other_types)
+            Union{t...,}
+        end
         const int_minus_one = I(-1)
         const int_zero = I(0)
         const int_plus_one = I(1)
@@ -399,6 +409,30 @@ baremodule TypeDomainIntegers
         end
         function Base.:(-)(@nospecialize n::TypeDomainInteger)
             negated(n)
+        end
+        function Base.convert((@nospecialize t::Interoperability.OtherTypesType), @nospecialize n::TypeDomainInteger)
+            i = interoperable(n)
+            convert(t, i)
+        end
+        function Base.convert(::Type{NonnegativeInteger}, x::Interoperability.OtherTypes)
+            i = I(x)::I
+            convert(NonnegativeInteger, i)
+        end
+        function Base.convert(::Type{TypeDomainInteger}, x::Interoperability.OtherTypes)
+            i = I(x)::I
+            convert(TypeDomainInteger, i)
+        end
+        function (t::Interoperability.OtherTypesType)(@nospecialize n::TypeDomainInteger)
+            i = interoperable(n)
+            t(i)
+        end
+        function NonnegativeInteger(x::Interoperability.OtherTypes)
+            i = I(x)::I
+            NonnegativeInteger(i)
+        end
+        function TypeDomainInteger(x::Interoperability.OtherTypes)
+            i = I(x)::I
+            TypeDomainInteger(i)
         end
     end
 
