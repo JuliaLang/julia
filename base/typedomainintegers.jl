@@ -454,6 +454,7 @@ baremodule TypeDomainIntegers
     baremodule BaseHelpers
         using ..Basic, ..LazyMinus, ..Interoperability
         using Base: convert, <, +, -, *, ==, !, @nospecialize
+        export apply_n_t, apply_t_n
         function apply_n_t(func, (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             i = interoperable(r)
             func(l, i)
