@@ -130,65 +130,65 @@ const max_tested_number = 7
                 end
             end
         end
-        # @testset "between a type domain integer and a `Number`" begin
-        #     z = @inferred zero(NonnegativeInteger)
-        #     o = @inferred natural_successor(z)
-        #     t = @inferred natural_successor(o)
-        #     for i ∈ -max_tested_number:max_tested_number
-        #         lesser_numbers = (
-        #             prevfloat(Float64(i)), prevfloat(Float32(i)), prevfloat(Float16(i)),
-        #             i - true, Float64(i) - true, Float32(i) - true, Float16(i) - true,
-        #             -Inf16, -Inf32, -Inf64,
-        #         )
-        #         greater_numbers = (
-        #             nextfloat(Float64(i)), nextfloat(Float32(i)), nextfloat(Float16(i)),
-        #             i + true, Float64(i) + true, Float32(i) + true, Float16(i) + true,
-        #             Inf16, Inf32, Inf64,
-        #         )
-        #         unequal_numbers = (lesser_numbers..., greater_numbers...)
-        #         n = convert(TypeDomainInteger, i)
-        #         @testset "`==`, `isequal`" begin
-        #             for op ∈ (==, isequal)
-        #                 for x ∈ (i, Float64(i), Float32(i), Float16(i))
-        #                     @test op(n, x)
-        #                     @test op(x, n)
-        #                 end
-        #                 for x ∈ unequal_numbers
-        #                     @test !op(n, x)
-        #                     @test !op(x, n)
-        #                 end
-        #             end
-        #             @testset "`missing`" begin
-        #                 @test ismissing(n == missing)
-        #                 @test ismissing(missing == n)
-        #                 @test !isequal(n, missing)
-        #                 @test !isequal(missing, n)
-        #             end
-        #         end
-        #         @testset "`<`, `isless`" begin
-        #             for op ∈ (<, isless)
-        #                 for x ∈ (i, Float64(i), Float32(i), Float16(i))
-        #                     @test !op(n, x)
-        #                     @test !op(x, n)
-        #                 end
-        #                 for x ∈ greater_numbers
-        #                     @test op(n, x)
-        #                     @test !op(x, n)
-        #                 end
-        #                 for x ∈ lesser_numbers
-        #                     @test !op(n, x)
-        #                     @test op(x, n)
-        #                 end
-        #             end
-        #             @testset "`missing`" begin
-        #                 @test ismissing(n < missing)
-        #                 @test ismissing(missing < n)
-        #                 @test isless(n, missing)
-        #                 @test !isless(missing, n)
-        #             end
-        #         end
-        #     end
-        # end
+        @testset "between a type domain integer and a `Number`" begin
+            z = @inferred zero(NonnegativeInteger)
+            o = @inferred natural_successor(z)
+            t = @inferred natural_successor(o)
+            for i ∈ -max_tested_number:max_tested_number
+                lesser_numbers = (
+                    prevfloat(Float64(i)), prevfloat(Float32(i)), prevfloat(Float16(i)),
+                    i - true, Float64(i) - true, Float32(i) - true, Float16(i) - true,
+                    -Inf16, -Inf32, -Inf64,
+                )
+                greater_numbers = (
+                    nextfloat(Float64(i)), nextfloat(Float32(i)), nextfloat(Float16(i)),
+                    i + true, Float64(i) + true, Float32(i) + true, Float16(i) + true,
+                    Inf16, Inf32, Inf64,
+                )
+                unequal_numbers = (lesser_numbers..., greater_numbers...)
+                n = convert(TypeDomainInteger, i)
+                @testset "`==`, `isequal`" begin
+                    for op ∈ (==, isequal)
+                        for x ∈ (i, Float64(i), Float32(i), Float16(i))
+                            @test op(n, x)
+                            @test op(x, n)
+                        end
+                        for x ∈ unequal_numbers
+                            @test !op(n, x)
+                            @test !op(x, n)
+                        end
+                    end
+                    @testset "`missing`" begin
+                        @test ismissing(n == missing)
+                        @test ismissing(missing == n)
+                        @test !isequal(n, missing)
+                        @test !isequal(missing, n)
+                    end
+                end
+                @testset "`<`, `isless`" begin
+                    for op ∈ (<, isless)
+                        for x ∈ (i, Float64(i), Float32(i), Float16(i))
+                            @test !op(n, x)
+                            @test !op(x, n)
+                        end
+                        for x ∈ greater_numbers
+                            @test op(n, x)
+                            @test !op(x, n)
+                        end
+                        for x ∈ lesser_numbers
+                            @test !op(n, x)
+                            @test op(x, n)
+                        end
+                    end
+                    @testset "`missing`" begin
+                        @test ismissing(n < missing)
+                        @test ismissing(missing < n)
+                        @test isless(n, missing)
+                        @test !isless(missing, n)
+                    end
+                end
+            end
+        end
     end
     @testset "addition and subtraction" begin
         @testset "identity" begin

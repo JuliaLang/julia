@@ -95,6 +95,7 @@ baremodule TypeDomainIntegers
             t = map(f, other_types)
             Union{t...,}
         end
+        const all_types = (Bool, I, other_types...)
         const int_minus_one = I(-1)
         const int_zero = I(0)
         const int_plus_one = I(1)
@@ -219,8 +220,33 @@ baremodule TypeDomainIntegers
         end
     end
 
+    baremodule BaseOverloadsPromotion
+        using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..Interoperability
+        using ..Basic: UpperBounds
+        using Base: Base, @nospecialize, @eval
+        struct UnexpectedException <: Exception end
+        const ZeroOrOne = Union{typeof(zero()),typeof(natural_successor(zero()))}
+        for type ∈ Interoperability.all_types
+            @eval function Base.promote_rule(
+                (@nospecialize tdt::Type{<:TypeDomainInteger}),
+                ::Type{$type},
+            )
+                if tdt <: Union{}
+                    throw(UnexpectedException())
+                end
+                t = if tdt <: ZeroOrOne
+                    Bool
+                else
+                    Int16  # presumably wide enough for any type domain integer
+                end
+                Base.promote_type(t, $type)
+            end
+        end
+    end
+
     baremodule BaseOverloads
         using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..Interoperability
+        using ..BaseOverloadsPromotion: ZeroOrOne
         using Base: Base, convert, <, +, -, *, ==, isequal, isless, !, @nospecialize
         function Base.zero(@nospecialize unused::Type{<:TypeDomainInteger})
             zero()
@@ -240,7 +266,6 @@ baremodule TypeDomainIntegers
                 end
             end
         end
-        const ZeroOrOne = Union{typeof(zero()),typeof(natural_successor(zero()))}
         function to_bool(@nospecialize n::ZeroOrOne)
             if n isa PositiveIntegerUpperBound
                 true
