@@ -1,5 +1,52 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# How does the julia scheduler work??
+
+# mutable struct Task
+#    next::Union{Nothing,Task} #Invasive linked list
+#    queue::Any #Union{Nothing, StickyWorkqueue } Invasive linked list
+#    storage::Any # Could be a union
+#    donenotify::Any #Condition var for task done
+#    result::Any #Return value for the closure
+#    scope::Any #Scope for ScopeValue
+#    code::Any #Closure being called
+#    rngState0::UInt64 #Random number generator state
+#    rngState1::UInt64 #Random number generator state
+#    rngState2::UInt64 #Random number generator state
+#    rngState3::UInt64 #Random number generator state
+#    rngState4::UInt64 #Random number generator state
+#    _state::UInt8 #task state Maybe make enum? #TODO: Should be atomic
+#    sticky::Bool
+#    _isexception::Bool #TODO: Should be atomic
+#    priority::UInt16
+# end
+#hidden state of the task begin
+#   tid::Int16 #thread id
+#   threadpoolid::Int8
+#   reentrant_timing::UInt8 # Counter for inference reentrancy
+#   gcstack::jl_gcframe_t # GC stack frame
+#   world_age::Csize_t
+#   ptls::jl_ptls_t # Pointer to the thread tls
+#   excstack::Any #Exception stack
+#   eh::jl_handler_t #Exception handler
+#   ctx::jl_ucontext_t #Saved thread state #TODO: this is very large and likely unnecessary
+#   stkbuf::Ptr{Cvoid} #Stack buffer
+#   bufsz::Csize_t #Size of the stack buffer
+#
+# end
+
+#The scheduler has many entrypoints but the simplest one is yield. Which enqueues current_task and looks for another task to run.
+
+#TODO: Figure out what the error paths are supposed to be doing
+
+# yield
+# enqueue current task and enter scheduler for something to do by calling wait()
+
+# wait
+# gets a workqueue from workqueue_for pops it via poptask and sets it as the next task
+
+# ensure_rescheduled
+#
 ## basic task functions and TLS
 
 Core.Task(@nospecialize(f), reserved_stack::Int=0) = Core._Task(f, reserved_stack, ThreadSynchronizer())
@@ -971,7 +1018,7 @@ function enq_work(t::Task)
             push!(workqueue_for(tid), t)
         else
             # Otherwise, put the task in the multiqueue.
-            Partr.multiq_insert(t, t.priority)
+            Scheduler.enqueue!(t)
             tid = 0
         end
     end
@@ -1154,10 +1201,10 @@ function trypoptask(W::StickyWorkqueue)
         end
         return t
     end
-    return Partr.multiq_deletemin()
+    return Scheduler.dequeue!()
 end
 
-checktaskempty = Partr.multiq_check_empty
+checktaskempty = Scheduler.checktaskempty
 
 @noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
