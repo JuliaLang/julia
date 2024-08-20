@@ -199,6 +199,21 @@ static int sleep_check_after_threshold(uint64_t *start_cycles) JL_NOTSAFEPOINT
     return 0;
 }
 
+void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    // equivalent to wake_thread, without the assert on wasrunning
+    int8_t state = jl_atomic_load_relaxed(&ptls->sleep_check_state);
+    if (state == sleeping) {
+        if (jl_atomic_cmpswap_relaxed(&ptls->sleep_check_state, &state, not_sleeping)) {
+            // this notification will never be consumed, so we may have now
+            // introduced some inaccuracy into the count, but that is
+            // unavoidable with any asynchronous interruption
+            jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+        }
+    }
+}
+
+
 static int set_not_sleeping(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {

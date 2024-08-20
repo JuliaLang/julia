@@ -1538,7 +1538,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_nothrow(String)
     @test !sizeof_nothrow(Type{String})
     @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
-    let PT = Core.Compiler.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
+    let PT = Core.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
         @test sizeof_tfunc(PT) === Const(16)
         @test nfields_tfunc(PT) === Const(2)
         @test sizeof_nothrow(PT)
@@ -4743,32 +4743,80 @@ end
 
 # issue #43784
 @testset "issue #43784" begin
-    init = Base.ImmutableDict{Any,Any}()
-    a = Const(init)
-    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, Any])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c)
-    @test ⊑(b, c)
+    ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
+    ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    Const, PartialStruct = Core.Const, Core.PartialStruct
 
-    init = Base.ImmutableDict{Number,Number}()
-    a = Const(init)
-    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c) && ⊑(b, c)
-    @test c === typeof(init)
-
-    a = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c) && ⊑(b, c)
-    @test c.fields[2] === Any # or Number
-    @test c.fields[3] === ComplexF64
-
-    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c)
-    @test ⊑(b, c)
-    @test c.fields[2] === Complex
-    @test c.fields[3] === Complex
+    let init = Base.ImmutableDict{Any,Any}()
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(init), Any, Any])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === typeof(init)
+    end
+    let init = Base.ImmutableDict{Any,Any}(1,2)
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(getfield(init,1)), Any, Any])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test length(c.fields) == 3
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === typeof(init)
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test c.fields[2] === Number
+        @test c.fields[3] === ComplexF64
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test c.fields[2] === Complex
+        @test c.fields[3] === Complex
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = PartialStruct(T, Any[T])
+        b = PartialStruct(T, Any[T, Number, Number])
+        @test b ⊑ a
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test length(c.fields) == 1
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = PartialStruct(T, Any[T])
+        b = Const(T())
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = Const(T())
+        b = PartialStruct(T, Any[T])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = Const(T())
+        b = Const(T(1,2))
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
 
     global const ginit43784 = Base.ImmutableDict{Any,Any}()
     @test Base.return_types() do
@@ -4800,6 +4848,31 @@ end
     @test a == Tuple
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
     @test a == Tuple
+end
+
+let ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
+    ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    Const, PartialStruct = Core.Const, Core.PartialStruct
+
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
+    @test !(Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test !(Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
+    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]))
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}])) broken=true
+    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]))
+    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+
+    t = Const((false, false)) ⊔ Const((false, true))
+    @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
+    t = t ⊔ Const((false, false, 0))
+    @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -5866,6 +5939,106 @@ end
 bar54341(args...) = foo54341(4, args...)
 
 @test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int
+
+# `PartialStruct` for partially initialized structs:
+struct PartiallyInitialized1
+    a; b; c
+    PartiallyInitialized1(a) = (@nospecialize; new(a))
+    PartiallyInitialized1(a, b) = (@nospecialize; new(a, b))
+    PartiallyInitialized1(a, b, c) = (@nospecialize; new(a, b, c))
+end
+mutable struct PartiallyInitialized2
+    a; b; c
+    PartiallyInitialized2(a) = (@nospecialize; new(a))
+    PartiallyInitialized2(a, b) = (@nospecialize; new(a, b))
+    PartiallyInitialized2(a, b, c) = (@nospecialize; new(a, b, c))
+end
+
+# 1. isdefined modeling for partial struct
+@test Base.infer_return_type((Any,Any)) do a, b
+    Val(isdefined(PartiallyInitialized1(a, b), :b))
+end == Val{true}
+@test Base.infer_return_type((Any,Any,)) do a, b
+    Val(isdefined(PartiallyInitialized1(a, b), :c))
+end >: Val{false}
+@test Base.infer_return_type((PartiallyInitialized1,)) do x
+    @assert isdefined(x, :a)
+    return Val(isdefined(x, :c))
+end == Val
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    Val(isdefined(PartiallyInitialized1(a, b, c), :c))
+end == Val{true}
+@test Base.infer_return_type((Any,Any)) do a, b
+    Val(isdefined(PartiallyInitialized2(a, b), :b))
+end == Val{true}
+@test Base.infer_return_type((Any,Any,)) do a, b
+    Val(isdefined(PartiallyInitialized2(a, b), :c))
+end >: Val{false}
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    s = PartiallyInitialized2(a, b)
+    s.c = c
+    Val(isdefined(s, :c))
+end >: Val{true}
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    Val(isdefined(PartiallyInitialized2(a, b, c), :c))
+end == Val{true}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    Val(isdefined(tuple(1, xs...), 1))
+end == Val{true}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    Val(isdefined(tuple(1, xs...), 2))
+end == Val
+
+# 2. getfield modeling for partial struct
+@test Base.infer_effects((Any,Any); optimize=false) do a, b
+    getfield(PartiallyInitialized1(a, b), :b)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+    getfield(PartiallyInitialized1(a, b), f, #=boundscheck=#false)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+    getfield(PartiallyInitialized1(a, b, c), :c)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+    getfield(PartiallyInitialized1(a, b, c), f, #=boundscheck=#false)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any); optimize=false) do a, b
+    getfield(PartiallyInitialized2(a, b), :b)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+    getfield(PartiallyInitialized2(a, b), f, #=boundscheck=#false)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+    getfield(PartiallyInitialized2(a, b, c), :c)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+    getfield(PartiallyInitialized2(a, b, c), f, #=boundscheck=#false)
+end |> Core.Compiler.is_nothrow
+
+# isdefined-Conditionals
+@test Base.infer_effects((Base.RefValue{Any},)) do x
+    if isdefined(x, :x)
+        return getfield(x, :x)
+    end
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Base.RefValue{Any},)) do x
+    if isassigned(x)
+        return x[]
+    end
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any); optimize=false) do a, c
+    x = PartiallyInitialized2(a)
+    x.c = c
+    if isdefined(x, :c)
+        return x.b
+    end
+end |> !Core.Compiler.is_nothrow
+
+# End to end test case for the partially initialized struct with `PartialStruct`
+@noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
+@test fully_eliminated() do
+    broadcast_noescape1(Ref("x"))
+end
 
 # InterConditional rt with Vararg argtypes
 fcondvarargs(a, b, c, d) = isa(d, Int64)

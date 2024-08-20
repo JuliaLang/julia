@@ -1166,7 +1166,12 @@ struct IntermediaryCollector <: WalkerCallback
     intermediaries::SPCSet
 end
 function (walker_callback::IntermediaryCollector)(@nospecialize(def), @nospecialize(defssa::AnySSAValue))
-    isa(def, Expr) || push!(walker_callback.intermediaries, defssa.id)
+    if !(def isa Expr)
+        push!(walker_callback.intermediaries, defssa.id)
+        if def isa PiNode
+            return LiftedValue(def.val)
+        end
+    end
     return nothing
 end
 

@@ -64,6 +64,9 @@ end
 @testset "AnnotatedChar" begin
     chr = Base.AnnotatedChar('c')
     @test chr == Base.AnnotatedChar(chr.char, Pair{Symbol, Any}[])
+    @test uppercase(chr) == Base.AnnotatedChar('C')
+    @test titlecase(chr) == Base.AnnotatedChar('C')
+    @test lowercase(Base.AnnotatedChar('C')) == chr
     str = Base.AnnotatedString("hmm", [(1:1, :attr => "h0h0"),
                                (1:2, :attr => "h0m1"),
                                (2:3, :attr => "m1m2")])
