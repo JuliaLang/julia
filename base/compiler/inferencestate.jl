@@ -359,7 +359,8 @@ mutable struct InferenceState
         # some more setups
         if !iszero(cache_mode & CACHE_MODE_LOCAL)
             push!(get_inference_cache(interp), result)
-        elseif !iszero(cache_mode & CACHE_MODE_GLOBAL)
+        end
+        if !iszero(cache_mode & CACHE_MODE_GLOBAL)
             push!(callstack, this)
             this.cycleid = this.frameid = length(callstack)
         end

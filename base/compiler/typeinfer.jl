@@ -1046,8 +1046,7 @@ typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype),
     typeinf_frame(interp, specialize_method(method, atype, sparams), run_optimizer)
 function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     result = InferenceResult(mi, typeinf_lattice(interp))
-    cache_mode = :no
-    frame = InferenceState(result, cache_mode, interp)
+    frame = InferenceState(result, #=cache_mode=#:no, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
     is_inferred(frame) || return nothing
