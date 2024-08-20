@@ -661,16 +661,16 @@ _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inb
 _droplast!(A) = deleteat!(A, lastindex(A))
 
 # destination type for matmul
-matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS::Type) = similar(B, TS, size(B))
-matprod_dest(A::AbstractArray, B::StructuredMatrix, TS::Type) = similar(A, TS, size(A))
-matprod_dest(A::StructuredMatrix, B::AbstractArray, TS::Type) = similar(B, TS, size(B))
+matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
+matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
+matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
 # diagonal is special, as it does not change the structure of the other matrix
 # we call similar without a size to preserve the type of the matrix wherever possible
 # reroute through _matprod_dest_diag to allow speicalizing on the type of the StructuredMatrix
 # without defining methods for both the orderings
-matprod_dest(A::StructuredMatrix, B::Diagonal, TS::Type) = _matprod_dest_diag(A, TS)
-matprod_dest(A::Diagonal, B::StructuredMatrix, TS::Type) = _matprod_dest_diag(B, TS)
-matprod_dest(A::Diagonal, B::Diagonal, TS::Type) = _matprod_dest_diag(B, TS)
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = _matprod_dest_diag(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = _matprod_dest_diag(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = _matprod_dest_diag(B, TS)
 _matprod_dest_diag(A, TS) = similar(A, TS)
 function _matprod_dest_diag(A::SymTridiagonal, TS)
     n = size(A, 1)
@@ -678,7 +678,7 @@ function _matprod_dest_diag(A::SymTridiagonal, TS)
 end
 
 # Special handling for adj/trans vec
-matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS::Type) = similar(B, TS)
+matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
