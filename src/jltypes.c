@@ -3662,6 +3662,8 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(task);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
+    const static uint32_t task_atomicfields[1] = {0x00001000}; // Set fields 13 as atomic
+    jl_task_type->name->atomicfields = task_atomicfields;
 
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
