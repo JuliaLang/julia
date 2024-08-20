@@ -257,7 +257,7 @@ baremodule TypeDomainIntegers
             end
         end
         const TypeDomainIntegerType = Union{Type{TypeDomainInteger},Type{NonnegativeInteger}}
-        function Base.convert(::Type{Bool}, @nospecialize o::ZeroOrOne)
+        function Base.convert(::Type{Bool}, @nospecialize o::TypeDomainInteger)
             to_bool(o)
         end
         function Base.convert((@nospecialize unused::TypeDomainIntegerType), n::Bool)
@@ -287,7 +287,7 @@ baremodule TypeDomainIntegers
         function TypeDomainInteger(n::Union{Bool,I})
             convert(TypeDomainInteger, n)
         end
-        function Bool(@nospecialize n::ZeroOrOne)
+        function Bool(@nospecialize n::TypeDomainInteger)
             to_bool(n)
         end
         function I(@nospecialize n::TypeDomainInteger)
