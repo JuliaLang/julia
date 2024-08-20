@@ -141,7 +141,8 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     rt = nothing
     if isa(stmt, Expr)
         head = stmt.head
-        if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined || head === :boundscheck
+        if (head === :call || head === :foreigncall || head === :new || head === :splatnew ||
+            head === :static_parameter || head === :isdefined || head === :boundscheck)
             (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
             add_flag!(inst, flags_for_effects(effects))
         elseif head === :invoke
