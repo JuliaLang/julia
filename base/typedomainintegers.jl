@@ -453,7 +453,7 @@ baremodule TypeDomainIntegers
 
     baremodule BaseHelpers
         using ..Basic, ..LazyMinus, ..Interoperability
-        using Base: convert, <, +, -, *, ==, !, @nospecialize
+        using Base: convert, isequal, <, +, -, *, ==, !, @nospecialize
         export apply_n_t, apply_t_n
         function apply_n_t(::typeof(+), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
@@ -551,6 +551,30 @@ baremodule TypeDomainIntegers
                     zero()
                 end
             end
+        end
+        function apply_n_t(
+            func::Union{typeof(isequal),typeof(==)},
+            (@nospecialize l::Number),
+            (@nospecialize r::TypeDomainInteger),
+        )
+            if r isa NegativeInteger
+                func(l, interoperable(r))
+            else
+                r = r::NonnegativeInteger
+                if r isa PositiveIntegerUpperBound
+                    func(l, interoperable(r))
+                else
+                    iszero(l)
+                end
+            end
+        end
+        function apply_t_n(
+            func::Union{typeof(isequal),typeof(==)},
+            (@nospecialize l::TypeDomainInteger),
+            (@nospecialize r::Number),
+        )
+            # equality is commutative
+            apply_n_t(func, r, l)
         end
     end
 
