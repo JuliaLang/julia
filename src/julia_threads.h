@@ -86,9 +86,13 @@ typedef ucontext_t _jl_ucontext_t;
 
 typedef struct {
     union {
-        _jl_ucontext_t ctx;
-        jl_stack_context_t copy_ctx;
+        _jl_ucontext_t *ctx;
+        jl_stack_context_t *copy_ctx;
     };
+    void *stkbuf; // malloc'd memory (either copybuf or stack)
+    size_t bufsz; // actual sizeof stkbuf
+    unsigned int copy_stack:31; // sizeof stack for copybuf
+    unsigned int started:1;
 #if defined(_COMPILER_TSAN_ENABLED_)
     void *tsan_state;
 #endif
@@ -155,13 +159,9 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
     struct _jl_timing_block_t *timing_stack;
+    // This is the location of our copy_stack
     void *stackbase;
     size_t stacksize;
-    union {
-        _jl_ucontext_t base_ctx; // base context of stack
-        // This hack is needed to support always_copy_stacks:
-        jl_stack_context_t copy_stack_ctx;
-    };
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
