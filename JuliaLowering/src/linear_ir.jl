@@ -1,20 +1,18 @@
 #-------------------------------------------------------------------------------
 # Lowering pass 5: Flatten to linear IR
 
-function is_simple_atom(ex)
+function is_simple_atom(ctx, ex)
     k = kind(ex)
-    # FIXME
-#   (or (number? x) (string? x) (char? x)
-#       (and (pair? x) (memq (car x) '(ssavalue null true false thismodule)))
-#       (eq? (typeof x) 'julia_value)))
-    is_number(k) || k == K"String" || k == K"Char"
+    # TODO flisp thismodule head?
+    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) ||
+        (k == K"core" && ex.name_val == "nothing")
 end
 
 # N.B.: This assumes that resolve-scopes has run, so outerref is equivalent to
 # a global in the current scope.
-function is_valid_ir_argument(ex)
+function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    return is_simple_atom(ex)
+    return is_simple_atom(ctx, ex)
     # FIXME ||
            #(k == K"outerref" && nothrow_julia_global(ex[1]))  ||
            #(k == K"globalref" && nothrow_julia_global(ex))    ||
@@ -61,8 +59,8 @@ end
 # BindingId could also subsume
 #   - top,core
 
-function is_valid_body_ir_argument(ex)
-    is_valid_ir_argument(ex) && return true
+function is_valid_body_ir_argument(ctx, ex)
+    is_valid_ir_argument(ctx, ex) && return true
     return false
     # FIXME
     k = kind(ex)
@@ -70,9 +68,9 @@ function is_valid_body_ir_argument(ex)
         TODO("vinfo-table stuff")
 end
 
-function is_simple_arg(ex)
+function is_simple_arg(ctx, ex)
     k = kind(ex)
-    return is_simple_atom(ex) || k == K"BindingId" || k == K"quote" || k == K"inert" ||
+    return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" || k == K"inert" ||
            k == K"top" || k == K"core" || k == K"globalref" || k == K"outerref"
 end
 
@@ -84,14 +82,14 @@ end
 
 function is_const_read_arg(ctx, ex)
     k = kind(ex)
-    return is_simple_atom(ex) ||
+    return is_simple_atom(ctx, ex) ||
            is_single_assign_var(ctx, ex) ||
            k == K"quote" || k == K"inert" || k == K"top" || k == K"core"
 end
 
 function is_valid_ir_rvalue(ctx, lhs, rhs)
     return is_ssa(ctx, lhs) ||
-           is_valid_ir_argument(rhs) ||
+           is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: splatnew isdefined invoke cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref
             kind(rhs) in KSet"new the_exception call foreigncall")
@@ -102,11 +100,11 @@ function compile_args(ctx, args)
     # First check if all the arguments as simple (and therefore side-effect free).
     # Otherwise, we need to use ssa values for all arguments to ensure proper
     # left-to-right evaluation semantics.
-    all_simple = all(is_simple_arg, args)
+    all_simple = all(a->is_simple_arg(ctx, a), args)
     args_out = SyntaxList(ctx)
     for arg in args
         arg_val = compile(ctx, arg, true, false)
-        if (all_simple || is_const_read_arg(ctx, arg_val)) && is_valid_body_ir_argument(arg_val)
+        if (all_simple || is_const_read_arg(ctx, arg_val)) && is_valid_body_ir_argument(ctx, arg_val)
             push!(args_out, arg_val)
         else
             push!(args_out, emit_assign_tmp(ctx, arg_val))
@@ -139,7 +137,7 @@ function emit_return(ctx, srcref, ex)
     # TODO: return type handling
     # TODO: exception stack handling
     # returning lambda directly is needed for @generated
-    if !(is_valid_ir_argument(ex) || head(ex) == K"lambda")
+    if !(is_valid_ir_argument(ctx, ex) || head(ex) == K"lambda")
         ex = emit_assign_tmp(ctx, ex)
     end
     # TODO: if !isnothing(ctx.return_type) ...
@@ -184,7 +182,7 @@ end
 
 function compile_condition_term(ctx, ex)
     cond = compile(ctx, ex, true, false)
-    if !is_valid_body_ir_argument(cond)
+    if !is_valid_body_ir_argument(ctx, cond)
         cond = emit_assign_tmp(ctx, cond)
     end
     return cond
@@ -507,7 +505,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             @chk numchildren(ex) == 3
             fname = ex[1]
             sig = compile(ctx, ex[2], true, false)
-            if !is_valid_ir_argument(sig)
+            if !is_valid_ir_argument(ctx, sig)
                 sig = emit_assign_tmp(ctx, sig)
             end
             lam = ex[3]

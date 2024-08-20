@@ -11,8 +11,7 @@ end
 2   (gotoifnot %₁ label₅)
 3   slot₂/b
 4   (return %₃)
-5   core.nothing
-6   (return %₅)
+5   (return core.nothing)
 
 ######################################
 # Branching, !tail && !value
@@ -84,5 +83,4 @@ end
 5   (gotoifnot %₄ label₈)
 6   slot₄/d
 7   (return %₆)
-8   core.nothing
-9   (return %₈)
+8   (return core.nothing)

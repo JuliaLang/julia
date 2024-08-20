@@ -12,8 +12,7 @@ end
 5   TestMod.body1
 6   TestMod.body2
 7   (goto label₁)
-8   core.nothing
-9   (return %₈)
+8   (return core.nothing)
 ########################################
 # While loop with short circuit condition
 while a && b
@@ -26,8 +25,7 @@ end
 4   (gotoifnot %₃ label₇)
 5   TestMod.body
 6   (goto label₁)
-7   core.nothing
-8   (return %₇)
+7   (return core.nothing)
 ########################################
 # While loop with with break and continue
 while cond
@@ -46,5 +44,4 @@ end
 6   (goto label₈)
 7   TestMod.body3
 8   (goto label₁)
-9   core.nothing
-10  (return %₉)
+9   (return core.nothing)
