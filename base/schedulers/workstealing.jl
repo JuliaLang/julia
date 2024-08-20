@@ -54,7 +54,7 @@ function attempt_steal!()
     for _ in 1:(4*nt) # Try to steal 4x nthread times
         tid2 = Base.Scheduler.cong(UInt32(nt))
         tid == tid2 && continue
-        t = QueueModule.steal!(queue_for(tid2))
+        t = QueueModule.steal!(queue_for(Int(tid2))) #TODO: Change types of things to avoid the convert
         t !== nothing && return t
     end
     return nothing
