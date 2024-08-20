@@ -1102,6 +1102,7 @@ The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `IOError` as argument.
+The returned iterator is mutable, so repeatedly accessing it will change its state.
 
 See also: [`readdir`](@ref).
 
