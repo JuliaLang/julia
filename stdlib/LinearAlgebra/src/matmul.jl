@@ -61,9 +61,10 @@ function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
 end
 
 # these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
-(*)(a::AbstractVector, tB::TransposeAbsMat) = reshape(a, length(a), 1) * tB
-(*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
-(*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
+function (*)(a::AbstractVector, B::AbstractMatrix)
+    require_one_based_indexing(a)
+    reshape(a, length(a), 1) * B
+end
 
 # Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
