@@ -3156,8 +3156,6 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec, 0, 1, 0);
     const static uint32_t binding_partition_atomicfields[] = { 0b01101 }; // Set fields 1, 3, 4 as atomic
     jl_binding_partition_type->name->atomicfields = binding_partition_atomicfields;
-    const static uint32_t binding_partition_constfields[] = { 0x0 };
-    jl_binding_partition_type->name->constfields = binding_partition_constfields;
 
     jl_binding_type =
         jl_new_datatype(jl_symbol("Binding"), core, jl_any_type, jl_emptysvec,

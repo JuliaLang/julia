@@ -298,6 +298,17 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b)
     return jl_atomic_load_relaxed(&b->value);
 }
 
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_seqcst(jl_binding_t *b)
+{
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    jl_ptr_kind_union_t pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+    if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
+        return NULL;
+    if (jl_bkind_is_some_constant(decode_restriction_kind(pku)))
+        return decode_restriction_value(pku);
+    return jl_atomic_load(&b->value);
+}
+
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b)
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
@@ -316,13 +327,13 @@ typedef struct _modstack_t {
 } modstack_t;
 static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, modstack_t *st);
 
-JL_DLLEXPORT jl_value_t *jl_reresolve_binding_value(jl_binding_t *b)
+JL_DLLEXPORT jl_value_t *jl_reresolve_binding_value_seqcst(jl_binding_t *b)
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     if (jl_bkind_is_some_guard(decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction)))) {
         jl_resolve_owner(b, b->globalref->mod, b->globalref->name, NULL);
     }
-    return jl_get_binding_value(b);
+    return jl_get_binding_value_seqcst(b);
 }
 
 // get binding for adding a method
@@ -809,7 +820,7 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // u
             return 0;
         return jl_get_binding_value(b) != NULL;
     }
-    return jl_reresolve_binding_value(b) != NULL;
+    return jl_reresolve_binding_value_seqcst(b) != NULL;
 }
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)

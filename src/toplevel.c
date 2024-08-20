@@ -293,7 +293,7 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     return args[0];
 }
 
-void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
+void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty)
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
@@ -346,7 +346,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
             break;
     }
     if (set_type) {
-        jl_binding_set_type(b, set_type, 1);
+        jl_binding_set_type(b, set_type);
     }
 }
 

@@ -944,7 +944,7 @@ static const auto jlgetbindingwrorerror_func = new JuliaFunction<>{
     nullptr,
 };
 static const auto jlgetbindingvalue_func = new JuliaFunction<>{
-    XSTR(jl_reresolve_binding_value),
+    XSTR(jl_reresolve_binding_value_seqcst),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -1017,17 +1017,7 @@ static const auto jlgenericfunction_func = new JuliaFunction<>{
         auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
         auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
         auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        return FunctionType::get(T_prjlvalue, {T_pjlvalue}, false);
-    },
-    nullptr,
-};
-static const auto jllocalgenericfunction_func = new JuliaFunction<>{
-    XSTR(jl_get_or_declare_local_gf),
-    [](LLVMContext &C) {
-        auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
-        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
-        auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        return FunctionType::get(T_prjlvalue, {T_pjlvalue, T_pjlvalue, T_pjlvalue}, false);
+        return FunctionType::get(T_prjlvalue, {T_pjlvalue, T_jlvalue, T_jlvalue}, false);
     },
     nullptr,
 };
@@ -6470,7 +6460,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 bp = julia_binding_gv(ctx, bnd);
                 jl_cgval_t gf = mark_julia_type(
                         ctx,
-                        ctx.builder.CreateCall(prepare_call(jlgenericfunction_func), { bp }),
+                        ctx.builder.CreateCall(prepare_call(jlgenericfunction_func), { bp,
+                            literal_pointer_val(ctx, (jl_value_t*)mod), name
+                        }),
                         true,
                         jl_function_type);
                 return gf;
@@ -10111,7 +10103,6 @@ static void init_jit_functions(void)
     //add_named_global(jlnsvec_func, &jl_svec);
     add_named_global(jlmethod_func, &jl_method_def);
     add_named_global(jlgenericfunction_func, &jl_declare_const_gf);
-    add_named_global(jllocalgenericfunction_func, &jl_get_or_declare_local_gf);
     add_named_global(jlenter_func, &jl_enter_handler);
     add_named_global(jl_current_exception_func, &jl_current_exception);
     add_named_global(jlleave_noexcept_func, &jl_pop_handler_noexcept);

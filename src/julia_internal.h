@@ -805,7 +805,7 @@ JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val);
-void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error);
+void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty);
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);

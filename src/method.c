@@ -1150,7 +1150,7 @@ JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
         jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
 }
 
-JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b)
+JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, jl_sym_t *name)
 {
     jl_value_t *gf = jl_get_binding_value_if_const(b);
     if (gf) {
@@ -1159,20 +1159,10 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b)
     }
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     if (!jl_bkind_is_some_guard(decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction))))
-        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(b->globalref->name));
-    gf = (jl_value_t*)jl_new_generic_function(b->globalref->name, b->globalref->mod);
-    jl_declare_constant_val(b, b->globalref->mod, b->globalref->name, gf);
+        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
+    gf = (jl_value_t*)jl_new_generic_function(name, mod);
+    jl_declare_constant_val(b, mod, name, gf);
     return gf;
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_or_declare_local_gf(jl_value_t **bp, jl_module_t *mod, jl_sym_t *name)
-{
-    jl_value_t *gf = *bp;
-    if (gf) {
-        jl_check_gf(gf, name);
-        return gf;
-    }
-    return (jl_value_t*)jl_new_generic_function(name, mod);
 }
 
 static jl_methtable_t *nth_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT
