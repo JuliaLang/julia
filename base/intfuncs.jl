@@ -271,7 +271,7 @@ n * invmod(n) == 1
 (n % T) * invmod(n, T) == 1
 ```
 Note that `*` here is modular multiplication in the integer ring, `T`.  This will
-throw an error if ``n`` is even, because then it is not relatively prime with `2^N`
+throw an error if `n` is even, because then it is not relatively prime with `2^N`
 and thus has no such inverse.
 
 Specifying the modulus implied by an integer type as an explicit value is often
