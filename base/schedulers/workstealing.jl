@@ -7,8 +7,9 @@ module Workstealing
 #    pop!(queue) # Only legal if you are the queues owner.
 #    steal!(queue)
 include("schedulers/CLL.jl")
+include("schedulers/CDLL.jl")
 
-const QueueModule = CLL
+const QueueModule = ConcurrentList
 const Queue = QueueModule.Queue{Task}
 const Queues_lock = Threads.SpinLock()
 global Queues::Memory{Queue} = Memory{Queue}([Queue()])
@@ -38,13 +39,22 @@ end
 function enqueue!(t::Task)
     # TODO: threadpools?
     push!(queue_for(Threads.threadid()), t)
+    ccall(:jl_safe_printf, Cvoid, (Cstring, Ptr{Nothing}), "Enqueue %p\n", pointer_from_objref(t))
     return nothing
 end
 
 function dequeue!()
+    tid = Threads.threadid()
     q = queue_for(Threads.threadid())
+    @label retry
     t = pop!(q) # Check own queue first
-    t !== nothing && return t
+    if t !== nothing
+        ccall(:jl_safe_printf, Cvoid, (Cstring, Ptr{Nothing}), "Pop self %p\n", pointer_from_objref(t))
+        if ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1) == 0
+            @goto retry
+        end
+        return t
+    end
     return attempt_steal!() # Otherwise try to steal from others
 end
 
@@ -55,7 +65,12 @@ function attempt_steal!()
         tid2 = Base.Scheduler.cong(UInt32(nt))
         tid == tid2 && continue
         t = QueueModule.steal!(queue_for(Int(tid2))) #TODO: Change types of things to avoid the convert
-        t !== nothing && return t
+        if t !== nothing
+            ccall(:jl_safe_printf, Cvoid, (Cstring, Ptr{Nothing}), "Stole %p\n", pointer_from_objref(t))
+            if ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1) == 0
+                continue
+            end
+        end
     end
     return nothing
 end
