@@ -557,7 +557,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         end
     end
     if !isempty(circular_deps)
-        @warn """
+        @info """
         Circular dependency detected. Loading may still succeed, but parallel precompilation will be skipped for:
           $(join(map(d->repr("text/plain", d), circular_deps), "\n  "))"""
     end
