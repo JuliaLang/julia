@@ -793,10 +793,10 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
         # otherwise, we don't
 
         # check in the cycle list first
-        # all items in here are mutual parents of all others
+        # all items in here are considered mutual parents of all others
         if !any(p::AbsIntState->matches_sv(p, sv), callers_in_cycle(frame))
             let parent = frame_parent(frame)
-                parent !== nothing || return false
+                parent === nothing && return false
                 (is_cached(parent) || frame_parent(parent) !== nothing) || return false
                 matches_sv(parent, sv) || return false
             end
@@ -1298,7 +1298,7 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
     if code !== nothing
         irsv = IRInterpretationState(interp, code, mi, arginfo.argtypes, world)
         if irsv !== nothing
-            irsv.parent = sv
+            assign_parentchild!(irsv, sv)
             rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv)
             @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from irinterp"
             if !(isa(rt, Type) && hasintersect(rt, Bool))
@@ -1376,11 +1376,17 @@ function const_prop_call(interp::AbstractInterpreter,
         add_remark!(interp, sv, "[constprop] Could not retrieve the source")
         return nothing # this is probably a bad generated function (unsound), but just ignore it
     end
-    frame.parent = sv
+    assign_parentchild!(frame, sv)
     if !typeinf(interp, frame)
         add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
+        @assert frame.frameid != 0 && frame.cycleid == frame.frameid
+        callstack = frame.callstack::Vector{AbsIntState}
+        @assert callstack[end] === frame && length(callstack) == frame.frameid
+        pop!(callstack)
         return nothing
     end
+    @assert frame.frameid != 0 && frame.cycleid == frame.frameid
+    @assert frame.parentid == sv.frameid
     @assert inf_result.result !== nothing
     # ConditionalSimpleArgtypes is allowed, because the only case in which it modifies
     # the argtypes is when one of the argtypes is a `Conditional`, which case
@@ -3328,7 +3334,6 @@ end
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !is_inferred(frame)
-    frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
     ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks
@@ -3549,7 +3554,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
         end
     end # while currbb <= nbbs
 
-    frame.dont_work_on_me = false
     nothing
 end
 
@@ -3601,16 +3605,23 @@ end
 # make as much progress on `frame` as possible (by handling cycles)
 function typeinf_nocycle(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_local(interp, frame)
+    @assert isempty(frame.ip)
+    callstack = frame.callstack::Vector{AbsIntState}
+    frame.cycleid == length(callstack) && return true
 
-    # If the current frame is part of a cycle, solve the cycle before finishing
     no_active_ips_in_callers = false
-    while !no_active_ips_in_callers
+    while true
+        # If the current frame is not the top part of a cycle, continue to the top of the cycle before resuming work
+        frame.cycleid == frame.frameid || return false
+        # If done, return and finalize this cycle
+        no_active_ips_in_callers && return true
+        # Otherwise, do at least one iteration over the entire current cycle
         no_active_ips_in_callers = true
-        for caller in frame.callers_in_cycle
-            caller.dont_work_on_me && return false # cycle is above us on the stack
+        for i = reverse(frame.cycleid:length(callstack))
+            caller = callstack[i]::InferenceState
             if !isempty(caller.ip)
                 # Note that `typeinf_local(interp, caller)` can potentially modify the other frames
-                # `frame.callers_in_cycle`, which is why making incremental progress requires the
+                # `frame.cycleid`, which is why making incremental progress requires the
                 # outer while loop.
                 typeinf_local(interp, caller)
                 no_active_ips_in_callers = false

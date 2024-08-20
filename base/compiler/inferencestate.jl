@@ -209,10 +209,10 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
-const CACHE_MODE_NULL     = 0x00      # not cached, without optimization
-const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization allowed
-const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization allowed
-const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization allowed
+const CACHE_MODE_NULL     = 0x00      # not cached, optimization optional
+const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
+const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
+const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization required
 
 mutable struct TryCatchFrame
     exct
@@ -254,9 +254,12 @@ mutable struct InferenceState
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
     cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
-    callers_in_cycle::Vector{InferenceState}
-    dont_work_on_me::Bool
-    parent # ::Union{Nothing,AbsIntState}
+
+    # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
+    callstack #::Vector{AbsIntState}
+    parentid::Int # index into callstack of the parent frame that originally added this frame (call frame_parent to extract the current parent of the SCC)
+    frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
+    cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
 
     #= results =#
     result::InferenceResult # remember where to put the result
@@ -324,9 +327,7 @@ mutable struct InferenceState
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
         cycle_backedges = Vector{Tuple{InferenceState,Int}}()
-        callers_in_cycle = Vector{InferenceState}()
-        dont_work_on_me = false
-        parent = nothing
+        callstack = AbsIntState[]
 
         valid_worlds = WorldRange(1, get_world_counter())
         bestguess = Bottom
@@ -347,16 +348,22 @@ mutable struct InferenceState
 
         restrict_abstract_call_sites = isa(def, Module)
 
-        # some more setups
-        !iszero(cache_mode & CACHE_MODE_LOCAL) && push!(get_inference_cache(interp), result)
-
         this = new(
             mi, world, mod, sptypes, slottypes, src, cfg, method_info,
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
-            pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
+            pclimitations, limitations, cycle_backedges, callstack, 0, 0, 0,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
+
+        # some more setups
+        if !iszero(cache_mode & CACHE_MODE_LOCAL)
+            push!(get_inference_cache(interp), result)
+        end
+        if !iszero(cache_mode & CACHE_MODE_GLOBAL)
+            push!(callstack, this)
+            this.cycleid = this.frameid = length(callstack)
+        end
 
         # Apply generated function restrictions
         if src.min_world != 1 || src.max_world != typemax(UInt)
@@ -769,30 +776,6 @@ function empty_backedges!(frame::InferenceState, currpc::Int=frame.currpc)
     return nothing
 end
 
-function print_callstack(sv::InferenceState)
-    print("=================== Callstack: ==================\n")
-    idx = 0
-    while sv !== nothing
-        print("[")
-        print(idx)
-        if !isa(sv.interp, NativeInterpreter)
-            print(", ")
-            print(typeof(sv.interp))
-        end
-        print("] ")
-        print(sv.linfo)
-        is_cached(sv) || print("  [uncached]")
-        println()
-        for cycle in sv.callers_in_cycle
-            print(' ', cycle.linfo)
-            println()
-        end
-        sv = sv.parent
-        idx += 1
-    end
-    print("================= End callstack ==================\n")
-end
-
 function narguments(sv::InferenceState, include_va::Bool=true)
     nargs = Int(sv.src.nargs)
     if !include_va
@@ -818,7 +801,9 @@ mutable struct IRInterpretationState
     const lazyreachability::LazyCFGReachability
     valid_worlds::WorldRange
     const edges::Vector{Any}
-    parent # ::Union{Nothing,AbsIntState}
+    callstack #::Vector{AbsIntState}
+    frameid::Int
+    parentid::Int
 
     function IRInterpretationState(interp::AbstractInterpreter,
         method_info::MethodInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
@@ -841,9 +826,9 @@ mutable struct IRInterpretationState
         lazyreachability = LazyCFGReachability(ir)
         valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
         edges = Any[]
-        parent = nothing
+        callstack = AbsIntState[]
         return new(method_info, ir, mi, world, curridx, argtypes_refined, ir.sptypes, tpdum,
-                   ssa_refined, lazyreachability, valid_worlds, edges, parent)
+                ssa_refined, lazyreachability, valid_worlds, edges, callstack, 0, 0)
     end
 end
 
@@ -863,10 +848,33 @@ function IRInterpretationState(interp::AbstractInterpreter,
                                  codeinst.min_world, codeinst.max_world)
 end
 
+
 # AbsIntState
 # ===========
 
 const AbsIntState = Union{InferenceState,IRInterpretationState}
+
+function print_callstack(frame::AbsIntState)
+    print("=================== Callstack: ==================\n")
+    frames = frame.callstack::Vector{AbsIntState}
+    for idx = (frame.frameid == 0 ? 0 : 1):length(frames)
+        sv = (idx == 0 ? frame : frames[idx])
+        idx == frame.frameid && print("*")
+        print("[")
+        print(idx)
+        if sv isa InferenceState && !isa(sv.interp, NativeInterpreter)
+            print(", ")
+            print(typeof(sv.interp))
+        end
+        print("] ")
+        print(frame_instance(sv))
+        is_cached(sv) || print("  [uncached]")
+        sv.parentid == idx - 1 || print(" [parent=", sv.parentid, "]")
+        println()
+        @assert sv.frameid == idx
+    end
+    print("================= End callstack ==================\n")
+end
 
 frame_instance(sv::InferenceState) = sv.linfo
 frame_instance(sv::IRInterpretationState) = sv.mi
@@ -878,8 +886,32 @@ function frame_module(sv::AbsIntState)
     return def.module
 end
 
-frame_parent(sv::InferenceState) = sv.parent::Union{Nothing,AbsIntState}
-frame_parent(sv::IRInterpretationState) = sv.parent::Union{Nothing,AbsIntState}
+function frame_parent(sv::InferenceState)
+    sv.parentid == 0 && return nothing
+    callstack = sv.callstack::Vector{AbsIntState}
+    sv = callstack[sv.cycleid]::InferenceState
+    sv.parentid == 0 && return nothing
+    return callstack[sv.parentid]
+end
+frame_parent(sv::IRInterpretationState) = sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState})[sv.parentid]
+
+# add the orphan child to the parent and the parent to the child
+function assign_parentchild!(child::InferenceState, parent::AbsIntState)
+    @assert child.frameid in (0, 1)
+    child.callstack = callstack = parent.callstack::Vector{AbsIntState}
+    child.parentid = parent.frameid
+    push!(callstack, child)
+    child.cycleid = child.frameid = length(callstack)
+    nothing
+end
+function assign_parentchild!(child::IRInterpretationState, parent::AbsIntState)
+    @assert child.frameid in (0, 1)
+    child.callstack = callstack = parent.callstack::Vector{AbsIntState}
+    child.parentid = parent.frameid
+    push!(callstack, child)
+    child.frameid = length(callstack)
+    nothing
+end
 
 function is_constproped(sv::InferenceState)
     (;overridden_by_const) = sv.result
@@ -898,9 +930,6 @@ method_for_inference_limit_heuristics(sv::AbsIntState) = method_info(sv).method_
 
 frame_world(sv::InferenceState) = sv.world
 frame_world(sv::IRInterpretationState) = sv.world
-
-callers_in_cycle(sv::InferenceState) = sv.callers_in_cycle
-callers_in_cycle(sv::IRInterpretationState) = ()
 
 function is_effect_overridden(sv::AbsIntState, effect::Symbol)
     if is_effect_overridden(frame_instance(sv), effect)
@@ -938,20 +967,39 @@ Note that cycles may be visited in any order.
 struct AbsIntStackUnwind
     sv::AbsIntState
 end
-iterate(unw::AbsIntStackUnwind) = (unw.sv, (unw.sv, 0))
-function iterate(unw::AbsIntStackUnwind, (sv, cyclei)::Tuple{AbsIntState, Int})
-    # iterate through the cycle before walking to the parent
-    callers = callers_in_cycle(sv)
-    if callers !== () && cyclei < length(callers)
-        cyclei += 1
-        parent = callers[cyclei]
-    else
-        cyclei = 0
-        parent = frame_parent(sv)
-    end
-    parent === nothing && return nothing
-    return (parent, (parent, cyclei))
+iterate(unw::AbsIntStackUnwind) = (unw.sv, length(unw.sv.callstack::Vector{AbsIntState}))
+function iterate(unw::AbsIntStackUnwind, frame::Int)
+    frame == 0 && return nothing
+    return ((unw.sv.callstack::Vector{AbsIntState})[frame], frame - 1)
 end
+
+struct AbsIntCycle
+    frames::Vector{AbsIntState}
+    cycleid::Int
+    cycletop::Int
+end
+iterate(unw::AbsIntCycle) = unw.cycleid == 0 ? nothing : (unw.frames[unw.cycletop], unw.cycletop)
+function iterate(unw::AbsIntCycle, frame::Int)
+    frame == unw.cycleid && return nothing
+    return (unw.frames[frame - 1], frame - 1)
+end
+
+"""
+    callers_in_cycle(sv::AbsIntState)
+
+Iterate through all callers of the given `AbsIntState` in the abstract
+interpretation stack (including the given `AbsIntState` itself) that are part
+of the same cycle, only if it is part of a cycle with multiple frames.
+"""
+function callers_in_cycle(sv::InferenceState)
+    callstack = sv.callstack::Vector{AbsIntState}
+    cycletop = cycleid = sv.cycleid
+    while cycletop < length(callstack) && (callstack[cycletop + 1]::InferenceState).cycleid == cycleid
+        cycletop += 1
+    end
+    return AbsIntCycle(callstack, cycletop == cycleid ? 0 : cycleid, cycletop)
+end
+callers_in_cycle(sv::IRInterpretationState) = AbsIntCycle(sv.callstack::Vector{AbsIntState}, 0, 0)
 
 # temporarily accumulate our edges to later add as backedges in the callee
 function add_backedge!(caller::InferenceState, mi::MethodInstance)
