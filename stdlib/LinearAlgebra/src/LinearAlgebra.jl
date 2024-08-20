@@ -662,8 +662,8 @@ _droplast!(A) = deleteat!(A, lastindex(A))
 
 # destination type for matmul
 matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
-matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
-matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+matprod_dest(A::AbstractArray, B::StructuredMatrix, TS) = similar(A, TS, size(A))
+matprod_dest(A::StructuredMatrix, B::AbstractArray, TS) = similar(B, TS, size(B))
 # diagonal is special, as it does not change the structure of the other matrix
 # we call similar without a size to preserve the type of the matrix wherever possible
 # reroute through _matprod_dest_diag to allow speicalizing on the type of the StructuredMatrix
