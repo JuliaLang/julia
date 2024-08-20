@@ -122,7 +122,13 @@ function (*)(A::AbstractMatrix, B::AbstractMatrix)
     mul!(matprod_dest(A, B, TS), A, B)
 end
 
-matprod_dest(A, B, TS) = similar(B, TS, (size(A, 1), size(B, 2)))
+"""
+    matprod_dest(A::AbstractArray, B::AbstractArray, T::Type)
+
+Return an appropriate `AbstractArray` of size `(size(A,1), size(B,2))` and element type `T`,
+that may be used to store the result of `A * B`.
+"""
+matprod_dest(A::AbstractArray, B::AbstractArray, T::Type) = similar(B, T, (size(A, 1), size(B, 2)))
 
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
