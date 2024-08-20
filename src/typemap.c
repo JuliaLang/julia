@@ -836,9 +836,7 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
     size_t n = jl_nparams(unw);
     int typesisva = n == 0 ? 0 : jl_is_vararg(jl_tparam(unw, n-1));
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
-        if (search->max_valid < jl_atomic_load_relaxed(&ml->min_world))
-            continue;
-        if (search->min_valid > jl_atomic_load_relaxed(&ml->max_world))
+        if (search->world < jl_atomic_load_relaxed(&ml->min_world) || search->world > jl_atomic_load_relaxed(&ml->max_world))
             continue;
         size_t lensig = jl_nparams(jl_unwrap_unionall((jl_value_t*)ml->sig));
         if (lensig == n || (ml->va && lensig <= n+1)) {
@@ -877,26 +875,7 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
                     }
                 }
                 if (ismatch) {
-                    size_t min_world = jl_atomic_load_relaxed(&ml->min_world);
-                    size_t max_world = jl_atomic_load_relaxed(&ml->max_world);
-                    if (search->world < min_world) {
-                        // ignore method table entries that are part of a later world
-                        if (search->max_valid >= min_world)
-                            search->max_valid = min_world - 1;
-                    }
-                    else if (search->world > max_world) {
-                        // ignore method table entries that have been replaced in the current world
-                        if (search->min_valid <= max_world)
-                            search->min_valid = max_world + 1;
-                    }
-                    else {
-                        // intersect the env valid range with method's valid range
-                        if (search->min_valid < min_world)
-                            search->min_valid = min_world;
-                        if (search->max_valid > max_world)
-                            search->max_valid = max_world;
-                        return ml;
-                    }
+                    return ml;
                 }
             }
             if (resetenv)

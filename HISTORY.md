@@ -1,3 +1,277 @@
+Julia v1.11 Release Notes
+========================
+
+New language features
+---------------------
+* `public` is a new keyword. Symbols marked with `public` are considered public
+  API. Symbols marked with `export` are now also treated as public API. The
+  difference between `public` and `export` is that `public` names do not become
+  available when `using` a package/module ([#50105]).
+* `ScopedValue` implements dynamic scope with inheritance across tasks ([#50958]).
+* The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
+  but allows to add keyword arguments to the function call ([#51501]).
+* Support for Unicode 15.1 ([#51799]).
+* Three new types around the idea of text with "annotations" (`Pair{Symbol, Any}`
+  entries, e.g. `:lang => "en"` or `:face => :magenta`). These annotations
+  are preserved across operations (e.g. string concatenation with `*`) when
+  possible.
+  * `AnnotatedString` is a new `AbstractString` type. It wraps an underlying
+    string and allows for annotations to be attached to regions of the string.
+    This type is used extensively in the new `StyledStrings` standard library to
+    hold styling information.
+  * `AnnotatedChar` is a new `AbstractChar` type. It wraps another char and
+    holds a list of annotations that apply to it.
+  * `AnnotatedIOBuffer` is a new `IO` type that mimics an `IOBuffer`, but has
+    specialised `read`/`write` methods for annotated content. This can be
+    thought of both as a "string builder" of sorts and also as glue between
+    annotated and unannotated content.
+* `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
+  to be preferentially picked up by the given julia version. i.e. in the same folder,
+  a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
+  version. This makes managing environments for multiple julia versions at the same time
+  easier ([#43845]).
+* `@time` now reports a count of any lock conflicts where a `ReentrantLock` had to wait, plus a new macro
+  `@lock_conflicts` which returns that count ([#52883]).
+
+Language changes
+----------------
+* During precompilation, the `atexit` hooks now run before saving the output file. This
+  allows users to safely tear down background state (such as closing Timers and sending
+  disconnect notifications to heartbeat tasks) and cleanup other resources when the program
+  wants to begin exiting.
+* Code coverage and malloc tracking is no longer generated during the package precompilation stage.
+  Further, during these modes pkgimage caches are now used for packages that are not being tracked.
+  This means that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
+  pkgimage caches for all other packages than the package being tested, likely meaning faster test
+  execution. ([#52123])
+
+* Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
+  omit the default user depot ([#51448]).
+
+Compiler/Runtime improvements
+-----------------------------
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
+* A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
+  loads, primarily to be used within JLLs ([#50074]).
+* Added support for annotating `Base.@assume_effects` on code blocks ([#52400]).
+* The libuv library has been updated from a base of v1.44.2 to v1.48.0 ([#49937]).
+
+Command-line option changes
+---------------------------
+
+* The entry point for Julia has been standardized to `Main.main(Base.ARGS)`. This must be explicitly opted into using the `@main` macro
+(see the docstring for further details). When opted-in, and julia is invoked to run a script or expression
+(i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
+This is intended to unify script and compilation workflows, where code loading may happen
+in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
+difference between defining a `main` function and executing the code directly at the end of the script ([50974]).
+* The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
+  cause Julia to consider loading existing cache files, but not to create new ones ([#50586]
+  and [#52573]).
+* The `--project` argument now accepts `@script` to give a path to a directory with a Project.toml relative to the passed script file. `--project=@script/foo` for the `foo` subdirectory. If no path is given after (i.e. `--project=@script`) then (like `--project=@.`) the directory and its parents are searched for a Project.toml ([#50864] and [#53352])
+
+Multi-threading changes
+-----------------------
+
+* `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
+* A new public (but unexported) struct `Base.Lockable{T, L<:AbstractLock}` makes it easy to bundle a resource and its lock together ([#52898]).
+
+Build system changes
+--------------------
+
+* There is a new `Makefile` to build Julia and LLVM using the profile-guided and link-time optimizations (PGO and LTO) strategies, see `contrib/pgo-lto/Makefile` ([#45641]).
+
+New library functions
+---------------------
+
+* `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
+* The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
+* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
+* `eachrsplit(string, pattern)` iterates split substrings right to left.
+* `Sys.username()` can be used to return the current user's username ([#51897]).
+* `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
+* `IdSet` is now exported from Base and considered public ([#53262]).
+
+New library features
+--------------------
+
+* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
+* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
+* New methods `allequal(f, itr)` and `allunique(f, itr)` taking a predicate function ([#47679]).
+* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
+* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
+  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
+  no longer required there for correctness to avoid data races ([#52461]).
+* After a process exits, `closewrite` will no longer be automatically called on
+  the stream passed to it. Call `wait` on the process instead to ensure the
+  content is fully written, then call `closewrite` manually to avoid
+  data-races. Or use the callback form of `open` to have all that handled
+  automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `filter` can now act on a `NamedTuple` ([#50795]).
+* `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354])
+* `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces the additive identity `[[0,0],[0,0,0]]` rather than erroring ([#38064]).
+
+Standard library changes
+------------------------
+
+#### StyledStrings
+
+* A new standard library for handling styling in a more comprehensive and structured way ([#49586]).
+* The new `Faces` struct serves as a container for text styling information
+  (think typeface, as well as color and decoration), and comes with a framework
+  to provide a convenient, extensible (via `addface!`), and customisable (with a
+  user's `Faces.toml` and `loadfaces!`) approach to
+  styled content ([#49586]).
+* The new `@styled_str` string macro provides a convenient way of creating a
+  `AnnotatedString` with various faces or other attributes applied ([#49586]).
+
+#### Package Manager
+
+#### LinearAlgebra
+* `cbrt(::AbstractMatrix{<:Real})` is now defined and returns real-valued matrix cube roots of real-valued matrices ([#50661]).
+* `eigvals/eigen(A, bunchkaufman(B))` and `eigvals/eigen(A, lu(B))`, which utilize the Bunchkaufman (LDL) and LU decomposition of `B`,
+   respectively, now efficiently compute the generalized eigenvalues (`eigen`: and eigenvectors) of `A` and `B`. Note: The second
+   argument is the output of `bunchkaufman` or `lu` ([#50471]).
+* There is now a specialized dispatch for `eigvals/eigen(::Hermitian{<:Tridiagonal})` which performs a similarity transformation to create a real symmetrix triagonal matrix, and solve that using the LAPACK routines ([#49546]).
+* Structured matrices now retain either the axes of the parent (for `Symmetric`/`Hermitian`/`AbstractTriangular`/`UpperHessenberg`), or that of the principal diagonal (for banded matrices) ([#52480]).
+* `bunchkaufman` and `bunchkaufman!` now work for any `AbstractFloat`, `Rational` and their complex variants. `bunchkaufman` now supports `Integer` types, by making an internal conversion to `Rational{BigInt}`. Added new function `inertia` that computes the inertia of the diagonal factor given by the `BunchKaufman` factorization object of a real symmetric or Hermitian matrix. For complex symmetric matrices, `inertia` only computes the number of zero eigenvalues of the diagonal factor ([#51487]).
+* Packages that specialize matrix-matrix `mul!` with a method signature of the form `mul!(::AbstractMatrix, ::MyMatrix, ::AbstractMatrix, ::Number, ::Number)` no longer encounter method ambiguities when interacting with `LinearAlgebra`. Previously, ambiguities used to arise when multiplying a `MyMatrix` with a structured matrix type provided by LinearAlgebra, such as `AbstractTriangular`, which used to necessitate additional methods to resolve such ambiguities. Similar sources of ambiguities have also been removed for matrix-vector `mul!` operations ([#52837]).
+* `lu` and `issuccess(::LU)` now accept an `allowsingular` keyword argument. When set to `true`, a valid factorization with rank-deficient U factor will be treated as success instead of throwing an error. Such factorizations are now shown by printing the factors together with a "rank-deficient" note rather than printing a "Failed Factorization" message ([#52957]).
+
+#### Logging
+
+#### Printf
+
+#### Profile
+
+#### Random
+* `rand` now supports sampling over `Tuple` types ([#35856], [#50251]).
+* `rand` now supports sampling over `Pair` types ([#28705]).
+* When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
+* Seedable random number generators from `Random` can now be seeded by a string, e.g.
+  `seed!(rng, "a random seed")` ([#51527]).
+
+#### REPL
+
+* Tab complete hints now show in lighter text while typing in the repl. To disable
+  set `Base.active_repl.options.hint_tab_completes = false` interactively, or in startup.jl:
+  ```
+  if VERSION >= v"1.11.0-0"
+    atreplinit() do repl
+        repl.options.hint_tab_completes = false
+    end
+  end
+  ``` ([#51229]).
+* Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
+  contextual module and Main so that switching back and forth is simple. ([#51616], [#52670])
+
+#### SuiteSparse
+
+
+#### SparseArrays
+
+#### Test
+
+#### Dates
+
+The undocumented function `adjust` is no longer exported but is now documented
+
+#### Statistics
+
+* Statistics is now an upgradeable standard library ([#46501]).
+
+#### Distributed
+
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
+
+#### Unicode
+
+
+#### DelimitedFiles
+
+
+#### InteractiveUtils
+
+Deprecated or removed
+---------------------
+
+* `Base.map`, `Iterators.map`, and `foreach` lost their single-argument methods ([#52631]).
+
+
+External dependencies
+---------------------
+* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser ([#50797]).
+
+Tooling Improvements
+--------------------
+
+* CI now performs limited automatic typo detection on all PRs. If you merge a PR with a
+  failing typo CI check, then the reported typos will be automatically ignored in future CI
+  runs on PRs that edit those same files ([#51704]).
+
+<!--- generated by NEWS-update.jl: -->
+[#28705]: https://github.com/JuliaLang/julia/issues/28705
+[#33892]: https://github.com/JuliaLang/julia/issues/33892
+[#34587]: https://github.com/JuliaLang/julia/issues/34587
+[#35856]: https://github.com/JuliaLang/julia/issues/35856
+[#38064]: https://github.com/JuliaLang/julia/issues/38064
+[#43845]: https://github.com/JuliaLang/julia/issues/43845
+[#46501]: https://github.com/JuliaLang/julia/issues/46501
+[#47354]: https://github.com/JuliaLang/julia/issues/47354
+[#47679]: https://github.com/JuliaLang/julia/issues/47679
+[#48273]: https://github.com/JuliaLang/julia/issues/48273
+[#48625]: https://github.com/JuliaLang/julia/issues/48625
+[#49546]: https://github.com/JuliaLang/julia/issues/49546
+[#49586]: https://github.com/JuliaLang/julia/issues/49586
+[#49937]: https://github.com/JuliaLang/julia/issues/49937
+[#50074]: https://github.com/JuliaLang/julia/issues/50074
+[#50105]: https://github.com/JuliaLang/julia/issues/50105
+[#50144]: https://github.com/JuliaLang/julia/issues/50144
+[#50251]: https://github.com/JuliaLang/julia/issues/50251
+[#50471]: https://github.com/JuliaLang/julia/issues/50471
+[#50586]: https://github.com/JuliaLang/julia/issues/50586
+[#50661]: https://github.com/JuliaLang/julia/issues/50661
+[#50795]: https://github.com/JuliaLang/julia/issues/50795
+[#50797]: https://github.com/JuliaLang/julia/issues/50797
+[#50958]: https://github.com/JuliaLang/julia/issues/50958
+[#51229]: https://github.com/JuliaLang/julia/issues/51229
+[#51416]: https://github.com/JuliaLang/julia/issues/51416
+[#51448]: https://github.com/JuliaLang/julia/issues/51448
+[#51487]: https://github.com/JuliaLang/julia/issues/51487
+[#51501]: https://github.com/JuliaLang/julia/issues/51501
+[#51527]: https://github.com/JuliaLang/julia/issues/51527
+[#51616]: https://github.com/JuliaLang/julia/issues/51616
+[#51647]: https://github.com/JuliaLang/julia/issues/51647
+[#51704]: https://github.com/JuliaLang/julia/issues/51704
+[#51799]: https://github.com/JuliaLang/julia/issues/51799
+[#51897]: https://github.com/JuliaLang/julia/issues/51897
+[#51929]: https://github.com/JuliaLang/julia/issues/51929
+[#52049]: https://github.com/JuliaLang/julia/issues/52049
+[#52096]: https://github.com/JuliaLang/julia/issues/52096
+[#52123]: https://github.com/JuliaLang/julia/issues/52123
+[#52139]: https://github.com/JuliaLang/julia/issues/52139
+[#52180]: https://github.com/JuliaLang/julia/issues/52180
+[#52196]: https://github.com/JuliaLang/julia/issues/52196
+[#52400]: https://github.com/JuliaLang/julia/issues/52400
+[#52413]: https://github.com/JuliaLang/julia/issues/52413
+[#52461]: https://github.com/JuliaLang/julia/issues/52461
+[#52480]: https://github.com/JuliaLang/julia/issues/52480
+[#52573]: https://github.com/JuliaLang/julia/issues/52573
+[#52631]: https://github.com/JuliaLang/julia/issues/52631
+[#52670]: https://github.com/JuliaLang/julia/issues/52670
+[#52837]: https://github.com/JuliaLang/julia/issues/52837
+[#52883]: https://github.com/JuliaLang/julia/issues/52883
+[#52889]: https://github.com/JuliaLang/julia/issues/52889
+[#52898]: https://github.com/JuliaLang/julia/issues/52898
+[#52957]: https://github.com/JuliaLang/julia/issues/52957
+[#53262]: https://github.com/JuliaLang/julia/issues/53262
+
+
 Julia v1.10 Release Notes
 =========================
 
@@ -142,6 +416,7 @@ Deprecated or removed
 [#44247]: https://github.com/JuliaLang/julia/issues/44247
 [#45164]: https://github.com/JuliaLang/julia/issues/45164
 [#45396]: https://github.com/JuliaLang/julia/issues/45396
+[#45641]: https://github.com/JuliaLang/julia/issues/45641
 [#45962]: https://github.com/JuliaLang/julia/issues/45962
 [#46196]: https://github.com/JuliaLang/julia/issues/46196
 [#46372]: https://github.com/JuliaLang/julia/issues/46372
@@ -834,7 +1109,7 @@ Standard library changes
 * `lpad/rpad` are now defined in terms of `textwidth` ([#39044]).
 * `Test.@test` now accepts `broken` and `skip` boolean keyword arguments, which
   mimic `Test.@test_broken` and `Test.@test_skip` behavior, but allows skipping
-  tests failing only under certain conditions.  For example
+  tests failing only under certain conditions. For example
   ```julia
   if T == Float64
       @test_broken isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
@@ -1258,7 +1533,7 @@ Standard library changes
 * The `Pkg.BinaryPlatforms` module has been moved into `Base` as `Base.BinaryPlatforms` and heavily reworked.
   Applications that want to be compatible with the old API should continue to import `Pkg.BinaryPlatforms`,
   however new users should use `Base.BinaryPlatforms` directly ([#37320]).
-* The `Pkg.Artifacts` module has been imported as a separate standard library.  It is still available as
+* The `Pkg.Artifacts` module has been imported as a separate standard library. It is still available as
   `Pkg.Artifacts`, however starting from Julia v1.6+, packages may import simply `Artifacts` without importing
   all of `Pkg` alongside ([#37320]).
 
@@ -1298,7 +1573,7 @@ Standard library changes
 * The `AbstractMenu` extension interface of `REPL.TerminalMenus` has been extensively
   overhauled. The new interface does not rely on global configuration variables, is more
   consistent in delegating printing of the navigation/selection markers, and provides
-  improved support for dynamic menus.  These changes are compatible with the previous
+  improved support for dynamic menus. These changes are compatible with the previous
   (deprecated) interface, so are non-breaking.
 
   The new API offers several enhancements:
@@ -1553,8 +1828,8 @@ New library functions
   `Base.Experimental.show_error_hints` from their `showerror` method ([#35094]).
 * The `@ccall` macro has been added to Base. It is a near drop-in replacement for `ccall` with more Julia-like syntax. It also wraps the new `foreigncall` API for varargs of different types, though it lacks the capability to specify an LLVM calling convention ([#32748]).
 * New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
-  argument.  They don't have the restriction for `combine` to be a `Function` and also
-  provide one-argument method that returns a closure.  The old methods of `merge` and
+  argument. They don't have the restriction for `combine` to be a `Function` and also
+  provide one-argument method that returns a closure. The old methods of `merge` and
   `merge!` are still available for backward compatibility ([#34296]).
 * The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
 * Add function `ismutable` and deprecate `isimmutable` to check whether something is mutable ([#34652]).
@@ -2434,7 +2709,7 @@ Standard Library Changes
 
 * The `Libdl` module's methods `dlopen()` and `dlsym()` have gained a
   `throw_error` keyword argument, replacing the now-deprecated `dlopen_e()`
-  and `dlsym_e()` methods.  When `throw_error` is `false`, failure to locate
+  and `dlsym_e()` methods. When `throw_error` is `false`, failure to locate
   a shared library or symbol will return `nothing` rather than `C_NULL`.
   ([#28888])
 
@@ -2696,7 +2971,7 @@ This section lists changes that do not have deprecation warnings.
     "Code Loading" and "Pkg" for documentation.
 
   * `replace(s::AbstractString, pat=>repl)` for function `repl` arguments formerly
-    passed a substring to `repl` in all cases.  It now passes substrings for
+    passed a substring to `repl` in all cases. It now passes substrings for
     string patterns `pat`, but a `Char` for character patterns (when `pat` is a
     `Char`, collection of `Char`, or a character predicate) ([#25815]).
 
@@ -2881,7 +3156,7 @@ This section lists changes that do not have deprecation warnings.
 
   * The logging system has been redesigned - `info` and `warn` are deprecated
     and replaced with the logging macros `@info`, `@warn`, `@debug` and
-    `@error`.  The `logging` function is also deprecated and replaced with
+    `@error`. The `logging` function is also deprecated and replaced with
     `AbstractLogger` and the functions from the new standard `Logging` library.
     ([#24490])
 
@@ -3037,7 +3312,7 @@ Library improvements
     For example, `x^-1` is now essentially a synonym for `inv(x)`, and works
     in a type-stable way even if `typeof(x) != typeof(inv(x))` ([#24240]).
 
-  * New `Iterators.reverse(itr)` for reverse-order iteration ([#24187]).  Iterator
+  * New `Iterators.reverse(itr)` for reverse-order iteration ([#24187]). Iterator
     types `T` can implement `start` etc. for `Iterators.Reverse{T}` to support this.
 
   * The functions `nextind` and `prevind` now accept `nchar` argument that indicates
@@ -3176,7 +3451,7 @@ Library improvements
     cartesian indices to linear indices using the normal indexing operation.
     ([#24715], [#26775]).
 
-  * `IdDict{K,V}` replaces `ObjectIdDict`.  It has type parameters
+  * `IdDict{K,V}` replaces `ObjectIdDict`. It has type parameters
     like other `AbstractDict` subtypes and its constructors mirror the
     ones of `Dict`. ([#25210])
 
@@ -3387,8 +3662,8 @@ Deprecated or removed
     should add offset axis support to the function `f` directly ([#26733]).
 
   * The functions `ones` and `zeros` used to accept any objects as dimensional arguments,
-    implicitly converting them to `Int`s.  This is now deprecated; only `Integer`s or
-    `AbstractUnitRange`s are accepted as arguments.  Instead, convert the arguments before
+    implicitly converting them to `Int`s. This is now deprecated; only `Integer`s or
+    `AbstractUnitRange`s are accepted as arguments. Instead, convert the arguments before
     calling `ones` or `zeros` ([#26733]).
 
   * The variadic `size(A, dim1, dim2, dims...)` method to return a tuple of multiple
@@ -4253,8 +4528,8 @@ Language changes
     Previously, this syntax parsed as an implicit multiplication ([#18690]).
 
   * For every binary operator `⨳`, `a .⨳ b` is now automatically equivalent to
-    the `broadcast` call `(⨳).(a, b)`.  Hence, one no longer defines methods
-    for `.*` etcetera.  This also means that "dot operations" automatically
+    the `broadcast` call `(⨳).(a, b)`. Hence, one no longer defines methods
+    for `.*` etcetera. This also means that "dot operations" automatically
     fuse into a single loop, along with other dot calls `f.(x)` ([#17623]).
     Similarly for unary operators ([#20249]).
 
@@ -4307,11 +4582,11 @@ This section lists changes that do not have deprecation warnings.
     or an array as a "scalar" ([#16986]).
 
   * `broadcast` now produces a `BitArray` instead of `Array{Bool}` for
-    functions yielding a boolean result.  If you want `Array{Bool}`, use
+    functions yielding a boolean result. If you want `Array{Bool}`, use
     `broadcast!` or `.=` ([#17623]).
 
   * Broadcast `A[I...] .= X` with entirely scalar indices `I` is deprecated as
-    its behavior will change in the future.  Use `A[I...] = X` instead.
+    its behavior will change in the future. Use `A[I...] = X` instead.
 
   * Operations like `.+` and `.*` on `Range` objects are now generic
     `broadcast` calls (see [above](#language-changes)) and produce an `Array`.
@@ -4357,7 +4632,7 @@ This section lists changes that do not have deprecation warnings.
     now tab-completes to U+03B5 (greek small letter epsilon) ([#19464]).
 
   * `retry` now inputs the keyword arguments `delays` and `check` instead of
-    `n` and `max_delay`.  The previous functionality can be achieved setting
+    `n` and `max_delay`. The previous functionality can be achieved setting
     `delays` to `ExponentialBackOff` ([#19331]).
 
   * `transpose(::AbstractVector)` now always returns a `RowVector` view of the input (which is a
@@ -4398,7 +4673,7 @@ This section lists changes that do not have deprecation warnings.
       using the values and types of `a` and `step` as given, whereas
       `range(a, step, len)` will attempt to match inputs `a::FloatNN`
       and `step::FloatNN` to rationals and construct a `StepRangeLen`
-      that internally uses twice-precision arithmetic.  These two
+      that internally uses twice-precision arithmetic. These two
       outcomes exhibit differences in both precision and speed.
 
   * `A=>B` expressions are now parsed as calls instead of using `=>` as the
@@ -4418,7 +4693,7 @@ This section lists changes that do not have deprecation warnings.
     trigamma, and polygamma special functions have been moved from Base to
     the
     [SpecialFunctions.jl package](https://github.com/JuliaMath/SpecialFunctions.jl)
-    ([#20427]).  Note that `airy`, `airyx` and `airyprime` have been deprecated
+    ([#20427]). Note that `airy`, `airyx` and `airyprime` have been deprecated
     in favor of more specific functions (`airyai`, `airybi`, `airyaiprime`,
     `airybiprimex`, `airyaix`, `airybix`, `airyaiprimex`, `airybiprimex`)
     ([#18050]).
@@ -4503,7 +4778,7 @@ Library improvements
     for more information.
 
   * The default color for info messages has been changed from blue to cyan
-    ([#18442]), and for warning messages from red to yellow ([#18453]).  This
+    ([#18442]), and for warning messages from red to yellow ([#18453]). This
     can be changed back to the original colors by setting the environment
     variables `JULIA_INFO_COLOR` to `"blue"` and `JULIA_WARN_COLOR` to `"red"`.
 
@@ -4847,10 +5122,10 @@ New language features
   * Function return type syntax `function f()::T` has been added ([#1090]). Values returned
     from a function with such a declaration will be converted to the specified type `T`.
 
-  * Many more operators now support `.` prefixes (e.g. `.≤`) ([#17393]).  However,
+  * Many more operators now support `.` prefixes (e.g. `.≤`) ([#17393]). However,
     users are discouraged from overloading these, since they are mainly parsed
     in order to implement backwards compatibility with planned automatic
-    broadcasting of dot operators in Julia 0.6 ([#16285]).  Explicitly qualified
+    broadcasting of dot operators in Julia 0.6 ([#16285]). Explicitly qualified
     operator names like `Base.≤` should now use `Base.:≤` (prefixed by `@compat`
     if you need 0.4 compatibility via the `Compat` package).
 
@@ -4983,7 +5258,7 @@ Library improvements
   * Strings ([#16107]):
 
     * The `UTF8String` and `ASCIIString` types have been merged into a single
-      `String` type ([#16058]).  Use `isascii(s)` to check whether
+      `String` type ([#16058]). Use `isascii(s)` to check whether
       a string contains only ASCII characters. The `ascii(s)` function now
       converts `s` to `String`, raising an `ArgumentError` exception if `s` is
       not pure ASCII.
@@ -5305,7 +5580,7 @@ New language features
 
   * Function call overloading: for arbitrary objects `x` (not of type
     `Function`), `x(...)` is transformed into `call(x, ...)`, and `call`
-    can be overloaded as desired.  Constructors are now a special case of
+    can be overloaded as desired. Constructors are now a special case of
     this mechanism, which allows e.g. constructors for abstract types.
     `T(...)` falls back to `convert(T, x)`, so all `convert` methods implicitly
     define a constructor ([#8712], [#2403]).
@@ -5333,13 +5608,13 @@ New language features
     `~/.julia/lib/v0.4` ([#8745]).
 
       * See manual section on `Module initialization and precompilation` (under `Modules`) for
-        details and errata.  In particular, to be safely precompilable a module may need an
+        details and errata. In particular, to be safely precompilable a module may need an
         `__init__` function to separate code that must be executed at runtime rather than precompile
-        time.  Modules that are *not* precompilable should call `__precompile__(false)`.
+        time. Modules that are *not* precompilable should call `__precompile__(false)`.
 
       * The precompiled `.ji` file includes a list of dependencies (modules and files that
         were imported/included at precompile-time), and the module is automatically recompiled
-        upon `import` when any of its dependencies have changed.  Explicit dependencies
+        upon `import` when any of its dependencies have changed. Explicit dependencies
         on other files can be declared with `include_dependency(path)` ([#12458]).
 
       * New option `--output-incremental={yes|no}` added to invoke the equivalent of `Base.compilecache`
@@ -5543,7 +5818,7 @@ Library improvements
     * New `vecdot` function, analogous to `vecnorm`, for Euclidean inner products over any iterable container ([#11067]).
 
     * `p = plan_fft(x)` and similar functions now return a `Base.DFT.Plan` object, rather
-    than an anonymous function.  Calling it via `p(x)` is deprecated in favor of
+    than an anonymous function. Calling it via `p(x)` is deprecated in favor of
     `p * x` or `p \ x` (for the inverse), and it can also be used with `A_mul_B!`
     to employ pre-allocated output arrays ([#12087]).
 
@@ -6033,7 +6308,7 @@ Library improvements
     * New string type, `UTF16String` ([#4930]), constructed by
       `utf16(s)` from another string, a `Uint16` array or pointer, or
       a byte array (possibly prefixed by a byte-order marker to
-      indicate endian-ness).  Its data is internally `NULL`-terminated
+      indicate endian-ness). Its data is internally `NULL`-terminated
       for passing to C ([#7016]).
 
     * `CharString` is renamed to `UTF32String` ([#4943]), and its data
@@ -6068,7 +6343,7 @@ Library improvements
 
       * New `vecnorm(itr, p=2)` function that computes the norm of
         any iterable collection of numbers as if it were a vector of
-        the same length.  This generalizes and replaces `normfro` ([#6057]),
+        the same length. This generalizes and replaces `normfro` ([#6057]),
         and `norm` is now type-stable ([#6056]).
 
       * New `UniformScaling` matrix type and identity `I` constant ([#5810]).

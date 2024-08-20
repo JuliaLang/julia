@@ -3,15 +3,15 @@
 ## [Building the Julia system image](@id Building-the-Julia-system-image)
 
 Julia ships with a preparsed system image containing the contents of the `Base` module, named
-`sys.ji`.  This file is also precompiled into a shared library called `sys.{so,dll,dylib}` on
-as many platforms as possible, so as to give vastly improved startup times.  On systems that do
+`sys.ji`. This file is also precompiled into a shared library called `sys.{so,dll,dylib}` on
+as many platforms as possible, so as to give vastly improved startup times. On systems that do
 not ship with a precompiled system image file, one can be generated from the source files shipped
 in Julia's `DATAROOTDIR/julia/base` folder.
 
 Julia will by default generate its system image on half of the available system threads. This
 may be controlled by the [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) environment variable.
 
-This operation is useful for multiple reasons.  A user may:
+This operation is useful for multiple reasons. A user may:
 
   * Build a precompiled shared library system image on a platform that did not ship with one, thereby
     improving startup times.
@@ -84,11 +84,11 @@ generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)
 This creates a system image with three separate targets; one for a generic `x86_64`
 processor, one with a `sandybridge` ISA (explicitly excluding `xsaveopt`) that explicitly
 clones all functions, and one targeting the `haswell` ISA, based off of the `sandybridge`
-sysimg version, and also excluding `rdrnd`.  When a Julia implementation loads the
+sysimg version, and also excluding `rdrnd`. When a Julia implementation loads the
 generated sysimg, it will check the host processor for matching CPU capability flags,
-enabling the highest ISA level possible.  Note that the base level (`generic`) requires
+enabling the highest ISA level possible. Note that the base level (`generic`) requires
 the `cx16` instruction, which is disabled in some virtualization software and must be
-enabled for the `generic` target to be loaded.  Alternatively, a sysimg could be generated
+enabled for the `generic` target to be loaded. Alternatively, a sysimg could be generated
 with the target `generic,-cx16` for greater compatibility, however note that this may cause
 performance and stability problems in some code.
 

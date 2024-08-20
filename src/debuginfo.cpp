@@ -7,6 +7,7 @@
 #include <llvm/DebugInfo/DWARF/DWARFContext.h>
 #include <llvm/Object/SymbolSize.h>
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/MemoryBufferRef.h>
 #include <llvm/IR/Function.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringMap.h>
@@ -335,8 +336,12 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
+    SmallVector<uint8_t, 0> packed;
+    compression::zlib::compress(ArrayRef<uint8_t>((uint8_t*)Object.getData().data(), Object.getData().size()), packed, compression::zlib::DefaultCompression);
+    jl_jit_add_bytes(packed.size());
+    auto ObjectCopy = new LazyObjectInfo{packed, Object.getData().size()}; // intentionally leaked so that we don't need to ref-count it, intentionally copied so that we exact-size the allocation (since no shrink_to_fit function)
     auto symbols = object::computeSymbolSizes(Object);
-    bool first = true;
+    bool hassection = false;
     for (const auto &sym_size : symbols) {
         const object::SymbolRef &sym_iter = sym_size.first;
         object::SymbolRef::Type SymbolType = cantFail(sym_iter.getType());
@@ -385,17 +390,17 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (mi)
                 linfomap[Addr] = std::make_pair(Size, mi);
-            if (first) {
-                objectmap[SectionLoadAddr] = {&Object,
-                    (size_t)SectionSize,
-                    (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-                    *Section,
-                    nullptr,
-                    };
-                first = false;
-            }
+            hassection = true;
+            objectmap.insert(std::pair{SectionLoadAddr, SectionInfo{
+                ObjectCopy,
+                (size_t)SectionSize,
+                (ptrdiff_t)(SectionAddr - SectionLoadAddr),
+                Section->getIndex()
+                }});
         });
     }
+    if (!hassection) // clang-sa demands that we do this to fool cplusplus.NewDeleteLeaks
+        delete ObjectCopy;
 }
 
 void jl_register_jit_object(const object::ObjectFile &Object,
@@ -1213,11 +1218,33 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
     auto fit = objmap.lower_bound(fptr);
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
         *slide = fit->second.slide;
-        *Section = fit->second.Section;
-        if (context) {
-            if (fit->second.context == nullptr)
-                fit->second.context = DWARFContext::create(*fit->second.object).release();
-            *context = fit->second.context;
+        auto lazyobject = fit->second.object;
+        if (!lazyobject->object && !lazyobject->data.empty()) {
+            if (lazyobject->uncompressedsize) {
+                SmallVector<uint8_t, 0> unpacked;
+                Error E = compression::zlib::decompress(lazyobject->data, unpacked, lazyobject->uncompressedsize);
+                if (E)
+                    lazyobject->data.clear();
+                else
+                    lazyobject->data = std::move(unpacked);
+                jl_jit_add_bytes(lazyobject->data.size() - lazyobject->uncompressedsize);
+                lazyobject->uncompressedsize = 0;
+            }
+            if (!lazyobject->data.empty()) {
+                auto obj = object::ObjectFile::createObjectFile(MemoryBufferRef(StringRef((const char*)lazyobject->data.data(), lazyobject->data.size()), "jit.o"));
+                if (obj)
+                    lazyobject->object = std::move(*obj);
+                else
+                    lazyobject->data.clear();
+            }
+        }
+        if (lazyobject->object) {
+            *Section = *std::next(lazyobject->object->section_begin(), fit->second.SectionIndex);
+            if (context) {
+                if (lazyobject->context == nullptr)
+                    lazyobject->context = DWARFContext::create(*lazyobject->object);
+                *context = lazyobject->context.get();
+            }
         }
         found = 1;
     }

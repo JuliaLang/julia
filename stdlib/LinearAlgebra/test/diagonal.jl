@@ -61,6 +61,16 @@ Random.seed!(1)
         @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
         @test_throws InexactError convert(Diagonal, ones(2,2))
+
+        # Test reversing
+        # Test reversing along rows
+        @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
+
+        # Test reversing along columns
+        @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
+
+        # Test reversing the entire matrix
+        @test reverse(D)::Diagonal == reverse(Matrix(D)) == reverse!(copy(D))
     end
 
     @testset "Basic properties" begin
@@ -609,6 +619,13 @@ end
     end
 end
 
+@testset "Test reverse" begin
+    D = Diagonal(randn(5))
+    @test reverse(D, dims=1) == reverse(Matrix(D), dims=1)
+    @test reverse(D, dims=2) == reverse(Matrix(D), dims=2)
+    @test reverse(D)::Diagonal == reverse(Matrix(D))
+end
+
 @testset "inverse" begin
     for d in Any[randn(n), Int[], [1, 2, 3], [1im, 2im, 3im], [1//1, 2//1, 3//1], [1+1im//1, 2//1, 3im//1]]
         D = Diagonal(d)
@@ -826,7 +843,7 @@ end
     @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
 end
 
-@testset "multiplication with Symmetric/Hermitian" begin
+@testset "multiplication/division with Symmetric/Hermitian" begin
     for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
         A = randn(T, n, n); A = A'A
@@ -839,6 +856,10 @@ end
             @test *(transform1(D), transform2(H)) ≈ *(transform1(Matrix(D)), transform2(Matrix(H)))
             @test *(transform1(S), transform2(D)) ≈ *(transform1(Matrix(S)), transform2(Matrix(D)))
             @test *(transform1(S), transform2(H)) ≈ *(transform1(Matrix(S)), transform2(Matrix(H)))
+            @test (transform1(H)/D) * D ≈ transform1(H)
+            @test (transform1(S)/D) * D ≈ transform1(S)
+            @test D * (D\transform2(H)) ≈ transform2(H)
+            @test D * (D\transform2(S)) ≈ transform2(S)
         end
     end
 end
@@ -1210,6 +1231,11 @@ Base.size(::SMatrix1) = (1, 1)
     @test C isa Matrix{SMatrix1{String}}
 end
 
+@testset "show" begin
+    @test repr(Diagonal([1,2])) == "Diagonal([1, 2])"  # 2-arg show
+    @test contains(repr(MIME"text/plain"(), Diagonal([1,2])), "⋅  2")  # 3-arg show
+end
+
 @testset "copyto! with UniformScaling" begin
     @testset "Fill" begin
         for len in (4, InfiniteArrays.Infinity())
@@ -1275,6 +1301,55 @@ end
     c=Diagonal(Vector{Float64}(undef, 4))
     kron!(c,a,b)
     @test c == Diagonal([2,2,2,2])
+end
+
+@testset "uppertriangular/lowertriangular" begin
+    D = Diagonal([1,2])
+    @test LinearAlgebra.uppertriangular(D) === D
+    @test LinearAlgebra.lowertriangular(D) === D
+end
+
+@testset "mul/div with an adjoint vector" begin
+    A = [1.0;;]
+    x = [1.0]
+    yadj = Diagonal(A) \ x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+    yadj = Diagonal(A) * x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+end
+
+@testset "Matrix conversion for non-numeric" begin
+    D = Diagonal(fill(Diagonal([1,3]), 2))
+    M = Matrix{eltype(D)}(D)
+    @test M isa Matrix{eltype(D)}
+    @test M == D
+end
+
+@testset "rmul!/lmul! with banded matrices" begin
+    @testset "$(nameof(typeof(B)))" for B in (
+                            Bidiagonal(rand(4), rand(3), :L),
+                            Tridiagonal(rand(3), rand(4), rand(3))
+                    )
+        BA = Array(B)
+        D = Diagonal(rand(size(B,1)))
+        DA = Array(D)
+        @test rmul!(copy(B), D) ≈ B * D ≈ BA * DA
+        @test lmul!(D, copy(B)) ≈ D * B ≈ DA * BA
+    end
+end
+
+@testset "+/- with block Symmetric/Hermitian" begin
+    for p in ([1 2; 3 4], [1 2+im; 2-im 4+2im])
+        m = SizedArrays.SizedArray{(2,2)}(p)
+        D = Diagonal(fill(m, 2))
+        for T in (Symmetric, Hermitian)
+            S = T(fill(m, 2, 2))
+            @test D + S == Array(D) + Array(S)
+            @test S + D == Array(S) + Array(D)
+        end
+    end
 end
 
 end # module TestDiagonal

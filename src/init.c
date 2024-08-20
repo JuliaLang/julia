@@ -64,39 +64,28 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
     // threads since it seems to return bogus values for master thread on Linux
     // and possibly OSX.
     if (!ismaster) {
-#  if defined(_OS_LINUX_)
+#  if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         pthread_attr_t attr;
+#if defined(_OS_FREEBSD_)
+        pthread_attr_get_np(pthread_self(), &attr);
+#else
         pthread_getattr_np(pthread_self(), &attr);
+#endif
         void *stackaddr;
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        *stack_lo = (void*)stackaddr;
-#pragma GCC diagnostic push
-#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
-#pragma GCC diagnostic ignored "-Wdangling-pointer"
-#endif
-        *stack_hi = (void*)__builtin_frame_address(0);
-#pragma GCC diagnostic pop
+        *stack_lo = stackaddr;
+        *stack_hi = (char*)stackaddr + stacksize;
         return;
 #  elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
         extern size_t pthread_get_stacksize_np(pthread_t thread);
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
-        *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)__builtin_frame_address(0);
-        return;
-#  elif defined(_OS_FREEBSD_)
-        pthread_attr_t attr;
-        pthread_attr_init(&attr);
-        pthread_attr_get_np(pthread_self(), &attr);
-        void *stackaddr;
-        size_t stacksize;
-        pthread_attr_getstack(&attr, &stackaddr, &stacksize);
-        pthread_attr_destroy(&attr);
-        *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)__builtin_frame_address(0);
+        size_t stacksize = pthread_get_stacksize_np(thread);
+        *stack_lo = (char*)stackaddr - stacksize;
+        *stack_hi = stackaddr;
         return;
 #  else
 #      warning "Getting precise stack size for thread is not supported."
@@ -273,7 +262,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
@@ -317,7 +306,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                     assert(item);
                     uv_unref(item->h);
                     jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
-                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                     jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                     jlbacktrace(); // written to STDERR_FILENO
                     item = next_shutdown_queue_item(item);
@@ -338,15 +327,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                          // we would like to guarantee this, but cannot currently, so there is still a small race window
                          // that needs to be fixed in libuv
     }
-    if (ct)
-        (void)jl_gc_safe_enter(ct->ptls); // park in gc-safe
     if (loop != NULL) {
         // TODO: consider uv_loop_close(loop) here, before shutdown?
         uv_library_shutdown();
         // no JL_UV_UNLOCK(), since it is now torn down
     }
-
-    // TODO: Destroy threads?
+    if (ct)
+        jl_safepoint_suspend_all_threads(ct); // Destroy other threads, so that they don't segfault
+    if (ct)
+        (void)jl_gc_safe_enter(ct->ptls); // park in gc-safe
 
     jl_destroy_timing(); // cleans up the current timing_stack for noreturn
 #ifdef USE_TIMING_COUNTS
@@ -372,7 +361,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\npostoutput hook threw an error: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
@@ -737,7 +726,6 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&precomp_statement_out_lock, "precomp_statement_out_lock");
     JL_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
-    JL_MUTEX_INIT(&jl_codegen_lock, "jl_codegen_lock");
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
 }
@@ -750,6 +738,9 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_init_timing();
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();
+
+    // initialize symbol-table lock
+    uv_mutex_init(&symtab_lock);
 
     // initialize backtraces
     jl_init_profile_lock();
@@ -826,6 +817,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     arraylist_new(&jl_linkage_blobs, 0);
     arraylist_new(&jl_image_relocs, 0);
+    arraylist_new(&jl_top_mods, 0);
     arraylist_new(&eytzinger_image_tree, 0);
     arraylist_new(&eytzinger_idxs, 0);
     arraylist_push(&eytzinger_idxs, (void*)0);
@@ -889,6 +881,8 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         post_image_load_hooks();
     }
     jl_start_threads();
+    jl_start_gc_threads();
+    uv_barrier_wait(&thread_init_done);
 
     jl_gc_enable(1);
 

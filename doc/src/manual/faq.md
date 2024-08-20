@@ -8,15 +8,15 @@ No.
 
 ### Why don't you compile Matlab/Python/R/… code to Julia?
 
-Since many people are familiar with the syntax of other dynamic languages, and lots of code has already been written in those languages, it is natural to wonder why we didn't just plug a Matlab or Python front-end into a Julia back-end (or “transpile” code to Julia) in order to get all the performance benefits of Julia without requiring programmers to learn a new language.  Simple, right?
+Since many people are familiar with the syntax of other dynamic languages, and lots of code has already been written in those languages, it is natural to wonder why we didn't just plug a Matlab or Python front-end into a Julia back-end (or “transpile” code to Julia) in order to get all the performance benefits of Julia without requiring programmers to learn a new language. Simple, right?
 
-The basic issue is that there is *nothing special about Julia's compiler*: we use a commonplace compiler (LLVM) with no “secret sauce” that other language developers don't know about.  Indeed, Julia's compiler is in many ways much simpler than those of other dynamic languages (e.g. PyPy or LuaJIT).   Julia's performance advantage derives almost entirely from its front-end: its language semantics allow a [well-written Julia program](@ref man-performance-tips) to *give more opportunities to the compiler* to generate efficient code and memory layouts.  If you tried to compile Matlab or Python code to Julia, our compiler would be limited by the semantics of Matlab or Python to producing code no better than that of existing compilers for those languages (and probably worse).  The key role of semantics is also why several existing Python compilers (like Numba and Pythran) only attempt to optimize a small subset of the language (e.g. operations on Numpy arrays and scalars), and for this subset they are already doing at least as well as we could for the same semantics.  The people working on those projects are incredibly smart and have accomplished amazing things, but retrofitting a compiler onto a language that was designed to be interpreted is a very difficult problem.
+The basic issue is that there is *nothing special about Julia's compiler*: we use a commonplace compiler (LLVM) with no “secret sauce” that other language developers don't know about. Indeed, Julia's compiler is in many ways much simpler than those of other dynamic languages (e.g. PyPy or LuaJIT). Julia's performance advantage derives almost entirely from its front-end: its language semantics allow a [well-written Julia program](@ref man-performance-tips) to *give more opportunities to the compiler* to generate efficient code and memory layouts. If you tried to compile Matlab or Python code to Julia, our compiler would be limited by the semantics of Matlab or Python to producing code no better than that of existing compilers for those languages (and probably worse). The key role of semantics is also why several existing Python compilers (like Numba and Pythran) only attempt to optimize a small subset of the language (e.g. operations on Numpy arrays and scalars), and for this subset they are already doing at least as well as we could for the same semantics. The people working on those projects are incredibly smart and have accomplished amazing things, but retrofitting a compiler onto a language that was designed to be interpreted is a very difficult problem.
 
-Julia's advantage is that good performance is not limited to a small subset of “built-in” types and operations, and one can write high-level type-generic code that works on arbitrary user-defined types while remaining fast and memory-efficient.  Types in languages like Python simply don't provide enough information to the compiler for similar capabilities, so as soon as you used those languages as a Julia front-end you would be stuck.
+Julia's advantage is that good performance is not limited to a small subset of “built-in” types and operations, and one can write high-level type-generic code that works on arbitrary user-defined types while remaining fast and memory-efficient. Types in languages like Python simply don't provide enough information to the compiler for similar capabilities, so as soon as you used those languages as a Julia front-end you would be stuck.
 
 For similar reasons, automated translation to Julia would also typically generate unreadable, slow, non-idiomatic code that would not be a good starting point for a native Julia port from another language.
 
-On the other hand, language *interoperability* is extremely useful: we want to exploit existing high-quality code in other languages from Julia (and vice versa)!  The best way to enable this is not a transpiler, but rather via easy inter-language calling facilities.  We have worked hard on this, from the built-in `ccall` intrinsic (to call C and Fortran libraries) to [JuliaInterop](https://github.com/JuliaInterop) packages that connect Julia to Python, Matlab, C++, and more.
+On the other hand, language *interoperability* is extremely useful: we want to exploit existing high-quality code in other languages from Julia (and vice versa)!  The best way to enable this is not a transpiler, but rather via easy inter-language calling facilities. We have worked hard on this, from the built-in `ccall` intrinsic (to call C and Fortran libraries) to [JuliaInterop](https://github.com/JuliaInterop) packages that connect Julia to Python, Matlab, C++, and more.
 
 ## [Public API](@id man-api)
 
@@ -47,12 +47,12 @@ will not be removed or receive meaningful breaking changes before Julia 2.0.
 
 ### There is a useful undocumented function/type/constant. Can I use it?
 
-Updating Julia may break your code if you use non-public API.  If the code is
-self-contained, it may be a good idea to copy it into your project.  If you want to rely on
+Updating Julia may break your code if you use non-public API. If the code is
+self-contained, it may be a good idea to copy it into your project. If you want to rely on
 a complex non-public API, especially when using it from a stable package, it is a good idea
 to open an [issue](https://github.com/JuliaLang/julia/issues) or
 [pull request](https://github.com/JuliaLang/julia/pulls) to start a discussion for turning it
-into a public API.  However, we do not discourage the attempt to create packages that expose
+into a public API. However, we do not discourage the attempt to create packages that expose
 stable public interfaces while relying on non-public implementation details of Julia and
 buffering the differences across different Julia versions.
 
@@ -71,12 +71,12 @@ session (technically, in module `Main`), it is always present.
 
 If memory usage is your concern, you can always replace objects with ones that consume less memory.
  For example, if `A` is a gigabyte-sized array that you no longer need, you can free the memory
-with `A = nothing`.  The memory will be released the next time the garbage collector runs; you can force
+with `A = nothing`. The memory will be released the next time the garbage collector runs; you can force
 this to happen with [`GC.gc()`](@ref Base.GC.gc). Moreover, an attempt to use `A` will likely result in an error, because most methods are not defined on type `Nothing`.
 
 ### How can I modify the declaration of a type in my session?
 
-Perhaps you've defined a type and then realize you need to add a new field.  If you try this at
+Perhaps you've defined a type and then realize you need to add a new field. If you try this at
 the REPL, you get the error:
 
 ```
@@ -87,8 +87,8 @@ Types in module `Main` cannot be redefined.
 
 While this can be inconvenient when you are developing new code, there's an excellent workaround.
  Modules can be replaced by redefining them, and so if you wrap all your new code inside a module
-you can redefine types and constants.  You can't import the type names into `Main` and then expect
-to be able to redefine them there, but you can use the module name to resolve the scope.  In other
+you can redefine types and constants. You can't import the type names into `Main` and then expect
+to be able to redefine them there, but you can use the module name to resolve the scope. In other
 words, while developing you might use a workflow something like this:
 
 ```julia
@@ -118,7 +118,7 @@ If one needs functionality both available as a library and a script, it is bette
 
 Running a Julia script using `julia file.jl` does not throw
 [`InterruptException`](@ref) when you try to terminate it with CTRL-C
-(SIGINT).  To run a certain code before terminating a Julia script,
+(SIGINT). To run a certain code before terminating a Julia script,
 which may or may not be caused by CTRL-C, use [`atexit`](@ref).
 Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
 file.jl` to execute a script while being able to catch
@@ -151,7 +151,7 @@ invoking an [operating-system shell](https://en.wikipedia.org/wiki/Shell_(comput
 That means that `run` does not perform wildcard expansion of `*` (["globbing"](https://en.wikipedia.org/wiki/Glob_(programming))),
 nor does it interpret [shell pipelines](https://en.wikipedia.org/wiki/Pipeline_(Unix)) like `|` or `>`.
 
-You can still do globbing and pipelines using Julia features, however.  For example, the built-in
+You can still do globbing and pipelines using Julia features, however. For example, the built-in
 [`pipeline`](@ref) function allows you to chain external programs and files, similar to shell pipes, and
 the [Glob.jl package](https://github.com/vtjnash/Glob.jl) implements POSIX-compatible globbing.
 
@@ -175,7 +175,7 @@ end
 ```
 and notice that it works fine in an interactive environment (like the Julia REPL),
 but gives ```UndefVarError: `x` not defined``` when you try to run it in script or other
-file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
+file. What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
 
 Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
 an assignment to a global in that local scope.
@@ -184,7 +184,7 @@ As mentioned above, Julia (version 1.5 or later) allows you to omit the `global`
 keyword for code in the REPL (and many other interactive environments), to simplify
 exploration (e.g. copy-pasting code from a function to run interactively).
 However, once you move to code in files, Julia requires a more disciplined approach
-to global variables.  You have least three options:
+to global variables. You have least three options:
 
 1. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
 2. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
@@ -252,7 +252,7 @@ the variables `A` and `x` were distinct bindings referring to the same mutable `
 
 ### Can I use `using` or `import` inside a function?
 
-No, you are not allowed to have a `using` or `import` statement inside a function.  If you want
+No, you are not allowed to have a `using` or `import` statement inside a function. If you want
 to import a module but only use its symbols inside a specific function or set of functions, you
 have two options:
 
@@ -266,7 +266,7 @@ have two options:
    ```
 
    This loads the module `Foo` and defines a variable `Foo` that refers to the module, but does not
-   import any of the other symbols from the module into the current namespace.  You refer to the
+   import any of the other symbols from the module into the current namespace. You refer to the
    `Foo` symbols by their qualified names `Foo.bar` etc.
 2. Wrap your function in a module:
 
@@ -395,7 +395,7 @@ julia> twothreearr()
 
 ### [What does "type-stable" mean?](@id man-type-stability)
 
-It means that the type of the output is predictable from the types of the inputs.  In particular,
+It means that the type of the output is predictable from the types of the inputs. In particular,
 it means that the type of the output cannot vary depending on the *values* of the inputs. The
 following code is *not* type-stable:
 
@@ -427,9 +427,9 @@ Stacktrace:
 [...]
 ```
 
-This behavior is an inconvenient consequence of the requirement for type-stability.  In the case
+This behavior is an inconvenient consequence of the requirement for type-stability. In the case
 of [`sqrt`](@ref), most users want `sqrt(2.0)` to give a real number, and would be unhappy if
-it produced the complex number `1.4142135623730951 + 0.0im`.  One could write the [`sqrt`](@ref)
+it produced the complex number `1.4142135623730951 + 0.0im`. One could write the [`sqrt`](@ref)
 function to switch to a complex-valued output only when passed a negative number (which is what
 [`sqrt`](@ref) does in some other languages), but then the result would not be [type-stable](@ref man-type-stability)
 and the [`sqrt`](@ref) function would have poor performance.
@@ -447,14 +447,14 @@ julia> sqrt(-2.0+0im)
 The parameters of a [parametric type](@ref Parametric-Types) can hold either
 types or bits values, and the type itself chooses how it makes use of these parameters.
 For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
-element type and the integer value `2` to express its number of dimensions.  When
+element type and the integer value `2` to express its number of dimensions. When
 defining your own parametric type, you can use subtype constraints to declare that a
 certain parameter must be a subtype ([`<:`](@ref)) of some abstract type or a previous
-type parameter.  There is not, however, a dedicated syntax to declare that a parameter
+type parameter. There is not, however, a dedicated syntax to declare that a parameter
 must be a _value_ of a given type — that is, you cannot directly declare that a
 dimensionality-like parameter [`isa`](@ref) `Int` within the `struct` definition, for
-example.  Similarly, you cannot do computations (including simple things like addition
-or subtraction) on type parameters.  Instead, these sorts of constraints and
+example. Similarly, you cannot do computations (including simple things like addition
+or subtraction) on type parameters. Instead, these sorts of constraints and
 relationships may be expressed through additional type parameters that are computed
 and enforced within the type's [constructors](@ref man-constructors).
 
@@ -900,7 +900,7 @@ array to store the result. If you prefer to mutate `x`, use `x .+= y` to update 
 individually.
 
 While this behavior might surprise some, the choice is deliberate. The main reason is the presence
-of immutable objects within Julia, which cannot change their value once created.  Indeed, a
+of immutable objects within Julia, which cannot change their value once created. Indeed, a
 number is an immutable object; the statements `x = 5; x += 1` do not modify the meaning of `5`,
 they modify the value bound to `x`. For an immutable, the only way to change the value is to reassign
 it.
@@ -943,7 +943,7 @@ Consider the printed output from the following:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async write(stdout, string(i), " Foo ", " Bar ")
+           Threads.@spawn write(stdout, string(i), " Foo ", " Bar ")
        end
 123 Foo  Foo  Foo  Bar  Bar  Bar
 ```
@@ -956,7 +956,7 @@ in the above example results in:
 
 ```jldoctest
 julia> @sync for i in 1:3
-           @async println(stdout, string(i), " Foo ", " Bar ")
+           Threads.@spawn println(stdout, string(i), " Foo ", " Bar ")
        end
 1 Foo  Bar
 2 Foo  Bar
@@ -969,7 +969,7 @@ You can lock your writes with a `ReentrantLock` like this:
 julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
-           @async begin
+           Threads.@spawn begin
                lock(l)
                try
                    write(stdout, string(i), " Foo ", " Bar ")

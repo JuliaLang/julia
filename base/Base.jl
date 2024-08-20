@@ -53,6 +53,9 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
+typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+
 dotgetproperty(x, f) = getproperty(x, f)
 
 getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))
@@ -137,6 +140,7 @@ if isdefined(Core, :Compiler)
 end
 
 include("exports.jl")
+include("public.jl")
 
 if false
     # simple print definitions for debugging. enable these if something
@@ -151,7 +155,8 @@ end
 """
     time_ns() -> UInt64
 
-Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
+Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
+between two moments in time.
 """
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
@@ -222,7 +227,7 @@ delete_method(which(Pair{Any,Any}, (Any, Any)))
 end
 
 # The REPL stdlib hooks into Base using this Ref
-const REPL_MODULE_REF = Ref{Module}()
+const REPL_MODULE_REF = Ref{Module}(Base)
 
 include("checked.jl")
 using .Checked
@@ -263,8 +268,28 @@ function strcat(x::String, y::String)
     end
     return out
 end
-include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
-include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
+BUILDROOT::String = ""
+
+baremodule BuildSettings
+end
+
+let i = 1
+    global BUILDROOT
+    while i <= length(Core.ARGS)
+        if Core.ARGS[i] == "--buildsettings"
+            include(BuildSettings, ARGS[i+1])
+            i += 1
+        else
+            BUILDROOT = Core.ARGS[i]
+        end
+        i += 1
+    end
+end
+
+include(strcat(BUILDROOT, "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
+include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
 # Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
 # a slightly more verbose fashion than usual, because we're running so early.
 const DL_LOAD_PATH = String[]
@@ -399,10 +424,12 @@ include("weakkeydict.jl")
 
 # ScopedValues
 include("scopedvalues.jl")
-using .ScopedValues
+
+# metaprogramming
+include("meta.jl")
 
 # Logging
-include("logging.jl")
+include("logging/logging.jl")
 using .CoreLogging
 
 include("env.jl")
@@ -494,9 +521,6 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# metaprogramming
-include("meta.jl")
-
 # Stack frames and traces
 include("stacktraces.jl")
 using .StackTraces
@@ -542,6 +566,8 @@ if isdefined(Core, :Compiler) && is_primary_base_module
     Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 end
 
+include("precompilation.jl")
+
 # finally, now make `include` point to the full version
 for m in methods(include)
     delete_method(m)
@@ -558,67 +584,12 @@ include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexp
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
+include(@__MODULE__, string(BUILDROOT, "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
 
 end_base_include = time_ns()
 
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
-
-# Precompiles for Revise and other packages
-# TODO: move these to contrib/generate_precompile.jl
-# The problem is they don't work there
-for match = _methods(+, (Int, Int), -1, get_world_counter())
-    m = match.method
-    delete!(push!(Set{Method}(), m), m)
-    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
-
-    empty!(Set())
-    push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
-    (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
-    (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
-    (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
-    (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
-    (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
-    Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
-    Dict(Base => [:(1+1)])[Base]
-    Dict(:one => [1])[:one]
-    Dict("abc" => Set())["abc"]
-    pushfirst!([], sum)
-    get(Base.pkgorigins, Base.PkgId(Base), nothing)
-    sort!([1,2,3])
-    unique!([1,2,3])
-    cumsum([1,2,3])
-    append!(Int[], BitSet())
-    isempty(BitSet())
-    delete!(BitSet([1,2]), 3)
-    deleteat!(Int32[1,2,3], [1,3])
-    deleteat!(Any[1,2,3], [1,3])
-    Core.svec(1, 2) == Core.svec(3, 4)
-    any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
-
-    # Code loading uses this
-    sortperm(mtime.(readdir(".")), rev=true)
-    # JLLWrappers uses these
-    Dict{UUID,Set{String}}()[UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
-    get!(Set{String}, Dict{UUID,Set{String}}(), UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
-    eachindex(IndexLinear(), Expr[])
-    push!(Expr[], Expr(:return, false))
-    vcat(String[], String[])
-    k, v = (:hello => nothing)
-    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
-    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
-    # Preferences uses these
-    precompile(get_preferences, (UUID,))
-    precompile(record_compiletime_preference, (UUID, String))
-    get(Dict{String,Any}(), "missing", nothing)
-    delete!(Dict{String,Any}(), "missing")
-    for (k, v) in Dict{String,Any}()
-        println(k)
-    end
-
-    break   # only actually need to do this once
-end
 
 if is_primary_base_module
 
@@ -629,8 +600,7 @@ function profile_printing_listener(cond::Base.AsyncCondition)
     profile = nothing
     try
         while _trywait(cond)
-            # this call to require is mostly legal, only because Profile has no dependencies and is usually in LOAD_PATH
-            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))::Module
+            profile = @something(profile, require_stdlib(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))::Module
             invokelatest(profile.peek_report[])
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
@@ -646,6 +616,25 @@ function profile_printing_listener(cond::Base.AsyncCondition)
     nothing
 end
 
+function start_profile_listener()
+    cond = Base.AsyncCondition()
+    Base.uv_unref(cond.handle)
+    t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+    atexit() do
+        # destroy this callback when exiting
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        # this will prompt any ongoing or pending event to flush also
+        close(cond)
+        # error-propagation is not needed, since the errormonitor will handle printing that better
+        t === current_task() || _wait(t)
+    end
+    finalizer(cond) do c
+        # if something goes south, still make sure we aren't keeping a reference in C to this
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+    ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+end
+
 function __init__()
     # Base library init
     global _atexit_hooks_finished = false
@@ -658,28 +647,17 @@ function __init__()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(explicit_loaded_modules)
+    @assert isempty(loaded_precompiles)
+    for (mod, key) in module_keys
+        loaded_precompiles[key => module_build_id(mod)] = mod
+    end
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end
     # Profiling helper
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
-        cond = Base.AsyncCondition()
-        Base.uv_unref(cond.handle)
-        t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
-        atexit() do
-            # destroy this callback when exiting
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-            # this will prompt any ongoing or pending event to flush also
-            close(cond)
-            # error-propagation is not needed, since the errormonitor will handle printing that better
-            _wait(t)
-        end
-        finalizer(cond) do c
-            # if something goes south, still make sure we aren't keeping a reference in C to this
-            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
-        end
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+        start_profile_listener()
     end
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
@@ -687,6 +665,8 @@ function __init__()
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
     end
+
+    CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end
 

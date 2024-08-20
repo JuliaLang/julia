@@ -554,7 +554,7 @@ function typeinfo_implicit(@nospecialize(T))
     end
     return isconcretetype(T) &&
         ((T <: Array && typeinfo_implicit(eltype(T))) ||
-         ((T <: Tuple || T <: Pair) && all(typeinfo_implicit, fieldtypes(T))) ||
+         ((T <: Tuple || T <: NamedTuple || T <: Pair) && all(typeinfo_implicit, fieldtypes(T))) ||
          (T <: AbstractDict && typeinfo_implicit(keytype(T)) && typeinfo_implicit(valtype(T))))
 end
 

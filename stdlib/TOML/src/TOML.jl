@@ -7,6 +7,8 @@ and to serialize Julia data structures to TOML format.
 """
 module TOML
 
+using Dates
+
 module Internals
     # The parser is defined in Base
     using Base.TOML: Parser, parse, tryparse, ParserError, isvalid_barekey_char, reinit!
@@ -35,6 +37,11 @@ will however reuse some internal data structures which can be beneficial for
 performance if a larger number of small files are parsed.
 """
 const Parser = Internals.Parser
+
+# Dates-enabled constructors
+Parser() = Parser{Dates}()
+Parser(io::IO) = Parser{Dates}(io)
+Parser(str::String; filepath=nothing) = Parser{Dates}(str; filepath)
 
 """
     parsefile(f::AbstractString)

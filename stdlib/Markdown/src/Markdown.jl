@@ -9,8 +9,11 @@ literals `md"..."` and `doc"..."`.
 """
 module Markdown
 
-import Base: show, ==, with_output_color, mapany
+import Base: AnnotatedString, AnnotatedIOBuffer, show, ==, with_output_color, mapany
 using Base64: stringmime
+
+using StyledStrings: StyledStrings, Face, addface!, @styled_str, styled
+using JuliaSyntaxHighlighting: highlight, highlight!
 
 # Margin for printing in terminal.
 const margin = 2
@@ -31,6 +34,27 @@ include("render/rst.jl")
 include("render/terminal/render.jl")
 
 export @md_str, @doc_str
+
+const MARKDOWN_FACES = [
+    :markdown_header => Face(weight=:bold),
+    :markdown_h1 => Face(height=1.25, inherit=:markdown_header),
+    :markdown_h2 => Face(height=1.20, inherit=:markdown_header),
+    :markdown_h3 => Face(height=1.15, inherit=:markdown_header),
+    :markdown_h4 => Face(height=1.12, inherit=:markdown_header),
+    :markdown_h5 => Face(height=1.08, inherit=:markdown_header),
+    :markdown_h6 => Face(height=1.05, inherit=:markdown_header),
+    :markdown_admonition => Face(weight=:bold),
+    :markdown_code => Face(inherit=:code),
+    :markdown_julia_prompt => Face(inherit=:repl_prompt_julia),
+    :markdown_footnote => Face(inherit=:bright_yellow),
+    :markdown_hrule => Face(inherit=:shadow),
+    :markdown_inlinecode => Face(inherit=:markdown_code),
+    :markdown_latex => Face(inherit=:magenta),
+    :markdown_link => Face(underline=:bright_blue),
+    :markdown_list => Face(foreground=:blue),
+]
+
+__init__() = foreach(addface!, MARKDOWN_FACES)
 
 parse(markdown::AbstractString; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
 parse_file(file::AbstractString; flavor = julia) = parse(read(file, String), flavor = flavor)

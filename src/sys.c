@@ -635,6 +635,38 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #endif
 }
 
+#ifdef _OS_OPENBSD_
+// Helper for jl_pathname_for_handle()
+struct dlinfo_data {
+    void       *searched;
+    const char *result;
+};
+
+static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
+{
+    struct dlinfo_data *data = (struct dlinfo_data *)vdata;
+    void *handle;
+
+    /* ensure dl_phdr_info at compile-time to be compatible with the one at runtime */
+    if (sizeof(*info) < size)
+        return -1;
+
+    /* dlopen the name */
+    handle = dlopen(info->dlpi_name, RTLD_LAZY | RTLD_NOLOAD);
+    if (handle == NULL)
+        return 0;
+
+    /* check if the opened library is the same as the searched handle */
+    if (data->searched == handle)
+        data->result = info->dlpi_name;
+
+    dlclose(handle);
+
+    /* continue if still not found */
+    return (data->result != NULL);
+}
+#endif
+
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 {
@@ -676,6 +708,14 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
     }
     free(pth16);
     return filepath;
+
+#elif defined(_OS_OPENBSD_)
+    struct dlinfo_data data = {
+        .searched = handle,
+        .result = NULL,
+    };
+    dl_iterate_phdr(&dlinfo_helper, &data);
+    return data.result;
 
 #else // Linux, FreeBSD, ...
 
@@ -754,11 +794,11 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 
 // FIXME: `rusage` is available on OpenBSD, DragonFlyBSD and NetBSD as well.
 //        All of them return `ru_maxrss` in kilobytes.
-#elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined (_OS_FREEBSD_)
+#elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined (_OS_FREEBSD_) || defined (_OS_OPENBSD_)
     struct rusage rusage;
     getrusage( RUSAGE_SELF, &rusage );
 
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined (_OS_OPENBSD_)
     return (size_t)(rusage.ru_maxrss * 1024);
 #else
     return (size_t)rusage.ru_maxrss;

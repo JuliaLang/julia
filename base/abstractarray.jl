@@ -748,7 +748,7 @@ julia> checkindex(Bool, 1:20, 21)
 false
 ```
 """
-checkindex(::Type{Bool}, inds, i) = throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
+checkindex(::Type{Bool}, inds, i) = throw(ArgumentError(LazyString("unable to check bounds for indices of type ", typeof(i))))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::IdentityUnitRange, i::Real) = checkindex(Bool, inds.indices, i)
 checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i - one(i)) < unsigned(last(inds))
@@ -896,12 +896,17 @@ emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 In-place [`copy`](@ref) of `src` into `dst`, discarding any pre-existing
 elements in `dst`.
 If `dst` and `src` are of the same type, `dst == src` should hold after
-the call. If `dst` and `src` are multidimensional arrays, they must have
+the call. If `dst` and `src` are vector types, they must have equal
+offset. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 
 See also [`copyto!`](@ref).
+
+!!! note
+    When operating on vector types, if `dst` and `src` are not of the
+    same length, `dst` is resized to `length(src)` prior to the `copy`.
 
 !!! compat "Julia 1.1"
     This method requires at least Julia 1.1. In Julia 1.0 this method
@@ -1078,22 +1083,13 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if srcstyle isa IndexLinear
             # Single-index implementation
             @inbounds for i in srcinds
-                if isassigned(src, i)
-                    dest[i + Δi] = src[i]
-                else
-                    _unsetindex!(dest, i + Δi)
-                end
+                dest[i + Δi] = src[i]
             end
         else
             # Dual-index implementation
             i = idf - 1
-            @inbounds for a in eachindex(src)
-                i += 1
-                if isassigned(src, a)
-                    dest[i] = src[a]
-                else
-                    _unsetindex!(dest, i)
-                end
+            @inbounds for a in src
+                dest[i+=1] = a
             end
         end
     else
@@ -1101,22 +1097,14 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         if iterdest == itersrc
             # Shared-iterator implementation
             for I in iterdest
-                if isassigned(src, I)
-                    @inbounds dest[I] = src[I]
-                else
-                    _unsetindex!(dest, I)
-                end
+                @inbounds dest[I] = src[I]
             end
         else
             # Dual-iterator implementation
             ret = iterate(iterdest)
-            @inbounds for a in itersrc
+            @inbounds for a in src
                 idx, state = ret::NTuple{2,Any}
-                if isassigned(src, a)
-                    dest[idx] = src[a]
-                else
-                    _unsetindex!(dest, idx)
-                end
+                dest[idx] = a
                 ret = iterate(iterdest, state)
             end
         end
@@ -1145,11 +1133,7 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
     src′ = unalias(dest, src)
     @inbounds for i = 0:n-1
-        if isassigned(src′, sstart+i)
-            dest[dstart+i] = src′[sstart+i]
-        else
-            _unsetindex!(dest, dstart+i)
-        end
+        dest[dstart+i] = src′[sstart+i]
     end
     return dest
 end
@@ -1160,7 +1144,7 @@ function copy(a::AbstractArray)
 end
 
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
-                 A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
+               A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
     if length(ir_dest) != length(ir_src)
         throw(ArgumentError(LazyString("source and destination must have same size (got ",
             length(ir_src)," and ",length(ir_dest),")")))
@@ -1218,7 +1202,25 @@ end
 copymutable(itr) = collect(itr)
 
 zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
 zero(x::AbstractArray) = map(zero, x)
+
+function _one(unit::T, mat::AbstractMatrix) where {T}
+    (rows, cols) = axes(mat)
+    (length(rows) == length(cols)) ||
+      throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
+    zer = zero(unit)::T
+    require_one_based_indexing(mat)
+    I = similar(mat, T)
+    fill!(I, zer)
+    for i ∈ rows
+        I[i, i] = unit
+    end
+    I
+end
+
+one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
+oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
@@ -1262,6 +1264,10 @@ function _memory_offset(x::AbstractArray, I::Vararg{Any,N}) where {N}
     return sum(map((i, s, o)->s*(i-o), J, strides(x), Tuple(first(CartesianIndices(x)))))*elsize(x)
 end
 
+## Special constprop heuristics for getindex/setindex
+typename(typeof(function getindex end)).constprop_heuristic = Core.ARRAY_INDEX_HEURISTIC
+typename(typeof(function setindex! end)).constprop_heuristic = Core.ARRAY_INDEX_HEURISTIC
+
 ## Approach:
 # We only define one fallback method on getindex for all argument types.
 # That dispatches to an (inlined) internal _getindex function, where the goal is
@@ -1274,8 +1280,11 @@ end
 """
     getindex(A, inds...)
 
-Return a subset of array `A` as specified by `inds`, where each `ind` may be,
-for example, an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+Return a subset of array `A` as selected by the indices `inds`.
+
+Each index may be any [supported index type](@ref man-supported-index-types), such
+as an [`Integer`](@ref), [`CartesianIndex`](@ref), [range](@ref Base.AbstractRange), or [array](@ref man-multi-dim-arrays) of supported indices.
+A [:](@ref Base.Colon) may be used to select all elements along a specific dimension, and a boolean array (e.g. an `Array{Bool}` or a [`BitArray`](@ref)) may be used to filter for elements where the corresponding index is `true`.
 
 When `inds` selects multiple elements, this function returns a newly
 allocated array. To index multiple elements without making a copy,
@@ -1302,6 +1311,27 @@ julia> getindex(A, 2:4)
 3-element Vector{Int64}:
  3
  2
+ 4
+
+julia> getindex(A, 2, 1)
+3
+
+julia> getindex(A, CartesianIndex(2, 1))
+3
+
+julia> getindex(A, :, 2)
+2-element Vector{Int64}:
+ 2
+ 4
+
+julia> getindex(A, 2, :)
+2-element Vector{Int64}:
+ 3
+ 4
+
+julia> getindex(A, A .> 2)
+2-element Vector{Int64}:
+ 3
  4
 ```
 """
@@ -1515,12 +1545,14 @@ much more common case where aliasing does not occur. By default,
 unaliascopy(A::Array) = copy(A)
 unaliascopy(A::AbstractArray)::typeof(A) = (@noinline; _unaliascopy(A, copy(A)))
 _unaliascopy(A::T, C::T) where {T} = C
-_unaliascopy(A, C) = throw(ArgumentError("""
-    an array of type `$(typename(typeof(A)).wrapper)` shares memory with another argument
-    and must make a preventative copy of itself in order to maintain consistent semantics,
-    but `copy(::$(typeof(A)))` returns a new array of type `$(typeof(C))`.
-    To fix, implement:
-        `Base.unaliascopy(A::$(typename(typeof(A)).wrapper))::typeof(A)`"""))
+function _unaliascopy(A, C)
+    Aw = typename(typeof(A)).wrapper
+    throw(ArgumentError(LazyString("an array of type `", Aw, "` shares memory with another argument ",
+    "and must make a preventative copy of itself in order to maintain consistent semantics, ",
+    "but `copy(::", typeof(A), ")` returns a new array of type `", typeof(C), "`.\n",
+    """To fix, implement:
+        `Base.unaliascopy(A::""", Aw, ")::typeof(A)`")))
+end
 unaliascopy(A) = A
 
 """
@@ -1612,13 +1644,15 @@ eltypeof(x::AbstractArray) = eltype(x)
 
 promote_eltypeof() = error()
 promote_eltypeof(v1) = eltypeof(v1)
-promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
+promote_eltypeof(v1, v2) = promote_type(eltypeof(v1), eltypeof(v2))
+promote_eltypeof(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltypeof(y)), promote_eltypeof(v1, v2), vs...))
 promote_eltypeof(v1::T, vs::T...) where {T} = eltypeof(v1)
 promote_eltypeof(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 promote_eltype() = error()
 promote_eltype(v1) = eltype(v1)
-promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+promote_eltype(v1, v2) = promote_type(eltype(v1), eltype(v2))
+promote_eltype(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltype(y)), promote_eltype(v1, v2), vs...))
 promote_eltype(v1::T, vs::T...) where {T} = eltype(T)
 promote_eltype(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
@@ -1629,10 +1663,10 @@ typed_vcat(::Type{T}) where {T} = Vector{T}()
 typed_hcat(::Type{T}) where {T} = Vector{T}()
 
 ## cat: special cases
-vcat(X::T...) where {T}         = T[ X[i] for i=1:length(X) ]
-vcat(X::T...) where {T<:Number} = T[ X[i] for i=1:length(X) ]
-hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=1:length(X) ]
-hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=1:length(X) ]
+vcat(X::T...) where {T}         = T[ X[i] for i=eachindex(X) ]
+vcat(X::T...) where {T<:Number} = T[ X[i] for i=eachindex(X) ]
+hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=eachindex(X) ]
+hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=eachindex(X) ]
 
 vcat(X::Number...) = hvcat_fill!(Vector{promote_typeof(X...)}(undef, length(X)), X)
 hcat(X::Number...) = hvcat_fill!(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
@@ -1887,7 +1921,7 @@ julia> vcat(range(1, 2, length=3))  # collects lazy ranges
  2.0
 
 julia> two = ([10, 20, 30]', Float64[4 5 6; 7 8 9])  # row vector and a matrix
-([10 20 30], [4.0 5.0 6.0; 7.0 8.0 9.0])
+(adjoint([10, 20, 30]), [4.0 5.0 6.0; 7.0 8.0 9.0])
 
 julia> vcat(two...)
 3×3 Matrix{Float64}:
@@ -2977,7 +3011,7 @@ end
 @inline function _stack_size_check(x, ax1::Tuple)
     if _iterator_axes(x) != ax1
         uax1 = map(UnitRange, ax1)
-        uaxN = map(UnitRange, axes(x))
+        uaxN = map(UnitRange, _iterator_axes(x))
         throw(DimensionMismatch(
             LazyString("stack expects uniform slices, got axes(x) == ", uaxN, " while first had ", uax1)))
     end
@@ -3257,7 +3291,7 @@ one *without* a colon in the slice. This is `view(A,:,i,:)`, whereas
 `mapslices(f, A; dims=(1,3))` uses `A[:,i,:]`. The function `f` may mutate
 values in the slice without affecting `A`.
 """
-function mapslices(f, A::AbstractArray; dims)
+@constprop :aggressive function mapslices(f, A::AbstractArray; dims)
     isempty(dims) && return map(f, A)
 
     for d in dims
@@ -3374,6 +3408,8 @@ mapany(f, itr) = Any[f(x) for x in itr]
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise, and stop when any of them is exhausted.
 
+The element type of the result is determined in the same manner as in [`collect`](@ref).
+
 See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
 # Examples
@@ -3489,12 +3525,45 @@ julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is 
 """
 map(f, it, iters...) = collect(Generator(f, it, iters...))
 
+# Generic versions of push! for AbstractVector
+# These are specialized further for Vector for faster resizing and setindexing
+function push!(a::AbstractVector{T}, item) where T
+    # convert first so we don't grow the array if the assignment won't work
+    itemT = item isa T ? item : convert(T, item)::T
+    new_length = length(a) + 1
+    resize!(a, new_length)
+    a[end] = itemT
+    return a
+end
+
+# specialize and optimize the single argument case
+function push!(a::AbstractVector{Any}, @nospecialize x)
+    new_length = length(a) + 1
+    resize!(a, new_length)
+    a[end] = x
+    return a
+end
+function push!(a::AbstractVector{Any}, @nospecialize x...)
+    @_terminates_locally_meta
+    na = length(a)
+    nx = length(x)
+    resize!(a, na + nx)
+    e = lastindex(a) - nx
+    for i = 1:nx
+        a[e+i] = x[i]
+    end
+    return a
+end
+
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A, a, b) = push!(push!(A, a), b)
 push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
+
+# sizehint! does not nothing by default
+sizehint!(a::AbstractVector, _) = a
 
 ## hashing AbstractArray ##
 
@@ -3619,9 +3688,9 @@ end
 ## 1-d circshift ##
 function circshift!(a::AbstractVector, shift::Integer)
     n = length(a)
-    n == 0 && return
+    n == 0 && return a
     shift = mod(shift, n)
-    shift == 0 && return
+    shift == 0 && return a
     l = lastindex(a)
     reverse!(a, firstindex(a), l-shift)
     reverse!(a, l-shift+1, lastindex(a))

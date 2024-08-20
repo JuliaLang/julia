@@ -184,11 +184,7 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
-    if commutative
-        @test r == Core.Compiler.tuplemerge(b, a)
-    else
-        @test_broken r == Core.Compiler.tuplemerge(b, a)
-    end
+    @test r == Core.Compiler.tuplemerge(b, a) broken=!commutative
 end
 tuplemerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
 tuplemerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
@@ -483,7 +479,7 @@ end
 @test f15259(1,2) == (1,2,1,2)
 # check that error cases are still correct
 @eval g15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); a.z)
-@test_throws ErrorException g15259(1,1)
+@test_throws FieldError g15259(1,1)
 @eval h15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); getfield(a, 3))
 @test_throws BoundsError h15259(1,1)
 
@@ -680,7 +676,6 @@ end
 function test_inferred_static(arrow::Pair, all_ssa)
     code, rt = arrow
     @test isdispatchelem(rt)
-    @test code.inferred
     for i = 1:length(code.code)
         e = code.code[i]
         test_inferred_static(e)
@@ -1102,7 +1097,7 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 
 # PR #28284, check that constants propagate through calls to new
 struct t28284
-  x::Int
+    x::Int
 end
 f28284() = Val(t28284(1))
 @inferred f28284()
@@ -1543,7 +1538,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test sizeof_nothrow(String)
     @test !sizeof_nothrow(Type{String})
     @test sizeof_tfunc(Type{Union{Int64, Int32}}) == Const(Core.sizeof(Union{Int64, Int32}))
-    let PT = Core.Compiler.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
+    let PT = Core.PartialStruct(Tuple{Int64,UInt64}, Any[Const(10), UInt64])
         @test sizeof_tfunc(PT) === Const(16)
         @test nfields_tfunc(PT) === Const(2)
         @test sizeof_nothrow(PT)
@@ -1703,7 +1698,6 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
     @test opt.src.ssavaluetypes isa Vector{Any}
-    @test !opt.src.inferred
     @test opt.mod === Base
 end
 
@@ -1943,6 +1937,8 @@ function f24852_kernel_cinfo(world::UInt, source, fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
+    code_info.nargs = 4
+    code_info.isva = false
     # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
     # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
     return match.method, code_info
@@ -2155,78 +2151,75 @@ end
 
 @testset "branching on conditional object" begin
     # simple
-    @test Base.return_types((Union{Nothing,Int},)) do a
+    @test Base.infer_return_type((Union{Nothing,Int},)) do a
         b = a === nothing
         return b ? 0 : a # ::Int
-    end == Any[Int]
+    end == Int
 
     # can use multiple times (as far as the subject of condition hasn't changed)
-    @test Base.return_types((Union{Nothing,Int},)) do a
+    @test Base.infer_return_type((Union{Nothing,Int},)) do a
         b = a === nothing
         c = b ? 0 : a # c::Int
         d = !b ? a : 0 # d::Int
         return c, d # ::Tuple{Int,Int}
-    end == Any[Tuple{Int,Int}]
+    end == Tuple{Int,Int}
 
     # should invalidate old constraint when the subject of condition has changed
-    @test Base.return_types((Union{Nothing,Int},)) do a
+    @test Base.infer_return_type((Union{Nothing,Int},)) do a
         cond = a === nothing
         r1 = cond ? 0 : a # r1::Int
         a = 0
         r2 = cond ? a : 1 # r2::Int, not r2::Union{Nothing,Int}
         return r1, r2 # ::Tuple{Int,Int}
-    end == Any[Tuple{Int,Int}]
+    end == Tuple{Int,Int}
 end
 
 # https://github.com/JuliaLang/julia/issues/42090#issuecomment-911824851
 # `PartialStruct` shouldn't wrap `Conditional`
-let M = Module()
-    @eval M begin
-        struct BePartialStruct
-            val::Int
-            cond
-        end
-    end
-
-    rt = @eval M begin
-        Base.return_types((Union{Nothing,Int},)) do a
-            cond = a === nothing
-            obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
-            r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
-            a = $(gensym(:anyvar))::Any
-            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
-            return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
-        end |> only
-    end
-    @test rt == Tuple{Union{Nothing,Int},Any}
+struct BePartialStruct
+    val::Int
+    cond
+end
+@test Tuple{Union{Nothing,Int},Any} == @eval Base.infer_return_type((Union{Nothing,Int},)) do a
+    cond = a === nothing
+    obj = $(Expr(:new, BePartialStruct, 42, :cond))
+    r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
+    a = $(gensym(:anyvar))::Any
+    r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
+    return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
 end
 
 # make sure we never form nested `Conditional` (https://github.com/JuliaLang/julia/issues/46207)
-@test Base.return_types((Any,)) do a
+@test Base.infer_return_type((Any,)) do a
     c = isa(a, Integer)
     42 === c ? :a : "b"
-end |> only === String
-@test Base.return_types((Any,)) do a
+end == String
+@test Base.infer_return_type((Any,)) do a
     c = isa(a, Integer)
     c === 42 ? :a : "b"
-end |> only === String
+end == String
 
-@testset "conditional constraint propagation from non-`Conditional` object" begin
-    @test Base.return_types((Bool,)) do b
-        if b
-            return !b ? nothing : 1 # ::Int
-        else
-            return 0
-        end
-    end == Any[Int]
-
-    @test Base.return_types((Any,)) do b
-        if b
-            return b # ::Bool
-        else
-            return nothing
-        end
-    end == Any[Union{Bool,Nothing}]
+function condition_object_update1(cond)
+    if cond # `cond` is known to be `Const(true)` within this branch
+        return !cond ? nothing : 1 # ::Int
+    else
+        return  cond ? nothing : 1 # ::Int
+    end
+end
+function condition_object_update2(x)
+    cond = x isa Int
+    if cond # `cond` is known to be `Const(true)` within this branch
+        return !cond ? nothing : x # ::Int
+    else
+        return  cond ? nothing : 1 # ::Int
+    end
+end
+@testset "state update for condition object" begin
+    # refine the type of condition object into constant boolean values on branching
+    @test Base.infer_return_type(condition_object_update1, (Bool,)) == Int
+    @test Base.infer_return_type(condition_object_update1, (Any,)) == Int
+    # refine even when their original type is `Conditional`
+    @test Base.infer_return_type(condition_object_update2, (Any,)) == Int
 end
 
 @testset "`from_interprocedural!`: translate inter-procedural information" begin
@@ -2568,6 +2561,14 @@ Base.return_types(intermustalias_edgecase, (Any,); interp=MustAliasInterpreter()
 @test Base.return_types((Any,); interp=MustAliasInterpreter()) do x
     intermustalias_edgecase(x)
 end |> only === Core.Compiler.InterMustAlias
+
+@test Base.infer_return_type((AliasableField,Integer,); interp=MustAliasInterpreter()) do a, x
+    s = (;x)
+    if getfield(a, :f) isa Symbol
+        return getfield(s, getfield(a, :f))
+    end
+    return 0
+end == Integer
 
 function f25579(g)
     h = g[]
@@ -4199,6 +4200,110 @@ end
     end
 end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
 
+@testset "constraint back-propagation from typeassert" begin
+    @test Base.infer_return_type((Any,)) do a
+        typeassert(a, Int)
+        return a
+    end == Int
+
+    @test Base.infer_return_type((Any,Bool)) do a, b
+        if b
+            typeassert(a, Int64)
+        else
+            typeassert(a, Int32)
+        end
+        return a
+    end == Union{Int32,Int64}
+end
+
+callsig_backprop_basic(::Int) = nothing
+callsig_backprop_unionsplit(::Int32) = nothing
+callsig_backprop_unionsplit(::Int64) = nothing
+callsig_backprop_multi(::Int32, ::Int64) = nothing
+callsig_backprop_any(::Any) = nothing
+callsig_backprop_lhs(::Int) = nothing
+callsig_backprop_bailout(::Val{0}) = 0
+callsig_backprop_bailout(::Val{1}) = undefvar # undefvar::Any triggers `bail_out_call`
+callsig_backprop_bailout(::Val{2}) = 2
+callsig_backprop_addinteger(a::Integer, b::Integer) = a + b # results in too many matching methods and triggers `bail_out_call`)
+@test Base.infer_return_type(callsig_backprop_addinteger) == Any
+let effects = Base.infer_effects(callsig_backprop_addinteger)
+    @test !Core.Compiler.is_consistent(effects)
+    @test !Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test !Core.Compiler.is_terminates(effects)
+end
+callsig_backprop_anti(::Any) = :any
+callsig_backprop_anti(::Int) = :int
+
+@testset "constraint back-propagation from call signature" begin
+    # basic case
+    @test Base.infer_return_type(a->(callsig_backprop_basic(a); return a), (Any,)) == Int
+
+    # union-split case
+    @test Base.infer_return_type(a->(callsig_backprop_unionsplit(a); return a), (Any,)) == Union{Int32,Int64}
+
+    # multiple arguments updates
+    @test Base.infer_return_type((Any,Any)) do a, b
+        callsig_backprop_multi(a, b)
+        return a, b
+    end == Tuple{Int32,Int64}
+
+    # refinement should happen only when it's worthwhile
+    @test Base.infer_return_type(a->(callsig_backprop_any(a); return a), (Integer,)) == Integer
+
+    # state update on lhs slot (assignment effect should have the precedence)
+    @test Base.infer_return_type((Any,)) do a
+        a = callsig_backprop_lhs(a)
+        return a
+    end == Nothing
+
+    # make sure to throw away an intermediate refinement information when we bail out early
+    # (inference would bail out on `callsig_backprop_bailout(::Val{1})`)
+    @test Base.infer_return_type(a->(callsig_backprop_bailout(a); return a), (Any,)) == Any
+
+    # if we see all the matching methods, we don't need to throw away refinement information
+    # even if it's caught by `bail_out_call` check
+    @test Base.infer_return_type((Any,Any)) do a, b
+        callsig_backprop_addinteger(a, b)
+        return a, b
+    end == Tuple{Integer,Integer}
+
+    # anti case
+    @test Base.infer_return_type((Any,)) do x
+        callsig_backprop_anti(x)
+        return x
+    end == Any
+end
+
+# make sure to add backedges when we use call signature constraint
+function callsig_backprop_invalidation_outer(a)
+    callsig_backprop_invalidation_inner!(a)
+    return a
+end
+@eval callsig_backprop_invalidation_inner!(::Int) = $(gensym(:undefvar)) # ::Any
+@test Base.infer_return_type((Any,)) do a
+    callsig_backprop_invalidation_outer(a)
+end == Int
+# new definition of `callsig_backprop_invalidation_inner!` should invalidate `callsig_backprop_invalidation_outer`
+# (even if the previous return type is annotated as `Any`)
+@eval callsig_backprop_invalidation_inner!(::Nothing) = $(gensym(:undefvar)) # ::Any
+@test Base.infer_return_type((Any,)) do a
+    # since inference will bail out at the first matched `_inner!` and so call signature constraint won't be available
+    callsig_backprop_invalidation_outer(a)
+end ≠ Int
+
+# https://github.com/JuliaLang/julia/issues/37866
+function issue37866(v::Vector{Union{Nothing,Float64}})
+    for x in v
+        if x > 5.0
+            return x # x > 5.0 is MethodError for Nothing so can assume ::Float64
+        end
+    end
+    return 0.0
+end
+@test Base.infer_return_type(issue37866, (Vector{Union{Nothing,Float64}},)) == Float64
+
 # make sure inference on a recursive call graph with nested `Type`s terminates
 # https://github.com/JuliaLang/julia/issues/40336
 f40336(@nospecialize(t)) = f40336(Type{t})
@@ -4266,10 +4371,10 @@ let # Test the presence of PhiNodes in lowered IR by taking the above function,
     Core.Compiler.replace_code_newstyle!(ci, ir)
     ci.ssavaluetypes = length(ci.ssavaluetypes)
     @test any(x->isa(x, Core.PhiNode), ci.code)
-    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(b, 1.0)
     @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
-    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any, true,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
 end
@@ -4441,7 +4546,7 @@ let x = Tuple{Int,Any}[
         #=19=# (0, Expr(:pop_exception, Core.SSAValue(2)))
         #=20=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
-    handler_at, handlers = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    (;handler_at, handlers) = Core.Compiler.compute_trycatch(last.(x))
     @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
 end
 
@@ -4491,8 +4596,10 @@ let
                # Vararg
         #=va=# Bound, unbound,         # => Tuple{Integer,Integer} (invalid `TypeVar` widened beforehand)
         } where Bound<:Integer
-    argtypes = Core.Compiler.most_general_argtypes(method, specTypes, true)
+    argtypes = Core.Compiler.most_general_argtypes(method, specTypes)
     popfirst!(argtypes)
+    # N.B.: `argtypes` do not have va processing applied yet
+    @test length(argtypes) == 12
     @test argtypes[1] == Integer
     @test argtypes[2] == Integer
     @test argtypes[3] == Type{Bound} where Bound<:Integer
@@ -4503,7 +4610,8 @@ let
     @test argtypes[8] == Any
     @test argtypes[9] == Union{Nothing,Bound} where Bound<:Integer
     @test argtypes[10] == Any
-    @test argtypes[11] == Tuple{Integer,Integer}
+    @test argtypes[11] == Integer
+    @test argtypes[12] == Integer
 end
 
 # make sure not to call `widenconst` on `TypeofVararg` objects
@@ -4635,32 +4743,80 @@ end
 
 # issue #43784
 @testset "issue #43784" begin
-    init = Base.ImmutableDict{Any,Any}()
-    a = Const(init)
-    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, Any])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c)
-    @test ⊑(b, c)
+    ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
+    ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    Const, PartialStruct = Core.Const, Core.PartialStruct
 
-    init = Base.ImmutableDict{Number,Number}()
-    a = Const(init)
-    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c) && ⊑(b, c)
-    @test c === typeof(init)
-
-    a = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c) && ⊑(b, c)
-    @test c.fields[2] === Any # or Number
-    @test c.fields[3] === ComplexF64
-
-    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
-    c = Core.Compiler.tmerge(a, b)
-    @test ⊑(a, c)
-    @test ⊑(b, c)
-    @test c.fields[2] === Complex
-    @test c.fields[3] === Complex
+    let init = Base.ImmutableDict{Any,Any}()
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(init), Any, Any])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === typeof(init)
+    end
+    let init = Base.ImmutableDict{Any,Any}(1,2)
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(getfield(init,1)), Any, Any])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test length(c.fields) == 3
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = Const(init)
+        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === typeof(init)
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(typeof(init), Any[Const(init), Number, ComplexF64])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test c.fields[2] === Number
+        @test c.fields[3] === ComplexF64
+    end
+    let init = Base.ImmutableDict{Number,Number}()
+        a = PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test c.fields[2] === Complex
+        @test c.fields[3] === Complex
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = PartialStruct(T, Any[T])
+        b = PartialStruct(T, Any[T, Number, Number])
+        @test b ⊑ a
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c isa PartialStruct
+        @test length(c.fields) == 1
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = PartialStruct(T, Any[T])
+        b = Const(T())
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = Const(T())
+        b = PartialStruct(T, Any[T])
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
+    let T = Base.ImmutableDict{Number,Number}
+        a = Const(T())
+        b = Const(T(1,2))
+        c = a ⊔ b
+        @test a ⊑ c && b ⊑ c
+        @test c === T
+    end
 
     global const ginit43784 = Base.ImmutableDict{Any,Any}()
     @test Base.return_types() do
@@ -4692,6 +4848,31 @@ end
     @test a == Tuple
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
     @test a == Tuple
+end
+
+let ⊑ = Core.Compiler.partialorder(Core.Compiler.fallback_lattice)
+    ⊔ = Core.Compiler.join(Core.Compiler.fallback_lattice)
+    Const, PartialStruct = Core.Const, Core.PartialStruct
+
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
+    @test !(Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test !(Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]))
+    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]))
+    @test  (Const((1,2)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}])) broken=true
+    @test  (Const((1,2,3)) ⊑ PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]))
+    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int}, Any[Const(1),Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(Tuple{Int,Int,Int}, Any[Const(1),Int,Int]) ⊑ Const((1,2,3)))
+    @test !(PartialStruct(Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
+    @test !(PartialStruct(Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+
+    t = Const((false, false)) ⊔ Const((false, true))
+    @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
+    t = t ⊔ Const((false, false, 0))
+    @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -4944,13 +5125,13 @@ g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
 # to terminate the call.
 @newinterp RecurseInterpreter
 let CC = Core.Compiler
-    function CC.const_prop_entry_heuristic(interp::RecurseInterpreter, result::CC.MethodCallResult,
-                                           si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+    function CC.const_prop_rettype_heuristic(interp::RecurseInterpreter, result::CC.MethodCallResult,
+                                             si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
         if result.rt isa CC.LimitedAccuracy
             return force # allow forced constprop to recurse into unresolved cycles
         end
-        return @invoke CC.const_prop_entry_heuristic(interp::CC.AbstractInterpreter, result::CC.MethodCallResult,
-                                                     si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+        return @invoke CC.const_prop_rettype_heuristic(interp::CC.AbstractInterpreter, result::CC.MethodCallResult,
+                                                       si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
     end
 end
 Base.@constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
@@ -5292,6 +5473,15 @@ end
 foo51090(b) = return bar51090(b)
 @test !fully_eliminated(foo51090, (Int,))
 
+Base.@assume_effects :terminates_globally @noinline function bar51090_terminates(b)
+    b == 0 && return
+    r = foo51090_terminates(b - 1)
+    Base.donotdelete(b)
+    return r
+end
+foo51090_terminates(b) = return bar51090_terminates(b)
+@test !fully_eliminated(foo51090_terminates, (Int,))
+
 # exploit throwness from concrete eval for intrinsics
 @test Base.return_types() do
     Base.or_int(true, 1)
@@ -5606,6 +5796,13 @@ end |> only === Float64
 @test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
 @test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError
 
+# exception type inference for `:new`
+struct NewExctInference
+    a::Int
+    @eval NewExctInference(a) = $(Expr(:new, :NewExctInference, :a))
+end
+@test Base.infer_exception_type(NewExctInference, (Float64,)) == TypeError
+
 # semi-concrete interpretation accuracy
 # https://github.com/JuliaLang/julia/issues/50037
 @inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
@@ -5633,3 +5830,217 @@ end
 
 # Issue #52613
 @test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar
+
+# https://github.com/JuliaLang/julia/issues/53590
+func53590(b) = b ? Int : Float64
+function issue53590(b1, b2)
+    T1 = func53590(b1)
+    T2 = func53590(b2)
+    return typejoin(T1, T2)
+end
+@test issue53590(true, true) == Int
+@test issue53590(true, false) == Real
+@test issue53590(false, false) == Float64
+@test issue53590(false, true) == Real
+
+# Expr(:throw_undef_if_not) handling
+@eval function has_tuin()
+    $(Expr(:throw_undef_if_not, :x, false))
+end
+@test Core.Compiler.return_type(has_tuin, Tuple{}) === Union{}
+@test_throws UndefVarError has_tuin()
+
+function gen_tuin_from_arg(world::UInt, source, _, _)
+    ci = make_codeinfo(Any[
+        Expr(:throw_undef_if_not, :x, Core.Argument(2)),
+        ReturnNode(true),
+    ]; slottypes=Any[Any, Bool])
+    ci.slotnames = Symbol[:var"#self#", :def]
+    ci.nargs = 2
+    ci.isva = false
+    ci
+end
+
+@eval function has_tuin2(def)
+    $(Expr(:meta, :generated, gen_tuin_from_arg))
+    $(Expr(:meta, :generated_only))
+end
+@test_throws UndefVarError has_tuin2(false)
+@test has_tuin2(true)
+
+# issue #53585
+let t = ntuple(i -> i % 8 == 1 ? Int64 : Float64, 4000)
+    @test only(Base.return_types(Base.promote_typeof, t)) == Type{Float64}
+    @test only(Base.return_types(vcat, t)) == Vector{Float64}
+end
+
+# Infinite loop in inference on SSA assignment
+const stop_infinite_loop::Base.Threads.Atomic{Bool} = Base.Threads.Atomic{Bool}(false)
+function gen_infinite_loop_ssa_generator(world::UInt, source, _)
+    ci = make_codeinfo(Any[
+        # Block 1
+        (),
+        # Block 2
+        PhiNode(Int32[1, 5], Any[SSAValue(1), SSAValue(3)]),
+        Expr(:call, tuple, SSAValue(2)),
+        Expr(:call, getindex, GlobalRef(@__MODULE__, :stop_infinite_loop)),
+        GotoIfNot(SSAValue(4), 2),
+        # Block 3
+        ReturnNode(SSAValue(2))
+    ]; slottypes=Any[Any])
+    ci.slotnames = Symbol[:var"#self#"]
+    ci.nargs = 1
+    ci.isva = false
+    ci
+end
+
+@eval function gen_infinite_loop_ssa()
+    $(Expr(:meta, :generated, gen_infinite_loop_ssa_generator))
+    $(Expr(:meta, :generated_only))
+    #= no body =#
+end
+
+# We want to make sure that both this returns `Tuple` and that
+# it doesn't infinite loop inside inference.
+@test Core.Compiler.return_type(gen_infinite_loop_ssa, Tuple{}) === Tuple
+
+# inference local cache lookup with extended lattice elements that may be transformed
+# by `matching_cache_argtypes`
+@newinterp CachedConditionalInterp
+Base.@constprop :aggressive function func_cached_conditional(x, y)
+    if x
+        @noinline sin(y)
+    else
+        0.0
+    end
+end;
+function test_func_cached_conditional(y)
+    y₁ = func_cached_conditional(isa(y, Float64), y)
+    y₂ = func_cached_conditional(isa(y, Float64), y)
+    return y₁, y₂
+end;
+let interp = CachedConditionalInterp();
+    @test Base.infer_return_type(test_func_cached_conditional, (Any,); interp) == Tuple{Float64, Float64}
+    @test count(interp.inf_cache) do result
+        result.linfo.def.name === :func_cached_conditional
+    end == 1
+end
+
+# fieldcount on `Tuple` should constant fold, even though `.fields` not const
+@test fully_eliminated(Base.fieldcount, Tuple{Type{Tuple{Nothing, Int, Int}}})
+
+# Vararg-constprop regression from MutableArithmetics (#54341)
+global SIDE_EFFECT54341::Int
+function foo54341(a, b, c, d, args...)
+    # Side effect to force constprop rather than semi-concrete
+    global SIDE_EFFECT54341 = a + b + c + d
+    return SIDE_EFFECT54341
+end
+bar54341(args...) = foo54341(4, args...)
+
+@test Core.Compiler.return_type(bar54341, Tuple{Vararg{Int}}) === Int
+
+# `PartialStruct` for partially initialized structs:
+struct PartiallyInitialized1
+    a; b; c
+    PartiallyInitialized1(a) = (@nospecialize; new(a))
+    PartiallyInitialized1(a, b) = (@nospecialize; new(a, b))
+    PartiallyInitialized1(a, b, c) = (@nospecialize; new(a, b, c))
+end
+mutable struct PartiallyInitialized2
+    a; b; c
+    PartiallyInitialized2(a) = (@nospecialize; new(a))
+    PartiallyInitialized2(a, b) = (@nospecialize; new(a, b))
+    PartiallyInitialized2(a, b, c) = (@nospecialize; new(a, b, c))
+end
+
+# 1. isdefined modeling for partial struct
+@test Base.infer_return_type((Any,Any)) do a, b
+    Val(isdefined(PartiallyInitialized1(a, b), :b))
+end == Val{true}
+@test Base.infer_return_type((Any,Any,)) do a, b
+    Val(isdefined(PartiallyInitialized1(a, b), :c))
+end >: Val{false}
+@test Base.infer_return_type((PartiallyInitialized1,)) do x
+    @assert isdefined(x, :a)
+    return Val(isdefined(x, :c))
+end == Val
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    Val(isdefined(PartiallyInitialized1(a, b, c), :c))
+end == Val{true}
+@test Base.infer_return_type((Any,Any)) do a, b
+    Val(isdefined(PartiallyInitialized2(a, b), :b))
+end == Val{true}
+@test Base.infer_return_type((Any,Any,)) do a, b
+    Val(isdefined(PartiallyInitialized2(a, b), :c))
+end >: Val{false}
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    s = PartiallyInitialized2(a, b)
+    s.c = c
+    Val(isdefined(s, :c))
+end >: Val{true}
+@test Base.infer_return_type((Any,Any,Any)) do a, b, c
+    Val(isdefined(PartiallyInitialized2(a, b, c), :c))
+end == Val{true}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    Val(isdefined(tuple(1, xs...), 1))
+end == Val{true}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    Val(isdefined(tuple(1, xs...), 2))
+end == Val
+
+# 2. getfield modeling for partial struct
+@test Base.infer_effects((Any,Any); optimize=false) do a, b
+    getfield(PartiallyInitialized1(a, b), :b)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+    getfield(PartiallyInitialized1(a, b), f, #=boundscheck=#false)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+    getfield(PartiallyInitialized1(a, b, c), :c)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+    getfield(PartiallyInitialized1(a, b, c), f, #=boundscheck=#false)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any); optimize=false) do a, b
+    getfield(PartiallyInitialized2(a, b), :b)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+    getfield(PartiallyInitialized2(a, b), f, #=boundscheck=#false)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+    getfield(PartiallyInitialized2(a, b, c), :c)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+    getfield(PartiallyInitialized2(a, b, c), f, #=boundscheck=#false)
+end |> Core.Compiler.is_nothrow
+
+# isdefined-Conditionals
+@test Base.infer_effects((Base.RefValue{Any},)) do x
+    if isdefined(x, :x)
+        return getfield(x, :x)
+    end
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Base.RefValue{Any},)) do x
+    if isassigned(x)
+        return x[]
+    end
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Any,Any); optimize=false) do a, c
+    x = PartiallyInitialized2(a)
+    x.c = c
+    if isdefined(x, :c)
+        return x.b
+    end
+end |> !Core.Compiler.is_nothrow
+
+# End to end test case for the partially initialized struct with `PartialStruct`
+@noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
+@test fully_eliminated() do
+    broadcast_noescape1(Ref("x"))
+end
+
+# InterConditional rt with Vararg argtypes
+fcondvarargs(a, b, c, d) = isa(d, Int64)
+gcondvarargs(a, x...) = return fcondvarargs(a, x...) ? isa(a, Int64) : !isa(a, Int64)
+@test Core.Compiler.return_type(gcondvarargs, Tuple{Vararg{Any}}) === Bool

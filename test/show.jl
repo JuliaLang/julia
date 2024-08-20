@@ -703,7 +703,7 @@ let oldout = stdout, olderr = stderr
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test fetch(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
         @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
@@ -1259,64 +1259,64 @@ end
     close(s2)
 end
 
-let repr = sprint(dump, :(x = 1))
-    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
-end
-let repr = sprint(dump, Pair{String,Int64})
-    @test repr == "Pair{String, Int64} <: Any\n  first::String\n  second::Int64\n"
-end
-let repr = sprint(dump, Tuple)
-    @test repr == "Tuple <: Any\n"
-end
-let repr = sprint(dump, Int64)
-    @test repr == "Int64 <: Signed\n"
-end
-let repr = sprint(dump, Any)
-    @test length(repr) == 4
-    @test occursin(r"^Any\n", repr)
-    @test endswith(repr, '\n')
-end
-let repr = sprint(dump, Integer)
-    @test occursin("Integer <: Real", repr)
-    @test !occursin("Any", repr)
-end
-let repr = sprint(dump, Union{Integer, Float32})
-    @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
-end
 module M30442
     struct T end
 end
-let repr = sprint(show, Union{String, M30442.T})
-    @test repr == "Union{$(curmod_prefix)M30442.T, String}" ||
-          repr == "Union{String, $(curmod_prefix)M30442.T}"
-end
-let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
-    @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
-end
-let repr = sprint(dump, Core.svec())
-    @test repr == "empty SimpleVector\n"
-end
-let repr = sprint(dump, sin)
-    @test repr == "sin (function of type typeof(sin))\n"
-end
-let repr = sprint(dump, Test)
-    @test repr == "Module Test\n"
-end
-let repr = sprint(dump, nothing)
-    @test repr == "Nothing nothing\n"
-end
-let a = Vector{Any}(undef, 10000)
-    a[2] = "elemA"
-    a[4] = "elemB"
-    a[11] = "elemC"
-    repr = sprint(dump, a; context=(:limit => true), sizehint=0)
-    @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
-end
-@test occursin("NamedTuple", sprint(dump, NamedTuple))
+@testset "Dump types" begin
+    let repr = sprint(dump, :(x = 1))
+        @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
+    end
+    let repr = sprint(dump, Pair{String,Int64})
+        @test repr == "struct Pair{String, Int64} <: Any\n  first::String\n  second::Int64\n"
+    end
+    let repr = sprint(dump, Tuple)
+        @test repr == "Tuple <: Any\n"
+    end
+    let repr = sprint(dump, Int64)
+        @test repr == "primitive type Int64 <: Signed\n"
+    end
+    let repr = sprint(dump, Any)
+        @test repr == "abstract type Any\n"
+    end
+    let repr = sprint(dump, Integer)
+        @test occursin("abstract type Integer <: Real", repr)
+        @test !occursin("Any", repr)
+    end
+    let repr = sprint(dump, Union{Integer, Float32})
+        @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
+    end
 
-# issue 36495, dumping a partial NamedTupled shouldn't error
-@test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
+    let repr = sprint(show, Union{String, M30442.T})
+        @test repr == "Union{$(curmod_prefix)M30442.T, String}" ||
+              repr == "Union{String, $(curmod_prefix)M30442.T}"
+    end
+    let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
+        @test repr == "Ptr{UInt8}($(Base.repr(UInt(1))))\n"
+    end
+    let repr = sprint(dump, Core.svec())
+        @test repr == "empty SimpleVector\n"
+    end
+    let repr = sprint(dump, sin)
+        @test repr == "sin (function of type typeof(sin))\n"
+    end
+    let repr = sprint(dump, Test)
+        @test repr == "Module Test\n"
+    end
+    let repr = sprint(dump, nothing)
+        @test repr == "Nothing nothing\n"
+    end
+    let a = Vector{Any}(undef, 10000)
+        a[2] = "elemA"
+        a[4] = "elemB"
+        a[11] = "elemC"
+        repr = sprint(dump, a; context=(:limit => true), sizehint=0)
+        @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
+    end
+    @test occursin("NamedTuple", sprint(dump, NamedTuple))
 
+    # issue 36495, dumping a partial NamedTupled shouldn't error
+    @test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
+end
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
 
@@ -1381,6 +1381,7 @@ test_repr("(:).a")
 @test repr(@NamedTuple{kw::@NamedTuple{kw2::Int64}}) == "@NamedTuple{kw::@NamedTuple{kw2::Int64}}"
 @test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
 @test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
+@test repr(@NamedTuple{var"#"::Int64}) == "@NamedTuple{var\"#\"::Int64}"
 
 # Test general printing of `Base.Pairs` (it should not use the `@Kwargs` macro syntax)
 @test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Tuple{Symbol}, @NamedTuple{init::$Int}}"
@@ -1892,6 +1893,7 @@ end
 
     @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
     @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer, Integer}[1 => 2]"
+    @test showstr([(a=1,)]) == "[(a = 1,)]"
     @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer, Integer}(1 => 2)"
     @test showstr(Dict(true=>false)) == "Dict{Bool, Bool}(1 => 0)"
     @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
@@ -2074,7 +2076,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
 end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
-    fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
+    src.debuginfo = Core.DebugInfo(src.debuginfo.def) # IRCode printing defaults to incomplete line info printing, so turn it off completely for CodeInfo too
     let source_slotnames = String["my_fun28173", "x"],
         repr_ir = split(repr(ir, context = :SOURCE_SLOTNAMES=>source_slotnames), '\n'),
         repr_ir = "CodeInfo(\n" * join((l[4:end] for l in repr_ir), "\n") * ")" # remove line numbers
@@ -2106,7 +2108,7 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     io = IOBuffer()
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
-    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 11
+    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
 
     # Test that a bad :invoke doesn't cause an error during printing
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)
@@ -2681,3 +2683,25 @@ end
 using .Issue49382
 (::Type{Issue49382.Type49382})() = 1
 @test sprint(show, methods(Issue49382.Type49382)) isa String
+
+# Showing of bad SlotNumber in Expr(:toplevel)
+let lowered = Meta.lower(Main, Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(x = 1)), :(y = 1))))
+    ci = lowered.args[1]
+    @assert isa(ci, Core.CodeInfo)
+    @test !isempty(ci.slotnames)
+    @assert ci.code[1].head === :toplevel
+    ci.code[1].args[1] = :($(Core.SlotNumber(1)) = 1)
+    # Check that this gets printed as `_1 = 1` not `y = 1`
+    @test contains(sprint(show, ci), "_1 = 1")
+end
+
+# Pointers should be reprable
+@test is_juliarepr(pointer([1]))
+@test is_juliarepr(Ptr{Vector{Complex{Float16}}}(UInt(0xdeadbeef)))
+
+# Toplevel MethodInstance with undef :uninferred
+let topmi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
+    topmi.specTypes = Tuple{}
+    topmi.def = Main
+    @test contains(repr(topmi), "Toplevel MethodInstance")
+end

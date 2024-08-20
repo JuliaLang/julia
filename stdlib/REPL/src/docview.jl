@@ -11,7 +11,7 @@ import Base.Docs: doc, formatdoc, parsedoc, apropos
 
 using Base: with_output_color, mapany, isdeprecated, isexported
 
-import REPL
+using Base.Filesystem: _readdirx
 
 using InteractiveUtils: subtypes
 
@@ -23,7 +23,7 @@ using Unicode: normalize
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote
-        docs = $REPL.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
+        docs = $Markdown.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
         $REPL.insert_internal_warning(docs, $internal_accesses)
     end
 end
@@ -75,20 +75,6 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
     :($REPL.@repl $io $expr $brief $mod $internal_accesses)
 end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
-
-# Print horizontal lines between each docstring if there are multiple docs
-function insert_hlines(docs)
-    if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
-        return docs
-    end
-    docs = docs::Markdown.MD
-    v = Any[]
-    for (n, doc) in enumerate(docs.content)
-        push!(v, doc)
-        n == length(docs.content) || push!(v, Markdown.HorizontalRule())
-    end
-    return Markdown.MD(v)
-end
 
 function formatdoc(d::DocStr)
     buffer = IOBuffer()
@@ -379,9 +365,9 @@ function find_readme(m::Module)::Union{String, Nothing}
     path = dirname(mpath)
     top_path = pkgdir(m)
     while true
-        for file in readdir(path; join=true, sort=true)
-            isfile(file) && (basename(lowercase(file)) in ["readme.md", "readme"]) || continue
-            return file
+        for entry in _readdirx(path; sort=true)
+            isfile(entry) && (lowercase(entry.name) in ["readme.md", "readme"]) || continue
+            return entry.path
         end
         path == top_path && break # go no further than pkgdir
         path = dirname(path) # work up through nested modules
@@ -473,7 +459,7 @@ repl_corrections(s) = repl_corrections(stdout, s)
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
-    if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
+    if isempty(symbols_latex)
         for (k,v) in Iterators.flatten((REPLCompletions.latex_symbols,
                                         REPLCompletions.emoji_symbols))
             symbols_latex[v] = k

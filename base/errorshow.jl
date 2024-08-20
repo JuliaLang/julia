@@ -43,6 +43,15 @@ function showerror(io::IO, ex::Meta.ParseError)
     end
 end
 
+function showerror(io::IO, ex::Core.TypeNameError)
+    print(io, "TypeNameError: ")
+    if isa(ex.a, Union)
+        print(io, "typename does not apply to unions whose components have different typenames")
+    else
+        print(io, "typename does not apply to this type")
+    end
+end
+
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
@@ -196,7 +205,7 @@ function showerror(io::IO, ex::CanonicalIndexError)
     print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
 end
 
-typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
+typesof(@nospecialize args...) = Tuple{Any[Core.Typeof(arg) for arg in args]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
     if a.name === b.name
@@ -273,7 +282,7 @@ function showerror(io::IO, ex::MethodError)
         arg_types_param = arg_types_param[3:end]
         san_arg_types_param = san_arg_types_param[3:end]
         keys = kwt.parameters[1]::Tuple
-        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in 1:length(keys)]
+        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in eachindex(keys)]
         arg_types = rewrap_unionall(Tuple{arg_types_param...}, arg_types)
     end
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -327,10 +336,11 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     if ex.world == typemax(UInt) || hasmethod(f, arg_types, world=ex.world)
+        if !isempty(kwargs)
+            print(io, "\nThis method does not support all of the given keyword arguments (and may not support any).")
+        end
         if ex.world == typemax(UInt) || isempty(kwargs)
             print(io, "\nThis error has been manually thrown, explicitly, so the method may exist but be intentionally marked as unimplemented.")
-        else
-            print(io, "\nThis method may not support any kwargs.")
         end
     elseif hasmethod(f, arg_types) && !hasmethod(f, arg_types, world=ex.world)
         curworld = get_world_counter()
@@ -366,6 +376,12 @@ function showerror(io::IO, ex::MethodError)
     nothing
 end
 
+function showerror(io::IO, exc::FieldError)
+    @nospecialize
+    print(io, "FieldError: type $(exc.type |> nameof) has no field $(exc.field)")
+    Base.Experimental.show_error_hints(io, exc)
+end
+
 striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
@@ -399,7 +415,7 @@ end
 
 #Show an error by directly calling jl_printf.
 #Useful in Base submodule __init__ functions where stderr isn't defined yet.
-function showerror_nostdio(err, msg::AbstractString)
+function showerror_nostdio(@nospecialize(err), msg::AbstractString)
     stderr_stream = ccall(:jl_stderr_stream, Ptr{Cvoid}, ())
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, msg)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, ":\n")
@@ -687,7 +703,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
     frame_counter = 1
-    for i in 1:length(displayed_stackframes)
+    for i in eachindex(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
 
         print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
@@ -761,7 +777,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
     if n > 1
-        printstyled(io, " (repeats $n times)"; color=:light_black)
+        printstyled(io, " (repeats $n times)"; color=Base.warn_color(), bold=true)
     end
     println(io)
 
@@ -799,7 +815,7 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     # t is a pre-processed backtrace (ref #12856)
-    if t isa Vector{Any}
+    if t isa Vector{Any} && (length(t) == 0 || t[1] isa Tuple{StackFrame,Int})
         filtered = t
     else
         filtered = process_backtrace(t)
@@ -864,7 +880,7 @@ end
 function _collapse_repeated_frames(trace)
     kept_frames = trues(length(trace))
     last_frame = nothing
-    for i in 1:length(trace)
+    for i in eachindex(trace)
         frame::StackFrame, _ = trace[i]
         if last_frame !== nothing && frame.file == last_frame.file && frame.line == last_frame.line
             #=
@@ -909,7 +925,7 @@ function _collapse_repeated_frames(trace)
                 end
                 if length(last_params) > length(params)
                     issame = true
-                    for i = 1:length(params)
+                    for i = eachindex(params)
                         issame &= params[i] == last_params[i]
                     end
                     if issame
@@ -1022,6 +1038,31 @@ end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 
+# handler for displaying a hint in case the user tries to call setindex! on
+# something that doesn't support it:
+#  - a number (probably attempting to use wrong indexing)
+#    eg: a = [1 2; 3 4]; a[1][2] = 5
+#  - a type (probably tried to initialize without parentheses)
+#    eg: d = Dict; d["key"] = 2
+function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if ex.f == setindex!
+        T = arg_types[1]
+        if T <: Number
+            print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
+            printstyled(io, "a[1, 2]", color=:cyan)
+            print(io, " rather than a[1][2]")
+        else isType(T)
+            Tx = T.parameters[1]
+            print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
+            printstyled(io, "d = $Tx([...])", color=:cyan)
+            print(io, " rather than d = $Tx")
+        end
+    end
+end
+
+Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
+
 # Display a hint in case the user tries to use the + operator on strings
 # (probably attempting concatenation)
 function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
@@ -1034,7 +1075,6 @@ function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
-
 
 # Display a hint in case the user tries to use the min or max function on an iterable
 # or tries to use something like `collect` on an iterator without defining either IteratorSize or length
@@ -1061,6 +1101,19 @@ end
 
 Experimental.register_error_hint(methods_on_iterable, MethodError)
 
+# Display a hint in case the user tries to access non-member fields of container type datastructures
+function fielderror_hint_handler(io, exc)
+    @nospecialize
+    field = exc.field
+    type = exc.type
+    if type <: AbstractDict
+        print(io, "\nDid you mean to access dict values using key: `:$field` ? Consider using indexing syntax ")
+        printstyled(io, "dict[:$(field)]", color=:cyan)
+        println(io)
+    end
+end
+
+Experimental.register_error_hint(fielderror_hint_handler, FieldError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

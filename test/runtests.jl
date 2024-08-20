@@ -11,7 +11,7 @@ include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
-using .BuildKiteTestJSON
+using .BuildkiteTestJSON
 
 (; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
@@ -429,9 +429,8 @@ cd(@__DIR__) do
     end
 
     if Base.get_bool_env("CI", false)
-        testresults = joinpath(@__DIR__, "results.json")
-        @info "Writing test result data to $testresults"
-        open(io -> write_testset_json(io, o_ts), testresults, "w")
+        @info "Writing test result data to $(@__DIR__)"
+        write_testset_json_files(@__DIR__, o_ts)
     end
 
     Test.TESTSET_PRINT_ENABLE[] = true

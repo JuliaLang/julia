@@ -220,7 +220,7 @@ for TT in (Int8, Int16, Int32, Int64, Int128, Int256, Int512, Complex{Int32}, Co
                 @test_throws TypeError Core.Intrinsics.atomic_pointerreplace(p, T(10), S(3), :sequentially_consistent, :sequentially_consistent)
             end
             @test Core.Intrinsics.pointerref(p, 1, 1) === T(10) === r[]
-            if sizeof(r) > 8
+            if sizeof(r) > 2*sizeof(Int)
                 @test_throws ErrorException("atomic_pointerref: invalid pointer for atomic operation") unsafe_load(p, :sequentially_consistent)
                 @test_throws ErrorException("atomic_pointerset: invalid pointer for atomic operation") unsafe_store!(p, T(1), :sequentially_consistent)
                 @test_throws ErrorException("atomic_pointerswap: invalid pointer for atomic operation") unsafe_swap!(p, T(100), :sequentially_consistent)
@@ -345,3 +345,16 @@ Base.show(io::IO, a::IntWrap) = print(io, "IntWrap(", a.x, ")")
         @test r2 isa IntWrap && r2.x === 103 === r[].x && r2 !== r[]
     end
 end)()
+
+@testset "issue #54548" begin
+    @inline passthrough(ptr::Core.LLVMPtr{T,A}) where {T,A} = Base.llvmcall(("""
+            define ptr addrspace(1) @entry(ptr addrspace(1) %0) #0 {
+            entry:
+                ret ptr addrspace(1) %0
+            }
+
+            attributes #0 = { alwaysinline }""", "entry"),
+        Core.LLVMPtr{T,A}, Tuple{Core.LLVMPtr{T,A}}, ptr)
+    f(gws) = passthrough(Core.bitcast(Core.LLVMPtr{UInt32,1}, gws))
+    f(C_NULL)
+end

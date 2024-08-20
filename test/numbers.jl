@@ -262,7 +262,7 @@ end
 
 # GMP allocation overflow should not cause crash
 if Base.GMP.ALLOC_OVERFLOW_FUNCTION[] && sizeof(Int) > 4
-  @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
+    @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
 end
 
 # exponentiating with a negative base
@@ -679,6 +679,9 @@ end
     @test copysign(big(-1), 0x02) == 1
     @test copysign(big(-1.0), 0x02) == 1.0
     @test copysign(-1//2, 0x01) == 1//2
+
+    # Verify overflow is checked with rational
+    @test_throws OverflowError copysign(typemin(Int)//1, 1)
 end
 
 @testset "isnan/isinf/isfinite" begin
@@ -1111,10 +1114,30 @@ end
 end
 
 @testset "Irrational zero and one" begin
-    @test one(pi) === true
-    @test zero(pi) === false
-    @test one(typeof(pi)) === true
-    @test zero(typeof(pi)) === false
+    for i in (π, ℯ, γ, catalan)
+        @test one(i) === true
+        @test zero(i) === false
+        @test one(typeof(i)) === true
+        @test zero(typeof(i)) === false
+    end
+end
+
+@testset "Irrational iszero, isfinite, isinteger, and isone" begin
+    for i in (π, ℯ, γ, catalan)
+        @test !iszero(i)
+        @test !isone(i)
+        @test !isinteger(i)
+        @test isfinite(i)
+    end
+end
+
+@testset "Irrational promote_type" begin
+    for T in (Float16, Float32, Float64)
+        for i in (π, ℯ, γ, catalan)
+            @test T(2.0) * i ≈ T(2.0) * T(i)
+            @test T(2.0) * i isa T
+        end
+    end
 end
 
 @testset "Irrationals compared with Irrationals" begin
@@ -2773,6 +2796,20 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     @test [2,4,8].^-2 == [0.25, 0.0625, 0.015625]
     @test [2, 4, 8].^-2 .* 4 == [1.0, 0.25, 0.0625] # nested literal_pow
     @test ℯ^-2 == exp(-2) ≈ inv(ℯ^2) ≈ (ℯ^-1)^2 ≈ sqrt(ℯ^-4)
+
+    if Int === Int32
+        p = 2147483647
+        @test x^p == 1
+        @test x^2147483647 == 2
+        @test (@fastmath x^p) == 1
+        @test (@fastmath x^2147483647) == 2
+    elseif Int === Int64
+        p = 9223372036854775807
+        @test x^p == 1
+        @test x^9223372036854775807 == 2
+        @test (@fastmath x^p) == 1
+        @test (@fastmath x^9223372036854775807) == 2
+    end
 end
 module M20889 # do we get the expected behavior without importing Base.^?
     using Test

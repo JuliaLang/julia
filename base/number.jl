@@ -287,7 +287,12 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
     zero(x)
     zero(::Type)
 
-Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+Get the additive identity element for `x`. If the additive identity can be deduced
+from the type alone, then a type may be given as an argument to `zero`.
+
+For example, `zero(Int)` will work because the additive identity is the same for all
+instances of `Int`, but `zero(Vector{Int})` is not defined because vectors of different
+lengths have different additive identities.
 
 See also [`iszero`](@ref), [`one`](@ref), [`oneunit`](@ref), [`oftype`](@ref).
 
@@ -311,12 +316,15 @@ zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 """
     one(x)
-    one(T::type)
+    one(T::Type)
 
 Return a multiplicative identity for `x`: a value such that
-`one(x)*x == x*one(x) == x`.  Alternatively `one(T)` can
-take a type `T`, in which case `one` returns a multiplicative
-identity for any `x` of type `T`.
+`one(x)*x == x*one(x) == x`. If the multiplicative identity can
+be deduced from the type alone, then a type may be given as
+an argument to `one` (e.g. `one(Int)` will work because the
+multiplicative identity is the same for all instances of `Int`,
+but `one(Matrix{Int})` is not defined because matrices of
+different shapes have different multiplicative identities.)
 
 If possible, `one(x)` returns a value of the same type as `x`,
 and `one(T)` returns a value of type `T`.  However, this may
@@ -354,9 +362,10 @@ one(::Type{Union{}}, slurp...) = Union{}(1)
     oneunit(x::T)
     oneunit(T::Type)
 
-Return `T(one(x))`, where `T` is either the type of the argument or
-(if a type is passed) the argument.  This differs from [`one`](@ref) for
-dimensionful quantities: `one` is dimensionless (a multiplicative identity)
+Return `T(one(x))`, where `T` is either the type of the argument, or
+the argument itself in cases where the `oneunit` can be deduced from
+the type alone. This differs from [`one`](@ref) for dimensionful
+quantities: `one` is dimensionless (a multiplicative identity)
 while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).
 
 # Examples

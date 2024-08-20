@@ -116,8 +116,8 @@ julia> using Base.Threads
 julia> nthreadpools()
 2
 
-julia> threadpool()
-:default
+julia> threadpool() # the main thread is in the interactive thread pool
+:interactive
 
 julia> nthreads(:default)
 3
@@ -132,6 +132,10 @@ julia> nthreads()
 !!! note
     The zero-argument version of `nthreads` returns the number of threads
     in the default pool.
+
+!!! note
+    Depending on whether Julia has been started with interactive threads,
+    the main thread is either in the default or interactive thread pool.
 
 Either or both numbers can be replaced with the word `auto`, which causes
 Julia to choose a reasonable default.
@@ -188,6 +192,7 @@ julia> a
 Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@distributed`](@ref).
 
 ### Using `@threads` without data-races
+
 The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just known that a data race can result in incorrect results and dangerous errors.
 
 Lets say we want to make the function `sum_single` below multithreaded.
@@ -223,11 +228,11 @@ julia> sum_multi_bad(1:1_000_000)
 Note that the result is not `500000500000` as it should be, and will most likely change each evaluation.
 
 To fix this, buffers that are specific to the task may be used to segment the sum into chunks that are race-free.
-Here `sum_single` is reused, with its own internal buffer `s`. The input vector `a` is split into `nthreads()`
+Here `sum_single` is reused, with its own internal buffer `s`. The input vector `a` is split into at most `nthreads()`
 chunks for parallel work. We then use `Threads.@spawn` to create tasks that individually sum each chunk. Finally, we sum the results from each task using `sum_single` again:
 ```julia-repl
 julia> function sum_multi_good(a)
-           chunks = Iterators.partition(a, length(a) ÷ Threads.nthreads())
+           chunks = Iterators.partition(a, cld(length(a), Threads.nthreads()))
            tasks = map(chunks) do chunk
                Threads.@spawn sum_single(chunk)
            end
@@ -252,6 +257,9 @@ depending on the characteristics of the operations.
 
 Although Julia's threads can communicate through shared memory, it is notoriously difficult to write correct and data-race free multi-threaded code. Julia's
 [`Channel`](@ref)s are thread-safe and may be used to communicate safely. There are also sections below that explain how to use [locks](@ref man-using-locks) and [atomics](@ref man-atomic-operations) to avoid data-races.
+
+In certain cases, Julia is able to detect a detect safety violations, in particular in regards to deadlocks or other known-unsafe operations such as yielding
+to the currently running task. In these cases, a [`ConcurrencyViolationError`](@ref) is thrown.
 
 ### Data-race freedom
 

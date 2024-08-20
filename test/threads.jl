@@ -341,3 +341,28 @@ end
 @testset "Base.Threads docstrings" begin
     @test isempty(Docs.undocumented_names(Threads))
 end
+
+@testset "wait failed task" begin
+    @testset "wait without throw keyword" begin
+        t = Threads.@spawn error("Error")
+        @test_throws TaskFailedException wait(t)
+    end
+
+    @testset "wait with throw=false" begin
+        t = Threads.@spawn error("Error")
+        wait(t; throw=false)
+        @test istaskfailed(t)
+    end
+end
+
+@testset "jl_*affinity" begin
+    cpumasksize = @ccall uv_cpumask_size()::Cint
+    if cpumasksize > 0 # otherwise affinities are not supported on the platform (UV_ENOTSUP)
+        jl_getaffinity = (tid, mask, cpumasksize) -> ccall(:jl_getaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        jl_setaffinity = (tid, mask, cpumasksize) -> ccall(:jl_setaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        mask = zeros(Cchar, cpumasksize)
+        @test jl_getaffinity(0, mask, cpumasksize) == 0
+        @test !all(iszero, mask)
+        @test jl_setaffinity(0, mask, cpumasksize) == 0
+    end
+end

@@ -364,7 +364,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
         }
     }
 #endif
-    jl_atomic_store_relaxed(&ptls->gc_state, 0); // GC unsafe
+    jl_atomic_store_relaxed(&ptls->gc_state, JL_GC_STATE_UNSAFE); // GC unsafe
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
@@ -404,6 +404,12 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     jl_fence();
     uv_mutex_unlock(&tls_lock);
 
+#if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
+    // ensures libunwind TLS space for this thread is allocated eagerly
+    // to make unwinding async-signal-safe even when using thread local caches.
+    unw_ensure_tls();
+#endif
+
     return ptls;
 }
 
@@ -430,6 +436,30 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
     return &ct->gcstack;
+}
+
+
+void jl_safepoint_suspend_all_threads(jl_task_t *ct)
+{
+    // TODO: prevent jl_n_threads changing or jl_safepoint_resume_thread calls on another thread
+    //uv_mutex_lock(&tls_lock);
+    //disallow_resume = ct->tid;
+    //uv_mutex_unlock(&tls_lock);
+    for (int16_t tid = 0; tid < jl_atomic_load_relaxed(&jl_n_threads); tid++) {
+        if (tid != jl_atomic_load_relaxed(&ct->tid))
+            jl_safepoint_suspend_thread(tid, 1);
+    };
+}
+
+void jl_safepoint_resume_all_threads(jl_task_t *ct)
+{
+    //uv_mutex_lock(&tls_lock);
+    //if (disallow_resume != ct->tid) return;
+    //uv_mutex_unlock(&tls_lock);
+    for (int16_t tid = 0; tid < jl_atomic_load_relaxed(&jl_n_threads); tid++) {
+        if (tid != jl_atomic_load_relaxed(&ct->tid))
+            jl_safepoint_resume_thread(tid);
+    };
 }
 
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
@@ -508,6 +538,12 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 #else
     pthread_mutex_unlock(&in_signal_lock);
 #endif
+    free(ptls->bt_data);
+    small_arraylist_free(&ptls->locks);
+    ptls->previous_exception = NULL;
+    // allow the page root_task is on to be freed
+    ptls->root_task = NULL;
+    jl_free_thread_gc_state(ptls);
     // then park in safe-region
     (void)jl_gc_safe_enter(ptls);
 }
@@ -517,7 +553,6 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 //// the other threads time to fail and emit their failure message
 //__attribute__((destructor)) static void _waitthreaddeath(void) { sleep(1); }
 
-JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 jl_mutex_t typecache_lock;
 
 JL_DLLEXPORT ssize_t jl_tls_offset = -1;
@@ -700,14 +735,9 @@ void jl_init_threading(void)
         }
         else {
             // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
-            // set the number of mark threads to half of compute threads
+            // set the number of mark threads to the number of compute threads
             // and number of sweep threads to 0
-            if (nthreads <= 1) {
-                jl_n_markthreads = 0;
-            }
-            else {
-                jl_n_markthreads = (nthreads / 2) - 1;
-            }
+            jl_n_markthreads = nthreads - 1; // -1 for the master (mutator) thread which may also do marking
             // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
             // cap the number of threads that may run the mark phase to
             // the number of CPU cores
@@ -732,10 +762,10 @@ void jl_init_threading(void)
     jl_atomic_store_release(&jl_all_tls_states, (jl_ptls_t*)calloc(jl_all_tls_states_size, sizeof(jl_ptls_t)));
     jl_atomic_store_release(&jl_n_threads, jl_all_tls_states_size);
     jl_n_gcthreads = ngcthreads;
-    gc_first_tid = nthreads;
+    gc_first_tid = nthreads + nthreadsi;
 }
 
-static uv_barrier_t thread_init_done;
+uv_barrier_t thread_init_done;
 
 void jl_start_threads(void)
 {
@@ -774,33 +804,24 @@ void jl_start_threads(void)
     uv_barrier_init(&thread_init_done, nthreads);
 
     // GC/System threads need to be after the worker threads.
-    int nworker_threads = nthreads - ngcthreads;
+    int nmutator_threads = nthreads - ngcthreads;
 
-    for (i = 1; i < nthreads; ++i) {
+    for (i = 1; i < nmutator_threads; ++i) {
         jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;
-        if (i < nworker_threads) {
-            uv_thread_create(&uvtid, jl_threadfun, t);
-            if (exclusive) {
-                mask[i] = 1;
-                uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
-                mask[i] = 0;
-            }
-        }
-        else if (i == nthreads - 1 && jl_n_sweepthreads == 1) {
-            uv_thread_create(&uvtid, jl_concurrent_gc_threadfun, t);
-        }
-        else {
-            uv_thread_create(&uvtid, jl_parallel_gc_threadfun, t);
+        uv_thread_create(&uvtid, jl_threadfun, t);
+        if (exclusive) {
+            mask[i] = 1;
+            uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+            mask[i] = 0;
         }
         uv_thread_detach(&uvtid);
     }
-
-    uv_barrier_wait(&thread_init_done);
 }
 
-_Atomic(unsigned) _threadedregion; // HACK: keep track of whether to prioritize IO or threading
+_Atomic(unsigned) _threadedregion; // keep track of whether to prioritize IO or threading
+_Atomic(uint16_t) io_loop_tid; // mark which thread is assigned to run the uv_loop
 
 JL_DLLEXPORT int jl_in_threaded_region(void)
 {
@@ -821,7 +842,27 @@ JL_DLLEXPORT void jl_exit_threaded_region(void)
         JL_UV_UNLOCK();
         // make sure thread 0 is not using the sleep_lock
         // so that it may enter the libuv event loop instead
-        jl_wakeup_thread(0);
+        jl_fence();
+        jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
+    }
+}
+
+JL_DLLEXPORT void jl_set_io_loop_tid(int16_t tid)
+{
+    if (tid < 0 || tid >= jl_atomic_load_relaxed(&jl_n_threads)) {
+        // TODO: do we care if this thread has exited or not started yet,
+        // since ptls2 might not be defined yet and visible on all threads yet
+        return;
+    }
+    jl_atomic_store_relaxed(&io_loop_tid, tid);
+    jl_fence();
+    if (jl_atomic_load_relaxed(&_threadedregion) == 0) {
+        // make sure the previous io_loop_tid leaves the libuv event loop
+        JL_UV_LOCK();
+        JL_UV_UNLOCK();
+        // make sure thread io_loop_tid is not using the sleep_lock
+        // so that it may enter the libuv event loop instead
+        jl_wakeup_thread(tid);
     }
 }
 
@@ -958,6 +999,52 @@ void _jl_mutex_unlock(jl_task_t *self, jl_mutex_t *lock)
 JL_DLLEXPORT int jl_alignment(size_t sz)
 {
     return jl_gc_alignment(sz);
+}
+
+// Return values:
+//     0  == success
+//     1  == invalid thread id provided
+//     2  == ptls2 was NULL
+//     <0 == uv_thread_getaffinity exit code
+JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    if (tid < 0 || tid >= nthreads)
+        return 1;
+
+    // TODO: use correct lock. system_id is only legal if the thread is alive.
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return 2;
+    uv_thread_t uvtid = ptls2->system_id;
+
+    int ret_uv = uv_thread_getaffinity(&uvtid, mask, cpumasksize);
+    if (ret_uv != 0)
+        return ret_uv;
+
+    return 0; // success
+}
+
+// Return values:
+//     0  == success
+//     1  == invalid thread id provided
+//     2  == ptls2 was NULL
+//     <0 == uv_thread_getaffinity exit code
+JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    if (tid < 0 || tid >= nthreads)
+        return 1;
+
+    // TODO: use correct lock. system_id is only legal if the thread is alive.
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        return 2;
+    uv_thread_t uvtid = ptls2->system_id;
+
+    int ret_uv = uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+    if (ret_uv != 0)
+        return ret_uv;
+
+    return 0; // success
 }
 
 #ifdef __cplusplus

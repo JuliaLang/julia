@@ -5,6 +5,7 @@
   utilities for walking the stack and looking up information about code addresses
 */
 #include <inttypes.h>
+#include "gc-stock.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"
@@ -82,7 +83,7 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         skip--;
     }
 #endif
-#if !defined(_OS_WINDOWS_)
+#if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     jl_set_safe_restore(&buf);
@@ -652,6 +653,80 @@ void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
     free(frames);
 }
 
+const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
+{
+    jl_value_t *def = debuginfo->def;
+    if (jl_is_method_instance(def))
+        def = ((jl_method_instance_t*)def)->def.value;
+    if (jl_is_method(def))
+        def = (jl_value_t*)((jl_method_t*)def)->file;
+    if (jl_is_symbol(def))
+        return jl_symbol_name((jl_sym_t*)def);
+    return "<unknown>";
+}
+
+const char *jl_debuginfo_file(jl_debuginfo_t *debuginfo)
+{
+    jl_debuginfo_t *linetable = debuginfo->linetable;
+    while ((jl_value_t*)linetable != jl_nothing) {
+        debuginfo = linetable;
+        linetable = debuginfo->linetable;
+    }
+    return jl_debuginfo_file1(debuginfo);
+}
+
+jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def)
+{
+    if (jl_is_method_instance(debuginfo_def))
+        debuginfo_def = ((jl_method_instance_t*)debuginfo_def)->def.value;
+    if (jl_is_method(debuginfo_def))
+        debuginfo_def = (jl_value_t*)((jl_method_t*)debuginfo_def)->module;
+    if (jl_is_module(debuginfo_def))
+        return (jl_module_t*)debuginfo_def;
+    return NULL;
+}
+
+const char *jl_debuginfo_name(jl_value_t *func)
+{
+    if (func == NULL)
+        return "macro expansion";
+    if (jl_is_method_instance(func))
+        func = ((jl_method_instance_t*)func)->def.value;
+    if (jl_is_method(func))
+        func = (jl_value_t*)((jl_method_t*)func)->name;
+    if (jl_is_symbol(func))
+        return jl_symbol_name((jl_sym_t*)func);
+    if (jl_is_module(func))
+        return "top-level scope";
+    return "<unknown>";
+}
+
+// func == module : top-level
+// func == NULL : macro expansion
+static void jl_print_debugloc(jl_debuginfo_t *debuginfo, jl_value_t *func, size_t ip, int inlined) JL_NOTSAFEPOINT
+{
+    if (!jl_is_symbol(debuginfo->def)) // this is a path or
+        func = debuginfo->def; // this is inlined code
+    struct jl_codeloc_t stmt = jl_uncompress1_codeloc(debuginfo->codelocs, ip);
+    intptr_t edges_idx = stmt.to;
+    if (edges_idx) {
+        jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, edges_idx - 1);
+        assert(jl_typetagis(edge, jl_debuginfo_type));
+        jl_print_debugloc(edge, NULL, stmt.pc, 1);
+    }
+    intptr_t ip2 = stmt.line;
+    if (ip2 >= 0 && ip > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
+        jl_print_debugloc(debuginfo->linetable, func, ip2, 0);
+    }
+    else {
+        if (ip2 < 0) // set broken debug info to ignored
+            ip2 = 0;
+        const char *func_name = jl_debuginfo_name(func);
+        const char *file = jl_debuginfo_file(debuginfo);
+        jl_safe_print_codeloc(func_name, file, ip2, inlined);
+    }
+}
+
 // Print code location for backtrace buffer entry at *bt_entry
 void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
 {
@@ -659,33 +734,23 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         jl_print_native_codeloc(bt_entry[0].uintptr);
     }
     else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
-        size_t ip = jl_bt_entry_header(bt_entry);
+        size_t ip = jl_bt_entry_header(bt_entry); // zero-indexed
         jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
-        if (jl_is_method_instance(code)) {
+        jl_value_t *def = (jl_value_t*)jl_core_module; // just used as a token here that isa Module
+        if (jl_is_code_instance(code)) {
+            jl_code_instance_t *ci = (jl_code_instance_t*)code;
+            def = (jl_value_t*)ci->def;
+            code = jl_atomic_load_relaxed(&ci->inferred);
+        } else if (jl_is_method_instance(code)) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)code;
+            def = code;
             // When interpreting a method instance, need to unwrap to find the code info
-            code = jl_atomic_load_relaxed(&((jl_method_instance_t*)code)->uninferred);
+            code = mi->def.method->source;
         }
         if (jl_is_code_info(code)) {
             jl_code_info_t *src = (jl_code_info_t*)code;
             // See also the debug info handling in codegen.cpp.
-            // NB: debuginfoloc is 1-based!
-            intptr_t debuginfoloc = jl_array_data(src->codelocs, int32_t)[ip];
-            while (debuginfoloc != 0) {
-                jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
-                    jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
-                assert(jl_typetagis(locinfo, jl_lineinfonode_type));
-                const char *func_name = "Unknown";
-                jl_value_t *method = locinfo->method;
-                if (jl_is_method_instance(method))
-                    method = ((jl_method_instance_t*)method)->def.value;
-                if (jl_is_method(method))
-                    method = (jl_value_t*)((jl_method_t*)method)->name;
-                if (jl_is_symbol(method))
-                    func_name = jl_symbol_name((jl_sym_t*)method);
-                jl_safe_print_codeloc(func_name, jl_symbol_name(locinfo->file),
-                                      locinfo->line, locinfo->inlined_at);
-                debuginfoloc = locinfo->inlined_at;
-            }
+            jl_print_debugloc(src->debuginfo, def, ip + 1, 0);
         }
         else {
             // If we're using this function something bad has already happened;
@@ -856,14 +921,12 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 
 extern bt_context_t *jl_to_bt_context(void *sigctx);
 
-static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
+JL_DLLEXPORT size_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    ptls->bt_size = 0;
     if (t == ct) {
-        ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
-        return;
+        return rec_backtrace(bt_data, max_bt_size, 0);
     }
     bt_context_t *context = NULL;
     bt_context_t c;
@@ -871,9 +934,11 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
     while (!jl_atomic_cmpswap(&t->tid, &old, ptls->tid) && old != ptls->tid) {
         int lockret = jl_lock_stackwalk();
         // if this task is already running somewhere, we need to stop the thread it is running on and query its state
-        if (!jl_thread_suspend_and_get_state(old, 0, &c)) {
+        if (!jl_thread_suspend_and_get_state(old, 1, &c)) {
             jl_unlock_stackwalk(lockret);
-            return;
+            if (jl_atomic_load_relaxed(&t->tid) != old)
+                continue;
+            return 0;
         }
         jl_unlock_stackwalk(lockret);
         if (jl_atomic_load_relaxed(&t->tid) == old) {
@@ -888,11 +953,11 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         // got the wrong thread stopped, try again
         jl_thread_resume(old);
     }
-    if (context == NULL && (!t->copy_stack && t->started && t->stkbuf != NULL)) {
+    if (context == NULL && (!t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL)) {
         // need to read the context from the task stored state
 #if defined(_OS_WINDOWS_)
         memset(&c, 0, sizeof(c));
-        _JUMP_BUFFER *mctx = (_JUMP_BUFFER*)&t->ctx.ctx.uc_mcontext;
+        _JUMP_BUFFER *mctx = (_JUMP_BUFFER*)&t->ctx.ctx->uc_mcontext;
 #if defined(_CPU_X86_64_)
         c.Rbx = mctx->Rbx;
         c.Rsp = mctx->Rsp;
@@ -905,20 +970,22 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         c.R15 = mctx->R15;
         c.Rip = mctx->Rip;
         memcpy(&c.Xmm6, &mctx->Xmm6, 10 * sizeof(mctx->Xmm6)); // Xmm6-Xmm15
-#else
+#elif defined(_CPU_X86_)
         c.Eip = mctx->Eip;
         c.Esp = mctx->Esp;
         c.Ebp = mctx->Ebp;
+#else
+        #error Windows is currently only supported on x86 and x86_64
 #endif
         context = &c;
 #elif defined(JL_HAVE_UNW_CONTEXT)
-        context = &t->ctx.ctx;
+        context = t->ctx.ctx;
 #elif defined(JL_HAVE_UCONTEXT)
-        context = jl_to_bt_context(&t->ctx.ctx);
+        context = jl_to_bt_context(t->ctx.ctx);
 #elif defined(JL_HAVE_ASM)
         memset(&c, 0, sizeof(c));
      #if defined(_OS_LINUX_) && defined(__GLIBC__)
-        __jmp_buf *mctx = &t->ctx.ctx.uc_mcontext->__jmpbuf;
+        __jmp_buf *mctx = &t->ctx.ctx->uc_mcontext->__jmpbuf;
         mcontext_t *mc = &c.uc_mcontext;
       #if defined(_CPU_X86_)
         // https://github.com/bminor/glibc/blame/master/sysdeps/i386/__longjmp.S
@@ -1004,13 +1071,13 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         mc->pc = mc->regs[30];
         context = &c;
       #else
-       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown linux")
+       #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown linux")
        (void)mc;
        (void)c;
        (void)mctx;
       #endif
      #elif defined(_OS_DARWIN_)
-        sigjmp_buf *mctx = &t->ctx.ctx.uc_mcontext;
+        sigjmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
       #if defined(_CPU_X86_64_)
         // from https://github.com/apple/darwin-libplatform/blob/main/src/setjmp/x86_64/_setjmp.s
         x86_thread_state64_t *mc = (x86_thread_state64_t*)&c;
@@ -1066,13 +1133,14 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         mc->__pad = 0; // aka __ra_sign_state = not signed
         context = &c;
       #else
-       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown darwin")
+       #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown darwin")
         (void)mctx;
         (void)c;
       #endif
-     #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
-        sigjmp_buf *mctx = &t->ctx.ctx.uc_mcontext;
+     #elif defined(_OS_FREEBSD_)
+        sigjmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
         mcontext_t *mc = &c.uc_mcontext;
+      #if defined(_CPU_X86_64_)
         // https://github.com/freebsd/freebsd-src/blob/releng/13.1/lib/libc/amd64/gen/_setjmp.S
         mc->mc_rip = ((long*)mctx)[0];
         mc->mc_rbx = ((long*)mctx)[1];
@@ -1083,22 +1151,50 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         mc->mc_r14 = ((long*)mctx)[6];
         mc->mc_r15 = ((long*)mctx)[7];
         context = &c;
+      #elif defined(_CPU_AARCH64_)
+        mc->mc_gpregs.gp_x[19] = ((long*)mctx)[0];
+        mc->mc_gpregs.gp_x[20] = ((long*)mctx)[1];
+        mc->mc_gpregs.gp_x[21] = ((long*)mctx)[2];
+        mc->mc_gpregs.gp_x[22] = ((long*)mctx)[3];
+        mc->mc_gpregs.gp_x[23] = ((long*)mctx)[4];
+        mc->mc_gpregs.gp_x[24] = ((long*)mctx)[5];
+        mc->mc_gpregs.gp_x[25] = ((long*)mctx)[6];
+        mc->mc_gpregs.gp_x[26] = ((long*)mctx)[7];
+        mc->mc_gpregs.gp_x[27] = ((long*)mctx)[8];
+        mc->mc_gpregs.gp_x[28] = ((long*)mctx)[9];
+        mc->mc_gpregs.gp_x[29] = ((long*)mctx)[10];
+        mc->mc_gpregs.gp_lr = ((long*)mctx)[11];
+        mc->mc_gpregs.gp_sp = ((long*)mctx)[12];
+        mc->mc_fpregs.fp_q[7] = ((long*)mctx)[13];
+        mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14];
+        mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15];
+        mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16];
+        mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17];
+        mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18];
+        mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19];
+        mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20];
+        context = &c;
+      #else
+       #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown freebsd")
+        (void)mctx;
+        (void)c;
+      #endif
      #else
-      #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
+      #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown system")
       (void)c;
      #endif
-#elif defined(JL_HAVE_SIGALTSTACK)
-     #pragma message("jl_rec_backtrace not defined for SIGALTSTACK")
 #else
-     #pragma message("jl_rec_backtrace not defined for unknown task system")
+     #pragma message("jl_record_backtrace not defined for unknown task system")
 #endif
     }
+    size_t bt_size = 0;
     if (context)
-        ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, context,  t->gcstack);
+        bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, t->gcstack);
     if (old == -1)
         jl_atomic_store_relaxed(&t->tid, old);
     else if (old != ptls->tid)
         jl_thread_resume(old);
+    return bt_size;
 }
 
 //--------------------------------------------------
@@ -1130,12 +1226,15 @@ JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    jl_rec_backtrace(t);
-    size_t i, bt_size = ptls->bt_size;
+    ptls->bt_size = 0;
     jl_bt_element_t *bt_data = ptls->bt_data;
+    size_t bt_size = jl_record_backtrace(t, bt_data, JL_MAX_BT_SIZE);
+    size_t i;
     for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
         jl_print_bt_entry_codeloc(bt_data + i);
     }
+    if (bt_size == 0)
+        jl_safe_printf("      no backtrace recorded\n");
 }
 
 JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
@@ -1151,15 +1250,19 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (size_t i = 0; i < nthreads; i++) {
-        // skip GC threads since they don't have tasks
-        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
+        jl_ptls_t ptls2 = allstates[i];
+        if (gc_is_parallel_collector_thread(i)) {
+            jl_safe_printf("==== Skipping backtrace for parallel GC thread %zu\n", i + 1);
             continue;
         }
-        jl_ptls_t ptls2 = allstates[i];
+        if (gc_is_concurrent_collector_thread(i)) {
+            jl_safe_printf("==== Skipping backtrace for concurrent GC thread %zu\n", i + 1);
+            continue;
+        }
         if (ptls2 == NULL) {
             continue;
         }
-        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
         int t_state = JL_TASK_STATE_DONE;
         jl_task_t *t = ptls2->root_task;
@@ -1171,14 +1274,9 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
             jl_safe_printf("     ---- Root task (%p)\n", ptls2->root_task);
             if (t != NULL) {
                 jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
-                        t->sticky, t->started, t_state,
+                        t->sticky, t->ctx.started, t_state,
                         jl_atomic_load_relaxed(&t->tid) + 1);
-                if (t->stkbuf != NULL) {
-                    jlbacktracet(t);
-                }
-                else {
-                    jl_safe_printf("      no stack\n");
-                }
+                jlbacktracet(t);
             }
             jl_safe_printf("     ---- End root task\n");
         }
@@ -1193,12 +1291,9 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
             jl_safe_printf("     ---- Task %zu (%p)\n", j + 1, t);
             // n.b. this information might not be consistent with the stack printing after it, since it could start running or change tid, etc.
             jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
-                    t->sticky, t->started, t_state,
+                    t->sticky, t->ctx.started, t_state,
                     jl_atomic_load_relaxed(&t->tid) + 1);
-            if (t->stkbuf != NULL)
-                jlbacktracet(t);
-            else
-                jl_safe_printf("      no stack\n");
+            jlbacktracet(t);
             jl_safe_printf("     ---- End task %zu\n", j + 1);
         }
         jl_safe_printf("==== End thread %d\n", ptls2->tid + 1);

@@ -127,8 +127,11 @@ function _trywait(t::Union{Timer, AsyncCondition})
         t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
     else
         if !isopen(t)
-            close(t) # wait for the close to complete
-            return false
+            set = t.set
+            if !set
+                close(t) # wait for the close to complete
+                return false
+            end
         end
         iolock_begin()
         set = t.set
@@ -151,7 +154,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
         end
         iolock_end()
     end
-    @atomic :monotonic t.set = false
+    @atomic :monotonic t.set = false # if there are multiple waiters, an unspecified number may short-circuit past here
     return set
 end
 
@@ -161,14 +164,14 @@ function wait(t::Union{Timer, AsyncCondition})
 end
 
 
-isopen(t::Union{Timer, AsyncCondition}) = t.isopen && t.handle != C_NULL
+isopen(t::Union{Timer, AsyncCondition}) = @atomic :acquire t.isopen
 
 function close(t::Union{Timer, AsyncCondition})
-    t.handle == C_NULL && return # short-circuit path
+    t.handle == C_NULL && !t.isopen && return # short-circuit path, :monotonic
     iolock_begin()
     if t.handle != C_NULL
         if t.isopen
-            @atomic :monotonic t.isopen = false
+            @atomic :release t.isopen = false
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
         end
         # implement _trywait here without the auto-reset function, just waiting for the final close signal
@@ -186,6 +189,8 @@ function close(t::Union{Timer, AsyncCondition})
             unlock(t.cond)
             unpreserve_handle(t)
         end
+    elseif t.isopen
+        @atomic :release t.isopen = false
     end
     iolock_end()
     nothing
@@ -198,8 +203,8 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
         if t.handle != C_NULL
             disassociate_julia_struct(t.handle) # not going to call the usual close hooks anymore
             if t.isopen
-                @atomic :monotonic t.isopen = false
-                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
+                @atomic :release t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle) # this will call Libc.free
             end
             @atomic :monotonic t.handle = C_NULL
             notify(t.cond, false)
@@ -214,8 +219,10 @@ end
 function _uv_hook_close(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
-        @atomic :monotonic t.isopen = false
-        Libc.free(@atomicswap :monotonic t.handle = C_NULL)
+        handle = t.handle
+        @atomic :release t.isopen = false
+        @atomic :monotonic t.handle = C_NULL
+        Libc.free(handle)
         notify(t.cond, false)
     finally
         unlock(t.cond)
@@ -243,7 +250,7 @@ function uv_timercb(handle::Ptr{Cvoid})
         if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
             # timer is stopped now
             if t.isopen
-                @atomic :monotonic t.isopen = false
+                @atomic :release t.isopen = false
                 ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
             end
         end

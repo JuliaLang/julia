@@ -14,14 +14,14 @@ function GitStatus(repo::GitRepo; status_opts=StatusOptions())
     stat_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_status_list_new, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{StatusOptions}),
-                  stat_ptr_ptr, repo.ptr, Ref(status_opts))
+                  stat_ptr_ptr, repo, Ref(status_opts))
     return GitStatus(repo, stat_ptr_ptr[])
 end
 
 function Base.length(status::GitStatus)
     ensure_initialized()
     return Int(ccall((:git_status_list_entrycount, libgit2), Csize_t,
-                      (Ptr{Ptr{Cvoid}},), status.ptr))
+                         (Ptr{Cvoid},), status))
 end
 
 function Base.getindex(status::GitStatus, i::Integer)
@@ -51,7 +51,7 @@ function status(repo::GitRepo, path::String)
     status_ptr = Ref{Cuint}(0)
     ret =  ccall((:git_status_file, libgit2), Cint,
                   (Ref{Cuint}, Ptr{Cvoid}, Cstring),
-                  status_ptr, repo.ptr, path)
+                  status_ptr, repo, path)
     (ret == Cint(Error.ENOTFOUND) || ret == Cint(Error.EAMBIGUOUS)) && return nothing
     return status_ptr[]
 end
