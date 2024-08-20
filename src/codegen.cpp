@@ -3207,7 +3207,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.max_world);
-    ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
         // try to look this up now.
         // TODO: This is bad and we'd like to delete it.
@@ -3268,7 +3268,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     if (bp == NULL)
         return jl_cgval_t();
     if (bpart) {
-        ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+        jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
         if (!jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             jl_value_t *ty = decode_restriction_value(pku);
             if (ty != nullptr) {
@@ -5490,7 +5490,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, ctx.max_world);
-    ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (assign) {
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
             // not yet declared
@@ -5663,7 +5663,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym, int allow_i
         }
         jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
         jl_binding_partition_t *bpart = jl_get_binding_partition(bnd, ctx.min_world);
-        ptr_kind_union_t pku = bpart ? jl_atomic_load_relaxed(&bpart->restriction) : encode_restriction(NULL, BINDING_KIND_GUARD);
+        jl_ptr_kind_union_t pku = bpart ? jl_atomic_load_relaxed(&bpart->restriction) : encode_restriction(NULL, BINDING_KIND_GUARD);
         if (decode_restriction_kind(pku) == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             if (jl_get_binding_value_if_const(bnd))
                 return mark_julia_const(ctx, jl_true);

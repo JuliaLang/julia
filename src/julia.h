@@ -643,9 +643,9 @@ enum jl_partition_kind {
 
 #ifdef _P64
 // Union of a ptr and a 3 bit field.
-typedef uintptr_t ptr_kind_union_t;
+typedef uintptr_t jl_ptr_kind_union_t;
 #else
-typedef struct __attribute__((aligned(8))) { jl_value_t *val; size_t kind; } ptr_kind_union_t;
+typedef struct __attribute__((aligned(8))) { jl_value_t *val; size_t kind; } jl_ptr_kind_union_t;
 #endif
 typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     JL_DATA_TYPE
@@ -660,7 +660,7 @@ typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
      *
      * Currently: Low 3 bits hold ->kind on _P64 to avoid needing >8 byte atomics
      */
-    _Atomic(ptr_kind_union_t) restriction;
+    _Atomic(jl_ptr_kind_union_t) restriction;
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t*) next;

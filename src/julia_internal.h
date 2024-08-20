@@ -860,7 +860,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred);
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
-EXTERN_INLINE_DECLARE enum jl_partition_kind decode_restriction_kind(ptr_kind_union_t pku) JL_NOTSAFEPOINT
+EXTERN_INLINE_DECLARE enum jl_partition_kind decode_restriction_kind(jl_ptr_kind_union_t pku) JL_NOTSAFEPOINT
 {
 #ifdef _P64
     uint8_t bits = (pku & 0x7);
@@ -876,7 +876,7 @@ EXTERN_INLINE_DECLARE enum jl_partition_kind decode_restriction_kind(ptr_kind_un
 #endif
 }
 
-STATIC_INLINE jl_value_t *decode_restriction_value(ptr_kind_union_t pku) JL_NOTSAFEPOINT
+STATIC_INLINE jl_value_t *decode_restriction_value(jl_ptr_kind_union_t pku) JL_NOTSAFEPOINT
 {
 #ifdef _P64
     jl_value_t *val = (jl_value_t*)(pku & ~0x7);
@@ -889,7 +889,7 @@ STATIC_INLINE jl_value_t *decode_restriction_value(ptr_kind_union_t pku) JL_NOTS
 #endif
 }
 
-STATIC_INLINE ptr_kind_union_t encode_restriction(jl_value_t *val, enum jl_partition_kind kind) JL_NOTSAFEPOINT
+STATIC_INLINE jl_ptr_kind_union_t encode_restriction(jl_value_t *val, enum jl_partition_kind kind) JL_NOTSAFEPOINT
 {
 #ifdef _P64
     if (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED)
@@ -897,9 +897,9 @@ STATIC_INLINE ptr_kind_union_t encode_restriction(jl_value_t *val, enum jl_parti
     if (kind == BINDING_KIND_GUARD)
         kind = BINDING_KIND_IMPLICIT;
     assert((((uintptr_t)val) & 0x7) == 0);
-    return ((ptr_kind_union_t)val) | kind;
+    return ((jl_ptr_kind_union_t)val) | kind;
 #else
-    ptr_kind_union_t ret = { val, kind };
+    jl_ptr_kind_union_t ret = { val, kind };
     return ret;
 #endif
 }
@@ -929,15 +929,15 @@ EXTERN_INLINE_DECLARE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) J
     return decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction));
 }
 
-STATIC_INLINE ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT;
 
 #ifndef __clang_analyzer__
-STATIC_INLINE ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
+STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
 {
     while (1) {
         if (!*bpart)
             return encode_restriction(NULL, BINDING_KIND_GUARD);
-        ptr_kind_union_t pku = jl_atomic_load_acquire(&(*bpart)->restriction);
+        jl_ptr_kind_union_t pku = jl_atomic_load_acquire(&(*bpart)->restriction);
         if (!jl_bkind_is_some_import(decode_restriction_kind(pku)))
             return pku;
         *bnd = (jl_binding_t*)decode_restriction_value(pku);

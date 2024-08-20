@@ -157,8 +157,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     else {
         jl_binding_t *b = jl_get_module_binding(parent_module, name, 1);
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
-        ptr_kind_union_t pku = encode_restriction(NULL, BINDING_KIND_CONST);
-        ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)newm, BINDING_KIND_CONST);
+        jl_ptr_kind_union_t pku = encode_restriction(NULL, BINDING_KIND_CONST);
+        jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)newm, BINDING_KIND_CONST);
         if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku)) {
             if (decode_restriction_kind(pku) != BINDING_KIND_CONST) {
                 jl_declare_constant_val(b, parent_module, name, (jl_value_t*)newm);
@@ -296,8 +296,8 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
 void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error)
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    ptr_kind_union_t new_pku = encode_restriction(ty, BINDING_KIND_GLOBAL);
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+    jl_ptr_kind_union_t new_pku = encode_restriction(ty, BINDING_KIND_GLOBAL);
     while (1) {
         if (decode_restriction_kind(pku) != BINDING_KIND_GLOBAL) {
             if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
@@ -340,7 +340,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
     }
     jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     while (decode_restriction_kind(pku) == BINDING_KIND_GUARD || decode_restriction_kind(pku) == BINDING_KIND_FAILED) {
         if (jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction(NULL, BINDING_KIND_DECLARED)))
             break;
@@ -655,7 +655,7 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     if (jl_get_binding_value_if_const(b) == (jl_value_t*)import)
         return;
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (decode_restriction_kind(pku) != BINDING_KIND_GUARD && decode_restriction_kind(pku) != BINDING_KIND_FAILED) {
         jl_errorf("importing %s into %s conflicts with an existing global",
                     jl_symbol_name(name), jl_symbol_name(m->name));
@@ -725,7 +725,7 @@ static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, con
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val, enum jl_partition_kind constant_kind)
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     int did_warn = 0;
     while (1) {
         if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {

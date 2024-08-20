@@ -224,11 +224,11 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         // Assignment does not create bindings in foreign modules (#54678)
                         jl_binding_t *b = jl_get_module_binding(mod, name, 1);
                         jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-                        ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+                        jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
                         while (1) {
                             if (!jl_bkind_is_some_guard(decode_restriction_kind(pku)))
                                 break;
-                            ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
+                            jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
                             if (jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku)) {
                                 jl_gc_wb(bpart, jl_any_type);
                                 break;

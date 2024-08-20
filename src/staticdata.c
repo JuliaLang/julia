@@ -1576,7 +1576,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         }
         else if (jl_is_binding_partition(v)) {
             jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
-            ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+            jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
             jl_value_t *restriction_val = decode_restriction_value(pku);
             static_assert(offsetof(jl_binding_partition_t, restriction) == 0, "BindingPartition layout mismatch");
             write_pointerfield(s, restriction_val);

@@ -206,7 +206,7 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     }
     jl_binding_t *b = jl_get_module_binding(mod, var, 0);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    ptr_kind_union_t pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+    jl_ptr_kind_union_t pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
     if (!bpart)
         return fl_ctx->F;
     if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
