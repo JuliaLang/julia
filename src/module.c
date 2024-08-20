@@ -222,7 +222,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
 
 extern jl_mutex_t jl_modules_mutex;
 
-static void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
+extern void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("new globals cannot be created in a generated function");
@@ -475,7 +475,7 @@ retry:
     if (decode_restriction_kind(pku) == BINDING_KIND_FAILED)
         return NULL;
     if (decode_restriction_kind(pku) == BINDING_KIND_DECLARED) {
-        return NULL;
+        return b;
     }
     if (decode_restriction_kind(pku) == BINDING_KIND_GUARD) {
         jl_binding_t *b2 = NULL;
@@ -1126,7 +1126,7 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         if (((b->publicp) ||
              (imported && (kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_IMPORTED)) ||
              (usings && kind == BINDING_KIND_EXPLICIT) ||
-             ((kind == BINDING_KIND_GLOBAL || kind == BINDING_KIND_CONST) && (all || main_public))) &&
+             ((kind == BINDING_KIND_GLOBAL || kind == BINDING_KIND_CONST || kind == BINDING_KIND_DECLARED) && (all || main_public))) &&
             (all || (!b->deprecated && !hidden)))
             _append_symbol_to_bindings_array(a, asname);
     }

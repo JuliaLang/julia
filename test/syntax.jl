@@ -2595,7 +2595,7 @@ using Test
 
 module Mod
 const x = 1
-global maybe_undef::Any, always_undef::Any
+global maybe_undef, always_undef
 export always_undef
 def() = (global maybe_undef = 0)
 func(x) = 2x + 1
@@ -3719,7 +3719,7 @@ module Foreign54607
 end
 @test_throws ErrorException (Foreign54607.foo = 1)
 @test_throws ErrorException Foreign54607.try_to_create_binding1()
-Foreign54607.try_to_create_binding2()
+@test_throws ErrorException Foreign54607.try_to_create_binding2()
 function assign_in_foreign_module()
     (Foreign54607.foo = 1)
     nothing

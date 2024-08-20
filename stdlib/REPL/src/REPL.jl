@@ -1815,6 +1815,8 @@ function capture_result(n::Ref{Int}, @nospecialize(x))
     n = n[]
     mod = Base.MainInclude
     if !isdefined(mod, :Out)
+        @eval mod global Out
+        @eval mod export Out
         setglobal!(mod, :Out, Dict{Int, Any}())
     end
     if x !== getglobal(mod, :Out) && x !== nothing # remove this?

@@ -215,28 +215,6 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
             if (e->head == jl_method_sym || e->head == jl_module_sym || e->head == jl_throw_undef_if_not_sym) {
                 i++;
             }
-            if (e->head == jl_assign_sym && binding_effects) {
-                jl_value_t *lhs = jl_exprarg(e, 0);
-                if (jl_is_globalref(lhs) || jl_is_symbol(lhs)) {
-                    jl_module_t *mod = jl_is_globalref(lhs) ? jl_globalref_mod(lhs) : module;
-                    jl_sym_t *name = jl_is_globalref(lhs) ? jl_globalref_name(lhs) : (jl_sym_t*)lhs;
-                    if (mod == module) {
-                        // Assignment does not create bindings in foreign modules (#54678)
-                        jl_binding_t *b = jl_get_module_binding(mod, name, 1);
-                        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-                        jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-                        while (1) {
-                            if (!jl_bkind_is_some_guard(decode_restriction_kind(pku)))
-                                break;
-                            jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
-                            if (jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku)) {
-                                jl_gc_wb(bpart, jl_any_type);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
             for (; i < nargs; i++) {
                 // TODO: this should be making a copy, not mutating the source
                 jl_exprargset(e, i, resolve_globals(jl_exprarg(e, i), module, sparam_vals, binding_effects, eager_resolve));
