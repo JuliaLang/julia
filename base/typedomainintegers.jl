@@ -455,14 +455,6 @@ baremodule TypeDomainIntegers
         using ..Basic, ..LazyMinus, ..Interoperability
         using Base: convert, <, +, -, *, ==, !, @nospecialize
         export apply_n_t, apply_t_n
-        function apply_n_t(func, (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
-            i = interoperable(r)
-            func(l, i)
-        end
-        function apply_t_n(func, (@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
-            i = interoperable(l)
-            func(i, r)
-        end
         function apply_n_t(::typeof(+), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
                 let pos = negated(r), posm1 = natural_predecessor(pos)
