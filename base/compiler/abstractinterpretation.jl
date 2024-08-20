@@ -2006,31 +2006,62 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 return Conditional(aty.slot, thentype, elsetype)
             end
         elseif f === isdefined
-            uty = argtypes[2]
             a = ssa_def_slot(fargs[2], sv)
-            if isa(uty, Union) && isa(a, SlotNumber)
-                fld = argtypes[3]
-                thentype = Bottom
-                elsetype = Bottom
-                for ty in uniontypes(uty)
-                    cnd = isdefined_tfunc(𝕃ᵢ, ty, fld)
-                    if isa(cnd, Const)
-                        if cnd.val::Bool
-                            thentype = thentype ⊔ ty
+            if isa(a, SlotNumber)
+                argtype2 = argtypes[2]
+                if isa(argtype2, Union)
+                    fld = argtypes[3]
+                    thentype = Bottom
+                    elsetype = Bottom
+                    for ty in uniontypes(argtype2)
+                        cnd = isdefined_tfunc(𝕃ᵢ, ty, fld)
+                        if isa(cnd, Const)
+                            if cnd.val::Bool
+                                thentype = thentype ⊔ ty
+                            else
+                                elsetype = elsetype ⊔ ty
+                            end
                         else
+                            thentype = thentype ⊔ ty
                             elsetype = elsetype ⊔ ty
                         end
-                    else
-                        thentype = thentype ⊔ ty
-                        elsetype = elsetype ⊔ ty
+                    end
+                    return Conditional(a, thentype, elsetype)
+                else
+                    thentype = form_partially_defined_struct(argtype2, argtypes[3])
+                    if thentype !== nothing
+                        elsetype = argtype2
+                        if rt === Const(false)
+                            thentype = Bottom
+                        elseif rt === Const(true)
+                            elsetype = Bottom
+                        end
+                        return Conditional(a, thentype, elsetype)
                     end
                 end
-                return Conditional(a, thentype, elsetype)
             end
         end
     end
     @assert !isa(rt, TypeVar) "unhandled TypeVar"
     return rt
+end
+
+function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
+    obj isa Const && return nothing # nothing to refine
+    name isa Const || return nothing
+    objt0 = widenconst(obj)
+    objt = unwrap_unionall(objt0)
+    objt isa DataType || return nothing
+    isabstracttype(objt) && return nothing
+    fldidx = try_compute_fieldidx(objt, name.val)
+    fldidx === nothing && return nothing
+    nminfld = datatype_min_ninitialized(objt)
+    if ismutabletype(objt)
+        fldidx == nminfld+1 || return nothing
+    else
+        fldidx > nminfld || return nothing
+    end
+    return PartialStruct(objt0, Any[fieldtype(objt0, i) for i = 1:fldidx])
 end
 
 function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any}, call::CallMeta)
@@ -2573,20 +2604,18 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, vtypes::Union{V
                 end
                 ats[i] = at
             end
-            # For now, don't allow:
-            # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
-            #   with `const` fields if anything refined)
-            # - partially initialized Const/PartialStruct
-            if fcount == nargs
-                if consistent === ALWAYS_TRUE && allconst
-                    argvals = Vector{Any}(undef, nargs)
-                    for j in 1:nargs
-                        argvals[j] = (ats[j]::Const).val
-                    end
-                    rt = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), rt, argvals, nargs))
-                elseif anyrefine
-                    rt = PartialStruct(rt, ats)
+            if fcount == nargs && consistent === ALWAYS_TRUE && allconst
+                argvals = Vector{Any}(undef, nargs)
+                for j in 1:nargs
+                    argvals[j] = (ats[j]::Const).val
                 end
+                rt = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), rt, argvals, nargs))
+            elseif anyrefine || nargs > datatype_min_ninitialized(rt)
+                # propagate partially initialized struct as `PartialStruct` when:
+                # - any refinement information is available (`anyrefine`), or when
+                # - `nargs` is greater than `n_initialized` derived from the struct type
+                #   information alone
+                rt = PartialStruct(rt, ats)
             end
         else
             rt = refine_partial_type(rt)
@@ -3094,7 +3123,8 @@ end
 @nospecializeinfer function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
-        local anyrefine = false
+        anyrefine = !isvarargtype(rt.fields[end]) &&
+            length(rt.fields) > datatype_min_ninitialized(unwrap_unionall(rt.typ))
         𝕃 = typeinf_lattice(info.interp)
         ⊏ = strictpartialorder(𝕃)
         for i in 1:length(fields)
