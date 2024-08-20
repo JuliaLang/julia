@@ -254,13 +254,15 @@ register_kinds!(JuliaSyntax, 0, [
     "END_KEYWORDS"
 
     "BEGIN_LITERAL"
-        "Bool"
-        "Integer"
-        "BinInt"
-        "HexInt"
-        "OctInt"
-        "Float"
-        "Float32"
+        "BEGIN_NUMBERS"
+            "Bool"
+            "Integer"
+            "BinInt"
+            "HexInt"
+            "OctInt"
+            "Float"
+            "Float32"
+        "END_NUMBERS"
         "String"
         "Char"
         "CmdString"
@@ -1114,6 +1116,7 @@ const _nonunique_kind_names = Set([
     K"ErrorBidiFormatting"
     K"ErrorInvalidOperator"
 
+    K"Bool"
     K"Integer"
     K"BinInt"
     K"HexInt"
@@ -1176,17 +1179,18 @@ is_error(k::Kind) = K"BEGIN_ERRORS" <= k <= K"END_ERRORS" || k == K"ErrorInvalid
 is_keyword(k::Kind) = K"BEGIN_KEYWORDS" <= k <= K"END_KEYWORDS"
 is_block_continuation_keyword(k::Kind) = K"BEGIN_BLOCK_CONTINUATION_KEYWORDS" <= k <= K"END_BLOCK_CONTINUATION_KEYWORDS"
 is_literal(k::Kind) = K"BEGIN_LITERAL" <= k <= K"END_LITERAL"
+is_number(k::Kind)  = K"BEGIN_NUMBERS" <= k <= K"END_NUMBERS"
 is_operator(k::Kind) = K"BEGIN_OPS" <= k <= K"END_OPS"
 is_word_operator(k::Kind) = (k == K"in" || k == K"isa" || k == K"where")
 
-is_identifier(k) = is_identifier(kind(k))
-is_contextual_keyword(k) = is_contextual_keyword(kind(k))
-is_error(k) = is_error(kind(k))
-is_keyword(k) = is_keyword(kind(k))
-is_literal(k) = is_literal(kind(k))
-is_operator(k) = is_operator(kind(k))
-is_word_operator(k) = is_word_operator(kind(k))
-
+is_identifier(x) = is_identifier(kind(x))
+is_contextual_keyword(x) = is_contextual_keyword(kind(x))
+is_error(x) = is_error(kind(x))
+is_keyword(x) = is_keyword(kind(x))
+is_literal(x) = is_literal(kind(x))
+is_number(x)  = is_number(kind(x))
+is_operator(x) = is_operator(kind(x))
+is_word_operator(x) = is_word_operator(kind(x))
 
 # Predicates for operator precedence
 # FIXME: Review how precedence depends on dottedness, eg
@@ -1214,10 +1218,6 @@ is_prec_pipe_gt(x)     = kind(x) == K"|>"
 is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS"<= kind(x) <= K"END_SYNTAX_KINDS"
 is_macro_name(x)       = K"BEGIN_MACRO_NAMES" <= kind(x) <= K"END_MACRO_NAMES"
 is_syntactic_assignment(x) = K"BEGIN_SYNTACTIC_ASSIGNMENTS" <= kind(x) <= K"END_SYNTACTIC_ASSIGNMENTS"
-
-function is_number(x)
-    kind(x) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float", K"Float32")
-end
 
 function is_string_delim(x)
     kind(x) in (K"\"", K"\"\"\"")
