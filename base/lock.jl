@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
+const ThreadSynchronizer = GenericCondition{Threads.SystemMutex}
 
 # Advisory reentrant lock
 """

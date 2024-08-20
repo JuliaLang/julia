@@ -2,7 +2,7 @@
 
 using Test
 using Base.Threads
-using Base.Threads: SpinLock, threadpoolsize
+using Base.Threads: SpinLock, SystemMutex, threadpoolsize
 
 # for cfunction_closure
 include("testenv.jl")
@@ -34,7 +34,7 @@ Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
 
 # basic lock check
 if threadpoolsize() > 1
-    let lk = SpinLock()
+    for lk in (SpinLock(), SystemMutex(), ReentrantLock())
         c1 = Base.Event()
         c2 = Base.Event()
         @test trylock(lk)
@@ -173,6 +173,7 @@ function threaded_add_locked(::Type{LockT}, x, n) where LockT
 end
 
 @test threaded_add_locked(SpinLock, 0, 10000) == 10000
+@test threaded_add_locked(SystemMutex, 0, 10000) == 10000
 @test threaded_add_locked(ReentrantLock, 0, 10000) == 10000
 
 # Check if the recursive lock can be locked and unlocked correctly.
@@ -213,6 +214,7 @@ function threaded_gc_locked(::Type{LockT}) where LockT
 end
 
 threaded_gc_locked(SpinLock)
+threaded_gc_locked(SystemMutex)
 threaded_gc_locked(ReentrantLock)
 
 # Issue 33159

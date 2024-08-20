@@ -61,6 +61,7 @@
 extern "C" {
 #endif
 
+JL_DLLEXPORT int jl_sizeof_uv_mutex_t(void) { return sizeof(uv_mutex_t); }
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
