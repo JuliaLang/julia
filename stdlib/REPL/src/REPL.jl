@@ -516,8 +516,7 @@ end
 
 # Semantically, we only need to override `Base.write`, but we also
 # override `unsafe_write` for performance.
-function Base.unsafe_write(io::Base.IOContext{<:LimitIO}, p::Ptr{UInt8}, nb::UInt)
-    limiter = io.io
+function Base.unsafe_write(limiter::LimitIO, p::Ptr{UInt8}, nb::UInt)
     # already exceeded? throw
     limiter.n > limiter.maxbytes && throw(LimitIOException(limiter.maxbytes))
     remaining = limiter.maxbytes - limiter.n # >= 0
@@ -525,21 +524,15 @@ function Base.unsafe_write(io::Base.IOContext{<:LimitIO}, p::Ptr{UInt8}, nb::UIn
     # Not enough bytes left; we will print up to the limit, then throw
     if remaining < nb
         if remaining > 0
-            # note we pass on the `ioproperties` with the inner `limiter.io` object
-            Base.unsafe_write(IOContext(limiter.io, Base.ioproperties(io)), p, remaining)
+            Base.unsafe_write(limiter.io, p, remaining)
         end
         throw(LimitIOException(limiter.maxbytes))
     end
 
-    # We won't hit the limit so we'll write the full `nb` bytes, again passing along the `ioproperties`.
-    bytes_written = Base.unsafe_write(IOContext(limiter.io, Base.ioproperties(io)), p, nb)
+    # We won't hit the limit so we'll write the full `nb` bytes
+    bytes_written = Base.unsafe_write(limiter.io, p, nb)
     limiter.n += bytes_written
     return bytes_written::Union{UInt, Int}
-end
-
-# wrap to hit optimized method
-function Base.unsafe_write(limiter::LimitIO, p::Ptr{UInt8}, nb::UInt)
-    return unsafe_write(IOContext(limiter), p, nb)
 end
 
 struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
