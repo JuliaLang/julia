@@ -485,16 +485,15 @@ baremodule TypeDomainIntegers
         using ..Basic, ..LazyMinus, ..Conversion
         using Base: convert, isequal, <, +, -, *, ==, !, @nospecialize
         export apply_n_t, apply_t_n
-        const interoperable = tdi_to_int
         function apply_n_t(::typeof(+), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
                 let pos = negated(r)::PositiveInteger
-                    l - interoperable(pos)
+                    l - tdi_to_int(pos)
                 end
             else
                 r = r::NonnegativeInteger
                 if r isa PositiveIntegerUpperBound
-                    l + interoperable(r)
+                    l + tdi_to_int(r)
                 else
                     l
                 end
@@ -509,11 +508,11 @@ baremodule TypeDomainIntegers
         end
         function apply_t_n(::typeof(-), (@nospecialize l::TypeDomainInteger), @nospecialize r::Number)
             if l isa NegativeInteger
-                interoperable(l) - r
+                tdi_to_int(l) - r
             else
                 l = l::NonnegativeInteger
                 if l isa PositiveIntegerUpperBound
-                    interoperable(l) - r
+                    tdi_to_int(l) - r
                 else
                     -r
                 end
@@ -523,7 +522,7 @@ baremodule TypeDomainIntegers
             if r isa NegativeInteger
                 let pos = negated(r), posm1 = natural_predecessor(pos)
                     if posm1 isa PositiveIntegerUpperBound
-                        l * interoperable(r)
+                        l * tdi_to_int(r)
                     else
                         -l
                     end
@@ -533,7 +532,7 @@ baremodule TypeDomainIntegers
                 if r isa PositiveIntegerUpperBound
                     let p = natural_predecessor(r)
                         if p isa PositiveIntegerUpperBound
-                            l * interoperable(r)
+                            l * tdi_to_int(r)
                         else
                             l
                         end
@@ -547,7 +546,7 @@ baremodule TypeDomainIntegers
             if l isa NegativeInteger
                 let pos = negated(l), posm1 = natural_predecessor(pos)
                     if posm1 isa PositiveIntegerUpperBound
-                        interoperable(l) * r
+                        tdi_to_int(l) * r
                     else
                         -r
                     end
@@ -557,7 +556,7 @@ baremodule TypeDomainIntegers
                 if l isa PositiveIntegerUpperBound
                     let p = natural_predecessor(l)
                         if p isa PositiveIntegerUpperBound
-                            interoperable(l) * r
+                            tdi_to_int(l) * r
                         else
                             r
                         end
@@ -573,11 +572,11 @@ baremodule TypeDomainIntegers
             (@nospecialize r::TypeDomainInteger),
         )
             if r isa NegativeInteger
-                func(l, interoperable(r))
+                func(l, tdi_to_int(r))
             else
                 r = r::NonnegativeInteger
                 if r isa PositiveIntegerUpperBound
-                    func(l, interoperable(r))
+                    func(l, tdi_to_int(r))
                 else
                     iszero(l)
                 end
