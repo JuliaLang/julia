@@ -3357,6 +3357,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
     states = frame.bb_vartables
     currstate = copy(states[currbb]::VarTable)
+    slotwrapperssas = BitSet()
     while currbb <= nbbs
         delete!(W, currbb)
         bbstart = first(bbs[currbb].stmts)
@@ -3520,6 +3521,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
+                # widen any slot wrapper types that should be invalidated by this change
+                # just like what's done for `currstate`
+                invalidate_ssa_slotwrapper!(ssavaluetypes, slotwrapperssas, slot_id(changes.var))
             end
             if refinements isa SlotRefinement
                 apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, currstate, changes)
@@ -3534,7 +3538,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 ssavaluetypes[currpc] = Any
                 continue
             end
-            record_ssa_assign!(𝕃ᵢ, currpc, rt, frame)
+            record_ssa_assign!(𝕃ᵢ, currpc, rt, frame, slotwrapperssas)
         end # for currpc in bbstart:bbend
 
         # Case 1: Fallthrough termination
@@ -3610,6 +3614,19 @@ function condition_object_change(currstate::VarTable, condt::Conditional,
         then_or_else ? condt.thentype : Union{},
         then_or_else ? Union{} : condt.elsetype)
     return StateUpdate(condslot, VarState(newcondt, vtype.undef), false)
+end
+
+# remove any lattice elements that wrap the reassigned slot object within `ssavaluetypes`
+function invalidate_ssa_slotwrapper!(ssavaluetypes::Vector{Any}, slotwrapperssas::BitSet, changeid::Int)
+    for idx = slotwrapperssas
+        invalidate_ssa_slotwrapper!(ssavaluetypes, idx, changeid)
+    end
+end
+function invalidate_ssa_slotwrapper!(ssavaluetypes::Vector{Any}, idx::Int, changeid::Int)
+    typ = ssavaluetypes[idx]
+    if should_invalidate(typ, changeid)
+        ssavaluetypes[idx] = @noinline widenwrappedslotwrapper(typ)
+    end
 end
 
 # make as much progress on `frame` as possible (by handling cycles)

@@ -743,15 +743,23 @@ end
 @nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o)) =
     (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && ⊑(lattice, n.typ, o.typ))))
 
-# remove any lattice elements that wrap the reassigned slot object from the vartable
-function invalidate_slotwrapper(vt::VarState, changeid::Int, ignore_conditional::Bool)
-    newtyp = ignorelimited(vt.typ)
-    if (!ignore_conditional && isa(newtyp, Conditional) && newtyp.slot == changeid) ||
-       (isa(newtyp, MustAlias) && newtyp.slot == changeid)
-        newtyp = @noinline widenwrappedslotwrapper(vt.typ)
-        return VarState(newtyp, vt.undef)
+function should_invalidate(@nospecialize(typ), changeid::Int, ignore_conditional::Bool=false)
+    typ = ignorelimited(typ)
+    return ((!ignore_conditional && typ isa Conditional && typ.slot == changeid) ||
+            (typ isa MustAlias && typ.slot == changeid))
+end
+
+# remove any lattice elements that wrap the reassigned slot object within `state`
+function invalidate_slotwrapper!(state::VarTable, changeid::Int, ignore_conditional::Bool)
+    for idx = 1:length(state)
+        invalidate_slotwrapper!(state, idx, changeid, ignore_conditional)
     end
-    return nothing
+end
+function invalidate_slotwrapper!(state::VarTable, idx::Int, changeid::Int, ignore_conditional::Bool)
+    vt = state[idx]
+    if should_invalidate(vt.typ, changeid, ignore_conditional)
+        state[idx] = VarState(@noinline(widenwrappedslotwrapper(vt.typ)), vt.undef)
+    end
 end
 
 function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable)
@@ -776,13 +784,10 @@ end
 
 function stoverwrite1!(state::VarTable, change::StateUpdate)
     changeid = slot_id(change.var)
-    for i = 1:length(state)
-        invalidated = invalidate_slotwrapper(state[i], changeid, change.conditional)
-        if invalidated !== nothing
-            state[i] = invalidated
-        end
-    end
-    # and update the type of it
+    # widen any slot wrapper types that should be invalidated by this change
+    # (unless if this change is made from `Conditional`)
+    invalidate_slotwrapper!(state, changeid, #=ignore_conditional=#change.conditional)
+    # and update the type of the slot
     newtype = change.vtype
     state[changeid] = newtype
     return state

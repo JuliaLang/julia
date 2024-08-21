@@ -734,11 +734,16 @@ end
 
 _topmod(sv::InferenceState) = _topmod(frame_module(sv))
 
-function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
+function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new),
+                            frame::InferenceState, slotwrapperssas::BitSet)
     ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
     if old === NOT_FOUND || !is_lattice_equal(𝕃ᵢ, new, old)
         ssavaluetypes[ssa_id] = new
+        wnew = ignorelimited(new)
+        if new isa Conditional || new isa MustAlias
+            push!(slotwrapperssas, ssa_id)
+        end
         W = frame.ip
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)
