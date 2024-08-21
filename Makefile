@@ -382,6 +382,11 @@ endif
 	cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(datarootdir)/julia/base
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
+
+	# Set .jl sources as read-only to match package directories
+	find $(DESTDIR)$(datarootdir)/julia/base -type f -name \*.jl -exec chmod 0444 '{}' \;
+	find $(DESTDIR)$(datarootdir)/julia/test -type f -name \*.jl -exec chmod 0444 '{}' \;
+
 	# Copy documentation
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
 	# Remove various files which should not be installed
@@ -403,6 +408,10 @@ endif
 	# Install appdata file
 	mkdir -p $(DESTDIR)$(datarootdir)/metainfo/
 	$(INSTALL_F) $(JULIAHOME)/contrib/julia.appdata.xml $(DESTDIR)$(datarootdir)/metainfo/
+	# Install terminal info database
+ifneq ($(WITH_TERMINFO),0)
+	cp -R -L $(build_datarootdir)/terminfo $(DESTDIR)$(datarootdir)
+endif
 
 	# Update RPATH entries and JL_SYSTEM_IMAGE_PATH if $(private_libdir_rel) != $(build_private_libdir_rel)
 ifneq ($(private_libdir_rel),$(build_private_libdir_rel))

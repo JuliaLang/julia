@@ -196,11 +196,8 @@ end
 
 ## generic (map)reduction
 
-has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = false
-has_fast_linear_indexing(a::Array) = true
-has_fast_linear_indexing(::Union{Number,Ref,AbstractChar}) = true  # 0d objects, for Broadcasted
-has_fast_linear_indexing(bc::Broadcast.Broadcasted) =
-    all(has_fast_linear_indexing, bc.args)
+has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = IndexStyle(a) === IndexLinear()
+has_fast_linear_indexing(a::AbstractVector) = true
 
 function check_reducedims(R, A)
     # Check whether R has compatible dimensions w.r.t. A for reduction
@@ -272,19 +269,20 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(axes1(R))
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            r = R[i1,IR]
+            @inbounds r = R[i1,IR]
             @simd for i in axes(A, 1)
-                r = op(r, f(A[i, IA]))
+                r = op(r, f(@inbounds(A[i, IA])))
             end
-            R[i1,IR] = r
+            @inbounds R[i1,IR] = r
         end
     else
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             @simd for i in axes(A, 1)
-                R[i,IR] = op(R[i,IR], f(A[i,IA]))
+                v = op(@inbounds(R[i,IR]), f(@inbounds(A[i,IA])))
+                @inbounds R[i,IR] = v
             end
         end
     end
@@ -1028,33 +1026,33 @@ function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
         i1 = first(axes1(Rval))
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            tmpRv = Rval[i1,IR]
-            tmpRi = Rind[i1,IR]
+            @inbounds tmpRv = Rval[i1,IR]
+            @inbounds tmpRi = Rind[i1,IR]
             for i in axes(A,1)
                 k, kss = y::Tuple
-                tmpAv = f(A[i,IA])
+                tmpAv = f(@inbounds(A[i,IA]))
                 if tmpRi == zi || op(tmpRv, tmpAv)
                     tmpRv = tmpAv
                     tmpRi = k
                 end
                 y = iterate(ks, kss)
             end
-            Rval[i1,IR] = tmpRv
-            Rind[i1,IR] = tmpRi
+            @inbounds Rval[i1,IR] = tmpRv
+            @inbounds Rind[i1,IR] = tmpRi
         end
     else
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             for i in axes(A, 1)
                 k, kss = y::Tuple
-                tmpAv = f(A[i,IA])
-                tmpRv = Rval[i,IR]
-                tmpRi = Rind[i,IR]
+                tmpAv = f(@inbounds(A[i,IA]))
+                @inbounds tmpRv = Rval[i,IR]
+                @inbounds tmpRi = Rind[i,IR]
                 if tmpRi == zi || op(tmpRv, tmpAv)
-                    Rval[i,IR] = tmpAv
-                    Rind[i,IR] = k
+                    @inbounds Rval[i,IR] = tmpAv
+                    @inbounds Rind[i,IR] = k
                 end
                 y = iterate(ks, kss)
             end

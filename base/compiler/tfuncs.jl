@@ -227,10 +227,19 @@ end
 @nospecs shift_tfunc(𝕃::AbstractLattice, x, y) = shift_tfunc(widenlattice(𝕃), x, y)
 @nospecs shift_tfunc(::JLTypeLattice, x, y) = widenconst(x)
 
+function not_tfunc(𝕃::AbstractLattice, @nospecialize(b))
+    if isa(b, Conditional)
+        return Conditional(b.slot, b.elsetype, b.thentype)
+    elseif isa(b, Const)
+        return Const(not_int(b.val))
+    end
+    return math_tfunc(𝕃, b)
+end
+
 add_tfunc(and_int, 2, 2, and_int_tfunc, 1)
 add_tfunc(or_int, 2, 2, or_int_tfunc, 1)
 add_tfunc(xor_int, 2, 2, math_tfunc, 1)
-add_tfunc(not_int, 1, 1, math_tfunc, 0) # usually used as not_int(::Bool) to negate a condition
+add_tfunc(not_int, 1, 1, not_tfunc, 0) # usually used as not_int(::Bool) to negate a condition
 add_tfunc(shl_int, 2, 2, shift_tfunc, 1)
 add_tfunc(lshr_int, 2, 2, shift_tfunc, 1)
 add_tfunc(ashr_int, 2, 2, shift_tfunc, 1)
@@ -410,7 +419,7 @@ end
             else
                 return Bottom
             end
-            if 1 <= idx <= datatype_min_ninitialized(a1)
+            if 1 ≤ idx ≤ datatype_min_ninitialized(a1)
                 return Const(true)
             elseif a1.name === _NAMEDTUPLE_NAME
                 if isconcretetype(a1)
@@ -418,14 +427,20 @@ end
                 else
                     ns = a1.parameters[1]
                     if isa(ns, Tuple)
-                        return Const(1 <= idx <= length(ns))
+                        return Const(1 ≤ idx ≤ length(ns))
                     end
                 end
-            elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
+            elseif idx ≤ 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
             elseif isa(arg1, Const)
                 if !ismutabletype(a1) || isconst(a1, idx)
                     return Const(isdefined(arg1.val, idx))
+                end
+            elseif isa(arg1, PartialStruct)
+                if !isvarargtype(arg1.fields[end])
+                    if 1 ≤ idx ≤ length(arg1.fields)
+                        return Const(true)
+                    end
                 end
             elseif !isvatuple(a1)
                 fieldT = fieldtype(a1, idx)
@@ -980,27 +995,39 @@ end
     ⊑ = partialorder(𝕃)
 
     # If we have s00 being a const, we can potentially refine our type-based analysis above
-    if isa(s00, Const) || isconstType(s00)
-        if !isa(s00, Const)
-            sv = (s00::DataType).parameters[1]
-        else
+    if isa(s00, Const) || isconstType(s00) || isa(s00, PartialStruct)
+        if isa(s00, Const)
             sv = s00.val
+            sty = typeof(sv)
+            nflds = nfields(sv)
+            ismod = sv isa Module
+        elseif isa(s00, PartialStruct)
+            sty = unwrap_unionall(s00.typ)
+            nflds = fieldcount_noerror(sty)
+            ismod = false
+        else
+            sv = (s00::DataType).parameters[1]
+            sty = typeof(sv)
+            nflds = nfields(sv)
+            ismod = sv isa Module
         end
         if isa(name, Const)
             nval = name.val
             if !isa(nval, Symbol)
-                isa(sv, Module) && return false
+                ismod && return false
                 isa(nval, Int) || return false
             end
             return isdefined_tfunc(𝕃, s00, name) === Const(true)
         end
-        boundscheck && return false
+
         # If bounds checking is disabled and all fields are assigned,
         # we may assume that we don't throw
-        isa(sv, Module) && return false
+        @assert !boundscheck
+        ismod && return false
         name ⊑ Int || name ⊑ Symbol || return false
-        typeof(sv).name.n_uninitialized == 0 && return true
-        for i = (datatype_min_ninitialized(typeof(sv)) + 1):nfields(sv)
+        sty.name.n_uninitialized == 0 && return true
+        nflds === nothing && return false
+        for i = (datatype_min_ninitialized(sty)+1):nflds
             isdefined_tfunc(𝕃, s00, Const(i)) === Const(true) || return false
         end
         return true
@@ -2862,7 +2889,7 @@ end
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
-    UNKNOWN = CallMeta(Type, Any, EFFECTS_THROWS, NoCallInfo())
+    UNKNOWN = CallMeta(Type, Any, Effects(EFFECTS_THROWS; nortcall=false), NoCallInfo())
     if !(2 <= length(argtypes) <= 3)
         return UNKNOWN
     end
@@ -2890,8 +2917,12 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         return UNKNOWN
     end
 
+    # effects are not an issue if we know this statement will get removed, but if it does not get removed,
+    # then this could be recursively re-entering inference (via concrete-eval), which will not terminate
+    RT_CALL_EFFECTS = Effects(EFFECTS_TOTAL; nortcall=false)
+
     if contains_is(argtypes_vec, Union{})
-        return CallMeta(Const(Union{}), Union{}, EFFECTS_TOTAL, NoCallInfo())
+        return CallMeta(Const(Union{}), Union{}, RT_CALL_EFFECTS, NoCallInfo())
     end
 
     # Run the abstract_call without restricting abstract call
@@ -2909,25 +2940,25 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     rt = widenslotwrapper(call.rt)
     if isa(rt, Const)
         # output was computed to be constant
-        return CallMeta(Const(typeof(rt.val)), Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Const(typeof(rt.val)), Union{}, RT_CALL_EFFECTS, info)
     end
     rt = widenconst(rt)
     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
         # output cannot be improved so it is known for certain
-        return CallMeta(Const(rt), Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
     elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
         # conservatively express uncertainty of this result
         # in two ways: both as being a subtype of this, and
         # because of LimitedAccuracy causes
-        return CallMeta(Type{<:rt}, Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
     elseif isa(tt, Const) || isconstType(tt)
         # input arguments were known for certain
         # XXX: this doesn't imply we know anything about rt
-        return CallMeta(Const(rt), Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Const(rt), Union{}, RT_CALL_EFFECTS, info)
     elseif isType(rt)
-        return CallMeta(Type{rt}, Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{rt}, Union{}, RT_CALL_EFFECTS, info)
     else
-        return CallMeta(Type{<:rt}, Union{}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{<:rt}, Union{}, RT_CALL_EFFECTS, info)
     end
 end
 
@@ -2935,7 +2966,7 @@ end
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
                              sv::AbsIntState, max_methods::Int)
     length(argtypes) < 2 && return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
-    isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_UNKNOWN, NoCallInfo())
+    isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
     matches = find_method_matches(interp, argtypes, atype; max_methods)
@@ -3160,6 +3191,11 @@ function foreigncall_effects(@specialize(abstract_eval), e::Expr)
     elseif name === :jl_genericmemory_copy_slice
         return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow=false)
     end
+    # `:foreigncall` can potentially perform all sorts of operations, including calling
+    # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
+    # concern that the method calls that potentially occur within the `:foreigncall` will
+    # be executed using the wrong method table due to concrete evaluation, so using
+    # `EFFECTS_UNKNOWN` here and not tainting with `:nonoverlayed` is fine
     return EFFECTS_UNKNOWN
 end
 

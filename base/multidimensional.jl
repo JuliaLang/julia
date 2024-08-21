@@ -1669,11 +1669,10 @@ function permutedims(B::StridedArray, perm)
     permutedims!(P, B, perm)
 end
 
-function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N}
-    indsB = axes(B)
-    length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
+checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N} = checkdims_perm(axes(P), axes(B), perm)
+function checkdims_perm(indsP::NTuple{N, AbstractUnitRange}, indsB::NTuple{N, AbstractUnitRange}, perm) where {N}
+    length(perm) == N || throw(ArgumentError(LazyString("expected permutation of size ", N, ", but length(perm)=", length(perm))))
     isperm(perm) || throw(ArgumentError("input is not a permutation"))
-    indsP = axes(P)
     for i in eachindex(perm)
         indsP[i] == indsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
@@ -1683,7 +1682,7 @@ end
 for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @generated function permutedims!(P::$PT{$(V...)}, B::$BT{$(V...)}, perm) where $(V...)
         quote
-            checkdims_perm(P, B, perm)
+            checkdims_perm(axes(P), axes(B), perm)
 
             #calculates all the strides
             native_strides = size_to_strides(1, size(B)...)

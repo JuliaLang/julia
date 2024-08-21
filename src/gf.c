@@ -3669,7 +3669,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
         int msp2 = !msp && jl_method_morespecific(m2, m);
         if (!msp) {
             if (subt || !include_ambiguous || (lim != -1 && msp2)) {
-                if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {
+                if (subt2 || ((lim != -1 || (!include_ambiguous && !msp2)) && jl_subtype((jl_value_t*)ti, m2->sig))) {
                     // this may be filtered out as fully intersected, if applicable later
                     mayexclude = 1;
                 }

@@ -18,6 +18,9 @@ using .Main.FillArrays
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -471,7 +474,7 @@ end
 end
 
 @testset "SymTridiagonal/Tridiagonal block matrix" begin
-    M = [1 2; 2 4]
+    M = [1 2; 3 4]
     n = 5
     A = SymTridiagonal(fill(M, n), fill(M, n-1))
     @test @inferred A[1,1] == Symmetric(M)
@@ -484,6 +487,9 @@ end
     @test_throws ArgumentError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
+
+    @test tr(A) == sum(diag(A))
+    @test issymmetric(tr(A))
 
     A = Tridiagonal(fill(M, n-1), fill(M, n), fill(M, n-1))
     @test @inferred A[1,1] == M
@@ -805,7 +811,7 @@ end
     @test copyto!(zero(S), T) == T
 
     T2 = Tridiagonal(ones(length(ev)), zero(dv), zero(ev))
-    @test_throws "cannot copy a non-symmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
+    @test_throws "cannot copy an asymmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
 
     @testset "mismatched sizes" begin
         dv2 = [4; @view dv[2:end]]
@@ -909,6 +915,19 @@ end
         D = Diagonal(fill(S33, size(T,1)))
         @test lmul!(D, copy(T)) ≈ D * T
     end
+end
+
+@testset "show" begin
+    T = Tridiagonal(1:3, 1:4, 1:3)
+    @test sprint(show, T) == "Tridiagonal(1:3, 1:4, 1:3)"
+    S = SymTridiagonal(1:4, 1:3)
+    @test sprint(show, S) == "SymTridiagonal(1:4, 1:3)"
+
+    m = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    T = Tridiagonal(fill(m,2), fill(m,3), fill(m,2))
+    @test sprint(show, T) == "Tridiagonal($(repr(diag(T,-1))), $(repr(diag(T))), $(repr(diag(T,1))))"
+    S = SymTridiagonal(fill(m,3), fill(m,2))
+    @test sprint(show, S) == "SymTridiagonal($(repr(diag(S))), $(repr(diag(S,1))))"
 end
 
 end # module TestTridiagonal

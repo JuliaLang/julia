@@ -555,8 +555,8 @@ end
     @testset "from Diagonal" begin
         D = Diagonal(d)
         @testset "to Bidiagonal" begin
-            BU = Bidiagonal(zero(d), oneunit.(du), :U)
-            BL = Bidiagonal(zero(d), oneunit.(dl), :L)
+            BU = Bidiagonal(similar(d, BigInt), similar(du, BigInt), :U)
+            BL = Bidiagonal(similar(d, BigInt), similar(dl, BigInt), :L)
             for B in (BL, BU)
                 copyto!(B, D)
                 @test B == D
@@ -573,7 +573,7 @@ end
             end
         end
         @testset "to Tridiagonal" begin
-            T = Tridiagonal(oneunit.(dl), zero(d), oneunit.(du))
+            T = Tridiagonal(similar(dl, BigInt), similar(d, BigInt), similar(du, BigInt))
             copyto!(T, D)
             @test T == D
 
@@ -586,8 +586,8 @@ end
             end
         end
         @testset "to SymTridiagonal" begin
-            for du2 in (oneunit.(du), oneunit.(d))
-                S = SymTridiagonal(zero(d), du2)
+            for du2 in (similar(du, BigInt), similar(d, BigInt))
+                S = SymTridiagonal(similar(d), du2)
                 copyto!(S, D)
                 @test S == D
             end
@@ -630,13 +630,14 @@ end
             end
         end
         @testset "to Tridiagonal" begin
-            T = Tridiagonal(oneunit.(dl), zero(d), oneunit.(du))
+            T = Tridiagonal(similar(dl, BigInt), similar(d, BigInt), similar(du, BigInt))
             for B in (BL, BU, BLones, BUones)
                 copyto!(T, B)
                 @test T == B
             end
 
             @testset "mismatched size" begin
+                T = Tridiagonal(oneunit.(dl), zero(d), oneunit.(du))
                 for uplo in (:L, :U)
                     T .= 0
                     copyto!(T, Bidiagonal([1], Int[], uplo))
@@ -647,8 +648,8 @@ end
             end
         end
         @testset "to SymTridiagonal" begin
-            for du2 in (oneunit.(du), oneunit.(d))
-                S = SymTridiagonal(zero(d), du2)
+            for du2 in (similar(du, BigInt), similar(d, BigInt))
+                S = SymTridiagonal(similar(d, BigInt), du2)
                 for B in (BL, BU)
                     copyto!(S, B)
                     @test S == B

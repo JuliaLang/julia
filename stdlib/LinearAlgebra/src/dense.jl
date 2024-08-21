@@ -370,13 +370,10 @@ julia> diagm([1,2,3])
 diagm(v::AbstractVector) = diagm(0 => v)
 diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 
-function tr(A::Matrix{T}) where T
-    n = checksquare(A)
-    t = zero(T)
-    @inbounds @simd for i in 1:n
-        t += A[i,i]
-    end
-    t
+function tr(A::StridedMatrix{T}) where T
+    checksquare(A)
+    isempty(A) && return zero(T)
+    reduce(+, (A[i] for i in diagind(A, IndexStyle(A))))
 end
 
 _kronsize(A::AbstractMatrix, B::AbstractMatrix) = map(*, size(A), size(B))
@@ -565,9 +562,6 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     isinteger(p) && return integerpow(A, p)
 
     # If possible, use diagonalization
-    if issymmetric(A)
-        return (Symmetric(A)^p)
-    end
     if ishermitian(A)
         return (Hermitian(A)^p)
     end
