@@ -2,7 +2,8 @@
 
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
-isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
+isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) ||
+    isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
 
 struct CFG
     blocks::Vector{BasicBlock}

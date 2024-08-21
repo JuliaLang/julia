@@ -2966,7 +2966,7 @@ end
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
                              sv::AbsIntState, max_methods::Int)
     length(argtypes) < 2 && return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
-    isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_UNKNOWN, NoCallInfo())
+    isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
     matches = find_method_matches(interp, argtypes, atype; max_methods)
@@ -3191,6 +3191,11 @@ function foreigncall_effects(@specialize(abstract_eval), e::Expr)
     elseif name === :jl_genericmemory_copy_slice
         return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow=false)
     end
+    # `:foreigncall` can potentially perform all sorts of operations, including calling
+    # overlay methods, but the `:foreigncall` itself is not dispatched, and there is no
+    # concern that the method calls that potentially occur within the `:foreigncall` will
+    # be executed using the wrong method table due to concrete evaluation, so using
+    # `EFFECTS_UNKNOWN` here and not tainting with `:nonoverlayed` is fine
     return EFFECTS_UNKNOWN
 end
 

@@ -2829,7 +2829,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :globaldecl
         return RTEffects(Nothing, Any, EFFECTS_UNKNOWN)
     elseif ehead === :thunk
-        return RTEffects(Any, Any, EFFECTS_UNKNOWN)
+        return RTEffects(Any, Any, Effects())
     end
     # N.B.: abstract_eval_value_expr can modify the global effects, but
     # we move out any arguments with effects during SSA construction later
