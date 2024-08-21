@@ -289,7 +289,7 @@ baremodule TypeDomainIntegers
     baremodule BaseOverloadsPromotion
         using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..PrimitiveTypes
         using ..Basic: UpperBounds
-        using Base: Base, @nospecialize, @eval
+        using Base: Base, ==, @nospecialize, @eval
         struct UnexpectedException <: Exception end
         const ZeroOrOne = Union{typeof(zero()),typeof(natural_successor(zero()))}
         for type ∈ PrimitiveTypes.types_all
@@ -306,6 +306,21 @@ baremodule TypeDomainIntegers
                     Int16  # presumably wide enough for any type domain integer
                 end
                 Base.promote_type(t, $type)
+            end
+        end
+        function Base.promote_rule(
+            (@nospecialize l::Type{<:TypeDomainInteger}),
+            (@nospecialize r::Type{<:TypeDomainInteger}),
+        )
+            if (l <: Union{}) || (r <: Union{})
+                throw(UnexpectedException())
+            end
+            if l == r
+                l
+            elseif (l <: ZeroOrOne) && (r <: ZeroOrOne)
+                Bool
+            else
+                Int16  # presumably wide enough for any type domain integer
             end
         end
     end
