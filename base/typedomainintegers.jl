@@ -488,7 +488,7 @@ baremodule TypeDomainIntegers
         function apply_n_t(::typeof(+), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
                 let pos = negated(r)::PositiveInteger
-                    l - tdi_to_int(pos)
+                    l + -tdi_to_int(pos)
                 end
             else
                 r = r::NonnegativeInteger
