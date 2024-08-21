@@ -58,7 +58,7 @@ baremodule TypeDomainIntegers
     baremodule LazyMinus
         using ..Basic
         using Base: @nospecialize
-        export NegativeInteger, TypeDomainInteger, negated
+        export NegativeInteger, TypeDomainInteger, negated, absolute_value_of
         struct NegativeInteger{X<:PositiveInteger} <: Integer
             x::X
             global function new_negative_integer(x::X) where {X<:PositiveInteger}
@@ -76,6 +76,13 @@ baremodule TypeDomainIntegers
                 else
                     n
                 end
+            end
+        end
+        function absolute_value_of(@nospecialize n::TypeDomainInteger)
+            if n isa NegativeInteger
+                n.x
+            else
+                n::NonnegativeInteger
             end
         end
     end
@@ -478,6 +485,9 @@ baremodule TypeDomainIntegers
         end
         function Base.:(-)(@nospecialize n::TypeDomainInteger)
             negated(n)
+        end
+        function Base.abs(@nospecialize n::TypeDomainInteger)
+            absolute_value_of(n)
         end
     end
 
