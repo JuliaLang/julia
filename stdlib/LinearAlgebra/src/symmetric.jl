@@ -261,6 +261,7 @@ Base._reverse(A::Symmetric, ::Colon) = Symmetric(reverse(A.data), A.uplo == 'U' 
 @propagate_inbounds function setindex!(A::Symmetric, v, i::Integer, j::Integer)
     i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
     setindex!(A.data, v, i, j)
+    return A
 end
 
 Base._reverse(A::Hermitian, dims) = reverse!(Matrix(A); dims)
@@ -274,6 +275,7 @@ Base._reverse(A::Hermitian, ::Colon) = Hermitian(reverse(A.data), A.uplo == 'U' 
     else
         setindex!(A.data, v, i, j)
     end
+    return A
 end
 
 Base.dataids(A::HermOrSym) = Base.dataids(parent(A))

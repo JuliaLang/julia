@@ -262,6 +262,8 @@ end
                 @test_throws ArgumentError A[3, 2] = 1 # test assignment on the subdiagonal
                 @test_throws ArgumentError A[2, 3] = 1 # test assignment on the superdiagonal
             end
+            # setindex! should return the destination
+            @test setindex!(A, A[2,2], 2, 2) === A
         end
         @testset "diag" begin
             @test (@inferred diag(A))::typeof(d) == d
