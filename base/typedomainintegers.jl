@@ -488,23 +488,13 @@ baremodule TypeDomainIntegers
         const interoperable = tdi_to_int
         function apply_n_t(::typeof(+), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
-                let pos = negated(r), posm1 = natural_predecessor(pos)
-                    if posm1 isa PositiveIntegerUpperBound
-                        l - interoperable(pos)
-                    else
-                        l - true
-                    end
+                let pos = negated(r)::PositiveInteger
+                    l - interoperable(pos)
                 end
             else
                 r = r::NonnegativeInteger
                 if r isa PositiveIntegerUpperBound
-                    let p = natural_predecessor(r)
-                        if p isa PositiveIntegerUpperBound
-                            l + interoperable(r)
-                        else
-                            l + true
-                        end
-                    end
+                    l + interoperable(r)
                 else
                     l
                 end
@@ -523,13 +513,7 @@ baremodule TypeDomainIntegers
             else
                 l = l::NonnegativeInteger
                 if l isa PositiveIntegerUpperBound
-                    let p = natural_predecessor(l)
-                        if p isa PositiveIntegerUpperBound
-                            interoperable(l) - r
-                        else
-                            true - r
-                        end
-                    end
+                    interoperable(l) - r
                 else
                     -r
                 end
