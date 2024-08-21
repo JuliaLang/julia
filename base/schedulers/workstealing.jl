@@ -39,21 +39,19 @@ end
 function enqueue!(t::Task)
     # TODO: threadpools?
     push!(queue_for(Threads.threadid()), t)
-    ccall(:jl_safe_printf, Cvoid, (Cstring, Ptr{Nothing}), "Enqueue %p\n", pointer_from_objref(t))
     return nothing
 end
 
 function dequeue!()
     tid = Threads.threadid()
     q = queue_for(Threads.threadid())
-    @label retry
     t = pop!(q) # Check own queue first
     if t !== nothing
-        ccall(:jl_safe_printf, Cvoid, (Cstring, Ptr{Nothing}), "Pop self %p\n", pointer_from_objref(t))
         if ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1) == 0
-            @goto retry
+            push!(q, t) # Is there a way to avoid popping the same unrunnable task over and over?
+        else
+            return t
         end
-        return t
     end
     return attempt_steal!() # Otherwise try to steal from others
 end
@@ -66,9 +64,10 @@ function attempt_steal!()
         tid == tid2 && continue
         t = QueueModule.steal!(queue_for(Int(tid2))) #TODO: Change types of things to avoid the convert
         if t !== nothing
-            ccall(:jl_safe_printf, Cvoid, (Cstring, Ptr{Nothing}), "Stole %p\n", pointer_from_objref(t))
             if ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1) == 0
-                continue
+                push!(queue_for(tid), t)
+            else
+                return t
             end
         end
     end
