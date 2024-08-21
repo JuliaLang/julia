@@ -64,6 +64,9 @@ baremodule TypeDomainIntegers
         export NegativeInteger, TypeDomainInteger, negated
         struct NegativeInteger{X<:PositiveInteger} <: Integer
             x::X
+            global function new_negative_integer(x::X) where {X<:PositiveInteger}
+                new{X}(x)
+            end
         end
         const TypeDomainInteger = Union{NonnegativeInteger,NegativeInteger}
         function negated(@nospecialize n::TypeDomainInteger)
@@ -72,7 +75,7 @@ baremodule TypeDomainIntegers
             else
                 n = n::NonnegativeInteger
                 if n isa PositiveIntegerUpperBound
-                    NegativeInteger(n)
+                    new_negative_integer(n)
                 else
                     n
                 end
