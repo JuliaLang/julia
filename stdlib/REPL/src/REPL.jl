@@ -549,7 +549,7 @@ function show_limited(io::IO, mime::MIME, x)
         show_repl(wrapped_limiter, mime, x)
     catch e
         e isa LimitIOException || rethrow()
-        printstyled(io, "…[printing stopped after displaying $(Base.format_bytes(e.maxbytes))]"; color=:light_yellow, bold=true)
+        printstyled(io, """…[printing stopped after displaying $(Base.format_bytes(e.maxbytes)); call `show(stdout, MIME"text/plain"(), ans)` to print without truncation]"""; color=:light_yellow, bold=true)
     end
 end
 
