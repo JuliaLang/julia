@@ -223,6 +223,7 @@ JL_NO_ASAN static void NOINLINE JL_NORETURN restore_stack(jl_ucontext_t *t, jl_p
     }
     void *_y = t->stkbuf;
     assert(_x != NULL && _y != NULL);
+#if defined(_OS_WINDOWS_) // this platform does not implement CFI_NORETURN correctly or at all in libunwind (or equivalent) which requires a workaround
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
     void *volatile *return_address = (void *volatile *)__builtin_frame_address(0) + 1;
     assert(*return_address == __builtin_return_address(0));
@@ -230,7 +231,9 @@ JL_NO_ASAN static void NOINLINE JL_NORETURN restore_stack(jl_ucontext_t *t, jl_p
 #else
 #pragma message("warning: CFI_NORETURN not implemented for this platform, so profiling of copy_stacks may segfault in this build")
 #endif
+#else
 CFI_NORETURN
+#endif
     memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
 
 #if defined(_OS_WINDOWS_)
@@ -287,14 +290,15 @@ JL_NO_ASAN static void NOINLINE restore_stack3(jl_ucontext_t *t, jl_ptls_t ptls,
         restore_stack3(t, ptls, p); // pass p to ensure the compiler can't tailcall this or avoid the alloca
     }
 #endif
+#if defined(_OS_WINDOWS_) // this platform does not implement CFI_NORETURN correctly or at all in libunwind (or equivalent) which requires a workaround
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
     void *volatile *return_address = (void *volatile *)__builtin_frame_address(0) + 1;
     assert(*return_address == __builtin_return_address(0));
     *return_address = NULL;
-#else
-#pragma message("warning: CFI_NORETURN not implemented for this platform, so profiling of copy_stacks may segfault in this build")
 #endif
+#else
 CFI_NORETURN
+#endif
     tsan_switch_to_ctx(t);
     jl_start_fiber_set(t); // (doesn't return)
     abort();
