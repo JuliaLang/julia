@@ -67,13 +67,19 @@ function showprov(x; kws...)
     showprov(stdout, x; kws...)
 end
 
-function print_ir(io::IO, ex)
+function print_ir(io::IO, ex, indent="")
     @assert kind(ex) == K"lambda" && kind(ex[1]) == K"block"
     stmts = children(ex[1])
     for (i, e) in enumerate(stmts)
         lno = rpad(i, 3)
-        code = string(e) # rpad(string(e), 50)
-        println(io, lno, " ", code)
+        if kind(e) == K"method" && numchildren(e) == 3
+            println(io, indent, lno, " --- method ", string(e[1]), " ", string(e[2]))
+            @assert kind(e[3]) == K"lambda"
+            print_ir(io, e[3], "    ")
+        else
+            code = string(e)
+            println(io, indent, lno, " ", code)
+        end
     end
 end
 

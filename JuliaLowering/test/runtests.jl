@@ -52,6 +52,13 @@ JuliaLowering.eval(test_mod, wrapscope(wrapscope(assign_z_2, :neutral), :soft))
 @test test_mod.z == 2
 
 #-------------------------------------------------------------------------------
+# Blocks
+@test JuliaLowering.include_string(test_mod, """
+begin
+end
+""") == nothing
+
+#-------------------------------------------------------------------------------
 # Placeholders
 @test JuliaLowering.include_string(test_mod, """_ = 10""") == 10
 
@@ -82,20 +89,6 @@ end
          (3,4,5),
          (2,3,4),
          (1,2,3,4,5))
-
-#-------------------------------------------------------------------------------
-# Functions
-@test JuliaLowering.include_string(test_mod, """
-begin
-    function f(x)
-        y = x + 1
-        "hi", x, y
-    end
-
-    f(1)
-end
-""") == ("hi", 1, 2)
-
 
 #-------------------------------------------------------------------------------
 # module
@@ -302,6 +295,7 @@ macro A.b(ex)
 end
 """)
 
+include("functions.jl")
 include("desugaring.jl")
 include("branching.jl")
 include("loops.jl")

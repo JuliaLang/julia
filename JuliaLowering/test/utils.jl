@@ -108,11 +108,22 @@ function match_ir_test_case(case_str)
     (name=strip(m[1]), input=strip(m[2]), output=strip(m[3]))
 end
 
-function format_ir_test_case(mod, input)
+function format_ir_for_test(mod, input)
     ex = parsestmt(SyntaxTree, input)
     x = JuliaLowering.lower(mod, ex)
-    output = strip(sprint(JuliaLowering.print_ir, x))
-    output = replace(output, string(mod)=>"TestMod")
+    ir = strip(sprint(JuliaLowering.print_ir, x))
+    return replace(ir, string(mod)=>"TestMod")
+end
+
+function format_ir_test_case(mod, input, description="-- Add description here --")
+    ir = format_ir_for_test(mod, input)
+    """
+    ########################################
+    # $description
+    $(strip(input))
+    #----------
+    $ir
+    """
 end
 
 function test_ir_cases(filename)
@@ -121,7 +132,7 @@ function test_ir_cases(filename)
 
     mod = Module(:TestMod)
     for (name,input,ref) in cases
-        output = format_ir_test_case(mod, input)
+        output = format_ir_for_test(mod, input)
         @testset "$name" begin
             if output != ref
                 # Do our own error dumping, as @test will 

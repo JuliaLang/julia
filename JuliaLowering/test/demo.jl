@@ -292,12 +292,53 @@ end
 """
 
 src = """
-begin
-    local a, b, c
-    if a
-        b
+let
+    x = try
+        error("hi")
+        1
+    catch exc
+        current_exceptions()
+    else
+        3
     end
-    c
+    x
+end
+"""
+
+src = """
+function f(y)
+    x = 
+    try
+        try
+            error("hi")
+            1
+        catch exc
+            if y
+                return 2
+            end
+            3
+        else
+            4
+        end
+    catch
+        5
+    end
+    x
+end
+"""
+
+src = """
+function f(x)::Int
+    if x
+        42.0
+    end
+    0xff
+end
+"""
+
+src = """
+try
+catch
 end
 """
 

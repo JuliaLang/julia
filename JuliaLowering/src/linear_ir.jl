@@ -37,17 +37,20 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     next_label_id::Ref{Int}
     is_toplevel_thunk::Bool
     lambda_locals::Set{IdTag}
-    return_type::Union{Nothing,NodeId}
+    return_type::Union{Nothing, SyntaxTree{GraphType}}
     break_labels::Dict{String, NodeId}
     handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
     catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+    finally_handler # ::Union{Nothing, SyntaxTree{GraphType}}
     mod::Module
 end
 
 function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
-    LinearIRContext(ctx.graph, SyntaxList(ctx.graph), ctx.bindings, Ref(0),
-                    is_toplevel_thunk, lambda_locals, return_type,
-                    Dict{String,NodeId}(), SyntaxList(ctx), SyntaxList(ctx), ctx.mod)
+    graph = syntax_graph(ctx)
+    rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
+    LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
+                    is_toplevel_thunk, lambda_locals, rett,
+                    Dict{String,NodeId}(), SyntaxList(ctx), SyntaxList(ctx), nothing, ctx.mod)
 end
 
 # FIXME: BindingId subsumes many things so need to assess what that means for these predicates.
@@ -123,25 +126,117 @@ function emit(ctx::LinearIRContext, srcref, k, args...)
 end
 
 # Emit computation of ex, assigning the result to an ssavar and returning that
-function emit_assign_tmp(ctx::LinearIRContext, ex)
-    tmp = ssavar(ctx, ex)
-    emit(ctx, ex, K"=", tmp, ex)
+function emit_assign_tmp(ctx::LinearIRContext, ex, name="tmp")
+    tmp = ssavar(ctx, ex, name)
+    emit(ctx, @ast ctx ex [K"=" tmp ex])
     return tmp
+end
+
+function compile_pop_exception(ctx::LinearIRContext, srcref, src_tokens, dest_tokens)
+    # It's valid to leave the context of src_tokens for the context of
+    # dest_tokens when src_tokens is the same or nested within dest_tokens.
+    # It's enough to check the token on the top of the dest stack.
+    n = length(dest_tokens)
+    jump_ok = n == 0 || (n <= length(src_tokens) && dest_tokens[n].var_id == src_tokens[n].var_id)
+    jump_ok || throw(LoweringError(srcref, "Attempt to jump into catch block"))
+    if n < length(src_tokens)
+        @ast ctx srcref [K"pop_exception" src_tokens[n+1]]
+    else
+        nothing
+    end
+end
+
+function emit_pop_exception(ctx::LinearIRContext, srcref, dest_tokens)
+    pexc = compile_pop_exception(ctx, srcref, ctx.catch_token_stack, dest_tokens)
+    if !isnothing(pexc)
+        emit(ctx, pexc)
+    end
+end
+
+function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
+    if isnothing(type)
+        return ex
+    end
+
+    # Require that the caller make `type` "simple", for now (can generalize
+    # later if necessary)
+    kt = kind(type)
+    @assert (kt == K"Identifier" || kt == K"BindingId" || is_literal(kt))
+    # Use a slot to permit union-splitting this in inference
+    tmp = new_mutable_var(ctx, srcref, "tmp")
+
+    @ast ctx srcref [K"block"
+        # [K"local_def" tmp]
+        # [K"=" type_ssa renumber_assigned_ssavalues(type)]
+        [K"=" tmp ex]
+        [K"if"
+            [K"call" "isa"::K"core" tmp type]
+            "nothing"::K"core"
+            [K"="
+                tmp
+                if do_typeassert
+                    [K"call"
+                        "typeassert"::K"core"
+                        [K"call" "convert"::K"top" type tmp]
+                        type
+                    ]
+                else
+                    [K"call" "convert"::K"top" type tmp]
+                end
+            ]
+        ]
+        tmp
+    ]
+end
+
+function actually_return(ctx, ex)
+    # TODO: Handle the implicit return coverage hack for #53354 ?
+    rett = ctx.return_type
+    if !isnothing(rett)
+        ex = compile(ctx, convert_for_type_decl(ctx, rett, ex, rett, true), true, false)
+    end
+    simple_ret_val = isempty(ctx.catch_token_stack) ?
+        # returning lambda directly is needed for @generated
+        (is_valid_ir_argument(ctx, ex) || kind(ex) == K"lambda") :
+        is_simple_atom(ctx, ex)
+    if !simple_ret_val
+        ex = emit_assign_tmp(ctx, ex, "return_tmp")
+    end
+    emit_pop_exception(ctx, ex, ())
+    emit(ctx, @ast ctx ex [K"return" ex])
+    return nothing
 end
 
 function emit_return(ctx, srcref, ex)
     if isnothing(ex)
         return
+    elseif isempty(ctx.handler_token_stack)
+        actually_return(ctx, ex)
+        return
     end
-    # TODO: Mark implicit returns as having no location??
-    # TODO: return type handling
-    # TODO: exception stack handling
-    # returning lambda directly is needed for @generated
-    if !(is_valid_ir_argument(ctx, ex) || head(ex) == K"lambda")
-        ex = emit_assign_tmp(ctx, ex)
+    # FIXME: What's this !is_ssa(ctx, ex) here about?
+    x = if is_simple_atom(ctx, ex) && !(is_ssa(ctx, ex) && !isnothing(ctx.finally_handler))
+        ex
+    elseif !isnothing(ctx.finally_handler)
+        tmp = new_mutable_var(ctx, ex)
+        emit(ctx, @ast ctx ex [K"=" tmp ex])
+        tmp
+    else
+        emit_assign_tmp(ctx, ex)
     end
-    # TODO: if !isnothing(ctx.return_type) ...
-    emit(ctx, srcref, K"return", ex)
+    if !isnothing(ctx.finally_handler)
+        TODO(ex, "Finally blocks")
+    else
+        emit(ctx, @ast ctx ex [K"leave" ctx.handler_token_stack...])
+        actually_return(ctx, x)
+    end
+    # Should we return `x` here? The flisp code does, but that doesn't seem
+    # useful as any returned value cannot be used?
+    return nothing
+end
+
+function emit_return(ctx, ex)
+    emit_return(ctx, ex, ex)
 end
 
 function emit_assignment(ctx, srcref, lhs, rhs)
@@ -288,7 +383,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     if isnothing(else_block)
         if in_tail_pos
             if !isnothing(try_val)
-                emit_return(ctx, try_val, try_val)
+                emit_return(ctx, try_val)
             end
         else
             if needs_value && !isnothing(try_val)
@@ -356,7 +451,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             throw(LoweringError(ex, "all-underscore identifiers are write-only and their values cannot be used in expressions"))
         end
         if in_tail_pos
-            emit_return(ctx, ex, ex)
+            emit_return(ctx, ex)
         elseif needs_value
             ex
         else
@@ -405,12 +500,22 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"block" || k == K"scope_block"
         nc = numchildren(ex)
-        res = nothing
-        for i in 1:nc
-            islast = i == nc
-            res = compile(ctx, ex[i], islast && needs_value, islast && in_tail_pos)
+        if nc == 0
+            if in_tail_pos
+                emit_return(ctx, nothing_(ctx, ex))
+            elseif needs_value
+                nothing_(ctx, ex)
+            else
+                nothing
+            end
+        else
+            res = nothing
+            for i in 1:nc
+                islast = i == nc
+                res = compile(ctx, ex[i], islast && needs_value, islast && in_tail_pos)
+            end
+            res
         end
-        res
     elseif k == K"break_block"
         end_label = make_label(ctx, ex)
         name = ex[1].name_val
@@ -495,7 +600,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         #     "Global method definition needs to be placed at the top level, or use `eval`"))
         if numchildren(ex) == 1
             if in_tail_pos
-                emit_return(ctx, ex, ex)
+                emit_return(ctx, ex)
             elseif needs_value
                 ex
             else
@@ -522,7 +627,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"lambda"
         lam = compile_lambda(ctx, ex)
         if in_tail_pos
-            emit_return(ctx, ex, lam)
+            emit_return(ctx, lam)
         elseif needs_value
             lam
         else
@@ -663,20 +768,19 @@ function _add_slots!(slot_rewrites, bindings, ids)
 end
 
 function compile_lambda(outer_ctx, ex)
-    lambda_info = ex.lambda_info
-    return_type = nothing # FIXME
-    # TODO: Add assignments for reassigned arguments to body using lambda_info.args
-    ctx = LinearIRContext(outer_ctx, lambda_info.is_toplevel_thunk, ex.lambda_locals, return_type)
+    info = ex.lambda_info
+    # TODO: Add assignments for reassigned arguments to body using info.args
+    ctx = LinearIRContext(outer_ctx, info.is_toplevel_thunk, ex.lambda_locals, info.ret_var)
     compile_body(ctx, ex[1])
     slot_rewrites = Dict{IdTag,Int}()
-    _add_slots!(slot_rewrites, ctx.bindings, (arg.var_id for arg in lambda_info.args))
+    _add_slots!(slot_rewrites, ctx.bindings, (arg.var_id for arg in info.args))
     # Sorting the lambda locals is required to remove dependence on Dict iteration order.
     _add_slots!(slot_rewrites, ctx.bindings, sort(collect(ex.lambda_locals)))
     # @info "" @ast ctx ex [K"block" ctx.code]
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     makenode(ctx, ex, K"lambda",
              makenode(ctx, ex[1], K"block", code),
-             lambda_info=lambda_info,
+             lambda_info=info,
              slot_rewrites=slot_rewrites
             )
 end
@@ -691,7 +795,7 @@ function linearize_ir(ctx, ex)
     # required to call reparent() ...
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
                            Ref(0), false, Set{IdTag}(), nothing,
-                           Dict{String,NodeId}(), SyntaxList(graph), SyntaxList(graph), ctx.mod)
+                           Dict{String,NodeId}(), SyntaxList(graph), SyntaxList(graph), nothing, ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     setattr!(graph, res._id, bindings=ctx.bindings)
     _ctx, res

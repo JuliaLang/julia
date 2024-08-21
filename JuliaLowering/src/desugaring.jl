@@ -601,9 +601,10 @@ function expand_function_def(ctx, ex, docs)
             QuoteNode(source_location(LineNumberNode, callex))::K"Value"
         ]
         if !isnothing(return_type)
+            ret_var = ssavar(ctx, return_type, "return_type")
             body = @ast ctx body [
                 K"block"
-                ret_var=return_type
+                [K"=" ret_var return_type]
                 body
             ]
         else
