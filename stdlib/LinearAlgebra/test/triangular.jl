@@ -17,20 +17,13 @@ isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "
 using .Main.FillArrays
 
 # custom AbstractTriangular type
-struct MyUpperTriangular{T, A<:AbstractMatrix{T}} <: LinearAlgebra.AbstractTriangular{T}
+struct MyTriangular{T, A<:LinearAlgebra.AbstractTriangular{T}} <: LinearAlgebra.AbstractTriangular{T}
     data :: A
 end
-Base.size(A::MyUpperTriangular) = size(A.data)
-Base.getindex(A::MyUpperTriangular, i::Int, j::Int) = UpperTriangular(A.data)[i,j]
-LinearAlgebra.rmul!(M::Matrix, A::MyUpperTriangular) = rmul!(M, UpperTriangular(A.data))
-LinearAlgebra.lmul!(A::MyUpperTriangular, M::AbstractMatrix) = lmul!(UpperTriangular(A.data), M)
-struct MyLowerTriangular{T, A<:AbstractMatrix{T}} <: LinearAlgebra.AbstractTriangular{T}
-    data :: A
-end
-Base.size(A::MyLowerTriangular) = size(A.data)
-Base.getindex(A::MyLowerTriangular, i::Int, j::Int) = LowerTriangular(A.data)[i,j]
-LinearAlgebra.rmul!(M::AbstractMatrix, A::MyLowerTriangular) = rmul!(M, LowerTriangular(A.data))
-LinearAlgebra.lmul!(A::MyLowerTriangular, M::AbstractMatrix) = lmul!(LowerTriangular(A.data), M)
+Base.size(A::MyTriangular) = size(A.data)
+Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
+LinearAlgebra.rmul!(M::Matrix, A::MyTriangular) = rmul!(M, A.data)
+LinearAlgebra.lmul!(A::MyTriangular, M::AbstractMatrix) = lmul!(A.data, M)
 
 debug && println("Triangular matrices")
 
@@ -1213,12 +1206,16 @@ end
 @testset "eigvecs for AbstractTriangular" begin
     S = SizedArrays.SizedArray{(3,3)}(reshape(1:9,3,3))
     for T in (UpperTriangular, UnitUpperTriangular,
-                LowerTriangular, UnitLowerTriangular,
-                MyUpperTriangular, MyLowerTriangular)
+                LowerTriangular, UnitLowerTriangular)
         U = T(S)
         V = eigvecs(U)
         λ = eigvals(U)
         @test U * V ≈ V * Diagonal(λ)
+
+        MU = MyTriangular(U)
+        V = eigvecs(U)
+        λ = eigvals(U)
+        @test MU * V ≈ V * Diagonal(λ)
     end
 end
 
