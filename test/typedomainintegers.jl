@@ -46,7 +46,7 @@ const max_tested_number = 7
         @test o === convert(NonnegativeInteger, true)
         @test false === @inferred convert(Bool, z)
         @test  true === @inferred convert(Bool, o)
-        @test_throws MethodError  convert(Bool, t)
+        @test_throws InexactError convert(Bool, t)
     end
     @testset "conversion to/from `Int`" begin
         for i ∈ 0:max_tested_number
@@ -79,7 +79,7 @@ const max_tested_number = 7
             end
             @testset "failure" begin
                 t = convert(NonnegativeInteger, 2)
-                @test_throws MethodError Bool(t)
+                @test_throws InexactError Bool(t)
             end
         end
         @testset "`Int`" begin

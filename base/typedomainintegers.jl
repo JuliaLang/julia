@@ -80,55 +80,35 @@ baremodule TypeDomainIntegers
         end
     end
 
-    baremodule Interoperability
-        using ..Basic, ..LazyMinus
-        using Base: checked_add, map, @nospecialize
-        export interoperable, incremented, decremented, I, int_minus_one, int_zero, int_plus_one
-        const I = Int8
-        const other_types = (
-            Int16, Int32, Int64, Int128,
-            UInt8, UInt16, UInt32, UInt64, UInt128,
-            Float16, Float32, Float64,
-        )
-        const OtherTypes = Union{other_types...,}
-        const OtherTypesType = let f = x -> Type{x}
-            t = map(f, other_types)
-            Union{t...,}
+    baremodule PrimitiveTypes
+        using Base: unsigned, map
+        const types_signed = (Int8, Int16, Int32, Int64, Int128)
+        const types_unsigned = (UInt8, UInt16, UInt32, UInt64, UInt128)
+        const types_int_without_bool = (types_signed..., types_unsigned...)
+        const types_int_with_bool = (Bool, types_int_without_bool...)
+        const types_float = (Float16, Float32, Float64)
+        const types_all = (types_int_with_bool..., types_float...)
+        function union_of_types(t::Tuple{Vararg{DataType}})
+            Union{t...,}::Type
         end
-        const all_types = (Bool, I, other_types...)
-        const int_minus_one = I(-1)
-        const int_zero = I(0)
-        const int_plus_one = I(1)
-        function interoperable(@nospecialize n::TypeDomainInteger)
-            if n isa NegativeInteger
-                I(n)
-            else
-                n = n::NonnegativeInteger
-                if n isa PositiveIntegerUpperBound
-                    let p = natural_predecessor(n)
-                        if p isa PositiveIntegerUpperBound
-                            I(n)
-                        else
-                            true
-                        end
-                    end
-                else
-                    false
-                end
-            end
+        const type_type = Type{<:Type}
+        function type(t::Type)
+            Type{t}::type_type
         end
-        function incremented(n::I)
-            checked_add(n, int_plus_one)::I
+        function type_union_of_types(t::Tuple{Vararg{Type}})
+            s = map(type, t)
+            union_of_types(s)::type_type
         end
-        function decremented(n::I)
-            checked_add(n, int_minus_one)::I
-        end
+        const TypesSigned = union_of_types(types_signed)
+        const TypesSignedType = type_union_of_types(types_signed)
+        const TypesAll = union_of_types(types_all)
+        const TypesAllType = type_union_of_types(types_all)
     end
 
     baremodule RecursiveAlgorithms
-        using ..Basic, ..LazyMinus, ..Interoperability
-        using Base: !, +, -, <, @assume_effects, @inline, @nospecialize
-        export subtracted, added, to_int, from_int, is_even, multiplied, is_less
+        using ..Basic, ..LazyMinus, ..PrimitiveTypes
+        using Base: Base, signbit, typemax, !, +, -, <, @assume_effects, @inline, @nospecialize
+        export subtracted, added, to_narrowest_signed_int, from_abs_int, is_even, multiplied, is_less
         @assume_effects :foldable function is_less((@nospecialize l::NonnegativeInteger), @nospecialize r::NonnegativeInteger)
             if r isa PositiveIntegerUpperBound
                 if l isa PositiveIntegerUpperBound
@@ -170,24 +150,36 @@ baremodule TypeDomainIntegers
             end
             ret::NonnegativeInteger
         end
-        @assume_effects :foldable function to_int(@nospecialize o::NonnegativeInteger)
+        const PSigned = PrimitiveTypes.TypesSigned
+        @assume_effects :foldable function widening_increment(n::PSigned)
+            if n < typemax(n)
+                n + true
+            else
+                Base.widen(n) + true
+            end::PSigned
+        end
+        @assume_effects :foldable function abs_decrement(n::PSigned)
+            if signbit(n)
+                n + true
+            else
+                n - true
+            end::PSigned
+        end
+        @assume_effects :foldable function to_narrowest_signed_int(@nospecialize o::NonnegativeInteger)
             if o isa PositiveIntegerUpperBound
-                let p = natural_predecessor(o), t = @inline to_int(p)
-                    incremented(t)
+                let p = natural_predecessor(o), t = @inline to_narrowest_signed_int(p)
+                    widening_increment(t)
                 end
             else
-                int_zero
-            end::I
+                Int8(0)
+            end
         end
         struct ConvertNaturalToNegativeException <: Exception end
-        @assume_effects :foldable function from_int(n::I)
-            if n < int_zero
-                throw(ConvertNaturalToNegativeException())
-            end
-            ret = if n === int_zero
+        @assume_effects :foldable function from_abs_int(n::PSigned)
+            ret = if Base.iszero(n)
                 zero()
             else
-                let v = decremented(n), p = @inline from_int(v)
+                let v = abs_decrement(n), p = @inline from_abs_int(v)
                     p = p::NonnegativeInteger
                     natural_successor(p)
                 end
@@ -220,13 +212,80 @@ baremodule TypeDomainIntegers
         end
     end
 
+    baremodule Conversion
+        using Base: map, signbit, -, @nospecialize
+        using ..Basic, ..LazyMinus, ..RecursiveAlgorithms, ..PrimitiveTypes
+        using ..RecursiveAlgorithms: ConvertNaturalToNegativeException
+        export
+            tdnn_to_int, tdi_to_int, tdnn_from_int, tdi_from_int,
+            tdnn_to_x,   tdi_to_x,   tdnn_from_x,   tdi_from_x
+        function tdnn_to_int(@nospecialize n::NonnegativeInteger)
+            if n isa PositiveIntegerUpperBound
+                let p = natural_predecessor(n)
+                    if p isa PositiveIntegerUpperBound
+                        to_narrowest_signed_int(n)
+                    else
+                        true
+                    end
+                end
+            else
+                false
+            end
+        end
+        function tdi_to_int(@nospecialize n::TypeDomainInteger)
+            if n isa NegativeInteger
+                let m = negated(n)::PositiveInteger
+                    -to_narrowest_signed_int(m)
+                end
+            else
+                tdnn_to_int(n)
+            end
+        end
+        const PSigned = PrimitiveTypes.TypesSigned
+        const TNumber = Type{<:Number}
+        function tdnn_from_int(i::PSigned)
+            if signbit(i)
+                throw(ConvertNaturalToNegativeException())
+            end
+            from_abs_int(i)
+        end
+        function tdi_from_int(i::PSigned)
+            n = from_abs_int(i)
+            if signbit(i)
+                negated(n)::NegativeInteger
+            else
+                n
+            end
+        end
+        function tdnn_to_x(x::TNumber, @nospecialize n::NonnegativeInteger)
+            i = tdnn_to_int(n)
+            x(i)
+        end
+        function tdi_to_x(x::TNumber, @nospecialize n::TypeDomainInteger)
+            i = tdi_to_int(n)
+            x(i)
+        end
+        function x_to_int(x::Number)
+            t = Int16  # presumably wide enough for any type domain integer
+            t(x)::t
+        end
+        function tdnn_from_x(x::Number)
+            i = x_to_int(x)
+            tdnn_from_int(i)
+        end
+        function tdi_from_x(x::Number)
+            i = x_to_int(x)
+            tdi_from_int(i)
+        end
+    end
+
     baremodule BaseOverloadsPromotion
-        using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..Interoperability
+        using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..PrimitiveTypes
         using ..Basic: UpperBounds
         using Base: Base, @nospecialize, @eval
         struct UnexpectedException <: Exception end
         const ZeroOrOne = Union{typeof(zero()),typeof(natural_successor(zero()))}
-        for type ∈ Interoperability.all_types
+        for type ∈ PrimitiveTypes.types_all
             @eval function Base.promote_rule(
                 (@nospecialize tdt::Type{<:TypeDomainInteger}),
                 ::Type{$type},
@@ -245,9 +304,8 @@ baremodule TypeDomainIntegers
     end
 
     baremodule BaseOverloads
-        using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..Interoperability
-        using ..BaseOverloadsPromotion: ZeroOrOne
-        using Base: Base, convert, <, +, -, *, ==, isequal, isless, !, @nospecialize
+        using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..PrimitiveTypes, ..Conversion
+        using Base: Base, convert, <, +, -, *, ==, isequal, isless, !, @nospecialize, @eval
         function Base.zero(@nospecialize unused::Type{<:TypeDomainInteger})
             zero()
         end
@@ -266,57 +324,28 @@ baremodule TypeDomainIntegers
                 end
             end
         end
-        function to_bool(@nospecialize n::ZeroOrOne)
-            if n isa PositiveIntegerUpperBound
-                true
-            else
-                false
+        const PAll = PrimitiveTypes.TypesAll
+        for type ∈ PrimitiveTypes.types_all
+            @eval begin
+                function Base.convert(::Type{$type}, @nospecialize n::TypeDomainInteger)
+                    tdi_to_x($type, n)
+                end
+                function (::Type{$type})(@nospecialize n::TypeDomainInteger)
+                    tdi_to_x($type, n)
+                end
             end
         end
-        function from_bool(b::Bool)
-            z = zero()
-            if b
-                natural_successor(z)
-            else
-                z
-            end
+        function Base.convert(::Type{NonnegativeInteger}, x::PAll)
+            tdnn_from_x(x)
         end
-        const TypeDomainIntegerType = Union{Type{TypeDomainInteger},Type{NonnegativeInteger}}
-        function Base.convert(::Type{Bool}, @nospecialize o::TypeDomainInteger)
-            to_bool(o)
+        function Base.convert(::Type{TypeDomainInteger}, x::PAll)
+            tdi_from_x(x)
         end
-        function Base.convert((@nospecialize unused::TypeDomainIntegerType), n::Bool)
-            from_bool(n)
+        function NonnegativeInteger(x::PAll)
+            tdnn_from_x(x)
         end
-        function Base.convert(::Type{I}, @nospecialize o::TypeDomainInteger)
-            if o isa NegativeInteger
-                -to_int(negated(o))
-            else
-                o = o::NonnegativeInteger
-                to_int(o)
-            end
-        end
-        function Base.convert(::Type{NonnegativeInteger}, n::I)
-            from_int(n)
-        end
-        function Base.convert(::Type{TypeDomainInteger}, n::I)
-            if n < int_zero
-                negated(from_int(-n))
-            else
-                from_int(n)
-            end
-        end
-        function NonnegativeInteger(n::Union{Bool,I})
-            convert(NonnegativeInteger, n)
-        end
-        function TypeDomainInteger(n::Union{Bool,I})
-            convert(TypeDomainInteger, n)
-        end
-        function Bool(@nospecialize n::TypeDomainInteger)
-            to_bool(n)
-        end
-        function I(@nospecialize n::TypeDomainInteger)
-            convert(I, n)
+        function TypeDomainInteger(x::PAll)
+            tdi_from_x(x)
         end
         function Base.:(-)((@nospecialize l::TypeDomainInteger), @nospecialize r::TypeDomainInteger)
             n = negated(r)
@@ -450,36 +479,13 @@ baremodule TypeDomainIntegers
         function Base.:(-)(@nospecialize n::TypeDomainInteger)
             negated(n)
         end
-        function Base.convert((@nospecialize t::Interoperability.OtherTypesType), @nospecialize n::TypeDomainInteger)
-            i = interoperable(n)
-            convert(t, i)
-        end
-        function Base.convert(::Type{NonnegativeInteger}, x::Interoperability.OtherTypes)
-            i = I(x)::I
-            convert(NonnegativeInteger, i)
-        end
-        function Base.convert(::Type{TypeDomainInteger}, x::Interoperability.OtherTypes)
-            i = I(x)::I
-            convert(TypeDomainInteger, i)
-        end
-        function (t::Interoperability.OtherTypesType)(@nospecialize n::TypeDomainInteger)
-            i = interoperable(n)
-            t(i)
-        end
-        function NonnegativeInteger(x::Interoperability.OtherTypes)
-            i = I(x)::I
-            NonnegativeInteger(i)
-        end
-        function TypeDomainInteger(x::Interoperability.OtherTypes)
-            i = I(x)::I
-            TypeDomainInteger(i)
-        end
     end
 
     baremodule BaseHelpers
-        using ..Basic, ..LazyMinus, ..Interoperability
+        using ..Basic, ..LazyMinus, ..Conversion
         using Base: convert, isequal, <, +, -, *, ==, !, @nospecialize
         export apply_n_t, apply_t_n
+        const interoperable = tdi_to_int
         function apply_n_t(::typeof(+), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
                 let pos = negated(r), posm1 = natural_predecessor(pos)
