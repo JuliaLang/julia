@@ -436,8 +436,20 @@ debug && println("Test basic type functionality")
 
             debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
 
+            if A1 isa Union{UpperTriangular, UnitUpperTriangular}
+                Tri = Tridiagonal(zeros(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
+            else
+                Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),zeros(eltyB,n-1))
+            end
+            A1c = copy(A1)
+            lmul!(Tri, A1c)
+            @test A1c ≈ Tri*M1
+            Tri = Tridiagonal(zeros(eltyB,n-1),rand(eltyB,n),zeros(eltyB,n-1))
+            A1c = copy(A1)
+            lmul!(Tri, A1c)
+            @test A1c ≈ Tri*M1
             Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-            @test lmul!(Tri,copy(A1)) ≈ Tri*M1
+            @test_throws "matrix cannot be represented as Bidiagonal" lmul!(Tri, A1c)
             Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
             C = Matrix{promote_type(elty1,eltyB)}(undef, n, n)
             mul!(C, Tri, A1)
