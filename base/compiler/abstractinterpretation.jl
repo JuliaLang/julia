@@ -2733,6 +2733,8 @@ function abstract_eval_isdefined(interp::AbstractInterpreter, e::Expr, vtypes::U
             rt = Const(false) # never assigned previously
         elseif !vtyp.undef
             rt = Const(true) # definitely assigned previously
+        else # form `Conditional` to refine `vtyp.undef` in the then branch
+            rt = Conditional(sym, vtyp.typ, vtyp.typ; isdefined=true)
         end
     elseif isa(sym, GlobalRef)
         if InferenceParams(interp).assume_bindings_static
@@ -3205,7 +3207,7 @@ end
 @inline function abstract_eval_basic_statement(interp::AbstractInterpreter,
     @nospecialize(stmt), pc_vartable::VarTable, frame::InferenceState)
     if isa(stmt, NewvarNode)
-        changes = StateUpdate(stmt.slot, VarState(Bottom, true), false)
+        changes = StateUpdate(stmt.slot, VarState(Bottom, true))
         return BasicStmtChange(changes, nothing, Union{})
     elseif !isa(stmt, Expr)
         (; rt, exct) = abstract_eval_statement(interp, stmt, pc_vartable, frame)
@@ -3220,7 +3222,7 @@ end
         end
         lhs = stmt.args[1]
         if isa(lhs, SlotNumber)
-            changes = StateUpdate(lhs, VarState(rt, false), false)
+            changes = StateUpdate(lhs, VarState(rt, false))
         elseif isa(lhs, GlobalRef)
             handle_global_assignment!(interp, frame, lhs, rt)
         elseif !isa(lhs, SSAValue)
@@ -3230,7 +3232,7 @@ end
     elseif hd === :method
         fname = stmt.args[1]
         if isa(fname, SlotNumber)
-            changes = StateUpdate(fname, VarState(Any, false), false)
+            changes = StateUpdate(fname, VarState(Any, false))
         end
         return BasicStmtChange(changes, nothing, Union{})
     elseif (hd === :code_coverage_effect || (
@@ -3576,7 +3578,7 @@ function apply_refinement!(𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecia
     oldtyp = vtype.typ
     ⊏ = strictpartialorder(𝕃ᵢ)
     if newtyp ⊏ oldtyp
-        stmtupdate = StateUpdate(slot, VarState(newtyp, vtype.undef), false)
+        stmtupdate = StateUpdate(slot, VarState(newtyp, vtype.undef))
         stoverwrite1!(currstate, stmtupdate)
     end
 end
@@ -3600,7 +3602,9 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # "causes" since we ignored those in the comparison
         newtyp = tmerge(𝕃ᵢ, newtyp, LimitedAccuracy(Bottom, oldtyp.causes))
     end
-    return StateUpdate(SlotNumber(condt.slot), VarState(newtyp, vtype.undef), true)
+    # if this `Conditional` is from from `@isdefined condt.slot`, refine its `undef` information
+    newundef = condt.isdefined ? !then_or_else : vtype.undef
+    return StateUpdate(SlotNumber(condt.slot), VarState(newtyp, newundef), #=conditional=#true)
 end
 
 function condition_object_change(currstate::VarTable, condt::Conditional,
@@ -3609,7 +3613,7 @@ function condition_object_change(currstate::VarTable, condt::Conditional,
     newcondt = Conditional(condt.slot,
         then_or_else ? condt.thentype : Union{},
         then_or_else ? Union{} : condt.elsetype)
-    return StateUpdate(condslot, VarState(newcondt, vtype.undef), false)
+    return StateUpdate(condslot, VarState(newcondt, vtype.undef))
 end
 
 # make as much progress on `frame` as possible (by handling cycles)
