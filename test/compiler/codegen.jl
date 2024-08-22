@@ -993,8 +993,9 @@ for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
             b::Int64
             c::$(T)
         end
-        @test fieldoffset($(StructName), 2) == 16
-        @test fieldoffset($(StructName), 3) == 32
-        @test sizeof($(StructName)) == 48
+        local broken_i128 = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "powerpc64le"
+        @test fieldoffset($(StructName), 2) == 16 broken=broken_i128
+        @test fieldoffset($(StructName), 3) == 32 broken=broken_i128
+        @test sizeof($(StructName)) == 48 broken=broken_i128
     end
 end
