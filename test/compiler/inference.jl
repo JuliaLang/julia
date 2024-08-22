@@ -1065,7 +1065,7 @@ gl_17003 = [1, 2, 3]
 f2_17003(item::AVector_17003) = nothing
 f2_17003(::Any) = f2_17003(NArray_17003(gl_17003))
 
-@test f2_17003(1) == nothing
+@test f2_17003(1) === nothing
 
 # issue #20847
 function segfaultfunction_20847(A::Vector{NTuple{N, T}}) where {N, T}
@@ -1076,7 +1076,7 @@ end
 tuplevec_20847 = Tuple{Float64, Float64}[(0.0,0.0), (1.0,0.0)]
 
 for A in (1,)
-    @test segfaultfunction_20847(tuplevec_20847) == nothing
+    @test segfaultfunction_20847(tuplevec_20847) === nothing
 end
 
 # Issue #20902, check that this doesn't error.
