@@ -1615,6 +1615,19 @@ exp2(x::AbstractFloat) = 2^x
 exp10(x::AbstractFloat) = 10^x
 fourthroot(::Missing) = missing
 
+function exp2(@nospecialize n::Union{
+    typeof(NonnegativeInteger(0)),
+    typeof(NonnegativeInteger(1)),
+})
+    natural_successor(n)
+end
+function exp10(n::typeof(NonnegativeInteger(0)))
+    natural_successor(n)
+end
+function expm1(n::typeof(NonnegativeInteger(0)))
+    n
+end
+
 function log2(@nospecialize n::Union{typeof(NonnegativeInteger(1)),typeof(NonnegativeInteger(2))})
     natural_predecessor(n)
 end
