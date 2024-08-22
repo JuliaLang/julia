@@ -264,6 +264,17 @@ baremodule TypeDomainIntegers
                 n
             end
         end
+        function tdnn_from_int(i::Bool)
+            z = zero()
+            if i
+                natural_successor(z)
+            else
+                z
+            end
+        end
+        function tdi_from_int(i::Bool)
+            tdnn_from_int(i)
+        end
         function tdi_to_x(x::TNumber, @nospecialize n::TypeDomainInteger)
             i = tdi_to_int(n)
             x(i)
