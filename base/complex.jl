@@ -86,7 +86,7 @@ julia> imag(1 + 3im)
 """
 imag(z::Complex) = z.im
 real(x::Real) = x
-imag(x::Real) = zero(x)
+imag(@nospecialize x::Real) = zero(NonnegativeInteger)
 
 """
     reim(z)
