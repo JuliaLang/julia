@@ -151,13 +151,20 @@ hash(x::Irrational, h::UInt) = 3*objectid(x) - h
 
 widen(::Type{T}) where {T<:Irrational} = T
 
-zero(::AbstractIrrational) = false
-zero(::Type{<:AbstractIrrational}) = false
+zero(::AbstractIrrational) = zero(TypeDomainInteger)
+zero(::Type{<:AbstractIrrational}) = zero(TypeDomainInteger)
 
-one(::AbstractIrrational) = true
-one(::Type{<:AbstractIrrational}) = true
+one(::AbstractIrrational) = one(TypeDomainInteger)
+one(::Type{<:AbstractIrrational}) = one(TypeDomainInteger)
 
-sign(x::AbstractIrrational) = ifelse(x < zero(x), -1.0, 1.0)
+function sign(x::AbstractIrrational)
+    o = one(TypeDomainInteger)
+    if signbit(x)
+        -o
+    else
+        o
+    end
+end
 
 -(x::AbstractIrrational) = -Float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]
