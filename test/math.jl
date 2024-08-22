@@ -1328,7 +1328,7 @@ end
     @test (@inferred hypot(1e-162)) ≈ 1e-162
     @test (@inferred hypot(2e-162, 1e-162, 1e-162)) ≈ hypot(2, 1, 1)*1e-162
     @test (@inferred hypot(1e162)) ≈ 1e162
-    @test hypot(-2) === 2.0
+    @test hypot(-2) === 2
     @test hypot(-2, 0) === 2.0
     let i = typemax(Int)
         @test (@inferred hypot(i, i)) ≈ i * √2
