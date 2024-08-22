@@ -29,6 +29,8 @@ using Core.Intrinsics: sqrt_llvm
 
 using .Base: IEEEFloat
 
+using ..TypeDomainIntegers
+
 @noinline function throw_complex_domainerror(f::Symbol, x)
     throw(DomainError(x,
         LazyString(f," was called with a negative real argument but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
