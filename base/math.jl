@@ -835,6 +835,8 @@ function _hypot(x::NTuple{N,<:IEEEFloat}) where {N}
     return scale * sqrt(mapreduce(y -> abs2(y * invscale), add_fast, x))
 end
 
+hypot(x::TypeDomainInteger) = abs(x)
+
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
 atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
 
