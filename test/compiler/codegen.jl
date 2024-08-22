@@ -984,3 +984,17 @@ end
 @test g55208((Union{}, true, true), 0) === typeof(Union{})
 
 @test string((Core.Union{}, true, true, true)) == "(Union{}, true, true, true)"
+
+# Issue #55558
+for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
+    @eval begin
+        struct $(StructName)
+            a::$(T)
+            b::Int64
+            c::$(T)
+        end
+        @test fieldoffset($(StructName), 2) == 16
+        @test fieldoffset($(StructName), 3) == 32
+        @test sizeof($(StructName)) == 48
+    end
+end
