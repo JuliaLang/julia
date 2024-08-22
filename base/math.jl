@@ -681,6 +681,16 @@ Return the fourth root of `x` by applying `sqrt` twice successively.
 """
 fourthroot(x::Number) = sqrt(sqrt(x))
 
+function sqrt(@nospecialize n::Union{typeof(NonnegativeInteger(0)),typeof(NonnegativeInteger(1))})
+    n
+end
+function cbrt(@nospecialize n::Union{typeof(NonnegativeInteger(0)),typeof(NonnegativeInteger(1))})
+    n
+end
+function fourthroot(@nospecialize n::Union{typeof(NonnegativeInteger(0)),typeof(NonnegativeInteger(1))})
+    n
+end
+
 """
     hypot(x, y)
 
