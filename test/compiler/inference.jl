@@ -6033,6 +6033,22 @@ end |> Core.Compiler.is_nothrow
         return x.b
     end
 end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((PartiallyInitialized2,); optimize=false) do x
+    if isdefined(x, :b)
+        if isdefined(x, :c)
+            return x.c
+        end
+        return x.b
+    end
+    return nothing
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Bool,Int,); optimize=false) do c, b
+    x = c ? PartiallyInitialized1(true) : PartiallyInitialized1(true, b)
+    if isdefined(x, :b)
+        return Val(x.a), x.b
+    end
+    return nothing
+end |> Core.Compiler.is_nothrow
 
 # End to end test case for the partially initialized struct with `PartialStruct`
 @noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
