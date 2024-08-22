@@ -630,4 +630,15 @@ end
     end
 end
 
+@testset "diag" begin
+    for T in (Float64, ComplexF64), k in (0, 1, -3), uplo in (:U, :L)
+        A = randn(T, 100, 100)
+        P = Hermitian(A' * A, uplo)
+        C = cholesky(P)
+        CC = cholesky(C)
+        @test C == CC
+    end
+end
+
+
 end # module TestCholesky
