@@ -476,7 +476,7 @@ Base._reverse!(A::SymTridiagonal, dims::Colon) = (reverse!(A.dv); reverse!(A.ev)
     else
         throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j)"))
     end
-    return x
+    return A
 end
 
 ## Tridiagonal matrices ##
@@ -731,7 +731,7 @@ end
         throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off ",
             lazy"the tridiagonal band to a nonzero value ($x)")))
     end
-    return x
+    return A
 end
 
 ## structured matrix methods ##

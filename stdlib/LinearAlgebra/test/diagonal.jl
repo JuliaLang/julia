@@ -617,6 +617,8 @@ end
             @test_throws ArgumentError D[i, j] = 1
         end
     end
+    # setindex should return the destination
+    @test setindex!(D, 1, 1, 1) === D
 end
 
 @testset "Test reverse" begin

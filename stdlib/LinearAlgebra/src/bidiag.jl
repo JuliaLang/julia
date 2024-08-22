@@ -186,7 +186,7 @@ end
         throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off the ",
             A.uplo == 'U' ? "upper" : "lower", " bidiagonal band to a nonzero value ", x)))
     end
-    return x
+    return A
 end
 
 Base._reverse(A::Bidiagonal, dims) = reverse!(Matrix(A); dims)
