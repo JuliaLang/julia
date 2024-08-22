@@ -914,6 +914,15 @@ function dominates_ssa(compact::IncrementalCompact, domtree::DomTree, x::AnySSAV
     return dominates(domtree, xb, yb)
 end
 
+function dominates_ssa(cfg::CFG, domtree::DomTree, x::Int, y::Int)
+    xb = block_for_inst(cfg, x)
+    yb = block_for_inst(cfg, y)
+    if xb == yb
+        return x < y
+    end
+    return dominates(domtree, xb, yb)
+end
+
 function _count_added_node!(compact::IncrementalCompact, @nospecialize(val))
     if isa(val, SSAValue)
         compact.used_ssas[val.id] += 1

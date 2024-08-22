@@ -73,14 +73,15 @@ struct Conditional
     slot::Int
     thentype
     elsetype
-    function Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype))
+    from_ssa::Int
+    function Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype), from_ssa::Int=1)
         assert_nested_slotwrapper(thentype)
         assert_nested_slotwrapper(elsetype)
-        return new(slot, thentype, elsetype)
+        return new(slot, thentype, elsetype, from_ssa)
     end
 end
-Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
-    Conditional(slot_id(var), thentype, elsetype)
+Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype), from_ssa::Int=1) =
+    Conditional(slot_id(var), thentype, elsetype, from_ssa)
 
 import Core: InterConditional
 """
@@ -100,7 +101,6 @@ InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetyp
     InterConditional(slot_id(var), thentype, elsetype)
 
 const AnyConditional = Union{Conditional,InterConditional}
-Conditional(cnd::InterConditional) = Conditional(cnd.slot, cnd.thentype, cnd.elsetype)
 InterConditional(cnd::Conditional) = InterConditional(cnd.slot, cnd.thentype, cnd.elsetype)
 
 """
@@ -316,7 +316,8 @@ end
     return false
 end
 
-is_same_conditionals(a::C, b::C) where C<:AnyConditional = a.slot == b.slot
+is_same_conditionals(a::Conditional, b::Conditional) = a.slot == b.slot && a.from_ssa == b.from_ssa
+is_same_conditionals(a::InterConditional, b::InterConditional) = a.slot == b.slot
 
 @nospecializeinfer is_lattice_bool(lattice::AbstractLattice, @nospecialize(typ)) = typ !== Bottom && ⊑(lattice, typ, Bool)
 
@@ -377,7 +378,8 @@ end
         end
         return Conditional(slot,
             thenfields === nothing ? Bottom : PartialStruct(vartyp.typ, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(vartyp.typ, elsefields))
+            elsefields === nothing ? Bottom : PartialStruct(vartyp.typ, elsefields),
+            #=TODO from_ssa=#0)
     else
         vartyp_widened = widenconst(vartyp)
         thenfields = thentype === Bottom ? nothing : Any[]
@@ -394,7 +396,8 @@ end
         end
         return Conditional(slot,
             thenfields === nothing ? Bottom : PartialStruct(vartyp_widened, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(vartyp_widened, elsefields))
+            elsefields === nothing ? Bottom : PartialStruct(vartyp_widened, elsefields),
+            #=TODO from_ssa=#0)
     end
 end
 

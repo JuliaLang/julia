@@ -30,12 +30,12 @@ function propagate_conditional(rt::InterConditional, cond::Conditional)
     new_elsetype = rt.elsetype === Const(true) ? cond.thentype : cond.elsetype
     if rt.thentype == Bottom
         @assert rt.elsetype != Bottom
-        return Conditional(cond.slot, Bottom, new_elsetype)
+        return Conditional(cond.slot, Bottom, new_elsetype, cond.from_ssa)
     elseif rt.elsetype == Bottom
         @assert rt.thentype != Bottom
-        return Conditional(cond.slot, new_thentype, Bottom)
+        return Conditional(cond.slot, new_thentype, Bottom, cond.from_ssa)
     end
-    return Conditional(cond.slot, new_thentype, new_elsetype)
+    return Conditional(cond.slot, new_thentype, new_elsetype, cond.from_ssa)
 end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
@@ -512,7 +512,7 @@ function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::
         if alias !== nothing
             return form_mustalias_conditional(alias, thentype, elsetype)
         end
-        return Conditional(slot, thentype, elsetype) # record a Conditional improvement to this slot
+        return Conditional(slot, thentype, elsetype, #=from_ssa=#sv.currpc) # record a Conditional improvement to this slot
     end
     return widenconditional(rt)
 end
@@ -1430,7 +1430,7 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
                     # TODO bail out here immediately rather than just propagating Bottom ?
                     given_argtypes[i] = Bottom
                 else
-                    given_argtypes[i] = Conditional(slotid, thentype, elsetype)
+                    given_argtypes[i] = Conditional(slotid, thentype, elsetype, #=from_ssa=#0)
                 end
                 continue
             end
@@ -1929,7 +1929,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             if isa(a, SlotNumber)
                 cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting, rt)
                 if cndt !== nothing
-                    return Conditional(a, cndt.thentype, cndt.elsetype)
+                    return Conditional(a, cndt.thentype, cndt.elsetype, #=from_ssa=#sv.currpc)
                 end
             end
             if isa(a2, MustAlias)
@@ -1947,7 +1947,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     # !(x isa T) implies !(Type{a2} <: T)
                     # TODO: complete splitting, based on which portions of the Union a3 for which isa_tfunc returns Const(true) or Const(false) instead of Bool
                     elsetype = typesubtract(a3, Type{widenconst(a2)}, InferenceParams(interp).max_union_splitting)
-                    return Conditional(b, a3, elsetype)
+                    return Conditional(b, a3, elsetype, #=from_ssa=#sv.currpc)
                 end
             end
         elseif f === (===)
@@ -1959,7 +1959,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             if isa(aty, Const)
                 if isa(b, SlotNumber)
                     cndt = egal_condition(aty, bty, InferenceParams(interp).max_union_splitting, rt)
-                    return Conditional(b, cndt.thentype, cndt.elsetype)
+                    return Conditional(b, cndt.thentype, cndt.elsetype, #=from_ssa=#sv.currpc)
                 elseif isa(bty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
                     cndt = egal_condition(aty, bty.fldtyp, InferenceParams(interp).max_union_splitting)
                     return form_mustalias_conditional(bty, cndt.thentype, cndt.elsetype)
@@ -1967,7 +1967,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             elseif isa(bty, Const)
                 if isa(a, SlotNumber)
                     cndt = egal_condition(bty, aty, InferenceParams(interp).max_union_splitting, rt)
-                    return Conditional(a, cndt.thentype, cndt.elsetype)
+                    return Conditional(a, cndt.thentype, cndt.elsetype, #=from_ssa=#sv.currpc)
                 elseif isa(aty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
                     cndt = egal_condition(bty, aty.fldtyp, InferenceParams(interp).max_union_splitting)
                     return form_mustalias_conditional(aty, cndt.thentype, cndt.elsetype)
@@ -1998,18 +1998,18 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             if isa(b, SlotNumber)
                 thentype = rt === Const(false) ? Bottom : widenslotwrapper(bty)
                 elsetype = rt === Const(true)  ? Bottom : widenslotwrapper(bty)
-                return Conditional(b, thentype, elsetype)
+                return Conditional(b, thentype, elsetype, #=from_ssa=#sv.currpc)
             elseif isa(a, SlotNumber)
                 thentype = rt === Const(false) ? Bottom : widenslotwrapper(aty)
                 elsetype = rt === Const(true)  ? Bottom : widenslotwrapper(aty)
-                return Conditional(a, thentype, elsetype)
+                return Conditional(a, thentype, elsetype, #=from_ssa=#sv.currpc)
             end
         elseif f === Core.Compiler.not_int
             aty = argtypes[2]
             if isa(aty, Conditional)
                 thentype = rt === Const(false) ? Bottom : aty.elsetype
                 elsetype = rt === Const(true)  ? Bottom : aty.thentype
-                return Conditional(aty.slot, thentype, elsetype)
+                return Conditional(aty.slot, thentype, elsetype, #=from_ssa=#sv.currpc)
             end
         elseif f === isdefined
             a = ssa_def_slot(fargs[2], sv)
@@ -2032,7 +2032,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                             elsetype = elsetype ⊔ ty
                         end
                     end
-                    return Conditional(a, thentype, elsetype)
+                    return Conditional(a, thentype, elsetype, #=from_ssa=#sv.currpc)
                 else
                     thentype = form_partially_defined_struct(argtype2, argtypes[3])
                     if thentype !== nothing
@@ -2042,7 +2042,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                         elseif rt === Const(true)
                             elsetype = Bottom
                         end
-                        return Conditional(a, thentype, elsetype)
+                        return Conditional(a, thentype, elsetype, #=from_ssa=#sv.currpc)
                     end
                 end
             end
@@ -2307,7 +2307,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, sv, max_methods)
         rty = abstract_call_known(interp, (===), arginfo, si, sv, max_methods).rt
         if isa(rty, Conditional)
-            return CallMeta(Conditional(rty.slot, rty.elsetype, rty.thentype), Bottom, EFFECTS_TOTAL, NoCallInfo()) # swap if-else
+            newrty = Conditional(rty.slot, rty.elsetype, rty.thentype, #=from_ssa=#sv.currpc)
+            return CallMeta(newrty, Bottom, EFFECTS_TOTAL, NoCallInfo()) # swap if-else
         elseif isa(rty, Const)
             return CallMeta(Const(rty.val === false), Bottom, EFFECTS_TOTAL, MethodResultPure())
         end
@@ -2552,7 +2553,7 @@ struct RTEffects
 end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sv::InferenceState)
-    unused = call_result_unused(sv, sv.currpc)
+    unused = call_result_unused(sv, #=from_ssa=#sv.currpc)
     if unused
         add_curr_ssaflag!(sv, IR_FLAG_UNUSED)
     end
@@ -2695,7 +2696,7 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
                 rt = widenconst(rt)
                 # Propagation of PartialOpaque disabled
             end
-            if isa(rt, PartialOpaque) && isa(sv, InferenceState) && !call_result_unused(sv, sv.currpc)
+            if isa(rt, PartialOpaque) && isa(sv, InferenceState) && !call_result_unused(sv, #=from_ssa=#sv.currpc)
                 # Infer this now so that the specialization is available to
                 # optimization.
                 argtypes = most_general_argtypes(rt)
@@ -3221,6 +3222,7 @@ end
         lhs = stmt.args[1]
         if isa(lhs, SlotNumber)
             changes = StateUpdate(lhs, VarState(rt, false), false)
+            setassignment!(frame.slotassignments, slot_id(lhs), frame.currpc)
         elseif isa(lhs, GlobalRef)
             handle_global_assignment!(interp, frame, lhs, rt)
         elseif !isa(lhs, SSAValue)
@@ -3357,7 +3359,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
     states = frame.bb_vartables
     currstate = copy(states[currbb]::VarTable)
-    slotwrapperssas = BitSet()
     while currbb <= nbbs
         delete!(W, currbb)
         bbstart = first(bbs[currbb].stmts)
@@ -3391,7 +3392,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condslot, SlotNumber)
                         # if this non-`Conditional` object is a slot, we form and propagate
                         # the conditional constraint on it
-                        condt = Conditional(condslot, Const(true), Const(false))
+                        condt = Conditional(condslot, Const(true), Const(false), #=from_ssa=#frame.currpc)
                     end
                     condval = maybe_extract_const_bool(condt)
                     nothrow = (condval !== nothing) || ⊑(𝕃ᵢ, orig_condt, Bool)
@@ -3436,7 +3437,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
                         # We continue with the true branch, but process the false
                         # branch here.
-                        if isa(condt, Conditional)
+                        if isa(condt, Conditional) && is_valid_conditional(condt, currpc, frame)
                             else_change = conditional_change(𝕃ᵢ, currstate, condt, #=then_or_else=#false)
                             if else_change !== nothing
                                 elsestate = copy(currstate)
@@ -3475,14 +3476,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             return caller.ssavaluetypes[caller_pc] !== Any
                         end
                     end
-                    ssavaluetypes[frame.currpc] = Any
+                    ssavaluetypes[currpc] = Any
                     @goto find_next_bb
                 elseif isa(stmt, EnterNode)
                     ssavaluetypes[currpc] = Any
                     add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     if isdefined(stmt, :scope)
                         scopet = abstract_eval_value(interp, stmt.scope, currstate, frame)
-                        handler = gethandler(frame, frame.currpc+1)::TryCatchFrame
+                        handler = gethandler(frame, currpc+1)::TryCatchFrame
                         @assert handler.scopet !== nothing
                         if !⊑(𝕃ᵢ, scopet, handler.scopet)
                             handler.scopet = tmerge(𝕃ᵢ, scopet, handler.scopet)
@@ -3521,9 +3522,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
-                # widen any slot wrapper types that should be invalidated by this change
-                # just like what's done for `currstate`
-                invalidate_ssa_slotwrapper!(ssavaluetypes, slotwrapperssas, slot_id(changes.var))
             end
             if refinements isa SlotRefinement
                 apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, currstate, changes)
@@ -3538,7 +3536,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 ssavaluetypes[currpc] = Any
                 continue
             end
-            record_ssa_assign!(𝕃ᵢ, currpc, rt, frame, slotwrapperssas)
+            record_ssa_assign!(𝕃ᵢ, currpc, rt, frame)
         end # for currpc in bbstart:bbend
 
         # Case 1: Fallthrough termination
@@ -3585,6 +3583,18 @@ function apply_refinement!(𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecia
     end
 end
 
+function is_valid_conditional(condt::Conditional, use_ssa::Int, sv::InferenceState)
+    domtree = get!(sv.lazydomtree)
+    dominates_ssa(sv.cfg, domtree, condt.from_ssa, use_ssa) ||
+        condt.from_ssa == use_ssa ||
+        return false
+    return all(getassignment(sv.slotassignments, condt.slot)) do aidx::Int
+               return (aidx == condt.from_ssa == 0 ||
+                       dominates_ssa(sv.cfg, domtree, aidx, condt.from_ssa) ||
+                       dominates_ssa(sv.cfg, domtree, use_ssa, aidx))
+           end
+end
+
 function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt::Conditional, then_or_else::Bool)
     vtype = currstate[condt.slot]
     oldtyp = vtype.typ
@@ -3612,21 +3622,9 @@ function condition_object_change(currstate::VarTable, condt::Conditional,
     vtype = currstate[slot_id(condslot)]
     newcondt = Conditional(condt.slot,
         then_or_else ? condt.thentype : Union{},
-        then_or_else ? Union{} : condt.elsetype)
+        then_or_else ? Union{} : condt.elsetype,
+        #=from_ssa=#condt.from_ssa)
     return StateUpdate(condslot, VarState(newcondt, vtype.undef), false)
-end
-
-# remove any lattice elements that wrap the reassigned slot object within `ssavaluetypes`
-function invalidate_ssa_slotwrapper!(ssavaluetypes::Vector{Any}, slotwrapperssas::BitSet, changeid::Int)
-    for idx = slotwrapperssas
-        invalidate_ssa_slotwrapper!(ssavaluetypes, idx, changeid)
-    end
-end
-function invalidate_ssa_slotwrapper!(ssavaluetypes::Vector{Any}, idx::Int, changeid::Int)
-    typ = ssavaluetypes[idx]
-    if should_invalidate(typ, changeid)
-        ssavaluetypes[idx] = @noinline widenwrappedslotwrapper(typ)
-    end
 end
 
 # make as much progress on `frame` as possible (by handling cycles)

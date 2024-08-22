@@ -182,15 +182,16 @@ function get!(x::LazyCFGReachability)
 end
 
 mutable struct LazyGenericDomtree{IsPostDom}
-    ir::IRCode
+    cfg::CFG
     domtree::GenericDomTree{IsPostDom}
-    LazyGenericDomtree{IsPostDom}(ir::IRCode) where {IsPostDom} = new{IsPostDom}(ir)
+    LazyGenericDomtree{IsPostDom}(cfg::CFG) where {IsPostDom} = new{IsPostDom}(cfg)
 end
+LazyGenericDomtree{IsPostDom}(ir::IRCode) where {IsPostDom} = LazyGenericDomtree{IsPostDom}(ir.cfg)
 function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
     isdefined(x, :domtree) && return x.domtree
     return @timeit "domtree 2" x.domtree = IsPostDom ?
-        construct_postdomtree(x.ir) :
-        construct_domtree(x.ir)
+        construct_postdomtree(x.cfg) :
+        construct_domtree(x.cfg)
 end
 
 const LazyDomtree = LazyGenericDomtree{false}
@@ -227,6 +228,16 @@ struct HandlerInfo
     handler_at::Vector{Tuple{Int,Int}} # tuple of current (handler, exception stack) value at the pc
 end
 
+struct SlotAssignments
+    assignments::Vector{BitSet}
+    SlotAssignments(nslots::Int) = new(Vector{BitSet}(undef, nslots))
+end
+const ARGUMENT_ASSIGNMENT = BitSet(0)
+getassignment(sa::SlotAssignments, sidx::Int) = isassigned(sa.assignments, sidx) ?
+    sa.assignments[sidx] : ARGUMENT_ASSIGNMENT
+setassignment!(sa::SlotAssignments, sidx::Int, pc::Int) = push!(isassigned(sa.assignments, sidx) ?
+    sa.assignments[sidx] : (sa.assignments[sidx] = BitSet()), pc)
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -249,6 +260,8 @@ mutable struct InferenceState
     ssavaluetypes::Vector{Any}
     stmt_edges::Vector{Vector{Any}}
     stmt_info::Vector{CallInfo}
+    slotassignments::SlotAssignments
+    lazydomtree::LazyDomtree
 
     #= intermediate states for interprocedural abstract interpretation =#
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
@@ -308,6 +321,8 @@ mutable struct InferenceState
         slottypes = Vector{Any}(undef, nslots)
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
+        slotassignments = SlotAssignments(nslots)
+        lazydomtree = LazyDomtree(cfg)
         argtypes = result.argtypes
 
         argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
@@ -316,7 +331,7 @@ mutable struct InferenceState
         for i = 1:nslots
             argtyp = (i > nargtypes) ? Bottom : argtypes[i]
             if argtyp === Bool && has_conditional(typeinf_lattice(interp))
-                argtyp = Conditional(i, Const(true), Const(false))
+                argtyp = Conditional(i, Const(true), Const(false), #=from_ssa=#0)
             end
             slottypes[i] = argtyp
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
@@ -350,7 +365,8 @@ mutable struct InferenceState
 
         this = new(
             mi, world, mod, sptypes, slottypes, src, cfg, method_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, ssavaluetypes,
+            stmt_edges, stmt_info, slotassignments, lazydomtree,
             pclimitations, limitations, cycle_backedges, callstack, 0, 0, 0,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
@@ -735,15 +751,11 @@ end
 _topmod(sv::InferenceState) = _topmod(frame_module(sv))
 
 function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new),
-                            frame::InferenceState, slotwrapperssas::BitSet)
+                            frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
     if old === NOT_FOUND || !is_lattice_equal(𝕃ᵢ, new, old)
         ssavaluetypes[ssa_id] = new
-        wnew = ignorelimited(new)
-        if new isa Conditional || new isa MustAlias
-            push!(slotwrapperssas, ssa_id)
-        end
         W = frame.ip
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)

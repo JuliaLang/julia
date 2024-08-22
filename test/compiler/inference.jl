@@ -2035,7 +2035,7 @@ function foo25261()
         next = f25261(Core.getfield(next, 2))
     end
 end
-let opt25261 = code_typed(foo25261, Tuple{}, optimize=true)[1].first.code
+let opt25261 = first(only(code_typed(foo25261, Tuple{}, optimize=true))).code
     i = 1
     # Skip to after the branch
     while !isa(opt25261[i], GotoIfNot)
