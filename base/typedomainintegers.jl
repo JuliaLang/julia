@@ -523,6 +523,9 @@ baremodule TypeDomainIntegers
         function Base.abs(@nospecialize n::TypeDomainInteger)
             absolute_value_of(n)
         end
+        function Base.signbit(@nospecialize n::TypeDomainInteger)
+            n isa NegativeInteger
+        end
     end
 
     baremodule BaseHelpers
