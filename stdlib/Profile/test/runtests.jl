@@ -173,7 +173,9 @@ let cmd = Base.julia_cmd()
         # should be under 10 seconds, so give it 2 minutes then report failure
         println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
         kill(p, Base.SIGQUIT)
-        sleep(10)
+        sleep(30)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
         kill(p, Base.SIGKILL)
     end
     s = read(p, String)
@@ -203,7 +205,9 @@ if Sys.isbsd() || Sys.islinux()
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
                 kill(p, Base.SIGQUIT)
-                sleep(10)
+                sleep(30)
+                kill(p, Base.SIGQUIT)
+                sleep(30)
                 kill(p, Base.SIGKILL)
                 close(notify_exit)
             end
