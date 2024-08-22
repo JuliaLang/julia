@@ -1628,6 +1628,31 @@ function expm1(n::typeof(NonnegativeInteger(0)))
     n
 end
 
+function sinh(n::typeof(NonnegativeInteger(0)))
+    n
+end
+function cosh(n::typeof(NonnegativeInteger(0)))
+    natural_successor(n)
+end
+function tanh(n::typeof(NonnegativeInteger(0)))
+    n
+end
+function sech(n::typeof(NonnegativeInteger(0)))
+    natural_successor(n)
+end
+function asinh(n::typeof(NonnegativeInteger(0)))
+    n
+end
+function acosh(n::typeof(NonnegativeInteger(1)))
+    natural_predecessor(n)
+end
+function atanh(n::typeof(NonnegativeInteger(0)))
+    n
+end
+function asech(n::typeof(NonnegativeInteger(1)))
+    natural_predecessor(n)
+end
+
 function log2(@nospecialize n::Union{typeof(NonnegativeInteger(1)),typeof(NonnegativeInteger(2))})
     natural_predecessor(n)
 end
