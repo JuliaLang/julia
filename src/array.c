@@ -457,13 +457,43 @@ JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len)
     return a;
 }
 
+uv_mutex_t array_to_string_print_lock;
+
+void jl_set_in_flight_bit_for_array_to_string(jl_array_t *a)
+{
+    uintptr_t msk = (1 << ARRAY_TO_STRING_IN_FLIGHT_BIT_OFFSET);
+    uintptr_t header = jl_atomic_fetch_or((_Atomic(uintptr_t) *)jl_astaggedvalue(a), msk);
+    if (header & msk) {
+        uv_mutex_lock(&array_to_string_print_lock);
+        // Race detected... Someone already set the in-flight bit.
+        jl_safe_printf("Race detected... Someone already set the in-flight bit.\n");
+        jlbacktracet(jl_current_task);
+        uv_mutex_unlock(&array_to_string_print_lock);
+    }
+}
+
+void jl_reset_in_flight_bit_for_array_to_string(jl_array_t *a)
+{
+    uintptr_t msk = (1 << ARRAY_TO_STRING_IN_FLIGHT_BIT_OFFSET);
+    uintptr_t header = jl_atomic_fetch_and((_Atomic(uintptr_t) *)jl_astaggedvalue(a), ~msk);
+    if (!(header & msk)) {
+        uv_mutex_lock(&array_to_string_print_lock);
+        // Race detected... Someone reset the in-flight bit before we could.
+        jl_safe_printf("Race detected... Someone reset the in-flight bit before we could.\n");
+        jlbacktracet(jl_current_task);
+        uv_mutex_unlock(&array_to_string_print_lock);
+    }
+}
+
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
+    jl_set_in_flight_bit_for_array_to_string(a);
     size_t len = jl_array_len(a);
     if (len == 0) {
         // this may seem like purely an optimization (which it also is), but it
         // also ensures that calling `String(a)` doesn't corrupt a previous
         // string also created the same way, where `a = StringVector(_)`.
+        jl_reset_in_flight_bit_for_array_to_string(a);
         return jl_an_empty_string;
     }
     if (a->flags.how == 3 && a->offset == 0 && a->elsize == 1 &&
@@ -476,11 +506,13 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
             a->nrows = 0;
             a->length = 0;
             a->maxsize = 0;
+            jl_reset_in_flight_bit_for_array_to_string(a);
             return o;
         }
     }
     a->nrows = 0;
     a->length = 0;
+    jl_reset_in_flight_bit_for_array_to_string(a);
     return jl_pchar_to_string((const char*)jl_array_data(a), len);
 }
 

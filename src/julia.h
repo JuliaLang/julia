@@ -95,7 +95,11 @@ typedef struct _jl_value_t jl_value_t;
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
     uintptr_t in_image:1;
-    uintptr_t unused:1;
+    // Bit to indicate whether a call to `jl_array_to_string` is in-flight
+    // Mostly used to implement a poor-man's dynamic race detector.
+    // See usage in `jl_array_to_string`.
+#define ARRAY_TO_STRING_IN_FLIGHT_BIT_OFFSET (3)
+    uintptr_t array_to_string_in_flight:1;
 #ifdef _P64
     uintptr_t tag:60;
 #else
@@ -2228,6 +2232,7 @@ JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOIN
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT; // deprecated
+JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT;
 // Mainly for debugging, use `void*` so that no type cast is needed in C++.
 JL_DLLEXPORT void jl_(void *jl_value) JL_NOTSAFEPOINT;
 

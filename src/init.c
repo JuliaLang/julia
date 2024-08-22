@@ -855,6 +855,8 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
 void jl_init_heartbeat(void);
 
+extern uv_mutex_t array_to_string_print_lock;
+
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
 {
     JL_TIMING(JULIA_INIT, JULIA_INIT);
@@ -901,6 +903,8 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     jl_start_threads();
     jl_start_gc_threads();
     uv_barrier_wait(&thread_init_done);
+
+    uv_mutex_init(&array_to_string_print_lock);
 
     jl_init_heartbeat();
 
