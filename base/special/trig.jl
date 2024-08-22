@@ -931,10 +931,18 @@ function tanpi(_x::T) where T<:IEEEFloat
     return float(T)(si / co)
 end
 
-sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
+function cospi(n::TypeDomainInteger)
+    o = one(NonnegativeInteger)
+    if iseven(n)
+        o
+    else
+        -o
+    end
+end
+
+sinpi(x::Integer) = zero(NonnegativeInteger)
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
-tanpi(x::Integer) = x >= 0 ? (isodd(x) ? -zero(float(x)) : zero(float(x))) :
-                             (isodd(x) ? zero(float(x)) : -zero(float(x)))
+tanpi(x::Integer) = zero(NonnegativeInteger)
 sincospi(x::Integer) = (sinpi(x), cospi(x))
 sinpi(x::AbstractFloat) = sin(pi*x)
 cospi(x::AbstractFloat) = cos(pi*x)
