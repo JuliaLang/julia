@@ -1110,6 +1110,20 @@ function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
     s*s > x ? s-1 : s
 end
 
+function isqrt(@nospecialize n::Union{
+    typeof(NonnegativeInteger(0)),
+    typeof(NonnegativeInteger(1)),
+    typeof(NonnegativeInteger(2)),
+    typeof(NonnegativeInteger(3)),
+})
+    z = zero(NonnegativeInteger)
+    if n isa PositiveIntegerUpperBound
+        natural_successor(z)
+    else
+        z
+    end
+end
+
 """
     factorial(n::Integer)
 
