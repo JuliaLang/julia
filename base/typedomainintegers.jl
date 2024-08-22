@@ -225,7 +225,7 @@ baremodule TypeDomainIntegers
         using ..RecursiveAlgorithms: ConvertNaturalToNegativeException
         export
             tdnn_to_int, tdi_to_int, tdnn_from_int, tdi_from_int,
-            tdnn_to_x,   tdi_to_x,   tdnn_from_x,   tdi_from_x
+                         tdi_to_x,   tdnn_from_x,   tdi_from_x
         function tdnn_to_int(@nospecialize n::NonnegativeInteger)
             if n isa PositiveIntegerUpperBound
                 let p = natural_predecessor(n)
@@ -263,10 +263,6 @@ baremodule TypeDomainIntegers
             else
                 n
             end
-        end
-        function tdnn_to_x(x::TNumber, @nospecialize n::NonnegativeInteger)
-            i = tdnn_to_int(n)
-            x(i)
         end
         function tdi_to_x(x::TNumber, @nospecialize n::TypeDomainInteger)
             i = tdi_to_int(n)
