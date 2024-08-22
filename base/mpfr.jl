@@ -22,7 +22,7 @@ import
         RawBigIntRoundingIncrementHelper, truncated, RawBigInt
 
 
-using .Base.Libc
+using .Base.Libc, ..TypeDomainIntegers
 import ..Rounding:
     rounding_raw, setrounding_raw, rounds_to_nearest, rounds_away_from_zero,
     tie_breaker_is_to_even, correct_rounding_requires_increment
@@ -401,6 +401,22 @@ function Bool(x::BigFloat)
     iszero(x) && return false
     isone(x) && return true
     throw(InexactError(:Bool, Bool, x))
+end
+function convert(::Type{NonnegativeInteger}, x::BigFloat)
+    isinteger(x) || throw(InexactError(:NonnegativeInteger, NonnegativeInteger, x))
+    TypeDomainIntegers.Conversion.tdnn_from_x(x)
+end
+function convert(::Type{TypeDomainInteger}, x::BigFloat)
+    isinteger(x) || throw(InexactError(:TypeDomainInteger, TypeDomainInteger, x))
+    TypeDomainIntegers.Conversion.tdi_from_x(x)
+end
+function NonnegativeInteger(x::BigFloat)
+    isinteger(x) || throw(InexactError(:NonnegativeInteger, NonnegativeInteger, x))
+    TypeDomainIntegers.Conversion.tdnn_from_x(x)
+end
+function TypeDomainInteger(x::BigFloat)
+    isinteger(x) || throw(InexactError(:TypeDomainInteger, TypeDomainInteger, x))
+    TypeDomainIntegers.Conversion.tdi_from_x(x)
 end
 function BigInt(x::BigFloat)
     isinteger(x) || throw(InexactError(:BigInt, BigInt, x))
