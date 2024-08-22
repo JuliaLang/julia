@@ -305,7 +305,7 @@ end
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
-include("typedomainintegers.jl")
+include("typedomainintegers.jl"); using .TypeDomainIntegers
 include("div.jl")
 include("rawbigints.jl")
 include("float.jl")
