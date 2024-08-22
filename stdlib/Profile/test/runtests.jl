@@ -274,19 +274,46 @@ end
 end
 
 @testset "HeapSnapshot" begin
-    tmpdir = mktempdir()
-    fname = cd(tmpdir) do
-        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    @testset "default save" begin
+        tmpdir = mktempdir()
+        fname = cd(tmpdir) do
+            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+        end
+        @test isfile(fname)
+        open(fname) do fs
+            @test readline(fs) != ""
+        end
+        rm(fname)
+        rm(tmpdir, force = true, recursive = true)
     end
 
-    @test isfile(fname)
-
-    open(fname) do fs
-        @test readline(fs) != ""
+    @testset "default save when current directory is readonly" begin
+        tmpdir = mktempdir()
+        fname = cd(tmpdir) do
+            chmod(tmpdir, 0o555)
+            read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+        end
+        @test !occursin(tmpdir, fname) # should not be in the given dir
+        @test isfile(fname)
+        open(fname) do fs
+            @test readline(fs) != ""
+        end
+        chmod(tmpdir, 0o777)
+        rm(fname)
+        rm(tmpdir, force = true, recursive = true)
     end
 
-    rm(fname)
-    rm(tmpdir, force = true, recursive = true)
+    @testset "save with custom dir" begin
+        tmpdir = mktempdir()
+        fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot(dir=$(repr(tmpdir))))"`, String)
+        @test occursin(tmpdir, fname)
+        @test isfile(fname)
+        open(fname) do fs
+            @test readline(fs) != ""
+        end
+        rm(fname)
+        rm(tmpdir, force = true, recursive = true)
+    end
 end
 
 @testset "PageProfile" begin

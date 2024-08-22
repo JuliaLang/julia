@@ -1328,9 +1328,10 @@ function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) 
     if isnothing(dir)
         wd = pwd()
         fpath = joinpath(wd, fname)
+        fpath_test = fpath * ".test" # use a different test file as windows can fail to save immediately after rm-ing a file
         try
-            touch(fpath)
-            rm(fpath; force=true)
+            touch(fpath_test)
+            rm(fpath_test; force=true)
         catch
             @warn "Cannot write to current directory `$(pwd())` so saving heap snapshot to `$(tempdir())`" maxlog=1 _id=Symbol(wd)
             fpath = joinpath(tempdir(), fname)
