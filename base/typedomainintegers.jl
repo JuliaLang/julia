@@ -347,7 +347,7 @@ baremodule TypeDomainIntegers
             end
         end
         const PAll = PrimitiveTypes.TypesAll
-        for type ∈ PrimitiveTypes.types_all
+        for type ∈ (AbstractFloat, PrimitiveTypes.types_all...)
             @eval begin
                 function Base.convert(::Type{$type}, @nospecialize n::TypeDomainInteger)
                     tdi_to_x($type, n)
