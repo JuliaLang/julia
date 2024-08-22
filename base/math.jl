@@ -1615,4 +1615,17 @@ exp2(x::AbstractFloat) = 2^x
 exp10(x::AbstractFloat) = 10^x
 fourthroot(::Missing) = missing
 
+function log2(@nospecialize n::Union{typeof(NonnegativeInteger(1)),typeof(NonnegativeInteger(2))})
+    natural_predecessor(n)
+end
+function log10(@nospecialize n::typeof(NonnegativeInteger(1)))
+    zero(NonnegativeInteger)
+end
+function log(@nospecialize n::typeof(NonnegativeInteger(1)))
+    zero(NonnegativeInteger)
+end
+function log1p(@nospecialize n::typeof(NonnegativeInteger(0)))
+    zero(NonnegativeInteger)
+end
+
 end # module
