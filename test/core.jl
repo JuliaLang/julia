@@ -42,6 +42,7 @@ for (T, c) in (
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
+        (Task, [:_state])
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
@@ -8265,3 +8266,5 @@ end
 @test Tuple{Vararg{Int}} === Union{Tuple{Int}, Tuple{}, Tuple{Int, Int, Vararg{Int}}}
 @test (Tuple{Vararg{T}} where T) === (Union{Tuple{T, T, Vararg{T}}, Tuple{}, Tuple{T}} where T)
 @test_broken (Tuple{Vararg{T}} where T) === Union{Tuple{T, T, Vararg{T}} where T, Tuple{}, Tuple{T} where T}
+
+@test sizeof(Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})) == 2

@@ -186,14 +186,14 @@ JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz)
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
 {
     // avoid adding an original thread stack to the free list
-    if (task == ptls->root_task && !task->copy_stack)
+    if (task == ptls->root_task && !task->ctx.copy_stack)
         return;
-    void *stkbuf = task->stkbuf;
-    size_t bufsz = task->bufsz;
+    void *stkbuf = task->ctx.stkbuf;
+    size_t bufsz = task->ctx.bufsz;
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
-            task->stkbuf = NULL;
+            task->ctx.stkbuf = NULL;
 #ifdef _COMPILER_ASAN_ENABLED_
             __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
 #endif
@@ -296,17 +296,17 @@ void sweep_stack_pools(void) JL_NOTSAFEPOINT
             jl_task_t *t = (jl_task_t*)lst[n];
             assert(jl_is_task(t));
             if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
-                if (t->stkbuf == NULL)
+                if (t->ctx.stkbuf == NULL)
                     ndel++; // jl_release_task_stack called
                 else
                     n++;
             }
             else {
                 ndel++;
-                void *stkbuf = t->stkbuf;
-                size_t bufsz = t->bufsz;
+                void *stkbuf = t->ctx.stkbuf;
+                size_t bufsz = t->ctx.bufsz;
                 if (stkbuf) {
-                    t->stkbuf = NULL;
+                    t->ctx.stkbuf = NULL;
                     _jl_free_stack(ptls2, stkbuf, bufsz);
                 }
 #ifdef _COMPILER_TSAN_ENABLED_
@@ -338,7 +338,7 @@ restart:
             continue;
         small_arraylist_t *live_tasks = &ptls2->gc_tls.heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
-        l += n + (ptls2->root_task->stkbuf != NULL);
+        l += n + (ptls2->root_task->ctx.stkbuf != NULL);
     }
     l += l / 20; // add 5% for margin of estimation error
     jl_array_t *a = jl_alloc_vec_any(l); // may gc, changing the number of tasks and forcing us to reload everything
@@ -350,7 +350,7 @@ restart:
         if (ptls2 == NULL)
             continue;
         jl_task_t *t = ptls2->root_task;
-        if (t->stkbuf != NULL) {
+        if (t->ctx.stkbuf != NULL) {
             if (j == l)
                 goto restart;
             jl_array_data(a,void*)[j++] = t;
@@ -359,7 +359,7 @@ restart:
         size_t n = mtarraylist_length(live_tasks);
         for (size_t i = 0; i < n; i++) {
             jl_task_t *t = (jl_task_t*)mtarraylist_get(live_tasks, i);
-            if (t->stkbuf != NULL) {
+            if (t->ctx.stkbuf != NULL) {
                 if (j == l)
                     goto restart;
                 jl_array_data(a,void*)[j++] = t;

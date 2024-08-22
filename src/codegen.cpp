@@ -2240,6 +2240,8 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
         // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
         jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ));
         constant.constant = jl_tparam0(typ);
+        if (typ == (jl_value_t*)jl_typeofbottom_type->super)
+            constant.isghost = true;
         return constant;
     }
     return jl_cgval_t(typ);
@@ -2252,7 +2254,7 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_datatype_t *typ)
 static inline jl_cgval_t mark_julia_const(jl_codectx_t &ctx, jl_value_t *jv)
 {
     jl_value_t *typ;
-    if (jl_is_type(jv)) {
+    if (jl_is_type(jv) && jv != jl_bottom_type) {
         typ = (jl_value_t*)jl_wrap_Type(jv); // TODO: gc-root this?
     }
     else {
@@ -3619,8 +3621,8 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
     if (arg1.constant && arg2.constant)
         return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), jl_egal(arg1.constant, arg2.constant));
 
-    jl_value_t *rt1 = arg1.typ;
-    jl_value_t *rt2 = arg2.typ;
+    jl_value_t *rt1 = (arg1.constant ? jl_typeof(arg1.constant) : arg1.typ);
+    jl_value_t *rt2 = (arg2.constant ? jl_typeof(arg2.constant) : arg2.typ);
     if (jl_is_concrete_type(rt1) && jl_is_concrete_type(rt2) && !jl_is_kind(rt1) && !jl_is_kind(rt2) && rt1 != rt2) {
         // disjoint concrete leaf types are never equal (quick test)
         return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
@@ -9534,7 +9536,7 @@ static jl_llvm_functions_t
                     RTindex = UndefValue::get(getInt8Ty(ctx.builder.getContext()));
                 }
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
-                    size_t tindex = get_box_tindex((jl_datatype_t*)val.typ, phiType);
+                    size_t tindex = get_box_tindex((jl_datatype_t*)(val.constant ? jl_typeof(val.constant) : val.typ), phiType);
                     if (tindex == 0) {
                         if (VN)
                             V = boxed(ctx, val);

@@ -18,7 +18,7 @@ function hasuniquerep(@nospecialize t)
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return _all(hasuniquerep, t.parameters)
+        return all(hasuniquerep, t.parameters)
     end
     return false
 end
