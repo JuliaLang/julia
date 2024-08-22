@@ -526,6 +526,21 @@ baremodule TypeDomainIntegers
         function Base.signbit(@nospecialize n::TypeDomainInteger)
             n isa NegativeInteger
         end
+        function Base.sign(@nospecialize n::TypeDomainInteger)
+            zer = zero()
+            plus = natural_successor(zer)
+            minus = negated(plus)
+            if n isa NegativeInteger
+                minus
+            else
+                n = n::NonnegativeInteger
+                if n isa PositiveIntegerUpperBound
+                    plus
+                else
+                    zer
+                end
+            end
+        end
     end
 
     baremodule BaseHelpers
