@@ -522,6 +522,8 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
+include("typedomainintegers_irrationals.jl")
+
 # Stack frames and traces
 include("stacktraces.jl")
 using .StackTraces
