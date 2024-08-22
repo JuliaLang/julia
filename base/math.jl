@@ -712,6 +712,9 @@ Stacktrace:
 julia> hypot(3, 4im)
 5.0
 
+julia> hypot(-5)
+5
+
 julia> hypot(-5.7)
 5.7
 
@@ -724,7 +727,7 @@ julia> norm([a, a, a, a]) == hypot(a, a, a, a)
 true
 ```
 """
-hypot(x::Number) = abs(float(x))
+hypot(x::Number) = abs(x)
 hypot(x::Number, y::Number) = _hypot(float.(promote(x, y))...)
 hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...)))
 function _hypot(x, y)
