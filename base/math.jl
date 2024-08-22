@@ -1666,4 +1666,23 @@ function log1p(@nospecialize n::typeof(NonnegativeInteger(0)))
     zero(NonnegativeInteger)
 end
 
+function sind(n::typeof(NonnegativeInteger(0)))
+    n
+end
+function asind(n::typeof(NonnegativeInteger(0)))
+    n
+end
+function cosd(n::typeof(NonnegativeInteger(0)))
+    natural_successor(n)
+end
+function acosd(n::typeof(NonnegativeInteger(1)))
+    natural_predecessor(n)
+end
+function secd(n::typeof(NonnegativeInteger(0)))
+    natural_successor(n)
+end
+function asecd(n::typeof(NonnegativeInteger(1)))
+    natural_predecessor(n)
+end
+
 end # module
