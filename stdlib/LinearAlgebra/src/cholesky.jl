@@ -551,7 +551,6 @@ end
 # allow packages like SparseArrays.jl to hook into here and redirect to out-of-place `cholesky`
 _cholesky(A::AbstractMatrix, args...; kwargs...) = cholesky!(A, args...; kwargs...)
 
-
 # allow cholesky of cholesky 
 cholesky(A::M) where {M <: Cholesky} = A
 
