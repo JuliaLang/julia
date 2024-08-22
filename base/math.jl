@@ -264,6 +264,13 @@ deg2rad(z::Real) = deg2rad(float(z))
 rad2deg(z::Number) = (z/pi)*180
 deg2rad(z::Number) = (z*pi)/180
 
+function deg2rad(@nospecialize z::typeof(zero(TypeDomainInteger)))
+    z
+end
+function rad2deg(@nospecialize z::typeof(zero(TypeDomainInteger)))
+    z
+end
+
 log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 
 """
