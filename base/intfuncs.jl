@@ -1159,6 +1159,19 @@ function factorial(n::Integer)
     return f
 end
 
+function factorial(@nospecialize n::Union{
+        typeof(NonnegativeInteger(0)),
+        typeof(NonnegativeInteger(1)),
+        typeof(NonnegativeInteger(2)),
+})
+    two = NonnegativeInteger(2)
+    if n === two
+        two
+    else
+        one(NonnegativeInteger)
+    end
+end
+
 """
     binomial(n::Integer, k::Integer)
 
