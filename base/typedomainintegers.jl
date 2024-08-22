@@ -225,7 +225,8 @@ baremodule TypeDomainIntegers
         using ..RecursiveAlgorithms: ConvertNaturalToNegativeException
         export
             tdnn_to_int, tdi_to_int, tdnn_from_int, tdi_from_int,
-                         tdi_to_x,   tdnn_from_x,   tdi_from_x
+                         tdi_to_x,   tdnn_from_x,   tdi_from_x,
+            tdi_to_x_with_extra
         function tdnn_to_int(@nospecialize n::NonnegativeInteger)
             if n isa PositiveIntegerUpperBound
                 let p = natural_predecessor(n)
@@ -278,6 +279,10 @@ baremodule TypeDomainIntegers
         function tdi_to_x(x::TNumber, @nospecialize n::TypeDomainInteger)
             i = tdi_to_int(n)
             x(i)
+        end
+        function tdi_to_x_with_extra(x::TNumber, (@nospecialize n::TypeDomainInteger), e)
+            i = tdi_to_int(n)
+            x(i, e)
         end
         function x_to_int(x::Number)
             t = Int16  # presumably wide enough for any type domain integer
@@ -334,7 +339,7 @@ baremodule TypeDomainIntegers
 
     baremodule BaseOverloads
         using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..PrimitiveTypes, ..Conversion
-        using Base: Base, convert, <, +, -, *, ==, isequal, isless, !, @nospecialize, @eval
+        using Base: Base, convert, RoundingMode, <, +, -, *, ==, isequal, isless, !, @nospecialize, @eval
         function Base.zero(@nospecialize unused::Type{<:TypeDomainInteger})
             zero()
         end
@@ -361,6 +366,13 @@ baremodule TypeDomainIntegers
                 end
                 function (::Type{$type})(@nospecialize n::TypeDomainInteger)
                     tdi_to_x($type, n)
+                end
+            end
+        end
+        for type ∈ (AbstractFloat, PrimitiveTypes.types_float...)
+            @eval begin
+                function (::Type{$type})((@nospecialize n::TypeDomainInteger), rm::RoundingMode)
+                    tdi_to_x_with_extra($type, n, rm)
                 end
             end
         end

@@ -257,8 +257,6 @@ using .Iterators: Flatten, Filter, product  # for generators
 using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 include("namedtuple.jl")
 
-include("typedomainintegers.jl")
-
 # For OS specific stuff
 # We need to strcat things here, before strings are really defined
 function strcat(x::String, y::String)
@@ -307,6 +305,7 @@ end
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
+include("typedomainintegers.jl")
 include("div.jl")
 include("rawbigints.jl")
 include("float.jl")
