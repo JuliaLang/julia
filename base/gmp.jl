@@ -13,6 +13,8 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
              clamp
 
+using ..TypeDomainIntegers
+
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
     const CulongMax = Union{UInt8, UInt16, UInt32}
@@ -389,6 +391,18 @@ function (::Type{T})(x::BigInt) where T<:Base.BitSigned
     end
 end
 
+function convert(::Type{NonnegativeInteger}, x::BigInt)
+    TypeDomainIntegers.Conversion.tdnn_from_x(x)
+end
+function convert(::Type{TypeDomainInteger}, x::BigInt)
+    TypeDomainIntegers.Conversion.tdi_from_x(x)
+end
+function NonnegativeInteger(x::BigInt)
+    TypeDomainIntegers.Conversion.tdnn_from_x(x)
+end
+function TypeDomainInteger(x::BigInt)
+    TypeDomainIntegers.Conversion.tdi_from_x(x)
+end
 
 Float64(n::BigInt, ::RoundingMode{:ToZero}) = MPZ.get_d(n)
 
