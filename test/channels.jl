@@ -500,7 +500,7 @@ end
     c = Channel(1)
     close(c)
     @test !isopen(c)
-    c.excp == nothing # to trigger the branch
+    c.excp === nothing # to trigger the branch
     @test_throws InvalidStateException Base.check_channel_state(c)
 end
 

@@ -7031,7 +7031,7 @@ translate27368(::Type{Val{name}}) where {name} =
 # issue #27456
 @inline foo27456() = try baz_nonexistent27456(); catch; nothing; end
 bar27456() = foo27456()
-@test bar27456() == nothing
+@test bar27456() === nothing
 
 # issue #27365
 mutable struct foo27365

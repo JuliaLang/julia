@@ -591,32 +591,32 @@ end
     @test findall(!, m) == [k for (k,v) in pairs(m) if !v]
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
-    @test findfirst(a.==5) == nothing
+    @test findfirst(a.==5) === nothing
     @test findfirst(Dict(1=>false, 2=>true)) == 2
-    @test findfirst(Dict(1=>false)) == nothing
+    @test findfirst(Dict(1=>false)) === nothing
     @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
-    @test findfirst(isodd, [2,4,6,2,0]) == nothing
+    @test findfirst(isodd, [2,4,6,2,0]) === nothing
     @test findnext(!iszero,a,4) == 4
     @test findnext(!iszero,a,5) == 6
     @test findnext(!iszero,a,1) == 2
     @test findnext(isequal(1),a,4) == 6
-    @test findnext(isequal(5),a,4) == nothing
+    @test findnext(isequal(5),a,4) === nothing
     @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
-    @test findlast(a.==5) == nothing
-    @test findlast(false) == nothing # test non-AbstractArray findlast
+    @test findlast(a.==5) === nothing
+    @test findlast(false) === nothing # test non-AbstractArray findlast
     @test findlast(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
-    @test findlast(isodd, [2,4,6,2,0]) == nothing
+    @test findlast(isodd, [2,4,6,2,0]) === nothing
     @test findprev(!iszero,a,4) == 4
     @test findprev(!iszero,a,5) == 4
-    @test findprev(!iszero,a,1) == nothing
+    @test findprev(!iszero,a,1) === nothing
     @test findprev(isequal(1),a,4) == 2
     @test findprev(isequal(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
-    @test findprev(isodd, [2,4,5,3,9,2,0], 2) == nothing
+    @test findprev(isodd, [2,4,5,3,9,2,0], 2) === nothing
     @test findfirst(isequal(0x00), [0x01, 0x00]) == 2
     @test findlast(isequal(0x00), [0x01, 0x00]) == 2
     @test findnext(isequal(0x00), [0x00, 0x01, 0x00], 2) == 3

@@ -440,7 +440,7 @@ function f1_30093(r)
     end
 end
 
-@test f1_30093(Ref(0)) == nothing
+@test f1_30093(Ref(0)) === nothing
 
 # issue 33590
 function f33590(b, x)
