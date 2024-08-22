@@ -552,7 +552,7 @@ end
 _cholesky(A::AbstractMatrix, args...; kwargs...) = cholesky!(A, args...; kwargs...)
 
 # allow cholesky of cholesky
-cholesky(A::M) where {M <: Cholesky} = A
+cholesky(A::Cholesky) = A
 
 ## With pivoting
 """
