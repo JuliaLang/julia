@@ -1022,7 +1022,14 @@ function enq_work(t::Task)
             tid = 0
         end
     end
-    ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    if (tid == 0)
+        n_spinning = Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads_spinning, Cint), :acquire)
+        n_spinning == 0 && ccall(:jl_add_spinner, Cvoid, ())
+    else
+        ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    end
+    # n_spinning = Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire)
+    # n_spinning == 0 && ccall(:jl_add_spinner, Cvoid, ())
     return t
 end
 

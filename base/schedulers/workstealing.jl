@@ -49,11 +49,13 @@ function dequeue!()
     if t !== nothing
         if ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1) == 0
             push!(q, t) # Is there a way to avoid popping the same unrunnable task over and over?
+            ccall(:jl_wakeup_thread, Cvoid, (Int16,), (Threads.threadid(t) - 1) % Int16)
         else
             return t
         end
     end
-    return attempt_steal!() # Otherwise try to steal from others
+    t = attempt_steal!() # Otherwise try to steal from others
+    return t
 end
 
 function attempt_steal!()
@@ -66,6 +68,7 @@ function attempt_steal!()
         if t !== nothing
             if ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1) == 0
                 push!(queue_for(tid), t)
+                ccall(:jl_wakeup_thread, Cvoid, (Int16,), (Threads.threadid(t) - 1) % Int16)
             else
                 return t
             end
