@@ -588,3 +588,6 @@ function Base.pop!(v::SyntaxList)
     SyntaxTree(v.graph, pop!(v.ids))
 end
 
+function Base.copy(v::SyntaxList)
+    SyntaxList(v.graph, copy(v.ids))
+end

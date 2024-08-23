@@ -337,8 +337,18 @@ end
 """
 
 src = """
-try
-catch
+let x = 10
+    global a = []
+    try
+        try
+            return 100
+        finally
+            push!(a, 1)
+        end
+    finally
+        push!(a, 2)
+    end
+    x
 end
 """
 
@@ -359,7 +369,7 @@ ctx3, ex_scoped = JuliaLowering.resolve_scopes(ctx2, ex_desugar)
 @info "Resolved scopes" ex_scoped formatsrc(ex_scoped, color_by=:var_id)
 
 ctx4, ex_compiled = JuliaLowering.linearize_ir(ctx3, ex_scoped)
-@info "Linear IR" ex_compiled formatsrc(ex_compiled, color_by=:var_id)
+@info "Linear IR" ex_compiled formatsrc(ex_compiled, color_by=:var_id) Text(sprint(JuliaLowering.print_ir, ex_compiled))
 
 ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.bindings, ex_compiled)
 @info "CodeInfo" ex_expr

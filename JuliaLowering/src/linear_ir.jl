@@ -24,6 +24,30 @@ function is_ssa(ctx, ex)
     kind(ex) == K"BindingId" && lookup_binding(ctx, ex).is_ssa
 end
 
+# Target to jump to, including info on try handler nesting and catch block
+# nesting
+struct JumpTarget{GraphType}
+    label::SyntaxTree{GraphType}
+    handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+    catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+end
+
+function JumpTarget(label::SyntaxTree{GraphType}, ctx) where {GraphType}
+    JumpTarget{GraphType}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+end
+
+struct FinallyHandler{GraphType}
+    tagvar::SyntaxTree{GraphType}
+    target::JumpTarget{GraphType}
+    exit_actions::Vector{Tuple{Symbol,Union{Nothing,SyntaxTree{GraphType}}}}
+end
+
+function FinallyHandler(tagvar::SyntaxTree{GraphType}, target::JumpTarget) where {GraphType}
+    FinallyHandler{GraphType}(tagvar, target,
+        Vector{Tuple{Symbol, Union{Nothing,SyntaxTree{GraphType}}}}())
+end
+
+
 """
 Context for creating linear IR.
 
@@ -38,19 +62,21 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     is_toplevel_thunk::Bool
     lambda_locals::Set{IdTag}
     return_type::Union{Nothing, SyntaxTree{GraphType}}
-    break_labels::Dict{String, NodeId}
+    break_targets::Dict{String, JumpTarget{GraphType}}
     handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
     catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
-    finally_handler # ::Union{Nothing, SyntaxTree{GraphType}}
+    finally_handlers::Vector{FinallyHandler{GraphType}}
     mod::Module
 end
 
 function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
     graph = syntax_graph(ctx)
     rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
+    GraphType = typeof(graph)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_locals, rett,
-                    Dict{String,NodeId}(), SyntaxList(ctx), SyntaxList(ctx), nothing, ctx.mod)
+                    Dict{String,JumpTarget{GraphType}}(), SyntaxList(ctx), SyntaxList(ctx),
+                    Vector{FinallyHandler{GraphType}}(), ctx.mod)
 end
 
 # FIXME: BindingId subsumes many things so need to assess what that means for these predicates.
@@ -153,6 +179,18 @@ function emit_pop_exception(ctx::LinearIRContext, srcref, dest_tokens)
     end
 end
 
+function emit_leave_handler(ctx::LinearIRContext, srcref, dest_tokens)
+    src_tokens = ctx.handler_token_stack
+    n = length(dest_tokens)
+    jump_ok = n == 0 || (n <= length(src_tokens) && dest_tokens[n].var_id == src_tokens[n].var_id)
+    jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
+    if n < length(src_tokens)
+        emit(ctx, @ast ctx srcref [K"leave" src_tokens[n+1:end]])
+    else
+        nothing
+    end
+end
+
 function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
     if isnothing(type)
         return ex
@@ -189,7 +227,30 @@ function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
     ]
 end
 
-function actually_return(ctx, ex)
+function emit_jump(ctx, srcref, target::JumpTarget)
+    emit_pop_exception(ctx, srcref, target.catch_token_stack)
+    emit_leave_handler(ctx, srcref, target.handler_token_stack)
+    emit(ctx, @ast ctx srcref [K"goto" target.label])
+end
+
+# Enter the current finally block, either through the landing pad (on_exit ==
+# :rethrow) or via a jump (on_exit ∈ (:return, :break)).
+#
+# An integer tag is created to identify the current code path and select the
+# on_exit action to be taken at finally handler exit.
+function enter_finally_block(ctx, srcref, on_exit, value)
+    @assert on_exit ∈ (:rethrow, :break, :return)
+    handler = last(ctx.finally_handlers)
+    push!(handler.exit_actions, (on_exit, value))
+    tag = length(handler.exit_actions)
+    emit(ctx, @ast ctx srcref [K"=" handler.tagvar tag::K"Integer"])
+    if on_exit != :rethrow
+        emit_jump(ctx, srcref, handler.target)
+    end
+end
+
+# Helper function for emit_return
+function _actually_return(ctx, ex)
     # TODO: Handle the implicit return coverage hack for #53354 ?
     rett = ctx.return_type
     if !isnothing(rett)
@@ -211,24 +272,27 @@ function emit_return(ctx, srcref, ex)
     if isnothing(ex)
         return
     elseif isempty(ctx.handler_token_stack)
-        actually_return(ctx, ex)
+        _actually_return(ctx, ex)
         return
     end
     # FIXME: What's this !is_ssa(ctx, ex) here about?
-    x = if is_simple_atom(ctx, ex) && !(is_ssa(ctx, ex) && !isnothing(ctx.finally_handler))
+    x = if is_simple_atom(ctx, ex) && !(is_ssa(ctx, ex) && !isempty(ctx.finally_handlers))
         ex
-    elseif !isnothing(ctx.finally_handler)
-        tmp = new_mutable_var(ctx, ex)
-        emit(ctx, @ast ctx ex [K"=" tmp ex])
+    elseif !isempty(ctx.finally_handlers)
+        # TODO: Why does flisp lowering create a mutable variable here even
+        # though we don't mutate it?
+        # tmp = ssavar(ctx, srcref, "returnval_via_finally") # <- can we use this?
+        tmp = new_mutable_var(ctx, srcref, "returnval_via_finally")
+        emit(ctx, @ast ctx srcref [K"=" tmp ex])
         tmp
     else
-        emit_assign_tmp(ctx, ex)
+        emit_assign_tmp(ctx, ex, "returnval_via_finally")
     end
-    if !isnothing(ctx.finally_handler)
-        TODO(ex, "Finally blocks")
+    if !isempty(ctx.finally_handlers)
+        enter_finally_block(ctx, srcref, :return, x)
     else
-        emit(ctx, @ast ctx ex [K"leave" ctx.handler_token_stack...])
-        actually_return(ctx, x)
+        emit(ctx, @ast ctx srcref [K"leave" ctx.handler_token_stack...])
+        _actually_return(ctx, x)
     end
     # Should we return `x` here? The flisp code does, but that doesn't seem
     # useful as any returned value cannot be used?
@@ -237,6 +301,23 @@ end
 
 function emit_return(ctx, ex)
     emit_return(ctx, ex, ex)
+end
+
+function emit_break(ctx, ex)
+    name = ex[1].name_val
+    target = get(ctx.break_targets, name, nothing)
+    if isnothing(target)
+        ty = name == "loop_exit" ? "break" : "continue"
+        throw(LoweringError(ex, "$ty must be used inside a `while` or `for` loop"))
+    end
+    if !isempty(ctx.finally_handlers)
+        handler = last(ctx.finally_handlers)
+        if length(target.handler_token_stack) < length(handler.target.handler_token_stack)
+            enter_finally_block(ctx, ex, :break, ex)
+            return
+        end
+    end
+    emit_jump(ctx, ex, target)
 end
 
 function emit_assignment(ctx, srcref, lhs, rhs)
@@ -250,7 +331,7 @@ function emit_assignment(ctx, srcref, lhs, rhs)
     else
         # in unreachable code (such as after return); still emit the assignment
         # so that the structure of those uses is preserved
-        emit(ctx, rhs, K"=", lhs, nothing_(ctx, srcref))
+        emit(ctx, @ast ctx srcref [K"=" lhs "nothing"::K"core"])
         nothing
     end
 end
@@ -362,13 +443,20 @@ end
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     @chk numchildren(ex) <= 3
     try_block = ex[1]
-    catch_block = ex[2]
-    else_block = numchildren(ex) == 2 ? nothing : ex[3]
-    finally_block = nothing # fixme
+    if kind(ex) == K"trycatchelse"
+        catch_block = ex[2]
+        else_block = numchildren(ex) == 2 ? nothing : ex[3]
+        finally_block = nothing
+        catch_label = make_label(ctx, catch_block)
+    else
+        catch_block = nothing
+        else_block = nothing
+        finally_block = ex[2]
+        catch_label = make_label(ctx, finally_block)
+    end
 
-    catch_label = make_label(ctx, catch_block)
     end_label = !in_tail_pos || !isnothing(finally_block) ? make_label(ctx, ex) : nothing
-    result_var = needs_value && !in_tail_pos ? new_mutable_var(ctx, ex, "result_var") : nothing
+    try_result = needs_value && !in_tail_pos ? new_mutable_var(ctx, ex, "try_result") : nothing
 
     # Exception handler block prefix
     handler_token = ssavar(ctx, ex, "handler_token")
@@ -376,7 +464,16 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         handler_token
         [K"enter" catch_label]  # TODO: dynscope
     ])
+    if !isnothing(finally_block)
+        # TODO: Trivial finally block optimization from JuliaLang/julia#52593 (or
+        # support a special form for @with)?
+        finally_handler = FinallyHandler(new_mutable_var(ctx, finally_block, "finally_tag"),
+                                         JumpTarget(end_label, ctx))
+        push!(ctx.finally_handlers, finally_handler)
+        emit(ctx, @ast ctx finally_block [K"=" finally_handler.tagvar -1::K"Integer"])
+    end
     push!(ctx.handler_token_stack, handler_token)
+
     # Try block code.
     try_val = compile(ctx, try_block, needs_value, false)
     # Exception handler block postfix
@@ -387,7 +484,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
         else
             if needs_value && !isnothing(try_val)
-                emit_assignment(ctx, ex, result_var, try_val)
+                emit_assignment(ctx, ex, try_result, try_val)
             end
             emit(ctx, @ast ctx ex [K"leave" handler_token])
         end
@@ -402,7 +499,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         else_val = compile(ctx, else_block, needs_value, in_tail_pos)
         if !in_tail_pos
             if needs_value && !isnothing(else_val)
-                emit_assignment(ctx, ex, result_var, else_val)
+                emit_assignment(ctx, ex, try_result, else_val)
             end
         end
     end
@@ -410,36 +507,68 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         emit(ctx, @ast ctx ex [K"goto" end_label])
     end
 
+    # Catch pad
     # Emit either catch or finally block. A combined try/catch/finally block
     # was split into separate trycatchelse and tryfinally blocks earlier.
-
-    emit(ctx, catch_label)
+    emit(ctx, catch_label) # <- Exceptional control flow enters here
     if !isnothing(finally_block)
-        TODO(finally_block, "finally")
+        # Attribute the postfix and prefix to the finally block as a whole.
+        srcref = finally_block
+        enter_finally_block(ctx, srcref, :rethrow, nothing)
+        emit(ctx, end_label) # <- Non-exceptional control flow enters here
+        pop!(ctx.finally_handlers)
+        compile(ctx, finally_block, false, false)
+        # Finally block postfix: Emit a branch for every code path which enters
+        # the block to dynamically decide which return/break/rethrow exit action to take
+        for (tag, (on_exit, value)) in Iterators.reverse(enumerate(finally_handler.exit_actions))
+            next_action_label = !in_tail_pos || tag != 1 || on_exit != :return ?
+                make_label(ctx, srcref) : nothing
+            if !isnothing(next_action_label)
+                next_action_label = make_label(ctx, srcref)
+                tmp = ssavar(ctx, srcref, "do_finally_action")
+                emit(ctx, @ast ctx srcref [K"=" tmp
+                    [K"call"
+                        "==="::K"core"
+                        finally_handler.tagvar
+                        tag::K"Integer"
+                    ]
+                ])
+                emit(ctx, @ast ctx srcref [K"gotoifnot" tmp next_action_label])
+            end
+            if on_exit === :return
+                emit_return(ctx, value)
+            elseif on_exit === :break
+                emit_break(ctx, value)
+            elseif on_exit === :rethrow
+                emit(ctx, @ast ctx srcref [K"call" "rethrow"::K"top"])
+            else
+                @assert false
+            end
+            if !isnothing(next_action_label)
+                emit(ctx, next_action_label)
+            end
+        end
     else
         push!(ctx.catch_token_stack, handler_token)
-        # Exceptional control flow enters here
         catch_val = compile(ctx, catch_block, needs_value, in_tail_pos)
-        if !isnothing(result_var) && !isnothing(catch_val)
-            emit_assignment(ctx, ex, result_var, catch_val)
+        if !isnothing(try_result) && !isnothing(catch_val)
+            emit_assignment(ctx, ex, try_result, catch_val)
         end
         if !in_tail_pos
             emit(ctx, @ast ctx ex [K"pop_exception" handler_token])
             emit(ctx, end_label)
         else
-            # <- pop_exception done in emit_return
+            # (pop_exception done in emit_return)
         end
         pop!(ctx.catch_token_stack)
     end
-    result_var
+    try_result
 end
 
 # This pass behaves like an interpreter on the given code.
 # To perform stateful operations, it calls `emit` to record that something
 # needs to be done. In value position, it returns an expression computing
 # the needed value.
-#
-# TODO: Is it ok to return `nothing` if we have no value in some sense?
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
@@ -519,28 +648,29 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"break_block"
         end_label = make_label(ctx, ex)
         name = ex[1].name_val
-        outer_label = get(ctx.break_labels, name, nothing)
-        ctx.break_labels[name] = end_label._id
+        outer_target = get(ctx.break_targets, name, nothing)
+        ctx.break_targets[name] = JumpTarget(end_label, ctx)
         compile(ctx, ex[2], false, false)
-        if isnothing(outer_label)
-            delete!(ctx.break_labels, name)
+        if isnothing(outer_target)
+            delete!(ctx.break_targets, name)
         else
-            ctx.break_labels = outer_label
+            ctx.break_targets = outer_target
         end
         emit(ctx, end_label)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
     elseif k == K"break"
-        name = ex[1].name_val
-        label_id = get(ctx.break_labels, name, nothing)
-        if isnothing(label_id)
-            ty = name == "loop_exit" ? "break" : "continue"
-            throw(LoweringError(ex, "$ty must be used inside a `while` or `for` loop"))
-        end
-        label = SyntaxTree(ctx.graph, label_id)
-        # TODO: try/finally handling
-        emit(ctx, @ast ctx ex [K"goto" label])
+        emit_break(ctx, ex)
+    #elseif k == K"symbolic_goto"
+    #   target = get(ctx.symbolic_jump_targets, ex.name_val, nothing)
+    #   if isnothing(target)
+    #       push!(ctx.symbolic_jump_origins, IRInsertionPoint(ctx))
+    #   else
+    #       emit_jump(
+    #elseif k == K"symbolic_label"
+    #   label = emit_label(ctx, ex)
+    #   push!(ctx.symbolic_jump_targets, JumpTarget(label, ctx))
     elseif k == K"return"
         compile(ctx, ex[1], true, true)
         nothing
@@ -592,7 +722,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             val
         end
-    elseif k == K"trycatchelse" # || k == K"tryfinally"
+    elseif k == K"trycatchelse" || k == K"tryfinally"
         compile_try(ctx, ex, needs_value, in_tail_pos)
     elseif k == K"method"
         # TODO
@@ -795,7 +925,9 @@ function linearize_ir(ctx, ex)
     # required to call reparent() ...
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
                            Ref(0), false, Set{IdTag}(), nothing,
-                           Dict{String,NodeId}(), SyntaxList(graph), SyntaxList(graph), nothing, ctx.mod)
+                           Dict{String,JumpTarget{typeof(graph)}}(),
+                           SyntaxList(graph), SyntaxList(graph),
+                           Vector{FinallyHandler{typeof(graph)}}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     setattr!(graph, res._id, bindings=ctx.bindings)
     _ctx, res

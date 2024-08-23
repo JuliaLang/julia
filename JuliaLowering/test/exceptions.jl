@@ -78,6 +78,32 @@ test_mod = Module()
     end
     """) == 1
 
+    @test JuliaLowering.include_string(test_mod, """
+    let x = -1
+        while true
+            try
+                error("hi")
+            catch
+                x = 2
+                break
+            end
+        end
+        x
+    end
+    """) == 2
+
+    @test JuliaLowering.include_string(test_mod, """
+    let x = -1
+        while true
+            try
+                x = 2
+                break
+            catch
+            end
+        end
+        x
+    end
+    """) == 2
 end
 
 @testset "value position" begin
@@ -235,5 +261,80 @@ end
 @test isempty(current_exceptions())
 
 test_ir_cases(joinpath(@__DIR__, "exceptions_ir.jl"))
+
+end
+
+#-------------------------------------------------------------------------------
+@testset "try/finally" begin
+
+test_mod = Module()
+
+@test JuliaLowering.include_string(test_mod, """
+let x = -1
+    try
+        x = 1
+    finally
+        x = 2
+    end
+    x
+end
+""") == 2
+
+@test JuliaLowering.include_string(test_mod, """
+let x = -1
+    try
+        try
+            error("hi")
+            x = 1
+        finally
+            x = 2
+        end
+    catch
+    end
+    x
+end
+""") == 2
+
+JuliaLowering.include_string(test_mod, """
+begin
+    function nested_finally(a, x, b, c)
+        try
+            try
+                if x
+                    return b
+                end
+                c
+            finally
+                push!(a, 1)
+            end
+        finally
+            push!(a, 2)
+        end
+    end
+end
+""")
+@test (a = []; res = test_mod.nested_finally(a, true, 100, 200); (a, res)) == ([1,2], 100)
+@test (a = []; res = test_mod.nested_finally(a, false, 100, 200); (a, res)) == ([1,2], 200)
+
+@test JuliaLowering.include_string(test_mod, """
+try
+    1
+catch
+    2
+finally
+    3
+end
+""") == 1
+
+@test JuliaLowering.include_string(test_mod, """
+try
+    error("hi")
+    1
+catch
+    2
+finally
+    3
+end
+""") == 2
 
 end
