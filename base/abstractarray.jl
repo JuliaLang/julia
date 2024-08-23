@@ -1903,7 +1903,8 @@ and to the syntax `[a; b; c]`.
 
 To concatenate a large vector of arrays, `reduce(vcat, A)` calls an efficient method
 when `A isa AbstractVector{<:AbstractVecOrMat}`, or a tuple of `AbstractVecOrMat`.
-On all other types, `reduce(vcat, A)` works one at a time, making `length(A)-1` vectors.
+On all other types, `reduce(vcat, A)` works one at a time, creating `length(A)-1` arrays, and discarding all but the last.
+This less efficient behaviour is also triggered by keywords like `reduce(vcat, A; init=Int[])`.
 
 See also [`hcat`](@ref), [`Iterators.flatten`](@ref), [`stack`](@ref).
 
