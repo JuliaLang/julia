@@ -1006,9 +1006,7 @@ int jl_safepoint_consume_sigint(void);
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
-#if defined(_OS_DARWIN_)
-typedef pthread_key_t jl_pgcstack_key_t;
-#elif defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_)
 typedef DWORD jl_pgcstack_key_t;
 #else
 typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;

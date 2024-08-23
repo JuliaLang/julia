@@ -92,41 +92,7 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 // as the fallback in the shared object. For better efficiency, we also
 // create a `__thread` variable in the main executable using a static TLS
 // model.
-#if defined(_OS_DARWIN_)
-// Mac doesn't seem to have static TLS model so the runtime TLS getter
-// registration will only add overhead to TLS access. The `__thread` variables
-// are emulated with `pthread_key_t` so it is actually faster to use it directly.
-static pthread_key_t jl_pgcstack_key;
-
-__attribute__((constructor)) void jl_init_tls(void)
-{
-    pthread_key_create(&jl_pgcstack_key, NULL);
-}
-
-JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
-{
-    return (jl_gcframe_t**)pthread_getspecific(jl_pgcstack_key);
-}
-
-void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
-{
-    pthread_setspecific(jl_pgcstack_key, (void*)pgcstack);
-}
-
-void jl_pgcstack_getkey(jl_get_pgcstack_func **f, pthread_key_t *k)
-{
-    // for codegen
-    *f = pthread_getspecific;
-    *k = jl_pgcstack_key;
-}
-
-
-JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, pthread_key_t k)
-{
-    jl_safe_printf("ERROR: Attempt to change TLS address.\n");
-}
-
-#elif defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_)
 // Apparently windows doesn't have a static TLS model (or one that can be
 // reliably used from a shared library) either..... Use `TLSAlloc` instead.
 
