@@ -547,6 +547,12 @@ baremodule TypeDomainIntegers
         })
             n
         end
+        function Base.widen(@nospecialize n::TypeDomainInteger)
+            n
+        end
+        function Base.widen(@nospecialize t::Type{<:TypeDomainInteger})
+            t
+        end
     end
 
     baremodule BaseHelpers
