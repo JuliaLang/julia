@@ -290,12 +290,13 @@ are included, including those not visible in the current module.
 See also [`supertype`](@ref), [`supertypes`](@ref), [`methodswith`](@ref).
 
 # Examples
-```jldoctest
-julia> subtypes(Integer)
-3-element Vector{Any}:
- Bool
- Signed
- Unsigned
+```julia
+julia> subtypes(Real)
+4-element Vector{Any}:
+ AbstractFloat
+ AbstractIrrational
+ Integer
+ Rational
 ```
 """
 subtypes(x::Type) = _subtypes_in!(Base.loaded_modules_array(), x)
