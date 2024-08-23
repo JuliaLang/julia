@@ -613,6 +613,14 @@ julia> cispi(0.25 + 1im)
 """
 function cispi end
 cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
+function cispi(n::TypeDomainInteger)
+    o = one(TypeDomainInteger)
+    if iseven(n)
+        o
+    else
+        -o
+    end
+end
 
 function cispi(z::Complex)
     v = exp(-(pi*imag(z)))
