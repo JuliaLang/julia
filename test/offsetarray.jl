@@ -872,3 +872,10 @@ end
     show(b, (A, A))
     @test String(take!(b)) == "([1], [1])"
 end
+
+@testset "mapreduce with OffsetRanges" begin
+    r = 5:100
+    a = OffsetArray(r, 2)
+    b = sum(a, dims=1)
+    @test b[begin] == sum(r)
+end
