@@ -109,7 +109,7 @@ end
 <=(x::AbstractIrrational, y::AbstractFloat) = x < y
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
-for func ∈ (:+, :-, :*, :(==), :isequal)
+for func ∈ (:+, :-, :*, :(==))
     @eval begin
         function Base.$func((@nospecialize l::Irrational), (@nospecialize r::TypeDomainInteger))
             TypeDomainIntegers.BaseHelpers.apply_n_t($func, l, r)

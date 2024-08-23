@@ -967,7 +967,7 @@ cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 <=(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0
 <=(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
-for func ∈ (:+, :-, :*, :(==), :isequal)
+for func ∈ (:+, :-, :*, :(==))
     @eval begin
         function Base.$func((@nospecialize l::BigFloat), (@nospecialize r::TypeDomainInteger))
             TypeDomainIntegers.BaseHelpers.apply_n_t($func, l, r)

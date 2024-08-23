@@ -339,7 +339,7 @@ baremodule TypeDomainIntegers
 
     baremodule BaseOverloads
         using ..Basic, ..RecursiveAlgorithms, ..LazyMinus, ..PrimitiveTypes, ..Conversion
-        using Base: Base, convert, RoundingMode, <, +, -, *, ==, isequal, isless, !, @nospecialize, @eval
+        using Base: Base, convert, RoundingMode, <, +, -, *, isless, !, @nospecialize, @eval
         function Base.zero(@nospecialize unused::Type{<:TypeDomainInteger})
             zero()
         end
@@ -435,12 +435,6 @@ baremodule TypeDomainIntegers
         end
         function Base.isodd(@nospecialize o::TypeDomainInteger)
             !Base.iseven(o)
-        end
-        function Base.:(==)((@nospecialize l::TypeDomainInteger), @nospecialize r::TypeDomainInteger)
-            l === r
-        end
-        function Base.isequal((@nospecialize l::TypeDomainInteger), @nospecialize r::TypeDomainInteger)
-            l === r
         end
         function Base.:(<)((@nospecialize l::TypeDomainInteger), @nospecialize r::TypeDomainInteger)
             l_neg = l isa NegativeInteger
@@ -671,9 +665,9 @@ baremodule TypeDomainIntegers
     end
 
     baremodule BaseOverloadsBinaryOperations
-        using Base: Base, isequal, +, -, *, ==, @nospecialize, @eval
+        using Base: Base, +, -, *, ==, @nospecialize, @eval
         using ..Basic, ..LazyMinus, ..PrimitiveTypes, ..BaseHelpers
-        for type ∈ PrimitiveTypes.types_all, func ∈ (:+, :-, :*, :(==), :isequal)
+        for type ∈ PrimitiveTypes.types_all, func ∈ (:+, :-, :*, :(==))
             @eval begin
                 function Base.$func((@nospecialize l::$type), (@nospecialize r::TypeDomainInteger))
                     apply_n_t($func, l, r)

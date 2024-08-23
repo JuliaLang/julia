@@ -580,7 +580,7 @@ end
 /(x::BigInt, y::Union{ClongMax,CulongMax}) = float(x)/y
 /(x::Union{ClongMax,CulongMax}, y::BigInt) = x/float(y)
 
-for func ∈ (:+, :-, :*, :(==), :isequal)
+for func ∈ (:+, :-, :*, :(==))
     @eval begin
         function Base.$func((@nospecialize l::BigInt), (@nospecialize r::TypeDomainInteger))
             TypeDomainIntegers.BaseHelpers.apply_n_t($func, l, r)
