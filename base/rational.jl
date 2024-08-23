@@ -310,7 +310,7 @@ julia> denominator(4)
 1
 ```
 """
-denominator(x::Integer) = one(x)
+denominator(@nospecialize x::Integer) = one(TypeDomainInteger)
 denominator(x::Rational) = x.den
 
 sign(x::Rational) = oftype(x, sign(x.num))
