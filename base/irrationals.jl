@@ -109,6 +109,17 @@ end
 <=(x::AbstractIrrational, y::AbstractFloat) = x < y
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
+for func ∈ (:+, :-, :*, :(==), :isequal)
+    @eval begin
+        function Base.$func((@nospecialize l::Irrational), (@nospecialize r::TypeDomainInteger))
+            TypeDomainIntegers.BaseHelpers.apply_n_t($func, l, r)
+        end
+        function Base.$func((@nospecialize l::TypeDomainInteger), (@nospecialize r::Irrational))
+            TypeDomainIntegers.BaseHelpers.apply_t_n($func, l, r)
+        end
+    end
+end
+
 # Irrational vs Rational
 @assume_effects :total function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
     return rationalize(T, big(x), tol=tol)

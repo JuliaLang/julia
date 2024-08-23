@@ -967,6 +967,17 @@ cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
 <=(x::BigFloat, y::CdoubleMax) = !isnan(x) && !isnan(y) && cmp(x,y) <= 0
 <=(x::CdoubleMax, y::BigFloat) = !isnan(x) && !isnan(y) && cmp(y,x) >= 0
 
+for func ∈ (:+, :-, :*, :(==), :isequal)
+    @eval begin
+        function Base.$func((@nospecialize l::BigFloat), (@nospecialize r::TypeDomainInteger))
+            TypeDomainIntegers.BaseHelpers.apply_n_t($func, l, r)
+        end
+        function Base.$func((@nospecialize l::TypeDomainInteger), (@nospecialize r::BigFloat))
+            TypeDomainIntegers.BaseHelpers.apply_t_n($func, l, r)
+        end
+    end
+end
+
 # Note: this inlines the implementation of `mpfr_signbit` to avoid a
 # `ccall`.
 signbit(x::BigFloat) = signbit(x.sign)
