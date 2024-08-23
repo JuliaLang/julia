@@ -592,6 +592,21 @@ baremodule TypeDomainIntegers
         end
     end
 
+    baremodule BaseOverloadsBinaryOperations
+        using Base: Base, isequal, +, -, *, ==, @nospecialize, @eval
+        using ..Basic, ..LazyMinus, ..PrimitiveTypes, ..BaseHelpers
+        for type ∈ PrimitiveTypes.types_all, func ∈ (:+, :-, :*, :(==), :isequal)
+            @eval begin
+                function Base.$func((@nospecialize l::$type), (@nospecialize r::TypeDomainInteger))
+                    apply_n_t($func, l, r)
+                end
+                function Base.$func((@nospecialize l::TypeDomainInteger), (@nospecialize r::$type))
+                    apply_t_n($func, l, r)
+                end
+            end
+        end
+    end
+
     export
         natural_successor, natural_predecessor, NonnegativeInteger, PositiveInteger,
         PositiveIntegerUpperBound, NegativeInteger, TypeDomainInteger
