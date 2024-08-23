@@ -553,6 +553,10 @@ baremodule TypeDomainIntegers
         function Base.widen(@nospecialize t::Type{<:TypeDomainInteger})
             t
         end
+        function Base.show(io::Base.IO, n::TypeDomainInteger)
+            i = tdi_to_int(n)
+            Base.show(io, Int(i))
+        end
     end
 
     baremodule BaseHelpers
