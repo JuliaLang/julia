@@ -541,6 +541,12 @@ baremodule TypeDomainIntegers
                 end
             end
         end
+        function Base.inv(@nospecialize n::Union{
+            typeof(TypeDomainInteger(-1)),
+            typeof(TypeDomainInteger( 1)),
+        })
+            n
+        end
     end
 
     baremodule BaseHelpers
