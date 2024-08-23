@@ -1176,6 +1176,22 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
     end
 end
 
+function sinc(@nospecialize n::TypeDomainInteger)
+    z = zero(TypeDomainInteger)
+    if iszero(n)
+        natural_successor(z)
+    else
+        z
+    end
+end
+function cosc(@nospecialize n::Union{
+    typeof(TypeDomainInteger(-1)),
+    typeof(TypeDomainInteger( 0)),
+    typeof(TypeDomainInteger( 1)),
+})
+    -n
+end
+
 for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
                                        (:acsc, :asin, :acsch, :asinh, "cosecant"),
                                        (:acot, :atan, :acoth, :atanh, "cotangent"))
