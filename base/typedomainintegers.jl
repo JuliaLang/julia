@@ -483,7 +483,7 @@ baremodule TypeDomainIntegers
 
     baremodule BaseHelpers
         using ..Basic, ..LazyMinus, ..Conversion
-        using Base: convert, isequal, <, +, -, *, ==, !, @nospecialize
+        using Base: convert, isequal, iszero, <, +, -, *, ==, !, @nospecialize
         export apply_n_t, apply_t_n
         function apply_n_t(::typeof(+), (@nospecialize l::Number), @nospecialize r::TypeDomainInteger)
             if r isa NegativeInteger
