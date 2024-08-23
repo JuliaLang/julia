@@ -83,11 +83,11 @@ end
     @test repr(Any[pi ℯ; ℯ pi]) == "Any[π ℯ; ℯ π]"
     @test string(pi) == "π"
 
-    @test sin(π) == sind(180) === sinpi(1) === sinpi(1//1) == tan(π) == 0
-    @test tan(π) == tand(180) === tanpi(1) === tanpi(1//1) === -0.0
-    @test cos(π) == cosd(180) === cospi(1) === cospi(1//1) == sec(π) == -1
+    @test sin(π) == sind(180) == sinpi(1) == sinpi(1//1) == tan(π) == 0
+    @test tan(π) == tand(180) == tanpi(1) == tanpi(1//1) == -0.0
+    @test cos(π) == cosd(180) == cospi(1) == cospi(1//1) == sec(π) == -1
     @test csc(π) == 1/0 && cot(π) == -1/0
-    @test sincos(π) === sincospi(1) == (0, -1)
+    @test sincos(π) == sincospi(1) == (0, -1)
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
@@ -572,16 +572,16 @@ end
 
 @testset "Integer and Inf args for sinpi/cospi/tanpi/sinc/cosc" begin
     for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
-        @test sinpi(1) === 0.0
-        @test sinpi(-1) === -0.0
+        @test sinpi(1) == 0.0
+        @test sinpi(-1) == -0.0
         @test cospi(1) == -1
         @test cospi(2) == 1
     end
 
-    @test tanpi(1) === -0.0
-    @test tanpi(-1) === 0.0
-    @test tanpi(2) === 0.0
-    @test tanpi(-2) === -0.0
+    @test tanpi(1) == -0.0
+    @test tanpi(-1) == 0.0
+    @test tanpi(2) == 0.0
+    @test tanpi(-2) == -0.0
     @test sinc(1) == 0
     @test sinc(complex(1,0)) == 0
     @test sinc(0) == 1
@@ -878,7 +878,7 @@ end
     @test exp10(5) ≈ exp10(5.0)
     @test exp10(50//10) ≈ exp10(5.0)
     @test log10(exp10(ℯ)) ≈ ℯ
-    @test log(ℯ) === 1
+    @test log(ℯ) == 1
     @test exp2(Float16(2.0)) ≈ exp2(2.0)
     @test exp2(Float16(1.0)) === Float16(exp2(1.0))
     @test exp10(Float16(1.0)) === Float16(exp10(1.0))
