@@ -1119,6 +1119,9 @@ end
         @test zero(i) == false
         @test one(typeof(i)) == true
         @test zero(typeof(i)) == false
+        @testset "JuliaLang/julia/issues/37977" begin
+            @test i === one(i)*i
+        end
     end
 end
 
