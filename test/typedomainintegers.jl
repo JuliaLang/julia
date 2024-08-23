@@ -238,22 +238,22 @@ const max_tested_number = 7
             end
         end
     end
-    # @testset "some identities" begin
-    #     z = @inferred zero(NonnegativeInteger)
-    #     o = @inferred natural_successor(z)
-    #     for c ∈ (π, ℯ, 7, 0x7, 7.0, true)
-    #         @test (z + c) === c === (c + z) === (c - z) === (o * c) === (c * o)
-    #     end
-    # end
-    # @testset "heterogeneous `+` `-` `*`" begin
-    #     for i ∈ -max_tested_number:max_tested_number
-    #         n = convert(TypeDomainInteger, i)
-    #         for x ∈ (((-1):5)..., ((-3):0.1:3)...)
-    #             for op ∈ (+, -, *)
-    #                 @test op(n, x) == op(i, x)
-    #                 @test op(x, n) == op(x, i)
-    #             end
-    #         end
-    #     end
-    # end
+    @testset "some identities" begin
+        z = @inferred zero(NonnegativeInteger)
+        o = @inferred natural_successor(z)
+        for c ∈ (π, ℯ, 7, 0x7, 7.0, true)
+            @test (z + c) === c === (c + z) === (c - z) === (o * c) === (c * o)
+        end
+    end
+    @testset "heterogeneous `+` `-` `*`" begin
+        for i ∈ -max_tested_number:max_tested_number
+            n = convert(TypeDomainInteger, i)
+            for x ∈ (((-1):5)..., ((-3):0.1:3)...)
+                for op ∈ (+, -, *)
+                    @test op(n, x) == op(i, x)
+                    @test op(x, n) == op(x, i)
+                end
+            end
+        end
+    end
 end
