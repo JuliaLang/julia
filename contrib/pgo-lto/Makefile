@@ -26,15 +26,14 @@ AFTER_STAGE1_MESSAGE:='You can now optionally collect more profiling data for us
 	Note that running extensive scripts may result in counter overflows, which can be detected by running $\
 	`make top`. Afterwards run `make stage2`.'
 
-TOOLCHAIN_FLAGS = $\
-	"CC=$(STAGE0_TOOLS)clang" $\
-	"CXX=$(STAGE0_TOOLS)clang++" $\
-	"LD=$(STAGE0_TOOLS)ld.lld" $\
-	"AR=$(STAGE0_TOOLS)llvm-ar" $\
-	"RANLIB=$(STAGE0_TOOLS)llvm-ranlib" $\
-	"CFLAGS+=$(PGO_CFLAGS)" $\
-	"CXXFLAGS+=$(PGO_CXXFLAGS)" $\
-	"LDFLAGS+=$(PGO_LDFLAGS)"
+STAGE1_FLAGS:=LDFLAGS="-fuse-ld=lld -flto=thin -Wl,--undefined-version -fprofile-generate=$(PROFILE_DIR)" $\
+			CFLAGS="-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)" $\
+			CXXFLAGS="-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)"
+STAGE2_FLAGS:=LDFLAGS="-fuse-ld=lld -flto=thin -Wl,--undefined-version -fprofile-use=$(PROFILE_FILE) -Wl,--icf=safe" $\
+			CFLAGS="-fprofile-use=$(PROFILE_FILE)" $\
+			CXXFLAGS="-fprofile-use=$(PROFILE_FILE)"
+
+all: stage2 # Default target as first in file
 
 $(STAGE0_BUILD) $(STAGE1_BUILD) $(STAGE2_BUILD):
 	$(MAKE) -C $(JULIA_ROOT) O=$@ configure
@@ -48,23 +47,15 @@ stage0: | $(STAGE0_BUILD)
 	touch $@
 
 $(STAGE1_BUILD): stage0
-stage1: PGO_CFLAGS:=-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)
-stage1: PGO_CXXFLAGS:=-fprofile-generate=$(PROFILE_DIR) -Xclang -mllvm -Xclang -vp-counters-per-site=$(COUNTERS_PER_SITE)
-stage1: PGO_LDFLAGS:=-fuse-ld=lld -flto=thin -fprofile-generate=$(PROFILE_DIR)
-stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
-	$(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) && touch $@
+	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE1_FLAGS) $(MAKE) -C $(STAGE1_BUILD) USECLANG=1 USE_BINARYBUILDER_LLVM=0 && touch $@
 	@echo $(AFTER_STAGE1_MESSAGE)
 
-stage2: PGO_CFLAGS:=-fprofile-use=$(PROFILE_FILE)
-stage2: PGO_CXXFLAGS:=-fprofile-use=$(PROFILE_FILE)
-stage2: PGO_LDFLAGS:=-fuse-ld=lld -flto=thin -fprofile-use=$(PROFILE_FILE) -Wl,--icf=safe
-stage2: export USE_BINARYBUILDER_LLVM=0
 stage2: $(PROFILE_FILE) | $(STAGE2_BUILD)
-	$(MAKE) -C $(STAGE2_BUILD) $(TOOLCHAIN_FLAGS) && touch $@
+	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE2_FLAGS) $(MAKE) -C $(STAGE2_BUILD) USECLANG=1 USE_BINARYBUILDER_LLVM=0 && touch $@
 
-install: stage2
-	$(MAKE) -C $(STAGE2_BUILD) USE_BINARYBUILDER_LLVM=0 install
+.DEFAULT: stage2
+	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE2_FLAGS) $(MAKE) -C $(STAGE2_BUILD) USECLANG=1 USE_BINARYBUILDER_LLVM=0 $@
 
 $(PROFILE_FILE): stage1 $(PROFRAW_FILES)
 	$(LLVM_PROFDATA) merge -output=$@ $(PROFRAW_FILES)
