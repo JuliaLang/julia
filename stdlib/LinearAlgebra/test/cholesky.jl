@@ -630,4 +630,14 @@ end
     end
 end
 
+@testset "cholesky_of_cholesky" begin
+    for T in (Float64, ComplexF64), uplo in (:U, :L)
+        A = randn(T, 100, 100)
+        P = Hermitian(A' * A, uplo)
+        C = cholesky(P)
+        CC = cholesky(C)
+        @test C == CC
+    end
+end
+
 end # module TestCholesky
