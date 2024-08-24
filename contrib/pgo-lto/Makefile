@@ -8,7 +8,6 @@ STAGE0_TOOLS:=$(STAGE0_BUILD)/usr/tools/
 
 PROFILE_DIR:=$(CURDIR)/profiles
 PROFILE_FILE:=$(PROFILE_DIR)/merged.prof
-PROFRAW_FILES:=$(wildcard $(PROFILE_DIR)/*.profraw)
 JULIA_ROOT:=$(CURDIR)/../..
 
 LLVM_CXXFILT:=$(STAGE0_TOOLS)llvm-cxxfilt
@@ -59,8 +58,8 @@ stage2: $(PROFILE_FILE) | $(STAGE2_BUILD)
 .DEFAULT: stage2
 	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE2_FLAGS) $(MAKE) -C $(STAGE2_BUILD) USECLANG=1 USE_BINARYBUILDER_LLVM=0 $@
 
-$(PROFILE_FILE): stage1 $(PROFRAW_FILES)
-	$(LLVM_PROFDATA) merge -output=$@ $(PROFRAW_FILES)
+$(PROFILE_FILE): stage1
+	$(LLVM_PROFDATA) merge -output=$@ $(PROFILE_DIR)/*.profraw
 
 # show top 50 functions
 top: $(PROFILE_FILE)
