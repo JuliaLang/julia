@@ -58,8 +58,8 @@ stage2: $(PROFILE_FILE) | $(STAGE2_BUILD)
 .DEFAULT: stage2
 	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE2_FLAGS) $(MAKE) -C $(STAGE2_BUILD) USECLANG=1 USE_BINARYBUILDER_LLVM=0 $@
 
-$(PROFILE_FILE): stage1
-	$(LLVM_PROFDATA) merge -output=$@ $(PROFILE_DIR)/*.profraw
+$(PROFILE_FILE): stage1 $(wildcard $(PROFILE_DIR)/*.profraw)
+    $(LLVM_PROFDATA) merge -output=$@ $(PROFILE_DIR)/*.profraw
 
 # show top 50 functions
 top: $(PROFILE_FILE)
