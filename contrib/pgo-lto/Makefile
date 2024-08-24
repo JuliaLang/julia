@@ -48,10 +48,12 @@ stage0: | $(STAGE0_BUILD)
 
 $(STAGE1_BUILD): stage0
 stage1: | $(STAGE1_BUILD)
+	@echo "--- Build Julia Stage 1 - with instrumentation"
 	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE1_FLAGS) $(MAKE) -C $(STAGE1_BUILD) USECLANG=1 USE_BINARYBUILDER_LLVM=0 && touch $@
 	@echo $(AFTER_STAGE1_MESSAGE)
 
 stage2: $(PROFILE_FILE) | $(STAGE2_BUILD)
+	@echo "--- Build Julia Stage 2 - PGO + LTO optimised"
 	PATH=$(STAGE0_TOOLS):$$PATH $(STAGE2_FLAGS) $(MAKE) -C $(STAGE2_BUILD) USECLANG=1 USE_BINARYBUILDER_LLVM=0 && touch $@
 
 .DEFAULT: stage2
