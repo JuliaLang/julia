@@ -478,25 +478,16 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
+    int n = uv_available_parallelism();
+#if defined(__APPLE__) && defined(_CPU_AARCH64_)
+    // Only on Apple Silicon we don't just return `uv_available_parallelism` because it may
+    // be larger than `jl_cpu_threads` (which asks for the performance cores only), and we
+    // want the more conservative estimate of the two.
     int cpu = jl_cpu_threads();
-    int masksize = uv_cpumask_size();
-    if (masksize < 0 || jl_running_under_rr(0))
-        return cpu;
-    uv_thread_t tid = uv_thread_self();
-    char *cpumask = (char *)calloc(masksize, sizeof(char));
-    int err = uv_thread_getaffinity(&tid, cpumask, masksize);
-    if (err) {
-        free(cpumask);
-        jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
-                       err);
-        return cpu;
-    }
-    int n = 0;
-    for (size_t i = 0; i < masksize; i++) {
-        n += cpumask[i];
-    }
-    free(cpumask);
     return n < cpu ? n : cpu;
+#else
+    return n;
+#endif
 }
 
 
