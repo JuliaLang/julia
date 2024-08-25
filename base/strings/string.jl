@@ -503,7 +503,7 @@ getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(
     end
     j = nextind(s, j) - 1
     n = j - i + 1
-    ss = _string_n(n)
+    ss = _string_n(n::Int)
     GC.@preserve s ss unsafe_copyto!(pointer(ss), pointer(s, i), n)
     return ss
 end
