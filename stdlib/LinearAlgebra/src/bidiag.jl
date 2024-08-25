@@ -186,7 +186,7 @@ end
         throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off the ",
             A.uplo == 'U' ? "upper" : "lower", " bidiagonal band to a nonzero value ", x)))
     end
-    return x
+    return A
 end
 
 Base._reverse(A::Bidiagonal, dims) = reverse!(Matrix(A); dims)
@@ -573,6 +573,7 @@ function _bibimul!(C, A, B, _add)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
+    iszero(n) && return C
     if n <= 3
         # naive multiplication
         for I in CartesianIndices(C)
@@ -925,7 +926,7 @@ function _mul!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat, _add::MulA
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     nA = size(A,1)
     nB = size(B,2)
-    iszero(nA) && return C
+    (iszero(nA) || iszero(nB)) && return C
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     if nA <= 3
         # naive multiplication
@@ -995,7 +996,8 @@ function _mul!(C::AbstractMatrix, A::AbstractMatrix, B::TriSym, _add::MulAddMul)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
     m = size(B,2)
-    (iszero(_add.alpha) || iszero(m)) && return _rmul_or_fill!(C, _add.beta)
+    (iszero(m) || iszero(n)) && return C
+    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     if m == 1
         B11 = B[1,1]
         return mul!(C, A, B11, _add.alpha, _add.beta)
@@ -1058,6 +1060,7 @@ function _dibimul!(C, A, B, _add)
     require_one_based_indexing(C)
     check_A_mul_B!_sizes(size(C), size(A), size(B))
     n = size(A,1)
+    iszero(n) && return C
     if n <= 3
         for I in CartesianIndices(C)
             _modify!(_add, A.diag[I[1]] * B[I[1], I[2]], C, I)

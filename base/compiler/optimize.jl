@@ -59,6 +59,12 @@ const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
 has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 
+function iscallstmt(@nospecialize stmt)
+    stmt isa Expr || return false
+    head = stmt.head
+    return head === :call || head === :invoke || head === :foreigncall
+end
+
 function flags_for_effects(effects::Effects)
     flags = zero(UInt32)
     if is_consistent(effects)
@@ -380,7 +386,7 @@ function recompute_effects_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), 
     elseif nothrow
         flag |= IR_FLAG_NOTHROW
     end
-    if !(isexpr(stmt, :call) || isexpr(stmt, :invoke))
+    if !iscallstmt(stmt)
         # There is a bit of a subtle point here, which is that some non-call
         # statements (e.g. PiNode) can be UB:, however, we consider it
         # illegal to introduce such statements that actually cause UB (for any
@@ -784,7 +790,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     if !has_flag(flag, IR_FLAG_NORTCALL)
         # if a function call that might invoke `Core.Compiler.return_type` has been deleted,
         # there's no need to taint with `:nortcall`, allowing concrete evaluation
-        if isexpr(stmt, :call) || isexpr(stmt, :invoke)
+        if iscallstmt(stmt)
             sv.nortcall = false
         end
     end

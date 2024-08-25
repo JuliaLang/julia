@@ -1361,3 +1361,8 @@ end |> Core.Compiler.is_nothrow
 @test Base.infer_effects((Vector{Any},)) do xs
     Core.svec(xs...)
 end |> Core.Compiler.is_nothrow
+
+# effects for unknown `:foreigncall`s
+@test Base.infer_effects() do
+    @ccall unsafecall()::Cvoid
+end == Core.Compiler.EFFECTS_UNKNOWN

@@ -498,10 +498,10 @@ This provides an acquire & release memory ordering on notify/wait.
     The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
 """
 mutable struct Event
-    const notify::ThreadSynchronizer
+    const notify::Threads.Condition
     const autoreset::Bool
     @atomic set::Bool
-    Event(autoreset::Bool=false) = new(ThreadSynchronizer(), autoreset, false)
+    Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
 end
 
 function wait(e::Event)

@@ -124,6 +124,9 @@ Random.seed!(1)
         Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
         @test_throws ArgumentError Bu[5, 4] = 1
         @test_throws ArgumentError Bl[4, 5] = 1
+
+        # setindex should return the destination
+        @test setindex!(ubd, 1, 1, 1) === ubd
     end
 
     @testset "isstored" begin

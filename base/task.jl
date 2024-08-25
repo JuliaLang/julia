@@ -156,20 +156,10 @@ const task_state_runnable = UInt8(0)
 const task_state_done     = UInt8(1)
 const task_state_failed   = UInt8(2)
 
-const _state_index = findfirst(==(:_state), fieldnames(Task))
-@eval function load_state_acquire(t)
-    # TODO: Replace this by proper atomic operations when available
-    @GC.preserve t llvmcall($("""
-        %rv = load atomic i8, i8* %0 acquire, align 8
-        ret i8 %rv
-        """), UInt8, Tuple{Ptr{UInt8}},
-        Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
-end
-
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
         # TODO: this field name should be deprecated in 2.0
-        st = load_state_acquire(t)
+        st = @atomic :acquire t._state
         if st === task_state_runnable
             return :runnable
         elseif st === task_state_done
@@ -223,7 +213,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = load_state_acquire(t) !== task_state_runnable
+istaskdone(t::Task) = (@atomic :acquire t._state) !== task_state_runnable
 
 """
     istaskstarted(t::Task) -> Bool
@@ -267,7 +257,7 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
+istaskfailed(t::Task) = ((@atomic :acquire t._state) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)
@@ -320,6 +310,7 @@ end
 
 # just wait for a task to be done, no error propagation
 function _wait(t::Task)
+    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     if !istaskdone(t)
         donenotify = t.donenotify::ThreadSynchronizer
         lock(donenotify)
@@ -374,7 +365,6 @@ in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed ta
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
 function wait(t::Task; throw=true)
-    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     _wait(t)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
@@ -813,12 +803,15 @@ macro sync_add(expr)
     end
 end
 
-throwto_repl_task(@nospecialize val) = throwto(getfield(active_repl_backend, :backend_task)::Task, val)
-
-function is_repl_running()
-    return isdefined(Base, :active_repl_backend) &&
-        (getfield(active_repl_backend, :backend_task)::Task)._state === task_state_runnable &&
-        getfield(active_repl_backend, :in_eval)
+function repl_backend_task()
+    @isdefined(active_repl_backend) || return
+    backend = active_repl_backend
+    isdefined(backend, :backend_task) || return
+    backend_task = getfield(active_repl_backend, :backend_task)::Task
+    if backend_task._state === task_state_runnable && getfield(backend, :in_eval)
+        return backend_task
+    end
+    return
 end
 
 # runtime system hook called when a task finishes
@@ -842,8 +835,9 @@ function task_done_hook(t::Task)
     end
 
     if err && !handled && Threads.threadid() == 1
-        if isa(result, InterruptException) && isempty(Workqueue) && is_repl_running()
-            throwto_repl_task(result)
+        if isa(result, InterruptException) && isempty(Workqueue)
+            backend = repl_backend_task()
+            backend isa Task && throwto(backend, result)
         end
     end
     # Clear sigatomic before waiting
@@ -854,11 +848,11 @@ function task_done_hook(t::Task)
         # If an InterruptException happens while blocked in the event loop, try handing
         # the exception to the REPL task since the current task is done.
         # issue #19467
-        if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue) && is_repl_running()
-            throwto_repl_task(e)
-        else
-            rethrow()
+        if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
+            backend = repl_backend_task()
+            backend isa Task && throwto(backend, e)
         end
+        rethrow() # this will terminate the program
     end
 end
 
@@ -1032,7 +1026,7 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
-        t.queue === nothing || Base.list_deletefirst!(t.queue::IntrusiveLinkedList{Task}, t)
+        q = t.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, t)
         setfield!(t, :result, arg)
         setfield!(t, :_isexception, true)
     else
@@ -1056,7 +1050,7 @@ function yield()
     try
         wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         rethrow()
     end
 end
