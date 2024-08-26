@@ -374,3 +374,69 @@ end
         end
     end
 end
+
+let once = PerProcess(() -> return [nothing])
+    @test typeof(once) <: PerProcess{Vector{Nothing}}
+    x = once()
+    @test x === once()
+    @atomic once.state = 0xff
+    @test_throws ErrorException("invalid state for PerProcess") once()
+    @test_throws ErrorException("PerProcess initializer failed previously") once()
+    @atomic once.state = 0x01
+    @test x === once()
+end
+let once = PerProcess{Int}(() -> error("expected"))
+    @test_throws ErrorException("expected") once()
+    @test_throws ErrorException("PerProcess initializer failed previously") once()
+end
+
+let once = PerThread(() -> return [nothing])
+    @test typeof(once) <: PerThread{Vector{Nothing}}
+    x = once()
+    @test x === once() === fetch(@async once())
+    tids = zeros(UInt, 50)
+    onces = Vector{Vector{Nothing}}(undef, length(tids))
+    for i = 1:length(tids)
+        function cl()
+            local y = once()
+            onces[i] = y
+            @test x !== y === once()
+            nothing
+        end
+        function threadcallclosure(cl::F) where {F} # create sparam so we can reference the type of cl in the ccall type
+            threadwork = @cfunction cl -> cl() Cvoid (Ref{F},) # create a cfunction that specializes on cl as an argument and calls it
+            err = @ccall uv_thread_create(Ref(tids, i)::Ptr{UInt}, threadwork::Ptr{Cvoid}, cl::Ref{F})::Cint # call that on a thread
+            err == 0 || Base.uv_error("uv_thread_create", err)
+        end
+        threadcallclosure(cl)
+    end
+    @noinline function waitallthreads(tids)
+        for i = 1:length(tids)
+            tid = Ref(tids, i)
+            tidp = Base.unsafe_convert(Ptr{UInt}, tid)::Ptr{UInt}
+            gc_state = @ccall jl_gc_safe_enter()::Int8
+            GC.@preserve tid err = @ccall uv_thread_join(tidp::Ptr{UInt})::Cint
+            @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+            err == 0 || Base.uv_error("uv_thread_join", err)
+        end
+    end
+    waitallthreads(tids)
+    @test length(IdSet{eltype(onces)}(onces)) == length(onces) # make sure every object is unique
+
+end
+let once = PerThread{Int}(() -> error("expected"))
+    @test_throws ErrorException("expected") once()
+    @test_throws ErrorException("PerThread initializer failed previously") once()
+end
+
+let once = PerTask(() -> return [nothing])
+    @test typeof(once) <: PerTask{Vector{Nothing}}
+    x = once()
+    @test x === once() !== fetch(@async once())
+    delete!(task_local_storage(), once)
+    @test x !== once() === once()
+end
+let once = PerTask{Int}(() -> error("expected"))
+    @test_throws ErrorException("expected") once()
+    @test_throws ErrorException("expected") once()
+end
