@@ -2,6 +2,13 @@
 
 const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 
+"""
+    current_task()
+
+Get the currently running [`Task`](@ref).
+"""
+current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
+
 # Advisory reentrant lock
 """
     ReentrantLock()
@@ -606,16 +613,23 @@ mutable struct PerProcess{T, F}
     const initializer::F
     const lock::ReentrantLock
 
-    PerProcess{T}(initializer::F) where {T, F} = new{T,F}(nothing, 0x00, true, initializer, ReentrantLock())
-    PerProcess{T,F}(initializer::F) where {T, F} = new{T,F}(nothing, 0x00, true, initializer, ReentrantLock())
-    PerProcess(initializer) = new{Base.promote_op(initializer), typeof(initializer)}(nothing, 0x00, true, initializer, ReentrantLock())
+    function PerProcess{T,F}(initializer::F) where {T, F}
+        once = new{T,F}(nothing, 0x00, true, initializer, ReentrantLock())
+        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+            once, :x, nothing)
+        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+            once, :state, 0x00)
+        return once
+    end
 end
+PerProcess{T}(initializer::F) where {T, F} = PerProcess{T, F}(initializer)
+PerProcess(initializer) = PerProcess{Base.promote_op(initializer), typeof(initializer)}(initializer)
 @inline function (once::PerProcess{T})() where T
     state = (@atomic :acquire once.state)
     if state != 0x01
         (@noinline function init_perprocesss(once, state)
             state == 0x02 && error("PerProcess initializer failed previously")
-            Base.__precompile__(once.allow_compile_time)
+            once.allow_compile_time || __precompile__(false)
             lock(once.lock)
             try
                 state = @atomic :monotonic once.state
@@ -644,6 +658,8 @@ function copyto_monotonic!(dest::AtomicMemory, src)
     for j in eachindex(src)
         if isassigned(src, j)
             @atomic :monotonic dest[i] = src[j]
+        #else
+        #    _unsafeindex_atomic!(dest, i, src[j], :monotonic)
         end
         i += 1
     end
@@ -701,10 +717,18 @@ mutable struct PerThread{T, F}
     @atomic ss::AtomicMemory{UInt8} # states: 0=initial, 1=hasrun, 2=error, 3==concurrent
     const initializer::F
 
-    PerThread{T}(initializer::F) where {T, F} = new{T,F}(AtomicMemory{T}(), AtomicMemory{UInt8}(), initializer)
-    PerThread{T,F}(initializer::F) where {T, F} = new{T,F}(AtomicMemory{T}(), AtomicMemory{UInt8}(), initializer)
-    PerThread(initializer) = (T = Base.promote_op(initializer); new{T, typeof(initializer)}(AtomicMemory{T}(), AtomicMemory{UInt8}(), initializer))
+    function PerThread{T,F}(initializer::F) where {T, F}
+        xs, ss = AtomicMemory{T}(), AtomicMemory{UInt8}()
+        once = new{T,F}(xs, ss, initializer)
+        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+            once, :xs, xs)
+        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+            once, :ss, ss)
+        return once
+    end
 end
+PerThread{T}(initializer::F) where {T, F} = PerThread{T,F}(initializer)
+PerThread(initializer) = PerThread{Base.promote_op(initializer), typeof(initializer)}(initializer)
 @inline function getindex(once::PerThread, tid::Integer)
     tid = Int(tid)
     ss = @atomic :acquire once.ss
