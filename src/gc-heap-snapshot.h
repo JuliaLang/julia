@@ -122,7 +122,7 @@ static inline void gc_heap_snapshot_record_finlist(jl_value_t *finlist, size_t i
 // Functions to call from Julia to take heap snapshot
 // ---------------------------------------------------------------------
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
-    ios_t *strings, ios_t *json, char all_one);
+    ios_t *strings, ios_t *json, char all_one, char redact_data);
 
 
 #ifdef __cplusplus
