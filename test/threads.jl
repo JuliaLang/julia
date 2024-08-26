@@ -390,10 +390,19 @@ let once = PerProcess{Int}(() -> error("expected"))
     @test_throws ErrorException("PerProcess initializer failed previously") once()
 end
 
-let once = PerThread(() -> return [nothing])
+let e = Base.Event(true),
+    started = Channel{Int16}(Inf),
+    once = PerThread() do
+        push!(started, threadid())
+        wait(e)
+        return [nothing]
+    end
     @test typeof(once) <: PerThread{Vector{Nothing}}
+    notify(e)
     x = once()
     @test x === once() === fetch(@async once())
+    @test take!(started) == threadid()
+    @test isempty(started)
     tids = zeros(UInt, 50)
     onces = Vector{Vector{Nothing}}(undef, length(tids))
     for i = 1:length(tids)
@@ -420,7 +429,18 @@ let once = PerThread(() -> return [nothing])
             err == 0 || Base.uv_error("uv_thread_join", err)
         end
     end
+    # let them finish in 5 batches of 10
+    for i = 1:length(tids) ÷ 10
+        for i = 1:10
+            @test take!(started) != threadid()
+        end
+        for i = 1:10
+            notify(e)
+        end
+    end
+    @test isempty(started)
     waitallthreads(tids)
+    @test isempty(started)
     @test length(IdSet{eltype(onces)}(onces)) == length(onces) # make sure every object is unique
 
 end
