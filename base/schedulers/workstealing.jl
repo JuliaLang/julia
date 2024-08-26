@@ -74,6 +74,17 @@ function attempt_steal!()
             end
         end
     end
+    for i in 1:(nt) # Try to steal from other threads round robin
+        t = QueueModule.steal!(queue_for(Int(i))) #TODO: Change types of things to avoid the convert
+        if t !== nothing
+            if ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1) == 0
+                push!(queue_for(tid), t)
+                ccall(:jl_wakeup_thread, Cvoid, (Int16,), (Threads.threadid(t) - 1) % Int16)
+            else
+                return t
+            end
+        end
+    end
     return nothing
 end
 

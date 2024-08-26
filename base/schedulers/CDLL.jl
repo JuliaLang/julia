@@ -202,9 +202,15 @@ function usable(node::Node)
     return node !== nothing && !is_special(node)
 end
 
+const _PADDING_TUPLE = ntuple(zero, 15)
 mutable struct ConcurrentDoublyLinkedList{T}
-    @atomic header::Union{Node{T}, Nothing}
+    @atomic header::Union{Node{T}, Nothing} # 8 bytes
+    padding::NTuple{15,UInt64} # 120 bytes
     @atomic trailer::Union{Node{T}, Nothing}
+    padding2::NTuple{15,UInt64}
+    function ConcurrentDoublyLinkedList{T}(header::Union{Node{T}, Nothing}, trailer::Union{Node{T}, Nothing}) where {T}
+        new{T}(header, _PADDING_TUPLE, trailer, _PADDING_TUPLE)
+    end
 end
 
 function ConcurrentDoublyLinkedList{T}() where {T}
