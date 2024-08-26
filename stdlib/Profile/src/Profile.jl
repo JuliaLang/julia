@@ -1220,8 +1220,10 @@ end
 
 
 """
-    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false, streaming=false)
-    Profile.take_heap_snapshot(all_one::Bool=false; dir::String, streaming=false)
+    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false;
+                               redact_data::Bool=true, streaming::Bool=false)
+    Profile.take_heap_snapshot(all_one::Bool=false; redact_data:Bool=true,
+                               dir::String=nothing, streaming::Bool=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
 Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
@@ -1231,6 +1233,8 @@ full file path, or IO stream.
 
 If `all_one` is true, then report the size of every object as one so they can be easily
 counted. Otherwise, report the actual size.
+
+If `redact_data` is true (default), then do not emit the contents of any object.
 
 If `streaming` is true, we will stream the snapshot data out into four files, using filepath
 as the prefix, to avoid having to hold the entire snapshot in memory. This option should be
@@ -1247,27 +1251,27 @@ backwards-compatibility) and your process is killed, note that this will always 
 parts in the same directory as your provided filepath, so you can still reconstruct the
 snapshot after the fact, via `assemble_snapshot()`.
 """
-function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; streaming::Bool=false)
+function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; redact_data::Bool=true, streaming::Bool=false)
     if streaming
-        _stream_heap_snapshot(filepath, all_one)
+        _stream_heap_snapshot(filepath, all_one, redact_data)
     else
         # Support the legacy, non-streaming mode, by first streaming the parts, then
         # reassembling it after we're done.
         prefix = filepath
-        _stream_heap_snapshot(prefix, all_one)
+        _stream_heap_snapshot(prefix, all_one, redact_data)
         Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
     end
     return filepath
 end
-function take_heap_snapshot(io::IO, all_one::Bool=false)
+function take_heap_snapshot(io::IO, all_one::Bool=false; redact_data::Bool=true)
     # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
     # then reassembling it after we're done.
     dir = tempdir()
     prefix = joinpath(dir, "snapshot")
-    _stream_heap_snapshot(prefix, all_one)
+    _stream_heap_snapshot(prefix, all_one, redact_data)
     Profile.HeapSnapshot.assemble_snapshot(prefix, io)
 end
-function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool)
+function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_data::Bool)
     # Nodes and edges are binary files
     open("$prefix.nodes", "w") do nodes
         open("$prefix.edges", "w") do edges
@@ -1280,9 +1284,9 @@ function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool)
                     Base.@_lock_ios(json,
                         ccall(:jl_gc_take_heap_snapshot,
                             Cvoid,
-                            (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar),
+                            (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar, Cchar),
                             nodes.handle, edges.handle, strings.handle, json.handle,
-                            Cchar(all_one))
+                            Cchar(all_one), Cchar(redact_data))
                     )
                     )
                     )
@@ -1292,7 +1296,7 @@ function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool)
         end
     end
 end
-function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) where {S <: AbstractString}
+function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing, kwargs...) where {S <: AbstractString}
     fname = "$(getpid())_$(time_ns()).heapsnapshot"
     if isnothing(dir)
         wd = pwd()
@@ -1307,7 +1311,7 @@ function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) 
     else
         fpath = joinpath(expanduser(dir), fname)
     end
-    return take_heap_snapshot(fpath, all_one)
+    return take_heap_snapshot(fpath, all_one; kwargs...)
 end
 
 """
