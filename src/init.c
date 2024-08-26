@@ -778,7 +778,6 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     // Important offset for external codegen.
     jl_task_gcstack_offset = offsetof(jl_task_t, gcstack);
     jl_task_ptls_offset = offsetof(jl_task_t, ptls);
-    jl_ptls_rng_offset = offsetof(jl_tls_states_t, rngseed);
 
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;

@@ -26,7 +26,9 @@ Return a random UInt32 in the range `1:max` except if max is 0, in that case ret
 """
 cong(max::UInt32) = iszero(max) ? UInt32(0) : jl_rand_ptls(max) + UInt32(1) #TODO: make sure users don't use 0 and remove this check
 
-const rngseed_offset = unsafe_load(cglobal(:jl_ptls_rng_offset, Cint))
+get_ptls_rng() = ccall(:jl_get_ptls_rng, UInt64, ())
+
+set_ptls_rng(seed::UInt64) = ccall(:jl_set_ptls_rng, Cvoid, (UInt64,), seed)
 
 """
     jl_rand_ptls(max::UInt32)
@@ -34,10 +36,9 @@ Return a random UInt32 in the range `0:max-1` using the thread-local RNG
 state. Max must be greater than 0.
 """
 Base.@assume_effects :removable :inaccessiblememonly :notaskstate function jl_rand_ptls(max::UInt32)
-    ptls = Base.unsafe_convert(Ptr{UInt64}, Core.getptls())
-    rngseed = Base.unsafe_load(ptls + rngseed_offset)
+    rngseed = get_ptls_rng()
     val, seed = rand_uniform_max_int32(max, rngseed)
-    Base.unsafe_store!(ptls + rngseed_offset, seed)
+    set_ptls_rng(seed)
     return val % UInt32
 end
 

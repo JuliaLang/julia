@@ -2252,7 +2252,6 @@ JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_RO
 
 extern JL_DLLIMPORT int jl_task_gcstack_offset;
 extern JL_DLLIMPORT int jl_task_ptls_offset;
-extern JL_DLLIMPORT int jl_ptls_rng_offset;
 
 #include "julia_locks.h"   // requires jl_task_t definition
 
