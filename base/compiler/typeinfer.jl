@@ -261,36 +261,37 @@ end
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
-    frames = frame.callers_in_cycle
-    if isempty(frames)
-        finish_nocycle(interp, frame)
-    elseif length(frames) == 1
-        @assert frames[1] === frame "invalid callers_in_cycle"
+    frames = frame.callstack::Vector{AbsIntState}
+    if length(frames) == frame.cycleid
         finish_nocycle(interp, frame)
     else
-        finish_cycle(interp, frames)
+        @assert frame.cycleid != 0
+        finish_cycle(interp, frames, frame.cycleid)
     end
-    empty!(frames)
     return true
 end
 
 function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
-    frame.dont_work_on_me = true
     finishinfer!(frame, frame.interp)
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
         optimize(frame.interp, opt, frame.result)
     end
     finish!(frame.interp, frame)
+    if frame.cycleid != 0
+        frames = frame.callstack::Vector{AbsIntState}
+        @assert frames[end] === frame
+        pop!(frames)
+    end
     return nothing
 end
 
-function finish_cycle(::AbstractInterpreter, frames::Vector{InferenceState})
+function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cycleid::Int)
     cycle_valid_worlds = WorldRange()
     cycle_valid_effects = EFFECTS_TOTAL
-    for caller in frames
-        @assert !(caller.dont_work_on_me)
-        caller.dont_work_on_me = true
+    for caller in cycleid:length(frames)
+        caller = frames[caller]::InferenceState
+        @assert caller.cycleid == cycleid
         # converge the world age range and effects for this cycle here:
         # all frames in the cycle should have the same bits of `valid_worlds` and `effects`
         # that are simply the intersection of each partial computation, without having
@@ -298,19 +299,23 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{InferenceState})
         cycle_valid_worlds = intersect(cycle_valid_worlds, caller.valid_worlds)
         cycle_valid_effects = merge_effects(cycle_valid_effects, caller.ipo_effects)
     end
-    for caller in frames
+    for caller in cycleid:length(frames)
+        caller = frames[caller]::InferenceState
         adjust_cycle_frame!(caller, cycle_valid_worlds, cycle_valid_effects)
         finishinfer!(caller, caller.interp)
     end
-    for caller in frames
+    for caller in cycleid:length(frames)
+        caller = frames[caller]::InferenceState
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
             optimize(caller.interp, opt, caller.result)
         end
     end
-    for caller in frames
+    for caller in cycleid:length(frames)
+        caller = frames[caller]::InferenceState
         finish!(caller.interp, caller)
     end
+    resize!(frames, cycleid - 1)
     return nothing
 end
 
@@ -396,9 +401,9 @@ end
 
 function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
     if typ isa LimitedAccuracy
-        if sv.parent === nothing
+        if sv.parentid === 0
             # we might have introduced a limit marker, but we should know it must be sv and other callers_in_cycle
-            #@assert !isempty(sv.callers_in_cycle)
+            #@assert !isempty(callers_in_cycle(sv))
             #  FIXME: this assert fails, appearing to indicate there is a bug in filtering this list earlier.
             #  In particular (during doctests for example), during inference of
             #  show(Base.IOContext{Base.GenericIOBuffer{Memory{UInt8}}}, Base.Multimedia.MIME{:var"text/plain"}, LinearAlgebra.BunchKaufman{Float64, Array{Float64, 2}, Array{Int64, 1}})
@@ -407,7 +412,7 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
         end
         causes = copy(typ.causes)
         delete!(causes, sv)
-        for caller in sv.callers_in_cycle
+        for caller in callers_in_cycle(sv)
             delete!(causes, caller)
         end
         if isempty(causes)
@@ -521,6 +526,7 @@ end
 # update the MethodInstance
 function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
+    @assert isempty(me.ip)
     s_edges = get_stmt_edges!(me, 1)
     for i = 2:length(me.stmt_edges)
         isassigned(me.stmt_edges, i) || continue
@@ -541,7 +547,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
         gt = me.ssavaluetypes
         for j = 1:length(gt)
             gt[j] = gtj = cycle_fix_limited(gt[j], me)
-            if gtj isa LimitedAccuracy && me.parent !== nothing
+            if gtj isa LimitedAccuracy && me.parentid != 0
                 limited_src = true
                 break
             end
@@ -573,10 +579,10 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
         type_annotate!(interp, me)
         mayopt = may_optimize(interp)
         doopt = mayopt &&
-                # disable optimization if we don't use this later
-                (me.cache_mode != CACHE_MODE_NULL || me.parent !== nothing) &&
+                # disable optimization if we don't use this later (because it is not cached)
+                me.cache_mode != CACHE_MODE_NULL &&
                 # disable optimization if we've already obtained very accurate result
-                !result_is_constabi(interp, result, mayopt)
+                !result_is_constabi(interp, result)
         if doopt
             result.src = OptimizationState(me, interp)
         else
@@ -746,41 +752,29 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
     return nothing
 end
 
-# at the end, all items in b's cycle
-# will now be added to a's cycle
-function union_caller_cycle!(a::InferenceState, b::InferenceState)
-    callers_in_cycle = b.callers_in_cycle
-    b.parent = a.parent
-    b.callers_in_cycle = a.callers_in_cycle
-    contains_is(a.callers_in_cycle, b) || push!(a.callers_in_cycle, b)
-    if callers_in_cycle !== a.callers_in_cycle
-        for caller in callers_in_cycle
-            if caller !== b
-                caller.parent = a.parent
-                caller.callers_in_cycle = a.callers_in_cycle
-                push!(a.callers_in_cycle, caller)
-            end
-        end
-    end
-    return
-end
-
-function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, ancestor::InferenceState, child::InferenceState)
+function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, child::InferenceState)
     # add backedge of parent <- child
     # then add all backedges of parent <- parent.parent
-    # and merge all of the callers into ancestor.callers_in_cycle
-    # and ensure that walking the parent list will get the same result (DAG) from everywhere
+    frames = parent.callstack::Vector{AbsIntState}
+    @assert child.callstack === frames
+    ancestorid = child.cycleid
     while true
         add_cycle_backedge!(parent, child)
-        union_caller_cycle!(ancestor, child)
+        parent.cycleid === ancestorid && break
         child = parent
-        child === ancestor && break
         parent = frame_parent(child)
         while !isa(parent, InferenceState)
             # XXX we may miss some edges here?
             parent = frame_parent(parent::IRInterpretationState)
         end
-        parent = parent::InferenceState
+    end
+    # ensure that walking the callstack has the same cycleid (DAG)
+    for frame = reverse(ancestorid:length(frames))
+        frame = frames[frame]
+        frame isa InferenceState || continue
+        frame.cycleid == ancestorid && break
+        @assert frame.cycleid > ancestorid
+        frame.cycleid = ancestorid
     end
 end
 
@@ -796,8 +790,8 @@ end
 # Walk through `mi`'s upstream call chain, starting at `parent`. If a parent
 # frame matching `mi` is encountered, then there is a cycle in the call graph
 # (i.e. `mi` is a descendant callee of itself). Upon encountering this cycle,
-# we "resolve" it by merging the call chain, which entails unioning each intermediary
-# frame's `callers_in_cycle` field and adding the appropriate backedges. Finally,
+# we "resolve" it by merging the call chain, which entails updating each intermediary
+# frame's `cycleid` field and adding the appropriate backedges. Finally,
 # we return `mi`'s pre-existing frame. If no cycles are found, `nothing` is
 # returned instead.
 function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
@@ -805,10 +799,11 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
     # This works just because currently the `:terminate` condition guarantees that
     # irinterp doesn't fail into unresolved cycles, but it's not a good solution.
     # We should revisit this once we have a better story for handling cycles in irinterp.
-    isa(parent, InferenceState) || return false
-    frame = parent
+    frames = parent.callstack::Vector{AbsIntState}
     uncached = false
-    while isa(frame, InferenceState)
+    for frame = reverse(1:length(frames))
+        frame = frames[frame]
+        isa(frame, InferenceState) || break
         uncached |= !is_cached(frame) # ensure we never add an uncached frame to a cycle
         if is_same_frame(interp, mi, frame)
             if uncached
@@ -818,20 +813,9 @@ function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, pa
                 poison_callstack!(parent, frame)
                 return true
             end
-            merge_call_chain!(interp, parent, frame, frame)
+            merge_call_chain!(interp, parent, frame)
             return frame
         end
-        for caller in callers_in_cycle(frame)
-            if is_same_frame(interp, mi, caller)
-                if uncached
-                    poison_callstack!(parent, frame)
-                    return true
-                end
-                merge_call_chain!(interp, parent, frame, caller)
-                return caller
-            end
-        end
-        frame = frame_parent(frame)
     end
     return false
 end
@@ -920,9 +904,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             end
             return EdgeCallResult(Any, Any, nothing, Effects())
         end
-        if is_cached(caller) || frame_parent(caller) !== nothing # don't involve uncached functions in cycle resolution
-            frame.parent = caller
-        end
+        assign_parentchild!(frame, caller)
         typeinf(interp, frame)
         update_valid_age!(caller, frame.valid_worlds)
         isinferred = is_inferred(frame)
@@ -1011,9 +993,8 @@ function codeinstance_for_const_with_code(interp::AbstractInterpreter, code::Cod
         code.relocatability, src.debuginfo)
 end
 
-result_is_constabi(interp::AbstractInterpreter, result::InferenceResult,
-                   run_optimizer::Bool=may_optimize(interp)) =
-    run_optimizer && may_discard_trees(interp) && is_result_constabi_eligible(result)
+result_is_constabi(interp::AbstractInterpreter, result::InferenceResult) =
+    may_discard_trees(interp) && is_result_constabi_eligible(result)
 
 # compute an inferred AST and return type
 typeinf_code(interp::AbstractInterpreter, match::MethodMatch, run_optimizer::Bool) =
@@ -1024,11 +1005,6 @@ typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), 
 function typeinf_code(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
     frame = typeinf_frame(interp, mi, run_optimizer)
     frame === nothing && return nothing
-    is_inferred(frame) || return nothing
-    if result_is_constabi(interp, frame.result, run_optimizer)
-        rt = frame.result.result::Const
-        return codeinfo_for_const(interp, frame.linfo, rt.val)
-    end
     return frame.src
 end
 
@@ -1051,17 +1027,14 @@ typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype)
     typeinf_ircode(interp, specialize_method(method, atype, sparams), optimize_until)
 function typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
                         optimize_until::Union{Integer,AbstractString,Nothing})
-    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
     frame = typeinf_frame(interp, mi, false)
     if frame === nothing
-        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
         return nothing, Any
     end
     (; result) = frame
     opt = OptimizationState(frame, interp)
     ir = run_passes_ipo_safe(opt.src, opt, result, optimize_until)
     rt = widenconst(ignorelimited(result.result))
-    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
     return ir, rt
 end
 
@@ -1072,13 +1045,22 @@ typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype),
               run_optimizer::Bool) =
     typeinf_frame(interp, specialize_method(method, atype, sparams), run_optimizer)
 function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
-    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
     result = InferenceResult(mi, typeinf_lattice(interp))
-    cache_mode = run_optimizer ? :global : :no
-    frame = InferenceState(result, cache_mode, interp)
+    frame = InferenceState(result, #=cache_mode=#:no, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
-    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+    is_inferred(frame) || return nothing
+    if run_optimizer
+        if result_is_constabi(interp, frame.result)
+            rt = frame.result.result::Const
+            opt = codeinfo_for_const(interp, frame.linfo, rt.val)
+        else
+            opt = OptimizationState(frame, interp)
+            optimize(interp, opt, frame.result)
+            opt = ir_to_codeinf!(opt)
+        end
+        result.src = frame.src = opt
+    end
     return frame
 end
 

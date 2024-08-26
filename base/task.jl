@@ -156,20 +156,10 @@ const task_state_runnable = UInt8(0)
 const task_state_done     = UInt8(1)
 const task_state_failed   = UInt8(2)
 
-const _state_index = findfirst(==(:_state), fieldnames(Task))
-@eval function load_state_acquire(t)
-    # TODO: Replace this by proper atomic operations when available
-    @GC.preserve t llvmcall($("""
-        %rv = load atomic i8, i8* %0 acquire, align 8
-        ret i8 %rv
-        """), UInt8, Tuple{Ptr{UInt8}},
-        Ptr{UInt8}(pointer_from_objref(t) + fieldoffset(Task, _state_index)))
-end
-
 @inline function getproperty(t::Task, field::Symbol)
     if field === :state
         # TODO: this field name should be deprecated in 2.0
-        st = load_state_acquire(t)
+        st = @atomic :acquire t._state
         if st === task_state_runnable
             return :runnable
         elseif st === task_state_done
@@ -223,7 +213,7 @@ julia> istaskdone(b)
 true
 ```
 """
-istaskdone(t::Task) = load_state_acquire(t) !== task_state_runnable
+istaskdone(t::Task) = (@atomic :acquire t._state) !== task_state_runnable
 
 """
     istaskstarted(t::Task) -> Bool
@@ -267,7 +257,7 @@ true
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
 """
-istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
+istaskfailed(t::Task) = ((@atomic :acquire t._state) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)

@@ -304,9 +304,10 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     to_print = sprint(; context=io) do io
         print(io, " "^p.indent)
         printstyled(io, p.header, color=p.color, bold=true)
-        print(io, " [")
-        print(io, "="^n_filled, ">")
-        print(io, " "^n_left, "]  ", )
+        print(io, " ")
+        printstyled(io, "━"^n_filled; color=p.color)
+        printstyled(io, perc >= 95 ? "━" : "╸"; color=p.color)
+        printstyled(io, "━"^n_left, " "; color=:light_black)
         print(io, progress_text)
         carriagereturn && print(io, "\r")
     end

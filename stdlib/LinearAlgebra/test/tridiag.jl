@@ -262,6 +262,8 @@ end
                 @test_throws ArgumentError A[3, 2] = 1 # test assignment on the subdiagonal
                 @test_throws ArgumentError A[2, 3] = 1 # test assignment on the superdiagonal
             end
+            # setindex! should return the destination
+            @test setindex!(A, A[2,2], 2, 2) === A
         end
         @testset "diag" begin
             @test (@inferred diag(A))::typeof(d) == d
@@ -915,6 +917,28 @@ end
         D = Diagonal(fill(S33, size(T,1)))
         @test lmul!(D, copy(T)) ≈ D * T
     end
+end
+
+@testset "mul with empty arrays" begin
+    A = zeros(5,0)
+    T = Tridiagonal(zeros(0), zeros(0), zeros(0))
+    TL = Tridiagonal(zeros(4), zeros(5), zeros(4))
+    @test size(A * T) == size(A)
+    @test size(TL * A) == size(A)
+    @test size(T * T) == size(T)
+    C = similar(A)
+    @test mul!(C, A, T) == A * T
+    @test mul!(C, TL, A) == TL * A
+    @test mul!(similar(T), T, T) == T * T
+    @test mul!(similar(T, size(T)), T, T) == T * T
+
+    v = zeros(size(T,2))
+    @test size(T * v) == size(v)
+    @test mul!(similar(v), T, v) == T * v
+
+    D = Diagonal(zeros(size(T,2)))
+    @test size(T * D) == size(D * T) == size(D)
+    @test mul!(similar(D), T, D) == mul!(similar(D), D, T) == T * D
 end
 
 @testset "show" begin
