@@ -284,6 +284,25 @@ function lbt_find_backing_library(symbol_name, interface::Symbol;
 end
 
 
+"""
+    lbt_forwarded_funcs(config::LBTConfig, lib::LBTLibraryInfo)
+
+Given a backing library `lib`, return the list of all functions that are
+forwarded to that library, as a vector of `String`s.
+"""
+function lbt_forwarded_funcs(config::LBTConfig, lib::LBTLibraryInfo)
+    forwarded_funcs = String[]
+    for (symbol_idx, symbol) in enumerate(config.exported_symbols)
+        forward_byte_offset = div(symbol_idx - 1, 8)
+        forward_byte_mask = 1 << mod(symbol_idx - 1, 8)
+        if lib.active_forwards[forward_byte_offset+1] & forward_byte_mask != 0x00
+            push!(forwarded_funcs, symbol)
+        end
+    end
+    return forwarded_funcs
+end
+
+
 ## NOTE: Manually setting forwards is referred to as the 'footgun API'.  It allows truly
 ## bizarre and complex setups to be created.  If you run into strange errors while using
 ## it, the first thing you should ask yourself is whether you've set things up properly.

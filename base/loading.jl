@@ -264,11 +264,15 @@ const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing)
 LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
 
 
-struct TOMLCache
-    p::TOML.Parser
+struct TOMLCache{Dates}
+    p::TOML.Parser{Dates}
     d::Dict{String, CachedTOMLDict}
 end
-const TOML_CACHE = TOMLCache(TOML.Parser(), Dict{String, Dict{String, Any}}())
+TOMLCache(p::TOML.Parser) = TOMLCache(p, Dict{String, CachedTOMLDict}())
+# TODO: Delete this converting constructor once Pkg stops using it
+TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, convert(Dict{String, CachedTOMLDict}, d))
+
+const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())
 
 parsed_toml(project_file::AbstractString) = parsed_toml(project_file, TOML_CACHE, require_lock)
 function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_lock::ReentrantLock)
@@ -2811,7 +2815,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
 
-    trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
+    trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[]) --trace-compile-timing` : ``
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
                              $(flags)
                              $(opts)
@@ -3586,7 +3590,13 @@ end
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{String,Int},Nothing}=nothing, stalecheck::Bool=true)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
-    io = open(cachefile, "r")
+    io = try
+        open(cachefile, "r")
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @debug "Rejecting cache file $cachefile for $modkey because it could not be opened" isfile(cachefile)
+        return true
+    end
     try
         checksum = isvalid_cache_header(io)
         if iszero(checksum)

@@ -100,6 +100,8 @@ export
     LineEditREPL,
     StreamREPL
 
+public TerminalMenus
+
 import Base:
     AbstractDisplay,
     display,

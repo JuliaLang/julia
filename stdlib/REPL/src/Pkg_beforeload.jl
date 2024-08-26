@@ -62,7 +62,9 @@ end
 function projname(project_file::String)
     if isfile(project_file)
         name = try
-            p = Base.TOML.Parser()
+            # The `nothing` here means that this TOML parser does not return proper Dates.jl
+            # objects - but that's OK since we're just checking the name here.
+            p = Base.TOML.Parser{nothing}()
             Base.TOML.reinit!(p, read(project_file, String); filepath=project_file)
             proj = Base.TOML.parse(p)
             get(proj, "name", nothing)

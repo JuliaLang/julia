@@ -107,8 +107,6 @@ JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
     return 0;
 }
 
-JL_DLLEXPORT void jl_build_newpm_pipeline_fallback(void *MPM, void *PB, void *config) UNAVAILABLE
-
 JL_DLLEXPORT void jl_register_passbuilder_callbacks_fallback(void *PB) { }
 
 #define MODULE_PASS(NAME, CLASS, CREATE_PASS) \

@@ -507,7 +507,7 @@ end
 # based on the package ecosystem
 function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
     return get!(filenamecache, spath) do
-        path = string(spath)
+        path = Base.fixup_stdlib_path(string(spath))
         if isabspath(path)
             if ispath(path)
                 # try to replace the file-system prefix with a short "@Module" one,
@@ -683,7 +683,7 @@ function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
     for i = 1:length(data)
         val = data[i]
         if iszero(val)
-            # (threadid, taskid, cpu_cycle_clock, thread_sleeping)
+            # META_OFFSET_THREADID, META_OFFSET_TASKID, META_OFFSET_CPUCYCLECLOCK, META_OFFSET_SLEEPSTATE
             push!(data_with_meta, threadid, taskid, cpu_clock_cycle+=1, false+1, 0, 0)
         else
             push!(data_with_meta, val)

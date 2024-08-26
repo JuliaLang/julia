@@ -865,6 +865,15 @@ end
     @test CartesianIndices(A) == CartesianIndices(B)
 end
 
+@testset "overflowing show" begin
+    A = OffsetArray(repeat([1], 1), typemax(Int)-1)
+    b = IOBuffer(maxsize=10)
+    show(b, A)
+    @test String(take!(b)) == "[1]"
+    show(b, (A, A))
+    @test String(take!(b)) == "([1], [1])"
+end
+
 @testset "indexing views (#53249)" begin
     v = view([1,2,3,4], :)
     @test v[Base.IdentityUnitRange(2:3)] == OffsetArray(2:3, 2:3)
