@@ -285,7 +285,7 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
         return
     end
     t = time()
-    if p.has_shown && (t - p.time_shown) < PROGRESS_BAR_TIME_GRANULARITY[]
+    if !p.always_reprint && p.has_shown && (t - p.time_shown) < PROGRESS_BAR_TIME_GRANULARITY[]
         return
     end
     p.time_shown = t
@@ -301,9 +301,11 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     max_progress_width = max(0, min(termwidth - textwidth(p.header) - textwidth(progress_text) - 10 , p.width))
     n_filled = ceil(Int, max_progress_width * perc / 100)
     n_left = max_progress_width - n_filled
+    headers = split(p.header, ' ')
     to_print = sprint(; context=io) do io
         print(io, " "^p.indent)
-        printstyled(io, p.header, color=p.color, bold=true)
+        printstyled(io, headers[1], " "; color=:green, bold=true)
+        printstyled(io, join(headers[2:end], ' '))
         print(io, " ")
         printstyled(io, "━"^n_filled; color=p.color)
         printstyled(io, perc >= 95 ? "━" : "╸"; color=p.color)
@@ -343,7 +345,7 @@ import Base: StaleCacheKey
 
 can_fancyprint(io::IO) = io isa Base.TTY && (get(ENV, "CI", nothing) != "true")
 
-function printpkgstyle(io, header, msg; color=:light_green)
+function printpkgstyle(io, header, msg; color=:green)
     printstyled(io, header; color, bold=true)
     println(io, " ", msg)
 end
@@ -564,9 +566,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     if !manifest
         if isempty(pkgs)
             pkgs = [pkg.name for pkg in direct_deps]
-            target = "all packages"
-        else
-            target = join(pkgs, ", ")
         end
         # restrict to dependencies of given packages
         function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
@@ -602,18 +601,16 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                 return
             end
         end
-    else
-        target = "manifest"
     end
 
     nconfigs = length(configs)
+    target = nothing
     if nconfigs == 1
         if !isempty(only(configs)[1])
-            target *= " for configuration $(join(only(configs)[1], " "))"
+            target = "for configuration $(join(only(configs)[1], " "))"
         end
-        target *= "..."
     else
-        target *= " for $nconfigs compilation configurations..."
+        target = "for $nconfigs compilation configurations..."
     end
     @debug "precompile: packages filtered"
 
@@ -695,15 +692,19 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         try
             wait(first_started)
             (isempty(pkg_queue) || interrupted_or_done.set) && return
-            fancyprint && lock(print_lock) do
-                printpkgstyle(io, :Precompiling, target)
-                print(io, ansi_disablecursor)
+            lock(print_lock) do
+                if target !== nothing
+                    printpkgstyle(io, :Precompiling, target)
+                end
+                if fancyprint
+                    print(io, ansi_disablecursor)
+                end
             end
             t = Timer(0; interval=1/10)
             anim_chars = ["◐","◓","◑","◒"]
             i = 1
             last_length = 0
-            bar = MiniProgressBar(; indent=2, header = "Progress", color = Base.info_color(), percentage=false, always_reprint=true)
+            bar = MiniProgressBar(; indent=0, header = "Precompiling packages ", color = :green, percentage=false, always_reprint=true)
             n_total = length(depsmap) * length(configs)
             bar.max = n_total - n_already_precomp
             final_loop = false
@@ -832,8 +833,10 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             config_str = "$(join(flags, " "))"
                             name *= color_string(" $(config_str)", :light_black)
                         end
-                        !fancyprint && lock(print_lock) do
-                            isempty(pkg_queue) && printpkgstyle(io, :Precompiling, target)
+                        lock(print_lock) do
+                            if !fancyprint && target === nothing && isempty(pkg_queue)
+                                printpkgstyle(io, :Precompiling, "packages...")
+                            end
                         end
                         push!(pkg_queue, pkg_config)
                         started[pkg_config] = true
