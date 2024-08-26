@@ -82,13 +82,13 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 // The tls_states buffer:
 //
 // On platforms that do not use ELF (i.e. where `__thread` is emulated with
-// lower level API) (Mac, Windows), we use the platform runtime API to create
+// lower level API) (Windows), we use the platform runtime API to create
 // TLS variable directly.
 // This is functionally equivalent to using `__thread` but can be
 // more efficient since we can have better control over the creation and
 // initialization of the TLS buffer.
 //
-// On platforms that use ELF (Linux, FreeBSD), we use a `__thread` variable
+// On platforms that support native TLS (ELF platforms + Macos) we use a `__thread` variable
 // as the fallback in the shared object. For better efficiency, we also
 // create a `__thread` variable in the main executable using a static TLS
 // model.
@@ -430,6 +430,7 @@ void jl_safepoint_resume_all_threads(jl_task_t *ct)
 
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
 static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
@@ -458,7 +459,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
         }
         if (signal_stack != NULL) {
             if (signal_stack_size)
-                jl_free_stack(signal_stack, signal_stack_size);
+                _jl_free_stack(ptls ,signal_stack, signal_stack_size);
             else
                 free(signal_stack);
         }
