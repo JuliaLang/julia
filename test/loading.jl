@@ -167,7 +167,7 @@ end
 
             @test root.uuid == root_uuid
             @test this.uuid == this_uuid
-            @test that == nothing
+            @test that === nothing
 
             write(project_file, """
             name = "Root"
@@ -180,8 +180,8 @@ end
             that = Base.identify_package("That")
 
             @test root.uuid == proj_uuid
-            @test this == nothing
-            @test that == nothing
+            @test this === nothing
+            @test that === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
         end
@@ -213,8 +213,8 @@ end
             that = Base.identify_package("That")
 
             @test root.uuid == root_uuid
-            @test this == nothing
-            @test that == nothing
+            @test this === nothing
+            @test that === nothing
 
             @test Base.get_uuid_name(project_file, this_uuid) == "This"
         finally
@@ -273,8 +273,8 @@ end
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
         @test Base.compilecache_path(pkg, UInt64(0)) == Base.compilecache_path(pkg, UInt64(0))
     end
-    @test identify_package("Baz") == nothing
-    @test identify_package("Qux") == nothing
+    @test identify_package("Baz") === nothing
+    @test identify_package("Qux") === nothing
     @testset "equivalent package names" begin
          classes = [
             ["Foo"],
@@ -848,7 +848,7 @@ end
         proj = joinpath(tmp, "Project.toml")
         touch(proj)
         touch(joinpath(tmp, "Manifest-v1.5.toml"))
-        @test Base.project_file_manifest_path(proj) == nothing
+        @test Base.project_file_manifest_path(proj) === nothing
         touch(joinpath(tmp, "Manifest.toml"))
         man = basename(Base.project_file_manifest_path(proj))
         @test man == "Manifest.toml"

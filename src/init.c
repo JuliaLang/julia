@@ -64,15 +64,19 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
     // threads since it seems to return bogus values for master thread on Linux
     // and possibly OSX.
     if (!ismaster) {
-#  if defined(_OS_LINUX_)
+#  if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         pthread_attr_t attr;
+#if defined(_OS_FREEBSD_)
+        pthread_attr_get_np(pthread_self(), &attr);
+#else
         pthread_getattr_np(pthread_self(), &attr);
+#endif
         void *stackaddr;
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        *stack_hi = stackaddr;
-        *stack_lo = (char*)stackaddr - stacksize;
+        *stack_lo = stackaddr;
+        *stack_hi = (char*)stackaddr + stacksize;
         return;
 #  elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
@@ -80,19 +84,8 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
         size_t stacksize = pthread_get_stacksize_np(thread);
-        *stack_hi = stackaddr;
         *stack_lo = (char*)stackaddr - stacksize;
-        return;
-#  elif defined(_OS_FREEBSD_)
-        pthread_attr_t attr;
-        pthread_attr_init(&attr);
-        pthread_attr_get_np(pthread_self(), &attr);
-        void *stackaddr;
-        size_t stacksize;
-        pthread_attr_getstack(&attr, &stackaddr, &stacksize);
-        pthread_attr_destroy(&attr);
         *stack_hi = stackaddr;
-        *stack_lo = (char*)stackaddr - stacksize;
         return;
 #  else
 #      warning "Getting precise stack size for thread is not supported."

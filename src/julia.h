@@ -2231,11 +2231,7 @@ typedef struct _jl_task_t {
     // current exception handler
     jl_handler_t *eh;
     // saved thread state
-    jl_ucontext_t ctx;
-    void *stkbuf; // malloc'd memory (either copybuf or stack)
-    size_t bufsz; // actual sizeof stkbuf
-    unsigned int copy_stack:31; // sizeof stack for copybuf
-    unsigned int started:1;
+    jl_ucontext_t ctx; // pointer into stkbuf, if suspended
 } jl_task_t;
 
 #define JL_TASK_STATE_RUNNABLE 0
