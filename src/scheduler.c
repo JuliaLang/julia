@@ -578,7 +578,7 @@ void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
     else {
         jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
     }
-    wakeup_thread(ptls->current_task, 0); // force thread 0 to see that we do not have the IO lock (and am dead)
+    wakeup_thread(jl_atomic_load_relaxed(&ptls->current_task), 0); // force thread 0 to see that we do not have the IO lock (and am dead)
     jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
 }
 
