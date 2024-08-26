@@ -471,7 +471,10 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                     extension_1 == extension_2 && continue
                     deps_ext_2 = depsmap_transitive[extension_2]
                     if issubset(deps_ext_2, deps_ext_1)
-                        push!(depsmap[extension_1], extension_2)
+                        # extensions do not depend on each other
+                        if !haskey(exts, extension_2)
+                            push!(depsmap[extension_1], extension_2)
+                        end
                     end
                 end
             end
@@ -849,7 +852,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor) do
                                 Base.with_logger(Base.NullLogger()) do
                                     # The false here means we ignore loaded modules, so precompile for a fresh session
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags)
+                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags, isext = haskey(exts, pkg))
                                 end
                             end
                             if ret isa Base.PrecompilableError
