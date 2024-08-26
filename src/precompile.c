@@ -139,14 +139,10 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     bool_t emit_split = outputji && emit_native;
 
     ios_t *s = NULL;
-    ios_t *z = NULL;
     int64_t srctextpos = 0 ;
     jl_create_system_image(emit_native ? &native_code : NULL,
-                           jl_options.incremental ? worklist : NULL,
-                           emit_split, &s, &z, &udeps, &srctextpos);
-
-    if (!emit_split)
-        z = s;
+                        jl_options.incremental ? worklist : NULL,
+                        &s,  &udeps, &srctextpos);
 
     ios_t f;
 
@@ -158,11 +154,16 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         free(s);
     }
 
-    // jl_dump_native writes the clone_targets into `s`
+    ios_t *z = NULL;
+    if (!emit_split) {
+        z = s;
+    } else {
+        ios_t *z = (ios_t*)malloc_s(sizeof(ios_t));
+        ios_mem(z, 0);
+    }   
+
     // We need to postpone the srctext writing after that.
     if (native_code) {
-        ios_t *targets = outputji ? &f : NULL;
-        // jl_dump_native will close and free z when appropriate
         // this is a horrible abstraction, but
         // this helps reduce live memory significantly
         jl_dump_native(native_code,
@@ -170,7 +171,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                         jl_options.outputunoptbc,
                         jl_options.outputo,
                         jl_options.outputasm,
-                        z, targets, NULL);
+                        z, NULL, NULL);
         jl_postoutput_hook();
     }
 
