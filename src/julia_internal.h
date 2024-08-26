@@ -1307,20 +1307,36 @@ JL_DLLEXPORT size_t jl_maxrss(void);
 // congruential random number generator
 // for a small amount of thread-local randomness
 
-STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT
+//TODO: utilize https://github.com/openssl/openssl/blob/master/crypto/rand/rand_uniform.c#L13-L99
+// for better performance, it does however require making users expect a 32bit random number.
+
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT // Open interval [0, max)
 {
-    if (max == 0)
+    if (max < 2)
         return 0;
     uint64_t mask = ~(uint64_t)0;
-    --max;
-    mask >>= __builtin_clzll(max|1);
-    uint64_t x;
+    int zeros = __builtin_clzll(max);
+    int bits = CHAR_BIT * sizeof(uint64_t) - zeros;
+    mask = mask >> zeros;
     do {
-        *seed = 69069 * (*seed) + 362437;
-        x = *seed & mask;
-    } while (x > max);
-    return x;
+        uint64_t value = 69069 * (*seed) + 362437;
+        *seed = value;
+        uint64_t x = value & mask;
+        if (x < max) {
+            return x;
+        }
+        int bits_left = zeros;
+        while (bits_left >= bits) {
+            value >>= bits;
+            x = value & mask;
+            if (x < max) {
+                return x;
+            }
+            bits_left -= bits;
+        }
+    } while (1);
 }
+
 JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_rand(void);

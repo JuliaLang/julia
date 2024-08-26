@@ -87,7 +87,7 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 // parallel task runtime
 // ---
 
-JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max)
+JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max) // [0, n)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return cong(max, &ptls->rngseed);
