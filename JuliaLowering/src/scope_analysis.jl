@@ -45,7 +45,7 @@ struct NameKey
 end
 
 #-------------------------------------------------------------------------------
-function _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, required_locals, ex)
+function _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, ex)
     k = kind(ex)
     if k == K"Identifier"
         push!(used_names, NameKey(ex))
@@ -58,20 +58,16 @@ function _find_scope_vars!(assignments, locals, globals, used_names, used_bindin
         get!(locals, NameKey(ex[1]), ex)
     elseif k == K"global"
         get!(globals, NameKey(ex[1]), ex)
-    elseif is_assertion(ex, "require_existing_locals")
-        for v in ex[2:end]
-            get!(required_locals, NameKey(v), v)
-        end
     # elseif k == K"method" TODO static parameters
     elseif k == K"="
         v = decl_var(ex[1])
         if !(kind(v) in KSet"BindingId globalref outerref Placeholder")
             get!(assignments, NameKey(v), v)
         end
-        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, required_locals, ex[2])
+        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, ex[2])
     else
         for e in children(ex)
-            _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, required_locals, e)
+            _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, e)
         end
     end
 end
@@ -87,9 +83,8 @@ function find_scope_vars(ex)
     globals = Dict{NameKey,ExT}()
     used_names = Set{NameKey}()
     used_bindings = Set{IdTag}()
-    required_locals = Dict{NameKey,ExT}()
     for e in children(ex)
-        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, required_locals, e)
+        _find_scope_vars!(assignments, locals, globals, used_names, used_bindings, e)
     end
 
     # Sort by key so that id generation is deterministic
@@ -98,9 +93,8 @@ function find_scope_vars(ex)
     globals = sort(collect(pairs(globals)), by=first)
     used_names = sort(collect(used_names))
     used_bindings = sort(collect(used_bindings))
-    required_locals = sort(collect(pairs(required_locals)), by=first)
 
-    return assignments, locals, globals, used_names, used_bindings, required_locals
+    return assignments, locals, globals, used_names, used_bindings
 end
 
 function Base.isless(a::NameKey, b::NameKey)
@@ -120,6 +114,8 @@ function NameKey(ex::SyntaxTree)
 end
 
 struct ScopeInfo
+    # True if scope is the global top level scope
+    is_toplevel_global_scope::Bool
     # True if scope is part of top level code, or a non-lambda scope nested
     # inside top level code. Thus requiring special scope resolution rules.
     in_toplevel_thunk::Bool
@@ -198,10 +194,11 @@ end
 function analyze_scope(ctx, ex, scope_type, lambda_info)
     parentscope = isempty(ctx.scope_stack) ? nothing : ctx.scope_stack[end]
     is_outer_lambda_scope = kind(ex) == K"lambda"
-    is_toplevel = !isnothing(lambda_info) && lambda_info.is_toplevel_thunk
-    in_toplevel_thunk = is_toplevel || (!is_outer_lambda_scope && parentscope.in_toplevel_thunk)
+    is_toplevel_global_scope = !isnothing(lambda_info) && lambda_info.is_toplevel_thunk
+    in_toplevel_thunk = is_toplevel_global_scope ||
+        (!is_outer_lambda_scope && parentscope.in_toplevel_thunk)
 
-    assignments, locals, globals, used, used_bindings, required_locals = find_scope_vars(ex)
+    assignments, locals, globals, used, used_bindings = find_scope_vars(ex)
 
     # Create new lookup table for variables in this scope which differ from the
     # parent scope.
@@ -253,7 +250,7 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     end
 
     # Compute implicit locals and globals
-    if is_toplevel
+    if is_toplevel_global_scope
         is_hard_scope = false
         is_soft_scope = false
 
@@ -318,16 +315,6 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
         end
     end
 
-    # Check that any required locals are present
-    for (varkey,e) in required_locals
-        vk = haskey(var_ids, varkey) ?
-             lookup_binding(ctx, var_ids[varkey]).kind :
-             var_kind(ctx, varkey, true)
-        if vk !== :local
-            throw(LoweringError(e, "`outer` annotations must match with a local variable in an outer scope but no such variable was found"))
-        end
-    end
-
     lambda_locals = is_outer_lambda_scope ? Set{IdTag}() : parentscope.lambda_locals
     for id in values(var_ids)
         vk = var_kind(ctx, id)
@@ -342,7 +329,8 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
         end
     end
 
-    return ScopeInfo(in_toplevel_thunk, is_soft_scope, is_hard_scope, var_ids, lambda_locals)
+    return ScopeInfo(is_toplevel_global_scope, in_toplevel_thunk, is_soft_scope,
+                     is_hard_scope, var_ids, lambda_locals)
 end
 
 function _resolve_scopes(ctx, ex::SyntaxTree)
@@ -383,6 +371,21 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         body
         pop!(ctx.scope_stack)
         @ast ctx ex [K"block" body...]
+    elseif k == K"assert"
+        if is_assertion(ex, "require_existing_locals")
+            for v in ex[2:end]
+                vk = var_kind(ctx, NameKey(v))
+                if vk !== :local
+                    throw(LoweringError(v, "`outer` annotations must match with a local variable in an outer scope but no such variable was found"))
+                end
+            end
+        elseif is_assertion(ex, "global_toplevel_only")
+            if !ctx.scope_stack[end].is_toplevel_global_scope
+                e = ex[2][1]
+                throw(LoweringError(e, "$(kind(e)) is only allowed in global scope"))
+            end
+        end
+        @ast ctx ex [K"unnecessary"] # TODO: Is there a better way to delete this?
     else
         mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
     end

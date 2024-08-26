@@ -808,15 +808,20 @@ function expand_module(ctx::DesugaringContext, ex::SyntaxTree)
     body = ex[2]
     @chk kind(body) == K"block"
 
-    @ast ctx ex [
-        K"call"
-        eval_module ::K"Value"
-        ctx.mod     ::K"Value"
-        modname     ::K"String"
-        [K"inert"(body)
-            [K"toplevel"
-                std_defs
-                children(body)...
+    @ast ctx ex [K"block"
+        [K"assert"
+            "global_toplevel_only"::K"Symbol"
+            [K"inert" ex]
+        ]
+        [K"call"
+            eval_module ::K"Value"
+            ctx.mod     ::K"Value"
+            modname     ::K"String"
+            [K"inert"(body)
+                [K"toplevel"
+                    std_defs
+                    children(body)...
+                ]
             ]
         ]
     ]
@@ -870,7 +875,13 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
-        expand_forms_2(ctx, expand_macro_def(ctx, ex))
+        @ast ctx ex [K"block"
+            [K"assert"
+                "global_toplevel_only"::K"Symbol"
+                [K"inert" ex]
+            ]
+            expand_forms_2(ctx, expand_macro_def(ctx, ex))
+        ]
     elseif k == K"if" || k == K"elseif"
         @chk numchildren(ex) >= 2
         @ast ctx ex [k

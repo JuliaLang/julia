@@ -352,6 +352,24 @@ let x = 10
 end
 """
 
+src = """
+let
+    for outer i = 1:2
+        body
+    end
+end
+"""
+
+src = """
+begin
+    yy = 200
+    module A
+        import ..yy
+        x = yy
+    end
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)
