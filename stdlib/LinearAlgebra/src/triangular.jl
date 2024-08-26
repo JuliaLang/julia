@@ -953,11 +953,6 @@ isunit_char(::UnitUpperTriangular) = 'U'
 isunit_char(::LowerTriangular) = 'N'
 isunit_char(::UnitLowerTriangular) = 'U'
 
-function lmul!(A::Tridiagonal, B::AbstractTriangular)
-    # this only succeeds if A is actually bidiagonal
-    lmul!(convert(Bidiagonal, A), B)
-end
-
 # generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
 _trimul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) =
     lmul!(A, copyto!(C, B))
