@@ -10435,7 +10435,9 @@ extern "C" void jl_init_llvm(void)
         }
     } else {
 #ifdef USE_ITTAPI
-        jl_using_intel_jitevents = __itt_get_collection_state() == __itt_collection_init_successful;
+        __itt_collection_state state = __itt_get_collection_state();
+        jl_using_intel_jitevents = state == __itt_collection_init_successful ||
+                                   state == __itt_collection_collector_exists;
 #endif
     }
 #endif
