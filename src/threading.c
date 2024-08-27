@@ -338,6 +338,36 @@ JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT
     return -1; // everything else uses threadpool -1 (does not belong to any threadpool)
 }
 
+JL_DLLEXPORT int8_t jl_cur_threadpoolid(void) JL_NOTSAFEPOINT
+{
+    return jl_current_task->ptls->threadpoolid;
+}
+
+JL_DLLEXPORT int16_t jl_cur_threadpool_tid(void) JL_NOTSAFEPOINT
+{
+    return jl_current_task->ptls->threadpool_tid;
+}
+
+STATIC_INLINE void set_ptls_tpid(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    int16_t tid = ptls->tid;
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    if (tid < 0 || tid >= nthreads)
+        jl_error("invalid tid");
+    int n = 0;
+    for (int i = 0; i < jl_n_threadpools; i++) {
+        int old_n = n;
+        n += jl_n_threads_per_pool[i];
+        if (tid < n) {
+            ptls->threadpoolid = i;
+            ptls->threadpool_tid = tid - old_n;
+            return;
+        }
+    }
+    ptls->threadpoolid = -1; // everything else uses threadpool -1 (does not belong to any threadpool)
+    ptls->threadpool_tid = -1;
+}
+
 jl_ptls_t jl_init_threadtls(int16_t tid)
 {
 #ifndef _OS_WINDOWS_
@@ -386,6 +416,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     if (tid == -1)
         tid = jl_atomic_load_relaxed(&jl_n_threads);
     ptls->tid = tid;
+    set_ptls_tpid(ptls);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     if (jl_all_tls_states_size <= tid) {
         int i, newsize = jl_all_tls_states_size + tid + 2;
