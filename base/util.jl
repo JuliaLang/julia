@@ -633,7 +633,7 @@ macro kwdef(expr)
     return quote
         $(esc(:($Base.@__doc__ $expr)))
         $kwdefs
-        $(esc(:(Base.kwdef_defaults)))(::Type{$(esc(S))}) = (;$(filter(p -> isexpr(p, :kw), parameters)...))
+        $(esc(:($Base.kwdef_defaults)))(::Type{$(esc(S))}) = (;$(filter(p -> isexpr(p, :kw), parameters)...))
     end
 end
 
