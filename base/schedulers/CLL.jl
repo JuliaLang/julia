@@ -73,26 +73,26 @@ mutable struct WSQueue{T}
     end
 end
 
+# pushBottom
 function Base.push!(q::WSQueue{T}, v::T) where T
     bottom = @atomic :monotonic q.bottom
     top    = @atomic :acquire   q.top
     buffer = @atomic :monotonic q.buffer
 
-    # add unlikely
-    if __unlikely(bottom - top > (buffer.capacity - 1))
-        # @debug "Growing WS buffer" bottom top capacity = buffer.capacity
+    size = bottom - top
+    if __unlikely(size > (buffer.capacity - 1)) # Chase-Lev has size >= (buf.capacity - 1) || Le has size > (buf.capacity - 1)
         new_buffer = WSBuffer{T}(2*buffer.capacity)
         copyto!(new_buffer, buffer) # TODO only copy active range?
         @atomic :release q.buffer = new_buffer
-        buffer = new_buffer
+        buffer = new_buffer # Le does buffer = @atomic :monotonic q.buffer
     end
-    # @show bottom
     @atomic :monotonic buffer[bottom] = v
     Core.Intrinsics.atomic_fence(:release)
     @atomic :monotonic q.bottom = bottom + 1
     return nothing
 end
 
+# popBottom / take
 function Base.popfirst!(q::WSQueue{T}) where T
     bottom = (@atomic :monotonic q.bottom) - 1
     buffer =  @atomic :monotonic q.buffer
@@ -102,32 +102,40 @@ function Base.popfirst!(q::WSQueue{T}) where T
 
     top = @atomic :monotonic q.top
 
-    if __likely(top <= bottom)
+    size = bottom - top
+    if __likely(size > 0)
+        # Non-empty queue
         v = @atomic :monotonic buffer[bottom]
-        if top == bottom
-            _, success = @atomicreplace q.top top => top+1
+        if size == 1
+            # Single last element in queue
+            _, success = @atomicreplace :sequentially_consistent :monotonic q.top top => top + 1
             @atomic :monotonic q.bottom = bottom + 1
             if !success
-                return nothing # failed
+                # Failed race
+                return nothing
             end
         end
         return v
     else
+        # Empty queue
         @atomic :monotonic q.bottom = bottom + 1
-        return nothing # failed
+        return nothing
     end
 end
 
 function steal!(q::WSQueue{T}) where T
-    top    = @atomic :acquire q.top
+    top = @atomic :acquire q.top
     Core.Intrinsics.atomic_fence(:sequentially_consistent)
     bottom = @atomic :acquire q.bottom
-    if top < bottom
-        buffer = @atomic :monotonic q.buffer
+    size = bottom - top
+    if size > 0
+        # Non-empty queue
+        buffer = @atomic :acquire q.buffer # consume in Le
         v = @atomic :monotonic buffer[top]
-        _, success = @atomicreplace q.top top => top+1
+        _, success = @atomicreplace :sequentially_consistent :monotonic q.top top => top+1
         if !success
-            return nothing # failed
+            # Failed race
+            return nothing
         end
         return v
     end
