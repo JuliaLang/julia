@@ -98,7 +98,7 @@ now(::Type{UTC}) = unix2datetime(time())
 Take the number of Rata Die days since epoch `0000-12-31T00:00:00` and return the
 corresponding `DateTime`.
 """
-rata2datetime(days) = DateTime(yearmonthday(days)...)
+rata2datetime(days) = DateTime(_yearmonthday(days)...)
 
 """
     datetime2rata(dt::TimeType) -> Int64
