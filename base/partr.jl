@@ -22,20 +22,22 @@ const heaps_lock = [SpinLock(), SpinLock()]
 
 """
     cong(max::UInt32)
+
 Return a random UInt32 in the range `1:max` except if max is 0, in that case return 0.
 """
-cong(max::UInt32) = iszero(max) ? UInt32(0) : jl_rand_ptls(max) + UInt32(1) #TODO: make sure users don't use 0 and remove this check
+cong(max::UInt32) = iszero(max) ? UInt32(0) : rand_ptls(max) + UInt32(1) #TODO: make sure users don't use 0 and remove this check
 
 get_ptls_rng() = ccall(:jl_get_ptls_rng, UInt64, ())
 
 set_ptls_rng(seed::UInt64) = ccall(:jl_set_ptls_rng, Cvoid, (UInt64,), seed)
 
 """
-    jl_rand_ptls(max::UInt32)
+    rand_ptls(max::UInt32)
+
 Return a random UInt32 in the range `0:max-1` using the thread-local RNG
 state. Max must be greater than 0.
 """
-Base.@assume_effects :removable :inaccessiblememonly :notaskstate function jl_rand_ptls(max::UInt32)
+Base.@assume_effects :removable :inaccessiblememonly :notaskstate function rand_ptls(max::UInt32)
     rngseed = get_ptls_rng()
     val, seed = rand_uniform_max_int32(max, rngseed)
     set_ptls_rng(seed)
@@ -54,6 +56,7 @@ end
 # result.
 """
     rand_uniform_max_int32(max::UInt32, seed::UInt64)
+
 Return a random UInt32 in the range `0:max-1` using the given seed.
 Max must be greater than 0.
 """
@@ -61,10 +64,10 @@ Base.@assume_effects :total function rand_uniform_max_int32(max::UInt32, seed::U
     if max == UInt32(1)
         return UInt32(0), seed
     end
-# We are generating a fixed point number on the interval [0, 1).
-# Multiplying this by the range gives us a number on [0, upper).
-# The high word of the multiplication result represents the integral part
-# This is not completely unbiased as it's missing the fractional part of the original implementation but it's good enough for our purposes
+    # We are generating a fixed point number on the interval [0, 1).
+    # Multiplying this by the range gives us a number on [0, upper).
+    # The high word of the multiplication result represents the integral part
+    # This is not completely unbiased as it's missing the fractional part of the original implementation but it's good enough for our purposes
     seed = UInt64(69069) * seed + UInt64(362437)
     prod = (UInt64(max)) * (seed % UInt32) # 64 bit product
     i = prod >> 32 % UInt32 # integral part
