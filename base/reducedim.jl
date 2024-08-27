@@ -58,6 +58,8 @@ function _check_valid_region(region)
     end
 end
 
+reducedim1(R, A) = length(axes1(R)) == 1
+
 ## generic (map)reduction
 
 has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = IndexStyle(a) === IndexLinear()
@@ -135,6 +137,13 @@ else
     _mapreduce_might_widen(_, _, _, _) = false
 end
 
+mapreduce_similar(A, ::Type{T}, dims) where {T} = similar(A, T, dims)
+function _mapreduce_similar_curried(A)
+    return function(::Type{T}, dims) where {T}
+        mapreduce_similar(A, T, dims)
+    end
+end
+
 #### Reduction initialization ####
 #
 # Similar to the scalar mapreduce, there are two*three cases we need to consider
@@ -157,10 +166,14 @@ function _mapreducedim_impl(f, op, init, A::AbstractArrayOrBroadcasted, raxs, ou
     # The "outer dimension" of the reduction are the preserved dimensions
     is_outer_dim = map((>(1))∘length, raxs)
     n = prod(map((b, ax)->ifelse(b, 1, length(ax)), is_outer_dim, Aaxs))
+
+    # We have special support for returning empty arrays
+    # isempty(outer_inds) && return collect_allocator(_mapreduce_similar_curried(A),
+    #     (_mapreduce_naive_inner_loop(f, op, init, A, is_outer_dim, outer_ind, a_inds) for outer_ind in outer_inds))
     (n == 0 || isempty(A)) && return _mapreduce_empty_array(f, op, init, A, raxs, out)
     n == 1 && return _mapreduce_one_array(f, op, init, A, raxs, out)
 
-    _mapreduce_might_widen(f, op, typeof(A), out) && return collect_similar(A,
+    _mapreduce_might_widen(f, op, typeof(A), out) && return collect_allocator(_mapreduce_similar_curried(A),
         (_mapreduce_naive_inner_loop(f, op, init, A, is_outer_dim, outer_ind, a_inds) for outer_ind in outer_inds))
 
     # Create the result vector with the first step of the reduction, using the passed output if given
@@ -170,7 +183,7 @@ function _mapreducedim_impl(f, op, init, A::AbstractArrayOrBroadcasted, raxs, ou
     i1, i2 = inner1
     @inbounds a1, a2 = A[i1], A[i2]
     v = _mapreduce_start(f, op, init, a1, a2)
-    R = isnothing(out) ? similar(A, typeof(v), raxs) : out
+    R = isnothing(out) ? mapreduce_similar(A, typeof(v), raxs) : out
     @inbounds R[i1] = v
     for i in Iterators.drop(outer_inds, 1)
         innerj = mergeindices(is_outer_dim, i, a_inds)
@@ -264,20 +277,20 @@ function _split2(ci::CartesianIndices{N}) where {N}
             CartesianIndices(ntuple(d->d==sliced_dim ? inds[d][begin+nskip+1:end] : inds[d][begin:end], Val(N))))
 end
 
-_mapreduce_empty_array(_, _, init, A, axes, ::Nothing) = fill!(similar(A, typeof(init), axes), init)
+_mapreduce_empty_array(_, _, init, A, axes, ::Nothing) = fill!(mapreduce_similar(A, typeof(init), axes), init)
 _mapreduce_empty_array(_, _, init, A, axes, out) = fill!(out, init)
 function _mapreduce_empty_array(f, op, ::_InitialValue, A, axes, ::Nothing)
     init = mapreduce_empty(f, op, eltype(A))
-    return fill!(similar(A, typeof(init), axes), init)
+    return fill!(mapreduce_similar(A, typeof(init), axes), init)
 end
 function _mapreduce_empty_array(f, op, ::_InitialValue, A, axes, out)
     init = mapreduce_empty(f, op, eltype(A))
     return fill!(out, init)
 end
 
-_mapreduce_one_array(f, op, init, A, axes, ::Nothing) = collect_similar(A, (op(init, f(@inbounds(A[i]))) for i in CartesianIndices(axes)))
+_mapreduce_one_array(f, op, init, A, axes, ::Nothing) = collect_allocator(_mapreduce_similar_curried(A), (op(init, f(@inbounds(A[i]))) for i in CartesianIndices(axes)))
 _mapreduce_one_array(f, op, init, A, axes, out) = (for i in CartesianIndices(axes); out[i] = op(init, f(@inbounds(A[i]))); end; out)
-_mapreduce_one_array(f, op, ::_InitialValue, A, axes, ::Nothing) = collect_similar(A, (mapreduce_first(f, op, @inbounds(A[i])) for i in CartesianIndices(axes)))
+_mapreduce_one_array(f, op, ::_InitialValue, A, axes, ::Nothing) = collect_allocator(_mapreduce_similar_curried(A), (mapreduce_first(f, op, @inbounds(A[i])) for i in CartesianIndices(axes)))
 _mapreduce_one_array(f, op, ::_InitialValue, A, axes, out) = (for i in CartesianIndices(axes); out[i] = mapreduce_first(f, op, @inbounds(A[i])); end; out)
 
 # Given two initial values in a reduction, compute the beginning of a op chain
@@ -1022,44 +1035,59 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
 end
 
 ##### findmin & findmax #####
-# Use an ad-hoc specialized StructArray to to the AoS->SoA transform
 
-struct PairArray{T,N,Style,A,B} <: AbstractArray{T,N}
+struct PairsArray{T,N,A} <: AbstractArray{T,N}
+    array::A
+end
+PairsArray(array::AbstractArray{T,N}) where {T, N} = PairsArray{Tuple{keytype(array),T}, N, typeof(array)}(array)
+const PairsVector{T,A} = PairsArray{T, 1, A}
+IndexStyle(::PairsVector) = IndexLinear()
+IndexStyle(::PairsArray) = IndexCartesian()
+size(P::PairsArray) = size(P.array)
+axes(P::PairsArray) = axes(P.array)
+@inline function getindex(P::PairsVector, i::Int)
+    @boundscheck checkbounds(P, i)
+    @inbounds (i, P.array[i])
+end
+@inline function getindex(P::PairsArray{<:Any,N}, I::CartesianIndex{N}) where {N}
+    @boundscheck checkbounds(P, I)
+    @inbounds (I, P.array[I])
+end
+@propagate_inbounds getindex(P::PairsVector, i::CartesianIndex{1}) = P[i.I[1]]
+@propagate_inbounds getindex(P::PairsArray{<:Any,N}, I::Vararg{Int, N}) where {N} = P[CartesianIndex(I)]
+# Defer a few functions to the parent array
+similar(P::PairsArray, ::Type{T}, dims::Tuple{Union{Int, AbstractUnitRange}, Vararg{Union{Int, AbstractUnitRange}}}) where {T} = similar(P.array, T, dims)
+similar(P::PairsArray, ::Type{T}, dims::Tuple{Union{Int, Base.OneTo}, Vararg{Union{Int, Base.OneTo}}}) where {T} = similar(P.array, T, dims)
+similar(P::PairsArray, ::Type{T}, dims::Tuple{Int, Vararg{Int}}) where {T} = similar(P.array, T, dims)
+similar(P::PairsArray, ::Type{T}, dims::Tuple{}) where {T} = similar(P.array, T, dims)
+mapreduce_similar(P::PairsArray, ::Type{T}, dims) where {T} = mapreduce_similar(P.array, T, dims)
+
+# Use an ad-hoc specialized StructArray to allow in-place AoS->SoA transform
+struct ZippedArray{T,N,Style,A,B} <: AbstractArray{T,N}
     first::A
     second::B
 end
-function PairArray(A::AbstractArray{T,N},B::AbstractArray{S,N}) where {T,S,N}
+function ZippedArray(A::AbstractArray{T,N},B::AbstractArray{S,N}) where {T,S,N}
     axes(A) == axes(B) || throw(DimensionMismatch("both arrays must have the same shape"))
-    PairArray{Tuple{T,S},N,IndexStyle(A,B),typeof(A),typeof(B)}(A,B)
+    # TODO: It'd be better if we could transform a Tuple{Int, Union{Int, Missing}} to Union{Tuple{Int,Int}, Tuple{Int, Missing}}
+    ZippedArray{Tuple{T,S},N,IndexStyle(A,B),typeof(A),typeof(B)}(A,B)
 end
-size(P::PairArray) = size(P.first)
-axes(P::PairArray) = axes(P.first)
-eachindex(P::PairArray{<:Any,<:Any,Style}) where {Style} = eachindex(Style, P.first)
-@inline function getindex(P::PairArray, I::Int...)
-    @boundscheck checkbounds(P, I...)
-    @inbounds (P.first[I...], P.second[I...])
+size(Z::ZippedArray) = size(Z.first)
+axes(Z::ZippedArray) = axes(Z.first)
+IndexStyle(::ZippedArray{<:Any,<:Any,Style}) where {Style} = Style
+@inline function getindex(Z::ZippedArray, I::Int...)
+    @boundscheck checkbounds(Z, I...)
+    @inbounds (Z.first[I...], Z.second[I...])
 end
-@propagate_inbounds setindex!(P::PairArray{T}, v, I::Int...) where {T} = setindex!(P, convert(T, v), I...)
-@inline function setindex!(P::PairArray{T}, v::T, I::Int...) where {T}
-    @boundscheck checkbounds(P, I...)
-    @inline P.first[I...] = v[1]
-    @inline P.second[I...] = v[2]
-    return P
+@propagate_inbounds setindex!(Z::ZippedArray{T}, v, I::Int...) where {T} = setindex!(Z, convert(T, v), I...)
+@inline function setindex!(Z::ZippedArray{T}, v::T, I::Int...) where {T}
+    @boundscheck checkbounds(Z, I...)
+    @inbounds Z.first[I...] = v[1]
+    @inbounds Z.second[I...] = v[2]
+    return Z
 end
-# TODO: need to do the inverse of hoist_pairs_union?
-similar(P::PairArray, ::Type{Tuple{F,S}}, dims::Tuple{Union{Integer, Base.OneTo}, Vararg{Union{Integer, Base.OneTo}}}) where {F,S} = PairArray(similar(P.first, F, dims), similar(P.second, S, dims))
-similar(P::PairArray, ::Type{Tuple{F,S}}, dims::Tuple{Union{Integer, Base.OneTo, AbstractUnitRange}, Vararg{Union{Integer, Base.OneTo, AbstractUnitRange}}}) where {F,S} = PairArray(similar(P.first, F, dims), similar(P.second, S, dims))
-similar(P::PairArray, ::Type{Tuple{F,S}}, dims::Tuple{}) where {F,S} = PairArray(similar(P.first, F, dims), similar(P.second, S, dims))
-similar(P::PairArray, ::Type{Tuple{F, S}}, dims::Tuple{Int64, Vararg{Int64}}) where {S, F} = PairArray(similar(P.first, F, dims), similar(P.second, S, dims))
-
-# TODO: need to handle abstract unions
-similar(P::PairArray, ::Type{T}, dims::Tuple{Union{Integer, Base.OneTo}, Vararg{Union{Integer, Base.OneTo}}}) where {T} = similar(P.second, T, dims)
-similar(P::PairArray, ::Type{T}, dims::Tuple{Union{Integer, Base.OneTo, AbstractUnitRange}, Vararg{Union{Integer, Base.OneTo, AbstractUnitRange}}}) where {T} = similar(P.second, T, dims)
-similar(P::PairArray, ::Type{T}, dims::Tuple{}) where {T} = similar(P.second, T, dims)
-similar(P::PairArray, ::Type{T}, dims::Tuple{Int64, Vararg{Int64}}) where {T} = similar(P.second, T, dims)
-
-split_pairs(P::PairArray) = (P.second, P.first)
-split_pairs(A::AbstractArray) = ([a[2] for a in A], [a[1] for a in A])
+_unzip(Z::ZippedArray) = (Z.first, Z.second)
+_unzip(A::AbstractArray) = ([a[1] for a in A], [a[2] for a in A])
 
 _transform_pair(f) = x-> (x[1], f(x[2]))
 _transform_pair(f::typeof(identity)) = f
@@ -1073,14 +1101,15 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 
 $(_DOCS_ALIASING_WARNING)
 """
-function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray; init::Bool=true) = findmin!(identity, rval, rind, A; init)
+function findmin!(f, rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    P = if init
-        mapreduce!(identity, (x,y)->ifelse(isgreater(x[2], y[2]), y, x), PairArray(rind, rval), PairArray(keys(A), A))
+    if init
+        mapreduce!(_transform_pair(f), (x,y)->ifelse(isgreater(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A))
     else
-        mapreducedim!(identity, (x,y)->ifelse(isgreater(x[2], y[2]), y, x), PairArray(rind, rval), PairArray(keys(A), A))
+        mapreducedim!(_transform_pair(f), (x,y)->ifelse(isgreater(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A))
     end
-    return split_pairs(P)
+    return (rval, rind)
 end
 
 """
@@ -1129,10 +1158,16 @@ julia> findmin(abs2, A, dims=2)
 findmin(f, A::AbstractArray; dims=:) = _findmin(f, A, dims)
 
 function _findmin(f, A, region)
-    P = _mapreduce_dim(_transform_pair(f), (x,y)->ifelse(isgreater(x[2], y[2]), y, x), _InitialValue(), PairArray(keys(A), A), region)
-    return split_pairs(P)
+    if f === identity
+        # Fast path with pre-allocated arrays
+        axs = reduced_indices(A, region)
+        return findmin!(identity, mapreduce_similar(A, eltype(A), axs), mapreduce_similar(A, keytype(A), axs), A)
+    else
+        P = _mapreduce_dim(_transform_pair(f), (x,y)->ifelse(isgreater(x[2], y[2]), y, x), _InitialValue(), PairsArray(A), region)
+        (inds, vals) = _unzip(P)
+        return (vals, inds)
+    end
 end
-
 """
     findmax!(rval, rind, A) -> (maxval, index)
 
@@ -1142,14 +1177,15 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 
 $(_DOCS_ALIASING_WARNING)
 """
-function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray; init::Bool=true) = findmax!(identity, rval, rind, A; init)
+function findmax!(f, rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    P = if init
-        mapreduce!(identity, (x,y)->ifelse(isless(x[2], y[2]), y, x), PairArray(rind, rval), PairArray(keys(A), A))
+    if init
+        mapreduce!(_transform_pair(f), (x,y)->ifelse(isless(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A))
     else
-        mapreducedim!(identity, (x,y)->ifelse(isless(x[2], y[2]), y, x), PairArray(rind, rval), PairArray(keys(A), A))
+        mapreducedim!(_transform_pair(f), (x,y)->ifelse(isless(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A))
     end
-    return split_pairs(P)
+    return (rval, rind)
 end
 
 """
@@ -1197,11 +1233,15 @@ julia> findmax(abs2, A, dims=2)
 """
 findmax(f, A::AbstractArray; dims=:) = _findmax(f, A, dims)
 function _findmax(f, A, region)
-    P = _mapreduce_dim(_transform_pair(f), (x,y)->ifelse(isless(x[2], y[2]), y, x), _InitialValue(), PairArray(keys(A), A), region)
-    return split_pairs(P)
+    if f === identity
+        axs = reduced_indices(A, region)
+        return findmax!(identity, mapreduce_similar(A, eltype(A), axs), mapreduce_similar(A, keytype(A), axs), A)
+    else
+        P = _mapreduce_dim(_transform_pair(f), (x,y)->ifelse(isless(x[2], y[2]), y, x), _InitialValue(), PairsArray(A), region)
+        (inds, vals) = _unzip(P)
+        return (vals, inds)
+    end
 end
-
-reducedim1(R, A) = length(axes1(R)) == 1
 
 """
     argmin(A; dims) -> indices

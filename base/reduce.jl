@@ -245,8 +245,7 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 @noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted,
                                   ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
-        @inbounds a1 = A[ifirst]
-        return mapreduce_first(f, op, a1)
+        throw(AssertionError("mapreduce_impl must not be called with only one element"))
     elseif ilast - ifirst < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
@@ -348,6 +347,7 @@ reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitUnsignedSmall} = one(UI
 
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
+reduce_empty(op::MappingRF{<:Any,<:BottomRF}, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf.rf, T)
 reduce_empty(op::FilteringRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 

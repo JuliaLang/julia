@@ -734,3 +734,11 @@ end
         Val(any(in((:one,:two,:three)),(:four,:three)))
     end |> only == Val{true}
 end
+
+@testset "type stability of internals for mean (etc); Statistics#160" begin
+    @test (@inferred Missing mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, view([1.0,2.0,missing],1:2), dims=:)) == 3.0
+    @test (@inferred Union{Missing,Int} mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:)) == 3.0
+
+    @test (@inferred Missing reduce((x,y)->Base.add_sum(x, y)/1, view([1.0,2.0,missing],1:2), dims=:)) == 3.0
+    @test (@inferred Union{Missing,Int} reduce((x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:)) == 3.0
+end

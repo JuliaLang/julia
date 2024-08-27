@@ -531,4 +531,8 @@ end
 
 @deprecate stat(fd::Integer) stat(RawFD(fd))
 
+function reducedim_initarray end
+const _dep_message_reducedim_initarray = ", these internals have been removed. To customize the array returned by dimensional reductions, implement mapreduce_similar instead"
+deprecate(Base, :reducedim_initarray)
+
 # END 1.12 deprecations

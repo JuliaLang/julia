@@ -699,6 +699,12 @@ collect(A::AbstractArray) = _collect_indices(axes(A), A)
 
 collect_similar(cont, itr) = _collect(cont, itr, IteratorEltype(itr), IteratorSize(itr))
 
+struct _Allocator{T}
+    f::T
+end
+similar(f::_Allocator, ::Type{T}, dims) where {T} = f.f(T, dims)
+collect_allocator(f::F, itr) where {F} = _collect(_Allocator(f), itr, IteratorEltype(itr), IteratorSize(itr))
+
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
     copyto!(_similar_for(cont, eltype(itr), itr, isz, _similar_shape(itr, isz)), itr)
 

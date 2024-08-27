@@ -234,6 +234,9 @@ Base.similar(::Broadcasted{ArrayConflict}, ::Type{ElType}, dims) where ElType =
     similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{Bool}, dims) =
     similar(BitArray, dims)
+# As well as the default behavior
+Base.similar(::Broadcasted, ::Type{ElType}, dims) where ElType =
+    similar(Array{ElType, length(dims)}, dims)
 
 @inline Base.axes(bc::Broadcasted) = _axes(bc, bc.axes)
 _axes(::Broadcasted, axes::Tuple) = axes
