@@ -1,6 +1,6 @@
 using Test
 
-exe_path = ARGS[1]
+exe_path = joinpath(@__DIR__, "hello"*splitext(Base.julia_exename())[2])
 
 @test readchomp(`$exe_path`) == "Hello, world!"
 

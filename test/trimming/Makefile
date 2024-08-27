@@ -16,6 +16,7 @@ endif
 # location of test source
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/../..)
+BUILDSCRIPT := $(BIN)/../share/julia/juliac-buildscript.jl
 include $(JULIAHOME)/Make.inc
 
 # get the executable suffix, if any
@@ -31,8 +32,8 @@ LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs) -ljulia-internal
 
 release: hello$(EXE)
 
-hello.o: $(SRCDIR)/hello.jl $(SRCDIR)/buildscript.jl
-	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.so --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --trim $(SRCDIR)/buildscript.jl $(SRCDIR)/hello.jl --output-exe true
+hello.o: $(SRCDIR)/hello.jl $(BUILDSCRIPT)
+	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.so --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --trim $(BUILDSCRIPT) $(SRCDIR)/hello.jl --output-exe true
 
 init.o: $(SRCDIR)/init.c
 	$(CC) -c -o $@ $< $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
@@ -41,8 +42,7 @@ hello$(EXE): hello.o init.o
 	$(CC) -o $@ $(WHOLE_ARCHIVE) hello.o $(NO_WHOLE_ARCHIVE) init.o $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
 check: hello$(EXE)
-	$(JULIA) --depwarn=error $(SRCDIR)/trimming.jl ./hello$(EXE)
-	@echo SUCCESS
+	$(JULIA) --depwarn=error $(SRCDIR)/../runtests.jl $(SRCDIR)/trimming
 
 clean:
 	-rm -f hello$(EXE) init.o hello.o
