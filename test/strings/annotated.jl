@@ -5,6 +5,7 @@
     @test str == Base.AnnotatedString(str.string, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[])
     @test length(str) == 11
     @test ncodeunits(str) == 11
+    @test convert(Base.AnnotatedString, str) === str
     @test eltype(str) == Base.AnnotatedChar{eltype(str.string)}
     @test first(str) == Base.AnnotatedChar(first(str.string), Pair{Symbol, Any}[])
     @test str[1:4] isa SubString{typeof(str)}
@@ -63,6 +64,8 @@ end
 
 @testset "AnnotatedChar" begin
     chr = Base.AnnotatedChar('c')
+    @test Base.AnnotatedChar(UInt32('c')) == chr
+    @test convert(Base.AnnotatedChar, chr) === chr
     @test chr == Base.AnnotatedChar(chr.char, Pair{Symbol, Any}[])
     @test uppercase(chr) == Base.AnnotatedChar('C')
     @test titlecase(chr) == Base.AnnotatedChar('C')

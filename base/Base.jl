@@ -647,7 +647,7 @@ function __init__()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(explicit_loaded_modules)
-    @assert isempty(loaded_precompiles)
+    empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
     for (mod, key) in module_keys
         loaded_precompiles[key => module_build_id(mod)] = mod
     end

@@ -1753,7 +1753,17 @@ end
     @test s.blocks isa Int64
     @test s.mtime isa Float64
     @test s.ctime isa Float64
+
+    @test s === stat((f,))
+    @test s === lstat((f,))
+    @test s === stat(".", f)
+    @test s === lstat(".", f)
 end
+
+mutable struct URI50890; f::String; end
+Base.joinpath(x::URI50890) = URI50890(x.f)
+@test_throws "stat not implemented" stat(URI50890("."))
+@test_throws "lstat not implemented" lstat(URI50890("."))
 
 @testset "StatStruct show's extended details" begin
     f, io = mktemp()

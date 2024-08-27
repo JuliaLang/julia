@@ -135,6 +135,10 @@ Standard library changes
 
 #### Profile
 
+* `Profile.take_heap_snapshot` takes a new keyword argument, `redact_data::Bool`,
+  that is `true` by default. When set, the contents of Julia objects are not emitted
+  in the heap snapshot. This currently only applies to strings. ([#55326])
+
 #### Random
 
 #### REPL
