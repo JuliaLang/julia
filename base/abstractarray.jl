@@ -754,11 +754,8 @@ checkindex(::Type{Bool}, inds::IdentityUnitRange, i::Real) = checkindex(Bool, in
 checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i - one(i)) < unsigned(last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
-_checkindex_range(::Type{Bool}, inds, i::AbstractRange) =
+checkindex(::Type{Bool}, inds::AbstractUnitRange, i::AbstractRange) =
     isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
-checkindex(::Type{Bool}, inds::AbstractUnitRange, i::AbstractRange) = _checkindex_range(Bool, inds, i)
-# generic fallback method for unusual range indices, e.g. CartesianIndex ranges
-checkindex(::Type{Bool}, inds, i::AbstractRange) = _checkindex_range(Bool, inds, i)
 # range like indices with cheap `extrema`
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::LinearIndices) =
     isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
