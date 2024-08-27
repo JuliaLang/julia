@@ -124,6 +124,7 @@ struct _jl_bt_element_t;
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
     int16_t tid;
+    int16_t threadpool_tid;
     int8_t threadpoolid;
     uint64_t rngseed;
     _Atomic(volatile size_t *) safepoint; // may be changed to the suspend page by any thread
@@ -197,6 +198,7 @@ typedef struct _jl_tls_states_t {
         uint64_t uv_run_leave;
         uint64_t sleep_enter;
         uint64_t sleep_leave;
+        uint64_t woken_up;
     )
 
     // some hidden state (usually just because we don't have the type's size declaration)

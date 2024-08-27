@@ -329,7 +329,7 @@ end
 end
 
 @testset "rand_ptls underflow" begin
-    @test Base.Partr.cong(UInt32(0)) == 0
+    @test Base.Scheduler.cong(UInt32(0)) == 0
 end
 
 @testset "num_stack_mappings metric" begin

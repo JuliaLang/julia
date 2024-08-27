@@ -19,10 +19,6 @@ const heap_d = UInt32(8)
 const heaps = [Vector{taskheap}(undef, 0), Vector{taskheap}(undef, 0)]
 const heaps_lock = [SpinLock(), SpinLock()]
 
-
-cong(max::UInt32) = iszero(max) ? UInt32(0) : ccall(:jl_rand_ptls, UInt32, (UInt32,), max) + UInt32(1)
-
-
 function multiq_sift_up(heap::taskheap, idx::Int32)
     while idx > Int32(1)
         parent = (idx - Int32(2)) ÷ heap_d + Int32(1)
@@ -94,10 +90,10 @@ function multiq_insert(task::Task, priority::UInt16)
 
     task.priority = priority
 
-    rn = cong(heap_p)
+    rn = Base.Scheduler.cong(heap_p)
     tpheaps = heaps[tp]
     while !trylock(tpheaps[rn].lock)
-        rn = cong(heap_p)
+        rn = Base.Scheduler.cong(heap_p)
     end
 
     heap = tpheaps[rn]
@@ -137,8 +133,8 @@ function multiq_deletemin()
         if i == heap_p
             return nothing
         end
-        rn1 = cong(heap_p)
-        rn2 = cong(heap_p)
+        rn1 = Base.Scheduler.cong(heap_p)
+        rn2 = Base.Scheduler.cong(heap_p)
         prio1 = tpheaps[rn1].priority
         prio2 = tpheaps[rn2].priority
         if prio1 > prio2
@@ -189,5 +185,9 @@ function multiq_check_empty()
     end
     return true
 end
+
+enqueue!(t::Task) = multiq_insert(t, t.priority)
+dequeue!() = multiq_deletemin()
+checktaskempty() = multiq_check_empty()
 
 end
