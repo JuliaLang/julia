@@ -36,6 +36,17 @@ function JumpTarget(label::SyntaxTree{GraphType}, ctx) where {GraphType}
     JumpTarget{GraphType}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
 end
 
+struct JumpOrigin{GraphType}
+    goto::SyntaxTree{GraphType}
+    index::Int
+    handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+    catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
+end
+
+function JumpOrigin(goto::SyntaxTree{GraphType}, index, ctx) where {GraphType}
+    JumpOrigin{GraphType}(goto, index, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+end
+
 struct FinallyHandler{GraphType}
     tagvar::SyntaxTree{GraphType}
     target::JumpTarget{GraphType}
@@ -66,6 +77,8 @@ struct LinearIRContext{GraphType} <: AbstractLoweringContext
     handler_token_stack::SyntaxList{GraphType, Vector{NodeId}}
     catch_token_stack::SyntaxList{GraphType, Vector{NodeId}}
     finally_handlers::Vector{FinallyHandler{GraphType}}
+    symbolic_jump_targets::Dict{String,JumpTarget{GraphType}}
+    symbolic_jump_origins::Vector{JumpOrigin{GraphType}}
     mod::Module
 end
 
@@ -76,7 +89,8 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_locals, rett,
                     Dict{String,JumpTarget{GraphType}}(), SyntaxList(ctx), SyntaxList(ctx),
-                    Vector{FinallyHandler{GraphType}}(), ctx.mod)
+                    Vector{FinallyHandler{GraphType}}(), Dict{String,JumpTarget{GraphType}}(),
+                    Vector{JumpOrigin{GraphType}}(), ctx.mod)
 end
 
 # FIXME: BindingId subsumes many things so need to assess what that means for these predicates.
@@ -158,7 +172,7 @@ function emit_assign_tmp(ctx::LinearIRContext, ex, name="tmp")
     return tmp
 end
 
-function compile_pop_exception(ctx::LinearIRContext, srcref, src_tokens, dest_tokens)
+function compile_pop_exception(ctx, srcref, src_tokens, dest_tokens)
     # It's valid to leave the context of src_tokens for the context of
     # dest_tokens when src_tokens is the same or nested within dest_tokens.
     # It's enough to check the token on the top of the dest stack.
@@ -172,6 +186,17 @@ function compile_pop_exception(ctx::LinearIRContext, srcref, src_tokens, dest_to
     end
 end
 
+function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
+    n = length(dest_tokens)
+    jump_ok = n == 0 || (n <= length(src_tokens) && dest_tokens[n].var_id == src_tokens[n].var_id)
+    jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
+    if n < length(src_tokens)
+        @ast ctx srcref [K"leave" src_tokens[n+1:end]]
+    else
+        nothing
+    end
+end
+
 function emit_pop_exception(ctx::LinearIRContext, srcref, dest_tokens)
     pexc = compile_pop_exception(ctx, srcref, ctx.catch_token_stack, dest_tokens)
     if !isnothing(pexc)
@@ -180,14 +205,9 @@ function emit_pop_exception(ctx::LinearIRContext, srcref, dest_tokens)
 end
 
 function emit_leave_handler(ctx::LinearIRContext, srcref, dest_tokens)
-    src_tokens = ctx.handler_token_stack
-    n = length(dest_tokens)
-    jump_ok = n == 0 || (n <= length(src_tokens) && dest_tokens[n].var_id == src_tokens[n].var_id)
-    jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
-    if n < length(src_tokens)
-        emit(ctx, @ast ctx srcref [K"leave" src_tokens[n+1:end]])
-    else
-        nothing
+    ex = compile_leave_handler(ctx, srcref, ctx.handler_token_stack, dest_tokens)
+    if !isnothing(ex)
+        emit(ctx, ex)
     end
 end
 
@@ -655,15 +675,24 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"break"
         emit_break(ctx, ex)
-    #elseif k == K"symbolic_goto"
-    #   target = get(ctx.symbolic_jump_targets, ex.name_val, nothing)
-    #   if isnothing(target)
-    #       push!(ctx.symbolic_jump_origins, IRInsertionPoint(ctx))
-    #   else
-    #       emit_jump(
-    #elseif k == K"symbolic_label"
-    #   label = emit_label(ctx, ex)
-    #   push!(ctx.symbolic_jump_targets, JumpTarget(label, ctx))
+    elseif k == K"symbolic_label"
+        label = emit_label(ctx, ex)
+        name = ex.name_val
+        if haskey(ctx.symbolic_jump_targets, name)
+            throw(LoweringError(ex, "Label `$name` defined multiple times"))
+        end
+        push!(ctx.symbolic_jump_targets, name=>JumpTarget(label, ctx))
+        if in_tail_pos
+            emit_return(ctx, ex, nothing_(ctx, ex))
+        elseif needs_value
+            throw(LoweringError(ex, "misplaced label in value position"))
+        end
+    elseif k == K"symbolic_goto"
+        push!(ctx.symbolic_jump_origins, JumpOrigin(ex, length(ctx.code)+1, ctx))
+        emit(ctx, makeleaf(ctx, ex, K"TOMBSTONE")) # ? pop_exception
+        emit(ctx, makeleaf(ctx, ex, K"TOMBSTONE")) # ? leave
+        emit(ctx, makeleaf(ctx, ex, K"TOMBSTONE")) # ? goto
+        nothing
     elseif k == K"return"
         compile(ctx, ex[1], true, true)
         nothing
@@ -854,6 +883,8 @@ function renumber_body(ctx, input_code, slot_rewrites)
             end
         elseif k == K"label"
             label_table[ex.id] = length(code) + 1
+        elseif k == K"TOMBSTONE"
+            # remove statement
         else
             ex_out = ex
         end
@@ -874,7 +905,33 @@ end
 # flisp: compile-body
 function compile_body(ctx, ex)
     compile(ctx, ex, true, true)
-    # TODO: Fix any gotos
+
+    # Fix up any symbolic gotos. (We can't do this earlier because the goto
+    # might precede the label definition in unstructured control flow.)
+    for origin in ctx.symbolic_jump_origins
+        name = origin.goto.name_val
+        target = get(ctx.symbolic_jump_targets, name, nothing)
+        if isnothing(target)
+            throw(LoweringError(origin.goto, "label `$name` referenced but not defined"))
+        end
+        i = origin.index
+        pop_ex = compile_pop_exception(ctx, origin.goto, origin.catch_token_stack,
+                                     target.catch_token_stack)
+        if !isnothing(pop_ex)
+            @assert kind(ctx.code[i]) == K"TOMBSTONE"
+            ctx.code[i] = pop_ex
+            i += 1
+        end
+        leave_ex = compile_leave_handler(ctx, origin.goto, origin.handler_token_stack,
+                                         target.handler_token_stack)
+        if !isnothing(leave_ex)
+            @assert kind(ctx.code[i]) == K"TOMBSTONE"
+            ctx.code[i] = leave_ex
+            i += 1
+        end
+        @assert kind(ctx.code[i]) == K"TOMBSTONE"
+        ctx.code[i] = @ast ctx origin.goto [K"goto" target.label]
+    end
     # TODO: Filter out any newvar nodes where the arg is definitely initialized
 end
 
@@ -916,11 +973,14 @@ function linearize_ir(ctx, ex)
                               id=Int)
     # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
     # required to call reparent() ...
+    GraphType = typeof(graph)
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
                            Ref(0), false, Set{IdTag}(), nothing,
                            Dict{String,JumpTarget{typeof(graph)}}(),
                            SyntaxList(graph), SyntaxList(graph),
-                           Vector{FinallyHandler{typeof(graph)}}(), ctx.mod)
+                           Vector{FinallyHandler{GraphType}}(),
+                           Dict{String, JumpTarget{GraphType}}(),
+                           Vector{JumpOrigin{GraphType}}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     setattr!(graph, res._id, bindings=ctx.bindings)
     _ctx, res

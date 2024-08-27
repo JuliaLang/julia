@@ -111,6 +111,16 @@ Base.eval(M, quote
         @chk kind(ex) == JuliaSyntax.K"quote"
         @ast __context__ ex [JuliaSyntax.K"inert" ex]
     end
+
+    function var"@label"(__context__::JuliaLowering.MacroContext, ex)
+        @chk kind(ex) == JuliaSyntax.K"Identifier"
+        @ast __context__ ex ex=>JuliaSyntax.K"symbolic_label"
+    end
+
+    function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
+        @chk kind(ex) == JuliaSyntax.K"Identifier"
+        @ast __context__ ex ex=>JuliaSyntax.K"symbolic_goto"
+    end
 end)
 
 JuliaLowering.include_string(M, """
@@ -361,13 +371,36 @@ end
 """
 
 src = """
-begin
-    yy = 200
-    module A
-        import ..yy
-        x = yy
+let
+    i = "hi"
+    j = 1
+    M.@label foo
+    try
+        println("i = ", i)
+        i = i + 1
+        if i <= 2
+            M.@goto foo
+        end
+    catch exc
+        println("Caught exception ", exc)
+        j = j + 1
+        if j <= 2
+            println("Trying again ", exc)
+            M.@goto foo
+        end
     end
 end
+"""
+
+src = """
+let
+    M.@goto foo
+    M.@label foo
+end
+"""
+
+src = """
+x = M.@label foo
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")

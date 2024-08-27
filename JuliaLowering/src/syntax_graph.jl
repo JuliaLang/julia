@@ -416,6 +416,7 @@ function _value_string(ex)
           k == K"globalref"   ? "$(ex.mod).$(ex.name_val)" :
           k == K"slot"        ? "slot" :
           k == K"symbolic_label" ? "label:$(ex.name_val)" :
+          k == K"symbolic_goto" ? "goto:$(ex.name_val)" :
           repr(get(ex, :value, nothing))
     id = get(ex, :var_id, nothing)
     if isnothing(id)

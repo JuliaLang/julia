@@ -126,11 +126,10 @@ function format_ir_test_case(mod, input, description="-- Add description here --
     """
 end
 
-function test_ir_cases(filename)
+function test_ir_cases(filename::AbstractString, mod=Module(:TestMod))
     str = read(filename, String)
     cases = [match_ir_test_case(s) for s in split(str, r"####*") if strip(s) != ""]
 
-    mod = Module(:TestMod)
     for (name,input,ref) in cases
         output = format_ir_for_test(mod, input)
         @testset "$name" begin

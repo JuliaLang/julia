@@ -4,6 +4,23 @@
 
 test_mod = Module()
 
+Base.eval(test_mod, quote
+    using JuliaLowering: JuliaLowering, @ast, @chk
+    using JuliaSyntax
+end)
+
+Base.eval(test_mod, quote
+    function var"@label"(__context__::JuliaLowering.MacroContext, ex)
+        @chk kind(ex) == JuliaSyntax.K"Identifier"
+        @ast __context__ ex ex=>JuliaSyntax.K"symbolic_label"
+    end
+
+    function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
+        @chk kind(ex) == JuliaSyntax.K"Identifier"
+        @ast __context__ ex ex=>JuliaSyntax.K"symbolic_goto"
+    end
+end)
+
 #-------------------------------------------------------------------------------
 @testset "Tail position" begin
 
@@ -287,11 +304,42 @@ end
 
 end
 
+@testset "symbolic goto/label" begin
+    JuliaLowering.include_string(test_mod, """
+    let
+        a = []
+        i = 1
+        @label foo
+        push!(a, i)
+        i = i + 1
+        if i <= 2
+            @goto foo
+        end
+        a
+    end
+    """) == [1,2]
+
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    begin
+        @goto foo
+    end
+    """)
+
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    begin
+        @label foo
+        @label foo
+    end
+    """)
+
+    @test_throws LoweringError JuliaLowering.include_string(test_mod, """
+    x = @label foo
+    """)
+end
+
 #-------------------------------------------------------------------------------
-@testset "Detailed lowering tests" begin
-
-test_ir_cases(joinpath(@__DIR__,"branching_ir.jl"))
-
+@testset "Branching IR" begin
+    test_ir_cases(joinpath(@__DIR__,"branching_ir.jl"), test_mod)
 end
 
 end
