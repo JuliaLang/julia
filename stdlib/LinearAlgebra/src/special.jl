@@ -283,8 +283,8 @@ for f in (:+, :-)
         uplo = sym_uplo(H.uplo)
         return Hermitian(parentof_applytri($f, H, Hermitian(D, uplo)), uplo)
     end
-    @eval $f(D::Diagonal, U::UpperOrLowerTriangular{<:Any, <:StridedMatrix}) = broadcast($f, D, U)
-    @eval $f(U::UpperOrLowerTriangular{<:Any, <:StridedMatrix}, D::Diagonal) = broadcast($f, U, D)
+    @eval $f(D::Diagonal{<:Any, <:StridedVector}, U::UpperOrLowerTriangular{<:Any, <:StridedMatrix}) = broadcast($f, D, U)
+    @eval $f(U::UpperOrLowerTriangular{<:Any, <:StridedMatrix}, D::Diagonal{<:Any, <:StridedVector}) = broadcast($f, U, D)
 end
 
 ## Diagonal construction from UniformScaling
