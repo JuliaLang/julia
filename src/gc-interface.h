@@ -128,6 +128,10 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 // Allocation
 // ========================================================================= //
 
+// FIXME: do we need to expose this function as well since it lived in julia_internal.h
+// and was very specific to the stock GC.
+struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
+
 // Allocates small objects and increments Julia allocation counterst. Size of the object
 // header must be included in the object size. The (possibly unused in some implementations)
 // offset to the arena in which we're allocating is passed in the second parameter, and the
@@ -210,6 +214,9 @@ JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align,
 // immortal region that is never swept. The second parameter specifies the type of the
 // object being allocated and will be used to set the object header.
 struct _jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT;
+
+// FIXME: add description here
+void jl_gc_notify_image_load(const char* img_data, size_t len);
 
 // ========================================================================= //
 // Runtime Write-Barriers

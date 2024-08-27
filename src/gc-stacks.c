@@ -56,7 +56,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 }
 
 
-static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
 #ifdef JL_USE_GUARD_PAGE
     size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
@@ -112,7 +112,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 }
 # endif
 
-static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
 #ifdef JL_USE_GUARD_PAGE
     size_t guard_size = LLT_ALIGN(jl_guard_size, jl_page_size);
@@ -160,7 +160,7 @@ static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
 }
 
 
-static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
+void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
 #ifdef _COMPILER_ASAN_ENABLED_
     __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
