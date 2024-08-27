@@ -1033,7 +1033,22 @@ function enq_work(t::Task)
     return t
 end
 
-schedule(t::Task) = enq_work(t)
+const ChildFirst = false
+
+function schedule(t::Task)
+    if ChildFirst
+        ct = current_task()
+        if ct.sticky || t.sticky
+            enq_work(t)
+        else
+            enq_work(ct)
+            yieldto(t)
+        end
+    else
+        enq_work(t)
+    end
+    return t
+end
 
 """
     schedule(t::Task, [val]; error=false)
