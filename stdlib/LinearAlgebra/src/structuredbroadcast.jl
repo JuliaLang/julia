@@ -262,13 +262,24 @@ function copyto!(dest::Tridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     return dest
 end
 
+_extract_triangular(bc::Broadcast.Broadcasted) = Broadcast.broadcasted(bc.f, map(_extract_triangular, bc.args)...)
+_extract_triangular(U::UpperOrLowerTriangular) = parent(U)
+_extract_triangular(D::BandedMatrix) = haszero(eltype(D)) ? zero(eltype(D)) : D
+_extract_triangular(x) = x
 function copyto!(dest::LowerTriangular, bc::Broadcasted{<:StructuredMatrixStyle})
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
+    # we process the Broadcasted object to extract the parents of LowerTriangular matrices
+    # this is because we only access the triangular half in the following section
+    bc2 = _extract_triangular(bc)
     for j in axs[2]
-        for i in j:axs[1][end]
-            @inbounds dest.data[i,j] = bc[CartesianIndex(i, j)]
+        @inbounds dest.data[j,j] = bc[BandIndex(0, j)]
+        if j < axs[1][end]
+            @inbounds dest.data[j+1,j] = bc[BandIndex(-1, j)]
+        end
+        for i in j+2:axs[1][end]
+            @inbounds dest.data[i,j] = bc2[CartesianIndex(i, j)]
         end
     end
     return dest
@@ -278,10 +289,17 @@ function copyto!(dest::UpperTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
+    # we process the Broadcasted object to extract the parents of UpperTriangular matrices
+    # this is because we only access the triangular half in the following section
+    bc2 = _extract_triangular(bc)
     for j in axs[2]
-        for i in 1:j
-            @inbounds dest.data[i,j] = bc[CartesianIndex(i, j)]
+        for i in 1:j-2
+            @inbounds dest.data[i,j] = bc2[CartesianIndex(i, j)]
         end
+        if j > 1
+            @inbounds dest.data[j-1,j] = bc[BandIndex(1, j-1)]
+        end
+        @inbounds dest.data[j,j] = bc[BandIndex(0, j)]
     end
     return dest
 end
