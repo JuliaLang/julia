@@ -73,14 +73,19 @@ struct Conditional
     slot::Int
     thentype
     elsetype
-    function Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype))
+    # `isdefined` indicates this `Conditional` is from `@isdefined slot`, implying that
+    # the `undef` information of `slot` can be improved in the then branch.
+    # Since this is only beneficial for local inference, it is not translated into `InterConditional`.
+    isdefined::Bool
+    function Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype);
+                         isdefined::Bool=false)
         assert_nested_slotwrapper(thentype)
         assert_nested_slotwrapper(elsetype)
-        return new(slot, thentype, elsetype)
+        return new(slot, thentype, elsetype, isdefined)
     end
 end
-Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
-    Conditional(slot_id(var), thentype, elsetype)
+Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype); isdefined::Bool=false) =
+    Conditional(slot_id(var), thentype, elsetype; isdefined)
 
 import Core: InterConditional
 """
@@ -180,6 +185,7 @@ struct StateUpdate
     var::SlotNumber
     vtype::VarState
     conditional::Bool
+    StateUpdate(var::SlotNumber, vtype::VarState, conditional::Bool=false) = new(var, vtype, conditional)
 end
 
 """
@@ -305,11 +311,17 @@ end
 
 # `Conditional` and `InterConditional` are valid in opposite contexts
 # (i.e. local inference and inter-procedural call), as such they will never be compared
-@nospecializeinfer function issubconditional(lattice::AbstractLattice, a::C, b::C) where {C<:AnyConditional}
+@nospecializeinfer issubconditional(𝕃::AbstractLattice, a::Conditional, b::Conditional) =
+    _issubconditional(𝕃, a, b, #=check_isdefined=#true)
+@nospecializeinfer issubconditional(𝕃::AbstractLattice, a::InterConditional, b::InterConditional) =
+    _issubconditional(𝕃, a, b, #=check_isdefined=#false)
+@nospecializeinfer function _issubconditional(𝕃::AbstractLattice, a::C, b::C, check_isdefined::Bool) where C<:AnyConditional
     if is_same_conditionals(a, b)
-        if ⊑(lattice, a.thentype, b.thentype)
-            if ⊑(lattice, a.elsetype, b.elsetype)
-                return true
+        if ⊑(𝕃, a.thentype, b.thentype)
+            if ⊑(𝕃, a.elsetype, b.elsetype)
+                if !check_isdefined || a.isdefined ≥ b.isdefined
+                    return true
+                end
             end
         end
     end
