@@ -6412,13 +6412,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 bp = julia_binding_gv(ctx, bnd);
                 bp = julia_binding_pvalue(ctx, bp);
             }
-            else if (jl_is_slotnumber(mn) || jl_is_argument(mn)) {
-                // XXX: eval_methoddef does not have this code branch
-                int sl = jl_slot_number(mn)-1;
-                jl_varinfo_t &vi = ctx.slots[sl];
-                bp = vi.boxroot;
-                name = literal_pointer_val(ctx, (jl_value_t*)slot_symbol(ctx, sl));
-            }
             if (bp) {
                 Value *mdargs[] = { name, literal_pointer_val(ctx, (jl_value_t*)mod), bp, literal_pointer_val(ctx, bnd) };
                 jl_cgval_t gf = mark_julia_type(
