@@ -664,7 +664,7 @@ function diag(M::Tridiagonal{T}, n::Integer=0) where T
     elseif n == 1
         return copyto!(similar(M.du, length(M.du)), M.du)
     elseif abs(n) <= size(M,1)
-        v = similar(M.d, size(M,1)-absn)
+        v = similar(M.d, size(M,1)-abs(n))
         for i in eachindex(v)
             v[i] = M[BandIndex(n,i)]
         end
