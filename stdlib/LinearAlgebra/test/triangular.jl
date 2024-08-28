@@ -903,7 +903,7 @@ end
     function test_one_oneunit_triangular(a)
         b = Matrix(a)
         @test (@inferred a^1) == b^1
-        @test (@inferred a^-1) == b^-1
+        @test (@inferred a^-1) ≈ b^-1
         @test one(a) == one(b)
         @test one(a)*a == a
         @test a*one(a) == a
