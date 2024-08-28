@@ -753,7 +753,10 @@ function diag(D::Diagonal{T}, k::Integer=0) where T
     if k == 0
         return copyto!(similar(D.diag, length(D.diag)), D.diag)
     elseif -size(D,1) <= k <= size(D,1)
-        v = similar(D.diag, size(D,1)-abs(k))
+        # We compute the element type as zero(D[1,1]) if !haszero(T)
+        # This only works as we limit k to abs(k) <= size(D,1), instead of allowing arbitrary values
+        # The limit ensures that k>0 is allowed only if D has at least one element
+        v = similar(D.diag, typeof(_zero(D, 1, 1)), size(D,1)-abs(k))
         for i in eachindex(v)
             v[i] = D[BandIndex(k, i)]
         end
