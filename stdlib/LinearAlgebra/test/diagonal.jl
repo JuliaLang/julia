@@ -1312,4 +1312,9 @@ end
     end
 end
 
+@testset "bounds-check with CartesianIndex ranges" begin
+    D = Diagonal(1:typemax(Int))
+    @test checkbounds(Bool, D, diagind(D, IndexCartesian()))
+end
+
 end # module TestDiagonal
