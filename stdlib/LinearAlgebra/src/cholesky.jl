@@ -551,6 +551,9 @@ end
 # allow packages like SparseArrays.jl to hook into here and redirect to out-of-place `cholesky`
 _cholesky(A::AbstractMatrix, args...; kwargs...) = cholesky!(A, args...; kwargs...)
 
+# allow cholesky of cholesky
+cholesky(A::Cholesky) = A
+
 ## With pivoting
 """
     cholesky(A, RowMaximum(); tol = 0.0, check = true) -> CholeskyPivoted

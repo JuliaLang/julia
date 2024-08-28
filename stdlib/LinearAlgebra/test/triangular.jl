@@ -34,6 +34,12 @@ debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
 @test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
 
+struct MyTriangular{T, A<:LinearAlgebra.AbstractTriangular{T}} <: LinearAlgebra.AbstractTriangular{T}
+    data :: A
+end
+Base.size(A::MyTriangular) = size(A.data)
+Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
+
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 @testset for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
@@ -906,7 +912,7 @@ end
     function test_one_oneunit_triangular(a)
         b = Matrix(a)
         @test (@inferred a^1) == b^1
-        @test (@inferred a^-1) == b^-1
+        @test (@inferred a^-1) ≈ b^-1
         @test one(a) == one(b)
         @test one(a)*a == a
         @test a*one(a) == a
@@ -1216,6 +1222,34 @@ end
         V = eigvecs(U)
         λ = eigvals(U)
         @test MU * V ≈ V * Diagonal(λ)
+    end
+end
+
+@testset "(l/r)mul! and (l/r)div! for generic triangular" begin
+    @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        M = MyTriangular(T(rand(4,4)))
+        A = rand(4,4)
+        Ac = similar(A)
+        @testset "lmul!" begin
+            Ac .= A
+            lmul!(M, Ac)
+            @test Ac ≈ M * A
+        end
+        @testset "rmul!" begin
+            Ac .= A
+            rmul!(Ac, M)
+            @test Ac ≈ A * M
+        end
+        @testset "ldiv!" begin
+            Ac .= A
+            ldiv!(M, Ac)
+            @test Ac ≈ M \ A
+        end
+        @testset "rdiv!" begin
+            Ac .= A
+            rdiv!(Ac, M)
+            @test Ac ≈ A / M
+        end
     end
 end
 

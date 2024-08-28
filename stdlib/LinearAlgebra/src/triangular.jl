@@ -979,9 +979,20 @@ _trimul!(C::AbstractMatrix, A::UpperOrLowerTriangular, B::AbstractTriangular) =
 _trimul!(C::AbstractMatrix, A::AbstractTriangular, B::UpperOrLowerTriangular) =
     generic_mattrimul!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
 
-lmul!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _trimul!(B, A, B)
-rmul!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _trimul!(A, A, B)
-
+function lmul!(A::AbstractTriangular, B::AbstractVecOrMat)
+    if istriu(A)
+        _trimul!(B, UpperTriangular(A), B)
+    else
+        _trimul!(B, LowerTriangular(A), B)
+    end
+end
+function rmul!(A::AbstractMatrix, B::AbstractTriangular)
+    if istriu(B)
+        _trimul!(A, A, UpperTriangular(B))
+    else
+        _trimul!(A, A, LowerTriangular(B))
+    end
+end
 
 for TC in (:AbstractVector, :AbstractMatrix)
     @eval @inline function _mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
@@ -1017,8 +1028,20 @@ _ldiv!(C::AbstractVecOrMat, A::UpperOrLowerTriangular, B::AbstractVecOrMat) =
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperOrLowerTriangular) =
     generic_mattridiv!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
 
-ldiv!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _ldiv!(B, A, B)
-rdiv!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _rdiv!(A, A, B)
+function ldiv!(A::AbstractTriangular, B::AbstractVecOrMat)
+    if istriu(A)
+        _ldiv!(B, UpperTriangular(A), B)
+    else
+        _ldiv!(B, LowerTriangular(A), B)
+    end
+end
+function rdiv!(A::AbstractMatrix, B::AbstractTriangular)
+    if istriu(B)
+        _rdiv!(A, A, UpperTriangular(B))
+    else
+        _rdiv!(A, A, LowerTriangular(B))
+    end
+end
 
 # preserve triangular structure in in-place multiplication/division
 for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),

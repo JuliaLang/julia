@@ -267,6 +267,14 @@ versions of packages already installed as possible.
 !!! compat "Julia 1.9"
     This only affects Julia 1.9 and above.
 
+### [`JULIA_PKG_GC_AUTO`](@id JULIA_PKG_GC_AUTO)
+
+If set to `false`, automatic garbage collection of packages and artifacts will be disabled;
+see [`Pkg.gc`](https://pkgdocs.julialang.org/v1/api/#Pkg.gc) for more details.
+
+!!! compat "Julia 1.12"
+    This environment variable is only supported on Julia 1.12 and above.
+
 ## Network transport
 
 ### [`JULIA_NO_VERIFY_HOSTS`](@id JULIA_NO_VERIFY_HOSTS)

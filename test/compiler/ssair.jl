@@ -219,7 +219,7 @@ let code = Any[
     ]
     ir = make_ircode(code; verify=false)
     ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) == nothing
+    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # issue #37919
