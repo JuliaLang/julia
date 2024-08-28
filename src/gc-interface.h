@@ -128,6 +128,13 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 // Allocation
 // ========================================================================= //
 
+// On GCC, this function is inlined when sz is constant (see julia_internal.h)
+// In general, this function should implement allocation and should use the specific GC's logic
+// to decide whether to allocate a small or a large object. Finally, note that this function
+// **must** also set the type of the returning object to be `ty`. The type `ty` may also be used to record
+// an allocation of that type in the allocation profiler.
+struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
+
 // Allocates small objects and increments Julia allocation counterst. Size of the object
 // header must be included in the object size. The (possibly unused in some implementations)
 // offset to the arena in which we're allocating is passed in the second parameter, and the
@@ -210,6 +217,11 @@ JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align,
 // immortal region that is never swept. The second parameter specifies the type of the
 // object being allocated and will be used to set the object header.
 struct _jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT;
+
+// This function notifies the GC about memory addresses that are set when loading the boot image.
+// The GC may use that information to, for instance, determine that such objects should
+// be treated as marked and belonged to the old generation in nursery collections.
+void jl_gc_notify_image_load(const char* img_data, size_t len);
 
 // ========================================================================= //
 // Runtime Write-Barriers

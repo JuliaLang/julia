@@ -46,7 +46,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 }
 
 
-static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
     VirtualFree(stkbuf, 0, MEM_RELEASE);
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
@@ -81,7 +81,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
     return stk;
 }
 
-static void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
+void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT
 {
     munmap(stkbuf, bufsz);
     jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
