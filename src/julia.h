@@ -865,7 +865,7 @@ static inline jl_value_t *jl_to_typeof(uintptr_t t)
     return (jl_value_t*)t;
 }
 #else
-extern JL_HIDDEN jl_datatype_t *ijl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
+extern JL_DLLEXPORT jl_datatype_t *ijl_small_typeof[(jl_max_tags << 4) / sizeof(jl_datatype_t*)];
 static inline jl_value_t *jl_to_typeof(uintptr_t t)
 {
     if (t < (jl_max_tags << 4))

@@ -106,12 +106,6 @@ JL_EXTENSION typedef struct _bigval_t {
     // must be 64-byte aligned here, in 32 & 64 bit modes
 } bigval_t;
 
-// data structure for tracking malloc'd genericmemory.
-typedef struct _mallocmemory_t {
-    jl_genericmemory_t *a; // lowest bit is tagged if this is aligned memory
-    struct _mallocmemory_t *next;
-} mallocmemory_t;
-
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
     // next metadata structure in per-thread list
@@ -426,21 +420,6 @@ STATIC_INLINE int gc_ith_parallel_collector_thread_id(int i) JL_NOTSAFEPOINT
 {
     assert(i >= 0 && i < jl_n_markthreads);
     return gc_first_tid + i;
-}
-
-STATIC_INLINE int gc_is_parallel_collector_thread(int tid) JL_NOTSAFEPOINT
-{
-    return tid >= gc_first_tid && tid <= gc_last_parallel_collector_thread_id();
-}
-
-STATIC_INLINE int gc_is_concurrent_collector_thread(int tid) JL_NOTSAFEPOINT
-{
-    if (jl_n_sweepthreads == 0) {
-        return 0;
-    }
-    int last_parallel_collector_thread_id = gc_last_parallel_collector_thread_id();
-    int concurrent_collector_thread_id = last_parallel_collector_thread_id + 1;
-    return tid == concurrent_collector_thread_id;
 }
 
 STATIC_INLINE int gc_random_parallel_collector_thread_id(jl_ptls_t ptls) JL_NOTSAFEPOINT
