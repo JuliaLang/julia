@@ -919,7 +919,273 @@ _os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 #endif
 
 
-extern bt_context_t *jl_to_bt_context(void *sigctx);
+extern bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT;
+
+// Some notes: this simulates a longjmp call occurring in context `c`, as if the
+// user was to set the PC in `c` to call longjmp and the PC in the longjmp to
+// return here. This helps work around many cases where siglongjmp out of a
+// signal handler is not supported (e.g. missing a _sigunaltstack call).
+// Additionally note that this doesn't restore the MXCSR or FP control word
+// (which some, but not most longjmp implementations do).  It also doesn't
+// support shadow stacks, so if those are in use, you might need to use a direct
+// jl_longjmp instead to leave the signal frame instead of relying on simulating
+// it and attempting to return normally.
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
+{
+#if (defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
+    https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/hwasan/hwasan_interceptors.cpp
+    return 0;
+#elif defined(_OS_WINDOWS_)
+    _JUMP_BUFFER* _ctx = (_JUMP_BUFFER*)mctx;
+    #if defined(_CPU_X86_64_)
+    c->Rbx = _ctx->Rbx;
+    c->Rsp = _ctx->Rsp;
+    c->Rbp = _ctx->Rbp;
+    c->Rsi = _ctx->Rsi;
+    c->Rdi = _ctx->Rdi;
+    c->R12 = _ctx->R12;
+    c->R13 = _ctx->R13;
+    c->R14 = _ctx->R14;
+    c->R15 = _ctx->R15;
+    c->Rip = _ctx->Rip;
+    memcpy(&c->Xmm6, &_ctx->Xmm6, 10 * sizeof(_ctx->Xmm6)); // Xmm6-Xmm15
+    // c->MxCsr = _ctx->MxCsr;
+    // c->FloatSave.ControlWord = _ctx->FpCsr;
+    // c->SegGS[0] = _ctx->Frame;
+    c->Rax = 1;
+    c->Rsp += sizeof(void*);
+    assert(c->Rsp % 16 == 0);
+    return 1;
+    #elif defined(_CPU_X86_)
+    c->Ebp = _ctx->Ebp;
+    c->Ebx = _ctx->Ebx;
+    c->Edi = _ctx->Edi;
+    c->Esi = _ctx->Esi;
+    c->Esp = _ctx->Esp;
+    c->Eip = _ctx->Eip;
+    // c->SegFS[0] = _ctx->Registration;
+    // c->FloatSave.ControlWord = _ctx->FpCsr;
+    c->Eax = 1;
+    c->Esp += sizeof(void*);
+    assert(c->Esp % 16 == 0);
+    return 1;
+    #else
+    #error Windows is currently only supported on x86 and x86_64
+    #endif
+#elif defined(_OS_LINUX_) && defined(__GLIBC__)
+    __jmp_buf *_ctx = &mctx->__jmpbuf;
+    mcontext_t *mc = &c->uc_mcontext;
+    #if defined(_CPU_X86_)
+    // https://github.com/bminor/glibc/blame/master/sysdeps/i386/__longjmp.S
+    // https://github.com/bminor/glibc/blame/master/sysdeps/i386/jmpbuf-offsets.h
+    // https://github.com/bminor/musl/blame/master/src/setjmp/i386/longjmp.s
+    mc->gregs[REG_EBX] = (*_ctx)[0];
+    mc->gregs[REG_ESI] = (*_ctx)[1];
+    mc->gregs[REG_EDI] = (*_ctx)[2];
+    mc->gregs[REG_EBP] = (*_ctx)[3];
+    mc->gregs[REG_ESP] = (*_ctx)[4];
+    mc->gregs[REG_EIP] = (*_ctx)[5];
+    // ifdef PTR_DEMANGLE ?
+    mc->gregs[REG_ESP] = ptr_demangle(mc->gregs[REG_ESP]);
+    mc->gregs[REG_EIP] = ptr_demangle(mc->gregs[REG_EIP]);
+    mc->gregs[REG_EAX] = 1;
+    assert(mc->gregs[REG_ESP] % 16 == 0);
+    return 1;
+    #elif defined(_CPU_X86_64_)
+    // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/__longjmp.S
+    // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/jmpbuf-offsets.h
+    // https://github.com/bminor/musl/blame/master/src/setjmp/x86_64/setjmp.s
+    mc->gregs[REG_RBX] = (*_ctx)[0];
+    mc->gregs[REG_RBP] = (*_ctx)[1];
+    mc->gregs[REG_R12] = (*_ctx)[2];
+    mc->gregs[REG_R13] = (*_ctx)[3];
+    mc->gregs[REG_R14] = (*_ctx)[4];
+    mc->gregs[REG_R15] = (*_ctx)[5];
+    mc->gregs[REG_RSP] = (*_ctx)[6];
+    mc->gregs[REG_RIP] = (*_ctx)[7];
+    // ifdef PTR_DEMANGLE ?
+    mc->gregs[REG_RBP] = ptr_demangle(mc->gregs[REG_RBP]);
+    mc->gregs[REG_RSP] = ptr_demangle(mc->gregs[REG_RSP]);
+    mc->gregs[REG_RIP] = ptr_demangle(mc->gregs[REG_RIP]);
+    mc->gregs[REG_RAX] = 1;
+    assert(mc->gregs[REG_RSP] % 16 == 0);
+    return 1;
+    #elif defined(_CPU_ARM_)
+    // https://github.com/bminor/glibc/blame/master/sysdeps/arm/__longjmp.S
+    // https://github.com/bminor/glibc/blame/master/sysdeps/arm/include/bits/setjmp.h
+    // https://github.com/bminor/musl/blame/master/src/setjmp/arm/longjmp.S
+    mc->arm_sp = (*_ctx)[0];
+    mc->arm_lr = (*_ctx)[1];
+    mc->arm_r4 = (*_ctx)[2]; // aka v1
+    mc->arm_r5 = (*_ctx)[3]; // aka v2
+    mc->arm_r6 = (*_ctx)[4]; // aka v3
+    mc->arm_r7 = (*_ctx)[5]; // aka v4
+    mc->arm_r8 = (*_ctx)[6]; // aka v5
+    mc->arm_r9 = (*_ctx)[7]; // aka v6 aka sb
+    mc->arm_r10 = (*_ctx)[8]; // aka v7 aka sl
+    mc->arm_fp = (*_ctx)[10]; // aka v8 aka r11
+    // ifdef PTR_DEMANGLE ?
+    mc->arm_sp = ptr_demangle(mc->arm_sp);
+    mc->arm_lr = ptr_demangle(mc->arm_lr);
+    mc->arm_pc = mc->arm_lr;
+    mc->arm_r0 = 1;
+    assert(mc->arm_sp % 16 == 0);
+    return 1;
+    #elif defined(_CPU_AARCH64_)
+    // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/__longjmp.S
+    // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/jmpbuf-offsets.h
+    // https://github.com/bminor/musl/blame/master/src/setjmp/aarch64/longjmp.s
+    // https://github.com/libunwind/libunwind/blob/ec171c9ba7ea3abb2a1383cee2988a7abd483a1f/src/aarch64/unwind_i.h#L62
+    unw_fpsimd_context_t *mcfp = (unw_fpsimd_context_t*)&mc->__reserved;
+    mc->regs[19] = (*_ctx)[0];
+    mc->regs[20] = (*_ctx)[1];
+    mc->regs[21] = (*_ctx)[2];
+    mc->regs[22] = (*_ctx)[3];
+    mc->regs[23] = (*_ctx)[4];
+    mc->regs[24] = (*_ctx)[5];
+    mc->regs[25] = (*_ctx)[6];
+    mc->regs[26] = (*_ctx)[7];
+    mc->regs[27] = (*_ctx)[8];
+    mc->regs[28] = (*_ctx)[9];
+    mc->regs[29] = (*_ctx)[10]; // aka fp
+    mc->regs[30] = (*_ctx)[11]; // aka lr
+    // Yes, they did skip 12 why writing the code originally; and, no, I do not know why.
+    mc->sp = (*_ctx)[13];
+    mcfp->vregs[7] = (*_ctx)[14]; // aka d8
+    mcfp->vregs[8] = (*_ctx)[15]; // aka d9
+    mcfp->vregs[9] = (*_ctx)[16]; // aka d10
+    mcfp->vregs[10] = (*_ctx)[17]; // aka d11
+    mcfp->vregs[11] = (*_ctx)[18]; // aka d12
+    mcfp->vregs[12] = (*_ctx)[19]; // aka d13
+    mcfp->vregs[13] = (*_ctx)[20]; // aka d14
+    mcfp->vregs[14] = (*_ctx)[21]; // aka d15
+    // ifdef PTR_DEMANGLE ?
+    mc->sp = ptr_demangle(mc->sp);
+    mc->regs[30] = ptr_demangle(mc->regs[30]);
+    mc->pc = mc->regs[30];
+    mc->regs[0] = 1;
+    assert(mc->sp % 16 == 0);
+    return 1;
+    #else
+    #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown linux")
+    (void)mc;
+    (void)mctx;
+    return 0;
+    #endif
+#elif defined(_OS_DARWIN_)
+    #if defined(_CPU_X86_64_)
+    // from https://github.com/apple/darwin-libplatform/blob/main/src/setjmp/x86_64/_setjmp.s
+    x86_thread_state64_t *mc = (x86_thread_state64_t*)c;
+    mc->__rbx = ((uint64_t*)mctx)[0];
+    mc->__rbp = ((uint64_t*)mctx)[1];
+    mc->__rsp = ((uint64_t*)mctx)[2];
+    mc->__r12 = ((uint64_t*)mctx)[3];
+    mc->__r13 = ((uint64_t*)mctx)[4];
+    mc->__r14 = ((uint64_t*)mctx)[5];
+    mc->__r15 = ((uint64_t*)mctx)[6];
+    mc->__rip = ((uint64_t*)mctx)[7];
+    // added in libsystem_platform 177.200.16 (macOS Mojave 10.14.3)
+    // prior to that _os_ptr_munge_token was (hopefully) typically 0,
+    // so x ^ 0 == x and this is a no-op
+    mc->__rbp = _OS_PTR_UNMUNGE(mc->__rbp);
+    mc->__rsp = _OS_PTR_UNMUNGE(mc->__rsp);
+    mc->__rip = _OS_PTR_UNMUNGE(mc->__rip);
+    mc->__rax = 1;
+    assert(mc->__rsp % 16 == 0);
+    return 1;
+    #elif defined(_CPU_AARCH64_)
+    // from https://github.com/apple/darwin-libplatform/blob/main/src/setjmp/arm64/setjmp.s
+    // https://github.com/apple/darwin-xnu/blob/main/osfmk/mach/arm/_structs.h
+    // https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/libunwind/src/Registers.hpp -> Registers_arm64
+    arm_thread_state64_t *mc = (arm_thread_state64_t*)c;
+    mc->__x[19] = ((uint64_t*)mctx)[0];
+    mc->__x[20] = ((uint64_t*)mctx)[1];
+    mc->__x[21] = ((uint64_t*)mctx)[2];
+    mc->__x[22] = ((uint64_t*)mctx)[3];
+    mc->__x[23] = ((uint64_t*)mctx)[4];
+    mc->__x[24] = ((uint64_t*)mctx)[5];
+    mc->__x[25] = ((uint64_t*)mctx)[6];
+    mc->__x[26] = ((uint64_t*)mctx)[7];
+    mc->__x[27] = ((uint64_t*)mctx)[8];
+    mc->__x[28] = ((uint64_t*)mctx)[9];
+    mc->__x[10] = ((uint64_t*)mctx)[10];
+    mc->__x[11] = ((uint64_t*)mctx)[11];
+    mc->__x[12] = ((uint64_t*)mctx)[12];
+    // 13 is reserved/unused
+    double *mcfp = (double*)&mc[1];
+    mcfp[7] = ((uint64_t*)mctx)[14]; // aka d8
+    mcfp[8] = ((uint64_t*)mctx)[15]; // aka d9
+    mcfp[9] = ((uint64_t*)mctx)[16]; // aka d10
+    mcfp[10] = ((uint64_t*)mctx)[17]; // aka d11
+    mcfp[11] = ((uint64_t*)mctx)[18]; // aka d12
+    mcfp[12] = ((uint64_t*)mctx)[19]; // aka d13
+    mcfp[13] = ((uint64_t*)mctx)[20]; // aka d14
+    mcfp[14] = ((uint64_t*)mctx)[21]; // aka d15
+    mc->__fp = _OS_PTR_UNMUNGE(mc->__x[10]);
+    mc->__lr = _OS_PTR_UNMUNGE(mc->__x[11]);
+    mc->__x[12] = _OS_PTR_UNMUNGE(mc->__x[12]);
+    mc->__sp = mc->__x[12];
+    // libunwind is broken for signed-pointers, but perhaps best not to leave the signed pointer lying around either
+    mc->__pc = ptrauth_strip(mc->__lr, 0);
+    mc->__pad = 0; // aka __ra_sign_state = not signed
+    mc->__x[0] = 1;
+    assert(mc->__sp % 16 == 0);
+    return 1;
+    #else
+    #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown darwin")
+    (void)mctx;
+    return 0;
+#endif
+#elif defined(_OS_FREEBSD_)
+    mcontext_t *mc = &c->uc_mcontext;
+    #if defined(_CPU_X86_64_)
+    // https://github.com/freebsd/freebsd-src/blob/releng/13.1/lib/libc/amd64/gen/_setjmp.S
+    mc->mc_rip = ((long*)mctx)[0];
+    mc->mc_rbx = ((long*)mctx)[1];
+    mc->mc_rsp = ((long*)mctx)[2];
+    mc->mc_rbp = ((long*)mctx)[3];
+    mc->mc_r12 = ((long*)mctx)[4];
+    mc->mc_r13 = ((long*)mctx)[5];
+    mc->mc_r14 = ((long*)mctx)[6];
+    mc->mc_r15 = ((long*)mctx)[7];
+    mc->mc_rax = 1;
+    mc->mc_rsp += sizeof(void*);
+    assert(mc->mc_rsp % 16 == 0);
+    return 1;
+    #elif defined(_CPU_AARCH64_)
+    mc->mc_gpregs.gp_x[19] = ((long*)mctx)[0];
+    mc->mc_gpregs.gp_x[20] = ((long*)mctx)[1];
+    mc->mc_gpregs.gp_x[21] = ((long*)mctx)[2];
+    mc->mc_gpregs.gp_x[22] = ((long*)mctx)[3];
+    mc->mc_gpregs.gp_x[23] = ((long*)mctx)[4];
+    mc->mc_gpregs.gp_x[24] = ((long*)mctx)[5];
+    mc->mc_gpregs.gp_x[25] = ((long*)mctx)[6];
+    mc->mc_gpregs.gp_x[26] = ((long*)mctx)[7];
+    mc->mc_gpregs.gp_x[27] = ((long*)mctx)[8];
+    mc->mc_gpregs.gp_x[28] = ((long*)mctx)[9];
+    mc->mc_gpregs.gp_x[29] = ((long*)mctx)[10];
+    mc->mc_gpregs.gp_lr = ((long*)mctx)[11];
+    mc->mc_gpregs.gp_sp = ((long*)mctx)[12];
+    mc->mc_fpregs.fp_q[7] = ((long*)mctx)[13];
+    mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14];
+    mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15];
+    mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16];
+    mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17];
+    mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18];
+    mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19];
+    mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20];
+    mc->mc_gpregs.gp_x[0] = 1;
+    assert(mc->mc_gpregs.gp_sp % 16 == 0);
+    return 1;
+    #else
+    #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown freebsd")
+    (void)mctx;
+    return 0;
+    #endif
+#else
+return 0;
+#endif
+}
 
 JL_DLLEXPORT size_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
 {
@@ -955,234 +1221,19 @@ JL_DLLEXPORT size_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, 
     }
     if (context == NULL && (!t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL)) {
         // need to read the context from the task stored state
+        jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
 #if defined(_OS_WINDOWS_)
         memset(&c, 0, sizeof(c));
-        _JUMP_BUFFER *mctx = (_JUMP_BUFFER*)&t->ctx.ctx->uc_mcontext;
-#if defined(_CPU_X86_64_)
-        c.Rbx = mctx->Rbx;
-        c.Rsp = mctx->Rsp;
-        c.Rbp = mctx->Rbp;
-        c.Rsi = mctx->Rsi;
-        c.Rdi = mctx->Rdi;
-        c.R12 = mctx->R12;
-        c.R13 = mctx->R13;
-        c.R14 = mctx->R14;
-        c.R15 = mctx->R15;
-        c.Rip = mctx->Rip;
-        memcpy(&c.Xmm6, &mctx->Xmm6, 10 * sizeof(mctx->Xmm6)); // Xmm6-Xmm15
-#elif defined(_CPU_X86_)
-        c.Eip = mctx->Eip;
-        c.Esp = mctx->Esp;
-        c.Ebp = mctx->Ebp;
-#else
-        #error Windows is currently only supported on x86 and x86_64
-#endif
-        context = &c;
+        if (jl_simulate_longjmp(*mctx, &c))
+            context = &c;
 #elif defined(JL_HAVE_UNW_CONTEXT)
         context = t->ctx.ctx;
 #elif defined(JL_HAVE_UCONTEXT)
         context = jl_to_bt_context(t->ctx.ctx);
 #elif defined(JL_HAVE_ASM)
         memset(&c, 0, sizeof(c));
-     #if defined(_OS_LINUX_) && defined(__GLIBC__)
-        __jmp_buf *mctx = &t->ctx.ctx->uc_mcontext->__jmpbuf;
-        mcontext_t *mc = &c.uc_mcontext;
-      #if defined(_CPU_X86_)
-        // https://github.com/bminor/glibc/blame/master/sysdeps/i386/__longjmp.S
-        // https://github.com/bminor/glibc/blame/master/sysdeps/i386/jmpbuf-offsets.h
-        // https://github.com/bminor/musl/blame/master/src/setjmp/i386/longjmp.s
-        mc->gregs[REG_EBX] = (*mctx)[0];
-        mc->gregs[REG_ESI] = (*mctx)[1];
-        mc->gregs[REG_EDI] = (*mctx)[2];
-        mc->gregs[REG_EBP] = (*mctx)[3];
-        mc->gregs[REG_ESP] = (*mctx)[4];
-        mc->gregs[REG_EIP] = (*mctx)[5];
-        // ifdef PTR_DEMANGLE ?
-        mc->gregs[REG_ESP] = ptr_demangle(mc->gregs[REG_ESP]);
-        mc->gregs[REG_EIP] = ptr_demangle(mc->gregs[REG_EIP]);
-        context = &c;
-      #elif defined(_CPU_X86_64_)
-        // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/__longjmp.S
-        // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/jmpbuf-offsets.h
-        // https://github.com/bminor/musl/blame/master/src/setjmp/x86_64/setjmp.s
-        mc->gregs[REG_RBX] = (*mctx)[0];
-        mc->gregs[REG_RBP] = (*mctx)[1];
-        mc->gregs[REG_R12] = (*mctx)[2];
-        mc->gregs[REG_R13] = (*mctx)[3];
-        mc->gregs[REG_R14] = (*mctx)[4];
-        mc->gregs[REG_R15] = (*mctx)[5];
-        mc->gregs[REG_RSP] = (*mctx)[6];
-        mc->gregs[REG_RIP] = (*mctx)[7];
-        // ifdef PTR_DEMANGLE ?
-        mc->gregs[REG_RBP] = ptr_demangle(mc->gregs[REG_RBP]);
-        mc->gregs[REG_RSP] = ptr_demangle(mc->gregs[REG_RSP]);
-        mc->gregs[REG_RIP] = ptr_demangle(mc->gregs[REG_RIP]);
-        context = &c;
-      #elif defined(_CPU_ARM_)
-        // https://github.com/bminor/glibc/blame/master/sysdeps/arm/__longjmp.S
-        // https://github.com/bminor/glibc/blame/master/sysdeps/arm/include/bits/setjmp.h
-        // https://github.com/bminor/musl/blame/master/src/setjmp/arm/longjmp.S
-        mc->arm_sp = (*mctx)[0];
-        mc->arm_lr = (*mctx)[1];
-        mc->arm_r4 = (*mctx)[2]; // aka v1
-        mc->arm_r5 = (*mctx)[3]; // aka v2
-        mc->arm_r6 = (*mctx)[4]; // aka v3
-        mc->arm_r7 = (*mctx)[5]; // aka v4
-        mc->arm_r8 = (*mctx)[6]; // aka v5
-        mc->arm_r9 = (*mctx)[7]; // aka v6 aka sb
-        mc->arm_r10 = (*mctx)[8]; // aka v7 aka sl
-        mc->arm_fp = (*mctx)[10]; // aka v8 aka r11
-        // ifdef PTR_DEMANGLE ?
-        mc->arm_sp = ptr_demangle(mc->arm_sp);
-        mc->arm_lr = ptr_demangle(mc->arm_lr);
-        mc->arm_pc = mc->arm_lr;
-        context = &c;
-      #elif defined(_CPU_AARCH64_)
-        // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/__longjmp.S
-        // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/jmpbuf-offsets.h
-        // https://github.com/bminor/musl/blame/master/src/setjmp/aarch64/longjmp.s
-        // https://github.com/libunwind/libunwind/blob/ec171c9ba7ea3abb2a1383cee2988a7abd483a1f/src/aarch64/unwind_i.h#L62
-        unw_fpsimd_context_t *mcfp = (unw_fpsimd_context_t*)&mc->__reserved;
-        mc->regs[19] = (*mctx)[0];
-        mc->regs[20] = (*mctx)[1];
-        mc->regs[21] = (*mctx)[2];
-        mc->regs[22] = (*mctx)[3];
-        mc->regs[23] = (*mctx)[4];
-        mc->regs[24] = (*mctx)[5];
-        mc->regs[25] = (*mctx)[6];
-        mc->regs[26] = (*mctx)[7];
-        mc->regs[27] = (*mctx)[8];
-        mc->regs[28] = (*mctx)[9];
-        mc->regs[29] = (*mctx)[10]; // aka fp
-        mc->regs[30] = (*mctx)[11]; // aka lr
-        // Yes, they did skip 12 why writing the code originally; and, no, I do not know why.
-        mc->sp = (*mctx)[13];
-        mcfp->vregs[7] = (*mctx)[14]; // aka d8
-        mcfp->vregs[8] = (*mctx)[15]; // aka d9
-        mcfp->vregs[9] = (*mctx)[16]; // aka d10
-        mcfp->vregs[10] = (*mctx)[17]; // aka d11
-        mcfp->vregs[11] = (*mctx)[18]; // aka d12
-        mcfp->vregs[12] = (*mctx)[19]; // aka d13
-        mcfp->vregs[13] = (*mctx)[20]; // aka d14
-        mcfp->vregs[14] = (*mctx)[21]; // aka d15
-        // ifdef PTR_DEMANGLE ?
-        mc->sp = ptr_demangle(mc->sp);
-        mc->regs[30] = ptr_demangle(mc->regs[30]);
-        mc->pc = mc->regs[30];
-        context = &c;
-      #else
-       #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown linux")
-       (void)mc;
-       (void)c;
-       (void)mctx;
-      #endif
-     #elif defined(_OS_DARWIN_)
-        sigjmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
-      #if defined(_CPU_X86_64_)
-        // from https://github.com/apple/darwin-libplatform/blob/main/src/setjmp/x86_64/_setjmp.s
-        x86_thread_state64_t *mc = (x86_thread_state64_t*)&c;
-        mc->__rbx = ((uint64_t*)mctx)[0];
-        mc->__rbp = ((uint64_t*)mctx)[1];
-        mc->__rsp = ((uint64_t*)mctx)[2];
-        mc->__r12 = ((uint64_t*)mctx)[3];
-        mc->__r13 = ((uint64_t*)mctx)[4];
-        mc->__r14 = ((uint64_t*)mctx)[5];
-        mc->__r15 = ((uint64_t*)mctx)[6];
-        mc->__rip = ((uint64_t*)mctx)[7];
-        // added in libsystem_platform 177.200.16 (macOS Mojave 10.14.3)
-        // prior to that _os_ptr_munge_token was (hopefully) typically 0,
-        // so x ^ 0 == x and this is a no-op
-        mc->__rbp = _OS_PTR_UNMUNGE(mc->__rbp);
-        mc->__rsp = _OS_PTR_UNMUNGE(mc->__rsp);
-        mc->__rip = _OS_PTR_UNMUNGE(mc->__rip);
-        context = &c;
-      #elif defined(_CPU_AARCH64_)
-        // from https://github.com/apple/darwin-libplatform/blob/main/src/setjmp/arm64/setjmp.s
-        // https://github.com/apple/darwin-xnu/blob/main/osfmk/mach/arm/_structs.h
-        // https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/libunwind/src/Registers.hpp -> Registers_arm64
-        arm_thread_state64_t *mc = (arm_thread_state64_t*)&c;
-        mc->__x[19] = ((uint64_t*)mctx)[0];
-        mc->__x[20] = ((uint64_t*)mctx)[1];
-        mc->__x[21] = ((uint64_t*)mctx)[2];
-        mc->__x[22] = ((uint64_t*)mctx)[3];
-        mc->__x[23] = ((uint64_t*)mctx)[4];
-        mc->__x[24] = ((uint64_t*)mctx)[5];
-        mc->__x[25] = ((uint64_t*)mctx)[6];
-        mc->__x[26] = ((uint64_t*)mctx)[7];
-        mc->__x[27] = ((uint64_t*)mctx)[8];
-        mc->__x[28] = ((uint64_t*)mctx)[9];
-        mc->__x[10] = ((uint64_t*)mctx)[10];
-        mc->__x[11] = ((uint64_t*)mctx)[11];
-        mc->__x[12] = ((uint64_t*)mctx)[12];
-        // 13 is reserved/unused
-        double *mcfp = (double*)&mc[1];
-        mcfp[7] = ((uint64_t*)mctx)[14]; // aka d8
-        mcfp[8] = ((uint64_t*)mctx)[15]; // aka d9
-        mcfp[9] = ((uint64_t*)mctx)[16]; // aka d10
-        mcfp[10] = ((uint64_t*)mctx)[17]; // aka d11
-        mcfp[11] = ((uint64_t*)mctx)[18]; // aka d12
-        mcfp[12] = ((uint64_t*)mctx)[19]; // aka d13
-        mcfp[13] = ((uint64_t*)mctx)[20]; // aka d14
-        mcfp[14] = ((uint64_t*)mctx)[21]; // aka d15
-        mc->__fp = _OS_PTR_UNMUNGE(mc->__x[10]);
-        mc->__lr = _OS_PTR_UNMUNGE(mc->__x[11]);
-        mc->__x[12] = _OS_PTR_UNMUNGE(mc->__x[12]);
-        mc->__sp = mc->__x[12];
-        // libunwind is broken for signed-pointers, but perhaps best not to leave the signed pointer lying around either
-        mc->__pc = ptrauth_strip(mc->__lr, 0);
-        mc->__pad = 0; // aka __ra_sign_state = not signed
-        context = &c;
-      #else
-       #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown darwin")
-        (void)mctx;
-        (void)c;
-      #endif
-     #elif defined(_OS_FREEBSD_)
-        sigjmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
-        mcontext_t *mc = &c.uc_mcontext;
-      #if defined(_CPU_X86_64_)
-        // https://github.com/freebsd/freebsd-src/blob/releng/13.1/lib/libc/amd64/gen/_setjmp.S
-        mc->mc_rip = ((long*)mctx)[0];
-        mc->mc_rbx = ((long*)mctx)[1];
-        mc->mc_rsp = ((long*)mctx)[2];
-        mc->mc_rbp = ((long*)mctx)[3];
-        mc->mc_r12 = ((long*)mctx)[4];
-        mc->mc_r13 = ((long*)mctx)[5];
-        mc->mc_r14 = ((long*)mctx)[6];
-        mc->mc_r15 = ((long*)mctx)[7];
-        context = &c;
-      #elif defined(_CPU_AARCH64_)
-        mc->mc_gpregs.gp_x[19] = ((long*)mctx)[0];
-        mc->mc_gpregs.gp_x[20] = ((long*)mctx)[1];
-        mc->mc_gpregs.gp_x[21] = ((long*)mctx)[2];
-        mc->mc_gpregs.gp_x[22] = ((long*)mctx)[3];
-        mc->mc_gpregs.gp_x[23] = ((long*)mctx)[4];
-        mc->mc_gpregs.gp_x[24] = ((long*)mctx)[5];
-        mc->mc_gpregs.gp_x[25] = ((long*)mctx)[6];
-        mc->mc_gpregs.gp_x[26] = ((long*)mctx)[7];
-        mc->mc_gpregs.gp_x[27] = ((long*)mctx)[8];
-        mc->mc_gpregs.gp_x[28] = ((long*)mctx)[9];
-        mc->mc_gpregs.gp_x[29] = ((long*)mctx)[10];
-        mc->mc_gpregs.gp_lr = ((long*)mctx)[11];
-        mc->mc_gpregs.gp_sp = ((long*)mctx)[12];
-        mc->mc_fpregs.fp_q[7] = ((long*)mctx)[13];
-        mc->mc_fpregs.fp_q[8] = ((long*)mctx)[14];
-        mc->mc_fpregs.fp_q[9] = ((long*)mctx)[15];
-        mc->mc_fpregs.fp_q[10] = ((long*)mctx)[16];
-        mc->mc_fpregs.fp_q[11] = ((long*)mctx)[17];
-        mc->mc_fpregs.fp_q[12] = ((long*)mctx)[18];
-        mc->mc_fpregs.fp_q[13] = ((long*)mctx)[19];
-        mc->mc_fpregs.fp_q[14] = ((long*)mctx)[20];
-        context = &c;
-      #else
-       #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown freebsd")
-        (void)mctx;
-        (void)c;
-      #endif
-     #else
-      #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown system")
-      (void)c;
-     #endif
+        if (jl_simulate_longjmp(*mctx, &c))
+            context = &c;
 #else
      #pragma message("jl_record_backtrace not defined for unknown task system")
 #endif
