@@ -6050,6 +6050,18 @@ end |> Core.Compiler.is_nothrow
     return nothing
 end |> Core.Compiler.is_nothrow
 
+# refine `undef` information from `@isdefined` check
+@test Base.infer_effects((Bool,Int)) do c, x
+    local val
+    if c
+        val = x
+    end
+    if @isdefined val
+        return val
+    end
+    return zero(Int)
+end |> Core.Compiler.is_nothrow
+
 # End to end test case for the partially initialized struct with `PartialStruct`
 @noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
 @test fully_eliminated() do
