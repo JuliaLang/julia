@@ -102,7 +102,7 @@ function Base.popfirst!(q::WSQueue{T}) where T
 
     top = @atomic :monotonic q.top
 
-    size = bottom - top
+    size = bottom - top + 1
     if __likely(size > 0)
         # Non-empty queue
         v = @atomic :monotonic buffer[bottom]
@@ -132,7 +132,7 @@ function steal!(q::WSQueue{T}) where T
         # Non-empty queue
         buffer = @atomic :acquire q.buffer # consume in Le
         v = @atomic :monotonic buffer[top]
-        _, success = @atomicreplace :sequentially_consistent :monotonic q.top top => top+1
+        _, success = @atomicreplace :sequentially_consistent :monotonic q.top top => top + 1
         if !success
             # Failed race
             return nothing
