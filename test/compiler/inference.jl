@@ -6051,7 +6051,7 @@ end |> Core.Compiler.is_nothrow
 end |> Core.Compiler.is_nothrow
 
 # refine `undef` information from `@isdefined` check
-@test Base.infer_effects((Bool,Int)) do c, x
+function isdefined_nothrow(c, x)
     local val
     if c
         val = x
@@ -6060,7 +6060,11 @@ end |> Core.Compiler.is_nothrow
         return val
     end
     return zero(Int)
-end |> Core.Compiler.is_nothrow
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(isdefined_nothrow, (Bool,Int)))
+@test !any(first(only(code_typed(isdefined_nothrow, (Bool,Int)))).code) do @nospecialize x
+    Meta.isexpr(x, :throw_undef_if_not)
+end
 
 # End to end test case for the partially initialized struct with `PartialStruct`
 @noinline broadcast_noescape1(a) = (broadcast(identity, a); nothing)
