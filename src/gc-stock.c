@@ -9,7 +9,6 @@
 #include "julia_atomics.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
-#include "jloptions.h"
 #ifdef __GLIBC__
 #include <malloc.h> // for malloc_trim
 #endif

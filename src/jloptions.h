@@ -64,6 +64,4 @@ typedef struct {
     int8_t trace_compile_timing;
 } jl_options_t;
 
-uint64_t parse_heap_size_hint(const char *optarg, const char *option_name);
-
 #endif
