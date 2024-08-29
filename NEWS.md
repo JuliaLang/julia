@@ -236,6 +236,9 @@ New library features
 Standard library changes
 ------------------------
 
+* Empty dimensional reductions (e.g., `reduce` and `mapreduce` with the `dims` keyword
+  selecting one or more dimensions) now behave like their whole-array (`dims=:`) counterparts,
+  only returning values in unambiguous cases and erroring otherwise.
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 * `isspace` now returns `true` for U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR),

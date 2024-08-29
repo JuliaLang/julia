@@ -348,8 +348,10 @@ _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
     mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims::D) where {D} =
+function _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims::D) where {D}
+    isempty(A) && return fill(mapreduce_empty(f, op, eltype(A)), reduced_indices(A, dims))
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+end
 
 _mapreduce_dim(f, op, nt, R::ReshapedArray, ::Colon) =
     _mapreduce_dim(f, op, nt, parent(R), :)
@@ -1141,10 +1143,7 @@ findmin(f, A::AbstractArray; dims::D=:) where {D} = _findmin(f, A, dims)
 function _findmin(f, A, region::D) where {D}
     ri = reduced_indices0(A, region)
     if isempty(A)
-        if prod(map(length, reduced_indices(A, region))) != 0
-            throw(ArgumentError("collection slices must be non-empty"))
-        end
-        similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
+        _empty_reduce_error()
     else
         fA = f(first(A))
         findminmax!(f, isgreater, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
@@ -1214,10 +1213,7 @@ findmax(f, A::AbstractArray; dims::D=:) where {D} = _findmax(f, A, dims)
 function _findmax(f, A, region::D) where {D}
     ri = reduced_indices0(A, region)
     if isempty(A)
-        if prod(map(length, reduced_indices(A, region))) != 0
-            throw(ArgumentError("collection slices must be non-empty"))
-        end
-        similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
+        _empty_reduce_error()
     else
         fA = f(first(A))
         findminmax!(f, isless, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
