@@ -3,7 +3,7 @@
 module CoreLogging
 
 import Base: isless, +, -, convert, show
-import Base: ScopedValue, with, @with
+import Base.ScopedValues: ScopedValue, with, @with
 
 export
     AbstractLogger,

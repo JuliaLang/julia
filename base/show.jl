@@ -514,24 +514,16 @@ function _show_default(io::IO, @nospecialize(x))
 end
 
 function active_module()
-    REPL = REPL_MODULE_REF[]
-    REPL === Base && return Main
-    return invokelatest(REPL.active_module)::Module
+    if ccall(:jl_is_in_pure_context, Bool, ())
+        error("active_module() should not be called from a pure context")
+    end
+    if !@isdefined(active_repl) || active_repl === nothing
+        return Main
+    end
+    return invokelatest(active_module, active_repl)::Module
 end
 
-# Check if a particular symbol is exported from a standard library module
-function is_exported_from_stdlib(name::Symbol, mod::Module)
-    !isdefined(mod, name) && return false
-    orig = getfield(mod, name)
-    while !(mod === Base || mod === Core)
-        activemod = active_module()
-        parent = parentmodule(mod)
-        if mod === activemod || mod === parent || parent === activemod
-            return false
-        end
-        mod = parent
-    end
-    return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
+module UsesCoreAndBaseOnly
 end
 
 function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
@@ -544,13 +536,13 @@ function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
         print(io, mt.name)
     elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
-        mod = active_module()
-        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === mod
-            show_sym(io, mt.name)
-        else
+        # this used to call the removed internal function `is_exported_from_stdlib`, which effectively
+        # just checked for exports from Core and Base.
+        mod = get(io, :module, UsesCoreAndBaseOnly)
+        if !(isvisible(mt.name, mt.module, mod) || mt.module === mod)
             print(io, mt.module, ".")
-            show_sym(io, mt.name)
         end
+        show_sym(io, mt.name)
     else
         fallback(io, f)
     end
@@ -737,9 +729,9 @@ end
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
-        # IOContext. If :module is not set, default to Main (or current active module).
+        # IOContext. If :module is not set, default to Main.
         # nothing can be used to force printing prefix.
-        from = get(io, :module, active_module())
+        from = get(io, :module, Main)
         if (from === nothing || !isvisible(name.name, name.mod, from))
             show(io, name.mod)
             print(io, ".")
@@ -1053,9 +1045,9 @@ function show_type_name(io::IO, tn::Core.TypeName)
     quo = false
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless type is visible from module passed to
-        # IOContext If :module is not set, default to Main (or current active module).
+        # IOContext If :module is not set, default to Main.
         # nothing can be used to force printing prefix
-        from = get(io, :module, active_module())
+        from = get(io, :module, Main)
         if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from::Module))
             show(io, tn.module)
             print(io, ".")
@@ -2535,7 +2527,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     uw = unwrap_unionall(ft)
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) && _isself(uw)
         uwmod = parentmodule(uw)
-        if qualified && !is_exported_from_stdlib(uw.name.mt.name, uwmod) && uwmod !== Main
+        if qualified && !isexported(uwmod, uw.name.mt.name) && uwmod !== Main
             print_within_stacktrace(io, uwmod, '.', bold=true)
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)

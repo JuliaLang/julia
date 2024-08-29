@@ -6,17 +6,42 @@
 
 # N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
 # inside the global code cache.
-#
-# # The type of a value might be constant
-# struct Const
-#     val
-# end
-#
-# struct PartialStruct
-#     typ
-#     fields::Vector{Any} # elements are other type lattice members
-# end
+
 import Core: Const, PartialStruct
+
+"""
+    struct Const
+        val
+    end
+
+The type representing a constant value.
+"""
+:(Const)
+
+"""
+    struct PartialStruct
+        typ
+        fields::Vector{Any} # elements are other type lattice members
+    end
+
+This extended lattice element is introduced when we have information about an object's
+fields beyond what can be obtained from the object type. E.g. it represents a tuple where
+some elements are known to be constants or a struct whose `Any`-typed field is initialized
+with `Int` values.
+
+- `typ` indicates the type of the object
+- `fields` holds the lattice elements corresponding to each field of the object
+
+If `typ` is a struct, `fields` represents the fields of the struct that are guaranteed to be
+initialized. For instance, if the length of `fields` of `PartialStruct` representing a
+struct with 4 fields is 3, the 4th field may not be initialized. If the length is 4, all
+fields are guaranteed to be initialized.
+
+If `typ` is a tuple, the last element of `fields` may be `Vararg`. In this case, it is
+guaranteed that the number of elements in the tuple is at least `length(fields)-1`, but the
+exact number of elements is unknown.
+"""
+:(PartialStruct)
 function PartialStruct(@nospecialize(typ), fields::Vector{Any})
     for i = 1:length(fields)
         assert_nested_slotwrapper(fields[i])
@@ -48,17 +73,27 @@ struct Conditional
     slot::Int
     thentype
     elsetype
-    function Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype))
+    # `isdefined` indicates this `Conditional` is from `@isdefined slot`, implying that
+    # the `undef` information of `slot` can be improved in the then branch.
+    # Since this is only beneficial for local inference, it is not translated into `InterConditional`.
+    isdefined::Bool
+    function Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype);
+                         isdefined::Bool=false)
         assert_nested_slotwrapper(thentype)
         assert_nested_slotwrapper(elsetype)
-        return new(slot, thentype, elsetype)
+        return new(slot, thentype, elsetype, isdefined)
     end
 end
-Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
-    Conditional(slot_id(var), thentype, elsetype)
+Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype); isdefined::Bool=false) =
+    Conditional(slot_id(var), thentype, elsetype; isdefined)
 
+import Core: InterConditional
 """
-    cnd::InterConditional
+    struct InterConditional
+        slot::Int
+        thentype
+        elsetype
+    end
 
 Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
 This is separate from `Conditional` to catch logic errors: the lattice element name is `InterConditional`
@@ -66,14 +101,6 @@ while processing a call, then `Conditional` everywhere else. Thus `InterConditio
 `CompilerTypes`—these type's usages are disjoint—though we define the lattice for `InterConditional`.
 """
 :(InterConditional)
-import Core: InterConditional
-# struct InterConditional
-#     slot::Int
-#     thentype
-#     elsetype
-#     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) =
-#         new(slot, thentype, elsetype)
-# end
 InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     InterConditional(slot_id(var), thentype, elsetype)
 
@@ -120,8 +147,6 @@ end
 MustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
     MustAlias(slot_id(var), vartyp, fldidx, fldtyp)
 
-_uniontypes(x::MustAlias, ts) = _uniontypes(widenconst(x), ts)
-
 """
     alias::InterMustAlias
 
@@ -160,6 +185,7 @@ struct StateUpdate
     var::SlotNumber
     vtype::VarState
     conditional::Bool
+    StateUpdate(var::SlotNumber, vtype::VarState, conditional::Bool=false) = new(var, vtype, conditional)
 end
 
 """
@@ -285,11 +311,17 @@ end
 
 # `Conditional` and `InterConditional` are valid in opposite contexts
 # (i.e. local inference and inter-procedural call), as such they will never be compared
-@nospecializeinfer function issubconditional(lattice::AbstractLattice, a::C, b::C) where {C<:AnyConditional}
+@nospecializeinfer issubconditional(𝕃::AbstractLattice, a::Conditional, b::Conditional) =
+    _issubconditional(𝕃, a, b, #=check_isdefined=#true)
+@nospecializeinfer issubconditional(𝕃::AbstractLattice, a::InterConditional, b::InterConditional) =
+    _issubconditional(𝕃, a, b, #=check_isdefined=#false)
+@nospecializeinfer function _issubconditional(𝕃::AbstractLattice, a::C, b::C, check_isdefined::Bool) where C<:AnyConditional
     if is_same_conditionals(a, b)
-        if ⊑(lattice, a.thentype, b.thentype)
-            if ⊑(lattice, a.elsetype, b.elsetype)
-                return true
+        if ⊑(𝕃, a.thentype, b.thentype)
+            if ⊑(𝕃, a.elsetype, b.elsetype)
+                if !check_isdefined || a.isdefined ≥ b.isdefined
+                    return true
+                end
             end
         end
     end
@@ -447,8 +479,13 @@ end
 @nospecializeinfer function ⊑(lattice::PartialsLattice, @nospecialize(a), @nospecialize(b))
     if isa(a, PartialStruct)
         if isa(b, PartialStruct)
-            if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
-                return false
+            a.typ <: b.typ || return false
+            if length(a.fields) ≠ length(b.fields)
+                if !(isvarargtype(a.fields[end]) || isvarargtype(b.fields[end]))
+                    length(a.fields) ≥ length(b.fields) || return false
+                else
+                    return false
+                end
             end
             for i in 1:length(b.fields)
                 af = a.fields[i]
@@ -471,19 +508,25 @@ end
         return isa(b, Type) && a.typ <: b
     elseif isa(b, PartialStruct)
         if isa(a, Const)
-            nf = nfields(a.val)
-            nf == length(b.fields) || return false
             widea = widenconst(a)::DataType
             wideb = widenconst(b)
             wideb′ = unwrap_unionall(wideb)::DataType
             widea.name === wideb′.name || return false
-            # We can skip the subtype check if b is a Tuple, since in that
-            # case, the ⊑ of the elements is sufficient.
-            if wideb′.name !== Tuple.name && !(widea <: wideb)
-                return false
+            if wideb′.name === Tuple.name
+                # We can skip the subtype check if b is a Tuple, since in that
+                # case, the ⊑ of the elements is sufficient.
+                # But for tuple comparisons, we need their lengths to be the same for now.
+                # TODO improve accuracy for cases when `b` contains vararg element
+                nfields(a.val) == length(b.fields) || return false
+            else
+                widea <: wideb || return false
+                # for structs we need to check that `a` has more information than `b` that may be partially initialized
+                n_initialized(a) ≥ length(b.fields) || return false
             end
+            nf = nfields(a.val)
             for i in 1:nf
                 isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
+                i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct
                 bfᵢ = b.fields[i]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)

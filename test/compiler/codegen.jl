@@ -440,7 +440,7 @@ function f1_30093(r)
     end
 end
 
-@test f1_30093(Ref(0)) == nothing
+@test f1_30093(Ref(0)) === nothing
 
 # issue 33590
 function f33590(b, x)
@@ -697,7 +697,7 @@ mktempdir() do pfx
         libs_deleted += 1
     end
     @test libs_deleted > 0
-    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) --startup-file=no -e 'print("no codegen!\n")'`) == "no codegen!"
 
     # PR #47343
     libs_emptied = 0
@@ -956,3 +956,46 @@ function foonopreds()
     pkgid.uuid !== nothing ? pkgid.uuid : false
 end
 @test foonopreds() !== nothing
+
+# issue 55396
+struct Incomplete55396
+  x::Tuple{Int}
+  y::Int
+  @noinline Incomplete55396(x::Int) = new((x,))
+end
+let x = Incomplete55396(55396)
+    @test x.x === (55396,)
+end
+
+# Core.getptls() special handling
+@test !occursin("call ptr @jlplt", get_llvm(Core.getptls, Tuple{})) #It should lower to a direct load of the ptls and not a ccall
+
+# issue 55208
+@noinline function f55208(x, i)
+    z = (i == 0 ? x[1] : x[i])
+    return z isa Core.TypeofBottom
+end
+@test f55208((Union{}, 5, 6, 7), 0)
+
+@noinline function g55208(x, i)
+    z = (i == 0 ? x[1] : x[i])
+    typeof(z)
+end
+@test g55208((Union{}, true, true), 0) === typeof(Union{})
+
+@test string((Core.Union{}, true, true, true)) == "(Union{}, true, true, true)"
+
+# Issue #55558
+for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
+    @eval begin
+        struct $(StructName)
+            a::$(T)
+            b::Int64
+            c::$(T)
+        end
+        local broken_i128 = Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "powerpc64le"
+        @test fieldoffset($(StructName), 2) == 16
+        @test fieldoffset($(StructName), 3) == 32 broken=broken_i128
+        @test sizeof($(StructName)) == 48 broken=broken_i128
+    end
+end

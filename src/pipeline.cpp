@@ -609,65 +609,6 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
     MPM.addPass(AfterOptimizationMarkerPass());
 }
 
-struct PipelineConfig {
-    int Speedup;
-    int Size;
-    int lower_intrinsics;
-    int dump_native;
-    int external_use;
-    int llvm_only;
-    int always_inline;
-    int enable_early_simplifications;
-    int enable_early_optimizations;
-    int enable_scalar_optimizations;
-    int enable_loop_optimizations;
-    int enable_vector_pipeline;
-    int remove_ni;
-    int cleanup;
-    int warn_missed_transformations;
-};
-
-extern "C" JL_DLLEXPORT_CODEGEN void jl_build_newpm_pipeline_impl(void *MPM, void *PB, PipelineConfig* config) JL_NOTSAFEPOINT
-{
-    OptimizationLevel O;
-    switch (config->Size) {
-        case 1:
-            O = OptimizationLevel::Os;
-            break;
-        default:
-            O = OptimizationLevel::Oz;
-            break;
-        case 0:
-            switch (config->Speedup) {
-                case 0:
-                    O = OptimizationLevel::O0;
-                    break;
-                case 1:
-                    O = OptimizationLevel::O1;
-                    break;
-                case 2:
-                    O = OptimizationLevel::O2;
-                    break;
-                default:
-                    O = OptimizationLevel::O3;
-                    break;
-            }
-    }
-    buildPipeline(*reinterpret_cast<ModulePassManager*>(MPM), reinterpret_cast<PassBuilder*>(PB), O,
-                    OptimizationOptions{!!config->lower_intrinsics,
-                                        !!config->dump_native,
-                                        !!config->external_use,
-                                        !!config->llvm_only,
-                                        !!config->always_inline,
-                                        !!config->enable_early_simplifications,
-                                        !!config->enable_early_optimizations,
-                                        !!config->enable_scalar_optimizations,
-                                        !!config->enable_loop_optimizations,
-                                        !!config->enable_vector_pipeline,
-                                        !!config->remove_ni,
-                                        !!config->cleanup,
-                                        !!config->warn_missed_transformations});
-}
 
 #undef JULIA_PASS
 
@@ -865,6 +806,14 @@ static Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJuliaPip
             OPTION(dump_native),
             OPTION(external_use),
             OPTION(llvm_only),
+            OPTION(always_inline),
+            OPTION(enable_early_simplifications),
+            OPTION(enable_early_optimizations),
+            OPTION(enable_scalar_optimizations),
+            OPTION(enable_loop_optimizations),
+            OPTION(enable_vector_pipeline),
+            OPTION(remove_ni),
+            OPTION(cleanup),
             OPTION(warn_missed_transformations)
 #undef OPTION
         };

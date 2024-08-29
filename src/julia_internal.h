@@ -65,7 +65,8 @@ static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf)
        that we're resetting to. The idea is to remove the poison from the frames
        that we're skipping over, since they won't be unwound. */
     uintptr_t top = jmpbuf_sp(buf);
-    uintptr_t bottom = (uintptr_t)ct->stkbuf;
+    uintptr_t bottom = (uintptr_t)(ct->ctx.copy_stack ? (char*)ct->ptls->stackbase  - ct->ptls->stacksize : (char*)ct->ctx.stkbuf);
+    //uintptr_t bottom = (uintptr_t)&top;
     __asan_unpoison_stack_memory(bottom, top - bottom);
 }
 static inline void asan_unpoison_stack_memory(uintptr_t addr, size_t size) {
@@ -1005,9 +1006,7 @@ int jl_safepoint_consume_sigint(void);
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
-#if defined(_OS_DARWIN_)
-typedef pthread_key_t jl_pgcstack_key_t;
-#elif defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_)
 typedef DWORD jl_pgcstack_key_t;
 #else
 typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
@@ -1306,20 +1305,36 @@ JL_DLLEXPORT size_t jl_maxrss(void);
 // congruential random number generator
 // for a small amount of thread-local randomness
 
-STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT
+//TODO: utilize https://github.com/openssl/openssl/blob/master/crypto/rand/rand_uniform.c#L13-L99
+// for better performance, it does however require making users expect a 32bit random number.
+
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t *seed) JL_NOTSAFEPOINT // Open interval [0, max)
 {
-    if (max == 0)
+    if (max < 2)
         return 0;
     uint64_t mask = ~(uint64_t)0;
-    --max;
-    mask >>= __builtin_clzll(max|1);
-    uint64_t x;
+    int zeros = __builtin_clzll(max);
+    int bits = CHAR_BIT * sizeof(uint64_t) - zeros;
+    mask = mask >> zeros;
     do {
-        *seed = 69069 * (*seed) + 362437;
-        x = *seed & mask;
-    } while (x > max);
-    return x;
+        uint64_t value = 69069 * (*seed) + 362437;
+        *seed = value;
+        uint64_t x = value & mask;
+        if (x < max) {
+            return x;
+        }
+        int bits_left = zeros;
+        while (bits_left >= bits) {
+            value >>= bits;
+            x = value & mask;
+            if (x < max) {
+                return x;
+            }
+            bits_left -= bits;
+        }
+    } while (1);
 }
+
 JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_rand(void);

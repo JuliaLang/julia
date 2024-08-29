@@ -182,6 +182,7 @@ struct HeapSnapshot {
 // global heap snapshot, mutated by garbage collector
 // when snapshotting is on.
 int gc_heap_snapshot_enabled = 0;
+int gc_heap_snapshot_redact_data = 0;
 HeapSnapshot *g_snapshot = nullptr;
 // mutex for gc-heap-snapshot.
 jl_mutex_t heapsnapshot_lock;
@@ -195,7 +196,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT;
 
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
-    ios_t *strings, ios_t *json, char all_one)
+    ios_t *strings, ios_t *json, char all_one, char redact_data)
 {
     HeapSnapshot snapshot;
     snapshot.nodes = nodes;
@@ -207,6 +208,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
 
     // Enable snapshotting
     g_snapshot = &snapshot;
+    gc_heap_snapshot_redact_data = redact_data;
     gc_heap_snapshot_enabled = true;
 
     _add_synthetic_root_entries(&snapshot);
@@ -216,6 +218,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
 
     // Disable snapshotting
     gc_heap_snapshot_enabled = false;
+    gc_heap_snapshot_redact_data = 0;
     g_snapshot = nullptr;
 
     jl_mutex_unlock(&heapsnapshot_lock);
@@ -328,7 +331,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     if (jl_is_string(a)) {
         node_type = "String";
-        name = jl_string_data(a);
+        name = gc_heap_snapshot_redact_data ? "<redacted>" : jl_string_data(a);
         self_size = jl_string_len(a);
     }
     else if (jl_is_symbol(a)) {

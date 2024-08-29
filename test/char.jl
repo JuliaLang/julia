@@ -121,7 +121,7 @@ end
     #iterate(c::Char)
     for x in testarrays
         @test iterate(x)[1] == x
-        @test iterate(x, iterate(x)[2]) == nothing
+        @test iterate(x, iterate(x)[2]) === nothing
     end
 
     #isless(x::Char, y::Integer) = isless(UInt32(x), y)

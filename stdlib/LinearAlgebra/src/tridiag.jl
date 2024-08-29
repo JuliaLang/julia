@@ -476,7 +476,7 @@ Base._reverse!(A::SymTridiagonal, dims::Colon) = (reverse!(A.dv); reverse!(A.ev)
     else
         throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j)"))
     end
-    return x
+    return A
 end
 
 ## Tridiagonal matrices ##
@@ -731,7 +731,7 @@ end
         throw(ArgumentError(LazyString(lazy"cannot set entry ($i, $j) off ",
             lazy"the tridiagonal band to a nonzero value ($x)")))
     end
-    return x
+    return A
 end
 
 ## structured matrix methods ##
@@ -1044,4 +1044,22 @@ function _copyto_banded!(A::SymTridiagonal, B::Tridiagonal)
     A.dv .= B.d
     _evview(A) .= B.du
     return A
+end
+
+# display
+function show(io::IO, T::Tridiagonal)
+    print(io, "Tridiagonal(")
+    show(io, T.dl)
+    print(io, ", ")
+    show(io, T.d)
+    print(io, ", ")
+    show(io, T.du)
+    print(io, ")")
+end
+function show(io::IO, S::SymTridiagonal)
+    print(io, "SymTridiagonal(")
+    show(io, eltype(S) <: Number ? S.dv : view(S, diagind(S, IndexStyle(S))))
+    print(io, ", ")
+    show(io, S.ev)
+    print(io, ")")
 end

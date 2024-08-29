@@ -650,7 +650,7 @@ static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
-    if (jt == (jl_value_t*)jl_bottom_type)
+    if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
         return getVoidTy(ctxt);
     if (jl_is_concrete_immutable(jt)) {
         if (jl_datatype_nbits(jt) == 0)
@@ -760,7 +760,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
     // use this where C-compatible (unboxed) structs are desired
     // use julia_type_to_llvm directly when you want to preserve Julia's type semantics
     if (isboxed) *isboxed = false;
-    if (jt == (jl_value_t*)jl_bottom_type)
+    if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
         return getVoidTy(ctxt);
     if (jl_is_primitivetype(jt))
         return bitstype_to_llvm(jt, ctxt, llvmcall);
@@ -947,6 +947,9 @@ static bool for_each_uniontype_small(
         bool allunbox = for_each_uniontype_small(f, ((jl_uniontype_t*)ty)->a, counter);
         allunbox &= for_each_uniontype_small(f, ((jl_uniontype_t*)ty)->b, counter);
         return allunbox;
+    }
+    else if (ty == (jl_value_t*)jl_typeofbottom_type->super) {
+        f(++counter, jl_typeofbottom_type); // treat Tuple{union{}} as identical to typeof(Union{})
     }
     else if (jl_is_pointerfree(ty)) {
         f(++counter, (jl_datatype_t*)ty);
@@ -1691,6 +1694,8 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         if (intersected_type == (jl_value_t*)jl_bottom_type)
             known_isa = false;
     }
+    if (intersected_type == (jl_value_t*)jl_typeofbottom_type->super)
+        intersected_type = (jl_value_t*)jl_typeofbottom_type; // swap abstract Type{Union{}} for concrete typeof(Union{})
     if (known_isa) {
         if (!*known_isa && !msg.isTriviallyEmpty()) {
             emit_type_error(ctx, x, literal_pointer_val(ctx, type), msg);
@@ -3947,8 +3952,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             else {
                 strct = emit_static_alloca(ctx, lt);
                 setName(ctx.emission_context, strct, arg_typename);
-                if (nargs < nf)
-                    promotion_point = ctx.builder.CreateStore(ctx.builder.CreateFreeze(UndefValue::get(lt)), strct);
                 if (tracked.count)
                     undef_derived_strct(ctx, strct, sty, ctx.tbaa().tbaa_stack);
             }
@@ -4103,6 +4106,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                 Align(1)));
                     }
                 }
+            }
+            if (promotion_point && nargs < nf) {
+                assert(!init_as_value);
+                IRBuilderBase::InsertPoint savedIP = ctx.builder.saveIP();
+                ctx.builder.SetInsertPoint(promotion_point);
+                promotion_point = cast<FreezeInst>(ctx.builder.CreateFreeze(UndefValue::get(lt)));
+                ctx.builder.CreateStore(promotion_point, strct);
+                ctx.builder.restoreIP(savedIP);
             }
             if (type_is_ghost(lt))
                 return mark_julia_const(ctx, sty->instance);
@@ -4286,9 +4297,8 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             ovflw = ctx.builder.CreateICmpUGE(ctx.builder.CreateAdd(offset, mlen), ctx.builder.CreateNUWAdd(mlen, mlen));
         }
 #endif
-        //Is this change fine
         boffset = ctx.builder.CreateMul(offset, elsz);
-        newdata = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), data, boffset);
+        newdata = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), data, boffset);
         (void)boffset; // LLVM is very bad at handling GEP with types different from the load
         if (bc) {
             BasicBlock *failBB, *endBB;

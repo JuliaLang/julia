@@ -18,6 +18,9 @@ using .Main.FillArrays
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -259,6 +262,8 @@ end
                 @test_throws ArgumentError A[3, 2] = 1 # test assignment on the subdiagonal
                 @test_throws ArgumentError A[2, 3] = 1 # test assignment on the superdiagonal
             end
+            # setindex! should return the destination
+            @test setindex!(A, A[2,2], 2, 2) === A
         end
         @testset "diag" begin
             @test (@inferred diag(A))::typeof(d) == d
@@ -912,6 +917,41 @@ end
         D = Diagonal(fill(S33, size(T,1)))
         @test lmul!(D, copy(T)) ≈ D * T
     end
+end
+
+@testset "mul with empty arrays" begin
+    A = zeros(5,0)
+    T = Tridiagonal(zeros(0), zeros(0), zeros(0))
+    TL = Tridiagonal(zeros(4), zeros(5), zeros(4))
+    @test size(A * T) == size(A)
+    @test size(TL * A) == size(A)
+    @test size(T * T) == size(T)
+    C = similar(A)
+    @test mul!(C, A, T) == A * T
+    @test mul!(C, TL, A) == TL * A
+    @test mul!(similar(T), T, T) == T * T
+    @test mul!(similar(T, size(T)), T, T) == T * T
+
+    v = zeros(size(T,2))
+    @test size(T * v) == size(v)
+    @test mul!(similar(v), T, v) == T * v
+
+    D = Diagonal(zeros(size(T,2)))
+    @test size(T * D) == size(D * T) == size(D)
+    @test mul!(similar(D), T, D) == mul!(similar(D), D, T) == T * D
+end
+
+@testset "show" begin
+    T = Tridiagonal(1:3, 1:4, 1:3)
+    @test sprint(show, T) == "Tridiagonal(1:3, 1:4, 1:3)"
+    S = SymTridiagonal(1:4, 1:3)
+    @test sprint(show, S) == "SymTridiagonal(1:4, 1:3)"
+
+    m = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    T = Tridiagonal(fill(m,2), fill(m,3), fill(m,2))
+    @test sprint(show, T) == "Tridiagonal($(repr(diag(T,-1))), $(repr(diag(T))), $(repr(diag(T,1))))"
+    S = SymTridiagonal(fill(m,3), fill(m,2))
+    @test sprint(show, S) == "SymTridiagonal($(repr(diag(S))), $(repr(diag(S,1))))"
 end
 
 end # module TestTridiagonal

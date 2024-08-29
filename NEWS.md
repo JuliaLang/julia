@@ -102,6 +102,7 @@ New library features
   the uniquing checking ([#53474])
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
 * `Lockable` is now exported ([#54595])
+* New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
 
 Standard library changes
 ------------------------
@@ -133,6 +134,10 @@ Standard library changes
 #### Printf
 
 #### Profile
+
+* `Profile.take_heap_snapshot` takes a new keyword argument, `redact_data::Bool`,
+  that is `true` by default. When set, the contents of Julia objects are not emitted
+  in the heap snapshot. This currently only applies to strings. ([#55326])
 
 #### Random
 
@@ -169,6 +174,10 @@ Deprecated or removed
 
 External dependencies
 ---------------------
+
+- The terminal info database, `terminfo`, is now vendored by default, providing a better
+  REPL user experience when `terminfo` is not available on the system. Julia can be built
+  without vendoring the database using the Makefile option `WITH_TERMINFO=0`. ([#55411])
 
 Tooling Improvements
 --------------------

@@ -542,7 +542,6 @@
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
-    YY(jl_build_newpm_pipeline) \
     YY(jl_register_passbuilder_callbacks) \
     YY(LLVMExtraMPMAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddRemoveNIPass) \

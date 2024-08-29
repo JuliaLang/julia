@@ -573,7 +573,7 @@ end
 @test Cmd(`foo`, env=["A=true"]).env      == ["A=true"]
 @test Cmd(`foo`, env=("A"=>true,)).env    == ["A=true"]
 @test Cmd(`foo`, env=["A"=>true]).env     == ["A=true"]
-@test Cmd(`foo`, env=nothing).env         == nothing
+@test Cmd(`foo`, env=nothing).env         === nothing
 
 # test for interpolation of Cmd
 let c = setenv(`x`, "A"=>true)

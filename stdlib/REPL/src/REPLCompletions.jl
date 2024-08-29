@@ -556,8 +556,7 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
-                                 aggressive_constant_propagation=true,
-                                 unoptimize_throw_blocks=false),
+                                 aggressive_constant_propagation=true),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
         return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
@@ -604,7 +603,7 @@ is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode 
 
 function is_call_graph_uncached(sv::CC.InferenceState)
     CC.is_cached(sv) && return false
-    parent = sv.parent
+    parent = CC.frame_parent(sv)
     parent === nothing && return true
     return is_call_graph_uncached(parent::CC.InferenceState)
 end
@@ -627,7 +626,7 @@ function is_repl_frame_getproperty(sv::CC.InferenceState)
     def isa Method || return false
     def.name === :getproperty || return false
     CC.is_cached(sv) && return false
-    return is_repl_frame(sv.parent)
+    return is_repl_frame(CC.frame_parent(sv))
 end
 
 # aggressive global binding resolution for `getproperty(::Module, ::Symbol)` calls within `repl_frame`
