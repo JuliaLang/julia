@@ -385,7 +385,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
                 throw(LoweringError(e, "$(kind(e)) is only allowed in global scope"))
             end
         end
-        @ast ctx ex [K"unnecessary"] # TODO: Is there a better way to delete this?
+        makeleaf(ctx, ex, K"TOMBSTONE")
     else
         mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
     end

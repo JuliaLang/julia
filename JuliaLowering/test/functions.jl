@@ -15,13 +15,13 @@ end
 
 @test JuliaLowering.include_string(test_mod, """
 begin
-    function f(x)::Int
+    function g(x)::Int
         if x == 1
             return 42.0
         end
         0xff
     end
-    (f(1), f(2))
+    (g(1), g(2))
 end
 """) === (42, 255)
 
@@ -35,10 +35,10 @@ Base.include_string(test_mod,
 
 @test_throws TypeError JuliaLowering.include_string(test_mod, """
 begin
-    function g()::X
+    function h()::X
         return nothing
     end
-    g()
+    h()
 end
 """)
 

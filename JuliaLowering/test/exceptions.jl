@@ -68,13 +68,13 @@ test_mod = Module()
 
     @test JuliaLowering.include_string(test_mod, """
     begin
-        function f()
+        function g()
             try
                 return 1
             catch
             end
         end
-        f()
+        g()
     end
     """) == 1
 

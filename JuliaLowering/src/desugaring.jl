@@ -448,16 +448,14 @@ function expand_decls(ctx, ex)
     stmts = SyntaxList(ctx)
     for binding in children(ex)
         kb = kind(binding)
-        if is_function_def(binding)
-            push!(stmts, makenode(ctx, binding, declkind, assigned_name(binding)))
-            push!(stmts, binding)
-        elseif is_prec_assignment(kb)
+        if is_prec_assignment(kb)
+            @chk numchildren(binding) == 2
             lhs = strip_decls!(ctx, stmts, declkind, binding[1])
-            push!(stmts, makenode(ctx, binding, kb, lhs, binding[2]))
+            push!(stmts, @ast ctx binding [kb lhs binding[2]])
         elseif is_sym_decl(binding)
             strip_decls!(ctx, stmts, declkind, binding)
         else
-            throw(LoweringError("invalid syntax in variable declaration"))
+            throw(LoweringError(ex, "invalid syntax in variable declaration"))
         end
     end
     makenode(ctx, ex, K"block", stmts)

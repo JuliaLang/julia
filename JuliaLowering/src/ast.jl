@@ -43,7 +43,7 @@ function lookup_binding(bindings::Bindings, id::Integer)
 end
 
 function lookup_binding(bindings::Bindings, ex::SyntaxTree)
-    # TODO: @assert kind(ex) == K"BindingId"
+    @assert kind(ex) == K"BindingId"
     bindings.info[ex.var_id]
 end
 
@@ -199,11 +199,17 @@ function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
     makeleaf(ctx, nameref, K"BindingId", var_id=id)
 end
 
+function add_lambda_local!(ctx::AbstractLoweringContext, id)
+    # empty - early passes don't need to record lambda locals
+end
+
 # Create a new local mutable variable
 function new_mutable_var(ctx::AbstractLoweringContext, srcref, name)
     id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, false, false))
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
-    makeleaf(ctx, nameref, K"BindingId", var_id=id)
+    var = makeleaf(ctx, nameref, K"BindingId", var_id=id)
+    add_lambda_local!(ctx, id)
+    var
 end
 
 # Assign `ex` to an SSA variable.
@@ -471,8 +477,7 @@ end
 
 function is_function_def(ex)
     k = kind(ex)
-    return k == K"function" || k == K"->" ||
-        (k == K"=" && numchildren(ex) == 2 && is_eventually_call(ex[1]))
+    return k == K"function" || k == K"->"
 end
 
 function is_valid_name(ex)

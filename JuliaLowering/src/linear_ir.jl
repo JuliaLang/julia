@@ -422,13 +422,8 @@ function compile_conditional(ctx, ex, false_label)
     end
 end
 
-function new_mutable_var(ctx::LinearIRContext, srcref, name)
-    # TODO: Deduplicate this somehow with generic new_mutable_var?
-    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, false, false))
-    nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
-    var = makeleaf(ctx, nameref, K"BindingId", var_id=id)
+function add_lambda_local!(ctx::LinearIRContext, id)
     push!(ctx.lambda_locals, id)
-    var
 end
 
 # Lowering of exception handling must ensure that
@@ -704,6 +699,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         else
             nothing
         end
+    elseif k == K"TOMBSTONE"
+        @chk !needs_value (ex,"TOMBSTONE encountered in value position")
+        nothing
     elseif k == K"if" || k == K"elseif"
         @chk numchildren(ex) <= 3
         has_else = numchildren(ex) > 2
