@@ -403,6 +403,13 @@ src = """
 x = M.@label foo
 """
 
+src = """
+begin
+    local x::T = 1
+    local x::S = 1
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)
@@ -419,10 +426,13 @@ ctx2, ex_desugar = JuliaLowering.expand_forms_2(ctx1, ex_macroexpand)
 ctx3, ex_scoped = JuliaLowering.resolve_scopes(ctx2, ex_desugar)
 @info "Resolved scopes" ex_scoped formatsrc(ex_scoped, color_by=:var_id)
 
-ctx4, ex_compiled = JuliaLowering.linearize_ir(ctx3, ex_scoped)
+ctx4, ex_converted = JuliaLowering.convert_closures(ctx3, ex_scoped)
+@info "Closure converted" ex_converted formatsrc(ex_converted, color_by=:var_id)
+
+ctx5, ex_compiled = JuliaLowering.linearize_ir(ctx4, ex_converted)
 @info "Linear IR" ex_compiled formatsrc(ex_compiled, color_by=:var_id) Text(sprint(JuliaLowering.print_ir, ex_compiled))
 
-ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx4.bindings, ex_compiled)
+ex_expr = JuliaLowering.to_lowered_expr(in_mod, ctx5.bindings, ex_compiled)
 @info "CodeInfo" ex_expr
 
 eval_result = Base.eval(in_mod, ex_expr)

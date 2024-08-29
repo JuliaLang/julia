@@ -1,9 +1,10 @@
-function lower(mod::Module, ex)
-    ctx1, ex1 = expand_forms_1(mod, ex)
-    ctx2, ex2 = expand_forms_2(ctx1, ex1)
-    ctx3, ex3 = resolve_scopes(ctx2, ex2)
-    ctx4, ex4 = linearize_ir(ctx3, ex3)
-    ex4
+function lower(mod::Module, ex0)
+    ctx1, ex1 = expand_forms_1(  mod,  ex0)
+    ctx2, ex2 = expand_forms_2(  ctx1, ex1)
+    ctx3, ex3 = resolve_scopes(  ctx2, ex2)
+    ctx4, ex4 = convert_closures(ctx3, ex3)
+    ctx5, ex5 = linearize_ir(    ctx4, ex4)
+    ex5
 end
 
 function macroexpand(mod::Module, ex)

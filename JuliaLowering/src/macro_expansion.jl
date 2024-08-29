@@ -138,9 +138,10 @@ function eval_macro_name(ctx, ex)
     ex1 = expand_forms_1(ctx, ex)
     ctx2, ex2 = expand_forms_2(ctx, ex1)
     ctx3, ex3 = resolve_scopes(ctx2, ex2)
-    ctx4, ex4 = linearize_ir(ctx3, ex3)
+    ctx4, ex4 = convert_closures(ctx3, ex3)
+    ctx5, ex5 = linearize_ir(ctx4, ex4)
     mod = ctx.current_layer.mod
-    expr_form = to_lowered_expr(mod, ex4.bindings, ex4)
+    expr_form = to_lowered_expr(mod, ex5.bindings, ex5)
     eval(mod, expr_form)
 end
 

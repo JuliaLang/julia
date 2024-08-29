@@ -211,42 +211,6 @@ function emit_leave_handler(ctx::LinearIRContext, srcref, dest_tokens)
     end
 end
 
-function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
-    if isnothing(type)
-        return ex
-    end
-
-    # Require that the caller make `type` "simple", for now (can generalize
-    # later if necessary)
-    kt = kind(type)
-    @assert (kt == K"Identifier" || kt == K"BindingId" || is_literal(kt))
-    # Use a slot to permit union-splitting this in inference
-    tmp = new_mutable_var(ctx, srcref, "tmp")
-
-    @ast ctx srcref [K"block"
-        # [K"local_def" tmp]
-        # [K"=" type_ssa renumber_assigned_ssavalues(type)]
-        [K"=" tmp ex]
-        [K"if"
-            [K"call" "isa"::K"core" tmp type]
-            "nothing"::K"core"
-            [K"="
-                tmp
-                if do_typeassert
-                    [K"call"
-                        "typeassert"::K"core"
-                        [K"call" "convert"::K"top" type tmp]
-                        type
-                    ]
-                else
-                    [K"call" "convert"::K"top" type tmp]
-                end
-            ]
-        ]
-        tmp
-    ]
-end
-
 function emit_jump(ctx, srcref, target::JumpTarget)
     emit_pop_exception(ctx, srcref, target.catch_token_stack)
     emit_leave_handler(ctx, srcref, target.handler_token_stack)

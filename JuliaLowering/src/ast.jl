@@ -1,63 +1,4 @@
 #-------------------------------------------------------------------------------
-abstract type AbstractLoweringContext end
-
-"""
-Unique symbolic identity for a variable, constant, label, or other entity
-"""
-const IdTag = Int
-
-"""
-Metadata about a binding
-"""
-struct BindingInfo
-    name::String
-    mod::Union{Nothing,Module} # Set when `kind === :global`
-    kind::Symbol              # :local :global :argument :static_parameter
-    is_ssa::Bool              # Single assignment, defined before use
-    is_ambiguous_local::Bool  # Local, but would be global in soft scope (ie, the REPL)
-end
-
-"""
-Metadata about "entities" (variables, constants, etc) in the program. Each
-entity is associated to a unique integer id, the BindingId. A binding will be
-inferred for each *name* in the user's source program by symbolic analysis of
-the source.
-
-However, bindings can also be introduced programmatically during lowering or
-macro expansion: the primary key for bindings is the `BindingId` integer, not
-a name.
-"""
-struct Bindings
-    info::Vector{BindingInfo}
-end
-
-Bindings() = Bindings(Vector{BindingInfo}())
-
-function new_binding(bindings::Bindings, info::BindingInfo)
-    push!(bindings.info, info)
-    return length(bindings.info)
-end
-
-function lookup_binding(bindings::Bindings, id::Integer)
-    bindings.info[id]
-end
-
-function lookup_binding(bindings::Bindings, ex::SyntaxTree)
-    @assert kind(ex) == K"BindingId"
-    bindings.info[ex.var_id]
-end
-
-function lookup_binding(ctx::AbstractLoweringContext, id)
-    lookup_binding(ctx.bindings, id)
-end
-
-const LayerId = Int
-
-function syntax_graph(ctx::AbstractLoweringContext)
-    ctx.graph
-end
-
-#-------------------------------------------------------------------------------
 # @chk: Basic AST structure checking tool
 #
 # Check a condition involving an expression, throwing a LoweringError if it
@@ -102,6 +43,87 @@ macro chk(cond, msg=nothing)
             throw(LoweringError(ex, $(isnothing(msg) ? "expected `$cond`" : esc(msg))))
         end
     end
+end
+
+#-------------------------------------------------------------------------------
+abstract type AbstractLoweringContext end
+
+"""
+Unique symbolic identity for a variable, constant, label, or other entity
+"""
+const IdTag = Int
+
+"""
+Metadata about a binding
+"""
+struct BindingInfo
+    name::String
+    mod::Union{Nothing,Module} # Set when `kind === :global`
+    kind::Symbol              # :local :global :argument :static_parameter
+    type::Union{Nothing,SyntaxTree} # Type, for bindings declared like x::T = 10
+    is_ssa::Bool              # Single assignment, defined before use
+    is_ambiguous_local::Bool  # Local, but would be global in soft scope (ie, the REPL)
+end
+
+"""
+Metadata about "entities" (variables, constants, etc) in the program. Each
+entity is associated to a unique integer id, the BindingId. A binding will be
+inferred for each *name* in the user's source program by symbolic analysis of
+the source.
+
+However, bindings can also be introduced programmatically during lowering or
+macro expansion: the primary key for bindings is the `BindingId` integer, not
+a name.
+"""
+struct Bindings
+    info::Vector{BindingInfo}
+end
+
+Bindings() = Bindings(Vector{BindingInfo}())
+
+function new_binding(bindings::Bindings, info::BindingInfo)
+    push!(bindings.info, info)
+    return length(bindings.info)
+end
+
+function _binding_id(id::Integer)
+    id
+end
+
+function _binding_id(ex::SyntaxTree)
+    @chk kind(ex) == K"BindingId"
+    ex.var_id
+end
+
+function update_binding(bindings::Bindings, x; type=nothing)
+    id = _binding_id(x)
+    b = lookup_binding(bindings, id)
+    bindings.info[id] = BindingInfo(
+        b.name,
+        b.mod,
+        b.kind,
+        isnothing(type) ? b.type : type,
+        b.is_ssa,
+        b.is_ambiguous_local,
+    )
+end
+
+function lookup_binding(bindings::Bindings, x)
+    bindings.info[_binding_id(x)]
+end
+
+function lookup_binding(ctx::AbstractLoweringContext, x)
+    lookup_binding(ctx.bindings, x)
+end
+
+function update_binding(ctx::AbstractLoweringContext, x; kws...)
+    update_binding(ctx.bindings, x; kws...)
+end
+
+const LayerId = Int
+
+function syntax_graph(ctx::AbstractLoweringContext)
+    ctx.graph
 end
 
 #-------------------------------------------------------------------------------
@@ -193,7 +215,7 @@ top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
 # Create a new SSA binding
 function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
     # TODO: Store this name in only one place? Probably use the provenance chain?
-    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, true, false))
+    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, nothing, true, false))
     # Create an identifier
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
     makeleaf(ctx, nameref, K"BindingId", var_id=id)
@@ -205,7 +227,7 @@ end
 
 # Create a new local mutable variable
 function new_mutable_var(ctx::AbstractLoweringContext, srcref, name)
-    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, false, false))
+    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, nothing, false, false))
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
     var = makeleaf(ctx, nameref, K"BindingId", var_id=id)
     add_lambda_local!(ctx, id)

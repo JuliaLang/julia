@@ -180,7 +180,7 @@ function init_binding(ctx, varkey::NameKey, kind::Symbol, is_ambiguous_local=fal
     id = kind === :global ? get(ctx.global_vars, varkey, nothing) : nothing
     if isnothing(id)
         mod = kind === :global ? ctx.scope_layers[varkey.layer].mod : nothing
-        id = new_binding(ctx.bindings, BindingInfo(varkey.name, mod, kind, false, is_ambiguous_local))
+        id = new_binding(ctx.bindings, BindingInfo(varkey.name, mod, kind, nothing, false, is_ambiguous_local))
     end
     if kind === :global
         ctx.global_vars[varkey] = id
@@ -340,12 +340,10 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         @ast ctx ex id::K"BindingId"
     elseif is_leaf(ex) || is_quoted(ex) || k == K"toplevel"
         ex
-    # TODO
     # elseif k == K"global"
     #     ex
-    # elseif k == K"local"
-    #     nothing_(ctx, ex)
-    # elseif require_existing_local
+    elseif k == K"local"
+        makeleaf(ctx, ex, K"TOMBSTONE")
     # elseif locals # return Dict of locals
     # elseif islocal
     elseif k == K"lambda"
@@ -421,7 +419,26 @@ type declarations.
 """
 function resolve_scopes(ctx::DesugaringContext, ex)
     ctx2 = ScopeResolutionContext(ctx)
-    res = resolve_scopes(ctx2, reparent(ctx2, ex))
-    ctx2, res
+    ex2 = resolve_scopes(ctx2, reparent(ctx2, ex))
+    _analyze_variables(ctx2, ex2)
+    ctx2, ex2
+end
+
+function _analyze_variables(ctx::ScopeResolutionContext, ex)
+    k = kind(ex)
+    if is_leaf(ex)
+        nothing
+    elseif k == K"decl"
+        _analyze_variables(ctx, ex[2])
+        if kind(ex[1]) != K"Placeholder"
+            binfo = lookup_binding(ctx, ex[1])
+            if !isnothing(binfo.type)
+                throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
+            end
+            update_binding(ctx, ex[1]; type=ex[2])
+        end
+    else
+        foreach(e->_analyze_variables(ctx, e), children(ex))
+    end
 end
 

@@ -25,6 +25,7 @@ _include("utils.jl")
 _include("macro_expansion.jl")
 _include("desugaring.jl")
 _include("scope_analysis.jl")
+_include("closure_conversion.jl")
 _include("linear_ir.jl")
 _include("runtime.jl")
 
