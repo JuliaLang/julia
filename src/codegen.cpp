@@ -1017,7 +1017,7 @@ static const auto jlgenericfunction_func = new JuliaFunction<>{
         auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
         auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
         auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        return FunctionType::get(T_prjlvalue, {T_pjlvalue, T_jlvalue, T_jlvalue}, false);
+        return FunctionType::get(T_prjlvalue, {T_pjlvalue, T_pjlvalue, T_pjlvalue}, false);
     },
     nullptr,
 };
