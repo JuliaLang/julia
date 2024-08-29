@@ -816,6 +816,38 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     end
 end
 
+# flisp: compile-body
+function compile_body(ctx, ex)
+    compile(ctx, ex, true, true)
+
+    # Fix up any symbolic gotos. (We can't do this earlier because the goto
+    # might precede the label definition in unstructured control flow.)
+    for origin in ctx.symbolic_jump_origins
+        name = origin.goto.name_val
+        target = get(ctx.symbolic_jump_targets, name, nothing)
+        if isnothing(target)
+            throw(LoweringError(origin.goto, "label `$name` referenced but not defined"))
+        end
+        i = origin.index
+        pop_ex = compile_pop_exception(ctx, origin.goto, origin.catch_token_stack,
+                                     target.catch_token_stack)
+        if !isnothing(pop_ex)
+            @assert kind(ctx.code[i]) == K"TOMBSTONE"
+            ctx.code[i] = pop_ex
+            i += 1
+        end
+        leave_ex = compile_leave_handler(ctx, origin.goto, origin.handler_token_stack,
+                                         target.handler_token_stack)
+        if !isnothing(leave_ex)
+            @assert kind(ctx.code[i]) == K"TOMBSTONE"
+            ctx.code[i] = leave_ex
+            i += 1
+        end
+        @assert kind(ctx.code[i]) == K"TOMBSTONE"
+        ctx.code[i] = @ast ctx origin.goto [K"goto" target.label]
+    end
+    # TODO: Filter out any newvar nodes where the arg is definitely initialized
+end
 
 #-------------------------------------------------------------------------------
 
@@ -900,39 +932,6 @@ function renumber_body(ctx, input_code, slot_rewrites)
     code
 end
 
-# flisp: compile-body
-function compile_body(ctx, ex)
-    compile(ctx, ex, true, true)
-
-    # Fix up any symbolic gotos. (We can't do this earlier because the goto
-    # might precede the label definition in unstructured control flow.)
-    for origin in ctx.symbolic_jump_origins
-        name = origin.goto.name_val
-        target = get(ctx.symbolic_jump_targets, name, nothing)
-        if isnothing(target)
-            throw(LoweringError(origin.goto, "label `$name` referenced but not defined"))
-        end
-        i = origin.index
-        pop_ex = compile_pop_exception(ctx, origin.goto, origin.catch_token_stack,
-                                     target.catch_token_stack)
-        if !isnothing(pop_ex)
-            @assert kind(ctx.code[i]) == K"TOMBSTONE"
-            ctx.code[i] = pop_ex
-            i += 1
-        end
-        leave_ex = compile_leave_handler(ctx, origin.goto, origin.handler_token_stack,
-                                         target.handler_token_stack)
-        if !isnothing(leave_ex)
-            @assert kind(ctx.code[i]) == K"TOMBSTONE"
-            ctx.code[i] = leave_ex
-            i += 1
-        end
-        @assert kind(ctx.code[i]) == K"TOMBSTONE"
-        ctx.code[i] = @ast ctx origin.goto [K"goto" target.label]
-    end
-    # TODO: Filter out any newvar nodes where the arg is definitely initialized
-end
-
 function _add_slots!(slot_rewrites, bindings, ids)
     n = length(slot_rewrites) + 1
     for id in ids
@@ -963,6 +962,14 @@ function compile_lambda(outer_ctx, ex)
             )
 end
 
+"""
+This pass converts nested ASTs in the body of a lambda into a list of
+statements (ie, Julia's linear/untyped IR).
+
+Most of the compliexty of this pass is in lowering structured control flow (if,
+loops, etc) to gotos and exception handling to enter/leave. We also convert
+`K"BindingId"` into K"slot", `K"globalref"` or `K"SSAValue` as appropriate.
+"""
 function linearize_ir(ctx, ex)
     graph = ensure_attributes(ctx.graph,
                               slot_rewrites=Dict{IdTag,Int},
