@@ -100,7 +100,7 @@ static inline void ws_queue_steal_from(ws_queue_t *q, void *dest, int32_t eltsz)
     int64_t b = jl_atomic_load_acquire(&q->bottom);
     int64_t size = b - t;
     if (size > 0) {
-        ws_array_t *ary = jl_atomic_load_relaxed(&q->array);
+        ws_array_t *ary = jl_atomic_load_acquire(&q->array); // consume in Le
         memcpy(dest, ary->buffer + (t & ary->mask) * eltsz, eltsz);
         if (!jl_atomic_cmpswap(&q->top, &t, t + 1))
             memset(dest, 0, eltsz);
