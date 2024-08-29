@@ -207,6 +207,27 @@ function _fieldnames(@nospecialize t)
     return t.name.names
 end
 
+const BINDING_KIND_GLOBAL       = 0x0
+const BINDING_KIND_CONST        = 0x1
+const BINDING_KIND_CONST_IMPORT = 0x2
+const BINDING_KIND_IMPLICIT     = 0x3
+const BINDING_KIND_EXPLICIT     = 0x4
+const BINDING_KIND_IMPORTED     = 0x5
+const BINDING_KIND_FAILED       = 0x6
+const BINDING_KIND_DECLARED     = 0x7
+const BINDING_KIND_GUARD        = 0x8
+
+function lookup_binding_partition(world::UInt, b::Core.Binding)
+    ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
+end
+
+function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+    ccall(:jl_get_globalref_partition, Ref{Core.BindingPartition}, (Any, UInt), gr, world)
+end
+
+binding_kind(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_kind, UInt8, (Any,), bpart)
+binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))
+
 """
     fieldname(x::DataType, i::Integer)
 

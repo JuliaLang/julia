@@ -1925,7 +1925,7 @@ precompile_test_harness("Issue #50538") do load_path
             ex isa ErrorException || rethrow()
             ex
         end
-        global undefglobal
+        global undefglobal::Any
         end
         """)
     ji, ofile = Base.compilecache(Base.PkgId("I50538"))
@@ -2012,6 +2012,13 @@ precompile_test_harness("Generated Opaque") do load_path
                 Expr(:opaque_closure_method, nothing, 0, false, lno, ci))
         end
         @assert oc_re_generated_no_partial()() === 1
+        @generated function oc_re_generated_no_partial_macro()
+            AT = nothing
+            RT = nothing
+            allow_partial = false # makes this legal to generate during pre-compile
+            return Expr(:opaque_closure, AT, RT, RT, allow_partial, :(()->const_int_barrier()))
+        end
+        @assert oc_re_generated_no_partial_macro()() === 1
         end
         """)
     Base.compilecache(Base.PkgId("GeneratedOpaque"))

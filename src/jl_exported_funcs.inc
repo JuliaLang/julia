@@ -97,7 +97,6 @@
     XX(jl_cstr_to_string) \
     XX(jl_current_exception) \
     XX(jl_debug_method_invalidation) \
-    XX(jl_declare_constant) \
     XX(jl_defines_or_exports_p) \
     XX(jl_deprecate_binding) \
     XX(jl_dlclose) \
@@ -185,7 +184,7 @@
     XX(jl_gc_total_hrtime) \
     XX(jl_gdblookup) \
     XX(jl_generating_output) \
-    XX(jl_generic_function_def) \
+    XX(jl_declare_const_gf) \
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
