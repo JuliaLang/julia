@@ -41,6 +41,10 @@ New library features
 Standard library changes
 ------------------------
 
+* Empty dimensional reductions (e.g., `reduce` and `mapreduce` with the `dims` keyword
+  selecting one or more dimensions) now behave like their whole-array (`dims=:`) counterparts,
+  only returning values in unambiguous cases and erroring otherwise.
+
 #### JuliaSyntaxHighlighting
 
 #### LinearAlgebra
