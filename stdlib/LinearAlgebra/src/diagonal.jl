@@ -205,7 +205,7 @@ function setindex!(D::Diagonal, v, i::Int, j::Int)
     elseif !iszero(v)
         throw(ArgumentError(lazy"cannot set off-diagonal entry ($i, $j) to a nonzero value ($v)"))
     end
-    return v
+    return D
 end
 
 

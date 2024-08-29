@@ -499,7 +499,7 @@ end
 @test Base.IteratorSize(product(1:2, countfrom(1))) == Base.IsInfinite()
 
 @test Base.iterate(product()) == ((), true)
-@test Base.iterate(product(), 1) == nothing
+@test Base.iterate(product(), 1) === nothing
 
 # intersection
 @test intersect(product(1:3, 4:6), product(2:4, 3:5)) == Iterators.ProductIterator((2:3, 4:5))
@@ -993,7 +993,7 @@ end
 end
 
 @testset "Iterators.peel" begin
-    @test Iterators.peel([]) == nothing
+    @test Iterators.peel([]) === nothing
     @test Iterators.peel(1:10)[1] == 1
     @test Iterators.peel(1:10)[2] |> collect == 2:10
     @test Iterators.peel(x^2 for x in 2:4)[1] == 4

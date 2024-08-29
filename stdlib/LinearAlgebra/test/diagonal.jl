@@ -617,6 +617,8 @@ end
             @test_throws ArgumentError D[i, j] = 1
         end
     end
+    # setindex should return the destination
+    @test setindex!(D, 1, 1, 1) === D
 end
 
 @testset "Test reverse" begin
@@ -1350,6 +1352,11 @@ end
             @test S + D == Array(S) + Array(D)
         end
     end
+end
+
+@testset "bounds-check with CartesianIndex ranges" begin
+    D = Diagonal(1:typemax(Int))
+    @test checkbounds(Bool, D, diagind(D, IndexCartesian()))
 end
 
 end # module TestDiagonal

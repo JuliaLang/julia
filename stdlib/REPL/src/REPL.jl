@@ -329,7 +329,7 @@ function warn_on_non_owning_accesses(current_mod, ast)
     end
     return ast
 end
-warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(REPL.active_module(), ast)
+warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(Base.active_module(), ast)
 
 const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaults for new REPL backends
 
@@ -497,7 +497,7 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
-        io = IOContext(io, :limit => true, :module => active_module(d)::Module)
+        io = IOContext(io, :limit => true, :module => Base.active_module(d)::Module)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
@@ -527,7 +527,7 @@ show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
 function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
-        io = IOContext(io, :module => active_module(repl)::Module)
+        io = IOContext(io, :module => Base.active_module(repl)::Module)
         print_response(io, response, show_value, have_color, specialdisplay(repl))
     end
     return nothing
@@ -628,7 +628,7 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
-    get_module = () -> active_module(repl)
+    get_module = () -> Base.active_module(repl)
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
         errormonitor(t)
@@ -760,14 +760,9 @@ REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
-function active_module() # this method is also called from Base
-    isdefined(Base, :active_repl) || return Main
-    Base.active_repl === nothing && return Main
-    return active_module(Base.active_repl::AbstractREPL)
-end
-active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
-active_module(::AbstractREPL) = Main
-active_module(d::REPLDisplay) = active_module(d.repl)
+Base.active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
+Base.active_module(::AbstractREPL) = Main
+Base.active_module(d::REPLDisplay) = Base.active_module(d.repl)
 
 setmodifiers!(c::CompletionProvider, m::LineEdit.Modifiers) = nothing
 
@@ -1206,7 +1201,7 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
 function contextual_prompt(repl::LineEditREPL, prompt::Union{String,Function})
     function ()
-        mod = active_module(repl)
+        mod = Base.active_module(repl)
         prefix = mod == Main ? "" : string('(', mod, ") ")
         pr = prompt isa String ? prompt : prompt()
         prefix * pr
