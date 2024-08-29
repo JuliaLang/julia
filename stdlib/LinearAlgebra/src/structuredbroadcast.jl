@@ -274,8 +274,6 @@ function copyto!(dest::LowerTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
-    # we process the Broadcasted object to extract the parents of LowerTriangular matrices
-    # this is because we only access the triangular half in the following section
     bc2 = _preprocess_broadcasted_offdiag(bc)
     for j in axs[2]
         @inbounds dest.data[j,j] = bc[BandIndex(0, j)]
@@ -293,8 +291,6 @@ function copyto!(dest::UpperTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
-    # we process the Broadcasted object to extract the parents of UpperTriangular matrices
-    # this is because we only access the triangular half in the following section
     bc2 = _preprocess_broadcasted_offdiag(bc)
     for j in axs[2]
         for i in 1:j-2
