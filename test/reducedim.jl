@@ -209,19 +209,19 @@ end
 
     for f in (minimum, maximum)
         @test_throws "reducing over an empty collection is not allowed" f(A, dims=1)
-        @test isequal(f(A, dims=2), zeros(Int, 0, 1))
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=2), zeros(Int, 0, 1))
         @test_throws "reducing over an empty collection is not allowed" f(A, dims=(1, 2))
-        @test isequal(f(A, dims=3), zeros(Int, 0, 1))
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=3), zeros(Int, 0, 1))
     end
     for f in (findmin, findmax)
-        @test_throws ArgumentError f(A, dims=1)
-        @test isequal(f(A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-        @test_throws ArgumentError f(A, dims=(1, 2))
-        @test isequal(f(A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-        @test_throws ArgumentError f(abs2, A, dims=1)
-        @test isequal(f(abs2, A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-        @test_throws ArgumentError f(abs2, A, dims=(1, 2))
-        @test isequal(f(abs2, A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws "reducing over an empty collection is not allowed" f(A, dims=1)
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws "reducing over an empty collection is not allowed" f(A, dims=(1, 2))
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=1)
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(abs2, A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=(1, 2))
+        @test_throws "reducing over an empty collection is not allowed" isequal(f(abs2, A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
     end
 
 end
