@@ -47,7 +47,7 @@ end
 sliceall(x) = @inbounds x[begin:end]
 sliceat(x, y) = @inbounds x[y:y]
 
-mergeindices(b, x::CartesianIndices, y::CartesianIndices) = CartesianIndices(map((b,x,y)->ifelse(b, x, y), b, x.indices, y.indices))
+mergeindices(b, x::CartesianIndices, y::CartesianIndices) = CartesianIndices(map((b,x,y)->sliceall(ifelse(b, x, y)), b, x.indices, y.indices))
 mergeindices(b, x::CartesianIndex, y::CartesianIndices) = mergeindices(b, CartesianIndices(map(sliceat, y.indices, x.I)), CartesianIndices(map(sliceall, y.indices)))
 mergeindices(b, x::CartesianIndex, y::CartesianIndex) = CartesianIndex(map((b,x,y)->ifelse(b, x, y), b, x.I, y.I))
 
@@ -128,8 +128,8 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted, 
 end
 
 if isdefined(Core, :Compiler)
-    _mapreduce_might_widen(f::F, op::G, ::Type{T}, out) where {F,G,T} = false
-    function _mapreduce_might_widen(f::F, op::G, ::Type{T}, ::Nothing) where {F,G,T}
+    _mapreduce_might_widen(_, _, _, _) = false
+    function _mapreduce_might_widen(f::F, op::G, A::T, ::Nothing) where {F,G,T}
         return !isconcretetype(Core.Compiler.return_type(x->op(f(first(x)), f(first(x))), Tuple{T}))
     end
 else
@@ -144,17 +144,47 @@ function _mapreduce_similar_curried(A)
     end
 end
 
-#### Reduction initialization ####
+#### Dimensional reduction implementation ####
 #
-# Similar to the scalar mapreduce, there are two*three cases we need to consider
-# when constructing the initial results array:
-# * Have init: Fill results array with init, proceed (regardless of reduction size)
-#   * Don't worry about widening and do a straight iteration with in-place updates over all values
-# * Otherwise:
-#   * No values: Fill with `mapreduce_empty` & return
-#   * One value: Fill with `mapreduce_first` & return
-#   * Two+ values: Fill with `op(f(a1), f(a2))`, proceed <--- this is the hard case:
-#       * Proceeding involves skipping the first two inner iterations
+# There are four (!!) orthogonal switches that affect the possible code paths here:
+#   * There's the number of elements in the reduction (n == 0, 1, or 2+)
+#   * There's the possibility of a passed initial value (specified or not)
+#   * There's in-place or not
+#
+# The relatively simpler scalar mapreduce has 2*3 branches:
+#   * 0 values:
+#       * Have init? Return it. Otherwise:
+#       * Return mapreduce_empty (usually an error, sometimes an unambiguous value like 0.0)
+#   * 1 value (a):
+#       * Have init? Return op(init, f(a)). Otherwise:
+#       * Return mapreduce_first (typically f(a))
+#   * 2+ values (a1, a2):
+#       * Have init? Start every chain with op(op(init, f(a1)), f(a2)) and continue. Otherwise:
+#       * Start every chain with op(f(a1), f(a2)) and continue
+#
+# In the context of dimensional reduce we _additionally_ need to divine out an element type
+# for the returned array. So all of the above branches need to accomodate incremental widening,
+# both as more elements are added to each reduction and across the multiple reductions.
+#
+# There's one additional consideration for the 0 values case — the returned array might or
+# might not be empty. In both cases, however, the ability to return an array (and its element
+# type) is determined by `mapreduce_empty`. We also don't want to include this consideration
+# _inside_ the incremental widening portion as it adds an additional `Union{}` element type
+# for the error path.
+#
+# Finally, actually doing the work wouldn't normally be so tricky — it's just two nested `for`
+# loops.  The trouble is that the naive double for loop is leaving 100x+ performance on the
+# table when it doesn't iterate in a cache-friendly manner.  So you might indeed want to update
+# a single value in `R` multiple times — and possibly widen as you do so.
+#
+# It's **_so very tempting_** to do the standard Julian idiom of:
+#     mapreduce(f, op, A, dims) = mapreduce!(f, op, init(f, op, A, dims), A)
+# But that simply doesn't work because there's not _a single way_ to initialize the beginning 
+# of a reduction.  There are SIX.  But then we add support for pre-allocated result vectors and
+# you even _moreso_ want to be able to just write, e.g.,
+#     sum!(r, A) = mapreduce!(identity, +, first_step!(identity, +, r, A), A)
+# But at that point you've _already done the first step_, so you need to be able to _continue_
+# the reduction from an arbitrary point in the iteration.
 _mapreducedim_impl(f::Type{F}, op, init, A::AbstractArrayOrBroadcasted, raxs, out) where {F} =
     _mapreducedim_impl(x->F(x), op, init, A::AbstractArrayOrBroadcasted, raxs, out)
 function _mapreducedim_impl(f, op, init, A::AbstractArrayOrBroadcasted, raxs, out)
@@ -173,7 +203,7 @@ function _mapreducedim_impl(f, op, init, A::AbstractArrayOrBroadcasted, raxs, ou
     (n == 0 || isempty(A)) && return _mapreduce_empty_array(f, op, init, A, raxs, out)
     n == 1 && return _mapreduce_one_array(f, op, init, A, raxs, out)
 
-    _mapreduce_might_widen(f, op, typeof(A), out) && return collect_allocator(_mapreduce_similar_curried(A),
+    _mapreduce_might_widen(f, op, A, out) && return collect_allocator(_mapreduce_similar_curried(A),
         (_mapreduce_naive_inner_loop(f, op, init, A, is_outer_dim, outer_ind, a_inds) for outer_ind in outer_inds))
 
     # Create the result vector with the first step of the reduction, using the passed output if given
