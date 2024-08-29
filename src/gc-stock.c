@@ -4008,11 +4008,6 @@ JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *o
     arraylist_push(&ptls->gc_tls.sweep_objs, obj);
 }
 
-void jl_gc_notify_image_load(const char* img_data, size_t len)
-{
-    // Do nothing
-}
-
 #ifdef __cplusplus
 }
 #endif
