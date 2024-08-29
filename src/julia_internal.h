@@ -805,7 +805,7 @@ JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val);
-void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty, int error);
+void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
@@ -859,6 +859,92 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred);
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
+
+EXTERN_INLINE_DECLARE enum jl_partition_kind decode_restriction_kind(jl_ptr_kind_union_t pku) JL_NOTSAFEPOINT
+{
+#ifdef _P64
+    uint8_t bits = (pku & 0x7);
+    jl_value_t *val = (jl_value_t*)(pku & ~0x7);
+
+    if (val == NULL && bits == BINDING_KIND_IMPLICIT) {
+        return BINDING_KIND_GUARD;
+    }
+
+    return (enum jl_partition_kind)bits;
+#else
+    return (enum jl_partition_kind)pku.kind;
+#endif
+}
+
+STATIC_INLINE jl_value_t *decode_restriction_value(jl_ptr_kind_union_t pku) JL_NOTSAFEPOINT
+{
+#ifdef _P64
+    jl_value_t *val = (jl_value_t*)(pku & ~0x7);
+    // This is a little bit of a lie at the moment - it is one of the things that
+    // can go wrong with binding replacement.
+    JL_GC_PROMISE_ROOTED(val);
+    return val;
+#else
+    return pku.val;
+#endif
+}
+
+STATIC_INLINE jl_ptr_kind_union_t encode_restriction(jl_value_t *val, enum jl_partition_kind kind) JL_NOTSAFEPOINT
+{
+#ifdef _P64
+    if (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED)
+        assert(val == NULL);
+    if (kind == BINDING_KIND_GUARD)
+        kind = BINDING_KIND_IMPLICIT;
+    assert((((uintptr_t)val) & 0x7) == 0);
+    return ((jl_ptr_kind_union_t)val) | kind;
+#else
+    jl_ptr_kind_union_t ret = { val, kind };
+    return ret;
+#endif
+}
+
+STATIC_INLINE int jl_bkind_is_some_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED;
+}
+
+STATIC_INLINE int jl_bkind_is_some_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT;
+}
+
+STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == BINDING_KIND_FAILED || kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED;
+}
+
+EXTERN_INLINE_DECLARE jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) JL_NOTSAFEPOINT {
+    if (!b)
+        return NULL;
+    assert(jl_is_binding(b));
+    return jl_atomic_load_relaxed(&b->partitions);
+}
+
+JL_DLLEXPORT jl_binding_partition_t *jl_get_globalref_partition(jl_globalref_t *gr, size_t world);
+
+EXTERN_INLINE_DECLARE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT {
+    return decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction));
+}
+
+STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT;
+
+#ifndef __clang_analyzer__
+STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
+{
+    while (1) {
+        if (!*bpart)
+            return encode_restriction(NULL, BINDING_KIND_GUARD);
+        jl_ptr_kind_union_t pku = jl_atomic_load_acquire(&(*bpart)->restriction);
+        if (!jl_bkind_is_some_import(decode_restriction_kind(pku)))
+            return pku;
+        *bnd = (jl_binding_t*)decode_restriction_value(pku);
+        *bpart = jl_get_binding_partition(*bnd, world);
+    }
+}
+#endif
 
 STATIC_INLINE int is_anonfn_typename(char *name)
 {

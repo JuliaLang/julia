@@ -561,6 +561,13 @@ void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *
                     g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<internal>"));
 }
 
+void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT
+{
+    _record_gc_edge("binding", from, to,
+                    g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<binding>"));
+}
+
+
 void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
 {
     // valid alloc_type values are 0, 1, 2

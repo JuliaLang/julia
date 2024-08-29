@@ -1925,7 +1925,7 @@ precompile_test_harness("Issue #50538") do load_path
             ex isa ErrorException || rethrow()
             ex
         end
-        global undefglobal
+        global undefglobal::Any
         end
         """)
     ji, ofile = Base.compilecache(Base.PkgId("I50538"))
