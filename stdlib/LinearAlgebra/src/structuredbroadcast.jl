@@ -262,17 +262,21 @@ function copyto!(dest::Tridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     return dest
 end
 
-_extract_triangular(bc::Broadcast.Broadcasted) = Broadcast.broadcasted(bc.f, map(_extract_triangular, bc.args)...)
-_extract_triangular(U::UpperOrLowerTriangular) = parent(U)
-_extract_triangular(D::BandedMatrix) = haszero(eltype(D)) ? zero(eltype(D)) : D
-_extract_triangular(x) = x
+# We split the loop into two sections: those over the diagonal and super/subdiagonal, and those away from it
+# in the latter loop, we may set banded matrices to the corresponding zero element (if one exists)
+# This avoids branches in the loop and helps with performance
+_preprocess_broadcasted_offdiag(bc::Broadcast.Broadcasted) = Broadcast.broadcasted(bc.f, map(_preprocess_broadcasted_offdiag, bc.args)...)
+# Reduce terms like UpperTrianguar(Diagonal([1,2,3])) to 0 away from the diagonal
+_preprocess_broadcasted_offdiag(U::UpperOrLowerTriangular) = _preprocess_broadcasted_offdiag(parent(U))
+_preprocess_broadcasted_offdiag(D::BandedMatrix) = haszero(eltype(D)) ? zero(eltype(D)) : D
+_preprocess_broadcasted_offdiag(x) = x
 function copyto!(dest::LowerTriangular, bc::Broadcasted{<:StructuredMatrixStyle})
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     # we process the Broadcasted object to extract the parents of LowerTriangular matrices
     # this is because we only access the triangular half in the following section
-    bc2 = _extract_triangular(bc)
+    bc2 = _preprocess_broadcasted_offdiag(bc)
     for j in axs[2]
         @inbounds dest.data[j,j] = bc[BandIndex(0, j)]
         if j < axs[1][end]
@@ -291,7 +295,7 @@ function copyto!(dest::UpperTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     # we process the Broadcasted object to extract the parents of UpperTriangular matrices
     # this is because we only access the triangular half in the following section
-    bc2 = _extract_triangular(bc)
+    bc2 = _preprocess_broadcasted_offdiag(bc)
     for j in axs[2]
         for i in 1:j-2
             @inbounds dest.data[i,j] = bc2[CartesianIndex(i, j)]
