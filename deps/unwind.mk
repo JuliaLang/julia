@@ -3,7 +3,7 @@ include $(SRCDIR)/unwind.version
 include $(SRCDIR)/llvmunwind.version
 
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
-LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) -lz $(SANITIZE_OPTS)
+LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) $(SANITIZE_OPTS)
 LIBUNWIND_CPPFLAGS :=
 
 ifeq ($(USE_SYSTEM_ZLIB),0)
@@ -48,7 +48,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-app
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo --disable-conservative-checks --enable-per-thread-cache
+	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" LDFLAGS=$(LDFLAGS) --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo --disable-conservative-checks --enable-per-thread-cache
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
