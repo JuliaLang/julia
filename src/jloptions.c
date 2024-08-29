@@ -36,7 +36,7 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
 
 /* This function is also used by gc-stock.c to parse the
  * JULIA_HEAP_SIZE_HINT environment variable. */
-static uint64_t parse_heap_size_hint(const char *optarg, const char *option_name)
+uint64_t parse_heap_size_hint(const char *optarg, const char *option_name)
 {
     long double value = 0.0;
     char unit[4] = {0};
