@@ -100,6 +100,7 @@ let
             redirect_stdout(isopen(orig_stdout) ? orig_stdout : devnull)
             close(pts)
         end
+        Base.errormonitor(repltask)
         try
             Base.REPL_MODULE_REF[] = REPL
             redirect_stdin(pts)
