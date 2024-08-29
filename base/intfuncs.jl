@@ -298,7 +298,11 @@ function invmod(n::T) where {T<:BitInteger}
 end
 
 # ^ for any x supporting *
-to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(one(x)), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nConvert input to float.")))
