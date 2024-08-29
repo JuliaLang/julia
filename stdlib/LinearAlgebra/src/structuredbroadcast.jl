@@ -268,7 +268,7 @@ end
 _preprocess_broadcasted_offdiag(bc::Broadcast.Broadcasted) = Broadcast.broadcasted(bc.f, map(_preprocess_broadcasted_offdiag, bc.args)...)
 # Reduce terms like UpperTrianguar(Diagonal([1,2,3])) to 0 away from the diagonal
 _preprocess_broadcasted_offdiag(U::UpperOrLowerTriangular) = _preprocess_broadcasted_offdiag(parent(U))
-_preprocess_broadcasted_offdiag(D::BandedMatrix) = haszero(eltype(D)) ? zero(eltype(D)) : D
+_preprocess_broadcasted_offdiag(D::BandedMatrix) = haszero(eltype(D)) ? (size(D) == (1,1) ? D[1,1] : zero(eltype(D))) : D
 _preprocess_broadcasted_offdiag(x) = x
 function copyto!(dest::LowerTriangular, bc::Broadcasted{<:StructuredMatrixStyle})
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))
