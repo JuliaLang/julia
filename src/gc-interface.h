@@ -218,11 +218,6 @@ JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align,
 // object being allocated and will be used to set the object header.
 struct _jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT;
 
-// This function notifies the GC about memory addresses that are set when loading the boot image.
-// The GC may use that information to, for instance, determine that such objects should
-// be treated as marked and belonged to the old generation in nursery collections.
-void jl_gc_notify_image_load(const char* img_data, size_t len);
-
 // ========================================================================= //
 // Runtime Write-Barriers
 // ========================================================================= //
