@@ -293,7 +293,7 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     return args[0];
 }
 
-void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty)
+void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty)
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
@@ -306,17 +306,17 @@ void jl_binding_set_type(jl_binding_t *b, jl_value_t *ty)
                 continue;
             } else {
                 jl_errorf("cannot set type for imported global %s.%s.",
-                        jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
+                        jl_symbol_name(mod->name), jl_symbol_name(sym));
             }
         }
         if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             jl_errorf("cannot set type for imported constant %s.%s.",
-                    jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
+                    jl_symbol_name(mod->name), jl_symbol_name(sym));
         }
         jl_value_t *old_ty = decode_restriction_value(pku);
         if (!jl_types_equal(ty, old_ty)) {
             jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
-                    jl_symbol_name(jl_globalref_mod(b->globalref)->name), jl_symbol_name(jl_globalref_name(b->globalref)));
+                    jl_symbol_name(mod->name), jl_symbol_name(sym));
         }
         if (jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku))
             break;
@@ -348,7 +348,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
             break;
     }
     if (set_type) {
-        jl_binding_set_type(b, set_type);
+        jl_binding_set_type(b, gm, gs, set_type);
     }
 }
 
@@ -748,8 +748,13 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
                 did_warn = 1;
             }
         } else if (!jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
-            jl_errorf("cannot declare %s.%s constant; it already has a value",
-                    jl_symbol_name(mod->name), jl_symbol_name(var));
+            if (jl_bkind_is_some_import(decode_restriction_kind(pku))) {
+                jl_errorf("cannot declare %s.%s constant; it was already declared as an import",
+                        jl_symbol_name(mod->name), jl_symbol_name(var));
+            } else {
+                jl_errorf("cannot declare %s.%s constant; it was already declared global",
+                        jl_symbol_name(mod->name), jl_symbol_name(var));
+            }
         }
         if (jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction(val, constant_kind))) {
             jl_gc_wb(bpart, val);

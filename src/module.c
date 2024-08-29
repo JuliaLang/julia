@@ -17,7 +17,7 @@ EXTERN_INLINE_DEFINE jl_binding_partition_t *jl_get_binding_partition(jl_binding
 EXTERN_INLINE_DEFINE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
 extern inline enum jl_partition_kind decode_restriction_kind(jl_ptr_kind_union_t pku) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT jl_binding_partition_t *jl_get_globalref_partition(jl_globalref_t *gr, size_t world) JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_binding_partition_t *jl_get_globalref_partition(jl_globalref_t *gr, size_t world)
 {
     if (!gr)
         return NULL;
@@ -258,9 +258,11 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
 retry:
     if (decode_restriction_kind(pku) != BINDING_KIND_GLOBAL && !jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
-            check_safe_newbinding(m, var);
-            if (!alloc && decode_restriction_kind(pku) != BINDING_KIND_DECLARED)
-                jl_errorf("Global %s.%s does not exist and cannot be assigned. Declare it using `global` before attempting assignment.", jl_symbol_name(m->name), jl_symbol_name(var));
+            if (decode_restriction_kind(pku) != BINDING_KIND_DECLARED) {
+                check_safe_newbinding(m, var);
+                if (!alloc)
+                    jl_errorf("Global %s.%s does not exist and cannot be assigned. Declare it using `global` before attempting assignment.", jl_symbol_name(m->name), jl_symbol_name(var));
+            }
             jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
             if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku))
                 goto retry;
@@ -345,7 +347,9 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     if (decode_restriction_kind(pku) != BINDING_KIND_GLOBAL && !jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
-            check_safe_newbinding(m, var);
+            if (decode_restriction_kind(pku) != BINDING_KIND_DECLARED) {
+                check_safe_newbinding(m, var);
+            }
             return b;
         }
         jl_value_t *f = jl_get_binding_value_if_const(b);
