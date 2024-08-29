@@ -905,6 +905,18 @@ Base.:+(::Infinity21097,::Infinity21097) = Infinity21097()
     end
 end
 
+@testset "don't assume zero is the neutral element; issue #54875" begin
+    A = rand(3,4)
+    @test sum(I -> A[I], CartesianIndices(A); dims=1) == sum(I -> A[I], CartesianIndices(A); dims=1, init=0.)
+end
+
+@testset "cannot construct a value of type Union{} for return result; issue #43731" begin
+    a = collect(1.0:4)
+    f(x) = x < 3 ? missing : x
+    @test ismissing(minimum(f, a))
+    @test ismissing(minimum(f, a); dims = 1)
+end
+
 @testset "zero indices are not special, issue #38660" begin
     v = OffsetVector([-1, 1], 0:1)
     @test findmin(v, dims=1) == OffsetVector.(([-1], [0]), (0:0,))
