@@ -850,7 +850,8 @@ JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 0);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    return bpart && !jl_bkind_is_some_guard(decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction)));
+    enum jl_partition_kind kind = decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction));
+    return bpart && kind == BINDING_KIND_DECLARED && !jl_bkind_is_some_guard(kind);
 }
 
 static uint_t bindingkey_hash(size_t idx, jl_value_t *data)
