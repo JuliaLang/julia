@@ -49,10 +49,14 @@ function Base.replaceindex_atomic!(buf::WSBuffer{T}, success_order::Symbol, fail
     @inbounds Base.replaceindex_atomic!(buf.buffer, success_order, fail_order, expected, desired, ((idx - 1) & buf.mask) + 1)
 end
 
-function Base.copyto!(dst::WSBuffer{T}, src::WSBuffer{T}) where T
+function Base.copyto!(dst::WSBuffer{T}, src::WSBuffer{T}, top, bottom) where T
+    # must use queue indexes. When the queue is in state top=3, bottom=18, capacity=16
+    # the real index of element 18 in the queue is 2, after growing in the new buffer it must be 18
     @assert dst.capacity >= src.capacity
-    for i in eachindex(src.buffer)
-       @inbounds @atomic :monotonic dst.buffer[i] = src.buffer[i]
+    @assert top <= bottom
+    # TODO overflow of bottom?
+    for i in top:bottom
+        @atomic :monotonic dst[i] = @atomic :monotonic src[i]
     end
 end
 
@@ -82,9 +86,9 @@ function Base.push!(q::WSQueue{T}, v::T) where T
     size = bottom - top
     if __unlikely(size > (buffer.capacity - 1)) # Chase-Lev has size >= (buf.capacity - 1) || Le has size > (buf.capacity - 1)
         new_buffer = WSBuffer{T}(2*buffer.capacity)
-        copyto!(new_buffer, buffer) # TODO only copy active range?
+        copyto!(new_buffer, buffer, top, bottom)
         @atomic :release q.buffer = new_buffer
-        buffer = new_buffer # Le does buffer = @atomic :monotonic q.buffer
+        buffer = new_buffer
     end
     @atomic :monotonic buffer[bottom] = v
     Core.Intrinsics.atomic_fence(:release)
