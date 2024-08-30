@@ -417,7 +417,7 @@ function load_REPL()
     return nothing
 end
 
-global active_repl
+global active_repl::Any
 global active_repl_backend = nothing
 
 function run_fallback_repl(interactive::Bool)

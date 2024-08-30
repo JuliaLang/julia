@@ -553,7 +553,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
     if (jl_base_module == NULL)
         return NULL;
     jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
-    return stderr_obj ? jl_atomic_load_relaxed(&stderr_obj->value) : NULL;
+    return stderr_obj ? jl_get_binding_value(stderr_obj) : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------
@@ -648,12 +648,10 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     if (globname && dv->name->module) {
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
-        if (b && jl_atomic_load_relaxed(&b->owner) && b->constp) {
-            jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
-            // The `||` makes this function work for both function instances and function types.
-            if (bv == v || jl_typeof(bv) == v)
-                return 1;
-        }
+        jl_value_t *bv = jl_get_binding_value_if_const(b);
+        // The `||` makes this function work for both function instances and function types.
+        if (bv && (bv == v || jl_typeof(bv) == v))
+            return 1;
     }
     return 0;
 }
@@ -1403,6 +1401,7 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
         return n;
     }
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
+            ((jl_datatype_t*)ftype)->name->mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_type_type_mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_nonfunction_mt) {
         n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->mt->name);

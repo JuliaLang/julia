@@ -781,6 +781,9 @@ end
     @test transpose(Dherm) == Diagonal([[1 1-im; 1+im 1], [1 1-im; 1+im 1]])
     @test adjoint(Dsym) == Diagonal([[1 1-im; 1-im 1], [1 1-im; 1-im 1]])
     @test transpose(Dsym) == Dsym
+    @test diag(D, 0) == diag(D) == [[1 2; 3 4], [1 2; 3 4]]
+    @test diag(D, 1) == diag(D, -1) == [zeros(Int,2,2)]
+    @test diag(D, 2) == diag(D, -2) == []
 
     v = [[1, 2], [3, 4]]
     @test Dherm' * v == Dherm * v
@@ -1352,6 +1355,11 @@ end
             @test S + D == Array(S) + Array(D)
         end
     end
+end
+
+@testset "bounds-check with CartesianIndex ranges" begin
+    D = Diagonal(1:typemax(Int))
+    @test checkbounds(Bool, D, diagind(D, IndexCartesian()))
 end
 
 end # module TestDiagonal
