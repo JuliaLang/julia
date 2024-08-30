@@ -1123,7 +1123,6 @@ end
 _extract_val(::Type{Val{V}}) where {V} = V
 _extract_val(@nospecialize _) = nothing
 _propertynames_bytype(::Type{T}) where {T} =
-    which(propertynames, (T,)) === which(propertynames, (Any,)) ? nothing :
     _extract_val(promote_op(Val∘propertynames, T))
 
 Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
