@@ -423,6 +423,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     JL_GC_PROMISE_ROOTED(ct);
     uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    ct->world_age = jl_get_world_counter(); // root_task sets world_age to 1
     jl_init_task_lock(ct);
     return &ct->gcstack;
 }
