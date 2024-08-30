@@ -159,7 +159,7 @@ let
     @test @lock(lockable2, lockable2[]["foo"]) == "hello"
 end
 
-for l in (Threads.SpinLock(), ReentrantLock())
+for l in (Threads.SpinLock(), Threads.SystemMutex(), ReentrantLock())
     @test get_finalizers_inhibited() == 0
     @test lock(get_finalizers_inhibited, l) == 1
     @test get_finalizers_inhibited() == 0

@@ -73,3 +73,81 @@ end
 function islocked(l::SpinLock)
     return (@atomic :monotonic l.owned) != 0
 end
+
+const UV_MUTEX_SIZE = ccall(:jl_sizeof_uv_mutex_t, Cint, ())
+
+"""
+    SystemMutex()
+
+Create a system mutex. This is a reentrant lock that is not aware of the julia scheduler.
+Blocking on it makes the thread not available for the julia scheduler.
+"""
+mutable struct SystemMutex <: AbstractLock
+    @atomic ownertid::Int16
+    handle::Ptr{Cvoid}
+    function SystemMutex()
+        m = new(zero(Int16), Libc.malloc(UV_MUTEX_SIZE))
+        ccall(:uv_mutex_init, Cvoid, (Ptr{Cvoid},), m.handle)
+        finalizer(_uv_hook_close, m)
+        return m
+    end
+end
+
+unsafe_convert(::Type{Ptr{Cvoid}}, m::SystemMutex) = m.handle
+
+function _uv_hook_close(x::SystemMutex)
+    h = x.handle
+    if h != C_NULL
+        x.handle = C_NULL
+        ccall(:uv_mutex_destroy, Cvoid, (Ptr{Cvoid},), h)
+        Libc.free(h)
+        nothing
+    end
+end
+
+function lock(m::SystemMutex)
+    if (@atomic :monotonic m.ownertid) == Int16(threadid())
+        return
+    end
+    # Temporary solution before we have gc transition support in codegen.
+    # This could mess up gc state when we add codegen support.
+    GC.disable_finalizers()
+    gc_state = ccall(:jl_gc_safe_enter, Int8, ())
+    ccall(:uv_mutex_lock, Cvoid, (Ptr{Cvoid},), m)
+    ccall(:jl_gc_safe_leave, Cvoid, (Int8,), gc_state)
+    @atomic :monotonic m.ownertid = Int16(threadid())
+    return
+end
+
+function trylock(m::SystemMutex)
+    if (@atomic :monotonic m.ownertid) == Int16(threadid())
+        return true
+    end
+    GC.disable_finalizers()
+    r = ccall(:uv_mutex_trylock, Cint, (Ptr{Cvoid},), m)
+    if r == 0
+        @atomic :monotonic m.ownertid = Int16(threadid())
+        return true
+    else
+        GC.enable_finalizers()
+        return false
+    end
+end
+
+function unlock(m::SystemMutex)
+    @assert((@atomic :monotonic m.ownertid) == Int16(threadid()), "unlock from wrong thread")
+    @atomic :monotonic m.ownertid = Int16(0)
+    ccall(:uv_mutex_unlock, Cvoid, (Ptr{Cvoid},), m)
+    GC.enable_finalizers()
+    return
+end
+
+function islocked(m::SystemMutex)
+    return (@atomic :monotonic m.ownertid) != Int16(0)
+end
+
+# Note: this cannot assert that the lock is held by the correct thread, because we do not
+# track which thread locked it. Users beware.
+function Base.assert_havelock(m::SystemMutex)
+    return (islocked(m) && (@atomic :monotonic m.ownertid) == Int16(threadid())) ? nothing : Base.concurrency_violation()
+end
