@@ -328,16 +328,25 @@ a master process to establish a connection before dying.
 
 ### [`JULIA_NUM_THREADS`](@id JULIA_NUM_THREADS)
 
-An unsigned 64-bit integer (`uint64_t`) that sets the maximum number of threads
-available to Julia. If `$JULIA_NUM_THREADS` is not positive or is not set, or
-if the number of CPU threads cannot be determined through system calls, then the
-number of threads is set to `1`.
+An unsigned 64-bit integer (`uint64_t`) or string that sets the maximum number
+of threads available to Julia. If `$JULIA_NUM_THREADS` is not set or is a
+non-positive integer, or if the number of CPU threads cannot be determined
+through system calls, then the number of threads is set to `1`.
 
 If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
-to the number of CPU threads.
+to the number of CPU threads. It can also be set to a comma-separated string to
+specify the size of the `:default` and `:interactive` [threadpools](@ref
+man-threadpools), respectively:
+```bash
+# 5 threads in the :default pool and 2 in the :interactive pool
+export JULIA_NUM_THREADS=5,2
+
+# `auto` threads in the :default pool and 1 in the :interactive pool
+export JULIA_NUM_THREADS=auto,1
+```
 
 !!! note
-    `JULIA_NUM_THREADS` must be defined before starting julia; defining it in
+    `JULIA_NUM_THREADS` must be defined before starting Julia; defining it in
     `startup.jl` is too late in the startup process.
 
 !!! compat "Julia 1.5"
@@ -346,6 +355,9 @@ to the number of CPU threads.
 
 !!! compat "Julia 1.7"
     The `auto` value for `$JULIA_NUM_THREADS` requires Julia 1.7 or above.
+
+!!! compat "Julia 1.9"
+    The `x,y` format for threadpools requires Julia 1.9 or above.
 
 ### [`JULIA_THREAD_SLEEP_THRESHOLD`](@id JULIA_THREAD_SLEEP_THRESHOLD)
 
