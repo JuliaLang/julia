@@ -109,6 +109,8 @@ static jl_ptls_t stkerror_ptls;
 static int have_backtrace_fiber;
 static void JL_NORETURN start_backtrace_fiber(void)
 {
+    // print the warning (this mysteriously needs a lot of stack for the WriteFile syscall)
+    stack_overflow_warning();
     // collect the backtrace
     stkerror_ptls->bt_size =
         rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx,
@@ -244,7 +246,6 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         case EXCEPTION_STACK_OVERFLOW:
             if (ct->eh != NULL) {
                 ptls->needs_resetstkoflw = 1;
-                stack_overflow_warning();
                 jl_throw_in_ctx(ct, jl_stackovf_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
