@@ -235,6 +235,14 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT;
 // in different GC generations (i.e. if the first argument points to an old object and the
 // second argument points to a young object), and if so, call the write barrier slow-path.
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT;
+// Freshly allocated objects are known to be in the young generation until the next safepoint,
+// so write barriers can be omitted until the next allocation. This function is a no-op that
+// can be used to annotate that a write barrier would be required were it not for this property
+// (as opposed to somebody just having forgotten to think about write barriers).
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent, const void *ptr) JL_NOTSAFEPOINT {}
+// Used to annotate that a write barrier would be required, but may be omitted because `ptr`
+// is known to be an old object.
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT {}
 // Write-barrier function that must be used after copying multiple fields of an object into
 // another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.

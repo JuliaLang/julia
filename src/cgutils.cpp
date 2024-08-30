@@ -568,23 +568,6 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
     return load;
 }
 
-// Returns ctx.types().T_pjlvalue
-static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
-{
-    // emit a pointer to any jl_value_t which will be valid across reloading code
-    if (p == NULL)
-        return Constant::getNullValue(ctx.types().T_pjlvalue);
-    // bindings are prefixed with jl_bnd#
-    jl_globalref_t *gr = p->globalref;
-    Value *pgv = gr ? julia_pgv(ctx, "jl_bnd#", gr->name, gr->mod, p) : julia_pgv(ctx, "jl_bnd#", p);
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-    auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
-            ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))),
-            false, sizeof(jl_binding_t), alignof(jl_binding_t)));
-    setName(ctx.emission_context, load, pgv->getName());
-    return load;
-}
-
 // bitcast a value, but preserve its address space when dealing with pointer types
 static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
 {

@@ -199,6 +199,8 @@ function Broadcast.newindex(A::StructuredMatrix, b::BandIndex)
     # and we apply newindex to both the axes at once to obtain the result
     size(A,1) > 1 ? b : BandIndex(0, 1)
 end
+# All structured matrices are square, and therefore they only broadcast out if they are size (1, 1)
+Broadcast.newindex(D::StructuredMatrix, I::CartesianIndex{2}) = size(D) == (1,1) ? CartesianIndex(1,1) : I
 
 function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     isvalidstructbc(dest, bc) || return copyto!(dest, convert(Broadcasted{Nothing}, bc))

@@ -875,8 +875,8 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_n_markthreads = 0;
         jl_n_sweepthreads = 0;
         jl_n_gcthreads = 0;
-        jl_n_threads_per_pool[0] = 1;
-        jl_n_threads_per_pool[1] = 0;
+        jl_n_threads_per_pool[0] = 0; // Interactive threadpool
+        jl_n_threads_per_pool[1] = 1; // Default threadpool
     } else {
         post_image_load_hooks();
     }
