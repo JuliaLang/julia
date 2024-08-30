@@ -79,6 +79,8 @@ Multi-threading changes
 Build system changes
 --------------------
 
+* There is a new `Makefile` to build Julia and LLVM using the profile-guided and link-time optimizations (PGO and LTO) strategies, see `contrib/pgo-lto/Makefile` ([#45641]).
+
 New library functions
 ---------------------
 
@@ -127,12 +129,6 @@ Standard library changes
   styled content ([#49586]).
 * The new `@styled_str` string macro provides a convenient way of creating a
   `AnnotatedString` with various faces or other attributes applied ([#49586]).
-
-#### JuliaSyntaxHighlighting
-
-* A new standard library for applying syntax highlighting to Julia code, this
-  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
-  that creates an `AnnotatedString` with syntax highlighting applied.
 
 #### Package Manager
 
@@ -420,6 +416,7 @@ Deprecated or removed
 [#44247]: https://github.com/JuliaLang/julia/issues/44247
 [#45164]: https://github.com/JuliaLang/julia/issues/45164
 [#45396]: https://github.com/JuliaLang/julia/issues/45396
+[#45641]: https://github.com/JuliaLang/julia/issues/45641
 [#45962]: https://github.com/JuliaLang/julia/issues/45962
 [#46196]: https://github.com/JuliaLang/julia/issues/46196
 [#46372]: https://github.com/JuliaLang/julia/issues/46372

@@ -7,7 +7,6 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "gc.h"
 #include "threading.h"
 
 #ifdef __cplusplus
@@ -32,7 +31,7 @@ static const int16_t sleeping_like_the_dead JL_UNUSED = 2;
 // a running count of how many threads are currently not_sleeping
 // plus a running count of the number of in-flight wake-ups
 // n.b. this may temporarily exceed jl_n_threads
-static _Atomic(int) nrunning = 0;
+_Atomic(int) n_threads_running = 0;
 
 // invariant: No thread is ever asleep unless sleep_check_state is sleeping (or we have a wakeup signal pending).
 // invariant: Any particular thread is not asleep unless that thread's sleep_check_state is sleeping.
@@ -88,7 +87,7 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 // parallel task runtime
 // ---
 
-JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max)
+JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max) // [0, n)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     return cong(max, &ptls->rngseed);
@@ -111,79 +110,6 @@ void jl_init_threadinginfra(void)
 
 
 void JL_NORETURN jl_finish_task(jl_task_t *ct);
-
-static inline int may_mark(void) JL_NOTSAFEPOINT
-{
-    return (jl_atomic_load(&gc_n_threads_marking) > 0);
-}
-
-static inline int may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT
-{
-    return (jl_atomic_load(&ptls->gc_tls.gc_sweeps_requested) > 0);
-}
-
-// parallel gc thread function
-void jl_parallel_gc_threadfun(void *arg)
-{
-    jl_threadarg_t *targ = (jl_threadarg_t*)arg;
-
-    // initialize this thread (set tid and create heap)
-    jl_ptls_t ptls = jl_init_threadtls(targ->tid);
-    void *stack_lo, *stack_hi;
-    jl_init_stack_limits(0, &stack_lo, &stack_hi);
-    // warning: this changes `jl_current_task`, so be careful not to call that from this function
-    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
-    JL_GC_PROMISE_ROOTED(ct);
-    (void)jl_atomic_fetch_add_relaxed(&nrunning, -1);
-    // wait for all threads
-    jl_gc_state_set(ptls, JL_GC_PARALLEL_COLLECTOR_THREAD, JL_GC_STATE_UNSAFE);
-    uv_barrier_wait(targ->barrier);
-
-    // free the thread argument here
-    free(targ);
-
-    while (1) {
-        uv_mutex_lock(&gc_threads_lock);
-        while (!may_mark() && !may_sweep(ptls)) {
-            uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
-        }
-        uv_mutex_unlock(&gc_threads_lock);
-        assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
-        gc_mark_loop_parallel(ptls, 0);
-        if (may_sweep(ptls)) {
-            assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
-            gc_sweep_pool_parallel(ptls);
-            jl_atomic_fetch_add(&ptls->gc_tls.gc_sweeps_requested, -1);
-        }
-    }
-}
-
-// concurrent gc thread function
-void jl_concurrent_gc_threadfun(void *arg)
-{
-    jl_threadarg_t *targ = (jl_threadarg_t*)arg;
-
-    // initialize this thread (set tid and create heap)
-    jl_ptls_t ptls = jl_init_threadtls(targ->tid);
-    void *stack_lo, *stack_hi;
-    jl_init_stack_limits(0, &stack_lo, &stack_hi);
-    // warning: this changes `jl_current_task`, so be careful not to call that from this function
-    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
-    JL_GC_PROMISE_ROOTED(ct);
-    (void)jl_atomic_fetch_add_relaxed(&nrunning, -1);
-    // wait for all threads
-    jl_gc_state_set(ptls, JL_GC_CONCURRENT_COLLECTOR_THREAD, JL_GC_STATE_UNSAFE);
-    uv_barrier_wait(targ->barrier);
-
-    // free the thread argument here
-    free(targ);
-
-    while (1) {
-        assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_CONCURRENT_COLLECTOR_THREAD);
-        uv_sem_wait(&gc_sweep_assists_needed);
-        gc_free_pages();
-    }
-}
 
 // thread function: used by all mutator threads except the main thread
 void jl_threadfun(void *arg)
@@ -218,9 +144,9 @@ void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT
     // record that there is now another thread that may be used to schedule work
     // we will decrement this again in scheduler_delete_thread, only slightly
     // in advance of pthread_join (which hopefully itself also had been
-    // adopted by now and is included in nrunning too)
-    (void)jl_atomic_fetch_add_relaxed(&nrunning, 1);
-    // n.b. this is the only point in the code where we ignore the invariants on the ordering of nrunning
+    // adopted by now and is included in n_threads_running too)
+    (void)jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+    // n.b. this is the only point in the code where we ignore the invariants on the ordering of n_threads_running
     // since we are being initialized from foreign code, we could not necessarily have expected or predicted that to happen
 }
 
@@ -273,6 +199,21 @@ static int sleep_check_after_threshold(uint64_t *start_cycles) JL_NOTSAFEPOINT
     return 0;
 }
 
+void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    // equivalent to wake_thread, without the assert on wasrunning
+    int8_t state = jl_atomic_load_relaxed(&ptls->sleep_check_state);
+    if (state == sleeping) {
+        if (jl_atomic_cmpswap_relaxed(&ptls->sleep_check_state, &state, not_sleeping)) {
+            // this notification will never be consumed, so we may have now
+            // introduced some inaccuracy into the count, but that is
+            // unavoidable with any asynchronous interruption
+            jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+        }
+    }
+}
+
+
 static int set_not_sleeping(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
@@ -280,7 +221,7 @@ static int set_not_sleeping(jl_ptls_t ptls) JL_NOTSAFEPOINT
             return 1;
         }
     }
-    int wasrunning = jl_atomic_fetch_add_relaxed(&nrunning, -1); // consume in-flight wakeup
+    int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, -1); // consume in-flight wakeup
     assert(wasrunning > 1); (void)wasrunning;
     return 0;
 }
@@ -292,7 +233,7 @@ static int wake_thread(int16_t tid) JL_NOTSAFEPOINT
     if (jl_atomic_load_relaxed(&ptls2->sleep_check_state) != not_sleeping) {
         int8_t state = sleeping;
         if (jl_atomic_cmpswap_relaxed(&ptls2->sleep_check_state, &state, not_sleeping)) {
-            int wasrunning = jl_atomic_fetch_add_relaxed(&nrunning, 1); // increment in-flight wakeup count
+            int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1); // increment in-flight wakeup count
             assert(wasrunning); (void)wasrunning;
             JL_PROBE_RT_SLEEP_CHECK_WAKE(ptls2, state);
             uv_mutex_lock(&ptls2->sleep_lock);
@@ -312,10 +253,7 @@ static void wake_libuv(void) JL_NOTSAFEPOINT
     JULIA_DEBUG_SLEEPWAKE( io_wakeup_leave = cycleclock() );
 }
 
-/* ensure thread tid is awake if necessary */
-JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
-{
-    jl_task_t *ct = jl_current_task;
+void wakeup_thread(jl_task_t *ct, int16_t tid) JL_NOTSAFEPOINT { // Pass in ptls when we have it already available to save a lookup
     int16_t self = jl_atomic_load_relaxed(&ct->tid);
     if (tid != self)
         jl_fence(); // [^store_buffering_1]
@@ -323,11 +261,11 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
     JULIA_DEBUG_SLEEPWAKE( wakeup_enter = cycleclock() );
     if (tid == self || tid == -1) {
         // we're already awake, but make sure we'll exit uv_run
-        // and that nrunning is updated if this is now considered in-flight
+        // and that n_threads_running is updated if this is now considered in-flight
         jl_ptls_t ptls = ct->ptls;
         if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
             if (jl_atomic_exchange_relaxed(&ptls->sleep_check_state, not_sleeping) != not_sleeping) {
-                int wasrunning = jl_atomic_fetch_add_relaxed(&nrunning, 1);
+                int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
                 assert(wasrunning); (void)wasrunning;
                 JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls);
             }
@@ -370,6 +308,12 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
     JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
 }
 
+/* ensure thread tid is awake if necessary */
+JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    wakeup_thread(ct, tid);
+}
 
 // get the next runnable task
 static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
@@ -506,7 +450,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     // responsibility, so need to make sure thread 0 will take care
                     // of us.
                     if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
-                        jl_wakeup_thread(0);
+                        wakeup_thread(ct, 0);
                 }
                 if (uvlock) {
                     int enter_eventloop = may_sleep(ptls);
@@ -548,8 +492,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 }
 
                 // any thread which wants us running again will have to observe
-                // sleep_check_state==sleeping and increment nrunning for us
-                int wasrunning = jl_atomic_fetch_add_relaxed(&nrunning, -1);
+                // sleep_check_state==sleeping and increment n_threads_running for us
+                int wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
                 assert(wasrunning);
                 isrunning = 0;
                 if (wasrunning == 1) {
@@ -573,8 +517,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 while (may_sleep(ptls)) {
                     if (ptls->tid == 0) {
                         task = wait_empty;
-                        if (task && jl_atomic_load_relaxed(&nrunning) == 0) {
-                            wasrunning = jl_atomic_fetch_add_relaxed(&nrunning, 1);
+                        if (task && jl_atomic_load_relaxed(&n_threads_running) == 0) {
+                            wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
                             assert(!wasrunning);
                             wasrunning = !set_not_sleeping(ptls);
                             assert(!wasrunning);
@@ -585,11 +529,11 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         }
                         task = NULL;
                     }
-                    // else should we warn the user of certain deadlock here if tid == 0 && nrunning == 0?
+                    // else should we warn the user of certain deadlock here if tid == 0 && n_threads_running == 0?
                     uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 }
                 assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
-                assert(jl_atomic_load_relaxed(&nrunning));
+                assert(jl_atomic_load_relaxed(&n_threads_running));
                 start_cycles = 0;
                 uv_mutex_unlock(&ptls->sleep_lock);
                 JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
@@ -603,7 +547,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             JL_CATCH {
                 // probably SIGINT, but possibly a user mistake in trypoptask
                 if (!isrunning)
-                    jl_atomic_fetch_add_relaxed(&nrunning, 1);
+                    jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
                 set_not_sleeping(ptls);
                 jl_rethrow();
             }
@@ -622,7 +566,7 @@ void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
     int notsleeping = jl_atomic_exchange_relaxed(&ptls->sleep_check_state, sleeping_like_the_dead) == not_sleeping;
     jl_fence();
     if (notsleeping) {
-        if (jl_atomic_load_relaxed(&nrunning) == 1) {
+        if (jl_atomic_load_relaxed(&n_threads_running) == 1) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[jl_atomic_load_relaxed(&io_loop_tid)];
             // This was the last running thread, and there is no thread with !may_sleep
             // so make sure tid 0 is notified to check wait_empty
@@ -632,10 +576,10 @@ void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
         }
     }
     else {
-        jl_atomic_fetch_add_relaxed(&nrunning, 1);
+        jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
     }
-    jl_wakeup_thread(0); // force thread 0 to see that we do not have the IO lock (and am dead)
-    jl_atomic_fetch_add_relaxed(&nrunning, -1);
+    wakeup_thread(jl_atomic_load_relaxed(&ptls->current_task), 0); // force thread 0 to see that we do not have the IO lock (and am dead)
+    jl_atomic_fetch_add_relaxed(&n_threads_running, -1);
 }
 
 #ifdef __cplusplus

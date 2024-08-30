@@ -700,38 +700,36 @@ int foreach_mtable_in_module(
         if ((void*)b == jl_nothing)
             break;
         jl_sym_t *name = b->globalref->name;
-        if (jl_atomic_load_relaxed(&b->owner) == b && b->constp) {
-            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
-            if (v) {
-                jl_value_t *uw = jl_unwrap_unionall(v);
-                if (jl_is_datatype(uw)) {
-                    jl_typename_t *tn = ((jl_datatype_t*)uw)->name;
-                    if (tn->module == m && tn->name == name && tn->wrapper == v) {
-                        // this is the original/primary binding for the type (name/wrapper)
-                        jl_methtable_t *mt = tn->mt;
-                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt && mt != jl_nonfunction_mt) {
-                            assert(mt->module == m);
-                            if (!visit(mt, env))
-                                return 0;
-                        }
-                    }
-                }
-                else if (jl_is_module(v)) {
-                    jl_module_t *child = (jl_module_t*)v;
-                    if (child != m && child->parent == m && child->name == name) {
-                        // this is the original/primary binding for the submodule
-                        if (!foreach_mtable_in_module(child, visit, env))
-                            return 0;
-                    }
-                }
-                else if (jl_is_mtable(v)) {
-                    jl_methtable_t *mt = (jl_methtable_t*)v;
-                    if (mt->module == m && mt->name == name) {
-                        // this is probably an external method table here, so let's
-                        // assume so as there is no way to precisely distinguish them
+        jl_value_t *v = jl_get_binding_value_if_const(b);
+        if (v) {
+            jl_value_t *uw = jl_unwrap_unionall(v);
+            if (jl_is_datatype(uw)) {
+                jl_typename_t *tn = ((jl_datatype_t*)uw)->name;
+                if (tn->module == m && tn->name == name && tn->wrapper == v) {
+                    // this is the original/primary binding for the type (name/wrapper)
+                    jl_methtable_t *mt = tn->mt;
+                    if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt && mt != jl_nonfunction_mt) {
+                        assert(mt->module == m);
                         if (!visit(mt, env))
                             return 0;
                     }
+                }
+            }
+            else if (jl_is_module(v)) {
+                jl_module_t *child = (jl_module_t*)v;
+                if (child != m && child->parent == m && child->name == name) {
+                    // this is the original/primary binding for the submodule
+                    if (!foreach_mtable_in_module(child, visit, env))
+                        return 0;
+                }
+            }
+            else if (jl_is_mtable(v)) {
+                jl_methtable_t *mt = (jl_methtable_t*)v;
+                if (mt->module == m && mt->name == name) {
+                    // this is probably an external method table here, so let's
+                    // assume so as there is no way to precisely distinguish them
+                    if (!visit(mt, env))
+                        return 0;
                 }
             }
         }
@@ -3669,7 +3667,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
         int msp2 = !msp && jl_method_morespecific(m2, m);
         if (!msp) {
             if (subt || !include_ambiguous || (lim != -1 && msp2)) {
-                if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {
+                if (subt2 || ((lim != -1 || (!include_ambiguous && !msp2)) && jl_subtype((jl_value_t*)ti, m2->sig))) {
                     // this may be filtered out as fully intersected, if applicable later
                     mayexclude = 1;
                 }

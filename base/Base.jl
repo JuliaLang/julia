@@ -53,6 +53,9 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
+typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+
 dotgetproperty(x, f) = getproperty(x, f)
 
 getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))
@@ -224,7 +227,7 @@ delete_method(which(Pair{Any,Any}, (Any, Any)))
 end
 
 # The REPL stdlib hooks into Base using this Ref
-const REPL_MODULE_REF = Ref{Module}()
+const REPL_MODULE_REF = Ref{Module}(Base)
 
 include("checked.jl")
 using .Checked
@@ -421,7 +424,6 @@ include("weakkeydict.jl")
 
 # ScopedValues
 include("scopedvalues.jl")
-using .ScopedValues
 
 # metaprogramming
 include("meta.jl")
@@ -624,7 +626,7 @@ function start_profile_listener()
         # this will prompt any ongoing or pending event to flush also
         close(cond)
         # error-propagation is not needed, since the errormonitor will handle printing that better
-        _wait(t)
+        t === current_task() || _wait(t)
     end
     finalizer(cond) do c
         # if something goes south, still make sure we aren't keeping a reference in C to this
@@ -645,7 +647,7 @@ function __init__()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     empty!(explicit_loaded_modules)
-    @assert isempty(loaded_precompiles)
+    empty!(loaded_precompiles) # If we load a packageimage when building the image this might not be empty
     for (mod, key) in module_keys
         loaded_precompiles[key => module_build_id(mod)] = mod
     end

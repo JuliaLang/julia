@@ -124,6 +124,9 @@ Random.seed!(1)
         Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
         @test_throws ArgumentError Bu[5, 4] = 1
         @test_throws ArgumentError Bl[4, 5] = 1
+
+        # setindex should return the destination
+        @test setindex!(ubd, 1, 1, 1) === ubd
     end
 
     @testset "isstored" begin
@@ -143,11 +146,9 @@ Random.seed!(1)
 
     @testset "show" begin
         BD = Bidiagonal(dv, ev, :U)
-        dstring = sprint(Base.print_matrix,BD.dv')
-        estring = sprint(Base.print_matrix,BD.ev')
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n super:$estring"
+        @test sprint(show,BD) == "Bidiagonal($(repr(dv)), $(repr(ev)), :U)"
         BD = Bidiagonal(dv,ev,:L)
-        @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n sub:$estring"
+        @test sprint(show,BD) == "Bidiagonal($(repr(dv)), $(repr(ev)), :L)"
     end
 
     @testset for uplo in (:U, :L)
@@ -828,6 +829,9 @@ end
         end
     end
 
+    @test diag(BU, -1) == [zeros(size(dv[i+1], 1), size(dv[i],2)) for i in 1:length(dv)-1]
+    @test diag(BL, 1) == [zeros(size(dv[i], 1), size(dv[i+1],2)) for i in 1:length(dv)-1]
+
     M = ones(2,2)
     for n in 0:1
         dv = fill(M, n)
@@ -944,9 +948,6 @@ end
             @test_throws ArgumentError rmul!(B, A)
             @test_throws ArgumentError lmul!(A, B)
         end
-        D = Diagonal(dv)
-        @test rmul!(copy(A), D) ≈ A * D
-        @test lmul!(D, copy(A)) ≈ D * A
     end
     @testset "non-commutative" begin
         S32 = SizedArrays.SizedArray{(3,2)}(rand(3,2))
@@ -968,6 +969,42 @@ end
     end
 end
 
+@testset "mul with Diagonal" begin
+    for n in 0:4
+        dv, ev = rand(n), rand(max(n-1,0))
+        d = rand(n)
+        for uplo in (:U, :L)
+            A = Bidiagonal(dv, ev, uplo)
+            D = Diagonal(d)
+            M = Matrix(A)
+            S = similar(A, size(A))
+            @test A * D ≈ mul!(S, A, D) ≈ M * D
+            @test D * A ≈ mul!(S, D, A) ≈ D * M
+            @test mul!(copy(S), D, A, 2, 2) ≈ D * M * 2 + S * 2
+            @test mul!(copy(S), A, D, 2, 2) ≈ M * D * 2 + S * 2
+
+            A2 = Bidiagonal(dv, zero(ev), uplo)
+            M2 = Array(A2)
+            S2 = Bidiagonal(copy(dv), copy(ev), uplo == (:U) ? (:L) : (:U))
+            MS2 = Array(S2)
+            @test mul!(copy(S2), D, A2) ≈ D * M2
+            @test mul!(copy(S2), A2, D) ≈ M2 * D
+            @test mul!(copy(S2), A2, D, 2, 2) ≈ M2 * D * 2 + MS2 * 2
+            @test mul!(copy(S2), D, A2, 2, 2) ≈ D * M2 * 2 + MS2 * 2
+        end
+    end
+
+    t1 = SizedArrays.SizedArray{(2,3)}([1 2 3; 3 4 5])
+    t2 = SizedArrays.SizedArray{(3,2)}([1 2; 3 4; 5 6])
+    dv, ev, d = fill(t1, 4), fill(2t1, 3), fill(t2, 4)
+    for uplo in (:U, :L)
+        A = Bidiagonal(dv, ev, uplo)
+        D = Diagonal(d)
+        @test A * D ≈ Array(A) * Array(D)
+        @test D * A ≈ Array(D) * Array(A)
+    end
+end
+
 @testset "conversion to Tridiagonal for immutable bands" begin
     n = 4
     dv = FillArrays.Fill(3, n)
@@ -982,6 +1019,33 @@ end
     B = Bidiagonal(dv, ev, :L)
     @test Tridiagonal{Int}(B) === Tridiagonal(B) === Tridiagonal(ev, dv, z)
     @test Tridiagonal{Float64}(B) === Tridiagonal(evf, dvf, zf)
+end
+
+@testset "off-band indexing error" begin
+    B = Bidiagonal(Vector{BigInt}(undef, 4), Vector{BigInt}(undef,3), :L)
+    @test_throws "cannot set entry" B[1,2] = 4
+end
+
+@testset "mul with empty arrays" begin
+    A = zeros(5,0)
+    B = Bidiagonal(zeros(0), zeros(0), :U)
+    BL = Bidiagonal(zeros(5), zeros(4), :U)
+    @test size(A * B) == size(A)
+    @test size(BL * A) == size(A)
+    @test size(B * B) == size(B)
+    C = similar(A)
+    @test mul!(C, A, B) == A * B
+    @test mul!(C, BL, A) == BL * A
+    @test mul!(similar(B), B, B) == B * B
+    @test mul!(similar(B, size(B)), B, B) == B * B
+
+    v = zeros(size(B,2))
+    @test size(B * v) == size(v)
+    @test mul!(similar(v), B, v) == B * v
+
+    D = Diagonal(zeros(size(B,2)))
+    @test size(B * D) == size(D * B) == size(D)
+    @test mul!(similar(D), B, D) == mul!(similar(D), D, B) == B * D
 end
 
 end # module TestBidiagonal

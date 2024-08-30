@@ -663,8 +663,11 @@ kw"{", kw"{}", kw"}"
 """
     []
 
-Square braces are used for [indexing](@ref man-array-indexing), [indexed assignment](@ref man-indexed-assignment),
-[array literals](@ref man-array-literals), and [array comprehensions](@ref man-comprehensions).
+Square brackets are used for [indexing](@ref man-array-indexing) ([`getindex`](@ref)),
+[indexed assignment](@ref man-indexed-assignment) ([`setindex!`](@ref)),
+[array literals](@ref man-array-literals) ([`Base.vect`](@ref)),
+[array concatenation](@ref man-array-concatenation) ([`vcat`](@ref), [`hcat`](@ref), [`hvcat`](@ref), [`hvncat`](@ref)),
+and [array comprehensions](@ref man-comprehensions) ([`collect`](@ref)).
 """
 kw"[", kw"[]", kw"]"
 
@@ -1835,11 +1838,14 @@ Stacktrace:
 DomainError
 
 """
-    Task(func)
+    Task(func[, reserved_stack::Int])
 
 Create a `Task` (i.e. coroutine) to execute the given function `func` (which
 must be callable with no arguments). The task exits when this function returns.
 The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
+
+The optional `reserved_stack` argument specifies the size of the stack available
+for this task, in bytes. The default, `0`, uses the system-dependent stack size default.
 
 !!! warning
     By default tasks will have the sticky bit set to true `t.sticky`. This models the
@@ -3182,13 +3188,26 @@ Any
 """
     Union{}
 
-`Union{}`, the empty [`Union`](@ref) of types, is the type that has no values. That is, it has the defining
-property `isa(x, Union{}) == false` for any `x`. `Base.Bottom` is defined as its alias and the type of `Union{}`
-is `Core.TypeofBottom`.
+`Union{}`, the empty [`Union`](@ref) of types, is the *bottom* type of the type system. That is, for each
+`T::Type`, `Union{} <: T`. Also see the subtyping operator's documentation: [`<:`](@ref).
+
+As such, `Union{}` is also an *empty*/*uninhabited* type, meaning that it has no values. That is, for each `x`,
+`isa(x, Union{}) == false`.
+
+`Base.Bottom` is defined as its alias and the type of `Union{}` is `Core.TypeofBottom`.
 
 # Examples
 ```jldoctest
 julia> isa(nothing, Union{})
+false
+
+julia> Union{} <: Int
+true
+
+julia> typeof(Union{}) === Core.TypeofBottom
+true
+
+julia> isa(Union{}, Union)
 false
 ```
 """

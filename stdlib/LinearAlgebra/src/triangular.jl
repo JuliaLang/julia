@@ -702,6 +702,43 @@ function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriang
     return A
 end
 
+function _trirdiv!(A::UpperTriangular, B::UpperOrUnitUpperTriangular, c::Number)
+    n = checksize1(A, B)
+    for j in 1:n
+        for i in 1:j
+            @inbounds A[i, j] = B[i, j] / c
+        end
+    end
+    return A
+end
+function _trirdiv!(A::LowerTriangular, B::LowerOrUnitLowerTriangular, c::Number)
+    n = checksize1(A, B)
+    for j in 1:n
+        for i in j:n
+            @inbounds A[i, j] = B[i, j] / c
+        end
+    end
+    return A
+end
+function _trildiv!(A::UpperTriangular, c::Number, B::UpperOrUnitUpperTriangular)
+    n = checksize1(A, B)
+    for j in 1:n
+        for i in 1:j
+            @inbounds A[i, j] = c \ B[i, j]
+        end
+    end
+    return A
+end
+function _trildiv!(A::LowerTriangular, c::Number, B::LowerOrUnitLowerTriangular)
+    n = checksize1(A, B)
+    for j in 1:n
+        for i in j:n
+            @inbounds A[i, j] = c \ B[i, j]
+        end
+    end
+    return A
+end
+
 rmul!(A::UpperOrLowerTriangular, c::Number) = @inline _triscale!(A, A, c, MulAddMul())
 lmul!(c::Number, A::UpperOrLowerTriangular) = @inline _triscale!(A, c, A, MulAddMul())
 
@@ -942,9 +979,20 @@ _trimul!(C::AbstractMatrix, A::UpperOrLowerTriangular, B::AbstractTriangular) =
 _trimul!(C::AbstractMatrix, A::AbstractTriangular, B::UpperOrLowerTriangular) =
     generic_mattrimul!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
 
-lmul!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _trimul!(B, A, B)
-rmul!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _trimul!(A, A, B)
-
+function lmul!(A::AbstractTriangular, B::AbstractVecOrMat)
+    if istriu(A)
+        _trimul!(B, UpperTriangular(A), B)
+    else
+        _trimul!(B, LowerTriangular(A), B)
+    end
+end
+function rmul!(A::AbstractMatrix, B::AbstractTriangular)
+    if istriu(B)
+        _trimul!(A, A, UpperTriangular(B))
+    else
+        _trimul!(A, A, LowerTriangular(B))
+    end
+end
 
 for TC in (:AbstractVector, :AbstractMatrix)
     @eval @inline function _mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
@@ -980,8 +1028,20 @@ _ldiv!(C::AbstractVecOrMat, A::UpperOrLowerTriangular, B::AbstractVecOrMat) =
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperOrLowerTriangular) =
     generic_mattridiv!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
 
-ldiv!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _ldiv!(B, A, B)
-rdiv!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _rdiv!(A, A, B)
+function ldiv!(A::AbstractTriangular, B::AbstractVecOrMat)
+    if istriu(A)
+        _ldiv!(B, UpperTriangular(A), B)
+    else
+        _ldiv!(B, LowerTriangular(A), B)
+    end
+end
+function rdiv!(A::AbstractMatrix, B::AbstractTriangular)
+    if istriu(B)
+        _rdiv!(A, A, UpperTriangular(B))
+    else
+        _rdiv!(A, A, LowerTriangular(B))
+    end
+end
 
 # preserve triangular structure in in-place multiplication/division
 for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
@@ -1095,7 +1155,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
     tstrided = t{<:Any, <:StridedMaybeAdjOrTransMat}
     @eval begin
         (*)(A::$t, x::Number) = $t(A.data*x)
-        (*)(A::$tstrided, x::Number) = A .* x
+        function (*)(A::$tstrided, x::Number)
+            eltype_dest = promote_op(*, eltype(A), typeof(x))
+            dest = $t(similar(parent(A), eltype_dest))
+            _triscale!(dest, x, A, MulAddMul())
+        end
 
         function (*)(A::$unitt, x::Number)
             B = $t(A.data)*x
@@ -1106,7 +1170,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
         end
 
         (*)(x::Number, A::$t) = $t(x*A.data)
-        (*)(x::Number, A::$tstrided) = x .* A
+        function (*)(x::Number, A::$tstrided)
+            eltype_dest = promote_op(*, typeof(x), eltype(A))
+            dest = $t(similar(parent(A), eltype_dest))
+            _triscale!(dest, x, A, MulAddMul())
+        end
 
         function (*)(x::Number, A::$unitt)
             B = x*$t(A.data)
@@ -1117,7 +1185,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
         end
 
         (/)(A::$t, x::Number) = $t(A.data/x)
-        (/)(A::$tstrided, x::Number) = A ./ x
+        function (/)(A::$tstrided, x::Number)
+            eltype_dest = promote_op(/, eltype(A), typeof(x))
+            dest = $t(similar(parent(A), eltype_dest))
+            _trirdiv!(dest, A,  x)
+        end
 
         function (/)(A::$unitt, x::Number)
             B = $t(A.data)/x
@@ -1129,7 +1201,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
         end
 
         (\)(x::Number, A::$t) = $t(x\A.data)
-        (\)(x::Number, A::$tstrided) = x .\ A
+        function (\)(x::Number, A::$tstrided)
+            eltype_dest = promote_op(\, typeof(x), eltype(A))
+            dest = $t(similar(parent(A), eltype_dest))
+            _trildiv!(dest, x, A)
+        end
 
         function (\)(x::Number, A::$unitt)
             B = x\$t(A.data)

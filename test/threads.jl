@@ -288,18 +288,16 @@ close(proc.in)
         proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
         timeout = false
-        timer = Timer(100) do _
+        timer = Timer(200) do _
             timeout = true
-            for sig in [Base.SIGTERM, Base.SIGHUP, Base.SIGKILL]
-                for _ in 1:1000
+            for sig in (Base.SIGQUIT, Base.SIGKILL)
+                for _ in 1:3
                     kill(proc, sig)
+                    sleep(1)
                     if done[]
-                        if sig != Base.SIGTERM
-                            @warn "Terminating `$script` required signal $sig"
-                        end
+                        @warn "Terminating `$script` required signal $sig"
                         return
                     end
-                    sleep(0.001)
                 end
             end
         end
@@ -309,16 +307,11 @@ close(proc.in)
             done[] = true
             close(timer)
         end
-        if ( !success(proc) ) || ( timeout )
+        if !success(proc) || timeout
             @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
         end
-        if Sys.iswindows() || Sys.isapple()
-            # Known failure: https://github.com/JuliaLang/julia/issues/43124
-            @test_skip success(proc)
-        else
-            @test success(proc)
-            @test !timeout
-        end
+        @test success(proc)
+        @test !timeout
     end
 end
 
@@ -357,12 +350,12 @@ end
 
 @testset "jl_*affinity" begin
     cpumasksize = @ccall uv_cpumask_size()::Cint
-    if !Sys.iswindows() && cpumasksize > 0 # otherwise affinities are not supported on the platform (UV_ENOTSUP)
-        mask = zeros(Cchar, cpumasksize);
+    if cpumasksize > 0 # otherwise affinities are not supported on the platform (UV_ENOTSUP)
         jl_getaffinity = (tid, mask, cpumasksize) -> ccall(:jl_getaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
         jl_setaffinity = (tid, mask, cpumasksize) -> ccall(:jl_setaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
-        @test jl_getaffinity(1, mask, cpumasksize) == 0
-        fill!(mask, 1)
-        @test jl_setaffinity(1, mask, cpumasksize) == 0
+        mask = zeros(Cchar, cpumasksize)
+        @test jl_getaffinity(0, mask, cpumasksize) == 0
+        @test !all(iszero, mask)
+        @test jl_setaffinity(0, mask, cpumasksize) == 0
     end
 end

@@ -66,3 +66,17 @@ function wraplines(content::Union{Annot, SubString{<:Annot}}, width::Integer = 8
     end
     lines
 end
+
+# Print horizontal lines between each docstring if there are multiple docs
+function insert_hlines(docs)
+    if !isa(docs, MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
+        return docs
+    end
+    docs = docs::MD
+    v = Any[]
+    for (n, doc) in enumerate(docs.content)
+        push!(v, doc)
+        n == length(docs.content) || push!(v, HorizontalRule())
+    end
+    return MD(v)
+end

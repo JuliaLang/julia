@@ -442,8 +442,7 @@ end
                 for pth in ("afile",
                             joinpath("afile", "not_file"),
                             SubString(joinpath(dir, "afile")),
-                            Base.RawFD(-1),
-                            -1)
+                            Base.RawFD(-1))
                     test_stat_error(stat, pth)
                     test_stat_error(lstat, pth)
                 end
@@ -1032,7 +1031,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
         @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
+        @test_throws Base._UVError("rename($(repr(nonexisting_src)), $(repr(dst)))", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
 end
 
@@ -1754,7 +1753,17 @@ end
     @test s.blocks isa Int64
     @test s.mtime isa Float64
     @test s.ctime isa Float64
+
+    @test s === stat((f,))
+    @test s === lstat((f,))
+    @test s === stat(".", f)
+    @test s === lstat(".", f)
 end
+
+mutable struct URI50890; f::String; end
+Base.joinpath(x::URI50890) = URI50890(x.f)
+@test_throws "stat not implemented" stat(URI50890("."))
+@test_throws "lstat not implemented" lstat(URI50890("."))
 
 @testset "StatStruct show's extended details" begin
     f, io = mktemp()

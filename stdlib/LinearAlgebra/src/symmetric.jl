@@ -12,7 +12,7 @@ struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     end
 end
 """
-    Symmetric(A, uplo=:U)
+    Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
 
 Construct a `Symmetric` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
 triangle of the matrix `A`.
@@ -63,7 +63,7 @@ function Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
 end
 
 """
-    symmetric(A, uplo=:U)
+    symmetric(A, uplo::Symbol=:U)
 
 Construct a symmetric view of `A`. If `A` is a matrix, `uplo` controls whether the upper
 (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
@@ -105,7 +105,7 @@ struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     end
 end
 """
-    Hermitian(A, uplo=:U)
+    Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
 
 Construct a `Hermitian` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
 triangle of the matrix `A`.
@@ -153,7 +153,7 @@ function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
 end
 
 """
-    hermitian(A, uplo=:U)
+    hermitian(A, uplo::Symbol=:U)
 
 Construct a hermitian view of `A`. If `A` is a matrix, `uplo` controls whether the upper
 (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A` is used to implicitly fill the
@@ -261,6 +261,7 @@ Base._reverse(A::Symmetric, ::Colon) = Symmetric(reverse(A.data), A.uplo == 'U' 
 @propagate_inbounds function setindex!(A::Symmetric, v, i::Integer, j::Integer)
     i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
     setindex!(A.data, v, i, j)
+    return A
 end
 
 Base._reverse(A::Hermitian, dims) = reverse!(Matrix(A); dims)
@@ -274,6 +275,7 @@ Base._reverse(A::Hermitian, ::Colon) = Hermitian(reverse(A.data), A.uplo == 'U' 
     else
         setindex!(A.data, v, i, j)
     end
+    return A
 end
 
 Base.dataids(A::HermOrSym) = Base.dataids(parent(A))
@@ -449,8 +451,8 @@ Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
 Base.copy(A::Transpose{<:Any,<:Hermitian}) =
     Hermitian(copy(transpose(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 
-tr(A::Symmetric) = tr(A.data) # to avoid AbstractMatrix fallback (incl. allocations)
-tr(A::Hermitian) = real(tr(A.data))
+tr(A::Symmetric{<:Number}) = tr(A.data) # to avoid AbstractMatrix fallback (incl. allocations)
+tr(A::Hermitian{<:Number}) = real(tr(A.data))
 
 Base.conj(A::Symmetric) = Symmetric(parentof_applytri(conj, A), sym_uplo(A.uplo))
 Base.conj(A::Hermitian) = Hermitian(parentof_applytri(conj, A), sym_uplo(A.uplo))
@@ -821,7 +823,7 @@ function ^(A::Symmetric{<:Real}, p::Real)
     if all(λ -> λ ≥ 0, F.values)
         return Symmetric((F.vectors * Diagonal((F.values).^p)) * F.vectors')
     else
-        return Symmetric((F.vectors * Diagonal((complex(F.values)).^p)) * F.vectors')
+        return Symmetric((F.vectors * Diagonal(complex.(F.values).^p)) * F.vectors')
     end
 end
 function ^(A::Symmetric{<:Complex}, p::Real)
@@ -853,7 +855,7 @@ function ^(A::Hermitian{T}, p::Real) where T
             return Hermitian(retmat)
         end
     else
-        return (F.vectors * Diagonal((complex(F.values).^p))) * F.vectors'
+        return (F.vectors * Diagonal((complex.(F.values).^p))) * F.vectors'
     end
 end
 
@@ -983,7 +985,7 @@ for func in (:log, :sqrt)
                 end
                 return Hermitian(retmat)
             else
-                retmat = (F.vectors * Diagonal(($func).(complex(F.values)))) * F.vectors'
+                retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
                 return retmat
             end
         end
@@ -998,7 +1000,7 @@ function cbrt(A::HermOrSym{<:Real})
 end
 
 """
-    hermitianpart(A, uplo=:U) -> Hermitian
+    hermitianpart(A::AbstractMatrix, uplo::Symbol=:U) -> Hermitian
 
 Return the Hermitian part of the square matrix `A`, defined as `(A + A') / 2`, as a
 [`Hermitian`](@ref) matrix. For real matrices `A`, this is also known as the symmetric part
@@ -1014,7 +1016,7 @@ See also [`hermitianpart!`](@ref) for the corresponding in-place operation.
 hermitianpart(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(_hermitianpart(A), uplo)
 
 """
-    hermitianpart!(A, uplo=:U) -> Hermitian
+    hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) -> Hermitian
 
 Overwrite the square matrix `A` in-place with its Hermitian part `(A + A') / 2`, and return
 [`Hermitian(A, uplo)`](@ref). For real matrices `A`, this is also known as the symmetric

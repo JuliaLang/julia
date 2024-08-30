@@ -308,6 +308,35 @@ end
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
 
+
+    a = rand(8, 7)
+    @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
+    @test @inferred(insertdims(a, dims=3))  == @inferred(insertdims(a, dims=(3,))) == reshape(a, (8, 7, 1))
+    @test @inferred(insertdims(a, dims=(1, 3)))  == reshape(a, (1, 8, 1, 7))
+    @test @inferred(insertdims(a, dims=(1, 2, 3)))  == reshape(a, (1, 1, 1, 8, 7))
+    @test @inferred(insertdims(a, dims=(1, 4)))  == reshape(a, (1, 8, 7, 1))
+    @test @inferred(insertdims(a, dims=(1, 3, 5)))  == reshape(a, (1, 8, 1, 7, 1))
+    @test @inferred(insertdims(a, dims=(1, 2, 4, 6)))  == reshape(a, (1, 1, 8, 1, 7, 1))
+    @test @inferred(insertdims(a, dims=(1, 3, 4, 6)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+    @test @inferred(insertdims(a, dims=(1, 4, 6, 3)))  == reshape(a, (1, 8, 1, 1, 7, 1))
+    @test @inferred(insertdims(a, dims=(1, 3, 5, 6)))  == reshape(a, (1, 8, 1, 7, 1, 1))
+
+    @test_throws ArgumentError insertdims(a, dims=(1, 1, 2, 3))
+    @test_throws ArgumentError insertdims(a, dims=(1, 2, 2, 3))
+    @test_throws ArgumentError insertdims(a, dims=(1, 2, 3, 3))
+    @test_throws UndefKeywordError insertdims(a)
+    @test_throws ArgumentError insertdims(a, dims=0)
+    @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
+    @test_throws ArgumentError insertdims(a, dims=4)
+    @test_throws ArgumentError insertdims(a, dims=6)
+
+    # insertdims and dropdims are inverses
+    b = rand(1,1,1,5,1,1,7)
+    for dims in [1, (1,), 2, (2,), 3, (3,), (1,3), (1,2,3), (1,2), (1,3,5), (1,2,5,6), (1,3,5,6), (1,3,5,6), (1,6,5,3)]
+        @test dropdims(insertdims(a; dims); dims) == a
+        @test insertdims(dropdims(b; dims); dims) == b
+    end
+
     sz = (5,8,7)
     A = reshape(1:prod(sz),sz...)
     @test A[2:6] == [2:6;]
@@ -562,32 +591,32 @@ end
     @test findall(!, m) == [k for (k,v) in pairs(m) if !v]
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
-    @test findfirst(a.==5) == nothing
+    @test findfirst(a.==5) === nothing
     @test findfirst(Dict(1=>false, 2=>true)) == 2
-    @test findfirst(Dict(1=>false)) == nothing
+    @test findfirst(Dict(1=>false)) === nothing
     @test findfirst(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findfirst(!isequal(1), [1,2,4,1,2,3,4]) == 2
     @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
-    @test findfirst(isodd, [2,4,6,2,0]) == nothing
+    @test findfirst(isodd, [2,4,6,2,0]) === nothing
     @test findnext(!iszero,a,4) == 4
     @test findnext(!iszero,a,5) == 6
     @test findnext(!iszero,a,1) == 2
     @test findnext(isequal(1),a,4) == 6
-    @test findnext(isequal(5),a,4) == nothing
+    @test findnext(isequal(5),a,4) === nothing
     @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
-    @test findlast(a.==5) == nothing
-    @test findlast(false) == nothing # test non-AbstractArray findlast
+    @test findlast(a.==5) === nothing
+    @test findlast(false) === nothing # test non-AbstractArray findlast
     @test findlast(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
-    @test findlast(isodd, [2,4,6,2,0]) == nothing
+    @test findlast(isodd, [2,4,6,2,0]) === nothing
     @test findprev(!iszero,a,4) == 4
     @test findprev(!iszero,a,5) == 4
-    @test findprev(!iszero,a,1) == nothing
+    @test findprev(!iszero,a,1) === nothing
     @test findprev(isequal(1),a,4) == 2
     @test findprev(isequal(1),a,8) == 6
     @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
-    @test findprev(isodd, [2,4,5,3,9,2,0], 2) == nothing
+    @test findprev(isodd, [2,4,5,3,9,2,0], 2) === nothing
     @test findfirst(isequal(0x00), [0x01, 0x00]) == 2
     @test findlast(isequal(0x00), [0x01, 0x00]) == 2
     @test findnext(isequal(0x00), [0x00, 0x01, 0x00], 2) == 3
@@ -3219,42 +3248,23 @@ end
     end
 end
 
-@testset "Wrapping Memory into Arrays with view and reshape" begin
-    mem::Memory{Int} = Memory{Int}(undef, 10) .= 11:20
+@testset "Wrapping Memory into Arrays" begin
+    mem = Memory{Int}(undef, 10) .= 1
+    memref = memoryref(mem)
+    @test_throws DimensionMismatch Base.wrap(Array, mem, (10, 10))
+    @test Base.wrap(Array, mem, (5,)) == ones(Int, 5)
+    @test Base.wrap(Array, mem, 2) == ones(Int, 2)
+    @test Base.wrap(Array, memref, 10) == ones(Int, 10)
+    @test Base.wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
+    @test Base.wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
 
-    @test_throws DimensionMismatch reshape(mem, 10, 10)
-    @test_throws DimensionMismatch reshape(mem, 5)
-    @test_throws BoundsError view(mem, 1:10, 1:10)
-    @test_throws BoundsError view(mem, 1:11)
-    @test_throws BoundsError view(mem, 3:11)
-    @test_throws BoundsError view(mem, 0:4)
-
-    @test @inferred(view(mem, 1:5))::Vector{Int} == 11:15
-    @test @inferred(view(mem, 1:2))::Vector{Int} == 11:12
-    @test @inferred(view(mem, 1:10))::Vector{Int} == 11:20
-    @test @inferred(view(mem, 3:8))::Vector{Int} == 13:18
-    @test @inferred(view(mem, 20:19))::Vector{Int} == []
-    @test @inferred(view(mem, -5:-7))::Vector{Int} == []
-    @test @inferred(view(mem, :))::Vector{Int} == mem
-    @test @inferred(reshape(mem, 5, 2))::Matrix{Int} == reshape(11:20, 5, 2)
-
-    # 53990
-    @test @inferred(view(mem, unsigned(1):10))::Vector{Int} == 11:20
-
-    empty_mem = Memory{Module}(undef, 0)
-    @test_throws BoundsError view(empty_mem, 0:1)
-    @test_throws BoundsError view(empty_mem, 1:2)
-    @test_throws DimensionMismatch reshape(empty_mem, 1)
-    @test_throws DimensionMismatch reshape(empty_mem, 1, 2, 3)
-    @test_throws ArgumentError reshape(empty_mem, 2^16, 2^16, 2^16, 2^16)
-
-    @test @inferred(view(empty_mem, 1:0))::Vector{Module} == []
-    @test @inferred(view(empty_mem, 10:3))::Vector{Module} == []
-    @test @inferred(view(empty_mem, :))::Vector{Module} == empty_mem
-    @test isempty(@inferred(reshape(empty_mem, 0, 7, 1))::Array{Module, 3})
-
-    offset_inds = OffsetArrays.IdOffsetRange(values=3:6, indices=53:56)
-    @test @inferred(view(collect(mem), offset_inds)) == view(mem, offset_inds)
+    memref2 = memoryref(mem, 3)
+    @test Base.wrap(Array, memref2, (5,)) == ones(Int, 5)
+    @test Base.wrap(Array, memref2, 2) == ones(Int, 2)
+    @test Base.wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
+    @test Base.wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
+    @test_throws DimensionMismatch Base.wrap(Array, memref2, 9)
+    @test_throws DimensionMismatch Base.wrap(Array, memref2, 10)
 end
 
 @testset "Memory size" begin
@@ -3264,4 +3274,10 @@ end
     @test size(mem, 0x1) == len
     @test size(mem, 2) == 1
     @test size(mem, 0x2) == 1
+end
+
+@testset "MemoryRef" begin
+    mem = Memory{Float32}(undef, 3)
+    ref = memoryref(mem, 2)
+    @test parent(ref) === mem
 end

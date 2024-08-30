@@ -2,9 +2,9 @@
 
 #include "gc-heap-snapshot.h"
 
+#include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
-#include "gc.h"
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
@@ -182,8 +182,10 @@ struct HeapSnapshot {
 // global heap snapshot, mutated by garbage collector
 // when snapshotting is on.
 int gc_heap_snapshot_enabled = 0;
+int gc_heap_snapshot_redact_data = 0;
 HeapSnapshot *g_snapshot = nullptr;
-extern jl_mutex_t heapsnapshot_lock;
+// mutex for gc-heap-snapshot.
+jl_mutex_t heapsnapshot_lock;
 
 void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &snapshot, char all_one);
 void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one);
@@ -194,7 +196,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT;
 
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
-    ios_t *strings, ios_t *json, char all_one)
+    ios_t *strings, ios_t *json, char all_one, char redact_data)
 {
     HeapSnapshot snapshot;
     snapshot.nodes = nodes;
@@ -206,6 +208,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
 
     // Enable snapshotting
     g_snapshot = &snapshot;
+    gc_heap_snapshot_redact_data = redact_data;
     gc_heap_snapshot_enabled = true;
 
     _add_synthetic_root_entries(&snapshot);
@@ -215,6 +218,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
 
     // Disable snapshotting
     gc_heap_snapshot_enabled = false;
+    gc_heap_snapshot_redact_data = 0;
     g_snapshot = nullptr;
 
     jl_mutex_unlock(&heapsnapshot_lock);
@@ -327,7 +331,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     if (jl_is_string(a)) {
         node_type = "String";
-        name = jl_string_data(a);
+        name = gc_heap_snapshot_redact_data ? "<redacted>" : jl_string_data(a);
         self_size = jl_string_len(a);
     }
     else if (jl_is_symbol(a)) {
@@ -556,6 +560,13 @@ void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *
     _record_gc_edge("internal", from, to,
                     g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<internal>"));
 }
+
+void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT
+{
+    _record_gc_edge("binding", from, to,
+                    g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<binding>"));
+}
+
 
 void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
 {

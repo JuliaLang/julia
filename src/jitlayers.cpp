@@ -3,7 +3,7 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include <stdint.h>
-#include <sstream>
+#include <string>
 
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/Statistic.h>
@@ -42,7 +42,11 @@ using namespace llvm;
 #include "julia_assert.h"
 #include "processor.h"
 
+#if JL_LLVM_VERSION >= 180000
+# include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupportPlugin.h>
+#else
 # include <llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h>
+#endif
 # include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 # include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
 # include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
@@ -564,6 +568,19 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     return jl_an_empty_string;
 }
 
+#if JL_LLVM_VERSION >= 180000
+CodeGenOptLevel CodeGenOptLevelFor(int optlevel)
+{
+#ifdef DISABLE_OPT
+    return CodeGenOptLevel::None;
+#else
+    return optlevel == 0 ? CodeGenOptLevel::None :
+        optlevel == 1 ? CodeGenOptLevel::Less :
+        optlevel == 2 ? CodeGenOptLevel::Default :
+        CodeGenOptLevel::Aggressive;
+#endif
+}
+#else
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 {
 #ifdef DISABLE_OPT
@@ -575,6 +592,7 @@ CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
         CodeGenOpt::Aggressive;
 #endif
 }
+#endif
 
 static auto countBasicBlocks(const Function &F) JL_NOTSAFEPOINT
 {
@@ -589,7 +607,7 @@ static Expected<orc::ThreadSafeModule> validateExternRelocations(orc::ThreadSafe
         auto F = dyn_cast<Function>(&GO);
         if (!F)
             return false;
-        return F->isIntrinsic() || F->getName().startswith("julia.");
+        return F->isIntrinsic() || F->getName().starts_with("julia.");
     };
     // validate the relocations for M (only for RuntimeDyld, JITLink performs its own symbol validation)
     auto Err = TSM.withModuleDo([isIntrinsicFunction](Module &M) JL_NOTSAFEPOINT {
@@ -1157,7 +1175,7 @@ namespace {
                 {
                     if (*jl_ExecutionEngine->get_dump_llvm_opt_stream()) {
                         for (auto &F : M.functions()) {
-                            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                            if (F.isDeclaration() || F.getName().starts_with("jfptr_")) {
                                 continue;
                             }
                             // Each function is printed as a YAML object with several attributes
@@ -1210,7 +1228,7 @@ namespace {
                         // Print LLVM function statistics _after_ optimization
                         ios_printf(stream, "  after: \n");
                         for (auto &F : M.functions()) {
-                            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                            if (F.isDeclaration() || F.getName().starts_with("jfptr_")) {
                                 continue;
                             }
                             Stat(F).dump(stream);
@@ -1397,7 +1415,7 @@ struct JuliaOJIT::DLSymOptimizer {
     void operator()(Module &M) {
         for (auto &GV : M.globals()) {
             auto Name = GV.getName();
-            if (Name.startswith("jlplt") && Name.endswith("got")) {
+            if (Name.starts_with("jlplt") && Name.ends_with("got")) {
                 auto fname = GV.getAttribute("julia.fname").getValueAsString().str();
                 void *addr;
                 if (GV.hasAttribute("julia.libname")) {
@@ -1651,7 +1669,7 @@ JuliaOJIT::JuliaOJIT()
                   DL.getGlobalPrefix(),
                   [&](const orc::SymbolStringPtr &S) {
                         const char *const atomic_prefix = "__atomic_";
-                        return (*S).startswith(atomic_prefix);
+                        return (*S).starts_with(atomic_prefix);
                   })));
         }
     }
@@ -2208,8 +2226,15 @@ static void jl_decorate_module(Module &M) {
         // Add special values used by debuginfo to build the UnwindData table registration for Win64
         // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
         // TODO: The data is set in debuginfo.cpp but it should be okay to actually emit it here.
-        M.appendModuleInlineAsm("\
-    .section .text                  \n\
+        std::string inline_asm = "\
+    .section ";
+        inline_asm +=
+#if JL_LLVM_VERSION >= 180000
+    ".ltext,\"ax\",@progbits";
+#else
+    ".text";
+#endif
+        inline_asm +=              "\n\
     .type   __UnwindData,@object    \n\
     .p2align        2, 0x90         \n\
     __UnwindData:                   \n\
@@ -2220,7 +2245,9 @@ static void jl_decorate_module(Module &M) {
         .p2align        2, 0x90     \n\
     __catchjmp:                     \n\
         .zero   12                  \n\
-        .size   __catchjmp, 12");
+        .size   __catchjmp, 12";
+
+        M.appendModuleInlineAsm(inline_asm);
     }
 }
 

@@ -33,35 +33,19 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     if isdefined(ex, :scope)
         scope = ex.scope
         if scope isa Module
-            bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint), scope, var, true)::Core.Binding
-            if isdefined(bnd, :owner)
-                owner = bnd.owner
-                if owner === bnd
-                    print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
-                end
+            bpart = Base.lookup_binding_partition(Base.get_world_counter(), GlobalRef(scope, var))
+            kind = Base.binding_kind(bpart)
+            if kind === Base.BINDING_KIND_GLOBAL || kind === Base.BINDING_KIND_CONST || kind == Base.BINDING_KIND_DECLARED
+                print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
+            elseif kind === Base.BINDING_KIND_FAILED
+                print(io, "\nHint: It looks like two or more modules export different ",
+                "bindings with this name, resulting in ambiguity. Try explicitly ",
+                "importing it from a particular module, or qualifying the name ",
+                "with the module it should come from.")
+            elseif kind === Base.BINDING_KIND_GUARD
+                print(io, "\nSuggestion: check for spelling errors or missing imports.")
             else
-                owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
-                if C_NULL == owner
-                    # No global of this name exists in this module.
-                    # This is the common case, so do not print that information.
-                    # It could be the binding was exported by two modules, which we can detect
-                    # by the `usingfailed` flag in the binding:
-                    if isdefined(bnd, :flags) && Bool(bnd.flags >> 4 & 1) # magic location of the `usingfailed` flag
-                        print(io, "\nHint: It looks like two or more modules export different ",
-                              "bindings with this name, resulting in ambiguity. Try explicitly ",
-                              "importing it from a particular module, or qualifying the name ",
-                              "with the module it should come from.")
-                    else
-                        print(io, "\nSuggestion: check for spelling errors or missing imports.")
-                    end
-                    owner = bnd
-                else
-                    owner = unsafe_pointer_to_objref(owner)::Core.Binding
-                end
-            end
-            if owner !== bnd
-                # this could use jl_binding_dbgmodule for the exported location in the message too
-                print(io, "\nSuggestion: this global was defined as `$(owner.globalref)` but not assigned a value.")
+                print(io, "\nSuggestion: this global was defined as `$(bpart.restriction.globalref)` but not assigned a value.")
             end
         elseif scope === :static_parameter
             print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
@@ -110,6 +94,8 @@ export
     LineEditREPL,
     StreamREPL
 
+public TerminalMenus
+
 import Base:
     AbstractDisplay,
     display,
@@ -128,7 +114,7 @@ include("options.jl")
 
 include("LineEdit.jl")
 using .LineEdit
-import ..LineEdit:
+import .LineEdit:
     CompletionProvider,
     HistoryProvider,
     add_history,
@@ -327,7 +313,7 @@ function warn_on_non_owning_accesses(current_mod, ast)
     end
     return ast
 end
-warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(REPL.active_module(), ast)
+warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(Base.active_module(), ast)
 
 const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaults for new REPL backends
 
@@ -556,7 +542,7 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
-        io = IOContext(io, :limit => true, :module => active_module(d)::Module)
+        io = IOContext(io, :limit => true, :module => Base.active_module(d)::Module)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
@@ -586,7 +572,7 @@ show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
 function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
-        io = IOContext(io, :module => active_module(repl)::Module)
+        io = IOContext(io, :module => Base.active_module(repl)::Module)
         print_response(io, response, show_value, have_color, specialdisplay(repl))
     end
     return nothing
@@ -687,7 +673,7 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
-    get_module = () -> active_module(repl)
+    get_module = () -> Base.active_module(repl)
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
         errormonitor(t)
@@ -819,13 +805,9 @@ REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
-function active_module() # this method is also called from Base
-    isdefined(Base, :active_repl) || return Main
-    return active_module(Base.active_repl::AbstractREPL)
-end
-active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
-active_module(::AbstractREPL) = Main
-active_module(d::REPLDisplay) = active_module(d.repl)
+Base.active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
+Base.active_module(::AbstractREPL) = Main
+Base.active_module(d::REPLDisplay) = Base.active_module(d.repl)
 
 setmodifiers!(c::CompletionProvider, m::LineEdit.Modifiers) = nothing
 
@@ -1264,7 +1246,7 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
 function contextual_prompt(repl::LineEditREPL, prompt::Union{String,Function})
     function ()
-        mod = active_module(repl)
+        mod = Base.active_module(repl)
         prefix = mod == Main ? "" : string('(', mod, ") ")
         pr = prompt isa String ? prompt : prompt()
         prefix * pr
@@ -1862,7 +1844,7 @@ module Numbered
 
 using ..REPL
 
-__current_ast_transforms() = isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+__current_ast_transforms() = Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
 function repl_eval_counter(hp)
     return length(hp.history) - hp.start_idx
@@ -1924,13 +1906,13 @@ end
 
 function __current_ast_transforms(backend)
     if backend === nothing
-        isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+        Base.active_repl_backend !== nothing ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
     else
         backend.ast_transforms
     end
 end
 
-function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+function numbered_prompt!(repl::LineEditREPL=Base.active_repl::LineEditREPL, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)

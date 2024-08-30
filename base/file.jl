@@ -440,10 +440,60 @@ julia> rm("goodbye.txt");
 ```
 """
 function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
-    checkfor_mv_cp_cptree(src, dst, "moving"; force=force)
-    rename(src, dst)
+    if force
+        _mv_replace(src, dst)
+    else
+        _mv_noreplace(src, dst)
+    end
+end
+
+function _mv_replace(src::AbstractString, dst::AbstractString)
+    # This check is copied from checkfor_mv_cp_cptree
+    if ispath(dst) && Base.samefile(src, dst)
+        abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
+        abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
+        throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir. ",
+                                   "This is not supported.\n  ",
+                                   "`src` refers to: $(abs_src)\n  ",
+                                   "`dst` refers to: $(abs_dst)\n")))
+    end
+    # First try to do a regular rename, because this might avoid a situation
+    # where dst is deleted or truncated.
+    try
+        rename(src, dst)
+    catch err
+        err isa IOError || rethrow()
+        err.code==Base.UV_ENOENT && rethrow()
+        # on rename error try to delete dst if it exists and isn't the same as src
+        checkfor_mv_cp_cptree(src, dst, "moving"; force=true)
+        try
+            rename(src, dst)
+        catch err
+            err isa IOError || rethrow()
+            # on second error, default to force cp && rm
+            cp(src, dst; force=true, follow_symlinks=false)
+            rm(src; recursive=true)
+        end
+    end
     dst
 end
+
+function _mv_noreplace(src::AbstractString, dst::AbstractString)
+    # Error if dst exists.
+    # This check currently has TOCTTOU issues.
+    checkfor_mv_cp_cptree(src, dst, "moving"; force=false)
+    try
+        rename(src, dst)
+    catch err
+        err isa IOError || rethrow()
+        err.code==Base.UV_ENOENT && rethrow()
+        # on error, default to cp && rm
+        cp(src, dst; force=false, follow_symlinks=false)
+        rm(src; recursive=true)
+    end
+    dst
+end
+
 
 """
     touch(path::AbstractString)
@@ -1043,24 +1093,30 @@ end
     walkdir(dir; topdown=true, follow_symlinks=false, onerror=throw)
 
 Return an iterator that walks the directory tree of a directory.
-The iterator returns a tuple containing `(rootpath, dirs, files)`.
+
+The iterator returns a tuple containing `(path, dirs, files)`.
+Each iteration `path` will change to the next directory in the tree;
+then `dirs` and `files` will be vectors containing the directories and files
+in the current `path` directory.
 The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `IOError` as argument.
+The returned iterator is stateful so when accessed repeatedly each access will
+resume where the last left off, like [`Iterators.Stateful`](@ref).
 
 See also: [`readdir`](@ref).
 
 # Examples
 ```julia
-for (root, dirs, files) in walkdir(".")
-    println("Directories in \$root")
+for (path, dirs, files) in walkdir(".")
+    println("Directories in \$path")
     for dir in dirs
-        println(joinpath(root, dir)) # path to directories
+        println(joinpath(path, dir)) # path to directories
     end
-    println("Files in \$root")
+    println("Files in \$path")
     for file in files
-        println(joinpath(root, file)) # path to files
+        println(joinpath(path, file)) # path to files
     end
 end
 ```
@@ -1070,18 +1126,18 @@ julia> mkpath("my/test/dir");
 
 julia> itr = walkdir("my");
 
-julia> (root, dirs, files) = first(itr)
+julia> (path, dirs, files) = first(itr)
 ("my", ["test"], String[])
 
-julia> (root, dirs, files) = first(itr)
+julia> (path, dirs, files) = first(itr)
 ("my/test", ["dir"], String[])
 
-julia> (root, dirs, files) = first(itr)
+julia> (path, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
 """
-function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
-    function _walkdir(chnl, root)
+function walkdir(path; topdown=true, follow_symlinks=false, onerror=throw)
+    function _walkdir(chnl, path)
         tryf(f, p) = try
                 f(p)
             catch err
@@ -1093,7 +1149,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
                 end
                 return
             end
-        entries = tryf(_readdirx, root)
+        entries = tryf(_readdirx, path)
         entries === nothing && return
         dirs = Vector{String}()
         files = Vector{String}()
@@ -1107,17 +1163,17 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         end
 
         if topdown
-            push!(chnl, (root, dirs, files))
+            push!(chnl, (path, dirs, files))
         end
         for dir in dirs
-            _walkdir(chnl, joinpath(root, dir))
+            _walkdir(chnl, joinpath(path, dir))
         end
         if !topdown
-            push!(chnl, (root, dirs, files))
+            push!(chnl, (path, dirs, files))
         end
         nothing
     end
-    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, root))
+    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, path))
 end
 
 function unlink(p::AbstractString)
@@ -1126,15 +1182,24 @@ function unlink(p::AbstractString)
     nothing
 end
 
-# For move command
-function rename(src::AbstractString, dst::AbstractString; force::Bool=false)
-    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
-    # on error, default to cp && rm
+"""
+    rename(oldpath::AbstractString, newpath::AbstractString)
+
+Change the name of a file from `oldpath` to `newpath`. If `newpath` is an existing file it may be replaced.
+Equivalent to [rename(2)](https://man7.org/linux/man-pages/man2/rename.2.html).
+Throws an `IOError` on failure.
+Return `newpath`.
+
+OS-specific restrictions may apply when `oldpath` and `newpath` are in different directories.
+
+See also: [`mv`](@ref).
+"""
+function rename(oldpath::AbstractString, newpath::AbstractString)
+    err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), oldpath, newpath)
     if err < 0
-        cp(src, dst; force=force, follow_symlinks=false)
-        rm(src; recursive=true)
+        uv_error("rename($(repr(oldpath)), $(repr(newpath)))", err)
     end
-    nothing
+    newpath
 end
 
 function sendfile(src::AbstractString, dst::AbstractString)

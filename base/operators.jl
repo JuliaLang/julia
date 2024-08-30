@@ -58,12 +58,14 @@ but which do not execute the operator or return a Bool:
 """
 (<:)
 
+import Core: >:
+
 """
     >:(T1, T2)
 
 Supertype operator, equivalent to `T2 <: T1`.
 """
-(>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
+>:
 
 """
     supertype(T::Union{DataType, UnionAll})
@@ -111,9 +113,10 @@ Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
 
-[`isequal`](@ref) falls back to `==`, so new methods of `==` will be used by the
-[`Dict`](@ref) type to compare keys. If your type will be used as a dictionary key, it
-should therefore also implement [`hash`](@ref).
+Equality and hashing are intimately related; two values that are considered [`isequal`](@ref) **must**
+have the same [`hash`](@ref) and by default `isequal` falls back to `==`. If a type customizes the behavior of `==` and/or [`isequal`](@ref),
+then [`hash`](@ref) must be similarly implemented to ensure `isequal` and `hash` agree. `Set`s, `Dict`s, and many other internal
+implementations assume that this invariant holds.
 
 If some type defines `==`, [`isequal`](@ref), and [`isless`](@ref) then it should
 also implement [`<`](@ref) to ensure consistency of comparisons.
@@ -345,6 +348,7 @@ true
 ===
 const ≡ = ===
 
+import Core: !==
 """
     !==(x, y)
     ≢(x,y)
@@ -362,7 +366,8 @@ julia> a ≢ a
 false
 ```
 """
-!==(@nospecialize(x), @nospecialize(y)) = !(x === y)
+!==
+
 const ≢ = !==
 
 """
@@ -1149,40 +1154,55 @@ julia> filter(!isletter, str)
 !(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
-    Fix1(f, x)
+    Fix{N}(f, x)
 
-A type representing a partially-applied version of the two-argument function
-`f`, with the first argument fixed to the value "x". In other words,
-`Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+A type representing a partially-applied version of a function `f`, with the argument
+`x` fixed at position `N::Int`. In other words, `Fix{3}(f, x)` behaves similarly to
+`(y1, y2, y3...; kws...) -> f(y1, y2, x, y3...; kws...)`.
 
-See also [`Fix2`](@ref Base.Fix2).
+!!! compat "Julia 1.12"
+    This general functionality requires at least Julia 1.12, while `Fix1` and `Fix2`
+    are available earlier.
+
+!!! note
+    When nesting multiple `Fix`, note that the `N` in `Fix{N}` is _relative_ to the current
+    available arguments, rather than an absolute ordering on the target function. For example,
+    `Fix{1}(Fix{2}(f, 4), 4)` fixes the first and second arg, while `Fix{2}(Fix{1}(f, 4), 4)`
+    fixes the first and third arg.
 """
-struct Fix1{F,T} <: Function
+struct Fix{N,F,T} <: Function
     f::F
     x::T
 
-    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
+    function Fix{N}(f::F, x) where {N,F}
+        if !(N isa Int)
+            throw(ArgumentError(LazyString("expected type parameter in `Fix` to be `Int`, but got `", N, "::", typeof(N), "`")))
+        elseif N < 1
+            throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
+        end
+        new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
+    end
 end
 
-(f::Fix1)(y) = f.f(f.x, y)
-
-"""
-    Fix2(f, x)
-
-A type representing a partially-applied version of the two-argument function
-`f`, with the second argument fixed to the value "x". In other words,
-`Fix2(f, x)` behaves similarly to `y->f(y, x)`.
-"""
-struct Fix2{F,T} <: Function
-    f::F
-    x::T
-
-    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
+function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
+    M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
+    return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
 end
 
-(f::Fix2)(y) = f.f(y, f.x)
+# Special cases for improved constant propagation
+(f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
+(f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
+
+"""
+Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
+"""
+const Fix1{F,T} = Fix{1,F,T}
+
+"""
+Alias for `Fix{2}`. See [`Fix`](@ref Base.Fix).
+"""
+const Fix2{F,T} = Fix{2,F,T}
+
 
 """
     isequal(x)
@@ -1319,8 +1339,7 @@ struct Splat{F} <: Function
     Splat(f) = new{Core.Typeof(f)}(f)
 end
 (s::Splat)(args) = s.f(args...)
-print(io::IO, s::Splat) = print(io, "splat(", s.f, ')')
-show(io::IO, s::Splat) = print(io, s)
+show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
 
 ## in and related operators
 
