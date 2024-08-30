@@ -730,6 +730,8 @@ end
 end
 @inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndex) =
     checkbounds_indices(Bool, inds, I.I)
+@inline checkindex(::Type{Bool}, inds::Tuple, i::AbstractRange{<:CartesianIndex}) =
+    isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
 
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,

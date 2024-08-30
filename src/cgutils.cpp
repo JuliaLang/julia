@@ -568,23 +568,6 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
     return load;
 }
 
-// Returns ctx.types().T_pjlvalue
-static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
-{
-    // emit a pointer to any jl_value_t which will be valid across reloading code
-    if (p == NULL)
-        return Constant::getNullValue(ctx.types().T_pjlvalue);
-    // bindings are prefixed with jl_bnd#
-    jl_globalref_t *gr = p->globalref;
-    Value *pgv = gr ? julia_pgv(ctx, "jl_bnd#", gr->name, gr->mod, p) : julia_pgv(ctx, "jl_bnd#", p);
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-    auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
-            ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))),
-            false, sizeof(jl_binding_t), alignof(jl_binding_t)));
-    setName(ctx.emission_context, load, pgv->getName());
-    return load;
-}
-
 // bitcast a value, but preserve its address space when dealing with pointer types
 static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
 {
@@ -650,7 +633,7 @@ static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
-    if (jt == (jl_value_t*)jl_bottom_type)
+    if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
         return getVoidTy(ctxt);
     if (jl_is_concrete_immutable(jt)) {
         if (jl_datatype_nbits(jt) == 0)
@@ -760,7 +743,7 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
     // use this where C-compatible (unboxed) structs are desired
     // use julia_type_to_llvm directly when you want to preserve Julia's type semantics
     if (isboxed) *isboxed = false;
-    if (jt == (jl_value_t*)jl_bottom_type)
+    if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
         return getVoidTy(ctxt);
     if (jl_is_primitivetype(jt))
         return bitstype_to_llvm(jt, ctxt, llvmcall);
@@ -947,6 +930,9 @@ static bool for_each_uniontype_small(
         bool allunbox = for_each_uniontype_small(f, ((jl_uniontype_t*)ty)->a, counter);
         allunbox &= for_each_uniontype_small(f, ((jl_uniontype_t*)ty)->b, counter);
         return allunbox;
+    }
+    else if (ty == (jl_value_t*)jl_typeofbottom_type->super) {
+        f(++counter, jl_typeofbottom_type); // treat Tuple{union{}} as identical to typeof(Union{})
     }
     else if (jl_is_pointerfree(ty)) {
         f(++counter, (jl_datatype_t*)ty);
@@ -1691,6 +1677,8 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         if (intersected_type == (jl_value_t*)jl_bottom_type)
             known_isa = false;
     }
+    if (intersected_type == (jl_value_t*)jl_typeofbottom_type->super)
+        intersected_type = (jl_value_t*)jl_typeofbottom_type; // swap abstract Type{Union{}} for concrete typeof(Union{})
     if (known_isa) {
         if (!*known_isa && !msg.isTriviallyEmpty()) {
             emit_type_error(ctx, x, literal_pointer_val(ctx, type), msg);

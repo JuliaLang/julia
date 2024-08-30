@@ -1235,6 +1235,8 @@ end
         @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
     end
     @test_throws ArgumentError Symbol("a\0a")
+
+    @test Base._string_n_override == Core.Compiler.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
 end
 
 @testset "Ensure UTF-8 DFA can never leave invalid state" begin
@@ -1390,8 +1392,15 @@ end
 end
 
 @testset "transcode" begin
-    str = "αβγ"
-    @test transcode(String, transcode(UInt16, str)) == str
-    @test transcode(String, transcode(UInt16, transcode(UInt8, str))) == str
-    @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    # string starting with an ASCII character
+    str_1 = "zβγ"
+    # string starting with a 2 byte UTF-8 character
+    str_2 = "αβγ"
+    # string starting with a 3 byte UTF-8 character
+    str_3 = "आख"
+    @testset for str in (str_1, str_2, str_3)
+        @test transcode(String, transcode(UInt16, str)) == str
+        @test transcode(String, transcode(UInt16, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    end
 end

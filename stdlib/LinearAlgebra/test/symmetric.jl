@@ -1127,4 +1127,12 @@ end
     end
 end
 
+@testset "setindex! returns the destination" begin
+    M = rand(2,2)
+    for T in (Symmetric, Hermitian)
+        S = T(M)
+        @test setindex!(S, 0, 2, 2) === S
+    end
+end
+
 end # module TestSymmetric

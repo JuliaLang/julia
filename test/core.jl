@@ -42,6 +42,7 @@ for (T, c) in (
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
+        (Task, [:_state])
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
@@ -7030,7 +7031,7 @@ translate27368(::Type{Val{name}}) where {name} =
 # issue #27456
 @inline foo27456() = try baz_nonexistent27456(); catch; nothing; end
 bar27456() = foo27456()
-@test bar27456() == nothing
+@test bar27456() === nothing
 
 # issue #27365
 mutable struct foo27365
@@ -8165,7 +8166,7 @@ let M = @__MODULE__
     @test_throws(ErrorException("cannot set type for global $(nameof(M)).a_typed_global. It already has a value or is already set to a different type."),
                  Core.eval(M, :(global a_typed_global::$(Union{Nothing,Tuple{Union{Integer,Nothing}}}))))
     @test Core.eval(M, :(global a_typed_global)) === nothing
-    @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
+    @test Core.get_binding_type(M, :a_typed_global) == Tuple{Union{Integer,Nothing}}
 end
 
 @test Base.unsafe_convert(Ptr{Int}, [1]) !== C_NULL
@@ -8265,3 +8266,5 @@ end
 @test Tuple{Vararg{Int}} === Union{Tuple{Int}, Tuple{}, Tuple{Int, Int, Vararg{Int}}}
 @test (Tuple{Vararg{T}} where T) === (Union{Tuple{T, T, Vararg{T}}, Tuple{}, Tuple{T}} where T)
 @test_broken (Tuple{Vararg{T}} where T) === Union{Tuple{T, T, Vararg{T}} where T, Tuple{}, Tuple{T} where T}
+
+@test sizeof(Pair{Union{typeof(Union{}),Nothing}, Union{Type{Union{}},Nothing}}(Union{}, Union{})) == 2

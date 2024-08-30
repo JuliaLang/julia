@@ -88,6 +88,9 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], false), Any))
         return UNDEF_TOKEN
+    elseif has_flag(ir.stmts[idx], IR_FLAG_NOTHROW)
+        # if the `isdefined`-ness of this slot is guaranteed by abstract interpretation,
+        # there is no need to form a `:throw_undef_if_not`
     elseif def_ssa !== true
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], def_ssa), Any))
@@ -153,12 +156,12 @@ end
 
 function fixup_uses!(ir::IRCode, ci::CodeInfo, code::Vector{Any}, uses::Vector{Int}, slot::Int, @nospecialize(ssa))
     for use in uses
-        code[use] = fixemup!(x::SlotNumber->slot_id(x)==slot, stmt::SlotNumber->(ssa, true), ir, ci, use, code[use])
+        code[use] = fixemup!(x::SlotNumber->slot_id(x)==slot, ::SlotNumber->Pair{Any,Any}(ssa, true), ir, ci, use, code[use])
     end
 end
 
 function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Pair{Any, Any}})
-    return fixemup!(stmt::SlotNumber->true, stmt::SlotNumber->renames[slot_id(stmt)], ir, ci, idx, stmt)
+    return fixemup!(::SlotNumber->true, x::SlotNumber->renames[slot_id(x)], ir, ci, idx, stmt)
 end
 
 # maybe use expr_type?
@@ -656,7 +659,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     visited = BitSet()
     new_nodes = ir.new_nodes
     @timeit "SSA Rename" while !isempty(worklist)
-        (item::Int, pred, incoming_vals) = pop!(worklist)
+        (item, pred, incoming_vals) = pop!(worklist)
         if sv.bb_vartables[item] === nothing
             continue
         end

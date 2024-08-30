@@ -288,18 +288,16 @@ close(proc.in)
         proc = run(cmd; wait = false)
         done = Threads.Atomic{Bool}(false)
         timeout = false
-        timer = Timer(100) do _
+        timer = Timer(200) do _
             timeout = true
-            for sig in [Base.SIGTERM, Base.SIGHUP, Base.SIGKILL]
-                for _ in 1:1000
+            for sig in (Base.SIGQUIT, Base.SIGKILL)
+                for _ in 1:3
                     kill(proc, sig)
+                    sleep(1)
                     if done[]
-                        if sig != Base.SIGTERM
-                            @warn "Terminating `$script` required signal $sig"
-                        end
+                        @warn "Terminating `$script` required signal $sig"
                         return
                     end
-                    sleep(0.001)
                 end
             end
         end
@@ -309,16 +307,11 @@ close(proc.in)
             done[] = true
             close(timer)
         end
-        if ( !success(proc) ) || ( timeout )
+        if !success(proc) || timeout
             @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
         end
-        if Sys.iswindows() || Sys.isapple()
-            # Known failure: https://github.com/JuliaLang/julia/issues/43124
-            @test_skip success(proc)
-        else
-            @test success(proc)
-            @test !timeout
-        end
+        @test success(proc)
+        @test !timeout
     end
 end
 
