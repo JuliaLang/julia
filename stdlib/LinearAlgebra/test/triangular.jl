@@ -1286,7 +1286,7 @@ end
     end
     common_tests(M, Any[1])
 
-    M = Diagonal(Int[1,2])
+    M = Diagonal([1,2])
     common_tests(M, Any[1])
     # extra tests for banded structure of the parent
     for T in (UpperTriangular, UnitUpperTriangular)
@@ -1294,6 +1294,15 @@ end
     end
     for T in (LowerTriangular, UnitLowerTriangular)
         @test @inferred(f(T(M), 1, Val(-1))) == Val(0)
+    end
+
+    M = Tridiagonal([1,2], [1,2,3], [1,2])
+    common_tests(M, Any[1])
+    for T in (UpperTriangular, UnitUpperTriangular)
+        @test @inferred(f(T(M), 1, Val(2))) == Val(0)
+    end
+    for T in (LowerTriangular, UnitLowerTriangular)
+        @test @inferred(f(T(M), 1, Val(-2))) == Val(0)
     end
 end
 
