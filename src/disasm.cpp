@@ -1263,9 +1263,8 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
                 false));
             std::unique_ptr<AsmPrinter> Printer(
                 TM->getTarget().createAsmPrinter(*TM, std::move(S)));
-            Printer->addAsmPrinterHandler(AsmPrinter::HandlerInfo(
-                        std::unique_ptr<AsmPrinterHandler>(new LineNumberPrinterHandler(*Printer, debuginfo)),
-                        "emit", "Debug Info Emission", "Julia", "Julia::LineNumberPrinterHandler Markup"));
+            Printer->addAsmPrinterHandler(std::unique_ptr<AsmPrinterHandler>(
+                new LineNumberPrinterHandler(*Printer, debuginfo)));
             if (!Printer)
                 return jl_an_empty_string;
             PM.add(Printer.release());
