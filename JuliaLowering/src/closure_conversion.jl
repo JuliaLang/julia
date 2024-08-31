@@ -69,8 +69,7 @@ function convert_assignment(ctx, ex)
         else
             @assert binfo.kind == :local
             # Typed local
-            tmp_rhs0 = is_simple_atom(ctx, rhs0) || kind(rhs0) == K"the_exception" ?
-                nothing : ssavar(ctx, rhs0)
+            tmp_rhs0 = is_simple_atom(ctx, rhs0) ? nothing : ssavar(ctx, rhs0)
             rhs1 = isnothing(tmp_rhs0) ? rhs0 : tmp_rhs0
             rhs = isnothing(binfo.type) ? rhs1 :
                   convert_for_type_decl(ctx, ex, rhs1, _convert_closures(ctx, binfo.type), true)

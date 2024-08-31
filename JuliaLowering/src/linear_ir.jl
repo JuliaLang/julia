@@ -135,7 +135,7 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: splatnew isdefined invoke cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref
-            kind(rhs) in KSet"new the_exception call foreigncall")
+            kind(rhs) in KSet"new call foreigncall")
 end
 
 # evaluate the arguments of a call, creating temporary locations as needed
@@ -552,7 +552,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
             k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" ||
-            k == K"Placeholder" || k == K"the_exception"
+            k == K"Placeholder"
         # TODO: other kinds: copyast $ globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall
         if needs_value && k == K"Placeholder"
             # TODO: ensure outterref, globalref work here

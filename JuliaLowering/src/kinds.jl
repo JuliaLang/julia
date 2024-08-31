@@ -37,7 +37,6 @@ function _register_kinds()
             "toplevel_butfirst"
             "lambda"
             "moved_local"
-            "the_exception"
             "foreigncall"
             "new"
             "globalref"

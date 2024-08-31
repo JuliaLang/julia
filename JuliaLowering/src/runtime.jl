@@ -159,6 +159,12 @@ function module_import(into_mod::Module, is_using::Bool,
     nothing
 end
 
+# Return the current exception. In JuliaLowering we use this rather than the
+# special form `K"the_exception"` to reduces the number of special forms.
+Base.@assume_effects :removable :nothrow function current_exception()
+    @ccall jl_current_exception(current_task()::Any)::Any
+end
+
 function bind_docs!(f::Function, docstr, method_metadata)
     mod = parentmodule(f)
     bind = Base.Docs.Binding(mod, nameof(f))

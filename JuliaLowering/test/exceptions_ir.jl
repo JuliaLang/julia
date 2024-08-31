@@ -336,3 +336,20 @@ end
 38  (return %₃₇)
 39  slot₅/returnval_via_finally
 40  (return %₃₉)
+
+########################################
+# Access to the exception object
+try
+    a
+catch exc
+    b
+end
+#----------
+1   (enter label₅)
+2   TestMod.a
+3   (leave %₁)
+4   (return %₂)
+5   (= slot₁/exc (call JuliaLowering.current_exception))
+6   TestMod.b
+7   (pop_exception %₁)
+8   (return %₆)

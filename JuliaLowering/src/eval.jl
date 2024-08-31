@@ -243,7 +243,7 @@ function to_lowered_expr(mod, bindings, ex)
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
         # call invoke static_parameter `=` method struct_type abstract_type
-        # primitive_type global const new splatnew isdefined the_exception
+        # primitive_type global const new splatnew isdefined
         # enter leave pop_exception inbounds boundscheck loopinfo copyast meta
         # foreigncall new_opaque_closure lambda
         head = k == K"call"   ? :call   :
@@ -251,7 +251,6 @@ function to_lowered_expr(mod, bindings, ex)
                k == K"global" ? :global :
                k == K"const"  ? :const  :
                k == K"leave"  ? :leave  :
-               k == K"the_exception"  ? :the_exception  :
                k == K"pop_exception"  ? :pop_exception  :
                nothing
         if isnothing(head)

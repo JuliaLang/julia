@@ -392,7 +392,7 @@ function expand_try(ctx, ex)
             [K"scope_block"(catch_, scope_type=:neutral)
                 if kind(exc_var) != K"Placeholder"
                     [K"block"
-                        [K"="(exc_var) exc_var [K"the_exception"]]
+                        [K"="(exc_var) exc_var [K"call" current_exception::K"Value"]]
                         catch_block
                     ]
                 else
