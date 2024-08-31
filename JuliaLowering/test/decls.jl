@@ -31,6 +31,22 @@ let
 end
 """) === (1, 20)
 
+# Global decls with types
+@test JuliaLowering.include_string(test_mod, """
+global a_typed_global::Int = 10.0
+""") === 10.0
+@test Core.get_binding_type(test_mod, :a_typed_global) === Int
+@test test_mod.a_typed_global === 10
+
+# Also allowed in nontrivial scopes in a top level thunk
+@test JuliaLowering.include_string(test_mod, """
+let
+    global a_typed_global_2::Int = 10.0
+end
+""") === 10.0
+@test Core.get_binding_type(test_mod, :a_typed_global_2) === Int
+@test test_mod.a_typed_global_2 === 10
+
 @test_throws LoweringError JuliaLowering.include_string(test_mod, """
 begin
     local x::T = 1
@@ -45,6 +61,13 @@ const local x = 1
 @test_throws LoweringError JuliaLowering.include_string(test_mod, """
 let
     const x = 1
+end
+""")
+
+# global type decls only allowed at top level
+@test_throws LoweringError JuliaLowering.include_string(test_mod, """
+function f()
+    global x::Int = 1
 end
 """)
 

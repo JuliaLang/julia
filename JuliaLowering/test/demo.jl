@@ -411,7 +411,9 @@ end
 """
 
 src = """
-const local x = 1
+function f()
+    global some_sym::Int = 1
+end
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")

@@ -41,6 +41,41 @@ function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
     ]
 end
 
+function convert_global_assignment(ctx, ex, var, rhs0)
+    binfo = lookup_binding(ctx, var)
+    @assert binfo.kind == :global
+    stmts = SyntaxList(ctx)
+    rhs1 = if is_simple_atom(ctx, rhs0)
+        rhs0
+    else
+        tmp = ssavar(ctx, rhs0)
+        push!(stmts, @ast ctx rhs0 [K"=" tmp rhs0])
+        tmp
+    end
+    rhs = if binfo.is_const && isnothing(binfo.type)
+        # const global assignments without a type declaration don't need us to
+        # deal with the binding type at all.
+        rhs1
+    else
+        type_var = ssavar(ctx, ex, "binding_type")
+        push!(stmts, @ast ctx ex [K"="
+            type_var
+            [K"call"
+                "get_binding_type"::K"core"
+                binfo.mod::K"Value"
+                binfo.name::K"Symbol"
+            ]
+        ])
+        do_typeassert = false # Global assignment type checking is done by the runtime
+        convert_for_type_decl(ctx, ex, rhs1, type_var, do_typeassert)
+    end
+    push!(stmts, @ast ctx ex [K"=" var rhs])
+    @ast ctx ex [K"block"
+        stmts...
+        rhs1
+    ]
+end
+
 # Convert assignment to a closed variable to a `setfield!` call and generate
 # `convert` calls for variables with declared types.
 #
@@ -55,11 +90,7 @@ function convert_assignment(ctx, ex)
     @chk kind(var) == K"BindingId"
     binfo = lookup_binding(ctx, var)
     if binfo.kind == :global
-        # TODO: convert-global-assignment
-        if !isnothing(binfo.type)
-            TODO(ex, "Typed global assignment??")
-        end
-        @ast ctx ex [K"=" var rhs0]
+        convert_global_assignment(ctx, ex, var, rhs0)
     else
         closed   = false # TODO
         captured = false # TODO
@@ -105,14 +136,21 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"="
         convert_assignment(ctx, ex)
     elseif k == K"decl"
+        if kind(ex[1]) != K"BindingId"
+            # TODO: This case might be better dealt with in an earlier pass,
+            # emitting `K"::"`??
+            TODO(ex, "assertions for decls with non-bindings")
+        end
         binfo = lookup_binding(ctx, ex[1])
         if binfo.kind == :local
             makeleaf(ctx, ex, K"TOMBSTONE")
         else
-            # Remaining `decl` expressions are type assertions if the argument is global
-            # (TODO: Maybe we should remove the useless ones in
-            #  analyze_variables() pass, or convert to `::`??)
-            TODO(ex, "global variables with type assertions")
+            @ast ctx ex [K"call"
+                "set_binding_type!"::K"core"
+                binfo.mod::K"Value"
+                binfo.name::K"Symbol"
+                _convert_closures(ctx, ex[2])
+            ]
         end
     elseif k == K"lambda"
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_locals)
@@ -128,8 +166,9 @@ Closure conversion and lowering of bindings
 
 This pass does a few things things:
 * Deal with typed variables (K"decl") and their assignments
-* Deal with global assignments
+* Deal with const and non-const global assignments
 * Convert closures into types
+* Lower variables captured by closures into boxes, etc, as necessary
 
 Invariants:
 * This pass must not introduce new K"Identifier" - only K"BindingId".

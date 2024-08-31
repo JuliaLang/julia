@@ -346,6 +346,10 @@ function maybe_update_bindings!(ctx, ex)
             if !isnothing(binfo.type)
                 throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
             end
+            if binfo.kind == :global && !ctx.scope_stack[end].in_toplevel_thunk
+                throw(LoweringError(ex, "type declarations for global variables must be at top level, not inside a function"))
+                # set_binding_type!
+            end
             update_binding!(ctx, id; type=ex[2])
         end
     elseif k == K"const"
