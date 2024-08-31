@@ -23,7 +23,7 @@
     @test convert(Union{String, SubString{String}}, u8str2)      === u8str2
     @test convert(Union{String, SubString{String}}, u8str2plain) === u8str2plain
 
-    for i1 = 1:length(u8str2)
+    for i1 = 1:ncodeunits(u8str2)
         if !isvalid(u8str2, i1); continue; end
         for i2 = i1:length(u8str2)
             if !isvalid(u8str2, i2); continue; end
@@ -207,35 +207,34 @@
     strs = ["∀∃∀"*String(rand(rng, UInt8, 40))*"∀∃∀",
                                       String(rand(rng, UInt8, 50))]
     @testset "proper nextind/prevind/thisind for SubString{String}: $(repr(s))" for s in strs
-            a = 0
-            while a <= ncodeunits(s)
-                a = nextind(s, a)
-                b = a - 1
-                while b <= ncodeunits(s)
-                    ss = SubString(s, a:b)
-                    s2 = s[a:b]
-                    @test ncodeunits(ss) == ncodeunits(s2)
-                    for i in 0:ncodeunits(ss)+1
-                        @test thisind(ss, i) == thisind(s2, i)
-                    end
-                    for i in 0:ncodeunits(ss)
-                        @test nextind(ss, i) == nextind(s2, i)
-                        for j in 0:ncodeunits(ss)+5
-                            if j > 0 || isvalid(ss, i)
-                                @test nextind(ss, i, j) == nextind(s2, i, j)
-                            end
-                        end
-                    end
-                    for i in 1:ncodeunits(ss)+1
-                        @test prevind(ss, i) == prevind(s2, i)
-                        for j in 0:ncodeunits(ss)+5
-                            if j > 0 || isvalid(ss, i)
-                                @test prevind(ss, i, j) == prevind(s2, i, j)
-                            end
-                        end
-                    end
-                    b = nextind(s, b)
+        a = 0
+        while a <= ncodeunits(s)
+            a = nextind(s, a)
+            b = a - 1
+            while b <= ncodeunits(s)
+                ss = SubString(s, a:b)
+                s2 = s[a:b]
+                @test ncodeunits(ss) == ncodeunits(s2)
+                for i in 0:ncodeunits(ss)+1
+                    @test thisind(ss, i) == thisind(s2, i)
                 end
+                for i in 0:ncodeunits(ss)
+                    @test nextind(ss, i) == nextind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test nextind(ss, i, j) == nextind(s2, i, j)
+                        end
+                    end
+                end
+                for i in 1:ncodeunits(ss)+1
+                    @test prevind(ss, i) == prevind(s2, i)
+                    for j in 0:ncodeunits(ss)+5
+                        if j > 0 || isvalid(ss, i)
+                            @test prevind(ss, i, j) == prevind(s2, i, j)
+                        end
+                    end
+                end
+                b = nextind(s, b)
             end
         end
     end
