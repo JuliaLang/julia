@@ -928,7 +928,7 @@ static void jl_dump_asm_internal(
         TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/ true,
                                      /*useDwarfDirectory*/ true, IP.release(),
                                      std::move(CE), std::move(MAB),
-                                     /*ShowInst*/ false));
+                                     /*ShowInst*/ false)
 #endif
     );
     Streamer->initSections(true, *STI);
@@ -1204,7 +1204,7 @@ public:
 #if JL_LLVM_VERSION >= 190000
     virtual void beginInstruction(const MachineInstr *MI) {
 #else
-    virtual void beginInstruction(const MachineInstr &MI) override {
+    virtual void beginInstruction(const MachineInstr *MI) override {
 #endif
         LinePrinter.emitInstructionAnnot(MI->getDebugLoc(), Stream);
         emitAndReset();
