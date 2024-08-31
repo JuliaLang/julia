@@ -1172,7 +1172,7 @@ public:
         Buffer.clear();
     }
 
-    virtual void setSymbolSize(const MCSymbol *Sym, uint64_t Size) override {}
+    virtual void setSymbolSize(const MCSymbol *Sym, uint64_t Size) {}
     //virtual void beginModule(Module *M) override {}
     virtual void endModule() override {}
     /// note that some AsmPrinter implementations may not call beginFunction at all
@@ -1191,11 +1191,11 @@ public:
     //virtual void beginFunclet(const MachineBasicBlock &MBB,
     //                          MCSymbol *Sym = nullptr) override {}
     //virtual void endFunclet() override {}
-    virtual void beginInstruction(const MachineInstr *MI) override {
+    virtual void beginInstruction(const MachineInstr *MI) {
         LinePrinter.emitInstructionAnnot(MI->getDebugLoc(), Stream);
         emitAndReset();
     }
-    virtual void endInstruction() override {}
+    virtual void endInstruction() {}
 };
 
 // get a native assembly for llvm::Function
