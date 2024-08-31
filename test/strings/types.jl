@@ -302,8 +302,7 @@ end
 
 ## Cstring tests ##
 
-# issue #13974: comparison against pointers
-let
+@testset "issue #13974: comparison against pointers" begin
     str = String("foobar")
     ptr = pointer(str)
     cstring = Cstring(ptr)
@@ -324,10 +323,15 @@ let
     @test C_NULL != cstring
 end
 
-# issue #31381: eltype(Cstring) != Cchar
-let
+@testset "issue #31381: eltype(Cstring) != Cchar" begin
     s = Cstring(C_NULL)
     @test eltype(Cstring) == Cchar
     @test eltype(s) == Cchar
     @test pointer(s) isa Ptr{Cchar}
+end
+
+@testset "Codeunits" begin
+    s = "I'm a string!"
+    @test codeunit(s) == UInt8
+    @test codeunit(s, Int8(1)) == codeunit(s, 1)
 end
