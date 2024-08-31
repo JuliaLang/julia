@@ -978,8 +978,7 @@ static std::string jl_get_cpu_name_llvm(void)
 
 static std::string jl_get_cpu_features_llvm(void)
 {
-    llvm::StringMap<bool> HostFeatures;
-    llvm::sys::getHostCPUFeatures(HostFeatures);
+    auto HostFeatures = llvm::sys::getHostCPUFeatures();
     std::string attr;
     for (auto &ele: HostFeatures) {
         if (ele.getValue()) {
