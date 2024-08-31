@@ -1178,7 +1178,11 @@ public:
         Buffer.clear();
     }
 
+#if JL_LLVM_VERSION >= 190000
     virtual void setSymbolSize(const MCSymbol *Sym, uint64_t Size) {}
+#else
+    virtual void setSymbolSize(const MCSymbol *Sym, uint64_t Size) override {}
+#endif
     //virtual void beginModule(Module *M) override {}
     virtual void endModule() override {}
     /// note that some AsmPrinter implementations may not call beginFunction at all
@@ -1197,11 +1201,19 @@ public:
     //virtual void beginFunclet(const MachineBasicBlock &MBB,
     //                          MCSymbol *Sym = nullptr) override {}
     //virtual void endFunclet() override {}
+#if JL_LLVM_VERSION >= 190000
     virtual void beginInstruction(const MachineInstr *MI) {
+#else
+    virtual void beginInstruction(const MachineInstr &MI) override {
+#endif
         LinePrinter.emitInstructionAnnot(MI->getDebugLoc(), Stream);
         emitAndReset();
     }
+#if JL_LLVM_VERSION >= 190000
     virtual void endInstruction() {}
+#else
+    virtual void endInstruction() override {}
+#endif
 };
 
 // get a native assembly for llvm::Function
