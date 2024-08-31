@@ -920,9 +920,17 @@ static void jl_dump_asm_internal(
     // LLVM will destroy the formatted stream, and we keep the raw stream.
     std::unique_ptr<formatted_raw_ostream> ustream(new formatted_raw_ostream(rstream));
     std::unique_ptr<MCStreamer> Streamer(
+#if JL_LLVM_VERSION >= 190000
         TheTarget->createAsmStreamer(Ctx, std::move(ustream),
 
-                                     IP.release(), std::move(CE), std::move(MAB)));
+                                     IP.release(), std::move(CE), std::move(MAB))
+#else
+        TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/ true,
+                                     /*useDwarfDirectory*/ true, IP.release(),
+                                     std::move(CE), std::move(MAB),
+                                     /*ShowInst*/ false));
+#endif
+    );
     Streamer->initSections(true, *STI);
 
     // Make the MemoryObject wrapper
@@ -1254,8 +1262,16 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
                 MCE.reset(TM->getTarget().createMCCodeEmitter(MII, *Context));
             }
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
+
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
-                *Context, std::move(FOut), InstPrinter, std::move(MCE), std::move(MAB)));
+#if JL_LLVM_VERSION >= 190000
+
+                *Context, std::move(FOut), InstPrinter, std::move(MCE), std::move(MAB)
+#else
+                *Context, std::move(FOut), true, true, InstPrinter, std::move(MCE),
+                std::move(MAB), false
+#endif
+                    ));
             std::unique_ptr<AsmPrinter> Printer(
                 TM->getTarget().createAsmPrinter(*TM, std::move(S)));
             Printer->addAsmPrinterHandler(std::unique_ptr<AsmPrinterHandler>(
