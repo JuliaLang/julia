@@ -441,7 +441,7 @@ julia> rm("goodbye.txt");
 
 !!! note
     The `mv` function is different from the `mv` command. The `mv` function by
-    default will error if `dst` exists, while the command will delete 
+    default will error if `dst` exists, while the command will delete
     an existing `dst` file by default.
     Also the `mv` function always operates on
     the assumption that `dst` is a file, while the command does different things depending
@@ -1202,7 +1202,7 @@ If a path contains a "\\0" throw an `ArgumentError`.
 On other failures throw an `IOError`.
 Return `newpath`.
 
-This is a lower level filesytem operation used to implement [`mv`](@ref).
+This is a lower level filesystem operation used to implement [`mv`](@ref).
 
 OS-specific restrictions may apply when `oldpath` and `newpath` are in different directories.
 
