@@ -1196,9 +1196,6 @@ Specifically, currently on Windows:
 4. `rename` may remove `oldpath` if it is a hardlink to `newpath`.
 
 See also: [`mv`](@ref).
-
-!!! compat "Julia 1.12"
-    This method was publicized in Julia 1.12.
 """
 function rename(oldpath::AbstractString, newpath::AbstractString)
     err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), oldpath, newpath)
