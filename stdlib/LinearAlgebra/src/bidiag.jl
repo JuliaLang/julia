@@ -401,7 +401,7 @@ function triu!(M::Bidiagonal{T}, k::Integer=0) where T
     return M
 end
 
-function diag(M::Bidiagonal{T}, n::Integer=0) where T
+Base.@constprop :aggressive function diag(M::Bidiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
     # same vector type is returned independent of n
     if n == 0
@@ -409,8 +409,7 @@ function diag(M::Bidiagonal{T}, n::Integer=0) where T
     elseif (n == 1 && M.uplo == 'U') ||  (n == -1 && M.uplo == 'L')
         return copyto!(similar(M.ev, length(M.ev)), M.ev)
     elseif -size(M,1) <= n <= size(M,1)
-        v = Base.collect_similar(M, (M[BandIndex(n,i)] for i in 1:size(M,1)-abs(n)))
-        return v
+        return Base.collect_similar(M.dv, (M[BandIndex(n,i)] for i in 1:size(M,1)-abs(n)))
     else
         throw(ArgumentError(LazyString(lazy"requested diagonal, $n, must be at least $(-size(M, 1)) ",
             lazy"and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))

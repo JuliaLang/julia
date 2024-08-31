@@ -753,14 +753,7 @@ function diag(D::Diagonal{T}, k::Integer=0) where T
     if k == 0
         return copyto!(similar(D.diag, length(D.diag)), D.diag)
     elseif -size(D,1) <= k <= size(D,1)
-        # We compute the element type as zero(D[1,1]) if !haszero(T)
-        # This only works as we limit k to abs(k) <= size(D,1), instead of allowing arbitrary values
-        # The limit ensures that k>0 is allowed only if D has at least one element
-        v = similar(D.diag, typeof(_zero(D, 1, 1)), size(D,1)-abs(k))
-        for i in eachindex(v)
-            v[i] = D[BandIndex(k, i)]
-        end
-        return v
+        return Base.collect_similar(D.diag, (D[BandIndex(k,i)] for i in 1:size(D,1)-abs(k)))
     else
         throw(ArgumentError(LazyString(lazy"requested diagonal, $k, must be at least $(-size(D, 1)) ",
             lazy"and at most $(size(D, 2)) for an $(size(D, 1))-by-$(size(D, 2)) matrix")))
