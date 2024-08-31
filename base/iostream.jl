@@ -233,7 +233,7 @@ function filesize(s::IOStream)
     catch e
         e isa IOError || rethrow()
         # if `s` is not seekable `ios_filesize` can fail, so fall back to slower stat method
-        stat(s).filesize
+        filesize(stat(s))
     end
     if sz == -1
         err = Libc.errno()
