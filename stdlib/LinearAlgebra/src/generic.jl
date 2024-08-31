@@ -389,6 +389,16 @@ function cross(a::AbstractVector, b::AbstractVector)
 end
 
 """
+    similarmutable(A)
+
+Return a mutable `AbstractArray` that shares its structure
+with `similar(A)`. The difference with `similar(A)` is that
+each index of the result corresponding to the stored ones
+of `A` will be mutable.
+"""
+similarmutable(A) = similar(A)
+
+"""
     triu(M)
 
 Upper triangle of a matrix.
@@ -411,9 +421,9 @@ julia> triu(a)
 ```
 """
 function triu(M::AbstractMatrix)
-    d = similar(M)
-    A = triu!(d) # may return a different type
+    A = similarmutable(M)
     copytrito!(A, M, 'U')
+    triu!(A)
 end
 
 """
@@ -439,9 +449,9 @@ julia> tril(a)
 ```
 """
 function tril(M::AbstractMatrix)
-    d = similar(M)
-    A = tril!(d) # may return a different type
+    A = similarmutable(M)
     copytrito!(A, M, 'L')
+    tril!(A)
 end
 
 """
