@@ -1584,6 +1584,7 @@ end
 @testset "-m" begin
     rot13proj = joinpath(@__DIR__, "project", "Rot13")
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13 --project nowhere ABJURER`) == "--cebwrpg abjurer NOWHERE "
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13.Rot26 --project nowhere ABJURER`) == "--project nowhere ABJURER "
 end
 
 @testset "workspace loading" begin
