@@ -58,11 +58,21 @@ Metadata about a binding
 """
 struct BindingInfo
     name::String
-    mod::Union{Nothing,Module} # Set when `kind === :global`
     kind::Symbol              # :local :global :argument :static_parameter
+    mod::Union{Nothing,Module} # Set when `kind === :global`
     type::Union{Nothing,SyntaxTree} # Type, for bindings declared like x::T = 10
+    is_const::Bool            # Single assignment, defined before use
     is_ssa::Bool              # Single assignment, defined before use
     is_ambiguous_local::Bool  # Local, but would be global in soft scope (ie, the REPL)
+end
+
+function BindingInfo(name::AbstractString, kind::Symbol;
+                     mod::Union{Nothing,Module} = nothing,
+                     type::Union{Nothing,SyntaxTree} = nothing,
+                     is_const::Bool = false,
+                     is_ssa::Bool = false,
+                     is_ambiguous_local::Bool = false)
+    BindingInfo(name, kind, mod, type, is_const, is_ssa, is_ambiguous_local)
 end
 
 """
@@ -95,14 +105,15 @@ function _binding_id(ex::SyntaxTree)
     ex.var_id
 end
 
-function update_binding(bindings::Bindings, x; type=nothing)
+function update_binding!(bindings::Bindings, x; type=nothing, is_const=nothing)
     id = _binding_id(x)
     b = lookup_binding(bindings, id)
     bindings.info[id] = BindingInfo(
         b.name,
-        b.mod,
         b.kind,
+        b.mod,
         isnothing(type) ? b.type : type,
+        isnothing(is_const) ? b.is_const : is_const,
         b.is_ssa,
         b.is_ambiguous_local,
     )
@@ -116,8 +127,8 @@ function lookup_binding(ctx::AbstractLoweringContext, x)
     lookup_binding(ctx.bindings, x)
 end
 
-function update_binding(ctx::AbstractLoweringContext, x; kws...)
-    update_binding(ctx.bindings, x; kws...)
+function update_binding!(ctx::AbstractLoweringContext, x; kws...)
+    update_binding!(ctx.bindings, x; kws...)
 end
 
 const LayerId = Int
@@ -215,7 +226,7 @@ top_ref(ctx, ex, name) = makeleaf(ctx, ex, K"top", name)
 # Create a new SSA binding
 function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
     # TODO: Store this name in only one place? Probably use the provenance chain?
-    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, nothing, true, false))
+    id = new_binding(ctx.bindings, BindingInfo(name, :local; is_ssa=true))
     # Create an identifier
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
     makeleaf(ctx, nameref, K"BindingId", var_id=id)
@@ -227,7 +238,7 @@ end
 
 # Create a new local mutable variable
 function new_mutable_var(ctx::AbstractLoweringContext, srcref, name)
-    id = new_binding(ctx.bindings, BindingInfo(name, nothing, :local, nothing, false, false))
+    id = new_binding(ctx.bindings, BindingInfo(name, :local))
     nameref = makeleaf(ctx, srcref, K"Identifier", name_val=name)
     var = makeleaf(ctx, nameref, K"BindingId", var_id=id)
     add_lambda_local!(ctx, id)

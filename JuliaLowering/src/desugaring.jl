@@ -421,22 +421,24 @@ end
 #   (x::T, (y::U, z))
 #   strip out stmts = (local x) (decl x T) (local x) (decl y U) (local z)
 #   and return (x, (y, z))
-function strip_decls!(ctx, stmts, declkind, ex)
+function strip_decls!(ctx, stmts, declkind, declkind2, ex)
     k = kind(ex)
     if k == K"Identifier"
         push!(stmts, makenode(ctx, ex, declkind, ex))
+        if !isnothing(declkind2)
+            push!(stmts, makenode(ctx, ex, declkind2, ex))
+        end
         ex
     elseif k == K"::"
         @chk numchildren(ex) == 2
         name = ex[1]
         @chk kind(name) == K"Identifier"
-        push!(stmts, makenode(ctx, ex, declkind, name))
         push!(stmts, makenode(ctx, ex, K"decl", name, ex[2]))
-        name
+        strip_decls!(ctx, stmts, declkind, declkind2, ex[1])
     elseif k == K"tuple" || k == K"parameters"
         cs = SyntaxList(ctx)
         for e in children(ex)
-            push!(cs, strip_decls!(ctx, stmts, declkind, e))
+            push!(cs, strip_decls!(ctx, stmts, declkind, declkind2, e))
         end
         makenode(ctx, ex, k, cs)
     end
@@ -445,15 +447,25 @@ end
 # local x, (y=2), z => local x; local y; y = 2; local z
 function expand_decls(ctx, ex)
     declkind = kind(ex)
+    if numchildren(ex) == 1 && kind(ex[1]) ∈ KSet"const global local"
+        declkind2 = kind(ex[1])
+        bindings = children(ex[1])
+    else
+        declkind2 = nothing
+        bindings = children(ex)
+    end
     stmts = SyntaxList(ctx)
-    for binding in children(ex)
+    for binding in bindings
         kb = kind(binding)
         if is_prec_assignment(kb)
             @chk numchildren(binding) == 2
-            lhs = strip_decls!(ctx, stmts, declkind, binding[1])
+            lhs = strip_decls!(ctx, stmts, declkind, declkind2, binding[1])
             push!(stmts, @ast ctx binding [kb lhs binding[2]])
         elseif is_sym_decl(binding)
-            strip_decls!(ctx, stmts, declkind, binding)
+            if declkind == K"const" || declkind2 == K"const"
+                throw(LoweringError(ex, "expected assignment after `const`"))
+            end
+            strip_decls!(ctx, stmts, declkind, declkind2, binding)
         else
             throw(LoweringError(ex, "invalid syntax in variable declaration"))
         end
@@ -888,7 +900,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"let"
         expand_forms_2(ctx, expand_let(ctx, ex))
-    elseif k == K"local" || k == K"global"
+    elseif k == K"local" || k == K"global" || k == K"const"
         if numchildren(ex) == 1 && kind(ex[1]) == K"Identifier"
             # Don't recurse when already simplified - `local x`, etc
             ex

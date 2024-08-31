@@ -180,7 +180,9 @@ function init_binding(ctx, varkey::NameKey, kind::Symbol, is_ambiguous_local=fal
     id = kind === :global ? get(ctx.global_vars, varkey, nothing) : nothing
     if isnothing(id)
         mod = kind === :global ? ctx.scope_layers[varkey.layer].mod : nothing
-        id = new_binding(ctx.bindings, BindingInfo(varkey.name, mod, kind, nothing, false, is_ambiguous_local))
+        id = new_binding(ctx.bindings,
+                         BindingInfo(varkey.name, kind;
+                                     mod=mod, is_ambiguous_local=is_ambiguous_local))
     end
     if kind === :global
         ctx.global_vars[varkey] = id
@@ -333,6 +335,29 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
                      is_hard_scope, var_ids, lambda_locals)
 end
 
+# Do some things which are better done after converting to BindingId.
+function maybe_update_bindings!(ctx, ex)
+    k = kind(ex)
+    if k == K"decl"
+        @chk numchildren(ex) == 2
+        id = ex[1]
+        if kind(id) != K"Placeholder"
+            binfo = lookup_binding(ctx, id)
+            if !isnothing(binfo.type)
+                throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
+            end
+            update_binding!(ctx, id; type=ex[2])
+        end
+    elseif k == K"const"
+        id = ex[1]
+        if lookup_binding(ctx, id).kind == :local
+            throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
+        end
+        update_binding!(ctx, id; is_const=true)
+    end
+    nothing
+end
+
 function _resolve_scopes(ctx, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier"
@@ -385,7 +410,9 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         end
         makeleaf(ctx, ex, K"TOMBSTONE")
     else
-        mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
+        ex_mapped = mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
+        maybe_update_bindings!(ctx, ex_mapped)
+        ex_mapped
     end
 end
 
@@ -420,25 +447,5 @@ type declarations.
 function resolve_scopes(ctx::DesugaringContext, ex)
     ctx2 = ScopeResolutionContext(ctx)
     ex2 = resolve_scopes(ctx2, reparent(ctx2, ex))
-    _analyze_variables(ctx2, ex2)
     ctx2, ex2
 end
-
-function _analyze_variables(ctx::ScopeResolutionContext, ex)
-    k = kind(ex)
-    if is_leaf(ex)
-        nothing
-    elseif k == K"decl"
-        _analyze_variables(ctx, ex[2])
-        if kind(ex[1]) != K"Placeholder"
-            binfo = lookup_binding(ctx, ex[1])
-            if !isnothing(binfo.type)
-                throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
-            end
-            update_binding(ctx, ex[1]; type=ex[2])
-        end
-    else
-        foreach(e->_analyze_variables(ctx, e), children(ex))
-    end
-end
-

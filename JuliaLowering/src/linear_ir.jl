@@ -775,6 +775,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         nothing
     elseif k == K"local_def" || k == K"local"
         nothing
+    elseif k == K"const"
+        emit(ctx, ex)
     else
         throw(LoweringError(ex, "Invalid syntax; $(repr(k))"))
     end

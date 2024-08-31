@@ -19,3 +19,12 @@ local x::T = 1
 15  slot₂/tmp
 16  (= slot₁/x %₁₅)
 17  (return 1)
+
+########################################
+# const
+const xx = 10
+#----------
+1   (const TestMod.xx)
+2   10
+3   (= TestMod.xx %₂)
+4   (return %₂)
