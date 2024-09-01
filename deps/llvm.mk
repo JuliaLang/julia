@@ -235,9 +235,9 @@ LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
 ifeq ($(shell test $(LLVM_VER_MAJ) -ge 19 && echo true),true)
-	$(eval $(call LLVM_PATCH,llvm19-ittapi-cmake))
+$(eval $(call LLVM_PATCH,llvm19-ittapi-cmake))
 else
-	$(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
+$(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
 endif
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
