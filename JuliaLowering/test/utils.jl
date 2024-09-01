@@ -105,7 +105,21 @@ function match_ir_test_case(case_str)
     if isnothing(m)
         error("Malformatted IR test case:\n$(repr(case_str))")
     end
-    (name=strip(m[1]), input=strip(m[2]), output=strip(m[3]))
+    (description=strip(m[1]), input=strip(m[2]), output=strip(m[3]))
+end
+
+function read_ir_test_cases(filename)
+    str = read(filename, String)
+    parts = split(str, r"#\*+")
+    if length(parts) == 2
+        preamble_str = strip(parts[1])
+        cases_str = parts[2]
+    else
+        preamble_str = ""
+        cases_str = only(parts)
+    end
+    (preamble_str,
+     [match_ir_test_case(s) for s in split(cases_str, r"####*") if strip(s) != ""])
 end
 
 function format_ir_for_test(mod, input)
@@ -115,29 +129,59 @@ function format_ir_for_test(mod, input)
     return replace(ir, string(mod)=>"TestMod")
 end
 
+function test_ir_cases(filename::AbstractString)
+    preamble, cases = read_ir_test_cases(filename)
+    test_mod = Module(:TestMod)
+    Base.include_string(test_mod, preamble)
+    for (description,input,ref) in cases
+        output = format_ir_for_test(test_mod, input)
+        @testset "$description" begin
+            if output != ref
+                # Do our own error dumping, as @test will 
+                @error "Test \"$description\" failed" output=Text(output) ref=Text(ref)
+            end
+            @test output == ref
+        end
+    end
+end
+
 function format_ir_test_case(mod, input, description="-- Add description here --")
     ir = format_ir_for_test(mod, input)
     """
     ########################################
     # $description
     $(strip(input))
-    #----------
+    #---------------------
     $ir
     """
 end
 
-function test_ir_cases(filename::AbstractString, mod=Module(:TestMod))
-    str = read(filename, String)
-    cases = [match_ir_test_case(s) for s in split(str, r"####*") if strip(s) != ""]
-
-    for (name,input,ref) in cases
-        output = format_ir_for_test(mod, input)
-        @testset "$name" begin
-            if output != ref
-                # Do our own error dumping, as @test will 
-                @error "Test \"$name\" failed" output=Text(output) ref=Text(ref)
+"""
+Update all IR test cases in `filename` when the IR format has changed.
+"""
+function refresh_ir_test_cases(filename)
+    preamble, cases = read_ir_test_cases(filename)
+    test_mod = Module(:TestMod)
+    Base.include_string(test_mod, preamble)
+    open(filename, "w") do io
+        if !isempty(preamble)
+            println(io, preamble, "\n")
+            println(io, "#*******************************************************************************")
+        end
+        for (description,input,ref) in cases
+            ir = format_ir_for_test(test_mod, input)
+            if ir != ref
+                @info "Refreshing test case $(repr(description))"
             end
-            @test output == ref
+            println(io,
+                """
+                ########################################
+                # $description
+                $(strip(input))
+                #---------------------
+                $ir
+                """
+            )
         end
     end
 end

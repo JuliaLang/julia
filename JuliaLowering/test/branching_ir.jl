@@ -1,4 +1,18 @@
-######################################
+using JuliaLowering: JuliaLowering, @ast, @chk
+using JuliaSyntax
+
+function var"@label"(__context__::JuliaLowering.MacroContext, ex)
+    @chk kind(ex) == JuliaSyntax.K"Identifier"
+    @ast __context__ ex ex=>JuliaSyntax.K"symbolic_label"
+end
+
+function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
+    @chk kind(ex) == JuliaSyntax.K"Identifier"
+    @ast __context__ ex ex=>JuliaSyntax.K"symbolic_goto"
+end
+
+#*******************************************************************************
+########################################
 # Basic branching tail && value
 begin
     local a, b
@@ -6,14 +20,14 @@ begin
         b
     end
 end
-#-------------------------
+#---------------------
 1   slot₁/a
 2   (gotoifnot %₁ label₅)
 3   slot₂/b
 4   (return %₃)
 5   (return core.nothing)
 
-######################################
+########################################
 # Branching, !tail && !value
 begin
     local a, b, c
@@ -22,14 +36,14 @@ begin
     end
     c
 end
-#-------------------------
+#---------------------
 1   slot₁/a
 2   (gotoifnot %₁ label₄)
 3   slot₂/b
 4   slot₃/c
 5   (return %₄)
 
-######################################
+########################################
 # Branching with else
 begin
     local a, b, c
@@ -47,7 +61,7 @@ end
 5   slot₃/c
 6   (return %₅)
 
-######################################
+########################################
 # Branching with else, !tail && !value
 begin
     local a, b, c, d
@@ -67,7 +81,7 @@ end
 6   slot₄/d
 7   (return %₆)
 
-######################################
+########################################
 # Blocks compile directly to branches
 begin
    local a, b, c, d
@@ -93,7 +107,7 @@ begin
     b
     @label foo
 end
-#----------
+#---------------------
 1   TestMod.a
 2   (goto label₄)
 3   TestMod.b
@@ -107,12 +121,12 @@ begin
     b
     @goto foo
 end
-#----------
+#---------------------
 1   TestMod.a
 2   TestMod.b
 3   (goto label₂)
 
-######################################
+########################################
 # Jumping out of try and catch blocks using @goto
 begin
     try
@@ -126,7 +140,7 @@ begin
     end
     @label lab
 end
-#----------
+#---------------------
 1   (enter label₈)
 2   TestMod.a
 3   (leave %₁)
@@ -162,7 +176,7 @@ begin
     end
     @label lab
 end
-#----------
+#---------------------
 1   (enter label₁₄)
 2   (enter label₆)
 3   TestMod.a
@@ -187,3 +201,4 @@ end
 22  (pop_exception %₁₄)
 23  (pop_exception %₁)
 24  (return core.nothing)
+

@@ -6,7 +6,7 @@ function f(x)::Int
     end
     0xff
 end
-#----------
+#---------------------
 1   (method :f)
 2   core.svec
 3   core.svec
@@ -36,3 +36,4 @@ end
     15  slot₃/tmp
     16  (return %₁₅)
 13  (return %₁)
+

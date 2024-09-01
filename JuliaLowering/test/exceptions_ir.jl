@@ -7,7 +7,7 @@ catch
     g
     return y
 end
-#----------
+#---------------------
 1   (enter label₆)
 2   TestMod.f
 3   TestMod.x
@@ -27,7 +27,7 @@ catch
     g
     return 20
 end
-#----------
+#---------------------
 1   (enter label₅)
 2   TestMod.f
 3   (leave %₁)
@@ -46,7 +46,7 @@ try
     end
 catch
 end
-#----------
+#---------------------
 1   (enter label₁₄)
 2   (enter label₇)
 3   (leave %₁ %₂)
@@ -73,7 +73,7 @@ catch
         return 20
     end
 end
-#----------
+#---------------------
 1   (enter label₄)
 2   (leave %₁)
 3   (return core.nothing)
@@ -93,7 +93,7 @@ catch
 else
     c
 end
-#----------
+#---------------------
 1   (enter label₆)
 2   TestMod.a
 3   (leave %₁)
@@ -105,7 +105,7 @@ end
 
 ########################################
 # try/catch/else, value position
-begin
+let
     z = try
         a
     catch
@@ -114,18 +114,18 @@ begin
         c
     end
 end
-#----------
+#---------------------
 1   (enter label₇)
 2   TestMod.a
 3   (leave %₁)
 4   TestMod.c
-5   (= slot₁/try_result %₄)
+5   (= slot₂/try_result %₄)
 6   (goto label₁₀)
 7   TestMod.b
-8   (= slot₁/try_result %₇)
+8   (= slot₂/try_result %₇)
 9   (pop_exception %₁)
-10  slot₁/try_result
-11  (= TestMod.z %₁₀)
+10  slot₂/try_result
+11  (= slot₁/z %₁₀)
 12  (return %₁₀)
 
 ########################################
@@ -140,7 +140,7 @@ begin
     end
     z
 end
-#----------
+#---------------------
 1   (enter label₆)
 2   TestMod.a
 3   (leave %₁)
@@ -158,7 +158,7 @@ try
 finally
     b
 end
-#----------
+#---------------------
 1   (enter label₇)
 2   (= slot₁/finally_tag -1)
 3   (= slot₂/returnval_via_finally TestMod.a)
@@ -175,27 +175,27 @@ end
 
 ########################################
 # basic try/finally, value position
-begin
+let
     z = try
         a
     finally
         b
     end
 end
-#----------
+#---------------------
 1   (enter label₇)
-2   (= slot₂/finally_tag -1)
+2   (= slot₃/finally_tag -1)
 3   TestMod.a
-4   (= slot₁/try_result %₃)
+4   (= slot₂/try_result %₃)
 5   (leave %₁)
 6   (goto label₈)
-7   (= slot₂/finally_tag 1)
+7   (= slot₃/finally_tag 1)
 8   TestMod.b
-9   (call core.=== slot₂/finally_tag 1)
+9   (call core.=== slot₃/finally_tag 1)
 10  (gotoifnot %₉ label₁₂)
 11  (call top.rethrow)
-12  slot₁/try_result
-13  (= TestMod.z %₁₂)
+12  slot₂/try_result
+13  (= slot₁/z %₁₂)
 14  (return %₁₂)
 
 ########################################
@@ -208,7 +208,7 @@ begin
     end
     z
 end
-#----------
+#---------------------
 1   (enter label₆)
 2   (= slot₁/finally_tag -1)
 3   TestMod.a
@@ -232,7 +232,7 @@ while true
         b
     end
 end
-#----------
+#---------------------
 1   (gotoifnot true label₁₅)
 2   (enter label₉)
 3   (= slot₁/finally_tag -1)
@@ -258,7 +258,7 @@ catch
 finally
     c
 end
-#----------
+#---------------------
 1   (enter label₁₅)
 2   (= slot₁/finally_tag -1)
 3   (enter label₈)
@@ -295,7 +295,7 @@ try
 finally
     d
 end
-#----------
+#---------------------
 1   (enter label₃₀)
 2   (= slot₁/finally_tag -1)
 3   (enter label₁₅)
@@ -344,7 +344,7 @@ try
 catch exc
     b
 end
-#----------
+#---------------------
 1   (enter label₅)
 2   TestMod.a
 3   (leave %₁)
@@ -353,3 +353,4 @@ end
 6   TestMod.b
 7   (pop_exception %₁)
 8   (return %₆)
+

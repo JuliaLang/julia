@@ -4,7 +4,7 @@ while f(a)
     body1
     body2
 end
-#----------
+#---------------------
 1   TestMod.f
 2   TestMod.a
 3   (call %₁ %₂)
@@ -13,12 +13,13 @@ end
 6   TestMod.body2
 7   (goto label₁)
 8   (return core.nothing)
+
 ########################################
 # While loop with short circuit condition
 while a && b
     body
 end
-#----------
+#---------------------
 1   TestMod.a
 2   (gotoifnot %₁ label₇)
 3   TestMod.b
@@ -26,6 +27,7 @@ end
 5   TestMod.body
 6   (goto label₁)
 7   (return core.nothing)
+
 ########################################
 # While loop with with break and continue
 while cond
@@ -35,7 +37,7 @@ while cond
     continue
     body3
 end
-#---------
+#---------------------
 1   TestMod.cond
 2   (gotoifnot %₁ label₉)
 3   TestMod.body1
@@ -45,3 +47,4 @@ end
 7   TestMod.body3
 8   (goto label₁)
 9   (return core.nothing)
+

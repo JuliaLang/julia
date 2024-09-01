@@ -1,7 +1,7 @@
 ########################################
 # Local declaration with type
 local x::T = 1
-#----------
+#---------------------
 1   (= slot₂/tmp 1)
 2   core.isa
 3   slot₂/tmp
@@ -23,7 +23,7 @@ local x::T = 1
 ########################################
 # const
 const xx = 10
-#----------
+#---------------------
 1   (const TestMod.xx)
 2   (= TestMod.xx 10)
 3   (return 10)
@@ -31,7 +31,7 @@ const xx = 10
 ########################################
 # Typed const
 const xx::T = 10
-#----------
+#---------------------
 1   core.set_binding_type!
 2   TestMod.T
 3   (call %₁ TestMod :xx %₂)
@@ -54,7 +54,7 @@ const xx::T = 10
 ########################################
 # Global assignment
 xx = 10
-#----------
+#---------------------
 1   core.get_binding_type
 2   (call %₁ TestMod :xx)
 3   (= slot₁/tmp 10)
@@ -73,7 +73,7 @@ xx = 10
 ########################################
 # Typed global assignment
 global xx::T = 10
-#----------
+#---------------------
 1   core.set_binding_type!
 2   TestMod.T
 3   (call %₁ TestMod :xx %₂)
@@ -92,3 +92,4 @@ global xx::T = 10
 16  slot₁/tmp
 17  (= TestMod.xx %₁₆)
 18  (return 10)
+
