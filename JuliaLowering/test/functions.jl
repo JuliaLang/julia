@@ -2,6 +2,26 @@
 
 test_mod = Module()
 
+# Function calls
+# Splatting
+@test JuliaLowering.include_string(test_mod, """
+let
+    x = 1
+    y = 2
+    zs = (3,4)
+    w = 5
+    (tuple(zs...),
+     tuple(zs..., w),
+     tuple(y, zs...),
+     tuple(x, y, zs..., w))
+end
+""") == ((3,4),
+         (3,4,5),
+         (2,3,4),
+         (1,2,3,4,5))
+
+#-------------------------------------------------------------------------------
+# Function definitions
 @test JuliaLowering.include_string(test_mod, """
 begin
     function f(x)
