@@ -332,11 +332,11 @@ end
 
 Base.@constprop :aggressive function istril(A::Union{LowerTriangular,UnitLowerTriangular}, k::Integer=0)
     k >= 0 && return true
-    return _istril(A, k)
+    return istril(parent(U), k)
 end
 Base.@constprop :aggressive function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
     k <= 0 && return true
-    return _istriu(A, k)
+    return istriu(parent(A), k)
 end
 istril(A::Adjoint, k::Integer=0) = istriu(A.parent, -k)
 istril(A::Transpose, k::Integer=0) = istriu(A.parent, -k)
