@@ -171,7 +171,7 @@ function refresh_ir_test_cases(filename)
         for (description,input,ref) in cases
             ir = format_ir_for_test(test_mod, input)
             if ir != ref
-                @info "Refreshing test case $(repr(description))"
+                @info "Refreshing test case $(repr(description)) in $filename"
             end
             println(io,
                 """
@@ -186,3 +186,6 @@ function refresh_ir_test_cases(filename)
     end
 end
 
+function refresh_all_ir_test_cases(test_dir=".")
+    foreach(refresh_ir_test_cases, filter(fn->endswith(fn, "ir.jl"), readdir(test_dir, join=true)))
+end

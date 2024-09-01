@@ -8,32 +8,23 @@ function f(x)::Int
 end
 #---------------------
 1   (method :f)
-2   core.svec
-3   core.svec
-4   core.Typeof
-5   TestMod.f
-6   (call %₄ %₅)
-7   core.Any
-8   (call %₃ %₆ %₇)
-9   core.svec
-10  (call %₉)
-11  (call %₂ %₈ %₁₀ :($(QuoteNode(:(#= line 1 =#)))))
-12  --- method :f %₁₁
+2   TestMod.f
+3   (call core.Typeof %₂)
+4   (call core.svec %₃ core.Any)
+5   (call core.svec)
+6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
+7   --- method :f %₆
     1   TestMod.Int
-    2   slot₂/x
-    3   (gotoifnot %₂ label₄)
-    4   (= slot₃/tmp 0xff)
-    5   core.isa
-    6   slot₃/tmp
-    7   (call %₅ %₆ %₁)
-    8   (gotoifnot %₇ label₁₀)
-    9   (goto label₁₅)
-    10  core.typeassert
-    11  top.convert
-    12  slot₃/tmp
-    13  (call %₁₁ %₁ %₁₂)
-    14  (= slot₃/tmp (call %₁₀ %₁₃ %₁))
-    15  slot₃/tmp
-    16  (return %₁₅)
-13  (return %₁)
+    2   (gotoifnot slot₂/x label₃)
+    3   (= slot₃/tmp 0xff)
+    4   slot₃/tmp
+    5   (call core.isa %₄ %₁)
+    6   (gotoifnot %₅ label₈)
+    7   (goto label₁₁)
+    8   slot₃/tmp
+    9   (call top.convert %₁ %₈)
+    10  (= slot₃/tmp (call core.typeassert %₉ %₁))
+    11  slot₃/tmp
+    12  (return %₁₁)
+8   (return %₁)
 

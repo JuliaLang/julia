@@ -104,34 +104,34 @@ begin
 end
 """
 
-JuliaLowering.include(Main, "demo_include.jl")
-
-Base.eval(M, quote
-    function var"@inert"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == JuliaSyntax.K"quote"
-        @ast __context__ ex [JuliaSyntax.K"inert" ex]
-    end
-
-    function var"@label"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == JuliaSyntax.K"Identifier"
-        @ast __context__ ex ex=>JuliaSyntax.K"symbolic_label"
-    end
-
-    function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == JuliaSyntax.K"Identifier"
-        @ast __context__ ex ex=>JuliaSyntax.K"symbolic_goto"
-    end
-end)
-
-JuliaLowering.include_string(M, """
-xx = "xx in M"
-macro test_inert_quote()
-    println(xx)
-    @inert quote
-        (\$xx, xx)
-    end
-end
-""")
+# JuliaLowering.include(Main, "demo_include.jl")
+#
+# Base.eval(M, quote
+#     function var"@inert"(__context__::JuliaLowering.MacroContext, ex)
+#         @chk kind(ex) == JuliaSyntax.K"quote"
+#         @ast __context__ ex [JuliaSyntax.K"inert" ex]
+#     end
+#
+#     function var"@label"(__context__::JuliaLowering.MacroContext, ex)
+#         @chk kind(ex) == JuliaSyntax.K"Identifier"
+#         @ast __context__ ex ex=>JuliaSyntax.K"symbolic_label"
+#     end
+#
+#     function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
+#         @chk kind(ex) == JuliaSyntax.K"Identifier"
+#         @ast __context__ ex ex=>JuliaSyntax.K"symbolic_goto"
+#     end
+# end)
+#
+# JuliaLowering.include_string(M, """
+# xx = "xx in M"
+# macro test_inert_quote()
+#     println(xx)
+#     @inert quote
+#         (\$xx, xx)
+#     end
+# end
+# """)
 
 function wrapscope(ex, scope_type)
     makenode(ex, ex, K"scope_block", ex; scope_type=scope_type)
@@ -411,8 +411,11 @@ end
 """
 
 src = """
-function f()
-    global some_sym::Int = 1
+begin
+    local a, b
+    if a
+        b
+    end
 end
 """
 

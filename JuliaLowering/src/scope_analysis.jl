@@ -292,7 +292,7 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
                 # In a top level thunk but *inside* a nontrivial scope
                 layer = ctx.scope_layers[varkey.layer]
                 if !layer.is_macro_expansion && (varkey in ctx.implicit_toplevel_globals ||
-                        isdefined(layer.mod, Symbol(varkey.name)))
+                        is_defined_and_owned_global(layer.mod, Symbol(varkey.name)))
                     # Special scope rules to make assignments to globals work
                     # like assignments to locals do inside a function.
                     if is_soft_scope

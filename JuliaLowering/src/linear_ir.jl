@@ -3,21 +3,38 @@
 
 function is_simple_atom(ctx, ex)
     k = kind(ex)
-    # TODO flisp thismodule head?
+    # TODO thismodule
     is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) ||
         (k == K"core" && ex.name_val == "nothing")
 end
 
-# N.B.: This assumes that resolve-scopes has run, so outerref is equivalent to
-# a global in the current scope.
+# This assumes that resolve-scopes has run, so outerref is equivalent to a
+# global in the current scope.
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    return is_simple_atom(ctx, ex)
-    # FIXME ||
-           #(k == K"outerref" && nothrow_julia_global(ex[1]))  ||
-           #(k == K"globalref" && nothrow_julia_global(ex))    ||
-           #(k == K"quote" || k = K"inert" || k == K"top" ||
-            #k == K"core" || k == K"slot" || k = K"static_parameter")
+    if is_simple_atom(ctx, ex) || k == K"inert" || k == K"top" || k == K"core"
+        true
+    elseif k == K"BindingId"
+        binfo = lookup_binding(ctx, ex)
+        bk = binfo.kind
+        # TODO: Can we allow bk == :local || bk == :argument || bk == :static_parameter ???
+        # Why does flisp seem to allow (slot) and (static_parameter), but these
+        # aren't yet converted to by existing lowering??
+        if bk == :global
+            # Globals are nothrow when they are defined - we assume a previously
+            # defined global can never be set to undefined. (TODO: This could be
+            # broken when precompiling a module `B` in the presence of a badly
+            # behaved module `A`, which inconsistently defines globals during
+            # `A.__init__()`??)
+            #
+            # TODO (k == K"outerref" && nothrow_julia_global(ex[1]))
+            is_defined_nothrow_global(binfo.mod, Symbol(binfo.name))
+        else
+            false
+        end
+    else
+        false
+    end
 end
 
 function is_ssa(ctx, ex)
@@ -93,22 +110,17 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_locals, return_type)
                     Vector{JumpOrigin{GraphType}}(), ctx.mod)
 end
 
-# FIXME: BindingId subsumes many things so need to assess what that means for these predicates.
-# BindingId can be
-#   - local variable (previously K"Identifier")
-#   - implicit global variables in current module (previously K"Identifier")
-#   - globalref - from macros
-#
-# BindingId could also subsume
-#   - top,core
-
 function is_valid_body_ir_argument(ctx, ex)
-    is_valid_ir_argument(ctx, ex) && return true
-    return false
-    # FIXME
-    k = kind(ex)
-    return k == K"BindingId" && # Arguments are always defined slots
-        TODO("vinfo-table stuff")
+    if is_valid_ir_argument(ctx, ex)
+        true
+    elseif kind(ex) == K"BindingId"
+        binfo = lookup_binding(ctx, ex)
+        # Arguments are always defined
+        # TODO: use equiv of vinfo:never-undef when we have it
+        binfo.kind == :argument
+    else
+        false
+    end
 end
 
 function is_simple_arg(ctx, ex)
@@ -118,16 +130,20 @@ function is_simple_arg(ctx, ex)
 end
 
 function is_single_assign_var(ctx::LinearIRContext, ex)
-    return false # FIXME
-    id = ex.var_id
-    # return id in ctx.lambda_args ||
+    kind(ex) == K"BindingId" || return false
+    binfo = lookup_binding(ctx, ex)
+    # Arguments are always single-assign
+    # TODO: Use equiv of vinfo:sa when we have it
+    return binfo.kind == :argument
 end
 
 function is_const_read_arg(ctx, ex)
     k = kind(ex)
-    return is_simple_atom(ctx, ex) ||
-           is_single_assign_var(ctx, ex) ||
-           k == K"quote" || k == K"inert" || k == K"top" || k == K"core"
+    # Even if we have side effects, we know that singly-assigned
+    # locals cannot be affected by them so we can inline them anyway.
+    # TODO from flisp: "We could also allow const globals here"
+    return k == K"inert" || k == K"top" || k == K"core" ||
+        is_simple_atom(ctx, ex) || is_single_assign_var(ctx, ex)
 end
 
 function is_valid_ir_rvalue(ctx, lhs, rhs)
@@ -140,7 +156,7 @@ end
 
 # evaluate the arguments of a call, creating temporary locations as needed
 function compile_args(ctx, args)
-    # First check if all the arguments as simple (and therefore side-effect free).
+    # First check if all the arguments are simple (and therefore side-effect free).
     # Otherwise, we need to use ssa values for all arguments to ensure proper
     # left-to-right evaluation semantics.
     all_simple = all(a->is_simple_arg(ctx, a), args)

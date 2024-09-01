@@ -181,3 +181,33 @@ function bind_docs!(f::Function, docstr, method_metadata)
     Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), arg_sig)
 end
 
+#-------------------------------------------------------------------------------
+# The following functions are used by lowering to inspect Julia's state.
+
+# Get the binding for `name` if one is already resolved in module `mod`. Note
+# that we cannot use `isdefined(::Module, ::Symbol)` here, because that causes
+# binding resolution which is a massive side effect we must avoid in lowering.
+function _get_module_binding(mod, name)
+    b = @ccall jl_get_module_binding(mod::Module, name::Symbol, 0::Cint)::Ptr{Core.Binding}
+    b == C_NULL ? nothing : unsafe_pointer_to_objref(b)
+end
+
+# Return true if a `name` is defined in and *by* the module `mod`.
+# Has no side effects, unlike isdefined()
+#
+# (This should do what fl_defined_julia_global does for flisp lowering)
+function is_defined_and_owned_global(mod, name)
+    b = _get_module_binding(mod, name)
+    !isnothing(b) && isdefined(b, :owner) && b.owner === b
+end
+
+# Return true if `name` is defined in `mod`, the sense that accessing it is nothrow.
+# Has no side effects, unlike isdefined()
+#
+# (This should do what fl_nothrow_julia_global does for flisp lowering)
+function is_defined_nothrow_global(mod, name)
+    b = _get_module_binding(mod, name)
+    !isnothing(b) && isdefined(b, :owner) || return false
+    isdefined(b.owner, :value)
+end
+
