@@ -5612,19 +5612,19 @@ end
 end
 
 # issue #54757, type redefinitions with recursive reference in supertype
-struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{T54757,N}} where X, N}
+struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
     x::A
     y::Union{A,T54757{A,N}}
     z::T54757{A}
 end
 
-struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{T54757,N}} where X, N}
+struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
     x::A
     y::Union{A,T54757{A,N}}
     z::T54757{A}
 end
 
-@test_throws ErrorException struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Union{T54757{Union{X,Integer}},T54757{A}},Vararg{T54757,N}} where X, N}
+@test_throws ErrorException struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A}},Vararg{Y,N}} where {X,Y<:T54757}, N}
     x::A
     y::Union{A,T54757{A,N}}
     z::T54757{A}

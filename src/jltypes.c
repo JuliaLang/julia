@@ -1679,6 +1679,7 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
         if (lb != ut->var->lb || ub != ut->var->ub) {
             jl_tvar_t *newtvar = jl_new_typevar(ut->var->name, lb, ub);
             JL_GC_PUSH1(&newtvar);
+            body = jl_substitute_var(body, ut->var, (jl_value_t*)newtvar);
             t = jl_new_struct(jl_unionall_type, newtvar, body);
             JL_GC_POP();
         }
@@ -1701,17 +1702,19 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
     }
     else if jl_is_vararg(t) { // recursively call itself on T
         jl_vararg_t *vt = (jl_vararg_t*)t;
-        jl_value_t *rT = NULL;
-        JL_GC_PUSH1(&rT);
-        rT = jl_substitute_datatype(vt->T, x, y);
-        if (rT != vt->T) {
-            jl_task_t *ct = jl_current_task;
-            t = jl_gc_alloc(ct->ptls, sizeof(jl_vararg_t), jl_vararg_type);
-            jl_set_typetagof((jl_vararg_t *)t, jl_vararg_tag, 0);
-            ((jl_vararg_t *)t)->T = rT;
-            ((jl_vararg_t *)t)->N = vt->N;
+        if (vt->T) { // vt->T could be NULL
+            jl_value_t *rT = NULL;
+            JL_GC_PUSH1(&rT);
+            rT = jl_substitute_datatype(vt->T, x, y);
+            if (rT != vt->T) {
+                jl_task_t *ct = jl_current_task;
+                t = jl_gc_alloc(ct->ptls, sizeof(jl_vararg_t), jl_vararg_type);
+                jl_set_typetagof((jl_vararg_t *)t, jl_vararg_tag, 0);
+                ((jl_vararg_t *)t)->T = rT;
+                ((jl_vararg_t *)t)->N = vt->N;
+            }
+            JL_GC_POP();
         }
-        JL_GC_POP();
     }
     return t;
 }
