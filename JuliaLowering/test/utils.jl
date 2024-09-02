@@ -163,27 +163,28 @@ function refresh_ir_test_cases(filename)
     preamble, cases = read_ir_test_cases(filename)
     test_mod = Module(:TestMod)
     Base.include_string(test_mod, preamble)
-    open(filename, "w") do io
-        if !isempty(preamble)
-            println(io, preamble, "\n")
-            println(io, "#*******************************************************************************")
-        end
-        for (description,input,ref) in cases
-            ir = format_ir_for_test(test_mod, input)
-            if ir != ref
-                @info "Refreshing test case $(repr(description)) in $filename"
-            end
-            println(io,
-                """
-                ########################################
-                # $description
-                $(strip(input))
-                #---------------------
-                $ir
-                """
-            )
-        end
+    io = IOBuffer()
+    if !isempty(preamble)
+        println(io, preamble, "\n")
+        println(io, "#*******************************************************************************")
     end
+    for (description,input,ref) in cases
+        ir = format_ir_for_test(test_mod, input)
+        if ir != ref
+            @info "Refreshing test case $(repr(description)) in $filename"
+        end
+        println(io,
+            """
+            ########################################
+            # $description
+            $(strip(input))
+            #---------------------
+            $ir
+            """
+        )
+    end
+    # Write only at the end to ensure we don't write rubbish if we crash!
+    write(filename, take!(io))
 end
 
 function refresh_all_ir_test_cases(test_dir=".")
