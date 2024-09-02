@@ -443,8 +443,6 @@ Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
             debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
 
             Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-            @test lmul!(Tri,copy(A1)) ≈ Tri*M1
-            Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
             C = Matrix{promote_type(elty1,eltyB)}(undef, n, n)
             mul!(C, Tri, A1)
             @test C ≈ Tri*M1
