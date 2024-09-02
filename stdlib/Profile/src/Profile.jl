@@ -990,7 +990,10 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                     link = editor_link(path, li.line)
                     styled"{link=$link:$styled_path}"
                 end
-                strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ", rich_file, "; $fname")
+                strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ", rich_file, "; ", fname)
+                if frame.overhead > 0
+                    strs[i] = styled"{bold:$(strs[i])}"
+                end
             end
         else
             strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
