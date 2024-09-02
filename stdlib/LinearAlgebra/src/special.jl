@@ -569,5 +569,5 @@ function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot 
 end
 
 # istriu/istril for triangular wrappers of structured matrices
-_istril(A::BandedMatrix, k, ::Val{'L'}) = istril(A, k)
-_istriu(A::BandedMatrix, k, ::Val{'U'}) = istriu(A, k)
+_istril(A::LowerTriangular{<:Any, <:BandedMatrix}, k) = istril(parent(A), k)
+_istriu(A::UpperTriangular{<:Any, <:BandedMatrix}, k) = istriu(parent(A), k)
