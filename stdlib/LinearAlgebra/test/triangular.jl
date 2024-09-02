@@ -1228,4 +1228,21 @@ end
     end
 end
 
+@testset "istriu/istril for structured parents" begin
+    for M in [Tridiagonal(rand(n-1), rand(n), rand(n-1)),
+                Tridiagonal(zeros(n-1), zeros(n), zeros(n-1)),
+                Diagonal(randn(n)),
+                Diagonal(zeros(n)),
+                ]
+        for TriT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+            U = TriT(M)
+            A = Array(U)
+            for k in -(n-1):n-1
+                @test istriu(U, k) == istriu(A, k)
+                @test istril(U, k) == istril(A, k)
+            end
+        end
+    end
+end
+
 end # module TestTriangular
