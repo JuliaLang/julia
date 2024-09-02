@@ -330,13 +330,29 @@ function Base.replace_in_print_matrix(A::Union{LowerTriangular,UnitLowerTriangul
     return i >= j ? s : Base.replace_with_centered_mark(s)
 end
 
-Base.@constprop :aggressive function istril(A::Union{LowerTriangular,UnitLowerTriangular}, k::Integer=0)
+istril(A::UnitLowerTriangular, k::Integer=0) = k >= 0
+istriu(A::UnitUpperTriangular, k::Integer=0) = k <= 0
+Base.@constprop :aggressive function istril(A::LowerTriangular, k::Integer=0)
     k >= 0 && return true
-    return istril(parent(U), k)
+    _istril(parent(A), k, Val('L'))
 end
-Base.@constprop :aggressive function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
+@inline function _istril(A, k, ::Val{'L'})
+    m = size(A, 1)
+    for j in max(1, k + 2):m
+        all(iszero, view(A, j:min(j - k - 1, m), j)) || return false
+    end
+    return true
+end
+Base.@constprop :aggressive function istriu(A::UpperTriangular, k::Integer=0)
     k <= 0 && return true
-    return istriu(parent(A), k)
+    _istriu(parent(A), k, Val('U'))
+end
+@inline function _istriu(A, k, ::Val{'U'})
+    m = size(A, 1)
+    for j in 1:min(m, m + k - 1)
+        all(iszero, view(A, max(1, j - k + 1):j, j)) || return false
+    end
+    return true
 end
 istril(A::Adjoint, k::Integer=0) = istriu(A.parent, -k)
 istril(A::Transpose, k::Integer=0) = istriu(A.parent, -k)

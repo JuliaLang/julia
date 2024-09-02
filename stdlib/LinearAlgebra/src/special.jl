@@ -567,3 +567,7 @@ function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot 
     B = Bidiagonal{T}(diag(S, 0), diag(S, S.uplo == 'U' ? 1 : -1), sym_uplo(S.uplo))
     cholesky!(Hermitian(B, sym_uplo(S.uplo)), NoPivot(); check = check)
 end
+
+# istriu/istril for triangular wrappers of structured matrices
+_istril(A::BandedMatrix, k, ::Val{'L'}) = istril(A, k)
+_istriu(A::BandedMatrix, k, ::Val{'U'}) = istriu(A, k)
