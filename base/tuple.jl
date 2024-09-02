@@ -660,16 +660,9 @@ prod(x::Tuple{}) = 1
 # than the general prod definition is available.
 prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
 
-all(x::Tuple{}) = true
-all(x::Tuple{Bool}) = x[1]
-all(x::Tuple{Bool, Bool}) = x[1]&x[2]
-all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-# use generic reductions for the rest
+all(x::NTuple{N,Bool}) where N = N <= 32 ? reduce(&, x; init = true) : _all(x, :)
 
-any(x::Tuple{}) = false
-any(x::Tuple{Bool}) = x[1]
-any(x::Tuple{Bool, Bool}) = x[1]|x[2]
-any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+any(x::NTuple{N,Bool}) where N = N <= 32 ? reduce(|, x; init = false) : _any(x, :)
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
