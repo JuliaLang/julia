@@ -321,7 +321,7 @@ end
 function flat(io::IO, data::Vector{Alloc}, cols::Int, fmt::ProfileFormat)
     fmt.combine || error(ArgumentError("combine=false"))
     lilist, n, m, totalbytes = parse_flat(fmt.combine ? StackFrame : UInt64, data, fmt.C)
-    filenamemap = FileNameMap()
+    filenamemap = Profile.FileNameMap()
     if isempty(lilist)
         warning_empty()
         return true
