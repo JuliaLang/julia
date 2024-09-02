@@ -334,7 +334,7 @@ istril(A::UnitLowerTriangular, k::Integer=0) = k >= 0
 istriu(A::UnitUpperTriangular, k::Integer=0) = k <= 0
 Base.@constprop :aggressive function istril(A::LowerTriangular, k::Integer=0)
     k >= 0 && return true
-    _istril(A, k)
+    return _istril(A, k)
 end
 @inline function _istril(A::LowerTriangular, k)
     P = parent(A)
@@ -346,7 +346,7 @@ end
 end
 Base.@constprop :aggressive function istriu(A::UpperTriangular, k::Integer=0)
     k <= 0 && return true
-    _istriu(A, k)
+    return _istriu(A, k)
 end
 @inline function _istriu(A::UpperTriangular, k)
     P = parent(A)
