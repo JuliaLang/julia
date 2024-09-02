@@ -505,9 +505,10 @@ end
 
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
-function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,String}})
+function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,String,String}})
     return get!(filenamecache, spath) do
         path = Base.fixup_stdlib_path(string(spath))
+        possible_base_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
         if isabspath(path)
             if ispath(path)
                 # try to replace the file-system prefix with a short "@Module" one,
@@ -524,20 +525,21 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
                             pkgid = Base.project_file_name_uuid(project_file, "")
                             isempty(pkgid.name) && return path # bad Project file
                             # return the joined the module name prefix and path suffix
-                            path = path[nextind(path, sizeof(root)):end]
-                            return string("@", pkgid.name), path
+                            _short_path = path[nextind(path, sizeof(root)):end]
+                            return path, string("@", pkgid.name), _short_path
                         end
                     end
                 end
             end
-            return "", path
-        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
+            return path, "", path
+        elseif isfile(possible_base_path)
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
-            return "@Base", normpath(path)
+            return possible_base_path, "@Base", normpath(path)
         else
             # for non-existent relative paths (such as "REPL[1]"), just consider simplifying them
-            return "", normpath(path) # drop leading "./"
+            path = normpath(path)
+            return "", "", path # drop leading "./"
         end
     end
 end
@@ -758,6 +760,8 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     return (lilist, n, m, totalshots, nsleeping)
 end
 
+const FileNameMap = Dict{Symbol,Tuple{String,String,String}}
+
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
     lilist, n, m, totalshots, nsleeping = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
@@ -768,7 +772,7 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         m = m[keep]
     end
     util_perc = (1 - (nsleeping / totalshots)) * 100
-    filenamemap = Dict{Symbol,Tuple{String,String}}()
+    filenamemap = FileNameMap()
     if isempty(lilist)
         if is_subsection
             Base.print(io, "Total snapshots: ")
@@ -790,9 +794,34 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
     return false
 end
 
+# make a terminal-clickable link to the file and linenum.
+# Similar to `define_default_editors` in `Base.Filesystem` but for creating URIs not commands
+function editor_link(path::String, linenum::Int)
+    editor = get(ENV, "JULIA_EDITOR", "")
+
+    if editor == "code"
+        return "vscode://file/$path:$linenum"
+    elseif editor == "subl" || editor == "sublime_text"
+        return "subl://$path:$linenum"
+    elseif editor == "idea" || occursin("idea", editor)
+        return "idea://open?file=$path&line=$linenum"
+    elseif editor == "pycharm"
+        return "pycharm://open?file=$path&line=$linenum"
+    elseif editor == "atom"
+        return "atom://core/open/file?filename=$path&line=$linenum"
+    elseif editor == "emacsclient"
+        return "emacs://open?file=$path&line=$linenum"
+    elseif editor == "vim" || editor == "nvim"
+        return "vim://open?file=$path&line=$linenum"
+    else
+        # TODO: convert the path to a generic URI (line numbers are not supported by generic URI)
+        return path
+    end
+end
+
 function print_flat(io::IO, lilist::Vector{StackFrame},
         n::Vector{Int}, m::Vector{Int},
-        cols::Int, filenamemap::Dict{Symbol,Tuple{String,String}},
+        cols::Int, filenamemap::FileNameMap,
         fmt::ProfileFormat)
     if fmt.sortedby === :count
         p = sortperm(n)
@@ -804,7 +833,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
     lilist = lilist[p]
     n = n[p]
     m = m[p]
-    pkgnames_filenames = Tuple{String,String}[short_path(li.file, filenamemap) for li in lilist]
+    pkgnames_filenames = Tuple{String,String,String}[short_path(li.file, filenamemap) for li in lilist]
     funcnames = String[string(li.func) for li in lilist]
     wcounts = max(6, ndigits(maximum(n)))
     wself = max(9, ndigits(maximum(m)))
@@ -815,7 +844,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
         li = lilist[i]
         maxline = max(maxline, li.line)
         maxfunc = max(maxfunc, textwidth(funcnames[i]))
-        maxfile = max(maxfile, sum(textwidth, pkgnames_filenames[i]) + 1)
+        maxfile = max(maxfile, sum(textwidth, pkgnames_filenames[i][2:3]) + 1)
     end
     wline = max(5, ndigits(maxline))
     ntext = max(20, cols - wcounts - wself - wline - 3)
@@ -843,7 +872,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
                 Base.print(io, "[any unknown stackframes]")
             end
         else
-            pkgname, file = pkgnames_filenames[i]
+            path, pkgname, file = pkgnames_filenames[i]
             isempty(file) && (file = "[unknown file]")
             pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
             Base.printstyled(io, pkgname, color=pkgcolor)
@@ -853,7 +882,12 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
                 Base.print(io, "/")
                 wpad -= 1
             end
-            Base.print(io, rpad(file_trunc, wpad, " "), " ")
+            if isempty(path)
+                Base.print(io, rpad(file_trunc, wpad, " "))
+            else
+                link = editor_link(path, li.line)
+                Base.print(io, rpad(styled"{link=$link:$file_trunc}", wpad, " "))
+            end
             Base.print(io, lpad(li.line > 0 ? string(li.line) : "?", wline, " "), " ")
             fname = funcnames[i]
             if !li.from_c && li.linfo !== nothing
@@ -902,7 +936,7 @@ end
 # mimics Stacktraces
 const PACKAGE_FIXEDCOLORS = Dict{String, Any}("@Base" => :gray, "@Core" => :gray)
 
-function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,Tuple{String,String}}, showpointer::Bool)
+function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::FileNameMap, showpointer::Bool)
     nindent = min(cols>>1, level)
     ndigoverhead = ndigits(maxes.overhead)
     ndigcounts = ndigits(maxes.count)
@@ -937,7 +971,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 else
                     fname = string(li.func)
                 end
-                pkgname, filename = short_path(li.file, filenamemap)
+                path, pkgname, filename = short_path(li.file, filenamemap)
                 if showpointer
                     fname = string(
                         "0x",
@@ -947,14 +981,16 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 end
                 pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
                 remaining_path = ltruncate(filename, widthfile - textwidth(pkgname) - 1)
-                strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ",
-                    styled"{$pkgcolor:$pkgname}",
-                    !isempty(pkgname) && !startswith(remaining_path, "/") ? "/" : "",
-                    remaining_path,
-                    ":",
-                    li.line == -1 ? "?" : string(li.line),
-                    "; ",
-                    fname)
+                linenum = li.line == -1 ? "?" : string(li.line)
+                slash = (!isempty(pkgname) && !startswith(remaining_path, "/")) ? "/" : ""
+                styled_path = styled"{$pkgcolor:$pkgname}$slash$remaining_path:$linenum"
+                rich_file = if isempty(path)
+                    styled_path
+                else
+                    link = editor_link(path, li.line)
+                    styled"{link=$link:$styled_path}"
+                end
+                strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ", rich_file, "; $fname")
             end
         else
             strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
@@ -1118,7 +1154,7 @@ end
 # avoid stack overflows.
 function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat, is_subsection::Bool) where T
     maxes = maxstats(bt)
-    filenamemap = Dict{Symbol,Tuple{String,String}}()
+    filenamemap = FileNameMap()
     worklist = [(bt, 0, 0, AnnotatedString(""))]
     if !is_subsection
         Base.print(io, "Overhead ╎ [+additional indent] Count File:Line; Function\n")
