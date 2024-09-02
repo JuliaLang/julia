@@ -613,6 +613,36 @@ void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, i
     ptls->gc_tls.heap.mallocarrays = ma;
 }
 
+// collector entry point and control
+_Atomic(uint32_t) jl_gc_disable_counter = 1;
+
+JL_DLLEXPORT int jl_gc_enable(int on)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    int prev = !ptls->disable_gc;
+    ptls->disable_gc = (on == 0);
+    if (on && !prev) {
+        // disable -> enable
+        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
+        }
+    }
+    else if (prev && !on) {
+        // enable -> disable
+        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+        // check if the GC is running and wait for it to finish
+        jl_gc_safepoint_(ptls);
+    }
+    return prev;
+}
+
+JL_DLLEXPORT int jl_gc_is_enabled(void)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return !ptls->disable_gc;
+}
+
 int gc_logging_enabled = 0;
 
 JL_DLLEXPORT void jl_enable_gc_logging(int enable) {

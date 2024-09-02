@@ -2850,36 +2850,6 @@ int gc_is_concurrent_collector_thread(int tid) JL_NOTSAFEPOINT
     return tid == concurrent_collector_thread_id;
 }
 
-// collector entry point and control
-_Atomic(uint32_t) jl_gc_disable_counter = 1;
-
-JL_DLLEXPORT int jl_gc_enable(int on)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    int prev = !ptls->disable_gc;
-    ptls->disable_gc = (on == 0);
-    if (on && !prev) {
-        // disable -> enable
-        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
-            gc_num.allocd += gc_num.deferred_alloc;
-            gc_num.deferred_alloc = 0;
-        }
-    }
-    else if (prev && !on) {
-        // enable -> disable
-        jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-        // check if the GC is running and wait for it to finish
-        jl_gc_safepoint_(ptls);
-    }
-    return prev;
-}
-
-JL_DLLEXPORT int jl_gc_is_enabled(void)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    return !ptls->disable_gc;
-}
-
 JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes) JL_NOTSAFEPOINT
 {
     jl_gc_num_t num = gc_num;
