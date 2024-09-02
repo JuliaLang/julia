@@ -65,7 +65,7 @@ end
 
 # An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
 function _peek_report()
-    iob = IOBuffer()
+    iob = Base.AnnotatedIOBuffer()
     ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
     Base.print(stderr, read(seekstart(iob), AnnotatedString))
