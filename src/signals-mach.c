@@ -297,7 +297,9 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         return;
     }
     jl_task_t *ct = jl_get_current_task();
-    if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+    if ((sig != SIGBUS || info->si_code == BUS_ADRERR) &&
+    !(ct == NULL || ct->ptls == NULL || jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING || ct->eh == NULL)
+    && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
         stack_overflow_warning();
     }
     sigdie_handler(sig, info, context);
