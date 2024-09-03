@@ -385,7 +385,7 @@ of the file or directory `src` refers to.
 Return `dst`.
 
 !!! note
-    The `cp` function is different from the `cp` command. The `cp` function always operates on
+    The `cp` function is different from the `cp` Unix command. The `cp` function always operates on
     the assumption that `dst` is a file, while the command does different things depending
     on whether `dst` is a directory or a file.
     Using `force=true` when `dst` is a directory will result in loss of all the contents present
@@ -440,7 +440,7 @@ julia> rm("goodbye.txt");
 ```
 
 !!! note
-    The `mv` function is different from the `mv` command. The `mv` function by
+    The `mv` function is different from the `mv` Unix command. The `mv` function by
     default will error if `dst` exists, while the command will delete
     an existing `dst` file by default.
     Also the `mv` function always operates on
