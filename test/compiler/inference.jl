@@ -6089,3 +6089,11 @@ end == Union{}
     f = issue55627_make_oc()
     return f(1), f(xs...)
 end == Tuple{Int,Int}
+@test Base.infer_exception_type() do
+    f = issue55627_make_oc()
+    return f(1), f()
+end >: MethodError
+@test Base.infer_exception_type() do
+    f = issue55627_make_oc()
+    return f(1), f('1')
+end >: TypeError

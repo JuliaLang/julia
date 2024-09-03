@@ -2339,7 +2339,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     ocargsig′ = unwrap_unionall(ocargsig)
     ocargsig′ isa DataType || return CallMeta(Any, Any, Effects(), NoCallInfo())
     ocsig = rewrap_unionall(Tuple{Tuple, ocargsig′.parameters...}, ocargsig)
-    hasintersect(sig, ocsig) || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
+    hasintersect(sig, ocsig) || return CallMeta(Union{}, Union{MethodError,TypeError}, EFFECTS_THROWS, NoCallInfo())
     ocmethod = closure.source::Method
     result = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
     (; rt, edge, effects, volatile_inf_result) = result
