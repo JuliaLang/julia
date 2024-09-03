@@ -98,8 +98,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                         add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
                     if const_call_result.exct ⋤ exct
-                        exct = const_call_result.exct
-                        (; const_result, edge) = const_call_result
+                        (; exct, const_result, edge) = const_call_result
                     else
                         add_remark!(interp, sv, "[constprop] Discarded exception type because result was wider than inference")
                     end
@@ -2135,12 +2134,13 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
     isexact || return CallMeta(Any, Any, Effects(), NoCallInfo())
     unwrapped = unwrap_unionall(types)
-    if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
-        return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+    types === Bottom && return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+    if !(unwrapped isa DataType && unwrapped.name === Tuple.name)
+        return CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo())
     end
     argtype = argtypes_to_type(argtype_tail(argtypes, 4))
     nargtype = typeintersect(types, argtype)
-    nargtype === Bottom && return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+    nargtype === Bottom && return CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo())
     nargtype isa DataType || return CallMeta(Any, Any, Effects(), NoCallInfo()) # other cases are not implemented below
     isdispatchelem(ft) || return CallMeta(Any, Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
     ft = ft::DataType
@@ -2154,7 +2154,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     ti = tienv[1]; env = tienv[2]::SimpleVector
     result = abstract_call_method(interp, method, ti, env, false, si, sv)
-    (; rt, edge, effects, volatile_inf_result) = result
+    (; rt, exct, edge, effects, volatile_inf_result) = result
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
     sig = match.spec_types
@@ -2168,14 +2168,18 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
     𝕃ₚ = ipo_lattice(interp)
+    ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
     f = singleton_type(ft′)
     invokecall = InvokeCall(types, lookupsig)
     const_call_result = abstract_call_method_with_const_args(interp,
         result, f, arginfo, si, match, sv, invokecall)
     const_result = volatile_inf_result
     if const_call_result !== nothing
-        if ⊑(𝕃ₚ, const_call_result.rt, rt)
+        if const_call_result.rt ⊑ rt
             (; rt, effects, const_result, edge) = const_call_result
+        end
+        if const_call_result.exct ⋤ exct
+            (; exct, const_result, edge) = const_call_result
         end
     end
     rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
@@ -2183,8 +2187,9 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
     if !match.fully_covers
         effects = Effects(effects; nothrow=false)
+        exct = exct ⊔ TypeError
     end
-    return CallMeta(rt, Any, effects, info)
+    return CallMeta(rt, exct, effects, info)
 end
 
 function invoke_rewrite(xs::Vector{Any})
@@ -2205,16 +2210,16 @@ end
 
 function abstract_throw(interp::AbstractInterpreter, argtypes::Vector{Any}, ::AbsIntState)
     na = length(argtypes)
-    𝕃ᵢ = typeinf_lattice(interp)
+    ⊔ = join(typeinf_lattice(interp))
     if na == 2
         argtype2 = argtypes[2]
         if isvarargtype(argtype2)
-            exct = tmerge(𝕃ᵢ, unwrapva(argtype2), ArgumentError)
+            exct = unwrapva(argtype2) ⊔ ArgumentError
         else
             exct = argtype2
         end
     elseif na == 3 && isvarargtype(argtypes[3])
-        exct = tmerge(𝕃ᵢ, argtypes[2], ArgumentError)
+        exct = argtypes[2] ⊔ ArgumentError
     else
         exct = ArgumentError
     end
@@ -2348,16 +2353,16 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     (; rt, exct, edge, effects, volatile_inf_result) = result
     match = MethodMatch(sig, Core.svec(), ocmethod, sig <: ocsig)
     𝕃ₚ = ipo_lattice(interp)
-    ⊑ₚ, ⋤ₚ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ)
+    ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
     const_result = volatile_inf_result
     if !result.edgecycle
         const_call_result = abstract_call_method_with_const_args(interp, result,
             nothing, arginfo, si, match, sv)
         if const_call_result !== nothing
-            if const_call_result.rt ⊑ₚ rt
+            if const_call_result.rt ⊑ rt
                 (; rt, effects, const_result, edge) = const_call_result
             end
-            if const_call_result.exct ⋤ₚ exct
+            if const_call_result.exct ⋤ exct
                 (; exct, const_result, edge) = const_call_result
             end
         end
@@ -2365,9 +2370,9 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     if check # analyze implicit type asserts on argument and return type
         rty = (unwrap_unionall(tt)::DataType).parameters[2]
         rty = rewrap_unionall(rty isa TypeVar ? rty.ub : rty, tt)
-        if !(rt ⊑ₚ rty && sig ⊑ₚ ocsig)
+        if !(rt ⊑ rty && sig ⊑ ocsig)
             effects = Effects(effects; nothrow=false)
-            exct = tmerge(𝕃ₚ, exct, TypeError)
+            exct = exct ⊔ TypeError
         end
     end
     rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)

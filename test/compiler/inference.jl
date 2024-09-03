@@ -6078,9 +6078,7 @@ gcondvarargs(a, x...) = return fcondvarargs(a, x...) ? isa(a, Int64) : !isa(a, I
 @test Core.Compiler.return_type(gcondvarargs, Tuple{Vararg{Any}}) === Bool
 
 # JuliaLang/julia#55627: argtypes check in `abstract_call_opaque_closure`
-issue55627_some_method(x) = 2x
-issue55627_make_oc() = Base.Experimental.@opaque (x::Int)->issue55627_some_method(x)
-
+issue55627_make_oc() = Base.Experimental.@opaque (x::Int) -> 2x
 @test Base.infer_return_type() do
     f = issue55627_make_oc()
     return f(1), f()
@@ -6099,9 +6097,7 @@ end >: MethodError
 end >: TypeError
 
 # `exct` modeling for opaque closure
-oc_exct_1() = Base.Experimental.@opaque function (x)
-        return x < 0 ? throw(x) : x
-    end
+oc_exct_1() = Base.Experimental.@opaque (x) -> x < 0 ? throw(x) : x
 @test Base.infer_exception_type((Int,)) do x
     oc_exct_1()(x)
 end == Int
@@ -6116,6 +6112,28 @@ f_invoke_nothrow(::Int) = :int
 @test Base.infer_effects((Int,)) do x
     @invoke f_invoke_nothrow(x::Number)
 end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Char,)) do x
+    @invoke f_invoke_nothrow(x::Number)
+end |> !Core.Compiler.is_nothrow
 @test Base.infer_effects((Union{Nothing,Int},)) do x
     @invoke f_invoke_nothrow(x::Number)
 end |> !Core.Compiler.is_nothrow
+
+# `exct` modeling for `invoke` calls
+f_invoke_exct(x::Number) = x < 0 ? throw(x) : x
+f_invoke_exct(x::Int) = x
+@test Base.infer_exception_type((Int,)) do x
+    @invoke f_invoke_exct(x::Number)
+end == Int
+@test Base.infer_exception_type() do
+    @invoke f_invoke_exct(42::Number)
+end == Union{}
+@test Base.infer_exception_type((Union{Nothing,Int},)) do x
+    @invoke f_invoke_exct(x::Number)
+end == Union{Int,TypeError}
+@test Base.infer_exception_type((Int,)) do x
+    invoke(f_invoke_exct, Number, x)
+end == TypeError
+@test Base.infer_exception_type((Char,)) do x
+    invoke(f_invoke_exct, Tuple{Number}, x)
+end == TypeError
