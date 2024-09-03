@@ -42,7 +42,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::AbsIntState, max_methods::Int)
     𝕃ₚ, 𝕃ᵢ = ipo_lattice(interp), typeinf_lattice(interp)
-    ⊑ₚ, ⊔ₚ, ⊔ᵢ  = partialorder(𝕃ₚ), join(𝕃ₚ), join(𝕃ᵢ)
+    ⊑ₚ, ⋤ₚ, ⊔ₚ, ⊔ᵢ  = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ), join(𝕃ᵢ)
     argtypes = arginfo.argtypes
     matches = find_method_matches(interp, argtypes, atype; max_methods)
     if isa(matches, FailedMethodMatch)
@@ -97,7 +97,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     else
                         add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
-                    if !(exct ⊑ₚ const_call_result.exct)
+                    if const_call_result.exct ⋤ exct
                         exct = const_call_result.exct
                         (; const_result, edge) = const_call_result
                     else
@@ -154,7 +154,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
                 # Treat the exception type separately. Currently, constprop often cannot determine the exception type
                 # because consistent-cy does not apply to exceptions.
-                if !(this_exct ⊑ₚ const_call_result.exct)
+                if const_call_result.exct ⋤ this_exct
                     this_exct = const_call_result.exct
                     (; const_result, edge) = const_call_result
                 else
@@ -2342,10 +2342,10 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     hasintersect(sig, ocsig) || return CallMeta(Union{}, Union{MethodError,TypeError}, EFFECTS_THROWS, NoCallInfo())
     ocmethod = closure.source::Method
     result = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
-    (; rt, edge, effects, volatile_inf_result) = result
+    (; rt, exct, edge, effects, volatile_inf_result) = result
     match = MethodMatch(sig, Core.svec(), ocmethod, sig <: ocsig)
     𝕃ₚ = ipo_lattice(interp)
-    ⊑ₚ = ⊑(𝕃ₚ)
+    ⊑ₚ, ⋤ₚ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ)
     const_result = volatile_inf_result
     if !result.edgecycle
         const_call_result = abstract_call_method_with_const_args(interp, result,
@@ -2354,20 +2354,23 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
             if const_call_result.rt ⊑ₚ rt
                 (; rt, effects, const_result, edge) = const_call_result
             end
+            if const_call_result.exct ⋤ₚ exct
+                (; exct, const_result, edge) = const_call_result
+            end
         end
     end
     if check # analyze implicit type asserts on argument and return type
-        ftt = closure.typ
-        (aty, rty) = (unwrap_unionall(ftt)::DataType).parameters
-        rty = rewrap_unionall(rty isa TypeVar ? rty.lb : rty, ftt)
-        if !(rt ⊑ₚ rty && tuple_tfunc(𝕃ₚ, arginfo.argtypes[2:end]) ⊑ₚ rewrap_unionall(aty, ftt))
+        rty = (unwrap_unionall(tt)::DataType).parameters[2]
+        rty = rewrap_unionall(rty isa TypeVar ? rty.ub : rty, tt)
+        if !(rt ⊑ₚ rty && sig ⊑ₚ ocsig)
             effects = Effects(effects; nothrow=false)
+            exct = tmerge(𝕃ₚ, exct, TypeError)
         end
     end
     rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)
     info = OpaqueClosureCallInfo(match, const_result)
     edge !== nothing && add_backedge!(sv, edge)
-    return CallMeta(rt, Any, effects, info)
+    return CallMeta(rt, exct, effects, info)
 end
 
 function most_general_argtypes(closure::PartialOpaque)

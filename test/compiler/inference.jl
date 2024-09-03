@@ -6097,3 +6097,15 @@ end >: MethodError
     f = issue55627_make_oc()
     return f(1), f('1')
 end >: TypeError
+
+# `exct` modeling for opaque closure
+oc_exct_1() = Base.Experimental.@opaque function (x)
+        return x < 0 ? throw(x) : x
+    end
+@test Base.infer_exception_type((Int,)) do x
+    oc_exct_1()(x)
+end == Int
+oc_exct_2() = Base.Experimental.@opaque Tuple{Number}->Number (x) -> '1'
+@test Base.infer_exception_type((Int,)) do x
+    oc_exct_2()(x)
+end == TypeError
