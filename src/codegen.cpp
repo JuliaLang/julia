@@ -171,6 +171,14 @@ void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
     }
 }
 
+void maybeSetName(jl_codegen_params_t &params, Value *V, const Twine &Name)
+{
+    // To be used when we may get an Instruction or something that is not an instruction i.e Constants/Arguments
+    if (params.debug_level >= 2 && isa<Instruction>(V)) {
+        V->setName(Name);
+    }
+}
+
 void setName(jl_codegen_params_t &params, Value *V, std::function<std::string()> GetName)
 {
     assert((isa<Constant>(V) || isa<Instruction>(V)) && "Should only set names on instructions!");
