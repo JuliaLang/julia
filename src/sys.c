@@ -478,16 +478,10 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
-    int n = uv_available_parallelism();
-#if defined(__APPLE__) && defined(_CPU_AARCH64_)
-    // Only on Apple Silicon we don't just return `uv_available_parallelism` because it may
-    // be larger than `jl_cpu_threads` (which asks for the performance cores only), and we
-    // want the more conservative estimate of the two.
-    int cpu = jl_cpu_threads();
-    return n < cpu ? n : cpu;
-#else
-    return n;
-#endif
+    // We want the more conservative estimate of the two.
+    int cpu_threads = jl_cpu_threads();
+    int available_parallelism = uv_available_parallelism();
+    return available_parallelism < cpu_threads ? available_parallelism : cpu_threads;
 }
 
 
