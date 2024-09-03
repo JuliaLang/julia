@@ -876,7 +876,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
             isempty(file) && (file = "[unknown file]")
             pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
             Base.printstyled(io, pkgname, color=pkgcolor)
-            file_trunc = ltruncate(file, wfile)
+            file_trunc = ltruncate(file, max(1, wfile))
             wpad = wfile - textwidth(pkgname)
             if !isempty(pkgname) && !startswith(file_trunc, "/")
                 Base.print(io, "/")
@@ -980,7 +980,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                         fname)
                 end
                 pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
-                remaining_path = ltruncate(filename, widthfile - textwidth(pkgname) - 1)
+                remaining_path = ltruncate(filename, max(1, widthfile - textwidth(pkgname) - 1))
                 linenum = li.line == -1 ? "?" : string(li.line)
                 slash = (!isempty(pkgname) && !startswith(remaining_path, "/")) ? "/" : ""
                 styled_path = styled"{$pkgcolor:$pkgname}$slash$remaining_path:$linenum"
