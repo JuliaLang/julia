@@ -2181,6 +2181,9 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
     info = InvokeCallInfo(match, const_result)
     edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
+    if !match.fully_covers
+        effects = Effects(effects; nothrow=false)
+    end
     return CallMeta(rt, Any, effects, info)
 end
 

@@ -6109,3 +6109,13 @@ oc_exct_2() = Base.Experimental.@opaque Tuple{Number}->Number (x) -> '1'
 @test Base.infer_exception_type((Int,)) do x
     oc_exct_2()(x)
 end == TypeError
+
+# nothrow modeling for `invoke` calls
+f_invoke_nothrow(::Number) = :number
+f_invoke_nothrow(::Int) = :int
+@test Base.infer_effects((Int,)) do x
+    @invoke f_invoke_nothrow(x::Number)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Union{Nothing,Int},)) do x
+    @invoke f_invoke_nothrow(x::Number)
+end |> !Core.Compiler.is_nothrow
