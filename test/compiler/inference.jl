@@ -6076,3 +6076,16 @@ end
 fcondvarargs(a, b, c, d) = isa(d, Int64)
 gcondvarargs(a, x...) = return fcondvarargs(a, x...) ? isa(a, Int64) : !isa(a, Int64)
 @test Core.Compiler.return_type(gcondvarargs, Tuple{Vararg{Any}}) === Bool
+
+# JuliaLang/julia#55627: argtypes check in `abstract_call_opaque_closure`
+issue55627_some_method(x) = 2x
+issue55627_make_oc() = Base.Experimental.@opaque (x::Int)->issue55627_some_method(x)
+
+@test Base.infer_return_type() do
+    f = issue55627_make_oc()
+    return f(1), f()
+end == Union{}
+@test Base.infer_return_type((Vector{Int},)) do xs
+    f = issue55627_make_oc()
+    return f(1), f(xs...)
+end == Tuple{Int,Int}

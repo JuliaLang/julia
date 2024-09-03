@@ -2334,11 +2334,16 @@ end
 function abstract_call_opaque_closure(interp::AbstractInterpreter,
     closure::PartialOpaque, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState, check::Bool=true)
     sig = argtypes_to_type(arginfo.argtypes)
-    result = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, si, sv)
-    (; rt, edge, effects, volatile_inf_result) = result
     tt = closure.typ
-    sigT = (unwrap_unionall(tt)::DataType).parameters[1]
-    match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
+    ocargsig = rewrap_unionall((unwrap_unionall(tt)::DataType).parameters[1], tt)
+    ocargsig′ = unwrap_unionall(ocargsig)
+    ocargsig′ isa DataType || return CallMeta(Any, Any, Effects(), NoCallInfo())
+    ocsig = rewrap_unionall(Tuple{Tuple, ocargsig′.parameters...}, ocargsig)
+    hasintersect(sig, ocsig) || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
+    ocmethod = closure.source::Method
+    result = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
+    (; rt, edge, effects, volatile_inf_result) = result
+    match = MethodMatch(sig, Core.svec(), ocmethod, sig <: ocsig)
     𝕃ₚ = ipo_lattice(interp)
     ⊑ₚ = ⊑(𝕃ₚ)
     const_result = volatile_inf_result
