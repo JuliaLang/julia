@@ -3026,12 +3026,15 @@ static Value *emit_genericmemoryelsize(jl_codectx_t &ctx, Value *v, jl_value_t *
         size_t sz = sty->layout->size;
         if (sty->layout->flags.arrayelem_isunion)
             sz++;
-        return ConstantInt::get(ctx.types().T_size, sz);
+        auto elsize = ConstantInt::get(ctx.types().T_size, sz);
+        return elsize;
     }
     else {
         Value *t = emit_typeof(ctx, v, false, false, true);
         Value *elsize = emit_datatype_size(ctx, t, add_isunion);
-        return ctx.builder.CreateZExt(elsize, ctx.types().T_size);
+        elsize = ctx.builder.CreateZExt(elsize, ctx.types().T_size);
+        setName(ctx.emission_context, elsize, "elsize");
+        return elsize;
     }
 }
 
@@ -3066,6 +3069,7 @@ static Value *emit_genericmemorylen(jl_codectx_t &ctx, Value *addr, jl_value_t *
     MDBuilder MDB(ctx.builder.getContext());
     auto rng = MDB.createRange(Constant::getNullValue(ctx.types().T_size), ConstantInt::get(ctx.types().T_size, genericmemoryype_maxsize(typ)));
     LI->setMetadata(LLVMContext::MD_range, rng);
+    setName(ctx.emission_context, LI, "memory_len");
     return LI;
 }
 
@@ -3075,7 +3079,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     Value *addr = mem;
     addr = decay_derived(ctx, addr);
     addr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, addr, 1);
-    setName(ctx.emission_context, addr, ".data_ptr");
+    setName(ctx.emission_context, addr, "memory_data_ptr");
     PointerType *PPT = cast<PointerType>(ctx.types().T_jlgenericmemory->getElementType(1));
     LoadInst *LI = ctx.builder.CreateAlignedLoad(PPT, addr, Align(sizeof(char*)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
@@ -3087,6 +3091,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
         assert(AS == AddressSpace::Loaded);
         ptr = ctx.builder.CreateCall(prepare_call(gc_loaded_func), { mem, ptr });
     }
+    setName(ctx.emission_context, ptr, "memory_data");
     return ptr;
 }
 
@@ -4195,6 +4200,7 @@ static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, Value *mem, Value *data, co
     Value *ref = Constant::getNullValue(get_memoryref_type(ctx.builder.getContext(), ctx.types().T_size, layout, 0));
     ref = ctx.builder.CreateInsertValue(ref, data, 0);
     ref = ctx.builder.CreateInsertValue(ref, mem, 1);
+    setName(ctx.emission_context, ref, "memory_ref");
     return mark_julia_type(ctx, ref, false, typ);
 }
 
@@ -4215,6 +4221,7 @@ static Value *emit_memoryref_FCA(jl_codectx_t &ctx, const jl_cgval_t &ref, const
         LoadInst *load = ctx.builder.CreateLoad(type, data_pointer(ctx, ref));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ref.tbaa);
         ai.decorateInst(load);
+        setName(ctx.emission_context, load, "memory_ref_FCA");
         return load;
     }
     else {
@@ -4231,9 +4238,12 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
         return jl_cgval_t();
     Value *V = emit_memoryref_FCA(ctx, ref, layout);
     Value *data = CreateSimplifiedExtractValue(ctx, V, 0);
+    maybeSetName(ctx.emission_context, data, "memoryref_data");
     Value *mem = CreateSimplifiedExtractValue(ctx, V, 1);
+    maybeSetName(ctx.emission_context, mem, "memoryref_mem");
     Value *i = emit_unbox(ctx, ctx.types().T_size, idx, (jl_value_t*)jl_long_type);
     Value *offset = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
+    setName(ctx.emission_context, offset, "memoryref_offset");
     Value *elsz = emit_genericmemoryelsize(ctx, mem, ref.typ, false);
     bool bc = bounds_check_enabled(ctx, inbounds);
 #if 1
@@ -4245,12 +4255,14 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
     bool isghost = layout->size == 0;
     if ((!isboxed && isunion) || isghost) {
         newdata = ctx.builder.CreateAdd(data, offset);
+        setName(ctx.emission_context, newdata, "memoryref_data+offset");
         if (bc) {
             BasicBlock *failBB, *endBB;
             failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
             endBB = BasicBlock::Create(ctx.builder.getContext(), "idxend");
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             Value *inbound = ctx.builder.CreateICmpULT(newdata, mlen);
+            setName(ctx.emission_context, offset, "memoryref_isinbounds");
             ctx.builder.CreateCondBr(inbound, endBB, failBB);
             failBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(failBB);
@@ -4278,10 +4290,13 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             // and we can further rearrange that as ovflw = !( offset+len < len+len ) as unsigned math
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             ovflw = ctx.builder.CreateICmpUGE(ctx.builder.CreateAdd(offset, mlen), ctx.builder.CreateNUWAdd(mlen, mlen));
+            setName(ctx.emission_context, ovflw, "memoryref_ovflw");
         }
 #endif
         boffset = ctx.builder.CreateMul(offset, elsz);
-        newdata = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), data, boffset);
+        setName(ctx.emission_context, boffset, "memoryref_byteoffset");
+        newdata = ctx.builder.CreateGEP(getInt8Ty(ctx.builder.getContext()), data, boffset);
+        setName(ctx.emission_context, newdata, "memoryref_data_byteoffset");
         (void)boffset; // LLVM is very bad at handling GEP with types different from the load
         if (bc) {
             BasicBlock *failBB, *endBB;
@@ -4304,8 +4319,11 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
                 ctx.builder.CreatePtrToInt(newdata, ctx.types().T_size),
                 ctx.builder.CreatePtrToInt(mptr, ctx.types().T_size));
             Value *blen = ctx.builder.CreateMul(mlen, elsz, "", true, true);
+            setName(ctx.emission_context, blen, "memoryref_bytelen");
             Value *inbound = ctx.builder.CreateICmpULT(bidx0, blen);
+            setName(ctx.emission_context, inbound, "memoryref_isinbounds");
             inbound = ctx.builder.CreateAnd(ctx.builder.CreateNot(ovflw), inbound);
+            setName(ctx.emission_context, inbound, "memoryref_isinbounds&notovflw");
 #else
             Value *idx0; // (newdata - mptr) / elsz
             idx0 = ctx.builder.CreateSub(
@@ -4342,8 +4360,10 @@ static jl_cgval_t emit_memoryref_offset(jl_codectx_t &ctx, const jl_cgval_t &ref
         offset = ctx.builder.CreateSub(
             ctx.builder.CreatePtrToInt(data, ctx.types().T_size),
             ctx.builder.CreatePtrToInt(mptr, ctx.types().T_size));
+        setName(ctx.emission_context, offset, "memoryref_offset");
         Value *elsz = emit_genericmemoryelsize(ctx, mem, ref.typ, false);
         offset = ctx.builder.CreateExactUDiv(offset, elsz);
+        setName(ctx.emission_context, offset, "memoryref_offsetidx");
     }
     offset = ctx.builder.CreateAdd(offset, ConstantInt::get(ctx.types().T_size, 1));
     return mark_julia_type(ctx, offset, false, jl_long_type);
@@ -4352,7 +4372,9 @@ static jl_cgval_t emit_memoryref_offset(jl_codectx_t &ctx, const jl_cgval_t &ref
 static Value *emit_memoryref_mem(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout)
 {
     Value *V = emit_memoryref_FCA(ctx, ref, layout);
-    return CreateSimplifiedExtractValue(ctx, V, 1);
+    V = CreateSimplifiedExtractValue(ctx, V, 1);
+    maybeSetName(ctx.emission_context, V, "memoryref_mem");
+    return V;
 }
 
 static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const jl_datatype_layout_t *layout)
@@ -4374,13 +4396,15 @@ static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const
     data = ctx.builder.CreateCall(prepare_call(gc_loaded_func), { mem, data });
     if (!GEPlist.empty()) {
         for (auto &GEP : make_range(GEPlist.rbegin(), GEPlist.rend())) {
-            Instruction *GEP2 = GEP->clone();
+            GetElementPtrInst *GEP2 = cast<GetElementPtrInst>(GEP->clone());
             GEP2->mutateType(PointerType::get(GEP->getResultElementType(), AS));
             GEP2->setOperand(GetElementPtrInst::getPointerOperandIndex(), data);
+            GEP2->setIsInBounds(true);
             ctx.builder.Insert(GEP2);
             data = GEP2;
         }
     }
+    setName(ctx.emission_context, data, "memoryref_data");
     return data;
 }
 
