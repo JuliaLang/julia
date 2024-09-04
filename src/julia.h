@@ -718,6 +718,7 @@ typedef struct _jl_module_t {
 } jl_module_t;
 
 struct _jl_globalref_t {
+    JL_DATA_TYPE
     jl_module_t *mod;
     jl_sym_t *name;
     jl_binding_t *binding;
