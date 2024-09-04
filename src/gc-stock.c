@@ -984,9 +984,12 @@ STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_pa
 // sweep over all memory that is being used and not in a pool
 static void gc_sweep_other(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
 {
+    uint64_t t_free_mallocd_memory_start = jl_hrtime();
     gc_sweep_foreign_objs();
     sweep_malloced_memory();
     sweep_big(ptls);
+    uint64_t t_free_mallocd_memory_end = jl_hrtime();
+    gc_num.total_sweep_free_mallocd_memory_time += t_free_mallocd_memory_end - t_free_mallocd_memory_start;
     jl_engine_sweep(gc_all_tls_states);
 }
 
@@ -1380,58 +1383,63 @@ static void gc_sweep_pool(void)
         }
     }
 
-    // the actual sweeping
-    jl_gc_padded_page_stack_t *new_gc_allocd_scratch = (jl_gc_padded_page_stack_t *) calloc_s(n_threads * sizeof(jl_gc_padded_page_stack_t));
-    jl_ptls_t ptls = jl_current_task->ptls;
-    gc_sweep_wake_all_pages(ptls, new_gc_allocd_scratch);
-    gc_sweep_pool_parallel(ptls);
-    gc_sweep_wait_for_all_pages();
+    uint64_t t_page_walk_start = jl_hrtime();
+    {
+        // the actual sweeping
+        jl_gc_padded_page_stack_t *new_gc_allocd_scratch = (jl_gc_padded_page_stack_t *) calloc_s(n_threads * sizeof(jl_gc_padded_page_stack_t));
+        jl_ptls_t ptls = jl_current_task->ptls;
+        gc_sweep_wake_all_pages(ptls, new_gc_allocd_scratch);
+        gc_sweep_pool_parallel(ptls);
+        gc_sweep_wait_for_all_pages();
 
-    // reset half-pages pointers
-    for (int t_i = 0; t_i < n_threads; t_i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        if (ptls2 != NULL) {
-            ptls2->gc_tls.page_metadata_allocd = new_gc_allocd_scratch[t_i].stack;
-            for (int i = 0; i < JL_GC_N_POOLS; i++) {
-                jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[i];
-                p->newpages = NULL;
+        // reset half-pages pointers
+        for (int t_i = 0; t_i < n_threads; t_i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+            if (ptls2 != NULL) {
+                ptls2->gc_tls.page_metadata_allocd = new_gc_allocd_scratch[t_i].stack;
+                for (int i = 0; i < JL_GC_N_POOLS; i++) {
+                    jl_gc_pool_t *p = &ptls2->gc_tls.heap.norm_pools[i];
+                    p->newpages = NULL;
+                }
             }
         }
-    }
 
-    // merge free lists
-    for (int t_i = 0; t_i < n_threads; t_i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        if (ptls2 == NULL) {
-            continue;
-        }
-        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
-        while (pg != NULL) {
-            jl_gc_pagemeta_t *pg2 = pg->next;
-            if (pg->fl_begin_offset != UINT16_MAX) {
-                char *cur_pg = pg->data;
-                jl_taggedvalue_t *fl_beg = (jl_taggedvalue_t*)(cur_pg + pg->fl_begin_offset);
-                jl_taggedvalue_t *fl_end = (jl_taggedvalue_t*)(cur_pg + pg->fl_end_offset);
-                *pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = fl_beg;
-                pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = &fl_end->next;
+        // merge free lists
+        for (int t_i = 0; t_i < n_threads; t_i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+            if (ptls2 == NULL) {
+                continue;
             }
-            pg = pg2;
-        }
-    }
-
-    // null out terminal pointers of free lists
-    for (int t_i = 0; t_i < n_threads; t_i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        if (ptls2 != NULL) {
-            for (int i = 0; i < JL_GC_N_POOLS; i++) {
-                *pfl[t_i * JL_GC_N_POOLS + i] = NULL;
+            jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->gc_tls.page_metadata_allocd.bottom);
+            while (pg != NULL) {
+                jl_gc_pagemeta_t *pg2 = pg->next;
+                if (pg->fl_begin_offset != UINT16_MAX) {
+                    char *cur_pg = pg->data;
+                    jl_taggedvalue_t *fl_beg = (jl_taggedvalue_t*)(cur_pg + pg->fl_begin_offset);
+                    jl_taggedvalue_t *fl_end = (jl_taggedvalue_t*)(cur_pg + pg->fl_end_offset);
+                    *pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = fl_beg;
+                    pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = &fl_end->next;
+                }
+                pg = pg2;
             }
         }
-    }
 
-    // cleanup
-    free(pfl);
-    free(new_gc_allocd_scratch);
+        // null out terminal pointers of free lists
+        for (int t_i = 0; t_i < n_threads; t_i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+            if (ptls2 != NULL) {
+                for (int i = 0; i < JL_GC_N_POOLS; i++) {
+                    *pfl[t_i * JL_GC_N_POOLS + i] = NULL;
+                }
+            }
+        }
+
+        // cleanup
+        free(pfl);
+        free(new_gc_allocd_scratch);
+    }
+    uint64_t t_page_walk_end = jl_hrtime();
+    gc_num.total_sweep_page_walk_time += t_page_walk_end - t_page_walk_start;
 
 #ifdef _P64 // only enable concurrent sweeping on 64bit
     // wake thread up to sweep concurrently
@@ -1439,7 +1447,10 @@ static void gc_sweep_pool(void)
         uv_sem_post(&gc_sweep_assists_needed);
     }
     else {
+        uint64_t t_madvise_start = jl_hrtime();
         gc_free_pages();
+        uint64_t t_madvise_end = jl_hrtime();
+        gc_num.total_sweep_madvise_time += t_madvise_end - t_madvise_start;
     }
 #else
     gc_free_pages();
