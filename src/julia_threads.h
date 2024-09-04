@@ -187,6 +187,9 @@ typedef struct _jl_tls_states_t {
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
+#ifdef _OS_DARWIN_
+    jl_jmp_buf *volatile safe_restore;
+#endif
 
     // currently-held locks, to be released when an exception is thrown
     small_arraylist_t locks;
