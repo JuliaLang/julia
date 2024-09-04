@@ -967,11 +967,12 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
                 abort();
             }
             Type *lty;
-            if (jl_field_isptr(jst, i)) {
+            enum jl_fieldkind_t kind = jl_field_kind(jst, i);
+            if (kind == JL_FIELDKIND_ISPTR) {
                 lty = JuliaType::get_prjlvalue_ty(ctxt);
                 isvector = false;
             }
-            else if (jl_is_uniontype(ty)) {
+            else if (kind == JL_FIELDKIND_ISUNION) {
                 // pick an Integer type size such that alignment will generally be correct,
                 // and always end with an Int8 (selector byte).
                 // We may need to insert padding first to get to the right offset
@@ -1001,6 +1002,8 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
                 continue;
             }
             else {
+                if (kind == JL_FIELDKIND_ISOTHER && jl_is_uniontype(ty))
+                    ty = ((jl_uniontype_t*)ty)->b;
                 bool isptr;
                 lty = _julia_struct_to_llvm(ctx, ctxt, ty, &isptr, llvmcall);
                 assert(lty && !isptr);
@@ -2406,14 +2409,14 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     unsigned nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
     // note that nb == jl_Module->getDataLayout().getTypeAllocSize(elty) or getTypeStoreSize, depending on whether it is a struct or primitive type
     AllocaInst *intcast = NULL;
-    if (Order == AtomicOrdering::NotAtomic && !isboxed && !aliasscope && elty->isAggregateType() && !jl_is_genericmemoryref_type(jltype)) {
+    if (Order == AtomicOrdering::NotAtomic && !isboxed && (!aliasscope && elty->isAggregateType() && !jl_is_genericmemoryref_type(jltype))) {
         // use split_value to do this load
         auto src = mark_julia_slot(ptr, jltype, NULL, tbaa);
         auto [val, roots, result_tbaa] = split_value(ctx, src, Align(alignment), /*copy_required*/true);
         if (maybe_null_if_boxed && !roots.empty()) {
             null_pointer_check(ctx, roots.get(ctx, 0), nullcheck);
         }
-        return mark_julia_slot(val, jltype, NULL, result_tbaa, std::move(roots));
+        return mark_julia_slot(val, jltype, nullptr, result_tbaa, std::move(roots));
     }
     Type *realelty = elty;
     if (Order != AtomicOrdering::NotAtomic) {
@@ -2447,7 +2450,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         instr = ctx.builder.CreateInsertValue(instr, load1, 1);
         if (maybe_null_if_boxed)
             null_pointer_check(ctx, load1, nullcheck);
-        return jl_cgval_t(instr, jltype, NULL);
+        return jl_cgval_t(instr, jltype, nullptr);
     }
     else {
         instr = emit_aliased_load(ctx, elty, ptr, Align(alignment), tbaa, aliasscope, Order,
@@ -2480,7 +2483,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (instr)
         return mark_julia_type(ctx, instr, isboxed, jltype);
     else
-        return mark_julia_slot(intcast, jltype, NULL, ctx.tbaa().tbaa_stack);
+        return mark_julia_slot(intcast, jltype, nullptr, ctx.tbaa().tbaa_stack);
 }
 
 static Function *emit_modifyhelper(jl_codectx_t &ctx2, const jl_cgval_t &op, const jl_cgval_t &modifyop, jl_value_t *jltype, Type *elty, jl_cgval_t rhs, const Twine &fname, bool gcstack_arg);
@@ -3063,7 +3066,8 @@ static bool field_may_be_null(const jl_cgval_t &strct, jl_datatype_t *stt, size_
     size_t nfields = jl_datatype_nfields(stt);
     if (idx < nfields - (unsigned)stt->name->n_uninitialized)
         return false;
-    if (!jl_field_isptr(stt, idx) && !jl_type_hasptr(jl_field_type(stt, idx)))
+    enum jl_fieldkind_t kind = jl_field_kind(stt, idx);
+    if (kind == JL_FIELDKIND_ISUNION || kind == JL_FIELDKIND_ISBITS)
         return false;
     if (strct.constant) {
         if ((jl_is_immutable(stt) || jl_field_isconst(stt, idx)) && jl_field_isdefined(strct.constant, idx))
@@ -3383,32 +3387,41 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     if (type_is_ghost(julia_type_to_llvm(ctx, jfty)))
         return ghostValue(ctx, jfty);
     Value *needlock = nullptr;
-    if (isatomic && !jl_field_isptr(jt, idx) && jl_datatype_size(jfty) > MAX_ATOMIC_SIZE) {
+    enum jl_fieldkind_t kind = jl_field_kind(jt, idx);
+    if (isatomic && kind != JL_FIELDKIND_ISPTR && jl_datatype_size(jfty) > MAX_ATOMIC_SIZE) {
         assert(strct.isboxed);
         needlock = boxed(ctx, strct);
     }
+    Value *otherval = nullptr;
+    bool isother = kind == JL_FIELDKIND_ISOTHER && jl_is_uniontype(jfty);
     bool maybe_null = field_may_be_null(strct, jt, idx);
+    if (isother) {
+        // override nullcheck to use for tindex instead
+        nullcheck = &otherval;
+        maybe_null = true;
+    }
     size_t byte_offset = jl_field_offset(jt, idx);
     if (!strct.inline_roots.empty()) {
         assert(!isatomic && !needlock);
         auto tbaa = best_field_tbaa(ctx, strct, jt, idx, byte_offset);
         auto offsets = split_value_field(jt, idx);
         bool hasptr = offsets.second >= 0;
-        assert(hasptr == jl_field_isptr(jt, idx) || jl_type_hasptr(jfty));
+        assert(hasptr == (kind == JL_FIELDKIND_ISPTR) || jl_type_hasptr(jfty));
         jl_gc_roots_t roots;
         if (hasptr) {
-            size_t nroots = jl_field_isptr(jt, idx) ? 1 : ((jl_datatype_t*)jfty)->layout->npointers;
+            size_t nroots = kind == JL_FIELDKIND_ISPTR ? 1 : ((jl_datatype_t*)jfty)->layout->npointers;
             roots = strct.inline_roots.slice(ctx, offsets.second, nroots);
             if (jl_field_isptr(jt, idx))
                 roots = jl_gc_roots_t(ArrayRef<Value*>(roots.get(ctx, 0)));
             if (maybe_null)
                 null_pointer_check(ctx, roots.get(ctx, 0), nullcheck);
         }
-        if (jl_field_isptr(jt, idx)) {
+        if (kind == JL_FIELDKIND_ISPTR) {
             return mark_julia_type(ctx, roots.get(ctx, 0), true, jfty);
         }
         Value *addr = offsets.first < 0 ? nullptr : offsets.first == 0 ? strct.V : emit_ptrgep(ctx, strct.V, offsets.first);
-        if (jl_is_uniontype(jfty)) {
+        if (kind == JL_FIELDKIND_ISUNION) {
+            assert(jl_is_uniontype(jfty));
             assert(roots.empty());
             size_t fsz = 0, al = 0;
             int union_max = jl_islayout_inline(jfty, &fsz, &al);
@@ -3423,7 +3436,10 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                     AtomicOrdering::NotAtomic, maybe_null, align, nullcheck);
         }
         else {
-            return mark_julia_slot(addr, jfty, nullptr, tbaa, std::move(roots));
+            Value *tindex = nullptr;
+            if (isother)
+                tindex = ctx.builder.CreateZExt(null_pointer_cmp(ctx, otherval), getInt8Ty(ctx.builder.getContext()));
+            return mark_julia_slot(addr, jfty, tindex, tbaa, std::move(roots));
         }
     }
     else if (strct.ispointer()) {
@@ -3432,7 +3448,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         Value *addr = (byte_offset == 0 ? staddr : emit_ptrgep(ctx, staddr, byte_offset));
         if (addr != staddr)
             setNameWithField(ctx.emission_context, addr, get_objname, jt, idx, Twine("_ptr"));
-        if (jl_field_isptr(jt, idx)) {
+        if (kind == JL_FIELDKIND_ISPTR) {
             LoadInst *Load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, Align(sizeof(void*)));
             setNameWithField(ctx.emission_context, Load, get_objname, jt, idx, Twine());
             Load->setOrdering(order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
@@ -3445,10 +3461,15 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         Value *ptindex = nullptr;
         int union_max = 0;
-        if (jl_is_uniontype(jfty)) {
+        if (kind == JL_FIELDKIND_ISUNION) {
+            assert(jl_is_uniontype(jfty));
             ptindex = emit_ptrgep(ctx, staddr, byte_offset + jl_field_size(jt, idx) - 1);
             size_t fsz = 0, al = 0;
             union_max = jl_islayout_inline(jfty, &fsz, &al);
+        }
+        else if (kind == JL_FIELDKIND_ISOTHER) {
+            maybe_null = true;
+            nullcheck = jwn;
         }
         if (jl_field_isconst(jt, idx) && jfty != (jl_value_t*)jl_bool_type && !maybe_null) {
             // just compute the pointer and let user load it when necessary
@@ -3458,6 +3479,10 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         if (needlock)
             emit_lockstate_value(ctx, needlock, true);
+        if (isother) {
+            jfty = ((jl_uniontype_t*)jfty)->b;
+            assert(jl_is_concrete_type(jfty) && !jl_is_pointerfree(jfty));
+        }
         jl_cgval_t ret = typed_load(ctx, addr, NULL, jfty, tbaa, nullptr, false,
                 needlock ? AtomicOrdering::NotAtomic : get_llvm_atomic_order(order),
                 maybe_null, jl_field_align(jt, idx), nullcheck, ptindex, strct.tbaa);
@@ -3465,6 +3490,14 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             setNameWithField(ctx.emission_context, ret.V, get_objname, jt, idx, Twine());
         if (needlock)
             emit_lockstate_value(ctx, needlock, false);
+        if (isother) {
+            if (ret.V && ret.inline_roots.empty() && !ret.ispointer())
+                ret = value_to_pointer(ctx, ret);
+            if (ret.inline_roots.empty() && ret.ispointer())
+                ret.inline_roots = extract_gc_roots(ctx, data_pointer(ctx, ret), (jl_datatype_t*)jfty, jl_datatype_layout((jl_datatype_t*)jfty)->npointers, ctx.tbaa().tbaa_stack);
+            ret.TIndex = ctx.builder.CreateZExt(null_pointer_cmp(ctx, otherval), getInt8Ty(ctx.builder.getContext()));
+            ret.typ = jl_field_type(jt, idx);
+        }
         return ret;
     }
     else if (isa<UndefValue>(strct.V)) {
@@ -3482,7 +3515,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             fldv = ctx.builder.CreateExtractElement(obj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), idx));
             setNameWithField(ctx.emission_context, fldv, get_objname, jt, idx, Twine());
         }
-        else if (!jl_field_isptr(jt, idx) && jl_is_uniontype(jfty)) {
+        else if (kind == JL_FIELDKIND_ISUNION) {
             int fsz = jl_field_size(jt, idx) - 1;
             unsigned ptindex = convert_struct_offset(ctx, T, byte_offset + fsz);
             AllocaInst *lv = NULL;
@@ -3530,6 +3563,13 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             Value *first_ptr = jl_field_isptr(jt, idx) ? fldv : extract_first_ptr(ctx, fldv);
             if (first_ptr)
                 null_pointer_check(ctx, first_ptr, nullcheck);
+        }
+        if (isother) {
+            Value *tindex = ctx.builder.CreateZExt(null_pointer_cmp(ctx, otherval), getInt8Ty(ctx.builder.getContext()));
+            Align align(julia_alignment(((jl_uniontype_t*)jfty)->b));
+            Value *loc = emit_static_alloca(ctx, fldv->getType(), align);
+            ctx.builder.CreateAlignedStore(fldv, loc, align);
+            return mark_julia_slot(loc, jfty, tindex, ctx.tbaa().tbaa_stack, ExtractTrackedValues(ctx, fldv));
         }
         return mark_julia_type(ctx, fldv, jl_field_isptr(jt, idx), jfty);
     }
@@ -4332,14 +4372,49 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         setNameWithField(ctx.emission_context, addr, get_objname, sty, idx0, Twine("_ptr"));
     }
     jl_value_t *jfty = jl_field_type(sty, idx0);
-    bool isboxed = jl_field_isptr(sty, idx0);
+    enum jl_fieldkind_t kind = jl_field_kind(sty, idx0);
     unsigned align = jl_field_align(sty, idx0);
     bool maybe_null = field_may_be_null(strct, sty, idx0);
     Value *ptindex = nullptr;
-    if (!isboxed && jl_is_uniontype(jfty)) {
+    if (kind == JL_FIELDKIND_ISUNION) {
+        assert(jl_is_uniontype(jfty));
         size_t fsz1 = jl_field_size(sty, idx0) - 1;
         ptindex = emit_ptrgep(ctx, addr, fsz1);
         setNameWithField(ctx.emission_context, ptindex, get_objname, sty, idx0, Twine(".tindex_ptr"));
+    }
+    bool isboxed = kind == JL_FIELDKIND_ISPTR;
+    bool isother = kind == JL_FIELDKIND_ISOTHER && jl_is_uniontype(jfty);
+    if (isother) {
+        // For Union{Nothing, T} stored as ISOTHER, we need to branch:
+        // - If rhs is Nothing (type `a`), store NULL to the first pointer
+        // - If rhs is type `b`, store the actual value
+        assert(!isreplacefield && !isswapfield && !ismodifyfield && !issetfieldonce);
+        jl_value_t *bty = ((jl_uniontype_t*)jfty)->b;
+        assert(jl_is_datatype(bty) && !jl_is_pointerfree(bty));
+        Value *isb = emit_isa(ctx, rhs, bty, Twine()).first;
+        BasicBlock *isaBB = BasicBlock::Create(ctx.builder.getContext(), "setfield_isa", ctx.f);
+        BasicBlock *isbBB = BasicBlock::Create(ctx.builder.getContext(), "setfield_isb", ctx.f);
+        BasicBlock *doneBB = BasicBlock::Create(ctx.builder.getContext(), "setfield_done", ctx.f);
+        ctx.builder.CreateCondBr(isb, isbBB, isaBB);
+        // Store NULL for type `a` (Nothing)
+        ctx.builder.SetInsertPoint(isaBB);
+        size_t first_ptr_offset = ((jl_datatype_t*)bty)->layout->first_ptr * sizeof(void*);
+        Value *first_ptr_addr = emit_ptrgep(ctx, addr, first_ptr_offset);
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+        ai.decorateInst(ctx.builder.CreateAlignedStore(
+            Constant::getNullValue(ctx.types().T_prjlvalue),
+            first_ptr_addr, Align(sizeof(void*))));
+        ctx.builder.CreateBr(doneBB);
+        // Store the actual value for type `b`
+        ctx.builder.SetInsertPoint(isbBB);
+        typed_store(ctx, addr, rhs, cmp, bty, tbaa, nullptr,
+            wb ? boxed(ctx, strct) : nullptr,
+            false, Order, FailOrder, align,
+            needlock, true, false, false, false, false,
+            maybe_null, modifyop, fname, nullptr, nullptr);
+        ctx.builder.CreateBr(doneBB);
+        ctx.builder.SetInsertPoint(doneBB);
+        return rhs;
     }
     return typed_store(ctx, addr, rhs, cmp, jfty, tbaa, nullptr,
         wb ? boxed(ctx, strct) : nullptr,

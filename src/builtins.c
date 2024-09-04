@@ -108,7 +108,8 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
         size_t offs = jl_field_offset(dt, f);
         char *ao = (char*)a + offs;
         char *bo = (char*)b + offs;
-        if (jl_field_isptr(dt, f)) {
+        enum jl_fieldkind_t kind = jl_field_kind(dt, f);
+        if (kind == JL_FIELDKIND_ISPTR) {
             // Save ptr recursion until the end -- only recurse if otherwise equal
             // Note that we also skip comparing the pointers for null here, because
             // null fields are rare so it can save CPU to delay this read too.
@@ -116,7 +117,8 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
         }
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
-            if (jl_is_uniontype(ft)) {
+            if (kind == JL_FIELDKIND_ISUNION) {
+                assert(jl_is_uniontype(ft));
                 size_t idx = jl_field_size(dt, f) - 1;
                 uint8_t asel = ((uint8_t*)ao)[idx];
                 uint8_t bsel = ((uint8_t*)bo)[idx];
@@ -124,7 +126,10 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                     return 0;
                 ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
             }
-            else if (ft->layout->first_ptr >= 0) {
+            else if (kind != JL_FIELDKIND_ISBITS) {
+                if (jl_is_uniontype(ft))
+                    ft = (jl_datatype_t*)((jl_uniontype_t*)ft)->b;
+                assert(ft->layout->first_ptr >= 0);
                 // If the field is a inline immutable that can be undef
                 // we need to check for undef first since undef struct
                 // may have fields that are different but should still be treated as equal.
@@ -437,19 +442,25 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)v + offs;
         uintptr_t u;
-        if (jl_field_isptr(dt, f)) {
+        enum jl_fieldkind_t kind = jl_field_kind(dt, f);
+        if (kind == JL_FIELDKIND_ISPTR) {
             jl_value_t *f = *(jl_value_t**)vo;
             u = (f == NULL) ? 0 : jl_object_id(f);
         }
         else {
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
-            if (jl_is_uniontype(fieldtype)) {
+            if (kind == JL_FIELDKIND_ISUNION) {
+                assert(jl_is_uniontype(fieldtype));
                 uint8_t sel = ((uint8_t*)vo)[jl_field_size(dt, f) - 1];
                 fieldtype = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)fieldtype, sel);
             }
+            else if (kind != JL_FIELDKIND_ISBITS) {
+                if (jl_is_uniontype(fieldtype))
+                    fieldtype = (jl_datatype_t*)((jl_uniontype_t*)fieldtype)->b;
+                assert(fieldtype->layout->first_ptr >= 0);
+            }
             assert(jl_is_datatype(fieldtype) && !fieldtype->name->abstract && !fieldtype->name->mutabl);
-            int32_t first_ptr = fieldtype->layout->first_ptr;
-            if (first_ptr >= 0 && ((jl_value_t**)vo)[first_ptr] == NULL) {
+            if (kind == JL_FIELDKIND_ISOTHER && ((jl_value_t**)vo)[fieldtype->layout->first_ptr] == NULL) {
                 // If the field is a inline immutable that can be can be undef
                 // we need to check to check for undef first since undef struct
                 // may have fields that are different but should still be treated as equal.

@@ -570,21 +570,29 @@ typedef struct {
     jl_value_t *JL_NONNULL b;
 } jl_uniontype_t;
 
-// in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
+
+enum jl_fieldkind_t {
+    JL_FIELDKIND_ISBITS,
+    JL_FIELDKIND_ISPTR,
+    JL_FIELDKIND_ISUNION,
+    JL_FIELDKIND_ISOTHER, // hasptr, possibly also singleton-union
+};
+
+// in little-endian, kind is always part of the first byte, avoiding the need for a branch in computing isptr
 typedef struct {
-    uint8_t isptr:1;
+    uint8_t kind:2;
     uint8_t size:7;
     uint8_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc8_t;
 
 typedef struct {
-    uint16_t isptr:1;
+    uint16_t kind:2;
     uint16_t size:15;
     uint16_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc16_t;
 
 typedef struct {
-    uint32_t isptr:1;
+    uint32_t kind:2;
     uint32_t size:31;
     uint32_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc32_t;
@@ -1495,11 +1503,16 @@ DEFINE_FIELD_ACCESSORS(offset)
 DEFINE_FIELD_ACCESSORS(size)
 #undef DEFINE_FIELD_ACCESSORS
 
-static inline int jl_field_isptr(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
+static inline enum jl_fieldkind_t jl_field_kind(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *ly = jl_datatype_layout(st);
     assert(i >= 0 && (size_t)i < ly->nfields);
-    return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + jl_fielddesc_size(ly->flags.fielddesc_type) * i))->isptr;
+    return (enum jl_fieldkind_t)((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + jl_fielddesc_size(ly->flags.fielddesc_type) * i))->kind;
+}
+
+static inline int jl_field_isptr(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
+{
+    return jl_field_kind(st, i) == JL_FIELDKIND_ISPTR;
 }
 
 static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT

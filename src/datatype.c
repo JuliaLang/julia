@@ -255,17 +255,17 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
         if (fielddesc_type == 0) {
             desc8[i].offset = desc[i].offset;
             desc8[i].size = desc[i].size;
-            desc8[i].isptr = desc[i].isptr;
+            desc8[i].kind = desc[i].kind;
         }
         else if (fielddesc_type == 1) {
             desc16[i].offset = desc[i].offset;
             desc16[i].size = desc[i].size;
-            desc16[i].isptr = desc[i].isptr;
+            desc16[i].kind = desc[i].kind;
         }
         else {
             desc32[i].offset = desc[i].offset;
             desc32[i].size = desc[i].size;
-            desc32[i].isptr = desc[i].isptr;
+            desc32[i].kind = desc[i].kind;
         }
     }
     if (first_ptr >= 0) {
@@ -727,14 +727,23 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         for (i = 0; i < nfields; i++) {
             jl_value_t *fld = jl_field_type(st, i);
             int isatomic = jl_field_isatomic(st, i);
+            jl_value_t *restfld = fld;
+            if (jl_is_uniontype(fld) && jl_is_datatype(((jl_uniontype_t*)fld)->a) && jl_is_datatype_singleton((jl_datatype_t*)((jl_uniontype_t*)fld)->a)) {
+                restfld = ((jl_uniontype_t*)fld)->b;
+            }
             size_t fsz = 0, al = 1;
-            if (jl_islayout_inline(fld, &fsz, &al) && (!isatomic || jl_is_datatype(fld))) { // aka jl_datatype_isinlinealloc
+            if (jl_islayout_inline(restfld, &fsz, &al) && (!isatomic || jl_is_datatype(fld))) { // aka jl_datatype_isinlinealloc
                 if (__unlikely(fsz > max_size))
                     // Should never happen
                     throw_ovf(should_malloc, desc, st, fsz);
-                desc[i].isptr = 0;
+                if (!jl_is_datatype(restfld) || (restfld != fld && jl_islayout_inline(fld, &fsz, &al)))
+                    desc[i].kind = JL_FIELDKIND_ISUNION;
 
-                if (jl_is_uniontype(fld)) {
+                else if (((jl_datatype_t*)restfld)->layout->first_ptr >= 0)
+                    desc[i].kind = JL_FIELDKIND_ISOTHER;
+                else
+                    desc[i].kind = JL_FIELDKIND_ISBITS;
+                if (desc[i].kind == JL_FIELDKIND_ISUNION) {
                     fsz += 1; // selector byte
                     zeroinit = 1;
                     // TODO: Some unions could be bits comparable.
@@ -746,10 +755,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                         isbitsegal = 0;
                         haspadding = 1;
                     }
-                    uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
-                    if (((jl_datatype_t*)fld)->layout->flags.haspadding)
+                    uint32_t fld_npointers = ((jl_datatype_t*)restfld)->layout->npointers;
+                    if (((jl_datatype_t*)restfld)->layout->flags.haspadding)
                         haspadding = 1;
-                    if (!((jl_datatype_t*)fld)->layout->flags.isbitsegal)
+                    if (!((jl_datatype_t*)restfld)->layout->flags.isbitsegal)
                         isbitsegal = 0;
                     if (i >= nfields - st->name->n_uninitialized && fld_npointers &&
                         fld_npointers * sizeof(void*) != fsz) {
@@ -766,7 +775,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                         isbitsegal = 0;
                     }
                     if (!zeroinit)
-                        zeroinit = ((jl_datatype_t*)fld)->zeroinit;
+                        zeroinit = ((jl_datatype_t*)restfld)->zeroinit;
                     npointers += fld_npointers;
                 }
             }
@@ -775,7 +784,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 al = fsz;
                 if (al > MAX_ALIGN)
                     al = MAX_ALIGN;
-                desc[i].isptr = 1;
+                desc[i].kind = JL_FIELDKIND_ISPTR;
                 zeroinit = 1;
                 npointers++;
                 if (!jl_pointer_egal(fld)) {
@@ -830,9 +839,12 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         for (i = 0; i < nfields; i++) {
             jl_value_t *fld = jl_field_type(st, i);
             uint32_t offset = desc[i].offset / sizeof(jl_value_t**);
-            if (desc[i].isptr)
+            if (desc[i].kind == JL_FIELDKIND_ISPTR)
                 pointers[ptr_i++] = offset;
-            else if (jl_is_datatype(fld)) {
+            else if (desc[i].kind == JL_FIELDKIND_ISOTHER) {
+                if (jl_is_uniontype(fld)) {
+                    fld = ((jl_uniontype_t*)fld)->b;
+                }
                 int j, npointers = ((jl_datatype_t*)fld)->layout->npointers;
                 for (j = 0; j < npointers; j++) {
                     pointers[ptr_i++] = offset + jl_ptr_offset((jl_datatype_t*)fld, j);
@@ -1429,7 +1441,7 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
         uint64_t z64 = zext_read64(src, nb);
         while (1) {
             success = jl_atomic_cmpswap((_Atomic(uint64_t)*)dst, &y64, z64);
-            if (success || undefref_check(dt, (jl_value_t*)&y64) != NULL)
+            if (success || undefref_check(dt, (jl_value_t*)&y64, NULL) != NULL)
                 break;
         }
     }
@@ -1447,7 +1459,7 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
         jl_uint128_t z128 = zext_read128(src, nb);
         while (1) {
             success = jl_atomic_cmpswap((_Atomic(jl_uint128_t)*)dst, &y128, z128);
-            if (success || undefref_check(dt, (jl_value_t*)&y128) != NULL)
+            if (success || undefref_check(dt, (jl_value_t*)&y128, NULL) != NULL)
                 break;
         }
     }
@@ -1818,18 +1830,28 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     if (i >= jl_datatype_nfields(st))
         jl_bounds_error_int(v, i + 1);
     size_t offs = jl_field_offset(st, i);
-    if (jl_field_isptr(st, i)) {
+    enum jl_fieldkind_t kind = jl_field_kind(st, i);
+    if (kind == JL_FIELDKIND_ISPTR) {
         return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs));
     }
     jl_value_t *ty = jl_field_type_concrete(st, i);
     int isatomic = jl_field_isatomic(st, i);
-    if (jl_is_uniontype(ty)) {
+    jl_value_t *undefval = NULL;
+    if (kind != JL_FIELDKIND_ISBITS) {
         assert(!isatomic);
-        size_t fsz = jl_field_size(st, i);
-        uint8_t sel = ((uint8_t*)v)[offs + fsz - 1];
-        ty = jl_nth_union_component(ty, sel);
-        if (jl_is_datatype_singleton((jl_datatype_t*)ty))
-            return ((jl_datatype_t*)ty)->instance;
+        if (kind == JL_FIELDKIND_ISUNION) {
+            size_t fsz = jl_field_size(st, i);
+            uint8_t sel = ((uint8_t*)v)[offs + fsz - 1];
+            ty = jl_nth_union_component(ty, sel);
+            if (jl_is_datatype_singleton((jl_datatype_t*)ty))
+                return ((jl_datatype_t*)ty)->instance;
+        }
+        else { // kind == JL_FIELDKIND_ISOTHER
+            assert(jl_is_uniontype(ty));
+            jl_uniontype_t *uty = (jl_uniontype_t*)ty;
+            undefval = ((jl_datatype_t*)uty->a)->instance;
+            ty = uty->b;
+        }
     }
     jl_value_t *r;
     size_t fsz = jl_datatype_size(ty);
@@ -1848,7 +1870,9 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
         // TODO: a finalizer here could make the isunion case not quite right
         r = jl_new_bits(ty, (char*)v + offs);
     }
-    return undefref_check((jl_datatype_t*)ty, r);
+    if (kind != JL_FIELDKIND_ISOTHER)
+        return r;
+    return undefref_check((jl_datatype_t*)ty, r, undefval);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
@@ -1875,16 +1899,16 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         assert(jl_field_isptr(st, i) && *(jl_value_t**)((char*)v + offs) == NULL);
         return;
     }
-    if (jl_field_isptr(st, i)) {
+    enum jl_fieldkind_t kind = jl_field_kind(st, i);
+    if (kind == JL_FIELDKIND_ISPTR) {
         jl_atomic_store_release((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
         jl_gc_wb(v, rhs);
     }
     else {
         jl_value_t *ty = jl_field_type_concrete(st, i);
         jl_value_t *rty = jl_typeof(rhs);
-        int hasptr;
-        int isunion = jl_is_uniontype(ty);
-        if (isunion) {
+        int hasptr = (kind == JL_FIELDKIND_ISOTHER);
+        if (kind == JL_FIELDKIND_ISUNION) {
             assert(!isatomic);
             size_t fsz = jl_field_size(st, i);
             uint8_t *psel = &((uint8_t*)v)[offs + fsz - 1];
@@ -1894,10 +1918,19 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
             *psel = nth;
             if (jl_is_datatype_singleton((jl_datatype_t*)rty))
                 return;
-            hasptr = 0;
         }
         else {
-            hasptr = ((jl_datatype_t*)ty)->layout->first_ptr >= 0;
+            if (hasptr && jl_is_uniontype(ty)) {
+                jl_uniontype_t *uty = (jl_uniontype_t*)ty;
+                jl_value_t *undefval = ((jl_datatype_t*)uty->a)->instance;
+                ty = uty->b;
+                assert(((jl_datatype_t*)ty)->layout->first_ptr >= 0);
+                if (undefval == rhs) {
+                    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs) + ((jl_datatype_t*)ty)->layout->first_ptr, NULL);
+                    return;
+                }
+            }
+            assert(hasptr == (((jl_datatype_t*)ty)->layout->first_ptr >= 0));
         }
         size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy
         assert(!isatomic || jl_typeis(rhs, ty));
@@ -1960,7 +1993,7 @@ inline jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t 
         }
     }
     if (!isunion)
-        r = undefref_check((jl_datatype_t*)ty, r);
+        r = undefref_check((jl_datatype_t*)ty, r, NULL);
     if (hasptr)
         jl_gc_multi_wb(parent, rhs); // rhs is immutable
     if (__unlikely(r == NULL))
@@ -2058,7 +2091,7 @@ inline jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_
         else {
             r = jl_new_bits(rty, p);
         }
-        r = undefref_check((jl_datatype_t*)rty, r);
+        r = undefref_check((jl_datatype_t*)rty, r, NULL);
         if (__unlikely(r == NULL))
             jl_throw(jl_undefref_exception);
         args[0] = r;
@@ -2217,7 +2250,7 @@ inline jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value
     if (success && hasptr)
         jl_gc_multi_wb(parent, rhs); // rhs is immutable
     if (!isunion) {
-        r = undefref_check((jl_datatype_t*)rty, r);
+        r = undefref_check((jl_datatype_t*)rty, r, NULL);
         if (__unlikely(r == NULL))
             jl_throw(jl_undefref_exception);
     }
@@ -2254,7 +2287,7 @@ inline int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *parent, jl_valu
     }
     else {
         char *px = lock(p, parent, needlock, isatomic);
-        success = undefref_check(rty, (jl_value_t*)px) == NULL;
+        success = undefref_check(rty, (jl_value_t*)px, NULL) == NULL;
         if (success)
             memassign_safe(hasptr, px, rhs, fsz);
         unlock(p, parent, needlock, isatomic);
@@ -2297,11 +2330,12 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st, i);
     _Atomic(jl_value_t*) *fld = (_Atomic(jl_value_t*)*)((char*)v + offs);
-    if (!jl_field_isptr(st, i)) {
-        jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(st, i);
-        if (!jl_is_datatype(ft) || ft->layout->first_ptr < 0)
+    enum jl_fieldkind_t kind = jl_field_kind(st, i);
+    if (kind != JL_FIELDKIND_ISPTR) {
+        jl_value_t *ft = jl_field_type_concrete(st, i);
+        if (kind != JL_FIELDKIND_ISOTHER || jl_is_uniontype(ft))
             return 2; // isbits are always defined
-        fld += ft->layout->first_ptr;
+        fld += jl_datatype_layout((jl_datatype_t*)ft)->first_ptr;
     }
     jl_value_t *fval = jl_atomic_load_relaxed(fld);
     return fval != NULL ? 1 : 0;

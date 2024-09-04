@@ -380,7 +380,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
         // TODO: a finalizer here could make the isunion case not quite right
         r = jl_new_bits(eltype, data);
     }
-    r = undefref_check((jl_datatype_t*)eltype, r);
+    r = undefref_check((jl_datatype_t*)eltype, r, NULL);
     if (__unlikely(r == NULL))
         jl_throw(jl_undefref_exception);
     return r;

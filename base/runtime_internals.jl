@@ -741,7 +741,7 @@ struct FieldDescStorage{T}
     offset::T
 end
 FieldDesc(fd::FieldDescStorage{T}) where {T} =
-    FieldDesc(false, fd.ptrsize & 1 != 0,
+    FieldDesc(false, fd.ptrsize & 3 == 1,
               fd.ptrsize >> 1, fd.offset)
 
 struct DataTypeFieldDesc
