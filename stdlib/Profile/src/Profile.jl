@@ -38,6 +38,8 @@ public clear,
     Allocs
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
+import Base: AnnotatedString
+using StyledStrings: @styled_str
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
 
@@ -63,10 +65,10 @@ end
 
 # An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
 function _peek_report()
-    iob = IOBuffer()
+    iob = Base.AnnotatedIOBuffer()
     ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stderr, String(take!(iob)))
+    Base.print(stderr, read(seekstart(iob), AnnotatedString))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)
@@ -266,7 +268,7 @@ function print(io::IO,
         end
         any_nosamples = true
         if format === :tree
-            Base.print(io, "Overhead ╎ [+additional indent] Count File:Line; Function\n")
+            Base.print(io, "Overhead ╎ [+additional indent] Count File:Line  Function\n")
             Base.print(io, "=========================================================\n")
         end
         if groupby == [:task, :thread]
@@ -503,9 +505,10 @@ end
 
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
-function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
+function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,String,String}})
     return get!(filenamecache, spath) do
         path = Base.fixup_stdlib_path(string(spath))
+        possible_base_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
         if isabspath(path)
             if ispath(path)
                 # try to replace the file-system prefix with a short "@Module" one,
@@ -522,20 +525,21 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                             pkgid = Base.project_file_name_uuid(project_file, "")
                             isempty(pkgid.name) && return path # bad Project file
                             # return the joined the module name prefix and path suffix
-                            path = path[nextind(path, sizeof(root)):end]
-                            return string("@", pkgid.name, path)
+                            _short_path = path[nextind(path, sizeof(root)):end]
+                            return path, string("@", pkgid.name), _short_path
                         end
                     end
                 end
             end
-            return path
-        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
+            return path, "", path
+        elseif isfile(possible_base_path)
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
-            return joinpath("@Base", normpath(path))
+            return possible_base_path, "@Base", normpath(path)
         else
             # for non-existent relative paths (such as "REPL[1]"), just consider simplifying them
-            return normpath(path) # drop leading "./"
+            path = normpath(path)
+            return "", "", path # drop leading "./"
         end
     end
 end
@@ -678,7 +682,7 @@ function add_fake_meta(data; threadid = 1, taskid = 0xf0f0f0f0)
     !isempty(data) && has_meta(data) && error("input already has metadata")
     cpu_clock_cycle = UInt64(99)
     data_with_meta = similar(data, 0)
-    for i = 1:length(data)
+    for i in eachindex(data)
         val = data[i]
         if iszero(val)
             # META_OFFSET_THREADID, META_OFFSET_TASKID, META_OFFSET_CPUCYCLECLOCK, META_OFFSET_SLEEPSTATE
@@ -756,6 +760,8 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     return (lilist, n, m, totalshots, nsleeping)
 end
 
+const FileNameMap = Dict{Symbol,Tuple{String,String,String}}
+
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
     lilist, n, m, totalshots, nsleeping = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
@@ -766,7 +772,7 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
         m = m[keep]
     end
     util_perc = (1 - (nsleeping / totalshots)) * 100
-    filenamemap = Dict{Symbol,String}()
+    filenamemap = FileNameMap()
     if isempty(lilist)
         if is_subsection
             Base.print(io, "Total snapshots: ")
@@ -788,9 +794,34 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
     return false
 end
 
+# make a terminal-clickable link to the file and linenum.
+# Similar to `define_default_editors` in `Base.Filesystem` but for creating URIs not commands
+function editor_link(path::String, linenum::Int)
+    editor = get(ENV, "JULIA_EDITOR", "")
+
+    if editor == "code"
+        return "vscode://file/$path:$linenum"
+    elseif editor == "subl" || editor == "sublime_text"
+        return "subl://$path:$linenum"
+    elseif editor == "idea" || occursin("idea", editor)
+        return "idea://open?file=$path&line=$linenum"
+    elseif editor == "pycharm"
+        return "pycharm://open?file=$path&line=$linenum"
+    elseif editor == "atom"
+        return "atom://core/open/file?filename=$path&line=$linenum"
+    elseif editor == "emacsclient"
+        return "emacs://open?file=$path&line=$linenum"
+    elseif editor == "vim" || editor == "nvim"
+        return "vim://open?file=$path&line=$linenum"
+    else
+        # TODO: convert the path to a generic URI (line numbers are not supported by generic URI)
+        return path
+    end
+end
+
 function print_flat(io::IO, lilist::Vector{StackFrame},
         n::Vector{Int}, m::Vector{Int},
-        cols::Int, filenamemap::Dict{Symbol,String},
+        cols::Int, filenamemap::FileNameMap,
         fmt::ProfileFormat)
     if fmt.sortedby === :count
         p = sortperm(n)
@@ -802,18 +833,18 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
     lilist = lilist[p]
     n = n[p]
     m = m[p]
-    filenames = String[short_path(li.file, filenamemap) for li in lilist]
+    pkgnames_filenames = Tuple{String,String,String}[short_path(li.file, filenamemap) for li in lilist]
     funcnames = String[string(li.func) for li in lilist]
     wcounts = max(6, ndigits(maximum(n)))
     wself = max(9, ndigits(maximum(m)))
     maxline = 1
     maxfile = 6
     maxfunc = 10
-    for i in 1:length(lilist)
+    for i in eachindex(lilist)
         li = lilist[i]
         maxline = max(maxline, li.line)
-        maxfunc = max(maxfunc, length(funcnames[i]))
-        maxfile = max(maxfile, length(filenames[i]))
+        maxfunc = max(maxfunc, textwidth(funcnames[i]))
+        maxfile = max(maxfile, sum(textwidth, pkgnames_filenames[i][2:3]) + 1)
     end
     wline = max(5, ndigits(maxline))
     ntext = max(20, cols - wcounts - wself - wline - 3)
@@ -829,7 +860,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
             rpad("File", wfile, " "), " ", lpad("Line", wline, " "), " Function")
     println(io, lpad("=====", wcounts, " "), " ", lpad("========", wself, " "), " ",
             rpad("====", wfile, " "), " ", lpad("====", wline, " "), " ========")
-    for i = 1:length(n)
+    for i in eachindex(n)
         n[i] < fmt.mincount && continue
         li = lilist[i]
         Base.print(io, lpad(string(n[i]), wcounts, " "), " ")
@@ -841,16 +872,29 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
                 Base.print(io, "[any unknown stackframes]")
             end
         else
-            file = filenames[i]
+            path, pkgname, file = pkgnames_filenames[i]
             isempty(file) && (file = "[unknown file]")
-            Base.print(io, rpad(rtruncto(file, wfile), wfile, " "), " ")
+            pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
+            Base.printstyled(io, pkgname, color=pkgcolor)
+            file_trunc = ltruncate(file, max(1, wfile))
+            wpad = wfile - textwidth(pkgname)
+            if !isempty(pkgname) && !startswith(file_trunc, "/")
+                Base.print(io, "/")
+                wpad -= 1
+            end
+            if isempty(path)
+                Base.print(io, rpad(file_trunc, wpad, " "))
+            else
+                link = editor_link(path, li.line)
+                Base.print(io, rpad(styled"{link=$link:$file_trunc}", wpad, " "))
+            end
             Base.print(io, lpad(li.line > 0 ? string(li.line) : "?", wline, " "), " ")
             fname = funcnames[i]
             if !li.from_c && li.linfo !== nothing
                 fname = sprint(show_spec_linfo, li)
             end
             isempty(fname) && (fname = "[unknown function]")
-            Base.print(io, ltruncto(fname, wfunc))
+            Base.print(io, rtruncate(fname, wfunc))
         end
         println(io)
     end
@@ -889,21 +933,24 @@ function indent(depth::Int)
     return indent
 end
 
-function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::Dict{Symbol,String}, showpointer::Bool)
+# mimics Stacktraces
+const PACKAGE_FIXEDCOLORS = Dict{String, Any}("@Base" => :gray, "@Core" => :gray)
+
+function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::FileNameMap, showpointer::Bool)
     nindent = min(cols>>1, level)
     ndigoverhead = ndigits(maxes.overhead)
     ndigcounts = ndigits(maxes.count)
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    strs = Vector{String}(undef, length(frames))
+    strs = Vector{AnnotatedString{String}}(undef, length(frames))
     showextra = false
     if level > nindent
         nextra = level - nindent
         nindent -= ndigits(nextra) + 2
         showextra = true
     end
-    for i = 1:length(frames)
+    for i in eachindex(frames)
         frame = frames[i]
         li = frame.frame
         stroverhead = lpad(frame.overhead > 0 ? string(frame.overhead) : "", ndigoverhead, " ")
@@ -924,7 +971,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 else
                     fname = string(li.func)
                 end
-                filename = short_path(li.file, filenamemap)
+                path, pkgname, filename = short_path(li.file, filenamemap)
                 if showpointer
                     fname = string(
                         "0x",
@@ -932,17 +979,26 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                         " ",
                         fname)
                 end
-                strs[i] = string(stroverhead, "╎", base, strcount, " ",
-                    rtruncto(filename, widthfile),
-                    ":",
-                    li.line == -1 ? "?" : string(li.line),
-                    "; ",
-                    fname)
+                pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
+                remaining_path = ltruncate(filename, max(1, widthfile - textwidth(pkgname) - 1))
+                linenum = li.line == -1 ? "?" : string(li.line)
+                slash = (!isempty(pkgname) && !startswith(remaining_path, "/")) ? "/" : ""
+                styled_path = styled"{$pkgcolor:$pkgname}$slash$remaining_path:$linenum"
+                rich_file = if isempty(path)
+                    styled_path
+                else
+                    link = editor_link(path, li.line)
+                    styled"{link=$link:$styled_path}"
+                end
+                strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ", rich_file, "  ", fname)
+                if frame.overhead > 0
+                    strs[i] = styled"{bold:$(strs[i])}"
+                end
             end
         else
             strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
         end
-        strs[i] = ltruncto(strs[i], cols)
+        strs[i] = rtruncate(strs[i], cols)
     end
     return strs
 end
@@ -1101,10 +1157,10 @@ end
 # avoid stack overflows.
 function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat, is_subsection::Bool) where T
     maxes = maxstats(bt)
-    filenamemap = Dict{Symbol,String}()
-    worklist = [(bt, 0, 0, "")]
+    filenamemap = FileNameMap()
+    worklist = [(bt, 0, 0, AnnotatedString(""))]
     if !is_subsection
-        Base.print(io, "Overhead ╎ [+additional indent] Count File:Line; Function\n")
+        Base.print(io, "Overhead ╎ [+additional indent] Count File:Line  Function\n")
         Base.print(io, "=========================================================\n")
     end
     while !isempty(worklist)
@@ -1135,7 +1191,7 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
             count = down.count
             count < fmt.mincount && continue
             count < noisefloor && continue
-            str = strs[i]
+            str = strs[i]::AnnotatedString
             noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
             pushfirst!(worklist, (down, level + 1, noisefloor_down, str))
         end
@@ -1196,24 +1252,7 @@ function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoFlatDict)
     return [(v[i], k[i]) for i in p]
 end
 
-# Utilities
-function rtruncto(str::String, w::Int)
-    if textwidth(str) <= w
-        return str
-    else
-        return string("…", str[prevind(str, end, w-2):end])
-    end
-end
-function ltruncto(str::String, w::Int)
-    if textwidth(str) <= w
-        return str
-    else
-        return string(str[1:nextind(str, 1, w-2)], "…")
-    end
-end
-
-
-truncto(str::Symbol, w::Int) = truncto(string(str), w)
+## Utilities
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
