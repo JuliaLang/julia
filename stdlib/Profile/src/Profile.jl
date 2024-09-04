@@ -503,13 +503,23 @@ function flatten(data::Vector, lidict::LineInfoDict)
     return (newdata, newdict)
 end
 
+const SRC_DIR = normpath(joinpath(Sys.BUILD_ROOT_PATH, "src"))
+
 # Take a file-system path and try to form a concise representation of it
 # based on the package ecosystem
 function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,String,String}})
     return get!(filenamecache, spath) do
         path = Base.fixup_stdlib_path(string(spath))
+        path_norm = normpath(path)
         possible_base_path = normpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
-        if isabspath(path)
+        lib_dir = abspath(Sys.BINDIR, Base.LIBDIR)
+        if startswith(path_norm, SRC_DIR)
+            remainder = only(split(path_norm, SRC_DIR, keepempty=false))
+            return (isfile(path_norm) ? path_norm : ""), "@juliasrc", remainder
+        elseif startswith(path_norm, lib_dir)
+            remainder = only(split(path_norm, lib_dir, keepempty=false))
+            return (isfile(path_norm) ? path_norm : ""), "@julialib", remainder
+        elseif isabspath(path)
             if ispath(path)
                 # try to replace the file-system prefix with a short "@Module" one,
                 # assuming that profile came from the current machine
