@@ -385,7 +385,7 @@ of the file or directory `src` refers to.
 Return `dst`.
 
 !!! note
-    The `cp` function is different from the `cp` command. The `cp` function always operates on
+    The `cp` function is different from the `cp` Unix command. The `cp` function always operates on
     the assumption that `dst` is a file, while the command does different things depending
     on whether `dst` is a directory or a file.
     Using `force=true` when `dst` is a directory will result in loss of all the contents present
@@ -438,6 +438,16 @@ julia> mv("hello.txt", "goodbye.txt", force=true)
 julia> rm("goodbye.txt");
 
 ```
+
+!!! note
+    The `mv` function is different from the `mv` Unix command. The `mv` function by
+    default will error if `dst` exists, while the command will delete
+    an existing `dst` file by default.
+    Also the `mv` function always operates on
+    the assumption that `dst` is a file, while the command does different things depending
+    on whether `dst` is a directory or a file.
+    Using `force=true` when `dst` is a directory will result in loss of all the contents present
+    in the `dst` directory, and `dst` will become a file that has the contents of `src` instead.
 """
 function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
     if force
@@ -1192,6 +1202,8 @@ If a path contains a "\\0" throw an `ArgumentError`.
 On other failures throw an `IOError`.
 Return `newpath`.
 
+This is a lower level filesystem operation used to implement [`mv`](@ref).
+
 OS-specific restrictions may apply when `oldpath` and `newpath` are in different directories.
 
 Currently there are a few differences in behavior on Windows which may be resolved in a future release.
@@ -1202,6 +1214,9 @@ Specifically, currently on Windows:
 4. `rename` may remove `oldpath` if it is a hardlink to `newpath`.
 
 See also: [`mv`](@ref).
+
+!!! compat "Julia 1.12"
+    This method was made public in Julia 1.12.
 """
 function rename(oldpath::AbstractString, newpath::AbstractString)
     err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), oldpath, newpath)
