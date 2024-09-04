@@ -23,6 +23,9 @@ struct GC_Num
     sweep_time      ::Int64
     mark_time       ::Int64
     total_sweep_time  ::Int64
+    total_sweep_page_walk_time              ::Int64
+    total_sweep_madvise_time                ::Int64
+    total_sweep_free_mallocd_memory_time    ::Int64
     total_mark_time   ::Int64
     last_full_sweep ::Int64
     last_incremental_sweep ::Int64

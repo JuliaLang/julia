@@ -83,6 +83,9 @@ typedef struct {
     uint64_t    sweep_time;
     uint64_t    mark_time;
     uint64_t    total_sweep_time;
+    uint64_t    total_sweep_page_walk_time;
+    uint64_t    total_sweep_madvise_time;
+    uint64_t    total_sweep_free_mallocd_memory_time;
     uint64_t    total_mark_time;
     uint64_t    last_full_sweep;
     uint64_t    last_incremental_sweep;
