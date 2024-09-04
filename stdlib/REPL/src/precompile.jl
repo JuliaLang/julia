@@ -96,7 +96,7 @@ let
         repltask = @task try
             Base.run_std_repl(REPL, false, :yes, true)
         finally
-            redirect_stderr(isopen(orig_stderr) ? orig_stderr : devnull)
+            redirect_stdin(isopen(orig_stdin) ? orig_stdin : devnull)
             redirect_stdout(isopen(orig_stdout) ? orig_stdout : devnull)
             close(pts)
         end
@@ -106,14 +106,14 @@ let
             redirect_stdin(pts)
             redirect_stdout(pts)
             redirect_stderr(pts)
-            REPL.print_qualified_access_warning(Base.Iterators, Base, :minimum) # trigger the warning while stderr is suppressed
             try
-                schedule(repltask)
-                # wait for the definitive prompt before start writing to the TTY
-                readuntil(output_copy, JULIA_PROMPT)
+                REPL.print_qualified_access_warning(Base.Iterators, Base, :minimum) # trigger the warning while stderr is suppressed
             finally
                 redirect_stderr(isopen(orig_stderr) ? orig_stderr : devnull)
             end
+            schedule(repltask)
+            # wait for the definitive prompt before start writing to the TTY
+            readuntil(output_copy, JULIA_PROMPT)
             write(debug_output, "\n#### REPL STARTED ####\n")
             sleep(0.1)
             readavailable(output_copy)
@@ -148,9 +148,9 @@ let
             write(ptm, "$CTRL_D")
             wait(repltask)
         finally
-            close(pts)
             redirect_stdin(isopen(orig_stdin) ? orig_stdin : devnull)
             redirect_stdout(isopen(orig_stdout) ? orig_stdout : devnull)
+            close(pts)
         end
         wait(tee)
     end
