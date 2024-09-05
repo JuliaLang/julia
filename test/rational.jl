@@ -810,4 +810,11 @@ end
     @test 2 === denominator(z // 2)
     @test 1 === denominator(z // 3)
     @test 5 === denominator(z // 5)
+    for den ∈ 1:10
+        q = z // den
+        @test q === (numerator(q)//denominator(q))
+    end
+    @testset "do not overflow silently" begin
+        @test_throws OverflowError numerator(Int8(1)//Int8(31) + Int8(8)im//Int8(3))
+    end
 end
