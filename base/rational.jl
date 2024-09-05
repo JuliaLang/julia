@@ -298,7 +298,7 @@ numerator(x::Rational) = x.num
 function numerator(z::Complex{<:Rational})
     den = denominator(z)
     reim = (real(z), imag(z))
-    result = numerator.(reim) .* div.(den, denominator.(reim))
+    result = checked_mul.(numerator.(reim), div.(den, denominator.(reim)))
     complex(result...)
 end
 
