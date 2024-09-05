@@ -801,3 +801,13 @@ end
     @test rationalize(Int64, nextfloat(0.1) * im; tol=0) == precise_next * im
     @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
 end
+
+@testset "complex numerator, denominator" begin
+    z = complex(3*3, 2*3*5)
+    @test z === numerator(z) === numerator(z // 2) === numerator(z // 5)
+    @test complex(3, 2*5) === numerator(z // 3)
+    @test isone(denominator(z))
+    @test 2 === denominator(z // 2)
+    @test 1 === denominator(z // 3)
+    @test 5 === denominator(z // 5)
+end
