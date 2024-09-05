@@ -295,7 +295,7 @@ julia> numerator(4)
 """
 numerator(x::Union{Integer,Complex{<:Integer}}) = x
 numerator(x::Rational) = x.num
-function numerator(x::Complex{<:Rational})
+function numerator(z::Complex{<:Rational})
     den = denominator(z)
     reim = (real(z), imag(z))
     result = numerator.(reim) .* div.(den, denominator.(reim))
@@ -318,7 +318,7 @@ julia> denominator(4)
 """
 denominator(x::Union{Integer,Complex{<:Integer}}) = one(x)
 denominator(x::Rational) = x.den
-denominator(x::Complex{<:Rational}) = lcm(denominator(real(z)), denominator(imag(z)))
+denominator(z::Complex{<:Rational}) = lcm(denominator(real(z)), denominator(imag(z)))
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
