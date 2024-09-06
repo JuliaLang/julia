@@ -138,6 +138,9 @@ Standard library changes
 * `Profile.take_heap_snapshot` takes a new keyword argument, `redact_data::Bool`,
   that is `true` by default. When set, the contents of Julia objects are not emitted
   in the heap snapshot. This currently only applies to strings. ([#55326])
+* `Profile.print()` now colors Base/Core/Package modules similarly to how they are in stacktraces.
+  Also paths, even if truncated, are now clickable in terminals that support URI links
+  to take you to the specified `JULIA_EDITOR` for the given file & line number. ([#55335])
 
 #### Random
 

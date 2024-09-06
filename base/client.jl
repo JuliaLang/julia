@@ -292,12 +292,12 @@ function exec_options(opts)
             invokelatest(show, Core.eval(Main, parse_input_line(arg)))
             println()
         elseif cmd == 'm'
-            @eval Main import $(Symbol(arg)).main
+            entrypoint = push!(split(arg, "."), "main")
+            Base.eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
             if !should_use_main_entrypoint()
                 error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
             end
             return false
-
         elseif cmd == 'L'
             # load file immediately on all processors
             if !distributed_mode

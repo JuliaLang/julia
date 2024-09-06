@@ -864,7 +864,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         end
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
-        add_remark!(interp, caller, "Inference is disabled for the target module")
+        add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
         return EdgeCallResult(Any, Any, nothing, Effects())
     end
     if !is_cached(caller) && frame_parent(caller) === nothing
@@ -897,7 +897,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         end
         frame = InferenceState(result, cache_mode, interp) # always use the cache for edge targets
         if frame === nothing
-            add_remark!(interp, caller, "Failed to retrieve source")
+            add_remark!(interp, caller, "[typeinf_edge] Failed to retrieve source")
             # can't get the source for this, so we know nothing
             if cache_mode == CACHE_MODE_GLOBAL
                 engine_reject(interp, ci)
@@ -918,6 +918,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
         # unresolvable cycle
+        add_remark!(interp, caller, "[typeinf_edge] Unresolvable cycle")
         return EdgeCallResult(Any, Any, nothing, Effects())
     end
     # return the current knowledge about this cycle
