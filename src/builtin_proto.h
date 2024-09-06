@@ -69,6 +69,7 @@ DECLARE_BUILTIN(svec);
 DECLARE_BUILTIN(swapfield);
 DECLARE_BUILTIN(swapglobal);
 DECLARE_BUILTIN(throw);
+DECLARE_BUILTIN(throw_methoderror);
 DECLARE_BUILTIN(tuple);
 DECLARE_BUILTIN(typeassert);
 DECLARE_BUILTIN(typeof);
