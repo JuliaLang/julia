@@ -216,7 +216,7 @@ pub extern "C" fn mmtk_post_alloc(
 
 #[no_mangle]
 pub extern "C" fn mmtk_will_never_move(object: ObjectReference) -> bool {
-    !object.is_movable::<JuliaVM>()
+    !object.is_movable()
 }
 
 #[no_mangle]
@@ -247,7 +247,7 @@ pub extern "C" fn mmtk_total_bytes() -> usize {
 
 #[no_mangle]
 pub extern "C" fn mmtk_is_live_object(object: ObjectReference) -> bool {
-    object.is_live::<JuliaVM>()
+    object.is_live()
 }
 
 #[no_mangle]
@@ -468,7 +468,7 @@ pub extern "C" fn mmtk_get_obj_size(obj: ObjectReference) -> usize {
 pub extern "C" fn mmtk_pin_object(object: ObjectReference) -> bool {
     // We may in the future replace this with a check for the immix space (bound check), which should be much cheaper.
     if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
-        memory_manager::pin_object::<JuliaVM>(object)
+        memory_manager::pin_object(object)
     } else {
         debug!("Object is not managed by mmtk - (un)pinning it via this function isn't supported.");
         false
@@ -479,7 +479,7 @@ pub extern "C" fn mmtk_pin_object(object: ObjectReference) -> bool {
 #[no_mangle]
 pub extern "C" fn mmtk_unpin_object(object: ObjectReference) -> bool {
     if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
-        memory_manager::unpin_object::<JuliaVM>(object)
+        memory_manager::unpin_object(object)
     } else {
         debug!("Object is not managed by mmtk - (un)pinning it via this function isn't supported.");
         false
@@ -490,7 +490,7 @@ pub extern "C" fn mmtk_unpin_object(object: ObjectReference) -> bool {
 #[no_mangle]
 pub extern "C" fn mmtk_is_pinned(object: ObjectReference) -> bool {
     if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
-        memory_manager::is_pinned::<JuliaVM>(object)
+        memory_manager::is_pinned(object)
     } else {
         debug!("Object is not managed by mmtk - checking via this function isn't supported.");
         false

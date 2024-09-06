@@ -164,8 +164,6 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         object.to_raw_address()
     }
 
-    const IN_OBJECT_ADDRESS_OFFSET: isize = 0;
-
     fn dump_object(_object: ObjectReference) {
         unimplemented!()
     }

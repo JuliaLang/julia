@@ -78,10 +78,7 @@ pub(crate) fn get_abi_structs_checksum_rust() -> usize {
 }
 
 // The functions below allow accessing the values of bitfields without performing a for loop
-use crate::{
-    julia_types::{__BindgenBitfieldUnit, mmtk__jl_task_t, mmtk_jl_datatype_layout_t},
-    JuliaVM,
-};
+use crate::julia_types::{__BindgenBitfieldUnit, mmtk__jl_task_t, mmtk_jl_datatype_layout_t};
 
 impl mmtk_jl_datatype_layout_t {
     #[inline]
@@ -118,7 +115,7 @@ pub extern "C" fn mmtk_julia_copy_stack_check(c_flag_is_defined: bool) {
 
 #[no_mangle]
 pub extern "C" fn mmtk_get_possibly_forwared(object: ObjectReference) -> ObjectReference {
-    match object.get_forwarded_object::<JuliaVM>() {
+    match object.get_forwarded_object() {
         Some(forwarded) => forwarded,
         None => object,
     }
