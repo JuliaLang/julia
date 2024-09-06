@@ -2767,18 +2767,10 @@ end
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)
 # in general, we convert the parent to a matrix to avail the StridedMatrix methods
-for (T, k) in ((:UpperTriangular, 0), (:UnitUpperTriangular, 1))
-    @eval function eigvecs(A::$T{<:BlasFloat})
-        d = convert(Matrix, triu(A.data, $k))
-        return eigvecs($T(d))
-    end
-end
-for (T, k) in ((:LowerTriangular, 0), (:UnitLowerTriangular, -1))
-    @eval function eigvecs(A::$T{<:BlasFloat})
-        d = convert(Matrix, tril(A.data, $k))
-        return eigvecs($T(d))
-    end
-end
+
+eigvecs(A::UpperOrUnitUpperTriangular{<:BlasFloat}) = eigvecs(UpperTriangular(Matrix(A)))
+eigvecs(A::LowerOrUnitLowerTriangular{<:BlasFloat}) = eigvecs(LowerTriangular(Matrix(A)))
+
 # fallback for unknown types
 function eigvecs(A::AbstractTriangular{<:BlasFloat})
     if istriu(A)
