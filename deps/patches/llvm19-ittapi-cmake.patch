@@ -45,3 +45,33 @@ index 0c5017c359d6..92777133e9de 100644
 
    LINK_LIBS ${LLVM_INTEL_JIT_LIBS}
 
+diff --git a/llvm/lib/ExecutionEngine/IntelJITEvents/CMakeLists.txt b/llvm/lib/ExecutionEngine/IntelJITEvents/CMakeLists.txt
+index b4fd04d65e26..56c529c08937 100644
+--- a/llvm/lib/ExecutionEngine/IntelJITEvents/CMakeLists.txt
++++ b/llvm/lib/ExecutionEngine/IntelJITEvents/CMakeLists.txt
+@@ -1,5 +1,8 @@
+ include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/.. )
+-include_directories( ${PROJECT_BINARY_DIR}/ittapi/include/ )
++if(NOT DEFINED ITTAPI_SOURCE_DIR)
++    set(ITTAPI_SOURCE_DIR ${PROJECT_BINARY_DIR})
++endif()
++include_directories( ${ITTAPI_SOURCE_DIR}/include/ )
+ add_llvm_component_library(LLVMIntelJITEvents
+   IntelJITEventListener.cpp
+
+diff --git a/llvm/lib/ExecutionEngine/Orc/TargetProcess/CMakeLists.txt b/llvm/lib/ExecutionEngine/Orc/TargetProcess/CMakeLists.txt
+index 3d1dfe758c79..03677d610cbb 100644
+--- a/llvm/lib/ExecutionEngine/Orc/TargetProcess/CMakeLists.txt
++++ b/llvm/lib/ExecutionEngine/Orc/TargetProcess/CMakeLists.txt
+@@ -6,7 +6,10 @@ set(intel_jit_profiling )
+ if( LLVM_USE_INTEL_JITEVENTS )
+   set(intel_jit_profiling IntelJITProfiling)
+   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../IntelJITProfiling)
+-  include_directories(${PROJECT_BINARY_DIR}/ittapi/include/ )
++  if(NOT DEFINED ITTAPI_SOURCE_DIR)
++      set(ITTAPI_SOURCE_DIR ${PROJECT_BINARY_DIR})
++  endif()
++  include_directories(${ITTAPI_SOURCE_DIR}/include/ )
+ endif()
+
+ add_llvm_component_library(LLVMOrcTargetProcess
