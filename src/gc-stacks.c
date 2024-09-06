@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc-common.h"
+#include "gc-stock.h"
 #include "threading.h"
 #ifndef _OS_WINDOWS_
 #  include <sys/resource.h>
@@ -202,11 +203,7 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     return stk;
 }
 
-extern _Atomic(int) gc_ptls_sweep_idx;
-extern _Atomic(int) gc_n_threads_sweeping;
-extern _Atomic(int) gc_stack_free_idx;
-
-void sweep_stack_pools(void) JL_NOTSAFEPOINT
+void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
 {
     // Stack sweeping algorithm:
     //    // deallocate stacks if we have too many sitting around unused

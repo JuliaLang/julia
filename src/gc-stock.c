@@ -1027,6 +1027,20 @@ void gc_sweep_wait_for_all_stacks(void)
     }
 }
 
+void sweep_stack_pools(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    // initialize ptls index for parallel sweeping of stack pools
+    int stack_free_idx = jl_atomic_load_relaxed(&gc_stack_free_idx);
+    if (stack_free_idx + 1 == gc_n_threads)
+        jl_atomic_store_relaxed(&gc_stack_free_idx, 0);
+    else
+        jl_atomic_store_relaxed(&gc_stack_free_idx, stack_free_idx + 1);
+    jl_atomic_store_release(&gc_ptls_sweep_idx, gc_n_threads - 1); // idx == gc_n_threads = release stacks to the OS so it's serial
+    gc_sweep_wake_all_stacks(ptls);
+    sweep_stack_pool_loop();
+    gc_sweep_wait_for_all_stacks();
+}
+
 static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_NOTSAFEPOINT
 {
     assert(pg->fl_begin_offset != UINT16_MAX);
@@ -3095,16 +3109,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 #endif
         current_sweep_full = sweep_full;
         sweep_weak_refs();
-        // initialize ptls index for parallel sweeping of stack pools
-        int stack_free_idx = jl_atomic_load_relaxed(&gc_stack_free_idx);
-        if (stack_free_idx + 1 == gc_n_threads)
-            jl_atomic_store_relaxed(&gc_stack_free_idx, 0);
-        else
-            jl_atomic_store_relaxed(&gc_stack_free_idx, stack_free_idx + 1);
-        jl_atomic_store_release(&gc_ptls_sweep_idx, gc_n_threads - 1); // idx == gc_n_threads = release stacks to the OS so it's serial
-        gc_sweep_wake_all_stacks(ptls);
-        sweep_stack_pools();
-        gc_sweep_wait_for_all_stacks();
+        sweep_stack_pools(ptls);
         gc_sweep_other(ptls, sweep_full);
         gc_scrub();
         gc_verify_tags();
@@ -3516,6 +3521,10 @@ STATIC_INLINE int may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT
     return (jl_atomic_load(&ptls->gc_tls.gc_sweeps_requested) > 0);
 }
 
+STATIC_INLINE int may_sweep_stack(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    return (jl_atomic_load(&ptls->gc_tls.gc_stack_sweep_requested) > 0);
+}
 // parallel gc thread function
 void jl_parallel_gc_threadfun(void *arg)
 {
@@ -3544,10 +3553,14 @@ void jl_parallel_gc_threadfun(void *arg)
         uv_mutex_unlock(&gc_threads_lock);
         assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
         gc_mark_loop_parallel(ptls, 0);
+        if (may_sweep_stack(ptls)) {
+            assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
+            sweep_stack_pool_loop();
+            jl_atomic_fetch_add(&ptls->gc_tls.gc_stack_sweep_requested, -1);
+        }
         if (may_sweep(ptls)) {
             assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_PARALLEL_COLLECTOR_THREAD);
             gc_sweep_pool_parallel(ptls);
-            sweep_stack_pools();
             jl_atomic_fetch_add(&ptls->gc_tls.gc_sweeps_requested, -1);
         }
     }
