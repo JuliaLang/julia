@@ -68,12 +68,12 @@ version = "1.11.0"
 [[deps.JuliaSyntaxHighlighting]]
 deps = ["StyledStrings"]
 uuid = "dc6e5ff7-fb65-4e79-a425-ec3bc9c03011"
-version = "1.11.0"
+version = "1.12.0"
 
 [[deps.LLD_jll]]
 deps = ["Artifacts", "Libdl", "Zlib_jll", "libLLVM_jll"]
 uuid = "d55e3150-da41-5e91-b323-ecfd1eec6109"
-version = "16.0.6+4"
+version = "18.1.7+2"
 
 [[deps.LLVMLibUnwind_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -113,12 +113,12 @@ version = "1.11.0+1"
 [[deps.LibUV_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "183b4373-6708-53ba-ad28-60e28bb38547"
-version = "2.0.1+16"
+version = "2.0.1+17"
 
 [[deps.LibUnwind_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "745a5e78-f969-53e9-954f-d19f2f74f4e3"
-version = "1.8.1+0"
+version = "1.8.1+1"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -163,7 +163,7 @@ version = "1.2.0"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.26+2"
+version = "0.3.28+2"
 
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -190,6 +190,7 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
 [[deps.Profile]]
+deps = ["StyledStrings"]
 uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 version = "1.11.0"
 
@@ -223,7 +224,7 @@ version = "1.11.0"
 [[deps.SparseArrays]]
 deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
-version = "1.11.0"
+version = "1.12.0"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra"]
@@ -242,7 +243,7 @@ version = "1.11.0"
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "7.7.0+0"
+version = "7.8.0+0"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -281,12 +282,12 @@ version = "2.2.5+0"
 [[deps.libLLVM_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8f36deef-c2a5-5394-99ed-8e07531fb29a"
-version = "16.0.6+4"
+version = "18.1.7+2"
 
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.8.0+1"
+version = "5.11.0+0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]

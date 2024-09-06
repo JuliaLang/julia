@@ -771,48 +771,31 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack() /* Nothing */
 #endif
 
-#define throw_internal_body(altstack)                                          \
-    assert(!jl_get_safe_restore());                                            \
-    jl_ptls_t ptls = ct->ptls;                                                 \
-    ptls->io_wait = 0;                                                         \
-    jl_gc_unsafe_enter(ptls);                                                  \
-    if (exception) {                                                           \
-        /* The temporary ptls->bt_data is rooted by special purpose code in the\
-           GC. This exists only for the purpose of preserving bt_data until we \
-           set ptls->bt_size=0 below. */                                       \
-        jl_push_excstack(ct, &ct->excstack, exception,                         \
-                         ptls->bt_data, ptls->bt_size);                        \
-        ptls->bt_size = 0;                                                     \
-    }                                                                          \
-    assert(ct->excstack && ct->excstack->top);                                 \
-    jl_handler_t *eh = ct->eh;                                                 \
-    if (eh != NULL) {                                                          \
-        if (altstack) ptls->sig_exception = NULL;                              \
-        pop_timings_stack()                                                    \
-        asan_unpoison_task_stack(ct, &eh->eh_ctx);                             \
-        jl_longjmp(eh->eh_ctx, 1);                                             \
-    }                                                                          \
-    else {                                                                     \
-        jl_no_exc_handler(exception, ct);                                      \
-    }                                                                          \
-    assert(0);
-
 static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
 {
-CFI_NORETURN
     JL_GC_PUSH1(&exception);
-    throw_internal_body(0);
-    jl_unreachable();
-}
-
-/* On the signal stack, we don't want to create any asan frames, but we do on the
-   normal, stack, so we split this function in two, depending on which context
-   we're calling it in. This also lets us avoid making a GC frame on the altstack,
-   which might end up getting corrupted if we recur here through another signal. */
-JL_NO_ASAN static void JL_NORETURN throw_internal_altstack(jl_task_t *ct, jl_value_t *exception)
-{
-CFI_NORETURN
-    throw_internal_body(1);
+    jl_ptls_t ptls = ct->ptls;
+    ptls->io_wait = 0;
+    jl_gc_unsafe_enter(ptls);
+    if (exception) {
+        /* The temporary ptls->bt_data is rooted by special purpose code in the\
+           GC. This exists only for the purpose of preserving bt_data until we
+           set ptls->bt_size=0 below. */
+        jl_push_excstack(ct, &ct->excstack, exception,
+                         ptls->bt_data, ptls->bt_size);
+        ptls->bt_size = 0;
+    }
+    assert(ct->excstack && ct->excstack->top);
+    jl_handler_t *eh = ct->eh;
+    if (eh != NULL) {
+        pop_timings_stack()
+        asan_unpoison_task_stack(ct, &eh->eh_ctx);
+        jl_longjmp(eh->eh_ctx, 1);
+    }
+    else {
+        jl_no_exc_handler(exception, ct);
+    }
+    assert(0);
     jl_unreachable();
 }
 
@@ -840,24 +823,6 @@ JL_DLLEXPORT void jl_rethrow(void)
     if (!excstack || excstack->top == 0)
         jl_error("rethrow() not allowed outside a catch block");
     throw_internal(ct, NULL);
-}
-
-// Special case throw for errors detected inside signal handlers.  This is not
-// (cannot be) called directly in the signal handler itself, but is returned to
-// after the signal handler exits.
-JL_DLLEXPORT JL_NO_ASAN void JL_NORETURN jl_sig_throw(void)
-{
-CFI_NORETURN
-    jl_jmp_buf *safe_restore = jl_get_safe_restore();
-    jl_task_t *ct = jl_current_task;
-    if (safe_restore) {
-        asan_unpoison_task_stack(ct, safe_restore);
-        jl_longjmp(*safe_restore, 1);
-    }
-    jl_ptls_t ptls = ct->ptls;
-    jl_value_t *e = ptls->sig_exception;
-    JL_GC_PROMISE_ROOTED(e);
-    throw_internal_altstack(ct, e);
 }
 
 JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
