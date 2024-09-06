@@ -16,15 +16,6 @@ using .Main.SizedArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
-# custom AbstractTriangular type
-struct MyTriangular{T, A<:LinearAlgebra.AbstractTriangular{T}} <: LinearAlgebra.AbstractTriangular{T}
-    data :: A
-end
-Base.size(A::MyTriangular) = size(A.data)
-Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
-LinearAlgebra.rmul!(M::Matrix, A::MyTriangular) = rmul!(M, A.data)
-LinearAlgebra.lmul!(A::MyTriangular, M::AbstractMatrix) = lmul!(A.data, M)
-
 debug && println("Triangular matrices")
 
 n = 9
