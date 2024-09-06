@@ -32,6 +32,8 @@ void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t byt
 void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEPOINT;
 // Used for objects that are reachable from the finalizer list
 void _gc_heap_snapshot_record_finlist(jl_value_t *finlist, size_t index) JL_NOTSAFEPOINT;
+// Used for objects reachable from the binding partition pointer union
+void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT;
 
 extern int gc_heap_snapshot_enabled;
 extern int prev_sweep_full;
@@ -94,6 +96,13 @@ static inline void gc_heap_snapshot_record_internal_array_edge(jl_value_t *from,
 {
     if (__unlikely(gc_heap_snapshot_enabled && prev_sweep_full)) {
         _gc_heap_snapshot_record_internal_array_edge(from, to);
+    }
+}
+
+static inline void gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT
+{
+    if (__unlikely(gc_heap_snapshot_enabled && prev_sweep_full)) {
+        _gc_heap_snapshot_record_binding_partition_edge(from, to);
     }
 }
 

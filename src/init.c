@@ -67,6 +67,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 #  if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         pthread_attr_t attr;
 #if defined(_OS_FREEBSD_)
+        pthread_attr_init(&attr);
         pthread_attr_get_np(pthread_self(), &attr);
 #else
         pthread_getattr_np(pthread_self(), &attr);

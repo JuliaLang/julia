@@ -128,7 +128,7 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
             offset = ConstantInt::getSigned(T_size, jl_tls_offset);
         auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), false), asm_str, "=r", false);
         tls = builder.CreateCall(tp, {}, "thread_ptr");
-        tls = builder.CreateGEP(Type::getInt8Ty(builder.getContext()), tls, {offset}, "tls_ppgcstack");
+        tls = builder.CreateInBoundsGEP(Type::getInt8Ty(builder.getContext()), tls, {offset}, "tls_ppgcstack");
     }
     return builder.CreateLoad(T_pppjlvalue, tls, "tls_pgcstack");
 }
