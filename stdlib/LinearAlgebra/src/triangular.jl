@@ -2782,11 +2782,6 @@ end
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)
-# in general, we convert the parent to a matrix to avail the StridedMatrix methods
-
-eigvecs(A::UpperOrUnitUpperTriangular{<:BlasFloat}) = eigvecs(UpperTriangular(Matrix(A)))
-eigvecs(A::LowerOrUnitLowerTriangular{<:BlasFloat}) = eigvecs(LowerTriangular(Matrix(A)))
-
 # fallback for unknown types
 function eigvecs(A::AbstractTriangular{<:BlasFloat})
     if istriu(A)
