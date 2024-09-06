@@ -1005,7 +1005,7 @@ static void gc_sweep_other(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
 }
 
 // wake up all threads to sweep the stacks
-void gc_sweep_wake_all_stacks(jl_ptls_t ptls)
+void gc_sweep_wake_all_stacks(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     uv_mutex_lock(&gc_threads_lock);
     int first = gc_first_parallel_collector_thread_id();
@@ -1020,7 +1020,7 @@ void gc_sweep_wake_all_stacks(jl_ptls_t ptls)
     return;
 }
 
-void gc_sweep_wait_for_all_stacks(void)
+void gc_sweep_wait_for_all_stacks(void) JL_NOTSAFEPOINT
 {
     while ((jl_atomic_load_acquire(&gc_ptls_sweep_idx)>= 0 ) || jl_atomic_load_acquire(&gc_n_threads_sweeping) != 0) {
         jl_cpu_pause();
