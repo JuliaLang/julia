@@ -234,6 +234,7 @@ JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_wait_for_compiled_addr;
 
 typedef struct _jl_line_info_node_t {
+    JL_DATA_TYPE
     struct _jl_module_t *module;
     jl_value_t *method; // may contain a jl_symbol, jl_method_t, or jl_method_instance_t
     jl_sym_t *file;
@@ -281,6 +282,7 @@ typedef union __jl_purity_overrides_t {
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
+    JL_DATA_TYPE
     // ssavalue-indexed arrays of properties:
     jl_array_t *code;  // Any array of statements
     jl_debuginfo_t *debuginfo; // Table of edge data for each statement
