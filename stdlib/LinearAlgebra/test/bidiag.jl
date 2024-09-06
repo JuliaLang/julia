@@ -124,6 +124,9 @@ Random.seed!(1)
         Bl = Bidiagonal(rand(elty, 10), zeros(elty, 9), 'L')
         @test_throws ArgumentError Bu[5, 4] = 1
         @test_throws ArgumentError Bl[4, 5] = 1
+
+        # setindex should return the destination
+        @test setindex!(ubd, 1, 1, 1) === ubd
     end
 
     @testset "isstored" begin
@@ -826,6 +829,9 @@ end
         end
     end
 
+    @test diag(BU, -1) == [zeros(size(dv[i+1], 1), size(dv[i],2)) for i in 1:length(dv)-1]
+    @test diag(BL, 1) == [zeros(size(dv[i], 1), size(dv[i+1],2)) for i in 1:length(dv)-1]
+
     M = ones(2,2)
     for n in 0:1
         dv = fill(M, n)
@@ -1018,6 +1024,28 @@ end
 @testset "off-band indexing error" begin
     B = Bidiagonal(Vector{BigInt}(undef, 4), Vector{BigInt}(undef,3), :L)
     @test_throws "cannot set entry" B[1,2] = 4
+end
+
+@testset "mul with empty arrays" begin
+    A = zeros(5,0)
+    B = Bidiagonal(zeros(0), zeros(0), :U)
+    BL = Bidiagonal(zeros(5), zeros(4), :U)
+    @test size(A * B) == size(A)
+    @test size(BL * A) == size(A)
+    @test size(B * B) == size(B)
+    C = similar(A)
+    @test mul!(C, A, B) == A * B
+    @test mul!(C, BL, A) == BL * A
+    @test mul!(similar(B), B, B) == B * B
+    @test mul!(similar(B, size(B)), B, B) == B * B
+
+    v = zeros(size(B,2))
+    @test size(B * v) == size(v)
+    @test mul!(similar(v), B, v) == B * v
+
+    D = Diagonal(zeros(size(B,2)))
+    @test size(B * D) == size(D * B) == size(D)
+    @test mul!(similar(D), B, D) == mul!(similar(D), D, B) == B * D
 end
 
 end # module TestBidiagonal

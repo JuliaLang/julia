@@ -394,13 +394,21 @@ let errf = tempname(),
     try
         redirect_stderr(new_stderr)
         @test occursin("f_broken_code", sprint(code_native, h_broken_code, ()))
+        Libc.flush_cstdio()
         println(new_stderr, "start")
         flush(new_stderr)
-        @test_throws "could not compile the specified method" sprint(code_native, f_broken_code, ())
+        @test_throws "could not compile the specified method" sprint(io -> code_native(io, f_broken_code, (), dump_module=true))
+        Libc.flush_cstdio()
+        println(new_stderr, "middle")
+        flush(new_stderr)
+        @test !isempty(sprint(io -> code_native(io, f_broken_code, (), dump_module=false)))
+        Libc.flush_cstdio()
+        println(new_stderr, "later")
+        flush(new_stderr)
+        @test invokelatest(g_broken_code) == 0
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
-        @test invokelatest(g_broken_code) == 0
     finally
         Libc.flush_cstdio()
         redirect_stderr(old_stderr)
@@ -410,6 +418,14 @@ let errf = tempname(),
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
+            @test occursin("""\nmiddle
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
+                """, errstr) || errstr
+            @test occursin("""\nlater
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
+                """, errstr) || errstr
             @test endswith(errstr, "\nend\n") || errstr
         end
         rm(errf)
