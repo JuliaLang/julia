@@ -5611,6 +5611,26 @@ end
     x::Array{T} where T<:Integer
 end
 
+# issue #54757, type redefinitions with recursive reference in supertype
+struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
+    x::A
+    y::Union{A,T54757{A,N}}
+    z::T54757{A}
+end
+
+struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
+    x::A
+    y::Union{A,T54757{A,N}}
+    z::T54757{A}
+end
+
+@test_throws ErrorException struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A}},Vararg{Y,N}} where {X,Y<:T54757}, N}
+    x::A
+    y::Union{A,T54757{A,N}}
+    z::T54757{A}
+end
+
+
 let a = Vector{Core.TypeofBottom}(undef, 2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]

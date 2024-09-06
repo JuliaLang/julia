@@ -1226,4 +1226,32 @@ end
     end
 end
 
+@testset "istriu/istril forwards to parent" begin
+    @testset "$(nameof(typeof(M)))" for M in [Tridiagonal(rand(n-1), rand(n), rand(n-1)),
+                Tridiagonal(zeros(n-1), zeros(n), zeros(n-1)),
+                Diagonal(randn(n)),
+                Diagonal(zeros(n)),
+                ]
+        @testset for TriT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+            U = TriT(M)
+            A = Array(U)
+            for k in -n:n
+                @test istriu(U, k) == istriu(A, k)
+                @test istril(U, k) == istril(A, k)
+            end
+        end
+    end
+    z = zeros(n,n)
+    @testset for TriT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+        P = Matrix{BigFloat}(undef, n, n)
+        copytrito!(P, z, TriT <: Union{UpperTriangular, UnitUpperTriangular} ? 'U' : 'L')
+        U = TriT(P)
+        A = Array(U)
+        @testset for k in -n:n
+            @test istriu(U, k) == istriu(A, k)
+            @test istril(U, k) == istril(A, k)
+        end
+    end
+end
+
 end # module TestTriangular
