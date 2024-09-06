@@ -5,6 +5,10 @@ module TestSpecial
 using Test, LinearAlgebra, Random
 using LinearAlgebra: rmul!, BandIndex
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 n= 10 #Size of matrix to test
 Random.seed!(1)
 
@@ -783,6 +787,75 @@ end
             end
         end
         @test_throws BoundsError D[BandIndex(size(D,1),1)]
+    end
+end
+
+@testset "Partly filled Hermitian and Diagonal algebra" begin
+    D = Diagonal([1,2])
+    for S in (Symmetric, Hermitian), uplo in (:U, :L)
+        M = Matrix{BigInt}(undef, 2, 2)
+        M[1,1] = M[2,2] = M[1+(uplo == :L), 1 + (uplo == :U)] = 3
+        H = S(M, uplo)
+        HM = Matrix(H)
+        @test H + D == D + H == HM + D
+        @test H - D == HM - D
+        @test D - H == D - HM
+    end
+end
+
+@testset "block SymTridiagonal" begin
+    m = SizedArrays.SizedArray{(2,2)}(reshape([1:4;;],2,2))
+    S = SymTridiagonal(fill(m,4), fill(m,3))
+    SA = Array(S)
+    D = Diagonal(fill(m,4))
+    DA = Array(D)
+    BU = Bidiagonal(fill(m,4), fill(m,3), :U)
+    BUA = Array(BU)
+    BL = Bidiagonal(fill(m,4), fill(m,3), :L)
+    BLA = Array(BL)
+    T = Tridiagonal(fill(m,3), fill(m,4), fill(m,3))
+    TA = Array(T)
+    IA = Array(Diagonal(fill(one(m), 4)))
+    @test S + D == D + S == SA + DA
+    @test S - D == -(D - S) == SA - DA
+    @test S + BU == SA + BUA
+    @test S - BU == -(BU - S) == SA - BUA
+    @test S + BL == SA + BLA
+    @test S - BL == -(BL - S) == SA - BLA
+    @test S + T == SA + TA
+    @test S - T == -(T - S) == SA - TA
+    @test S + S == SA + SA
+    @test S - S == -(S - S) == SA - SA
+    @test S + I == I + S == SA + IA
+    @test S - I == -(I - S) == SA - IA
+
+    @test S == S
+    @test S != D
+    @test S != BL
+    @test S != BU
+    @test S != T
+
+    @test_throws ArgumentError fill!(S, m)
+    S_small = SymTridiagonal(fill(m,2), fill(m,1))
+    @test_throws "cannot fill a SymTridiagonal with an asymmetric value" fill!(S, m)
+    fill!(S_small, Symmetric(m))
+    @test all(==(Symmetric(m)), S_small)
+
+    @testset "diag" begin
+        m = SizedArrays.SizedArray{(2,2)}([1 3; 3 4])
+        D = Diagonal(fill(m,4))
+        z = fill(zero(m),3)
+        d = fill(m,4)
+        BU = Bidiagonal(d, z, :U)
+        BL = Bidiagonal(d, z, :L)
+        T = Tridiagonal(z, d, z)
+        for ev in (fill(zero(m),3), fill(zero(m),4))
+            SD = SymTridiagonal(fill(m,4), ev)
+            @test SD == D == SD
+            @test SD == BU == SD
+            @test SD == BL == SD
+            @test SD == T == SD
+        end
     end
 end
 

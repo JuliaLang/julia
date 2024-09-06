@@ -829,6 +829,9 @@ end
         end
     end
 
+    @test diag(BU, -1) == [zeros(size(dv[i+1], 1), size(dv[i],2)) for i in 1:length(dv)-1]
+    @test diag(BL, 1) == [zeros(size(dv[i], 1), size(dv[i+1],2)) for i in 1:length(dv)-1]
+
     M = ones(2,2)
     for n in 0:1
         dv = fill(M, n)
