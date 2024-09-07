@@ -17,6 +17,7 @@ public
     Fix,
     Fix1,
     Fix2,
+    FixKw,
     Generator,
     ImmutableDict,
     OneTo,
