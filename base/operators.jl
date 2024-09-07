@@ -1213,6 +1213,9 @@ Returns a `Function` that calls `f` with the keyword arguments `kw` prepended
 to those given in each call. The fixed keyword arguments cannot be removed,
 but they can be overridden by those specified in the call.
 
+!!! compat "Julia 1.12"
+    `Base.FixKw` requires at least Julia 1.12.
+
 See also [`Base.Fix`](@ref).
 
 # Examples
