@@ -96,7 +96,7 @@ structured_broadcast_alloc(bc, ::Type{UnitLowerTriangular}, ::Type{ElType}, n) w
 structured_broadcast_alloc(bc, ::Type{UnitUpperTriangular}, ::Type{ElType}, n) where {ElType} =
     UnitUpperTriangular(Array{ElType}(undef, n, n))
 structured_broadcast_alloc(bc, ::Type{Matrix}, ::Type{ElType}, n) where {ElType} =
-    Matrix(Array{ElType}(undef, n, n))
+    Array{ElType}(undef, n, n)
 
 # A _very_ limited list of structure-preserving functions known at compile-time. This list is
 # derived from the formerly-implemented `broadcast` methods in 0.6. Note that this must
