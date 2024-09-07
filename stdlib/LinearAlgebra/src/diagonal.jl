@@ -194,18 +194,19 @@ diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
 diagzero(D::Diagonal{M, <:AbstractVector{M}}, i, j) where {T,M<:AbstractMatrix{T}} =
     diagzero(M, axes(D.diag[i], 1), axes(D.diag[j], 2))
 # dispatching on the axes permits specializing on the axis types to return something other than an Array
-diagzero(M::Type, ax::Union{AbstractUnitRange, Integer}...) = diagzero(M, ax)
-diagzero(M::Type, ::Tuple{}) = zeros(eltype(M))
+diagzero(M::Type, ax::Vararg{T,2}) where {T<:Union{AbstractUnitRange, Integer}} = diagzero(M, ax)
 """
-    diagzero(::Type{M}, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) where {M<:AbstractMatrix}
+    diagzero(::Type{M}, ax::NTuple{2, AbstractUnitRange}) where {M<:AbstractMatrix}
 
 Return an appropriate zero-ed matrix similar to `M`, with either
 the axes `ax`, or the `size` `map(length, ax)`.
 This will be used as a structural zero element of a banded matrix. By default, `diagzero` falls back to
 using the size along each axis to construct the result.
 """
-diagzero(M::Type, ax::Tuple{AbstractUnitRange, Vararg{AbstractUnitRange}}) = diagzero(M, map(length, ax))
-diagzero(::Type{M}, sz::Tuple{Integer, Vararg{Integer}}) where {M<:AbstractMatrix} = zeros(eltype(M), sz)
+diagzero(M::Type, ax::NTuple{2,AbstractUnitRange}) = diagzero(M, map(length, ax))
+function diagzero(::Type{M}, sz::NTuple{2,Integer}) where {M}
+    zeros(M <: AbstractMatrix ? eltype(M) : M, sz)
+end
 
 @inline function getindex(D::Diagonal, b::BandIndex)
     @boundscheck checkbounds(D, b)
