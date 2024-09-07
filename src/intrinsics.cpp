@@ -767,7 +767,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         setName(ctx.emission_context, im1, "pointerref_offset");
         Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
-        thePtr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), thePtr, im1);
+        thePtr = emit_ptrgep(ctx, thePtr, im1);
         setName(ctx.emission_context, thePtr, "pointerref_src");
         MDNode *tbaa = best_tbaa(ctx.tbaa(), ety);
         emit_memcpy(ctx, strct, jl_aliasinfo_t::fromTBAA(ctx, tbaa), thePtr, jl_aliasinfo_t::fromTBAA(ctx, nullptr), size, Align(sizeof(jl_value_t*)), Align(align_nb));
@@ -848,7 +848,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         setName(ctx.emission_context, im1, "pointerset_offset");
-        auto gep = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), thePtr, im1);
+        auto gep = emit_ptrgep(ctx, thePtr, im1);
         setName(ctx.emission_context, gep, "pointerset_ptr");
         emit_memcpy(ctx, gep, jl_aliasinfo_t::fromTBAA(ctx, nullptr), x, size, Align(align_nb), Align(julia_alignment(ety)));
     }

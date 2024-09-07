@@ -350,15 +350,7 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
                     ConstantInt::get(Type::getInt32Ty(Cond->getContext()), i),
                     "", SI);
         }
-        #if JL_LLVM_VERSION >= 170000
         assert(FalseElem->getType() == TrueElem->getType());
-        #else
-        if (FalseElem->getType() != TrueElem->getType()) {
-            // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-            assert(FalseElem->getContext().supportsTypedPointers());
-            FalseElem = new BitCastInst(FalseElem, TrueElem->getType(), "", SI);
-        }
-        #endif
         SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI);
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[SelectBase] = Number;
@@ -427,33 +419,7 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
                 BaseElem = Base;
             else
                 BaseElem = IncomingBases[i];
-            #if JL_LLVM_VERSION >= 170000
             assert(BaseElem->getType() == T_prjlvalue);
-            #else
-            if (BaseElem->getType() != T_prjlvalue) {
-                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-                assert(BaseElem->getContext().supportsTypedPointers());
-                auto &remap = CastedRoots[i][BaseElem];
-                if (!remap) {
-                    if (auto constant = dyn_cast<Constant>(BaseElem)) {
-                        remap = ConstantExpr::getBitCast(constant, T_prjlvalue, "");
-                    } else {
-                        Instruction *InsertBefore;
-                        if (auto arg = dyn_cast<Argument>(BaseElem)) {
-                            InsertBefore = &*arg->getParent()->getEntryBlock().getFirstInsertionPt();
-                        } else {
-                            assert(isa<Instruction>(BaseElem) && "Unknown value type detected!");
-                            InsertBefore = cast<Instruction>(BaseElem)->getNextNonDebugInstruction();
-                        }
-                        while (isa<PHINode>(InsertBefore)) {
-                            InsertBefore = InsertBefore->getNextNonDebugInstruction();
-                        }
-                        remap = new BitCastInst(BaseElem, T_prjlvalue, "", InsertBefore);
-                    }
-                }
-                BaseElem = remap;
-            }
-            #endif
             lift->addIncoming(BaseElem, IncomingBB);
         }
     }
@@ -1528,14 +1494,11 @@ SmallVector<Value*, 0> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, I
     return Ptrs;
 }
 
-unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, Type *DTy, IRBuilder<> &irbuilder) {
+unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
     auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
     for (unsigned i = 0; i < Ptrs.size(); ++i) {
-        Value *Elem = Ptrs[i];// Dst has type `[n x {}*]*`
-        Value *Slot = irbuilder.CreateConstInBoundsGEP2_32(DTy, Dst, 0, i);
-        #if JL_LLVM_VERSION < 170000
-        assert(cast<PointerType>(Dst->getType())->isOpaqueOrPointeeTypeMatches(DTy));
-        #endif
+        Value *Elem = Ptrs[i];
+        Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(irbuilder.getInt8Ty(), Dst, i * sizeof(void*));
         StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
         shadowStore->setOrdering(AtomicOrdering::NotAtomic);
         // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -2133,7 +2096,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 // the type tag. (Note that if the size is not a constant, it will call
                 // gc_alloc_obj, and will redundantly set the tag.)
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptls = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
+                auto ptls = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
                 auto newI = builder.CreateCall(
                     allocBytesIntrinsic,
                     {
@@ -2319,15 +2282,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
-    #if JL_LLVM_VERSION >= 170000
     assert(Val->getType() == T_prjlvalue);
-    #else
-    if (Val->getType() != T_prjlvalue) {
-        // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-        assert(Val->getContext().supportsTypedPointers());
-        Val = new BitCastInst(Val, T_prjlvalue, "", InsertBefore);
-    }
-    #endif
     new StoreInst(Val, slotAddress, InsertBefore);
 }
 
@@ -2407,18 +2362,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             for (CallInst *II : ToDelete) {
                 II->eraseFromParent();
             }
-            #if JL_LLVM_VERSION >= 170000
             assert(slotAddress->getType() == AI->getType());
-            #else
-            if (slotAddress->getType() != AI->getType()) {
-                // If we're replacing an ArrayAlloca, the pointer element type may need to be fixed up
-                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-                assert(slotAddress->getContext().supportsTypedPointers());
-                auto BCI  = new BitCastInst(slotAddress, AI->getType());
-                BCI->insertAfter(slotAddress);
-                slotAddress = BCI;
-            }
-            #endif
             AI->replaceAllUsesWith(slotAddress);
             AI->eraseFromParent();
             AI = NULL;
@@ -2443,15 +2387,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
                 slotAddress->insertAfter(gcframe);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
                 auto Elem = MaybeExtractScalar(S, ValExpr, SI);
-                #if JL_LLVM_VERSION >= 170000
                 assert(Elem->getType() == T_prjlvalue);
-                #else
-                if (Elem->getType() != T_prjlvalue) {
-                    // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-                    assert(Elem->getContext().supportsTypedPointers());
-                    Elem = new BitCastInst(Elem, T_prjlvalue, "", SI);
-                }
-                #endif
                 //auto Idxs = ArrayRef<unsigned>(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
