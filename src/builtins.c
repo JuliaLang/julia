@@ -584,7 +584,7 @@ JL_CALLABLE(jl_f_throw_methoderror)
 {
     JL_NARGSV(throw_methoderror, 1);
     size_t world = jl_get_tls_world_age();
-    jl_method_error((jl_function_t *)args[0], &args[1], nargs, world);
+    jl_method_error(args[0], &args[1], nargs, world);
     return jl_nothing;
 }
 
