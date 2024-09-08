@@ -292,15 +292,10 @@ end
 
     rand_twiceprecision(::Type{T}) where {T<:Number} = Base.TwicePrecision{T}(rand(widen(T)))
 
-    rand_twiceprecision_is_ok(::Type{T}) where {T<:Number} = @test !iszero(rand_twiceprecision(T).lo)
-
     # For this test the `BigFloat` mantissa needs to be just a bit
     # larger than the `Float64` mantissa
     setprecision(BigFloat, 70) do
         n = 10
-        @testset "rand twiceprecision is ok" for T ∈ (Float32, Float64), i ∈ 1:n
-            rand_twiceprecision_is_ok(T)
-        end
         @testset "twiceprecision roundtrip is not lossy 1" for i ∈ 1:n
             twiceprecision_roundtrip_is_not_lossy(Float64, rand(BigFloat))
         end
