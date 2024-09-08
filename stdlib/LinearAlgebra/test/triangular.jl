@@ -1198,6 +1198,22 @@ end
     end
 end
 
+@testset "eigvecs for AbstractTriangular" begin
+    S = SizedArrays.SizedArray{(3,3)}(reshape(1:9,3,3))
+    for T in (UpperTriangular, UnitUpperTriangular,
+                LowerTriangular, UnitLowerTriangular)
+        U = T(S)
+        V = eigvecs(U)
+        λ = eigvals(U)
+        @test U * V ≈ V * Diagonal(λ)
+
+        MU = MyTriangular(U)
+        V = eigvecs(U)
+        λ = eigvals(U)
+        @test MU * V ≈ V * Diagonal(λ)
+    end
+end
+
 @testset "(l/r)mul! and (l/r)div! for generic triangular" begin
     @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         M = MyTriangular(T(rand(4,4)))

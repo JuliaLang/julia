@@ -2782,6 +2782,14 @@ end
 
 # Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)
+# fallback for unknown types
+function eigvecs(A::AbstractTriangular{<:BlasFloat})
+    if istriu(A)
+        eigvecs(UpperTriangular(Matrix(A)))
+    else # istril(A)
+        eigvecs(LowerTriangular(Matrix(A)))
+    end
+end
 function eigvecs(A::AbstractTriangular{T}) where T
     TT = promote_type(T, Float32)
     if TT <: BlasFloat
