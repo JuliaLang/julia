@@ -194,7 +194,7 @@ diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
 diagzero(D::Diagonal{M, <:AbstractVector{M}}, i, j) where {T,M<:AbstractMatrix{T}} =
     diagzero(M, axes(D.diag[i], 1), axes(D.diag[j], 2))
 # dispatching on the axes permits specializing on the axis types to return something other than an Array
-diagzero(M::Type, ax::Vararg{T,2}) where {T<:Union{AbstractUnitRange, Integer}} = diagzero(M, ax)
+diagzero(M::Type, ax::Vararg{Union{AbstractUnitRange, Integer},2}) = diagzero(M, ax)
 """
     diagzero(::Type{M}, ax::NTuple{2, AbstractUnitRange}) where {M<:AbstractMatrix}
 
