@@ -123,7 +123,7 @@ import Base.Docs: catdoc
 catdoc(md::MD...) = MD(md...)
 
 if Base.generating_output()
-    dummy = md""  # workload to trigger precompile
+    md""  # workload to trigger precompile
 end
 
 end
