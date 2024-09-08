@@ -122,4 +122,26 @@ import Base.Docs: catdoc
 
 catdoc(md::MD...) = MD(md...)
 
+
+precompile(Tuple{typeof(Markdown.mdexpr), String})
+precompile(Tuple{typeof(Markdown.hashheader), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.list), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.fencedcode), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.blockquote), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.admonition), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.blocktex), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.blockinterp), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.indentcode), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.footnote), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+
+#=  145.1 ms =# precompile(Tuple{typeof(Markdown.github_table), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+
+precompile(Tuple{typeof(Markdown.horizontalrule), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.setextheader), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+precompile(Tuple{typeof(Markdown.paragraph), Base.GenericIOBuffer{Memory{UInt8}}, Markdown.MD})
+
+precompile(Tuple{typeof(Markdown.toexpr), Markdown.Paragraph})
+precompile(Tuple{typeof(Markdown.toexpr), Array{Any, 1}})
+precompile(Tuple{typeof(Markdown.toexpr), String})
+
 end
