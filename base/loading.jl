@@ -529,15 +529,15 @@ function pkgdir(m::Module, paths::String...)
     path === nothing && return nothing
     original = path
     path = dirname(path)
-    if endswith(path, "src")
+    if splitpath(path)[end] == "src"
         path = dirname(path)
     elseif contains(path, "ext")
         # extensions can reside at `../ext/FooExt.jl` or `../ext/FooExt/FooExt.jl`
-        if endswith(path, "ext")
+        if splitpath(path)[end] == "ext"
             path = dirname(path)
         else
             path = dirname(path)
-            endswith(path, "ext") || error("Unexpected path structure for extension module: $original")
+            splitpath(path)[end] == "ext" || error("Unexpected path structure for extension module: $original")
             path = dirname(path)
         end
     else
