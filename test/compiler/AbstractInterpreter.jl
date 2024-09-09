@@ -409,6 +409,7 @@ end
 CC.nsplit_impl(info::NoinlineCallInfo) = CC.nsplit(info.info)
 CC.getsplit_impl(info::NoinlineCallInfo, idx::Int) = CC.getsplit(info.info, idx)
 CC.getresult_impl(info::NoinlineCallInfo, idx::Int) = CC.getresult(info.info, idx)
+CC.add_uncovered_edges_impl(edges::Vector{Any}, info::NoinlineCallInfo, @nospecialize(atype)) = CC.add_uncovered_edges!(edges, info.info, atype)
 
 function CC.abstract_call(interp::NoinlineInterpreter,
     arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
@@ -431,6 +432,8 @@ end
 @inline function inlined_usually(x, y, z)
     return x * y + z
 end
+foo_split(x::Float64) = 1
+foo_split(x::Int) = 2
 
 # check if the inlining algorithm works as expected
 let src = code_typed1((Float64,Float64,Float64)) do x, y, z
@@ -444,6 +447,7 @@ let NoinlineModule = Module()
     main_func(x, y, z) = inlined_usually(x, y, z)
     @eval NoinlineModule noinline_func(x, y, z) = $inlined_usually(x, y, z)
     @eval OtherModule other_func(x, y, z) = $inlined_usually(x, y, z)
+    @eval NoinlineModule bar_split_error() = $foo_split(Core.compilerbarrier(:type, nothing))
 
     interp = NoinlineInterpreter(Set((NoinlineModule,)))
 
@@ -472,6 +476,11 @@ let NoinlineModule = Module()
     let src = code_typed1(OtherModule.other_func, (Float64,Float64,Float64); interp)
         @test count(isinvoke(:inlined_usually), src.code) == 0
         @test count(iscall((src, inlined_usually)), src.code) == 0
+    end
+
+    let src = code_typed1(NoinlineModule.bar_split_error)
+        @test count(iscall((src, foo_split)), src.code) == 0
+        @test count(iscall((src, Core.throw_methoderror)), src.code) > 0
     end
 end
 

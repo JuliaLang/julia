@@ -331,15 +331,15 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         end
         valid_worlds = intersect(valid_worlds, matches.valid_worlds)
         thisfullmatch = any(match::MethodMatch->match.fully_covers, matches)
-        found = false
+        mt_found = false
         for (i, mt′) in enumerate(mts)
             if mt′ === mt
                 fullmatches[i] &= thisfullmatch
-                found = true
+                mt_found = true
                 break
             end
         end
-        if !found
+        if !mt_found
             push!(mts, mt)
             push!(fullmatches, thisfullmatch)
         end

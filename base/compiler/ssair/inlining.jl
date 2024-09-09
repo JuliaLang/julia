@@ -1399,14 +1399,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
         if !fully_covered
             atype = argtypes_to_type(sig.argtypes)
             # We will emit an inline MethodError so we need a backedge to the MethodTable
-            unwrapped_info = info isa ConstCallInfo ? info.call : info
-            if unwrapped_info isa UnionSplitInfo
-                for (fullmatch, mt) in zip(unwrapped_info.fullmatches, unwrapped_info.mts)
-                    !fullmatch && push!(state.edges, mt, atype)
-                end
-            elseif unwrapped_info isa MethodMatchInfo
-                push!(state.edges, unwrapped_info.mt, atype)
-            else @assert false end
+            add_uncovered_edges!(state.edges, info, atype)
         end
     elseif !isempty(cases)
         # if we've not seen all candidates, union split is valid only for dispatch tuples

@@ -450,10 +450,16 @@ abstract type CallInfo end
 
 nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
 getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
+add_uncovered_edges!(edges::Vector{Any}, info::CallInfo, @nospecialize(atype)) = add_uncovered_edges_impl(edges, info, atype)
+
 getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
 
+# must implement `nsplit`, `getsplit`, and `add_uncovered_edges!` to opt in to inlining
 nsplit_impl(::CallInfo) = nothing
 getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
+add_uncovered_edges_impl(edges::Vector{Any}, info::CallInfo, @nospecialize(atype)) = error("unexpected call into `add_uncovered_edges!`")
+
+# must implement `getresult` to opt in to extended lattice return information
 getresult_impl(::CallInfo, ::Int) = nothing
 
 @specialize
