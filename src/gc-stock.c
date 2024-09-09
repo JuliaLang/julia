@@ -1013,7 +1013,7 @@ void gc_sweep_wake_all_stacks(jl_ptls_t ptls) JL_NOTSAFEPOINT
     for (int i = first; i <= last; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         gc_check_ptls_of_parallel_collector_thread(ptls2);
-        jl_atomic_fetch_add(&ptls2->gc_tls.gc_sweeps_requested, 1);
+        jl_atomic_fetch_add(&ptls2->gc_tls.gc_stack_sweep_requested, 1);
     }
     uv_cond_broadcast(&gc_threads_cond);
     uv_mutex_unlock(&gc_threads_lock);
@@ -3547,7 +3547,7 @@ void jl_parallel_gc_threadfun(void *arg)
 
     while (1) {
         uv_mutex_lock(&gc_threads_lock);
-        while (!may_mark() && !may_sweep(ptls)) {
+        while (!may_mark() && !may_sweep(ptls) && !may_sweep_stack(ptls)) {
             uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
         }
         uv_mutex_unlock(&gc_threads_lock);
