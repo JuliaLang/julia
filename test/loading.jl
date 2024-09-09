@@ -1051,6 +1051,9 @@ end
                 $ew HasExtensions.ext_loaded && error("ext_loaded set")
                 using HasDepWithExtensions
                 $ew using HasDepWithExtensions
+                $ew Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
+                $ew _pkgdir = pkgdir(Base.get_extension(HasExtensions, :Extension))
+                $ew _pkgdir == pkgdir(HasExtensions) != nothing || error("unexpected extension pkgdir path")
                 $ew Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
                 $ew HasExtensions.ext_loaded || error("ext_loaded not set")
                 $ew HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
@@ -1105,10 +1108,16 @@ end
             using HasExtensions
             using ExtDep
             Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
+            _pkgdir = pkgdir(Base.get_extension(HasExtensions, :Extension))
+            _pkgdir == pkgdir(HasExtensions) != nothing || error("unexpected extension pkgdir path: $_pkgdir")
             using ExtDep2
             Base.get_extension(HasExtensions, :ExtensionFolder) isa Module || error("expected extension to load")
+            _pkgdir = pkgdir(Base.get_extension(HasExtensions, :ExtensionFolder))
+            _pkgdir == pkgdir(HasExtensions) != nothing || error("unexpected extension pkgdir path: $_pkgdir")
             using ExtDep3
             Base.get_extension(HasExtensions, :ExtensionDep) isa Module || error("expected extension to load")
+            _pkgdir = pkgdir(Base.get_extension(HasExtensions, :ExtensionDep))
+            _pkgdir == pkgdir(HasExtensions) != nothing || error("unexpected extension pkgdir path: $_pkgdir")
         end
         """
         for compile in (`--compiled-modules=no`, ``)
