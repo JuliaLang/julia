@@ -124,7 +124,23 @@ catdoc(md::MD...) = MD(md...)
 
 if Base.generating_output()
     # workload to reduce latency
-    md"**Here is some markdown**..."
+    md"""
+    # H1
+    ## H2
+    ### H3
+    **bold text**
+    *italicized text*
+    > blockquote
+    1. First item
+    2. Second item
+    3. Third item
+    - First item
+    - Second item
+    - Third item
+    `code`
+    Horizontal Rule
+    ---
+    """
 end
 
 end
