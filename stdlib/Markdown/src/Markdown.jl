@@ -123,7 +123,7 @@ import Base.Docs: catdoc
 catdoc(md::MD...) = MD(md...)
 
 if Base.generating_output()
-    # (representive) workload to trigger precompile; from Pkg.REPLMode.gen_help()
+    # (representative) workload to trigger precompile; from Pkg.REPLMode.gen_help()
     md"**Welcome to the Pkg REPL-mode** .."
 end
 
