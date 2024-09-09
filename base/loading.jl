@@ -1189,7 +1189,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
-function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}, ignore_native::Union{Nothing,Bool}=nothing)
+function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}, ignore_native::Union{Nothing,Bool}=nothing; register::Bool=true)
     if isnothing(ignore_native)
         if JLOptions().code_coverage == 0 && JLOptions().malloc_log == 0
             ignore_native = false
@@ -1238,6 +1238,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     for M in restored
         M = M::Module
         if parentmodule(M) === M && PkgId(M) == pkg
+            register && register_root_module(M)
             if timing_imports
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
@@ -1897,8 +1898,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         depmods[i] = dep
     end
     # then load the file
-    loaded = _include_from_serialized(pkg, path, ocachepath, depmods, ignore_native)
-    loaded isa Module && register_root_module(loaded)
+    loaded = _include_from_serialized(pkg, path, ocachepath, depmods, ignore_native; register = true)
     return loaded
 end
 
@@ -1965,8 +1965,7 @@ end
                     if dep === nothing
                         try
                             set_pkgorigin_version_path(modkey, modpath)
-                            dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps)
-                            dep isa Module && stalecheck && register_root_module(dep)
+                            dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps; register = stalecheck)
                         finally
                             end_loading(modkey, dep)
                         end
@@ -1982,9 +1981,8 @@ end
             end
             restored = get(loaded_precompiles, pkg => newbuild_id, nothing)
             if !isa(restored, Module)
-                restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps)
+                restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps; register = stalecheck)
             end
-            isa(restored, Module) && stalecheck && register_root_module(restored)
             isa(restored, Module) && return restored
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
             @label check_next_path
