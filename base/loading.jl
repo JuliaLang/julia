@@ -508,6 +508,8 @@ package root.
 To get the root directory of the package that implements the current module
 the form `pkgdir(@__MODULE__)` can be used.
 
+If an extension module is given, the root of the parent package is returned.
+
 ```julia-repl
 julia> pkgdir(Foo)
 "/path/to/Foo.jl"
@@ -525,7 +527,23 @@ function pkgdir(m::Module, paths::String...)
     rootmodule = moduleroot(m)
     path = pathof(rootmodule)
     path === nothing && return nothing
-    return joinpath(dirname(dirname(path)), paths...)
+    original = path
+    path = dirname(path)
+    if endswith(path, "src")
+        path = dirname(path)
+    elseif contains(path, "ext")
+        # extensions can reside at `../ext/FooExt.jl` or `../ext/FooExt/FooExt.jl`
+        if endswith(path, "ext")
+            path = dirname(path)
+        else
+            path = dirname(path)
+            endswith(path, "ext") || error("Unexpected path structure for extension module: $original")
+            path = dirname(path)
+        end
+    else
+        error("Unexpected path structure for module source: $original")
+    end
+    return joinpath(path, paths...)
 end
 
 function get_pkgversion_from_path(path)
