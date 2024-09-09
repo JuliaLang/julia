@@ -1213,6 +1213,7 @@ escape_builtin!(::typeof(Core.donotdelete), _...) = false
 # not really safe, but `ThrownEscape` will be imposed later
 escape_builtin!(::typeof(isdefined), _...) = false
 escape_builtin!(::typeof(throw), _...) = false
+escape_builtin!(::typeof(Core.throw_methoderror), _...) = false
 
 function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 4 || return false

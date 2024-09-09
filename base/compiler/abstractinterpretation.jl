@@ -2226,6 +2226,17 @@ function abstract_throw(interp::AbstractInterpreter, argtypes::Vector{Any}, ::Ab
     return CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo())
 end
 
+function abstract_throw_methoderror(interp::AbstractInterpreter, argtypes::Vector{Any}, ::AbsIntState)
+    exct = if length(argtypes) == 1
+        ArgumentError
+    elseif !isvarargtype(argtypes[2])
+        MethodError
+    else
+        tmerge(𝕃ᵢ, MethodError, ArgumentError)
+    end
+    return CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo())
+end
+
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
@@ -2246,6 +2257,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_applicable(interp, argtypes, sv, max_methods)
         elseif f === throw
             return abstract_throw(interp, argtypes, sv)
+        elseif f === Core.throw_methoderror
+            return abstract_throw_methoderror(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
         ft = popfirst!(argtypes)
