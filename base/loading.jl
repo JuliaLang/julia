@@ -531,7 +531,7 @@ function pkgdir(m::Module, paths::String...)
     path = dirname(path)
     if splitpath(path)[end] == "src"
         path = dirname(path)
-    elseif contains(path, "ext")
+    elseif "ext" in splitpath(path)
         # extensions can reside at `../ext/FooExt.jl` or `../ext/FooExt/FooExt.jl`
         if splitpath(path)[end] == "ext"
             path = dirname(path)
