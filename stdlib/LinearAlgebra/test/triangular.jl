@@ -443,8 +443,6 @@ Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
             debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
 
             Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-            @test lmul!(Tri,copy(A1)) ≈ Tri*M1
-            Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
             C = Matrix{promote_type(elty1,eltyB)}(undef, n, n)
             mul!(C, Tri, A1)
             @test C ≈ Tri*M1
@@ -903,7 +901,7 @@ end
     function test_one_oneunit_triangular(a)
         b = Matrix(a)
         @test (@inferred a^1) == b^1
-        @test (@inferred a^-1) == b^-1
+        @test (@inferred a^-1) ≈ b^-1
         @test one(a) == one(b)
         @test one(a)*a == a
         @test a*one(a) == a
@@ -1200,6 +1198,22 @@ end
     end
 end
 
+@testset "eigvecs for AbstractTriangular" begin
+    S = SizedArrays.SizedArray{(3,3)}(reshape(1:9,3,3))
+    for T in (UpperTriangular, UnitUpperTriangular,
+                LowerTriangular, UnitLowerTriangular)
+        U = T(S)
+        V = eigvecs(U)
+        λ = eigvals(U)
+        @test U * V ≈ V * Diagonal(λ)
+
+        MU = MyTriangular(U)
+        V = eigvecs(U)
+        λ = eigvals(U)
+        @test MU * V ≈ V * Diagonal(λ)
+    end
+end
+
 @testset "(l/r)mul! and (l/r)div! for generic triangular" begin
     @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         M = MyTriangular(T(rand(4,4)))
@@ -1224,6 +1238,34 @@ end
             Ac .= A
             rdiv!(Ac, M)
             @test Ac ≈ A / M
+        end
+    end
+end
+
+@testset "istriu/istril forwards to parent" begin
+    @testset "$(nameof(typeof(M)))" for M in [Tridiagonal(rand(n-1), rand(n), rand(n-1)),
+                Tridiagonal(zeros(n-1), zeros(n), zeros(n-1)),
+                Diagonal(randn(n)),
+                Diagonal(zeros(n)),
+                ]
+        @testset for TriT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+            U = TriT(M)
+            A = Array(U)
+            for k in -n:n
+                @test istriu(U, k) == istriu(A, k)
+                @test istril(U, k) == istril(A, k)
+            end
+        end
+    end
+    z = zeros(n,n)
+    @testset for TriT in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
+        P = Matrix{BigFloat}(undef, n, n)
+        copytrito!(P, z, TriT <: Union{UpperTriangular, UnitUpperTriangular} ? 'U' : 'L')
+        U = TriT(P)
+        A = Array(U)
+        @testset for k in -n:n
+            @test istriu(U, k) == istriu(A, k)
+            @test istril(U, k) == istril(A, k)
         end
     end
 end

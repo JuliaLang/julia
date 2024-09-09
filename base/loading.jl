@@ -269,7 +269,6 @@ struct TOMLCache{Dates}
     d::Dict{String, CachedTOMLDict}
 end
 TOMLCache(p::TOML.Parser) = TOMLCache(p, Dict{String, CachedTOMLDict}())
-# TODO: Delete this converting constructor once Pkg stops using it
 TOMLCache(p::TOML.Parser, d::Dict{String, Dict{String, Any}}) = TOMLCache(p, convert(Dict{String, CachedTOMLDict}, d))
 
 const TOML_CACHE = TOMLCache(TOML.Parser{nothing}())

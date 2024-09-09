@@ -282,6 +282,8 @@ end
 
 @testset "`deepcopy` a `GenericCondition`" begin
     a = Base.GenericCondition(ReentrantLock())
+    # Test printing
+    @test repr(a) == "Base.GenericCondition(ReentrantLock())"
     @test !islocked(a.lock)
     lock(a.lock)
     @test islocked(a.lock)
