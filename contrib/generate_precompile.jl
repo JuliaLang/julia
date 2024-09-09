@@ -81,6 +81,9 @@ precompile(Base.get_preferences, (Base.UUID,))
 precompile(Base.record_compiletime_preference, (Base.UUID, String))
 
 # miscellaneous
+precompile(Tuple{typeof(Base.setindex!), Base.EnvDict, Bool, String})
+precompile(Tuple{typeof(Base.first), Array{Any, 1}})
+precompile(Tuple{typeof(Base.print), Base.TTY, String})
 precompile(Tuple{typeof(Base.exit)})
 precompile(Tuple{typeof(Base.require), Base.PkgId})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
