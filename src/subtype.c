@@ -1304,6 +1304,7 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
 }
 
 static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e);
+static int has_exists_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT;
 
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
@@ -1314,7 +1315,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     if (jl_is_uniontype(x)) {
         if (obviously_egal(x, y))
             return 1;
-        if (e->Runions.depth == 0 && jl_is_typevar(y) && !jl_has_free_typevars(x) && !jl_has_free_typevars(((jl_tvar_t*)y)->ub)) {
+        if (e->Runions.depth == 0 && jl_is_typevar(y) && !jl_has_free_typevars(x)) {
             // Similar to fast path for repeated elements: if there have been no outer
             // unions on the right, and the right side is a typevar, then we can handle the
             // typevar first before picking a union element, under the theory that it may
@@ -1325,7 +1326,17 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             // free typevars, since the typevars presence might lead to those elements
             // getting eliminated (omit_bad_union) or degenerate (Union{Ptr{T}, Ptr}) or
             // combined (Union{T, S} where {T, S <: T}).
-            return subtype_var((jl_tvar_t*)y, x, e, 1, param);
+            jl_tvar_t *yvar = (jl_tvar_t *)y;
+            jl_varbinding_t *yb = lookup(e, yvar);
+            while (e->intersection && yb != NULL && yb->lb == yb->ub && jl_is_typevar(yb->lb)) {
+                yvar = (jl_tvar_t *)yb->lb;
+                yb = lookup(e, yvar);
+            }
+            // Note: `x <: ∃y` performs a local ∀-∃ check between `x` and `yb->ub`.
+            // We need to ensure that there's no ∃ typevar as otherwise that check
+            // might cause false alarm due to the accumulated env change.
+            if (yb == NULL || yb->right == 0 || !has_exists_typevar(yb->ub, e))
+                return subtype_var(yvar, x, e, 1, param);
         }
         x = pick_union_element(x, e, 0);
     }

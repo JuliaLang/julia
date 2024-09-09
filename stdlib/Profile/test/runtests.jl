@@ -168,7 +168,8 @@ let cmd = Base.julia_cmd()
         println("done")
         print(Profile.len_data())
         """
-    p = open(`$cmd -e $script`)
+    # use multiple threads here to ensure that profiling works with threading
+    p = open(`$cmd -t2 -e $script`)
     t = Timer(120) do t
         # should be under 10 seconds, so give it 2 minutes then report failure
         println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
