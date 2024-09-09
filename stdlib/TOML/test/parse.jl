@@ -14,6 +14,7 @@ using TOML: ParserError
           TOML.parse(IOBuffer(str)) ==
           TOML.parse(p, str) == TOML.parse(p, SubString(str)) ==
           TOML.parse(p, IOBuffer(str)) == dict
+    @test TOML.parse("a\t=1") == dict
     @test_throws ParserError TOML.parse(invalid_str)
     @test_throws ParserError TOML.parse(SubString(invalid_str))
     @test_throws ParserError TOML.parse(IOBuffer(invalid_str))

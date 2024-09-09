@@ -10,6 +10,7 @@ Call `memcpy` from the C standard library.
 
 """
 function memcpy(dst::Ptr, src::Ptr, n::Integer)
+    @_terminates_globally_meta
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, n)
 end
 
@@ -23,6 +24,7 @@ Call `memmove` from the C standard library.
 
 """
 function memmove(dst::Ptr, src::Ptr, n::Integer)
+    @_terminates_globally_meta
     ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, n)
 end
 
@@ -36,6 +38,7 @@ Call `memset` from the C standard library.
 
 """
 function memset(p::Ptr, val, n::Integer)
+    @_terminates_globally_meta
     ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, val, n)
 end
 
@@ -49,5 +52,6 @@ Call `memcmp` from the C standard library.
 
 """
 function memcmp(a::Ptr, b::Ptr, n::Integer)
+    @_terminates_globally_meta
     ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, n % Csize_t) % Int
 end

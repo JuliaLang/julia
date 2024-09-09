@@ -34,8 +34,25 @@ elseif Sys.iswindows()
     const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"sa
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"sa
 
+    const splitdrive_re = let
+        # Slash in either direction.
+        S = raw"[\\/]"
+        # Not a slash in either direction.
+        N = raw"[^\\/]"
+        # Drive letter, e.g. `C:`
+        drive = "$(N)+:"
+        # UNC path, e.g. `\\server\share`
+        unc = "$(S)$(S)$(N)+$(S)$(N)+"
+        # Long drive letter, e.g. `\\?\C:`
+        long_drive = "$(S)$(S)\\?$(S)$(drive)"
+        # Long UNC path, e.g. `\\?\UNC\server\share`
+        long_unc = "$(S)$(S)\\?$(S)UNC$(S)$(N)+$(S)$(N)+"
+        # Need to match the long patterns first so they get priority.
+        Regex("^($long_unc|$long_drive|$unc|$drive|)(.*)\$", "sa")
+    end
+
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"sa, path)::AbstractMatch
+        m = match(splitdrive_re, path)::AbstractMatch
         String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else
@@ -60,6 +77,8 @@ Return the current user's home directory.
     `homedir` determines the home directory via `libuv`'s `uv_os_homedir`. For details
     (for example on how to specify the home directory via environment variables), see the
     [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
+
+See also [`Sys.username`](@ref).
 """
 function homedir()
     buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
@@ -416,11 +435,11 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
 
-# Example
+# Examples
 
 If you are in a directory called `JuliaExample` and the data you are using is two levels up relative to the `JuliaExample` directory, you could write:
 
-abspath("../../data")
+    abspath("../../data")
 
 Which gives a path like `"/home/JuliaUser/data/"`.
 

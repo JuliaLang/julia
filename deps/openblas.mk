@@ -10,7 +10,7 @@ OPENBLAS_BUILD_OPTS := CC="$(CC) $(SANITIZE_OPTS)" FC="$(FC) $(SANITIZE_OPTS)" L
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
 OPENBLAS_BUILD_OPTS += USE_THREAD=1
-OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=50
+OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=400
 # Maximum number of threads for parallelism
 OPENBLAS_BUILD_OPTS += NUM_THREADS=512
 else
@@ -90,17 +90,17 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied: $(BUILDDIR)/$(OP
 		patch -p1 -f < $(SRCDIR)/patches/openblas-winexit.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-memory-buffer-multi-threading.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-winexit.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-memory-buffer-multi-threading.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-memory-buffer-multi-threading.patch-applied
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
 		patch -p1 -f < $(SRCDIR)/patches/openblas-ofast-power.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/neoverse-generic-kernels.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured

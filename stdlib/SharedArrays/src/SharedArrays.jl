@@ -8,7 +8,7 @@ module SharedArrays
 using Mmap, Distributed, Random
 
 import Base: length, size, elsize, ndims, IndexStyle, reshape, convert, deepcopy_internal,
-             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, unsafe_convert
+             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, cconvert
 import Random
 using Serialization
 using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize
@@ -358,8 +358,8 @@ for each worker process.
 """
 localindices(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-unsafe_convert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = unsafe_convert(Ptr{T}, sdata(S))
-unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr{T}, sdata(S))
+cconvert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = cconvert(Ptr{T}, sdata(S))
+cconvert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = cconvert(Ptr{T}, sdata(S))
 
 function SharedArray(A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))

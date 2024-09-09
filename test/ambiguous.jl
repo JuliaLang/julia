@@ -75,7 +75,7 @@ let io = IOBuffer()
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
     @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+    @test_throws("Calling invoke(f, t, args...) would throw:\nMethodError: no method matching ambig",
                  which(ambig, (UInt8, Int)))
     @test length(code_typed(ambig, (UInt8, Int))) == 0
 end
@@ -97,10 +97,7 @@ ambig(x::Union{Char, Int16}) = 's'
 
 # Automatic detection of ambiguities
 
-const allowed_undefineds = Set([
-    GlobalRef(Base, :active_repl),
-    GlobalRef(Base, :active_repl_backend),
-])
+const allowed_undefineds = Set([])
 
 let Distributed = get(Base.loaded_modules,
                       Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
@@ -288,6 +285,30 @@ for f in (Ambig8.f, Ambig8.g)
     @test f(Int8(0)) == 4
     @test_throws MethodError f(0)
     @test_throws MethodError f(pi)
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 2
+        @test ambig[] == 1
+    end
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 2
+        @test ambig[] == 1
+    end
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 3
+        @test ambig[] == 1
+    end
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 3
+        @test ambig[] == 1
+    end
 end
 
 module Ambig9
@@ -308,23 +329,22 @@ end
 @test length(detect_unbound_args(M25341; recursive=true)) == 1
 
 # Test that Core and Base are free of UndefVarErrors
-# not using isempty so this prints more information when it fails
 @testset "detect_unbound_args in Base and Core" begin
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
         pop!(need_to_handle_undef_sparam, which(Core.Compiler.eltype, Tuple{Type{Tuple{Any}}}))
-        @test_broken need_to_handle_undef_sparam == Set()
+        @test_broken isempty(need_to_handle_undef_sparam)
         pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
-        @test need_to_handle_undef_sparam == Set()
+        @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
-        @test_broken need_to_handle_undef_sparam == Set()
+        @test_broken isempty(need_to_handle_undef_sparam)
         pop!(need_to_handle_undef_sparam, which(Base._cat, Tuple{Any, AbstractArray}))
         pop!(need_to_handle_undef_sparam, which(Base.byteenv, (Union{AbstractArray{Pair{T,V}, 1}, Tuple{Vararg{Pair{T,V}}}} where {T<:AbstractString,V},)))
         pop!(need_to_handle_undef_sparam, which(Base.float, Tuple{AbstractArray{Union{Missing, T},N} where {T, N}}))
@@ -333,7 +353,7 @@ end
         pop!(need_to_handle_undef_sparam, which(Base.zero, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.one, Tuple{Type{Union{Missing, T}} where T}))
         pop!(need_to_handle_undef_sparam, which(Base.oneunit, Tuple{Type{Union{Missing, T}} where T}))
-        @test need_to_handle_undef_sparam == Set()
+        @test isempty(need_to_handle_undef_sparam)
     end
 end
 
@@ -426,5 +446,21 @@ cc46601(::Type{T}, x::Number) where {T<:Number} = 6
 cc46601(::Type{T}, x::Int) where {T<:AbstractString} = 7
 @test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
 @test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 7
+
+# Issue #55231
+struct U55231{P} end
+struct V55231{P} end
+U55231(::V55231) = nothing
+(::Type{T})(::V55231) where {T<:U55231} = nothing
+@test length(methods(U55231)) == 2
+U55231(a, b) = nothing
+@test length(methods(U55231)) == 3
+struct S55231{P} end
+struct T55231{P} end
+(::Type{T})(::T55231) where {T<:S55231} = nothing
+S55231(::T55231) = nothing
+@test length(methods(S55231)) == 2
+S55231(a, b) = nothing
+@test length(methods(S55231)) == 3
 
 nothing

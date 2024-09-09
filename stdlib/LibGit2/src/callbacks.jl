@@ -9,7 +9,7 @@ function mirror_callback(remote::Ptr{Ptr{Cvoid}}, repo_ptr::Ptr{Cvoid},
     ensure_initialized()
     # Create the remote with a mirroring url
     fetch_spec = "+refs/*:refs/*"
-    err = ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
+    err = ccall((:git_remote_create_with_fetchspec, libgit2), Cint,
                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Cstring),
                 remote, repo_ptr, name, url, fetch_spec)
     err != 0 && return Cint(err)
@@ -43,7 +43,7 @@ end
 function user_abort()
     ensure_initialized()
     # Note: Potentially it could be better to just throw a Julia error.
-    ccall((:giterr_set_str, :libgit2), Cvoid,
+    ccall((:giterr_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, user cancelled credential request.")
     return Cint(Error.EUSER)
@@ -51,7 +51,7 @@ end
 
 function prompt_limit()
     ensure_initialized()
-    ccall((:giterr_set_str, :libgit2), Cvoid,
+    ccall((:giterr_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, maximum number of prompts reached.")
     return Cint(Error.EAUTH)
@@ -59,7 +59,7 @@ end
 
 function exhausted_abort()
     ensure_initialized()
-    ccall((:giterr_set_str, :libgit2), Cvoid,
+    ccall((:giterr_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "All authentication methods have failed.")
     return Cint(Error.EAUTH)
@@ -79,7 +79,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
 
     # first try ssh-agent if credentials support its usage
     if p.use_ssh_agent && username_ptr != Cstring(C_NULL) && (!revised || !isfilled(cred))
-        err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
+        err = ccall((:git_cred_ssh_key_from_agent, libgit2), Cint,
                     (Ptr{Ptr{Cvoid}}, Cstring), libgit2credptr, username_ptr)
 
         p.use_ssh_agent = false  # use ssh-agent only one time
@@ -175,7 +175,7 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
     if !revised
         return exhausted_abort()
     end
-    return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
+    return ccall((:git_cred_ssh_key_new, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pubkey, cred.prvkey, cred.pass)
 end
@@ -195,9 +195,9 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
     if p.use_git_helpers && (!revised || !isfilled(cred))
         git_cred = GitCredential(p.config, p.url)
 
-         # Use `deepcopy` to ensure shredding the `git_cred` does not shred the `cred`s copy
+         # Use `copy` to ensure shredding the `git_cred` does not shred the `cred`s copy
         cred.user = something(git_cred.username, "")
-        cred.pass = deepcopy(something(git_cred.password, ""))
+        cred.pass = git_cred.password !== nothing ? copy(git_cred.password) : ""
         Base.shred!(git_cred)
         revised = true
 
@@ -235,7 +235,7 @@ function authenticate_userpass(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPay
         return exhausted_abort()
     end
 
-    return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
+    return ccall((:git_cred_userpass_plaintext_new, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Cstring, Cstring),
                  libgit2credptr, cred.user, cred.pass)
 end
@@ -292,7 +292,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
             cred = explicit
 
             # Copy explicit credentials to avoid mutating approved credentials.
-            # invalidation fix from cred being non-inferrable
+            # invalidation fix from cred being non-inferable
             p.credential = Base.invokelatest(deepcopy, cred)
 
             if isa(cred, SSHCredential)
@@ -307,7 +307,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
 
             # Perform a deepcopy as we do not want to mutate approved cached credentials
             if haskey(cache, cred_id)
-                # invalidation fix from cache[cred_id] being non-inferrable
+                # invalidation fix from cache[cred_id] being non-inferable
                 p.credential = Base.invokelatest(deepcopy, cache[cred_id])
             end
         end
@@ -339,7 +339,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     if err == 0
         if p.explicit !== nothing
             ensure_initialized()
-            ccall((:giterr_set_str, :libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
+            ccall((:giterr_set_str, libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
                   "The explicitly provided credential is incompatible with the requested " *
                   "authentication methods.")
         end

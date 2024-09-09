@@ -26,19 +26,19 @@ end
 for str in [astr, GenericString(astr)]
     @test_throws BoundsError findnext(isequal('z'), str, 0)
     @test_throws BoundsError findnext(isequal('∀'), str, 0)
-    @test findfirst(isequal('x'), str) == nothing
-    @test findfirst(isequal('\0'), str) == nothing
-    @test findfirst(isequal('\u80'), str) == nothing
-    @test findfirst(isequal('∀'), str) == nothing
+    @test findfirst(isequal('x'), str) === nothing
+    @test findfirst(isequal('\0'), str) === nothing
+    @test findfirst(isequal('\u80'), str) === nothing
+    @test findfirst(isequal('∀'), str) === nothing
     @test findfirst(isequal('H'), str) == 1
     @test findfirst(isequal('l'), str) == 3
     @test findnext(isequal('l'), str, 4) == 4
     @test findnext(isequal('l'), str, 5) == 11
-    @test findnext(isequal('l'), str, 12) == nothing
+    @test findnext(isequal('l'), str, 12) === nothing
     @test findfirst(isequal(','), str) == 6
-    @test findnext(isequal(','), str, 7) == nothing
+    @test findnext(isequal(','), str, 7) === nothing
     @test findfirst(isequal('\n'), str) == 14
-    @test findnext(isequal('\n'), str, 15) == nothing
+    @test findnext(isequal('\n'), str, 15) === nothing
     @test_throws BoundsError findnext(isequal('ε'), str, nextind(str,lastindex(str))+1)
     @test_throws BoundsError findnext(isequal('a'), str, nextind(str,lastindex(str))+1)
 end
@@ -46,59 +46,59 @@ end
 for str in [astr, GenericString(astr)]
     @test_throws BoundsError findnext('z', str, 0)
     @test_throws BoundsError findnext('∀', str, 0)
-    @test findfirst('x', str) == nothing
-    @test findfirst('\0', str) == nothing
-    @test findfirst('\u80', str) == nothing
-    @test findfirst('∀', str) == nothing
+    @test findfirst('x', str) === nothing
+    @test findfirst('\0', str) === nothing
+    @test findfirst('\u80', str) === nothing
+    @test findfirst('∀', str) === nothing
     @test findfirst('H', str) == 1
     @test findfirst('l', str) == 3
     @test findfirst('e', str) == 2
-    @test findfirst('u', str) == nothing
+    @test findfirst('u', str) === nothing
     @test findnext('l', str, 4) == 4
     @test findnext('l', str, 5) == 11
-    @test findnext('l', str, 12) == nothing
+    @test findnext('l', str, 12) === nothing
     @test findfirst(',', str) == 6
-    @test findnext(',', str, 7) == nothing
+    @test findnext(',', str, 7) === nothing
     @test findfirst('\n', str) == 14
-    @test findnext('\n', str, 15) == nothing
+    @test findnext('\n', str, 15) === nothing
     @test_throws BoundsError findnext('ε', str, nextind(str,lastindex(str))+1)
     @test_throws BoundsError findnext('a', str, nextind(str,lastindex(str))+1)
 end
 
 # ascii backward search
 for str in [astr]
-    @test findlast(isequal('x'), str) == nothing
-    @test findlast(isequal('\0'), str) == nothing
-    @test findlast(isequal('\u80'), str) == nothing
-    @test findlast(isequal('∀'), str) == nothing
+    @test findlast(isequal('x'), str) === nothing
+    @test findlast(isequal('\0'), str) === nothing
+    @test findlast(isequal('\u80'), str) === nothing
+    @test findlast(isequal('∀'), str) === nothing
     @test findlast(isequal('H'), str) == 1
-    @test findprev(isequal('H'), str, 0) == nothing
+    @test findprev(isequal('H'), str, 0) === nothing
     @test findlast(isequal('l'), str) == 11
     @test findprev(isequal('l'), str, 5) == 4
     @test findprev(isequal('l'), str, 4) == 4
     @test findprev(isequal('l'), str, 3) == 3
-    @test findprev(isequal('l'), str, 2) == nothing
+    @test findprev(isequal('l'), str, 2) === nothing
     @test findlast(isequal(','), str) == 6
-    @test findprev(isequal(','), str, 5) == nothing
+    @test findprev(isequal(','), str, 5) === nothing
     @test findlast(isequal('\n'), str) == 14
 end
 
 for str in [astr]
-    @test findlast('x', str) == nothing
-    @test findlast('\0', str) == nothing
-    @test findlast('\u80', str) == nothing
-    @test findlast('∀', str) == nothing
+    @test findlast('x', str) === nothing
+    @test findlast('\0', str) === nothing
+    @test findlast('\u80', str) === nothing
+    @test findlast('∀', str) === nothing
     @test findlast('H', str) == 1
-    @test findprev('H', str, 0) == nothing
+    @test findprev('H', str, 0) === nothing
     @test findlast('l', str) == 11
     @test findprev('l', str, 5) == 4
     @test findprev('l', str, 4) == 4
     @test findprev('l', str, 3) == 3
-    @test findprev('l', str, 2) == nothing
+    @test findprev('l', str, 2) === nothing
     @test findlast(',', str) == 6
-    @test findprev(',', str, 5) == nothing
-    @test findlast(str, "") == nothing
-    @test findlast(str^2, str) == nothing
+    @test findprev(',', str, 5) === nothing
+    @test findlast(str, "") === nothing
+    @test findlast(str^2, str) === nothing
     @test findlast('\n', str) == 14
 end
 
@@ -106,133 +106,133 @@ end
 for str in (u8str, GenericString(u8str))
     @test_throws BoundsError findnext(isequal('z'), str, 0)
     @test_throws BoundsError findnext(isequal('∀'), str, 0)
-    @test findfirst(isequal('z'), str) == nothing
-    @test findfirst(isequal('\0'), str) == nothing
-    @test findfirst(isequal('\u80'), str) == nothing
-    @test findfirst(isequal('∄'), str) == nothing
+    @test findfirst(isequal('z'), str) === nothing
+    @test findfirst(isequal('\0'), str) === nothing
+    @test findfirst(isequal('\u80'), str) === nothing
+    @test findfirst(isequal('∄'), str) === nothing
     @test findfirst(isequal('∀'), str) == 1
     @test_throws StringIndexError findnext(isequal('∀'), str, 2)
-    @test findnext(isequal('∀'), str, 4) == nothing
+    @test findnext(isequal('∀'), str, 4) === nothing
     @test findfirst(isequal('∃'), str) == 13
     @test_throws StringIndexError findnext(isequal('∃'), str, 15)
-    @test findnext(isequal('∃'), str, 16) == nothing
+    @test findnext(isequal('∃'), str, 16) === nothing
     @test findfirst(isequal('x'), str) == 26
     @test findnext(isequal('x'), str, 27) == 43
-    @test findnext(isequal('x'), str, 44) == nothing
+    @test findnext(isequal('x'), str, 44) === nothing
     @test findfirst(isequal('δ'), str) == 17
     @test_throws StringIndexError findnext(isequal('δ'), str, 18)
     @test findnext(isequal('δ'), str, nextind(str,17)) == 33
-    @test findnext(isequal('δ'), str, nextind(str,33)) == nothing
+    @test findnext(isequal('δ'), str, nextind(str,33)) === nothing
     @test findfirst(isequal('ε'), str) == 5
     @test findnext(isequal('ε'), str, nextind(str,5)) == 54
-    @test findnext(isequal('ε'), str, nextind(str,54)) == nothing
-    @test findnext(isequal('ε'), str, nextind(str,lastindex(str))) == nothing
-    @test findnext(isequal('a'), str, nextind(str,lastindex(str))) == nothing
+    @test findnext(isequal('ε'), str, nextind(str,54)) === nothing
+    @test findnext(isequal('ε'), str, nextind(str,lastindex(str))) === nothing
+    @test findnext(isequal('a'), str, nextind(str,lastindex(str))) === nothing
     @test_throws BoundsError findnext(isequal('ε'), str, nextind(str,lastindex(str))+1)
     @test_throws BoundsError findnext(isequal('a'), str, nextind(str,lastindex(str))+1)
 end
 
 # utf-8 backward search
 for str in [u8str]
-    @test findlast(isequal('z'), str) == nothing
-    @test findlast(isequal('\0'), str) == nothing
-    @test findlast(isequal('\u80'), str) == nothing
-    @test findlast(isequal('∄'), str) == nothing
+    @test findlast(isequal('z'), str) === nothing
+    @test findlast(isequal('\0'), str) === nothing
+    @test findlast(isequal('\u80'), str) === nothing
+    @test findlast(isequal('∄'), str) === nothing
     @test findlast(isequal('∀'), str) == 1
-    @test findprev(isequal('∀'), str, 0) == nothing
+    @test findprev(isequal('∀'), str, 0) === nothing
     @test findlast(isequal('∃'), str) == 13
     @test findprev(isequal('∃'), str, 14) == 13
     @test findprev(isequal('∃'), str, 13) == 13
-    @test findprev(isequal('∃'), str, 12) == nothing
+    @test findprev(isequal('∃'), str, 12) === nothing
     @test findlast(isequal('x'), str) == 43
     @test findprev(isequal('x'), str, 42) == 26
-    @test findprev(isequal('x'), str, 25) == nothing
+    @test findprev(isequal('x'), str, 25) === nothing
     @test findlast(isequal('δ'), str) == 33
     @test findprev(isequal('δ'), str, 32) == 17
-    @test findprev(isequal('δ'), str, 16) == nothing
+    @test findprev(isequal('δ'), str, 16) === nothing
     @test findlast(isequal('ε'), str) == 54
     @test findprev(isequal('ε'), str, 53) == 5
-    @test findprev(isequal('ε'), str, 4) == nothing
+    @test findprev(isequal('ε'), str, 4) === nothing
 end
 
 # string forward search with a single-char string
-@test findfirst("x", astr) == nothing
+@test findfirst("x", astr) === nothing
 @test findfirst("H", astr) == 1:1
-@test findnext("H", astr, 2) == nothing
+@test findnext("H", astr, 2) === nothing
 @test findfirst("l", astr) == 3:3
 @test findnext("l", astr, 4) == 4:4
 @test findnext("l", astr, 5) == 11:11
-@test findnext("l", astr, 12) == nothing
+@test findnext("l", astr, 12) === nothing
 @test findfirst("\n", astr) == 14:14
-@test findnext("\n", astr, 15) == nothing
+@test findnext("\n", astr, 15) === nothing
 
-@test findfirst("z", u8str) == nothing
-@test findfirst("∄", u8str) == nothing
+@test findfirst("z", u8str) === nothing
+@test findfirst("∄", u8str) === nothing
 @test findfirst("∀", u8str) == 1:1
-@test findnext("∀", u8str, 4) == nothing
+@test findnext("∀", u8str, 4) === nothing
 @test findfirst("∃", u8str) == 13:13
-@test findnext("∃", u8str, 16) == nothing
+@test findnext("∃", u8str, 16) === nothing
 @test findfirst("x", u8str) == 26:26
 @test findnext("x", u8str, 27) == 43:43
-@test findnext("x", u8str, 44) == nothing
+@test findnext("x", u8str, 44) === nothing
 @test findfirst("ε", u8str) == 5:5
 @test findnext("ε", u8str, 7) == 54:54
-@test findnext("ε", u8str, 56) == nothing
+@test findnext("ε", u8str, 56) === nothing
 
 # strifindprev  backward search with a single-char string
-@test findlast("x", astr) == nothing
+@test findlast("x", astr) === nothing
 @test findlast("H", astr) == 1:1
 @test findprev("H", astr, 2) == 1:1
-@test findprev("H", astr, 0) == nothing
+@test findprev("H", astr, 0) === nothing
 @test findlast("l", astr) == 11:11
 @test findprev("l", astr, 10) == 4:4
 @test findprev("l", astr, 4) == 4:4
 @test findprev("l", astr, 3) == 3:3
-@test findprev("l", astr, 2) == nothing
+@test findprev("l", astr, 2) === nothing
 @test findlast("\n", astr) == 14:14
-@test findprev("\n", astr, 13) == nothing
+@test findprev("\n", astr, 13) === nothing
 
-@test findlast("z", u8str) == nothing
-@test findlast("∄", u8str) == nothing
+@test findlast("z", u8str) === nothing
+@test findlast("∄", u8str) === nothing
 @test findlast("∀", u8str) == 1:1
-@test findprev("∀", u8str, 0) == nothing
+@test findprev("∀", u8str, 0) === nothing
 #TODO: setting the limit in the middle of a wide char
 #      makes findnext fail but findprev succeed.
 #      Should findprev fail as well?
-#@test findprev("∀", u8str, 2) == nothing # gives 1:3
+#@test findprev("∀", u8str, 2) === nothing # gives 1:3
 @test findlast("∃", u8str) == 13:13
-@test findprev("∃", u8str, 12) == nothing
+@test findprev("∃", u8str, 12) === nothing
 @test findlast("x", u8str) == 43:43
 @test findprev("x", u8str, 42) == 26:26
-@test findprev("x", u8str, 25) == nothing
+@test findprev("x", u8str, 25) === nothing
 @test findlast("ε", u8str) == 54:54
 @test findprev("ε", u8str, 53) == 5:5
-@test findprev("ε", u8str, 4) == nothing
+@test findprev("ε", u8str, 4) === nothing
 
 # string forward search with a single-char regex
-@test findfirst(r"x", astr) == nothing
+@test findfirst(r"x", astr) === nothing
 @test findfirst(r"H", astr) == 1:1
-@test findnext(r"H", astr, 2) == nothing
+@test findnext(r"H", astr, 2) === nothing
 @test findfirst(r"l", astr) == 3:3
 @test findnext(r"l", astr, 4) == 4:4
 @test findnext(r"l", astr, 5) == 11:11
-@test findnext(r"l", astr, 12) == nothing
+@test findnext(r"l", astr, 12) === nothing
 @test findfirst(r"\n", astr) == 14:14
-@test findnext(r"\n", astr, 15) == nothing
-@test findfirst(r"z", u8str) == nothing
-@test findfirst(r"∄", u8str) == nothing
+@test findnext(r"\n", astr, 15) === nothing
+@test findfirst(r"z", u8str) === nothing
+@test findfirst(r"∄", u8str) === nothing
 @test findfirst(r"∀", u8str) == 1:1
-@test findnext(r"∀", u8str, 4) == nothing
+@test findnext(r"∀", u8str, 4) === nothing
 @test findfirst(r"∀", u8str) == findfirst(r"\u2200", u8str)
 @test findnext(r"∀", u8str, 4) == findnext(r"\u2200", u8str, 4)
 @test findfirst(r"∃", u8str) == 13:13
-@test findnext(r"∃", u8str, 16) == nothing
+@test findnext(r"∃", u8str, 16) === nothing
 @test findfirst(r"x", u8str) == 26:26
 @test findnext(r"x", u8str, 27) == 43:43
-@test findnext(r"x", u8str, 44) == nothing
+@test findnext(r"x", u8str, 44) === nothing
 @test findfirst(r"ε", u8str) == 5:5
 @test findnext(r"ε", u8str, 7) == 54:54
-@test findnext(r"ε", u8str, 56) == nothing
+@test findnext(r"ε", u8str, 56) === nothing
 for i = 1:lastindex(astr)
     @test findnext(r"."s, astr, i) == i:i
 end
@@ -272,18 +272,18 @@ for i = 1:lastindex(u8str)
 end
 
 # string forward search with a two-char string literal
-@test findfirst("xx", "foo,bar,baz") == nothing
+@test findfirst("xx", "foo,bar,baz") === nothing
 @test findfirst("fo", "foo,bar,baz") == 1:2
-@test findnext("fo", "foo,bar,baz", 3) == nothing
+@test findnext("fo", "foo,bar,baz", 3) === nothing
 @test findfirst("oo", "foo,bar,baz") == 2:3
-@test findnext("oo", "foo,bar,baz", 4) == nothing
+@test findnext("oo", "foo,bar,baz", 4) === nothing
 @test findfirst("o,", "foo,bar,baz") == 3:4
-@test findnext("o,", "foo,bar,baz", 5) == nothing
+@test findnext("o,", "foo,bar,baz", 5) === nothing
 @test findfirst(",b", "foo,bar,baz") == 4:5
 @test findnext(",b", "foo,bar,baz", 6) == 8:9
-@test findnext(",b", "foo,bar,baz", 10) == nothing
+@test findnext(",b", "foo,bar,baz", 10) === nothing
 @test findfirst("az", "foo,bar,baz") == 10:11
-@test findnext("az", "foo,bar,baz", 12) == nothing
+@test findnext("az", "foo,bar,baz", 12) === nothing
 
 # issue #9365
 # string forward search with a two-char UTF-8 (2 byte) string literal
@@ -327,32 +327,32 @@ end
 @test findprev("\U1f596\U1f596", "\U1f596\U1f596", lastindex("\U1f596\U1f596\U1f596")) == 1:5
 
 # string backward search with a two-char string literal
-@test findlast("xx", "foo,bar,baz") == nothing
+@test findlast("xx", "foo,bar,baz") === nothing
 @test findlast("fo", "foo,bar,baz") == 1:2
-@test findprev("fo", "foo,bar,baz", 1) == nothing
+@test findprev("fo", "foo,bar,baz", 1) === nothing
 @test findlast("oo", "foo,bar,baz") == 2:3
-@test findprev("oo", "foo,bar,baz", 2) == nothing
+@test findprev("oo", "foo,bar,baz", 2) === nothing
 @test findlast("o,", "foo,bar,baz") == 3:4
-@test findprev("o,", "foo,bar,baz", 1) == nothing
+@test findprev("o,", "foo,bar,baz", 1) === nothing
 @test findlast(",b", "foo,bar,baz") == 8:9
 @test findprev(",b", "foo,bar,baz", 6) == 4:5
-@test findprev(",b", "foo,bar,baz", 3) == nothing
+@test findprev(",b", "foo,bar,baz", 3) === nothing
 @test findlast("az", "foo,bar,baz") == 10:11
-@test findprev("az", "foo,bar,baz", 10) == nothing
+@test findprev("az", "foo,bar,baz", 10) === nothing
 
 # string search with a two-char regex
-@test findfirst(r"xx", "foo,bar,baz") == nothing
+@test findfirst(r"xx", "foo,bar,baz") === nothing
 @test findfirst(r"fo", "foo,bar,baz") == 1:2
-@test findnext(r"fo", "foo,bar,baz", 3) == nothing
+@test findnext(r"fo", "foo,bar,baz", 3) === nothing
 @test findfirst(r"oo", "foo,bar,baz") == 2:3
-@test findnext(r"oo", "foo,bar,baz", 4) == nothing
+@test findnext(r"oo", "foo,bar,baz", 4) === nothing
 @test findfirst(r"o,", "foo,bar,baz") == 3:4
-@test findnext(r"o,", "foo,bar,baz", 5) == nothing
+@test findnext(r"o,", "foo,bar,baz", 5) === nothing
 @test findfirst(r",b", "foo,bar,baz") == 4:5
 @test findnext(r",b", "foo,bar,baz", 6) == 8:9
-@test findnext(r",b", "foo,bar,baz", 10) == nothing
+@test findnext(r",b", "foo,bar,baz", 10) === nothing
 @test findfirst(r"az", "foo,bar,baz") == 10:11
-@test findnext(r"az", "foo,bar,baz", 12) == nothing
+@test findnext(r"az", "foo,bar,baz", 12) === nothing
 
 # occursin with a String and Char needle
 @test occursin("o", "foo")
@@ -395,13 +395,29 @@ s_18109 = "fooα🐨βcd3"
     @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
 end
 
+@testset "Findall char in string" begin
+    @test findall(==('w'), "wabcwewwawk") == [1, 5, 7, 8, 10]
+    @test isempty(findall(isequal("w"), "abcde!,"))
+    @test findall(==('读'), "联国读大会一九四二月十读日第号决通过并颁布读") == [7, 34, 64]
+
+    # Empty string
+    @test isempty(findall(isequal('K'), ""))
+    @test isempty(findall(isequal('α'), ""))
+
+    # Finds an invalid char ONLY if it's at a char boundary in the string,
+    # i.e. iterating the string would emit the given char.
+    @test findall(==('\xfe'), "abκæøc\xfeα\xfeβå!") == [10, 13]
+    @test isempty(findall(==('\xaf'), "abκæ读α\xe8\xaf\xfeβå!"))
+    @test isempty(findall(==('\xc3'), ";æ"))
+end
+
 # issue 37280
 @testset "UInt8, Int8 vector" begin
     for T in [Int8, UInt8], VT in [Int8, UInt8]
         A = T[0x40, 0x52, 0x00, 0x52, 0x00]
 
         for A in (A, @view(A[1:end]), codeunits(String(copyto!(Vector{UInt8}(undef,5), A))))
-            @test findfirst(VT[0x30], A) === findfirst(==(VT(0x30)), A) == nothing
+            @test findfirst(VT[0x30], A) === findfirst(==(VT(0x30)), A) === nothing
             @test findfirst(VT[0x52], A) === 2:2
             @test findfirst(==(VT(0x52)), A) === 2
             @test findlast(VT[0x30], A) === findlast(==(VT(0x30)), A) === nothing

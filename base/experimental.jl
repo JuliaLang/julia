@@ -9,7 +9,7 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname
+using Base: Threads, sync_varname, is_function_def, @propagate_inbounds
 using Base.Meta
 
 """
@@ -28,10 +28,7 @@ end
 Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
-@eval Base.getindex(A::Const, i1::Int) =
-    (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =
-  (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@propagate_inbounds Base.getindex(A::Const, i1::Int, I::Int...) = A.a[i1, I...]
 
 """
     @aliasscope expr
@@ -86,10 +83,15 @@ end
 """
     Experimental.@sync
 
-Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn),
+`Distributed.@spawnat` and `Distributed.@distributed`
 are complete, or at least one of them has errored. The first exception is immediately
 rethrown. It is the responsibility of the user to cancel any still-running operations
 during error handling.
+
+!!! Note
+    This is different to [`@sync`](@ref) in that errors from wrapped tasks are thrown immediately,
+    potentially before all tasks have returned.
 
 !!! Note
     This interface is experimental and subject to change or removal without notice.
@@ -141,7 +143,7 @@ code to resort to runtime dispatch instead.
 Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
 """
 macro max_methods(n::Int)
-    0 < n < 5 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
+    1 <= n <= 4 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
     return Expr(:meta, :max_methods, n)
 end
 
@@ -154,13 +156,13 @@ for max_methods. This setting is global for the entire generic function (or more
 the MethodTable).
 """
 macro max_methods(n::Int, fdef::Expr)
-    0 < n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
+    1 <= n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
     (fdef.head === :function && length(fdef.args) == 1) || error("Second argument must be a function forward declaration")
     return :(typeof($(esc(fdef))).name.max_methods = $(UInt8(n)))
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,...}
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -193,7 +195,7 @@ macro compiler_options(args...)
             elseif ex.args[1] === :max_methods
                 a = ex.args[2]
                 a = a === :default ? 3 :
-                  a isa Int ? ((0 < a < 5) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
+                  a isa Int ? ((1 <= a <= 4) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
                   error("invalid argument to \"max_methods\" option")
                 push!(opts.args, Expr(:meta, :max_methods, a))
             else
@@ -252,7 +254,7 @@ When issuing a hint, the output should typically start with `\\n`.
 If you define custom exception types, your `showerror` method can
 support hints by calling [`Experimental.show_error_hints`](@ref).
 
-# Example
+# Examples
 
 ```
 julia> module Hinter
@@ -278,6 +280,7 @@ Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby tri
 ```
 julia> Hinter.only_int(1.0)
 ERROR: MethodError: no method matching only_int(::Float64)
+The function `only_int` exists, but no method is defined for this combination of argument types.
 Did you mean to call `any_number`?
 Closest candidates are:
     ...
@@ -315,7 +318,7 @@ function show_error_hints(io, ex, args...)
     isnothing(hinters) && return
     for handler in hinters
         try
-            Base.invokelatest(handler, io, ex, args...)
+            @invokelatest handler(io, ex, args...)
         catch err
             tn = typeof(handler).name
             @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
@@ -327,27 +330,113 @@ end
 include("opaque_closure.jl")
 
 """
-    Experimental.@overlay mt [function def]
+    Base.Experimental.@overlay mt def
 
 Define a method and add it to the method table `mt` instead of to the global method table.
 This can be used to implement a method override mechanism. Regular compilation will not
 consider these methods, and you should customize the compilation flow to look in these
 method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
 
+!!! note
+    Please be aware that when defining overlay methods using `@overlay`, it is not necessary
+    to have an original method that corresponds exactly in terms of how the method dispatches.
+    This means that the method overlay mechanism enabled by `@overlay` is not implemented by
+    replacing the methods themselves, but through an additional and prioritized method
+    lookup during the method dispatch.
+
+    Considering this, it is important to understand that in compilations using an overlay
+    method table like the following, the method dispatched by `callx(x)` is not the regular
+    method `callx(::Float64)`, but the overlay method `callx(x::Real)`:
+    ```julia
+    callx(::Real) = :real
+    @overlay SOME_OVERLAY_MT callx(::Real) = :overlay_real
+    callx(::Float64) = :float64
+
+    # some overlay callsite
+    let x::Float64
+        callx(x) #> :overlay_real
+    end
+    ```
 """
 macro overlay(mt, def)
-    def = macroexpand(__module__, def) # to expand @inline, @generated, etc
-    if !isexpr(def, [:function, :(=)])
-        error("@overlay requires a function Expr")
-    end
-    if isexpr(def.args[1], :call)
-        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
-    elseif isexpr(def.args[1], :where)
-        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    inner = Base.unwrap_macrocalls(def)
+    is_function_def(inner) || error("@overlay requires a function definition")
+    overlay_def!(mt, inner)
+    return esc(def)
+end
+
+"""
+    Base.Experimental.@consistent_overlay mt def
+
+This macro operates almost identically to [`Base.Experimental.@overlay`](@ref), defining a
+new overlay method. The key difference with this macro is that it informs the compiler that
+the invocation of the overlay method it defines is `:consistent` with a regular,
+non-overlayed method call.
+
+More formally, when evaluating a generic function call ``f(x)`` at a specific world age
+``i``, if a regular method call ``fᵢ(x)`` is redirected to an overlay method call ``fᵢ′(x)``
+defined by this macro, ``fᵢ(x)`` and ``fᵢ′(x)`` are considered `:consistent` if the following
+conditions are met:
+- If ``fᵢ(x)`` returns a value ``y``, then ``fᵢ′(x)`` also returns some value ``yᵢ``, and ``y ≡ yᵢ`` holds.
+- If ``fᵢ(x)`` throws an exception, then ``fᵢ′(x)`` also throws some exception.
+
+For a detailed definition of `:consistent`-cy, consult the corresponding section in
+[`Base.@assume_effects`](@ref).
+
+!!! note
+    Note that the requirements for `:consistent`-cy include not only that the return values
+    are egal, but also that the manner of termination is the same. However, it's important
+    to aware that when they throw exceptions, the exceptions themselves don't necessarily
+    have to be egal. In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is
+    required to also throw one, but the exact exceptions may differ.
+
+!!! note
+    Please note that the `:consistent`-cy requirement applies not to method itself but to
+    _method invocation_. This means that for the use of `@consistent_overlay`, it is
+    necessary for method invocations with the native regular compilation and those with
+    a compilation with overlay method table to be `:consistent`.
+
+    For example, it is important to understand that, `@consistent_overlay` can be used like
+    the following:
+    ```julia
+    callsin(x::Real) = x < 0 ? error(x) : sin(x)
+    @consistent_overlay SOME_OVERLAY_MT callsin(x::Float64) =
+        x < 0 ? error_somehow(x) : sin(x)
+    ```
+    However, be aware that this `@consistent_overlay` will immediately become invalid if a
+    new method for `callsin` is defined subsequently, such as:
+    ```julia
+    callsin(x::Float64) = cos(x)
+    ```
+
+    This specifically implies that the use of `@consistent_overlay` should be restricted as
+    much as possible to cases where a regular method with a concrete signature is replaced
+    by an overlay method with the same concrete signature.
+
+    This constraint is closely related to the note in [`Base.Experimental.@overlay`](@ref);
+    you are advised to consult that as well.
+"""
+macro consistent_overlay(mt, def)
+    inner = Base.unwrap_macrocalls(def)
+    is_function_def(inner) || error("@consistent_overlay requires a function definition")
+    overlay_def!(mt, inner)
+    override = Core.Compiler.EffectsOverride(; consistent_overlay=true)
+    Base.pushmeta!(def::Expr, Base.form_purity_expr(override))
+    return esc(def)
+end
+
+function overlay_def!(mt, @nospecialize ex)
+    arg1 = ex.args[1]
+    if isexpr(arg1, :call)
+        arg1.args[1] = Expr(:overlay, mt, arg1.args[1])
+    elseif isexpr(arg1, :(::))
+        overlay_def!(mt, arg1)
+    elseif isexpr(arg1, :where)
+        overlay_def!(mt, arg1)
     else
-        error("@overlay requires a function Expr")
+        error("@overlay requires a function definition")
     end
-    esc(def)
+    return ex
 end
 
 let new_mt(name::Symbol, mod::Module) = begin
@@ -360,11 +449,11 @@ let new_mt(name::Symbol, mod::Module) = begin
 end
 
 """
-    Experimental.@MethodTable(name)
+    Base.Experimental.@MethodTable name
 
 Create a new MethodTable in the current module, bound to `name`. This method table can be
-used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
-adding them to the global method table.
+used with the [`Base.Experimental.@overlay`](@ref) macro to define methods for a function
+without adding them to the global method table.
 """
 :@MethodTable
 

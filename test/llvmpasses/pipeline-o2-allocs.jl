@@ -53,8 +53,7 @@ end
 # CHECK-NOT: julia.gc_preserve_end
 function nopreserve()
     ref = Ref(0)
-    GC.@preserve ref begin
-    end
+    GC.@preserve ref begin end
 end
 
 # COM: this cordons off the attributes/function declarations from the actual

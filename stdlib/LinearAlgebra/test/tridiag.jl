@@ -15,6 +15,12 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -82,7 +88,7 @@ end
             @test TT == Matrix(TT)
             @test TT.dl === y
             @test TT.d  === x
-            @test TT.du === y
+            @test TT.du == y
             @test typeof(TT)(TT) === TT
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
@@ -95,12 +101,12 @@ end
         @test isa(ST, SymTridiagonal{elty,Vector{elty}})
         TT = Tridiagonal{elty,Vector{elty}}(GenericArray(dl), d, GenericArray(dl))
         @test isa(TT, Tridiagonal{elty,Vector{elty}})
-        @test_throws MethodError SymTridiagonal(d, GenericArray(dl))
-        @test_throws MethodError SymTridiagonal(GenericArray(d), dl)
-        @test_throws MethodError Tridiagonal(GenericArray(dl), d, GenericArray(dl))
-        @test_throws MethodError Tridiagonal(dl, GenericArray(d), dl)
-        @test_throws MethodError SymTridiagonal{elty}(d, GenericArray(dl))
-        @test_throws MethodError Tridiagonal{elty}(GenericArray(dl), d,GenericArray(dl))
+        @test_throws ArgumentError SymTridiagonal(d, GenericArray(dl))
+        @test_throws ArgumentError SymTridiagonal(GenericArray(d), dl)
+        @test_throws ArgumentError Tridiagonal(GenericArray(dl), d, GenericArray(dl))
+        @test_throws ArgumentError Tridiagonal(dl, GenericArray(d), dl)
+        @test_throws ArgumentError SymTridiagonal{elty}(d, GenericArray(dl))
+        @test_throws ArgumentError Tridiagonal{elty}(GenericArray(dl), d,GenericArray(dl))
         STI = SymTridiagonal([1,2,3,4], [1,2,3])
         TTI = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3])
         TTI2 = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3], [1,2])
@@ -129,27 +135,43 @@ end
         @test_throws ArgumentError tril!(SymTridiagonal(d, dl), n)
         @test_throws ArgumentError tril!(Tridiagonal(dl, d, du), -n - 2)
         @test_throws ArgumentError tril!(Tridiagonal(dl, d, du), n)
-        @test tril(SymTridiagonal(d,dl))    == Tridiagonal(dl,d,zerosdl)
-        @test tril(SymTridiagonal(d,dl),1)  == Tridiagonal(dl,d,dl)
-        @test tril(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,zerosd,zerosdl)
-        @test tril(SymTridiagonal(d,dl),-2) == Tridiagonal(zerosdl,zerosd,zerosdl)
-        @test tril(Tridiagonal(dl,d,du))    == Tridiagonal(dl,d,zerosdu)
-        @test tril(Tridiagonal(dl,d,du),1)  == Tridiagonal(dl,d,du)
-        @test tril(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,zerosd,zerosdu)
-        @test tril(Tridiagonal(dl,d,du),-2) == Tridiagonal(zerosdl,zerosd,zerosdu)
+        @test @inferred(tril(SymTridiagonal(d,dl)))    == Tridiagonal(dl,d,zerosdl)
+        @test @inferred(tril(SymTridiagonal(d,dl),1))  == Tridiagonal(dl,d,dl)
+        @test @inferred(tril(SymTridiagonal(d,dl),-1)) == Tridiagonal(dl,zerosd,zerosdl)
+        @test @inferred(tril(SymTridiagonal(d,dl),-2)) == Tridiagonal(zerosdl,zerosd,zerosdl)
+        @test @inferred(tril(Tridiagonal(dl,d,du)))    == Tridiagonal(dl,d,zerosdu)
+        @test @inferred(tril(Tridiagonal(dl,d,du),1))  == Tridiagonal(dl,d,du)
+        @test @inferred(tril(Tridiagonal(dl,d,du),-1)) == Tridiagonal(dl,zerosd,zerosdu)
+        @test @inferred(tril(Tridiagonal(dl,d,du),-2)) == Tridiagonal(zerosdl,zerosd,zerosdu)
+        @test @inferred(tril!(copy(SymTridiagonal(d,dl))))    == Tridiagonal(dl,d,zerosdl)
+        @test @inferred(tril!(copy(SymTridiagonal(d,dl)),1))  == Tridiagonal(dl,d,dl)
+        @test @inferred(tril!(copy(SymTridiagonal(d,dl)),-1)) == Tridiagonal(dl,zerosd,zerosdl)
+        @test @inferred(tril!(copy(SymTridiagonal(d,dl)),-2)) == Tridiagonal(zerosdl,zerosd,zerosdl)
+        @test @inferred(tril!(copy(Tridiagonal(dl,d,du))))    == Tridiagonal(dl,d,zerosdu)
+        @test @inferred(tril!(copy(Tridiagonal(dl,d,du)),1))  == Tridiagonal(dl,d,du)
+        @test @inferred(tril!(copy(Tridiagonal(dl,d,du)),-1)) == Tridiagonal(dl,zerosd,zerosdu)
+        @test @inferred(tril!(copy(Tridiagonal(dl,d,du)),-2)) == Tridiagonal(zerosdl,zerosd,zerosdu)
 
         @test_throws ArgumentError triu!(SymTridiagonal(d, dl), -n)
         @test_throws ArgumentError triu!(SymTridiagonal(d, dl), n + 2)
         @test_throws ArgumentError triu!(Tridiagonal(dl, d, du), -n)
         @test_throws ArgumentError triu!(Tridiagonal(dl, d, du), n + 2)
-        @test triu(SymTridiagonal(d,dl))    == Tridiagonal(zerosdl,d,dl)
-        @test triu(SymTridiagonal(d,dl),-1) == Tridiagonal(dl,d,dl)
-        @test triu(SymTridiagonal(d,dl),1)  == Tridiagonal(zerosdl,zerosd,dl)
-        @test triu(SymTridiagonal(d,dl),2)  == Tridiagonal(zerosdl,zerosd,zerosdl)
-        @test triu(Tridiagonal(dl,d,du))    == Tridiagonal(zerosdl,d,du)
-        @test triu(Tridiagonal(dl,d,du),-1) == Tridiagonal(dl,d,du)
-        @test triu(Tridiagonal(dl,d,du),1)  == Tridiagonal(zerosdl,zerosd,du)
-        @test triu(Tridiagonal(dl,d,du),2)  == Tridiagonal(zerosdl,zerosd,zerosdu)
+        @test @inferred(triu(SymTridiagonal(d,dl)))    == Tridiagonal(zerosdl,d,dl)
+        @test @inferred(triu(SymTridiagonal(d,dl),-1)) == Tridiagonal(dl,d,dl)
+        @test @inferred(triu(SymTridiagonal(d,dl),1))  == Tridiagonal(zerosdl,zerosd,dl)
+        @test @inferred(triu(SymTridiagonal(d,dl),2))  == Tridiagonal(zerosdl,zerosd,zerosdl)
+        @test @inferred(triu(Tridiagonal(dl,d,du)))    == Tridiagonal(zerosdl,d,du)
+        @test @inferred(triu(Tridiagonal(dl,d,du),-1)) == Tridiagonal(dl,d,du)
+        @test @inferred(triu(Tridiagonal(dl,d,du),1))  == Tridiagonal(zerosdl,zerosd,du)
+        @test @inferred(triu(Tridiagonal(dl,d,du),2))  == Tridiagonal(zerosdl,zerosd,zerosdu)
+        @test @inferred(triu!(copy(SymTridiagonal(d,dl))))    == Tridiagonal(zerosdl,d,dl)
+        @test @inferred(triu!(copy(SymTridiagonal(d,dl)),-1)) == Tridiagonal(dl,d,dl)
+        @test @inferred(triu!(copy(SymTridiagonal(d,dl)),1))  == Tridiagonal(zerosdl,zerosd,dl)
+        @test @inferred(triu!(copy(SymTridiagonal(d,dl)),2))  == Tridiagonal(zerosdl,zerosd,zerosdl)
+        @test @inferred(triu!(copy(Tridiagonal(dl,d,du))))    == Tridiagonal(zerosdl,d,du)
+        @test @inferred(triu!(copy(Tridiagonal(dl,d,du)),-1)) == Tridiagonal(dl,d,du)
+        @test @inferred(triu!(copy(Tridiagonal(dl,d,du)),1))  == Tridiagonal(zerosdl,zerosd,du)
+        @test @inferred(triu!(copy(Tridiagonal(dl,d,du)),2))  == Tridiagonal(zerosdl,zerosd,zerosdu)
 
         @test !istril(SymTridiagonal(d,dl))
         @test istril(SymTridiagonal(d,zerosdl))
@@ -234,7 +256,7 @@ end
             @test size(A, 3) == 1
             @test size(A, 1) == n
             @test size(A) == (n, n)
-            @test_throws ArgumentError size(A, 0)
+            @test_throws BoundsError size(A, 0)
         end
         @testset "getindex" begin
             @test_throws BoundsError A[n + 1, 1]
@@ -256,6 +278,8 @@ end
                 @test_throws ArgumentError A[3, 2] = 1 # test assignment on the subdiagonal
                 @test_throws ArgumentError A[2, 3] = 1 # test assignment on the superdiagonal
             end
+            # setindex! should return the destination
+            @test setindex!(A, A[2,2], 2, 2) === A
         end
         @testset "diag" begin
             @test (@inferred diag(A))::typeof(d) == d
@@ -279,6 +303,9 @@ end
         @testset "Idempotent tests" begin
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
+                if func ∈ (transpose, adjoint)
+                    @test func(func(A)) === A
+                end
             end
         end
         @testset "permutedims(::[Sym]Tridiagonal)" begin
@@ -434,17 +461,23 @@ end
             end
         else # mat_type is Tridiagonal
             @testset "tridiagonal linear algebra" begin
-                for (BB, vv) in ((copy(B), copy(v)), (view(B, 1:n, 1), view(v, 1:n)))
+                for vv in (copy(v), view(copy(v), 1:n))
                     @test A*vv ≈ fA*vv
                     invFv = fA\vv
                     @test A\vv ≈ invFv
-                    # @test Base.solve(T,v) ≈ invFv
-                    # @test Base.solve(T, B) ≈ F\B
                     Tlu = factorize(A)
                     x = Tlu\vv
                     @test x ≈ invFv
                 end
+                elty != Int && @test A \ v ≈ ldiv!(copy(A), copy(v))
             end
+            F = lu(A)
+            L1, U1, p1 = F
+            G = lu!(F, 2A)
+            L2, U2, p2 = F
+            @test L1 ≈ L2
+            @test 2U1 ≈ U2
+            @test p1 == p2
         end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
@@ -459,7 +492,7 @@ end
 end
 
 @testset "SymTridiagonal/Tridiagonal block matrix" begin
-    M = [1 2; 2 4]
+    M = [1 2; 3 4]
     n = 5
     A = SymTridiagonal(fill(M, n), fill(M, n-1))
     @test @inferred A[1,1] == Symmetric(M)
@@ -472,6 +505,9 @@ end
     @test_throws ArgumentError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
+
+    @test tr(A) == sum(diag(A))
+    @test issymmetric(tr(A))
 
     A = Tridiagonal(fill(M, n-1), fill(M, n), fill(M, n-1))
     @test @inferred A[1,1] == M
@@ -499,6 +535,11 @@ end
     @test SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
 end
 
+@testset "Issue #48505" begin
+    @test SymTridiagonal([1,2,3],[4,5.0]) == [1.0 4.0 0.0; 4.0 2.0 5.0; 0.0 5.0 3.0]
+    @test Tridiagonal([1, 2], [4, 5, 1], [6.0, 7]) == [4.0 6.0 0.0; 1.0 5.0 7.0; 0.0 2.0 1.0]
+end
+
 @testset "convert for SymTridiagonal" begin
     STF32 = SymTridiagonal{Float32}(fill(1f0, 5), fill(1f0, 4))
     @test convert(SymTridiagonal{Float64}, STF32)::SymTridiagonal{Float64} == STF32
@@ -513,6 +554,14 @@ end
 @testset "constructors with range and other abstract vectors" begin
     @test SymTridiagonal(1:3, 1:2) == [1 1 0; 1 2 2; 0 2 3]
     @test Tridiagonal(4:5, 1:3, 1:2) == [1 1 0; 4 2 2; 0 5 3]
+end
+
+@testset "Prevent off-diagonal aliasing in Tridiagonal" begin
+    e = ones(4)
+    f = e[1:end-1]
+    T = Tridiagonal(f, 2e, f)
+    T ./= 10
+    @test all(==(0.1), f)
 end
 
 @testset "Issue #26994 (and the empty case)" begin
@@ -766,6 +815,35 @@ using .Main.SizedArrays
     end
 end
 
+@testset "copyto! between SymTridiagonal and Tridiagonal" begin
+    ev, dv = [1:4;], [1:5;]
+    S = SymTridiagonal(dv, ev)
+    T = Tridiagonal(zero(ev), zero(dv), zero(ev))
+    @test copyto!(T, S) == S
+    @test copyto!(zero(S), T) == T
+
+    ev2 = [1:5;]
+    S = SymTridiagonal(dv, ev2)
+    T = Tridiagonal(zeros(length(ev2)-1), zero(dv), zeros(length(ev2)-1))
+    @test copyto!(T, S) == S
+    @test copyto!(zero(S), T) == T
+
+    T2 = Tridiagonal(ones(length(ev)), zero(dv), zero(ev))
+    @test_throws "cannot copy an asymmetric Tridiagonal matrix to a SymTridiagonal" copyto!(zero(S), T2)
+
+    @testset "mismatched sizes" begin
+        dv2 = [4; @view dv[2:end]]
+        @test copyto!(S, SymTridiagonal([4], Int[])) == SymTridiagonal(dv2, ev)
+        @test copyto!(T, SymTridiagonal([4], Int[])) == Tridiagonal(ev, dv2, ev)
+        @test copyto!(S, Tridiagonal(Int[], [4], Int[])) == SymTridiagonal(dv2, ev)
+        @test copyto!(T, Tridiagonal(Int[], [4], Int[])) == Tridiagonal(ev, dv2, ev)
+        @test copyto!(S, SymTridiagonal(Int[], Int[])) == SymTridiagonal(dv, ev)
+        @test copyto!(T, SymTridiagonal(Int[], Int[])) == Tridiagonal(ev, dv, ev)
+        @test copyto!(S, Tridiagonal(Int[], Int[], Int[])) == SymTridiagonal(dv, ev)
+        @test copyto!(T, Tridiagonal(Int[], Int[], Int[])) == Tridiagonal(ev, dv, ev)
+    end
+end
+
 @testset "copyto! with UniformScaling" begin
     @testset "Tridiagonal" begin
         @testset "Fill" begin
@@ -797,6 +875,99 @@ end
         @test all(iszero, diag(ST, 1))
         @test all(iszero, diag(ST, -1))
     end
+end
+
+@testset "custom axes" begin
+    dv, uv = OffsetArray(1:4), OffsetArray(1:3)
+    B = Tridiagonal(uv, dv, uv)
+    ax = axes(dv, 1)
+    @test axes(B) === (ax, ax)
+    B = SymTridiagonal(dv, uv)
+    @test axes(B) === (ax, ax)
+end
+
+@testset "Reverse operation on Tridiagonal" begin
+    for n in 5:6
+        d = randn(n)
+        dl = randn(n - 1)
+        du = randn(n - 1)
+        T = Tridiagonal(dl, d, du)
+        @test reverse(T, dims=1) == reverse(Matrix(T), dims=1)
+        @test reverse(T, dims=2) == reverse(Matrix(T), dims=2)
+        @test reverse(T)::Tridiagonal == reverse(Matrix(T)) == reverse!(copy(T))
+    end
+end
+
+@testset "Reverse operation on SymTridiagonal" begin
+    n = 5
+    d = randn(n)
+    dl = randn(n - 1)
+    ST = SymTridiagonal(d, dl)
+    @test reverse(ST, dims=1) == reverse(Matrix(ST), dims=1)
+    @test reverse(ST, dims=2) == reverse(Matrix(ST), dims=2)
+    @test reverse(ST)::SymTridiagonal == reverse(Matrix(ST))
+end
+
+@testset "getindex with Integers" begin
+    dv, ev = 1:4, 1:3
+    for S in (Tridiagonal(ev, dv, ev), SymTridiagonal(dv, ev))
+        @test_throws "invalid index" S[3, true]
+        @test S[1,2] == S[Int8(1),UInt16(2)] == S[big(1), Int16(2)]
+    end
+end
+
+@testset "rmul!/lmul! with banded matrices" begin
+    dl, d, du = rand(3), rand(4), rand(3)
+    A = Tridiagonal(dl, d, du)
+    D = Diagonal(d)
+    @test rmul!(copy(A), D) ≈ A * D
+    @test lmul!(D, copy(A)) ≈ D * A
+
+    @testset "non-commutative" begin
+        S32 = SizedArrays.SizedArray{(3,2)}(rand(3,2))
+        S33 = SizedArrays.SizedArray{(3,3)}(rand(3,3))
+        S22 = SizedArrays.SizedArray{(2,2)}(rand(2,2))
+        T = Tridiagonal(fill(S32,3), fill(S32, 4), fill(S32, 3))
+        D = Diagonal(fill(S22, size(T,2)))
+        @test rmul!(copy(T), D) ≈ T * D
+        D = Diagonal(fill(S33, size(T,1)))
+        @test lmul!(D, copy(T)) ≈ D * T
+    end
+end
+
+@testset "mul with empty arrays" begin
+    A = zeros(5,0)
+    T = Tridiagonal(zeros(0), zeros(0), zeros(0))
+    TL = Tridiagonal(zeros(4), zeros(5), zeros(4))
+    @test size(A * T) == size(A)
+    @test size(TL * A) == size(A)
+    @test size(T * T) == size(T)
+    C = similar(A)
+    @test mul!(C, A, T) == A * T
+    @test mul!(C, TL, A) == TL * A
+    @test mul!(similar(T), T, T) == T * T
+    @test mul!(similar(T, size(T)), T, T) == T * T
+
+    v = zeros(size(T,2))
+    @test size(T * v) == size(v)
+    @test mul!(similar(v), T, v) == T * v
+
+    D = Diagonal(zeros(size(T,2)))
+    @test size(T * D) == size(D * T) == size(D)
+    @test mul!(similar(D), T, D) == mul!(similar(D), D, T) == T * D
+end
+
+@testset "show" begin
+    T = Tridiagonal(1:3, 1:4, 1:3)
+    @test sprint(show, T) == "Tridiagonal(1:3, 1:4, 1:3)"
+    S = SymTridiagonal(1:4, 1:3)
+    @test sprint(show, S) == "SymTridiagonal(1:4, 1:3)"
+
+    m = SizedArrays.SizedArray{(2,2)}(reshape([1:4;],2,2))
+    T = Tridiagonal(fill(m,2), fill(m,3), fill(m,2))
+    @test sprint(show, T) == "Tridiagonal($(repr(diag(T,-1))), $(repr(diag(T))), $(repr(diag(T,1))))"
+    S = SymTridiagonal(fill(m,3), fill(m,2))
+    @test sprint(show, S) == "SymTridiagonal($(repr(diag(S))), $(repr(diag(S,1))))"
 end
 
 end # module TestTridiagonal

@@ -314,8 +314,7 @@ julia> a = [1. 2.; 3. 4.]
 
 julia> qr!(a)
 LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}, Matrix{Float64}}
-Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
+Q factor: 2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
 R factor:
 2×2 Matrix{Float64}:
  -3.16228  -4.42719
@@ -367,6 +366,11 @@ The individual components of the decomposition `F` can be retrieved via property
  - `F.p`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
  - `F.P`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
 
+!!! note
+    Each reference to the upper triangular factor via `F.R` allocates a new array.
+    It is therefore advisable to cache that array, say, by `R = F.R` and continue working
+    with `R`.
+
 Iterating the decomposition produces the components `Q`, `R`, and if extant `p`.
 
 The following functions are available for the `QR` objects: [`inv`](@ref), [`size`](@ref),
@@ -379,7 +383,7 @@ Multiplication with respect to either full/square or non-full/square `Q` is allo
 and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix with
 [`Matrix`](@ref). This operation returns the "thin" Q factor, i.e., if `A` is `m`×`n` with `m>=n`, then
 `Matrix(F.Q)` yields an `m`×`n` matrix with orthonormal columns.  To retrieve the "full" Q factor, an
-`m`×`m` orthogonal matrix, use `F.Q*I`. If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
+`m`×`m` orthogonal matrix, use `F.Q*I` or `collect(F.Q)`. If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
 orthogonal matrix.
 
 The block size for QR decomposition can be specified by keyword argument
@@ -399,8 +403,7 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
 
 julia> F = qr(A)
 LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}, Matrix{Float64}}
-Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
+Q factor: 3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
 R factor:
 2×2 Matrix{Float64}:
  -5.0  10.0
@@ -414,16 +417,19 @@ true
     `qr` returns multiple types because LAPACK uses several representations
     that minimize the memory storage requirements of products of Householder
     elementary reflectors, so that the `Q` and `R` matrices can be stored
-    compactly rather as two separate dense matrices.
+    compactly rather than two separate dense matrices.
 """
 function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
     AA = copy_similar(A, _qreltype(T))
-    return qr!(AA, arg...; kwargs...)
+    return _qr(AA, arg...; kwargs...)
 end
 # TODO: remove in Julia v2.0
 @deprecate qr(A::AbstractMatrix, ::Val{false}; kwargs...) qr(A, NoPivot(); kwargs...)
 @deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, ColumnNorm(); kwargs...)
+
+# allow packages like SparseArrays.jl to hook into here and redirect to out-of-place `qr`
+_qr(A::AbstractMatrix, args...; kwargs...) = qr!(A, args...; kwargs...)
 
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)
@@ -452,7 +458,7 @@ Array(F::QRPivoted) = Matrix(F)
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{QR, QRCompactWY, QRPivoted})
     summary(io, F); println(io)
-    println(io, "Q factor:")
+    print(io, "Q factor: ")
     show(io, mime, F.Q)
     println(io, "\nR factor:")
     show(io, mime, F.R)
@@ -529,13 +535,20 @@ function ldiv!(A::QRCompactWY{T}, B::AbstractMatrix{T}) where {T}
     return B
 end
 
+function rank(A::QRPivoted; atol::Real=0, rtol::Real=min(size(A)...) * eps(real(float(one(eltype(A.Q))))) * iszero(atol))
+    m = min(size(A)...)
+    m == 0 && return 0
+    tol = max(atol, rtol*abs(A.R[1,1]))
+    return something(findfirst(i -> abs(A.R[i,i]) <= tol, 1:m), m+1) - 1
+end
+
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractMatrix{T}, rcond::Real) where {T<:BlasFloat}
     require_one_based_indexing(B)
     m, n = size(A)
 
     if m > size(B, 1) || n > size(B, 1)
-        throw(DimensionMismatch("B has leading dimension $(size(B, 1)) but needs at least $(max(m, n))"))
+        throw(DimensionMismatch(lazy"B has leading dimension $(size(B, 1)) but needs at least $(max(m, n))"))
     end
 
     if length(A.factors) == 0 || length(B) == 0
@@ -728,7 +741,7 @@ _ret_size(A::Factorization, B::AbstractMatrix) = (max(size(A, 2), size(B, 1)), s
 function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}}) where T<:BlasReal
     require_one_based_indexing(BIn)
     m, n = size(A)
-    m == size(BIn, 1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(BIn,1)) rows"))
+    m == size(BIn, 1) || throw(DimensionMismatch(lazy"left hand side has $m rows, but right hand side has $(size(BIn,1)) rows"))
 
 # |z1|z3|  reinterpret  |x1|x2|x3|x4|  transpose  |x1|y1|  reshape  |x1|y1|x3|y3|
 # |z2|z4|      ->       |y1|y2|y3|y4|     ->      |x2|y2|     ->    |x2|y2|x4|y4|

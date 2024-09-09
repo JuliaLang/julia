@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "basic properties" begin
-
     @test typemax(Char) == reinterpret(Char, typemax(UInt32))
     @test typemin(Char) == Char(0)
     @test typemax(Char) == reinterpret(Char, 0xffffffff)
@@ -122,7 +121,7 @@ end
     #iterate(c::Char)
     for x in testarrays
         @test iterate(x)[1] == x
-        @test iterate(x, iterate(x)[2]) == nothing
+        @test iterate(x, iterate(x)[2]) === nothing
     end
 
     #isless(x::Char, y::Integer) = isless(UInt32(x), y)
@@ -212,6 +211,35 @@ end
     finally
         rm(file, force=true)
     end
+end
+
+# issue #50532
+@testset "invalid read(io, Char)" begin
+    # byte values with different numbers of leading bits
+    B = UInt8[
+        0x3f, 0x4d, 0x52, 0x63, 0x81, 0x83, 0x89, 0xb6,
+        0xc0, 0xc8, 0xd3, 0xe3, 0xea, 0xeb, 0xf0, 0xf2,
+        0xf4, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
+    ]
+    f = tempname()
+    for b1 in B, b2 in B, t = 0:3
+        bytes = [b1, b2]
+        append!(bytes, rand(B, t))
+        s = String(bytes)
+        write(f, s)
+        @test s == read(f, String)
+        chars = collect(s)
+        ios = [IOBuffer(s), open(f), Base.Filesystem.open(f, 0)]
+        for io in ios
+            chars′ = Char[]
+            while !eof(io)
+                push!(chars′, read(io, Char))
+            end
+            @test chars == chars′
+            close(io)
+        end
+    end
+    rm(f)
 end
 
 @testset "overlong codes" begin
@@ -331,4 +359,32 @@ end
     @test hash(ASCIIChar('x'), UInt(10)) == hash('x', UInt(10))
     @test Base.IteratorSize(Char) == Base.HasShape{0}()
     @test convert(ASCIIChar, 1) == Char(1)
+end
+
+@testset "foldable functions" begin
+    v = @inferred (() -> Val(isuppercase('C')))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(islowercase('C')))()
+    @test v isa Val{false}
+
+    v = @inferred (() -> Val(isletter('C')))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(isnumeric('C')))()
+    @test v isa Val{false}
+
+    struct MyChar <: AbstractChar
+        x :: Char
+    end
+    Base.codepoint(m::MyChar) = codepoint(m.x)
+    MyChar(x::UInt32) = MyChar(Char(x))
+
+    v = @inferred (() -> Val(isuppercase(MyChar('C'))))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(islowercase(MyChar('C'))))()
+    @test v isa Val{false}
+
+    v = @inferred (() -> Val(isletter(MyChar('C'))))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(isnumeric(MyChar('C'))))()
+    @test v isa Val{false}
 end

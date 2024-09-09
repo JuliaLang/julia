@@ -29,12 +29,16 @@ endif
 ifeq ($(BUILD_OS),WINNT)
 LIBGIT2_OPTS += -G"MSYS Makefiles"
 else
-LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
+LIBGIT2_OPTS += -DBUILD_TESTS=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 endif
+ifeq ($(OS),OpenBSD)
+# iconv.h is third-party
+LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-I/usr/local/include"
+endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 

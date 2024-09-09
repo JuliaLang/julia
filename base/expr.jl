@@ -65,7 +65,7 @@ function copy_exprs(@nospecialize(x))
     end
     return x
 end
-copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(@inbounds x[i]) for i in 1:length(x)]
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(@inbounds x[i]) for i in eachindex(x)]
 
 @eval exprarray(head::Symbol, arg::Array{Any,1}) = $(Expr(:new, :Expr, :head, :arg))
 
@@ -76,10 +76,8 @@ function copy(c::CodeInfo)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
     if cnew.slottypes !== nothing
-        cnew.slottypes = copy(cnew.slottypes)
+        cnew.slottypes = copy(cnew.slottypes::Vector{Any})
     end
-    cnew.codelocs  = copy(cnew.codelocs)
-    cnew.linetable = copy(cnew.linetable::Union{Vector{Any},Vector{Core.LineInfoNode}})
     cnew.ssaflags  = copy(cnew.ssaflags)
     cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges::Vector)
     ssavaluetypes  = cnew.ssavaluetypes
@@ -126,9 +124,10 @@ function macroexpand(m::Module, @nospecialize(x); recursive=true)
 end
 
 """
-    @macroexpand
+    @macroexpand [mod,] ex
 
 Return equivalent expression with all macros removed (expanded).
+If two arguments are provided, the first is the module to evaluate in.
 
 There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
@@ -163,19 +162,27 @@ julia> M.f()
 ```
 With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module `M` in the example).
 With `macroexpand` the expression expands in the module given as the first argument.
+
+!!! compat "Julia 1.11"
+    The two-argument form requires at least Julia 1.11.
 """
 macro macroexpand(code)
     return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
 end
-
+macro macroexpand(mod, code)
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=true))
+end
 
 """
-    @macroexpand1
+    @macroexpand1 [mod,] ex
 
 Non recursive version of [`@macroexpand`](@ref).
 """
 macro macroexpand1(code)
     return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+end
+macro macroexpand1(mod, code)
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=false))
 end
 
 ## misc syntax ##
@@ -343,39 +350,39 @@ macro noinline(x)
 end
 
 """
-    @constprop setting [ex]
+    Base.@constprop setting [ex]
 
 Control the mode of interprocedural constant propagation for the annotated function.
 
 Two `setting`s are supported:
 
-- `@constprop :aggressive [ex]`: apply constant propagation aggressively.
+- `Base.@constprop :aggressive [ex]`: apply constant propagation aggressively.
   For a method where the return type depends on the value of the arguments,
   this can yield improved inference results at the cost of additional compile time.
-- `@constprop :none [ex]`: disable constant propagation. This can reduce compile
+- `Base.@constprop :none [ex]`: disable constant propagation. This can reduce compile
   times for functions that Julia might otherwise deem worthy of constant-propagation.
   Common cases are for functions with `Bool`- or `Symbol`-valued arguments or keyword arguments.
 
-`@constprop` can be applied immediately before a function definition or within a function body.
+`Base.@constprop` can be applied immediately before a function definition or within a function body.
 
 ```julia
 # annotate long-form definition
-@constprop :aggressive function longdef(x)
-  ...
+Base.@constprop :aggressive function longdef(x)
+    ...
 end
 
 # annotate short-form definition
-@constprop :aggressive shortdef(x) = ...
+Base.@constprop :aggressive shortdef(x) = ...
 
 # annotate anonymous function that a `do` block creates
 f() do
-    @constprop :aggressive
+    Base.@constprop :aggressive
     ...
 end
 ```
 
 !!! compat "Julia 1.10"
-  The usage within a function body requires at least Julia 1.10.
+    The usage within a function body requires at least Julia 1.10.
 """
 macro constprop(setting, ex)
     sym = constprop_setting(setting)
@@ -398,61 +405,82 @@ function constprop_setting(@nospecialize setting)
 end
 
 """
-    @assume_effects setting... [ex]
+    Base.@assume_effects setting... [ex]
 
-Override the compiler's effect modeling for the given method or foreign call.
-`@assume_effects` can be applied immediately before a function definition or within a function body.
-It can also be applied immediately before a `@ccall` expression.
-
-!!! compat "Julia 1.8"
-    Using `Base.@assume_effects` requires Julia version 1.8.
+Override the compiler's effect modeling.
+This macro can be used in several contexts:
+1. Immediately before a method definition, to override the entire effect modeling of the applied method.
+2. Within a function body without any arguments, to override the entire effect modeling of the enclosing method.
+3. Applied to a code block, to override the local effect modeling of the applied code block.
 
 # Examples
 ```jldoctest
-julia> Base.@assume_effects :terminates_locally function pow(x)
-           # this :terminates_locally allows `pow` to be constant-folded
+julia> Base.@assume_effects :terminates_locally function fact(x)
+           # usage 1:
+           # this :terminates_locally allows `fact` to be constant-folded
            res = 1
-           1 < x < 20 || error("bad pow")
+           0 ≤ x < 20 || error("bad fact")
            while x > 1
                res *= x
                x -= 1
            end
            return res
        end
-pow (generic function with 1 method)
+fact (generic function with 1 method)
 
 julia> code_typed() do
-           pow(12)
-       end
-1-element Vector{Any}:
- CodeInfo(
+           fact(12)
+       end |> only
+CodeInfo(
 1 ─     return 479001600
 ) => Int64
 
 julia> code_typed() do
            map((2,3,4)) do x
+               # usage 2:
                # this :terminates_locally allows this anonymous function to be constant-folded
                Base.@assume_effects :terminates_locally
                res = 1
-               1 < x < 20 || error("bad pow")
+               0 ≤ x < 20 || error("bad fact")
                while x > 1
                    res *= x
                    x -= 1
                end
                return res
            end
-       end
-1-element Vector{Any}:
- CodeInfo(
+       end |> only
+CodeInfo(
 1 ─     return (2, 6, 24)
 ) => Tuple{Int64, Int64, Int64}
 
-julia> Base.@assume_effects :total !:nothrow @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
-Vector{Int64} (alias for Array{Int64, 1})
+julia> code_typed() do
+           map((2,3,4)) do x
+               res = 1
+               0 ≤ x < 20 || error("bad fact")
+               # usage 3:
+               # with this :terminates_locally annotation the compiler skips tainting
+               # `:terminates` effect within this `while` block, allowing the parent
+               # anonymous function to be constant-folded
+               Base.@assume_effects :terminates_locally while x > 1
+                   res *= x
+                   x -= 1
+               end
+               return res
+           end
+       end |> only
+CodeInfo(
+1 ─     return (2, 6, 24)
+) => Tuple{Int64, Int64, Int64}
 ```
 
+!!! compat "Julia 1.8"
+    Using `Base.@assume_effects` requires Julia version 1.8.
+
 !!! compat "Julia 1.10"
-  The usage within a function body requires at least Julia 1.10.
+    The usage within a function body requires at least Julia 1.10.
+
+!!! compat "Julia 1.11"
+    The code block annotation requires at least Julia 1.11.
 
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,
@@ -475,6 +503,9 @@ The following `setting`s are supported.
 - `:terminates_locally`
 - `:notaskstate`
 - `:inaccessiblememonly`
+- `:noub`
+- `:noub_if_noinbounds`
+- `:nortcall`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -495,7 +526,7 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
 
 !!! note
     The `:consistent`-cy assertion is made world-age wise. More formally, write
-    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then we require:
+    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
     ```math
     ∀ i, x, y: x ≡ y → fᵢ(x) ≡ fᵢ(y)
     ```
@@ -511,13 +542,6 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     because the optimizer may rewrite them causing the output to not be `:consistent`,
     even for the same world age (e.g. because one ran in the interpreter, while
     the other was optimized).
-
-!!! note
-    The `:consistent`-cy assertion currrently includes the assertion that the function
-    will not execute any undefined behavior (for any input). Note that undefined behavior
-    may technically cause the function to violate other effect assertions (such as
-    `:nothrow` or `:effect_free`) as well, but we do not model this, and all effects
-    except `:consistent` assume the absence of undefined behavior.
 
 !!! note
     If `:consistent` functions terminate by throwing an exception, that exception
@@ -556,7 +580,7 @@ were not executed.
 ---
 ## `:nothrow`
 
-The `:nothrow` settings asserts that this method does not terminate abnormally
+The `:nothrow` settings asserts that this method does not throw an exception
 (i.e. will either always return a value or never return).
 
 !!! note
@@ -565,7 +589,11 @@ The `:nothrow` settings asserts that this method does not terminate abnormally
     method itself.
 
 !!! note
-    `MethodErrors` and similar exceptions count as abnormal termination.
+    If the execution of a method may raise `MethodError`s and similar exceptions, then
+    the method is not considered as `:nothrow`.
+    However, note that environment-dependent errors like `StackOverflowError` or `InterruptException`
+    are not modeled by this effect and thus a method that may result in `StackOverflowError`
+    does not necessarily need to be `!:nothrow` (although it should usually be `!:terminates` too).
 
 ---
 ## `:terminates_globally`
@@ -578,7 +606,7 @@ The `:terminates_globally` settings asserts that this method will eventually ter
 
 !!! note
     The compiler will consider this a strong indication that the method will
-    terminate relatively *quickly* and may (if otherwise legal), call this
+    terminate relatively *quickly* and may (if otherwise legal) call this
     method at compile time. I.e. it is a bad idea to annotate this setting
     on a method that *technically*, but not *practically*, terminates.
 
@@ -639,6 +667,28 @@ global state or mutable memory pointed to by its arguments.
     This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
 
 ---
+## `:noub`
+
+The `:noub` setting asserts that the method will not execute any undefined behavior
+(for any input). Note that undefined behavior may technically cause the method to violate
+any other effect assertions (such as `:consistent` or `:effect_free`) as well, but we do
+not model this, and they assume the absence of undefined behavior.
+
+---
+## `:nortcall`
+
+The `:nortcall` setting asserts that the method does not call `Core.Compiler.return_type`,
+and that any other methods this method might call also do not call `Core.Compiler.return_type`.
+
+!!! note
+    To be precise, this assertion can be used when a call to `Core.Compiler.return_type` is
+    not made at runtime; that is, when the result of `Core.Compiler.return_type` is known
+    exactly at compile time and the call is eliminated by the optimizer. However, since
+    whether the result of `Core.Compiler.return_type` is folded at compile time depends
+    heavily on the compiler's implementation, it is generally risky to assert this if
+    the method in question uses `Core.Compiler.return_type` in any form.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -647,6 +697,8 @@ currently equivalent to the following `setting`s:
 - `:consistent`
 - `:effect_free`
 - `:terminates_globally`
+- `:noub`
+- `:nortcall`
 
 !!! note
     This list in particular does not include `:nothrow`. The compiler will still
@@ -656,7 +708,7 @@ currently equivalent to the following `setting`s:
 
 !!! note
     An explicit `@inbounds` annotation inside the function will also disable
-    constant folding and not be overriden by `:foldable`.
+    constant folding and not be overridden by `:foldable`.
 
 ---
 ## `:removable`
@@ -679,6 +731,8 @@ the following other `setting`s:
 - `:terminates_globally`
 - `:notaskstate`
 - `:inaccessiblememonly`
+- `:noub`
+- `:nortcall`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -698,68 +752,86 @@ the call is generally total, it may however throw.
 """
 macro assume_effects(args...)
     lastex = args[end]
-    inner = unwrap_macrocalls(lastex)
-    if is_function_def(inner)
-        ex = lastex
-        idx = length(args)-1
+    override = compute_assumed_settings(args[begin:end-1])
+    if is_function_def(unwrap_macrocalls(lastex))
+        return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
     elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
-        ex = lastex
-        idx = length(args)-1
-    else # anonymous function case
-        ex = nothing
-        idx = length(args)
+        lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
+        insert!(lastex.args, 3, Core.Compiler.encode_effects_override(override))
+        return esc(lastex)
     end
-    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly) =
-        (false, false, false, false, false, false, false, false)
-    for org_setting in args[1:idx]
-        (setting, val) = compute_assumed_setting(org_setting)
-        if setting === :consistent
-            consistent = val
-        elseif setting === :effect_free
-            effect_free = val
-        elseif setting === :nothrow
-            nothrow = val
-        elseif setting === :terminates_globally
-            terminates_globally = val
-        elseif setting === :terminates_locally
-            terminates_locally = val
-        elseif setting === :notaskstate
-            notaskstate = val
-        elseif setting === :inaccessiblememonly
-            inaccessiblememonly = val
-        elseif setting === :foldable
-            consistent = effect_free = terminates_globally = val
-        elseif setting === :removable
-            effect_free = nothrow = terminates_globally = val
-        elseif setting === :total
-            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = val
-        else
-            throw(ArgumentError("@assume_effects $org_setting not supported"))
-        end
-    end
-    if is_function_def(inner)
-        return esc(pushmeta!(ex, :purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
-    elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
-        ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
-        )))
-        return esc(ex)
-    else # anonymous function case
-        return Expr(:meta, Expr(:purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+    override′ = compute_assumed_setting(override, lastex)
+    if override′ !== nothing
+        # anonymous function case
+        return Expr(:meta, form_purity_expr(override′))
+    else
+        # call site annotation case
+        return Expr(:block,
+                    form_purity_expr(override),
+                    Expr(:local, Expr(:(=), :val, esc(lastex))),
+                    Expr(:purity), # region end token
+                    :val)
     end
 end
 
-function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
-    if isexpr(setting, :call) && setting.args[1] === :(!)
-        return compute_assumed_setting(setting.args[2], !val)
-    elseif isa(setting, QuoteNode)
-        return compute_assumed_setting(setting.value, val)
-    else
-        return (setting, val)
+function compute_assumed_settings(settings)
+    override = EffectsOverride()
+    for setting in settings
+        override = compute_assumed_setting(override, setting)
+        override === nothing &&
+            throw(ArgumentError("`@assume_effects $setting` not supported"))
     end
+    return override
+end
+
+using Core.Compiler: EffectsOverride
+
+function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)
+    if isexpr(setting, :call) && setting.args[1] === :(!)
+        return compute_assumed_setting(override, setting.args[2], !val)
+    elseif isa(setting, QuoteNode)
+        return compute_assumed_setting(override, setting.value, val)
+    end
+    if setting === :consistent
+        return EffectsOverride(override; consistent = val)
+    elseif setting === :effect_free
+        return EffectsOverride(override; effect_free = val)
+    elseif setting === :nothrow
+        return EffectsOverride(override; nothrow = val)
+    elseif setting === :terminates_globally
+        return EffectsOverride(override; terminates_globally = val)
+    elseif setting === :terminates_locally
+        return EffectsOverride(override; terminates_locally = val)
+    elseif setting === :notaskstate
+        return EffectsOverride(override; notaskstate = val)
+    elseif setting === :inaccessiblememonly
+        return EffectsOverride(override; inaccessiblememonly = val)
+    elseif setting === :noub
+        return EffectsOverride(override; noub = val)
+    elseif setting === :noub_if_noinbounds
+        return EffectsOverride(override; noub_if_noinbounds = val)
+    elseif setting === :foldable
+        consistent = effect_free = terminates_globally = noub = nortcall = val
+        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub, nortcall)
+    elseif setting === :removable
+        effect_free = nothrow = terminates_globally = val
+        return EffectsOverride(override; effect_free, nothrow, terminates_globally)
+    elseif setting === :total
+        consistent = effect_free = nothrow = terminates_globally = notaskstate =
+            inaccessiblememonly = noub = nortcall = val
+        return EffectsOverride(override;
+            consistent, effect_free, nothrow, terminates_globally, notaskstate,
+            inaccessiblememonly, noub, nortcall)
+    end
+    return nothing
+end
+
+function form_purity_expr(override::EffectsOverride)
+    ex = Expr(:purity)
+    for i = 1:Core.Compiler.NUM_EFFECTS_OVERRIDES
+        push!(ex.args, getfield(override, i))
+    end
+    return ex
 end
 
 """
@@ -772,7 +844,7 @@ end
 Tells the compiler to infer `f` using the declared types of `@nospecialize`d arguments.
 This can be used to limit the number of compiler-generated specializations during inference.
 
-# Example
+# Examples
 
 ```julia
 julia> f(A::AbstractArray) = g(A)
@@ -795,6 +867,9 @@ while it can not infer the concrete return type of it.
 Without the `@nospecializeinfer`, `f([1.0])` would infer the return type of `g` as `Float64`,
 indicating that inference ran for `g(::Vector{Float64})` despite the prohibition on
 specialized code generation.
+
+!!! compat "Julia 1.10"
+    Using `Base.@nospecializeinfer` requires Julia version 1.10.
 """
 macro nospecializeinfer(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :nospecializeinfer) : ex)
@@ -867,23 +942,17 @@ function unwrap_macrocalls(ex::Expr)
     return inner
 end
 
-function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
-    if isempty(args)
-        tag = sym
-    else
-        tag = Expr(sym, args...)::Expr
-    end
-
+function pushmeta!(ex::Expr, tag::Union{Symbol,Expr})
     inner = unwrap_macrocalls(ex)
-
     idx, exargs = findmeta(inner)
     if idx != 0
-        push!(exargs[idx].args, tag)
+        metastmt = exargs[idx]::Expr
+        push!(metastmt.args, tag)
     else
         body = inner.args[2]::Expr
         pushfirst!(body.args, Expr(:meta, tag))
     end
-    ex
+    return ex
 end
 
 popmeta!(body, sym) = _getmeta(body, sym, true)
@@ -979,25 +1048,28 @@ function findmeta_block(exargs, argsmatch=args->true)
     return 0, []
 end
 
-remove_linenums!(ex) = ex
-function remove_linenums!(ex::Expr)
-    if ex.head === :block || ex.head === :quote
-        # remove line number expressions from metadata (not argument literal or inert) position
-        filter!(ex.args) do x
-            isa(x, Expr) && x.head === :line && return false
-            isa(x, LineNumberNode) && return false
-            return true
+"""
+    Base.remove_linenums!(ex)
+
+Remove all line-number metadata from expression-like object `ex`.
+"""
+function remove_linenums!(@nospecialize ex)
+    if ex isa Expr
+        if ex.head === :block || ex.head === :quote
+            # remove line number expressions from metadata (not argument literal or inert) position
+            filter!(ex.args) do x
+                isa(x, Expr) && x.head === :line && return false
+                isa(x, LineNumberNode) && return false
+                return true
+            end
         end
-    end
-    for subex in ex.args
-        subex isa Expr && remove_linenums!(subex)
+        for subex in ex.args
+            subex isa Expr && remove_linenums!(subex)
+        end
+    elseif ex isa CodeInfo
+        ex.debuginfo = Core.DebugInfo(ex.debuginfo.def) # TODO: filter partially, but keep edges
     end
     return ex
-end
-function remove_linenums!(src::CodeInfo)
-    src.codelocs .= 0
-    length(src.linetable) > 1 && resize!(src.linetable, 1)
-    return src
 end
 
 replace_linenums!(ex, ln::LineNumberNode) = ex
@@ -1057,7 +1129,6 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
-        tmp = gensym("tmp")
         return Expr(:escape,
                     Expr(f.head, f.args[1],
                          Expr(:block,
@@ -1084,13 +1155,22 @@ If no `order` is specified it defaults to :sequentially_consistent.
     @atomic a.b.x += addend
     @atomic :release a.b.x = new
     @atomic :acquire_release a.b.x += addend
+    @atomic m[idx] = new
+    @atomic m[idx] += addend
+    @atomic :release m[idx] = new
+    @atomic :acquire_release m[idx] += addend
 
 Perform the store operation expressed on the right atomically and return the
 new value.
 
-With `=`, this operation translates to a `setproperty!(a.b, :x, new)` call.
-With any operator also, this operation translates to a `modifyproperty!(a.b,
-:x, +, addend)[2]` call.
+With assignment (`=`), this operation translates to a `setproperty!(a.b, :x, new)`
+or, in case of reference, to a `setindex_atomic!(m, order, new, idx)` call,
+with `order` defaulting to `:sequentially_consistent`.
+
+With any modifying operator this operation translates to a
+`modifyproperty!(a.b, :x, op, addend)[2]` or, in case of reference, to a
+`modifyindex_atomic!(m, order, op, addend, idx...)[2]` call,
+with `order` defaulting to `:sequentially_consistent`.
 
     @atomic a.b.x max arg2
     @atomic a.b.x + arg2
@@ -1098,12 +1178,20 @@ With any operator also, this operation translates to a `modifyproperty!(a.b,
     @atomic :acquire_release max(a.b.x, arg2)
     @atomic :acquire_release a.b.x + arg2
     @atomic :acquire_release a.b.x max arg2
+    @atomic m[idx] max arg2
+    @atomic m[idx] + arg2
+    @atomic max(m[idx], arg2)
+    @atomic :acquire_release max(m[idx], arg2)
+    @atomic :acquire_release m[idx] + arg2
+    @atomic :acquire_release m[idx] max arg2
 
 Perform the binary operation expressed on the right atomically. Store the
-result into the field in the first argument and return the values `(old, new)`.
+result into the field or the reference in the first argument, and return the values
+`(old, new)`.
 
-This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
-
+This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` or,
+in case of reference to a `modifyindex_atomic!(m, order, func, arg2, idx)` call,
+with `order` defaulting to `:sequentially_consistent`.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1136,8 +1224,36 @@ julia> @atomic a.x max 5 # again change field x of a to the max value, with sequ
 10 => 10
 ```
 
+```jldoctest
+julia> mem = AtomicMemory{Int}(undef, 2);
+
+julia> @atomic mem[1] = 2 # set mem[1] to value 2 with sequential consistency
+2
+
+julia> @atomic :monotonic mem[1] # fetch the first value of mem, with monotonic consistency
+2
+
+julia> @atomic mem[1] += 1 # increment the first value of mem, with sequential consistency
+3
+
+julia> @atomic mem[1] + 1 # increment the first value of mem, with sequential consistency
+3 => 4
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+4
+
+julia> @atomic max(mem[1], 10) # change the first value of mem to the max value, with sequential consistency
+4 => 10
+
+julia> @atomic mem[1] max 5 # again change the first value of mem to the max value, with sequential consistency
+10 => 10
+```
+
 !!! compat "Julia 1.7"
-    This functionality requires at least Julia 1.7.
+    Atomic fields functionality requires at least Julia 1.7.
+
+!!! compat "Julia 1.12"
+    Atomic reference functionality requires at least Julia 1.12.
 """
 macro atomic(ex)
     if !isa(ex, Symbol) && !is_expr(ex, :(::))
@@ -1164,11 +1280,17 @@ function make_atomic(order, ex)
             return :(getproperty($l, $r, $order))
         elseif isexpr(ex, :call, 3)
             return make_atomic(order, ex.args[2], ex.args[1], ex.args[3])
+        elseif isexpr(ex, :ref)
+            x, idcs = esc(ex.args[1]), map(esc, ex.args[2:end])
+            return :(getindex_atomic($x, $order, $(idcs...)))
         elseif ex.head === :(=)
             l, r = ex.args[1], esc(ex.args[2])
             if is_expr(l, :., 2)
                 ll, lr = esc(l.args[1]), esc(l.args[2])
                 return :(setproperty!($ll, $lr, $r, $order))
+            elseif is_expr(l, :ref)
+                x, idcs = esc(l.args[1]), map(esc, l.args[2:end])
+                return :(setindex_atomic!($x, $order, $r, $(idcs...)))
             end
         end
         if length(ex.args) == 2
@@ -1191,19 +1313,29 @@ function make_atomic(order, ex)
 end
 function make_atomic(order, a1, op, a2)
     @nospecialize
-    is_expr(a1, :., 2) || error("@atomic modify expression missing field access")
-    a1l, a1r, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
-    return :(modifyproperty!($a1l, $a1r, $op, $a2, $order))
+    if is_expr(a1, :., 2)
+        a1l, a1r, op, a2 = esc(a1.args[1]), esc(a1.args[2]), esc(op), esc(a2)
+        return :(modifyproperty!($a1l, $a1r, $op, $a2, $order))
+    elseif is_expr(a1, :ref)
+        x, idcs, op, a2 = esc(a1.args[1]), map(esc, a1.args[2:end]), esc(op), esc(a2)
+        return :(modifyindex_atomic!($x, $order, $op, $a2, $(idcs...)))
+    end
+    error("@atomic modify expression missing field access or indexing")
 end
 
 
 """
     @atomicswap a.b.x = new
     @atomicswap :sequentially_consistent a.b.x = new
+    @atomicswap m[idx] = new
+    @atomicswap :sequentially_consistent m[idx] = new
 
-Stores `new` into `a.b.x` and returns the old value of `a.b.x`.
+Stores `new` into `a.b.x` (`m[idx]` in case of reference) and returns the old
+value of `a.b.x` (the old value stored at `m[idx]`, respectively).
 
-This operation translates to a `swapproperty!(a.b, :x, new)` call.
+This operation translates to a `swapproperty!(a.b, :x, new)` or,
+in case of reference, `swapindex_atomic!(mem, order, new, idx)` call,
+with `order` defaulting to `:sequentially_consistent`.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1221,8 +1353,23 @@ julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 ```
 
+```jldoctest
+julia> mem = AtomicMemory{Int}(undef, 2);
+
+julia> @atomic mem[1] = 1;
+
+julia> @atomicswap mem[1] = 4 # replace the first value of `mem` with 4, with sequential consistency
+1
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+4
+```
+
 !!! compat "Julia 1.7"
-    This functionality requires at least Julia 1.7.
+    Atomic fields functionality requires at least Julia 1.7.
+
+!!! compat "Julia 1.12"
+    Atomic reference functionality requires at least Julia 1.12.
 """
 macro atomicswap(order, ex)
     order isa QuoteNode || (order = esc(order))
@@ -1235,9 +1382,14 @@ function make_atomicswap(order, ex)
     @nospecialize
     is_expr(ex, :(=), 2) || error("@atomicswap expression missing assignment")
     l, val = ex.args[1], esc(ex.args[2])
-    is_expr(l, :., 2) || error("@atomicswap expression missing field access")
-    ll, lr = esc(l.args[1]), esc(l.args[2])
-    return :(swapproperty!($ll, $lr, $val, $order))
+    if is_expr(l, :., 2)
+        ll, lr = esc(l.args[1]), esc(l.args[2])
+        return :(swapproperty!($ll, $lr, $val, $order))
+    elseif is_expr(l, :ref)
+        x, idcs = esc(l.args[1]), map(esc, l.args[2:end])
+        return :(swapindex_atomic!($x, $order, $val, $(idcs...)))
+    end
+    error("@atomicswap expression missing field access or indexing")
 end
 
 
@@ -1245,12 +1397,18 @@ end
     @atomicreplace a.b.x expected => desired
     @atomicreplace :sequentially_consistent a.b.x expected => desired
     @atomicreplace :sequentially_consistent :monotonic a.b.x expected => desired
+    @atomicreplace m[idx] expected => desired
+    @atomicreplace :sequentially_consistent m[idx] expected => desired
+    @atomicreplace :sequentially_consistent :monotonic m[idx] expected => desired
 
 Perform the conditional replacement expressed by the pair atomically, returning
 the values `(old, success::Bool)`. Where `success` indicates whether the
 replacement was completed.
 
-This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` call.
+This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` or,
+in case of reference, to a
+`replaceindex_atomic!(mem, success_order, fail_order, expected, desired, idx)` call,
+with both orders defaulting to `:sequentially_consistent`.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
@@ -1267,7 +1425,7 @@ julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 2
 
-julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
+julia> @atomicreplace a.x 1 => 3 # replace field x of a with 2 if it was 1, with sequential consistency
 (old = 2, success = false)
 
 julia> xchg = 2 => 0; # replace field x of a with 0 if it was 2, with sequential consistency
@@ -1279,8 +1437,34 @@ julia> @atomic a.x # fetch field x of a, with sequential consistency
 0
 ```
 
+```jldoctest
+julia> mem = AtomicMemory{Int}(undef, 2);
+
+julia> @atomic mem[1] = 1;
+
+julia> @atomicreplace mem[1] 1 => 2 # replace the first value of mem with 2 if it was 1, with sequential consistency
+(old = 1, success = true)
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+2
+
+julia> @atomicreplace mem[1] 1 => 3 # replace field x of a with 2 if it was 1, with sequential consistency
+(old = 2, success = false)
+
+julia> xchg = 2 => 0; # replace field x of a with 0 if it was 2, with sequential consistency
+
+julia> @atomicreplace mem[1] xchg
+(old = 2, success = true)
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+0
+```
+
 !!! compat "Julia 1.7"
-    This functionality requires at least Julia 1.7.
+    Atomic fields functionality requires at least Julia 1.7.
+
+!!! compat "Julia 1.12"
+    Atomic reference functionality requires at least Julia 1.12.
 """
 macro atomicreplace(success_order, fail_order, ex, old_new)
     fail_order isa QuoteNode || (fail_order = esc(fail_order))
@@ -1296,13 +1480,117 @@ macro atomicreplace(ex, old_new)
 end
 function make_atomicreplace(success_order, fail_order, ex, old_new)
     @nospecialize
-    is_expr(ex, :., 2) || error("@atomicreplace expression missing field access")
-    ll, lr = esc(ex.args[1]), esc(ex.args[2])
-    if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
-        exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
-        return :(replaceproperty!($ll, $lr, $exp, $rep, $success_order, $fail_order))
-    else
-        old_new = esc(old_new)
-        return :(replaceproperty!($ll, $lr, $old_new::Pair..., $success_order, $fail_order))
+    if is_expr(ex, :., 2)
+        ll, lr = esc(ex.args[1]), esc(ex.args[2])
+        if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
+            exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
+            return :(replaceproperty!($ll, $lr, $exp, $rep, $success_order, $fail_order))
+        else
+            old_new = esc(old_new)
+            return :(replaceproperty!($ll, $lr, $old_new::Pair..., $success_order, $fail_order))
+        end
+    elseif is_expr(ex, :ref)
+        x, idcs = esc(ex.args[1]), map(esc, ex.args[2:end])
+        if is_expr(old_new, :call, 3) && old_new.args[1] === :(=>)
+            exp, rep = esc(old_new.args[2]), esc(old_new.args[3])
+            return :(replaceindex_atomic!($x, $success_order, $fail_order, $exp, $rep, $(idcs...)))
+        else
+            old_new = esc(old_new)
+            return :(replaceindex_atomic!($x, $success_order, $fail_order, $old_new::Pair..., $(idcs...)))
+        end
     end
+    error("@atomicreplace expression missing field access or indexing")
+end
+
+"""
+    @atomiconce a.b.x = value
+    @atomiconce :sequentially_consistent a.b.x = value
+    @atomiconce :sequentially_consistent :monotonic a.b.x = value
+    @atomiconce m[idx] = value
+    @atomiconce :sequentially_consistent m[idx] = value
+    @atomiconce :sequentially_consistent :monotonic m[idx] = value
+
+Perform the conditional assignment of value atomically if it was previously
+unset. Returned value `success::Bool` indicates whether the assignment was completed.
+
+This operation translates to a `setpropertyonce!(a.b, :x, value)` or,
+in case of reference, to a `setindexonce_atomic!(m, success_order, fail_order, value, idx)` call,
+with both orders defaulting to `:sequentially_consistent`.
+
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
+
+# Examples
+```jldoctest
+julia> mutable struct AtomicOnce
+           @atomic x
+           AtomicOnce() = new()
+       end
+
+julia> a = AtomicOnce()
+AtomicOnce(#undef)
+
+julia> @atomiconce a.x = 1 # set field x of a to 1, if unset, with sequential consistency
+true
+
+julia> @atomic a.x # fetch field x of a, with sequential consistency
+1
+
+julia> @atomiconce :monotonic a.x = 2 # set field x of a to 1, if unset, with monotonic consistence
+false
+```
+
+```jldoctest
+julia> mem = AtomicMemory{Vector{Int}}(undef, 1);
+
+julia> isassigned(mem, 1)
+false
+
+julia> @atomiconce mem[1] = [1] # set the first value of mem to [1], if unset, with sequential consistency
+true
+
+julia> isassigned(mem, 1)
+true
+
+julia> @atomic mem[1] # fetch the first value of mem, with sequential consistency
+1-element Vector{Int64}:
+ 1
+
+julia> @atomiconce :monotonic mem[1] = [2] # set the first value of mem to [2], if unset, with monotonic
+false
+
+julia> @atomic mem[1]
+1-element Vector{Int64}:
+ 1
+```
+
+!!! compat "Julia 1.11"
+    Atomic fields functionality requires at least Julia 1.11.
+
+!!! compat "Julia 1.12"
+    Atomic reference functionality requires at least Julia 1.12.
+"""
+macro atomiconce(success_order, fail_order, ex)
+    fail_order isa QuoteNode || (fail_order = esc(fail_order))
+    success_order isa QuoteNode || (success_order = esc(success_order))
+    return make_atomiconce(success_order, fail_order, ex)
+end
+macro atomiconce(order, ex)
+    order isa QuoteNode || (order = esc(order))
+    return make_atomiconce(order, order, ex)
+end
+macro atomiconce(ex)
+    return make_atomiconce(QuoteNode(:sequentially_consistent), QuoteNode(:sequentially_consistent), ex)
+end
+function make_atomiconce(success_order, fail_order, ex)
+    @nospecialize
+    is_expr(ex, :(=), 2) || error("@atomiconce expression missing assignment")
+    l, val = ex.args[1], esc(ex.args[2])
+    if is_expr(l, :., 2)
+        ll, lr = esc(l.args[1]), esc(l.args[2])
+        return :(setpropertyonce!($ll, $lr, $val, $success_order, $fail_order))
+    elseif is_expr(l, :ref)
+        x, idcs = esc(l.args[1]), map(esc, l.args[2:end])
+        return :(setindexonce_atomic!($x, $success_order, $fail_order, $val, $(idcs...)))
+    end
+    error("@atomiconce expression missing field access or indexing")
 end

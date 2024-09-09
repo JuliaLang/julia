@@ -95,6 +95,13 @@ $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 
 CCLD := $(CC)
 
+# Override `-shared-libasan` from root Make.inc
+ifeq ($(SANITIZE),1)
+ifeq ($(SANITIZE_ADDRESS),1)
+JLDFLAGS += -static-libsan
+endif
+endif
+
 $(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
 

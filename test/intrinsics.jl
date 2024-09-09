@@ -180,28 +180,12 @@ end
     @test_intrinsic Core.Intrinsics.fptoui UInt Float16(3.3) UInt(3)
 end
 
-if Sys.ARCH == :aarch64 ||  Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-    # On AArch64 we are following the `_Float16` ABI. Buthe these functions expect `Int16`.
-    # TODO: SHould we have `Chalf == Int16` and `Cfloat16 == Float16`?
-    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
-    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
-    truncsfhf2(x::Float32) = reinterpret(Float16, ccall("extern __truncsfhf2", llvmcall, UInt16, (Float32,), x))
-    gnu_f2h_ieee(x::Float32) = reinterpret(Float16, ccall("extern __gnu_f2h_ieee", llvmcall, UInt16, (Float32,), x))
-    truncdfhf2(x::Float64) = reinterpret(Float16, ccall("extern __truncdfhf2", llvmcall, UInt16, (Float64,), x))
-else
-    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (Float16,), x)
-    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (Float16,), x)
-    truncsfhf2(x::Float32) = ccall("extern __truncsfhf2", llvmcall, Float16, (Float32,), x)
-    gnu_f2h_ieee(x::Float32) = ccall("extern __gnu_f2h_ieee", llvmcall, Float16, (Float32,), x)
-    truncdfhf2(x::Float64) = ccall("extern __truncdfhf2", llvmcall, Float16, (Float64,), x)
-end
-
 @testset "Float16 intrinsics (crt)" begin
-    @test extendhfsf2(Float16(3.3)) == 3.3007812f0
+    gnu_h2f_ieee(x::Float16) = ccall("julia__gnu_h2f_ieee", Float32, (Float16,), x)
+    gnu_f2h_ieee(x::Float32) = ccall("julia__gnu_f2h_ieee", Float16, (Float32,), x)
+
     @test gnu_h2f_ieee(Float16(3.3)) == 3.3007812f0
-    @test truncsfhf2(3.3f0) == Float16(3.3)
     @test gnu_f2h_ieee(3.3f0) == Float16(3.3)
-    @test truncdfhf2(3.3) == Float16(3.3)
 end
 
 using Base.Experimental: @force_compile
@@ -213,8 +197,8 @@ for order in (:not_atomic, :monotonic, :acquire, :release, :acquire_release, :se
     @test (order -> Core.Intrinsics.atomic_fence(order))(order) === nothing
     @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)))) === nothing
 end
-@test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) == nothing
-@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) == nothing
+@test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) === nothing
+@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) === nothing
 
 primitive type Int256 <: Signed 256 end
 Int256(i::Int) = Core.Intrinsics.sext_int(Int256, i)
@@ -236,7 +220,7 @@ for TT in (Int8, Int16, Int32, Int64, Int128, Int256, Int512, Complex{Int32}, Co
                 @test_throws TypeError Core.Intrinsics.atomic_pointerreplace(p, T(10), S(3), :sequentially_consistent, :sequentially_consistent)
             end
             @test Core.Intrinsics.pointerref(p, 1, 1) === T(10) === r[]
-            if sizeof(r) > 8
+            if sizeof(r) > 2*sizeof(Int)
                 @test_throws ErrorException("atomic_pointerref: invalid pointer for atomic operation") unsafe_load(p, :sequentially_consistent)
                 @test_throws ErrorException("atomic_pointerset: invalid pointer for atomic operation") unsafe_store!(p, T(1), :sequentially_consistent)
                 @test_throws ErrorException("atomic_pointerswap: invalid pointer for atomic operation") unsafe_swap!(p, T(100), :sequentially_consistent)
@@ -361,3 +345,16 @@ Base.show(io::IO, a::IntWrap) = print(io, "IntWrap(", a.x, ")")
         @test r2 isa IntWrap && r2.x === 103 === r[].x && r2 !== r[]
     end
 end)()
+
+@testset "issue #54548" begin
+    @inline passthrough(ptr::Core.LLVMPtr{T,A}) where {T,A} = Base.llvmcall(("""
+            define ptr addrspace(1) @entry(ptr addrspace(1) %0) #0 {
+            entry:
+                ret ptr addrspace(1) %0
+            }
+
+            attributes #0 = { alwaysinline }""", "entry"),
+        Core.LLVMPtr{T,A}, Tuple{Core.LLVMPtr{T,A}}, ptr)
+    f(gws) = passthrough(Core.bitcast(Core.LLVMPtr{UInt32,1}, gws))
+    f(C_NULL)
+end

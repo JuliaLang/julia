@@ -35,27 +35,44 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
         //   uint64: length of src text
         //   char*: src text
         // At the end we write int32(0) as a terminal sentinel.
-        size_t len = jl_array_len(udeps);
+        size_t len = jl_array_nrows(udeps);
+        static jl_value_t *replace_depot_func = NULL;
+        if (!replace_depot_func)
+            replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
         ios_t srctext;
+        jl_value_t *deptuple = NULL;
+        JL_GC_PUSH2(&deptuple, &udeps);
         for (size_t i = 0; i < len; i++) {
-            jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
+            deptuple = jl_array_ptr_ref(udeps, i);
             jl_value_t *depmod = jl_fieldref(deptuple, 0);  // module
             // Dependencies declared with `include_dependency` are excluded
             // because these may not be Julia code (and could be huge)
             if (depmod != (jl_value_t*)jl_main_module) {
-                jl_value_t *dep = jl_fieldref(deptuple, 1);  // file abspath
-                const char *depstr = jl_string_data(dep);
-                if (!depstr[0])
+                jl_value_t *abspath = jl_fieldref(deptuple, 1);  // file abspath
+                const char *abspathstr = jl_string_data(abspath);
+                if (!abspathstr[0])
                     continue;
-                ios_t *srctp = ios_file(&srctext, depstr, 1, 0, 0, 0);
+                ios_t *srctp = ios_file(&srctext, abspathstr, 1, 0, 0, 0);
                 if (!srctp) {
                     jl_printf(JL_STDERR, "WARNING: could not cache source text for \"%s\".\n",
-                            jl_string_data(dep));
+                              abspathstr);
                     continue;
                 }
-                size_t slen = jl_string_len(dep);
+
+                jl_value_t **replace_depot_args;
+                JL_GC_PUSHARGS(replace_depot_args, 2);
+                replace_depot_args[0] = replace_depot_func;
+                replace_depot_args[1] = abspath;
+                jl_task_t *ct = jl_current_task;
+                size_t last_age = ct->world_age;
+                ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+                jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 2);
+                ct->world_age = last_age;
+                JL_GC_POP();
+
+                size_t slen = jl_string_len(depalias);
                 write_int32(f, slen);
-                ios_write(f, depstr, slen);
+                ios_write(f, jl_string_data(depalias), slen);
                 posfile = ios_pos(f);
                 write_uint64(f, 0);   // placeholder for length of this file in bytes
                 uint64_t filelen = (uint64_t) ios_copyall(f, &srctext);
@@ -65,6 +82,7 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                 ios_seek_end(f);
             }
         }
+        JL_GC_POP();
     }
     write_int32(f, 0); // mark the end of the source text
 }
@@ -75,7 +93,12 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         return;
     }
 
-    jl_task_wait_empty();
+    jl_task_wait_empty(); // wait for most work to finish (except possibly finalizers)
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_collect(JL_GC_INCREMENTAL); // sweep finalizers
+    jl_task_t *ct = jl_current_task;
+    jl_gc_enable_finalizers(ct, 0); // now disable finalizers, as they could schedule more work or make other unexpected changes to reachability
+    jl_task_wait_empty(); // then make sure we are the only thread alive that could be running user code past here
 
     if (!jl_module_init_order) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
@@ -86,9 +109,9 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     jl_array_t *udeps = NULL;
     JL_GC_PUSH2(&worklist, &udeps);
     jl_module_init_order = jl_alloc_vec_any(0);
-    int i, l = jl_array_len(worklist);
+    int i, l = jl_array_nrows(worklist);
     for (i = 0; i < l; i++) {
-        jl_value_t *m = jl_ptrarrayref(worklist, i);
+        jl_value_t *m = jl_array_ptr_ref(worklist, i);
         jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
@@ -111,7 +134,9 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
 
-    bool_t emit_split = jl_options.outputji && emit_native;
+    const char *outputji = jl_options.outputji;
+
+    bool_t emit_split = outputji && emit_native;
 
     ios_t *s = NULL;
     ios_t *z = NULL;
@@ -123,38 +148,37 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     if (!emit_split)
         z = s;
 
+    ios_t f;
+
+    if (outputji) {
+        if (ios_file(&f, outputji, 1, 1, 1, 1) == NULL)
+            jl_errorf("cannot open system image file \"%s\" for writing", outputji);
+        ios_write(&f, (const char *)s->buf, (size_t)s->size);
+        ios_close(s);
+        free(s);
+    }
+
     // jl_dump_native writes the clone_targets into `s`
     // We need to postpone the srctext writing after that.
     if (native_code) {
+        ios_t *targets = outputji ? &f : NULL;
+        // jl_dump_native will close and free z when appropriate
+        // this is a horrible abstraction, but
+        // this helps reduce live memory significantly
         jl_dump_native(native_code,
                         jl_options.outputbc,
                         jl_options.outputunoptbc,
                         jl_options.outputo,
                         jl_options.outputasm,
-                        (const char*)z->buf, (size_t)z->size, s);
+                        z, targets, NULL);
         jl_postoutput_hook();
     }
 
-    if ((jl_options.outputji || emit_native) && jl_options.incremental) {
-        write_srctext(s, udeps, srctextpos);
-    }
-
-    if (jl_options.outputji) {
-        ios_t f;
-        if (ios_file(&f, jl_options.outputji, 1, 1, 1, 1) == NULL)
-            jl_errorf("cannot open system image file \"%s\" for writing", jl_options.outputji);
-        ios_write(&f, (const char*)s->buf, (size_t)s->size);
+    if (outputji) {
+        if (jl_options.incremental) {
+            write_srctext(&f, udeps, srctextpos);
+        }
         ios_close(&f);
-    }
-
-    if (s) {
-        ios_close(s);
-        free(s);
-    }
-
-    if (emit_split) {
-        ios_close(z);
-        free(z);
     }
 
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
@@ -165,6 +189,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         }
     }
     JL_GC_POP();
+    jl_gc_enable_finalizers(ct, 1);
 }
 
 #ifdef __cplusplus

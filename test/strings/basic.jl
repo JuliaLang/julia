@@ -203,6 +203,12 @@ end
         @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
     end
+
+    @testset ":noshift constructor" begin
+        @test SubString("", 0, 0, Val(:noshift)) == ""
+        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
+        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
+    end
 end
 
 
@@ -250,8 +256,6 @@ end
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
-    @test Meta.parse(string(Char(0xe0080)," = 1"), 1, raise=false)[1] ==
-        Expr(:error, "invalid character \"\Ue0080\" near column 1")
 end
 
 @testset "Symbol and gensym" begin
@@ -761,11 +765,6 @@ function getData(dic)
 end
 @test getData(Dict()) == ",,,,,,,,,,,,,,,,,,"
 
-@testset "unrecognized escapes in string/char literals" begin
-    @test_throws Meta.ParseError Meta.parse("\"\\.\"")
-    @test_throws Meta.ParseError Meta.parse("\'\\.\'")
-end
-
 @testset "thisind" begin
     let strs = Any["∀α>β:α+1>β", s"∀α>β:α+1>β",
                    SubString("123∀α>β:α+1>β123", 4, 18),
@@ -1171,7 +1170,7 @@ end
     code_units = Base.CodeUnits("abc")
     @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
     @test Base.elsize(code_units) == sizeof(UInt8)
-    @test Base.unsafe_convert(Ptr{Int8}, code_units) == Base.unsafe_convert(Ptr{Int8}, code_units.s)
+    @test Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{UInt8}, code_units)) == Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{Int8}, code_units.s))
 end
 
 @testset "LazyString" begin
@@ -1236,6 +1235,8 @@ end
         @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
     end
     @test_throws ArgumentError Symbol("a\0a")
+
+    @test Base._string_n_override == Core.Compiler.encode_effects_override(Base.compute_assumed_settings((:total, :(!:consistent))))
 end
 
 @testset "Ensure UTF-8 DFA can never leave invalid state" begin
@@ -1387,5 +1388,24 @@ end
         for b4 = setdiff(0x00:0xFF,table_row[4])
             @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state3,[b4],1,1)
         end
+    end
+end
+
+@testset "transcode" begin
+    # string starting with an ASCII character
+    str_1 = "zβγ"
+    # string starting with a 2 byte UTF-8 character
+    str_2 = "αβγ"
+    # string starting with a 3 byte UTF-8 character
+    str_3 = "आख"
+    # string starting with a 4 byte UTF-8 character
+    str_4 = "𒃵𒃰"
+    @testset for str in (str_1, str_2, str_3, str_4)
+        @test transcode(String, str) === str
+        @test transcode(String, transcode(UInt16, str)) == str
+        @test transcode(String, transcode(UInt16, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(Int32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
+        @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
     end
 end

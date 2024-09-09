@@ -2,27 +2,27 @@
 
 # tests that interpreter matches codegen
 using Test
-using Core: GotoIfNot, ReturnNode
+using Core.IR
 
 # test that interpreter correctly handles PhiNodes (#29262)
 let m = Meta.@lower 1 + 1
     @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::Core.CodeInfo
+    src = m.args[1]::CodeInfo
     src.code = Any[
         # block 1
         QuoteNode(:a),
         QuoteNode(:b),
         GlobalRef(@__MODULE__, :test29262),
-        GotoIfNot(Core.SSAValue(3), 6),
+        GotoIfNot(SSAValue(3), 6),
         # block 2
-        Core.PhiNode(Int32[4], Any[Core.SSAValue(1)]),
-        Core.PhiNode(Int32[4, 5], Any[Core.SSAValue(2), Core.SSAValue(5)]),
-        ReturnNode(Core.SSAValue(6)),
+        PhiNode(Int32[4], Any[SSAValue(1)]),
+        PhiNode(Int32[4, 5], Any[SSAValue(2), SSAValue(5)]),
+        ReturnNode(SSAValue(6)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
-    src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
@@ -32,7 +32,7 @@ end
 
 let m = Meta.@lower 1 + 1
     @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::Core.CodeInfo
+    src = m.args[1]::CodeInfo
     src.code = Any[
         # block 1
         QuoteNode(:a),
@@ -40,83 +40,73 @@ let m = Meta.@lower 1 + 1
         QuoteNode(:c),
         GlobalRef(@__MODULE__, :test29262),
         # block 2
-        Core.PhiNode(Int32[4, 16], Any[false, true]), # false, true
-        Core.PhiNode(Int32[4, 16], Any[Core.SSAValue(1), Core.SSAValue(2)]), # :a, :b
-        Core.PhiNode(Int32[4, 16], Any[Core.SSAValue(3), Core.SSAValue(6)]), # :c, :a
-        Core.PhiNode(Int32[16], Any[Core.SSAValue(7)]), # NULL, :c
+        PhiNode(Int32[4, 16], Any[false, true]), # false, true
+        PhiNode(Int32[4, 16], Any[SSAValue(1), SSAValue(2)]), # :a, :b
+        PhiNode(Int32[4, 16], Any[SSAValue(3), SSAValue(6)]), # :c, :a
+        PhiNode(Int32[16], Any[SSAValue(7)]), # NULL, :c
         # block 3
-        Core.PhiNode(Int32[], Any[]), # NULL, NULL
-        Core.PhiNode(Int32[17, 8], Any[true, Core.SSAValue(4)]), # test29262, test29262, [true]
-        Core.PhiNode(Int32[17], Vector{Any}(undef, 1)), # NULL, NULL
-        Core.PhiNode(Int32[8], Vector{Any}(undef, 1)), # NULL, NULL
-        Core.PhiNode(Int32[], Any[]), # NULL, NULL
-        Core.PhiNode(Int32[17, 8], Any[Core.SSAValue(2), Core.SSAValue(8)]), # NULL, :c, [:b]
-        Core.PhiNode(Int32[], Any[]), # NULL, NULL
-        GotoIfNot(Core.SSAValue(5), 5),
+        PhiNode(Int32[], Any[]), # NULL, NULL
+        PhiNode(Int32[17, 8], Any[true, SSAValue(4)]), # test29262, test29262, [true]
+        PhiNode(Int32[17], Vector{Any}(undef, 1)), # NULL, NULL
+        PhiNode(Int32[8], Vector{Any}(undef, 1)), # NULL, NULL
+        PhiNode(Int32[], Any[]), # NULL, NULL
+        PhiNode(Int32[17, 8], Any[SSAValue(2), SSAValue(8)]), # NULL, :c, [:b]
+        PhiNode(Int32[], Any[]), # NULL, NULL
+        GotoIfNot(SSAValue(5), 5),
         # block 4
-        GotoIfNot(Core.SSAValue(10), 9),
+        GotoIfNot(SSAValue(10), 9),
         # block 5
-        Expr(:call, GlobalRef(Core, :tuple), Core.SSAValue(6), Core.SSAValue(7), Core.SSAValue(8), Core.SSAValue(14)),
-        ReturnNode(Core.SSAValue(18)),
+        Expr(:call, GlobalRef(Core, :tuple), SSAValue(6), SSAValue(7), SSAValue(8), SSAValue(14)),
+        ReturnNode(SSAValue(18)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
-    src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
+    m.args[1] = copy(src)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test (:b, :a, :c, :c) === @eval $m
+    m.args[1] = copy(src)
     global test29262 = false
     @test (:b, :a, :c, :b) === @eval $m
 end
 
 let m = Meta.@lower 1 + 1
     @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::Core.CodeInfo
+    src = m.args[1]::CodeInfo
     src.code = Any[
         # block 1
         QuoteNode(:a),
         QuoteNode(:b),
         GlobalRef(@__MODULE__, :test29262),
         # block 2
-        Expr(:enter, 11),
+        EnterNode(12),
         # block 3
-        Core.UpsilonNode(),
-        Core.UpsilonNode(),
-        Core.UpsilonNode(Core.SSAValue(2)),
-        GotoIfNot(Core.SSAValue(3), 10),
+        UpsilonNode(),
+        UpsilonNode(),
+        UpsilonNode(SSAValue(2)),
+        GotoIfNot(SSAValue(3), 10),
         # block 4
-        Core.UpsilonNode(Core.SSAValue(1)),
+        UpsilonNode(SSAValue(1)),
         # block 5
         Expr(:throw_undef_if_not, :expected, false),
+        ReturnNode(), # unreachable
         # block 6
-        Core.PhiCNode(Any[Core.SSAValue(5), Core.SSAValue(7), Core.SSAValue(9)]), # NULL, :a, :b
-        Core.PhiCNode(Any[Core.SSAValue(6)]), # NULL
-        Expr(:leave, 1),
+        PhiCNode(Any[SSAValue(5), SSAValue(7), SSAValue(9)]), # NULL, :a, :b
+        PhiCNode(Any[SSAValue(6)]), # NULL
+        Expr(:pop_exception, SSAValue(4)),
         # block 7
-        ReturnNode(Core.SSAValue(11)),
+        ReturnNode(SSAValue(12)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
-    src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
+    src.ssavaluetypes = nstmts
+    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
     global test29262 = false
     @test :b === @eval $m
+    @test isempty(current_exceptions())
 end
-
-# https://github.com/JuliaLang/julia/issues/47065
-# `Core.Compiler.sort!` should be able to handle a big list
-let n = 1000
-    ex = :(return 1)
-    for _ in 1:n
-        ex = :(rand() < .1 && $(ex))
-    end
-    @eval global function f_1000_blocks()
-        $ex
-        return 0
-    end
-end
-@test f_1000_blocks() == 0
