@@ -528,18 +528,14 @@ function pkgdir(m::Module, paths::String...)
     path = pathof(rootmodule)
     path === nothing && return nothing
     original = path
-    path = dirname(path)
-    if splitpath(path)[end] == "src"
+    path, base = splitdir(path)
+    if base == "src"
+        # package source in `../src/Foo.jl`
+    elseif base == "ext"
+        # extension source in `../ext/FooExt.jl`
+    elseif basename(path) == "ext"
+        # extension source in `../ext/FooExt/FooExt.jl`
         path = dirname(path)
-    elseif "ext" in splitpath(path)
-        # extensions can reside at `../ext/FooExt.jl` or `../ext/FooExt/FooExt.jl`
-        if splitpath(path)[end] == "ext"
-            path = dirname(path)
-        else
-            path = dirname(path)
-            splitpath(path)[end] == "ext" || error("Unexpected path structure for extension module: $original")
-            path = dirname(path)
-        end
     else
         error("Unexpected path structure for module source: $original")
     end
