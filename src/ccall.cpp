@@ -22,6 +22,8 @@ TRANSFORMED_CCALL_STAT(jl_cpu_wake);
 TRANSFORMED_CCALL_STAT(jl_gc_safepoint);
 TRANSFORMED_CCALL_STAT(jl_get_ptls_states);
 TRANSFORMED_CCALL_STAT(jl_threadid);
+TRANSFORMED_CCALL_STAT(jl_get_ptls_rng);
+TRANSFORMED_CCALL_STAT(jl_set_ptls_rng);
 TRANSFORMED_CCALL_STAT(jl_get_tls_world_age);
 TRANSFORMED_CCALL_STAT(jl_get_world_counter);
 TRANSFORMED_CCALL_STAT(jl_gc_enable_disable_finalizers_internal);
@@ -1691,6 +1693,36 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         ai.decorateInst(tid);
         return mark_or_box_ccall_result(ctx, tid, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_get_ptls_rng)) {
+        ++CCALL_STAT(jl_get_ptls_rng);
+        assert(lrt == getInt64Ty(ctx.builder.getContext()));
+        assert(!isVa && !llvmcall && nccallargs == 0);
+        JL_GC_POP();
+        Value *ptls_p = get_current_ptls(ctx);
+        const int rng_offset = offsetof(jl_tls_states_t, rngseed);
+        Value *rng_ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptls_p, ConstantInt::get(ctx.types().T_size, rng_offset / sizeof(int8_t)));
+        setName(ctx.emission_context, rng_ptr, "rngseed_ptr");
+        LoadInst *rng_value = ctx.builder.CreateAlignedLoad(getInt64Ty(ctx.builder.getContext()), rng_ptr, Align(sizeof(void*)));
+        setName(ctx.emission_context, rng_value, "rngseed");
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        ai.decorateInst(rng_value);
+        return mark_or_box_ccall_result(ctx, rng_value, retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_set_ptls_rng)) {
+        ++CCALL_STAT(jl_set_ptls_rng);
+        assert(lrt == getVoidTy(ctx.builder.getContext()));
+        assert(!isVa && !llvmcall && nccallargs == 1);
+        JL_GC_POP();
+        Value *ptls_p = get_current_ptls(ctx);
+        const int rng_offset = offsetof(jl_tls_states_t, rngseed);
+        Value *rng_ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptls_p, ConstantInt::get(ctx.types().T_size, rng_offset / sizeof(int8_t)));
+        setName(ctx.emission_context, rng_ptr, "rngseed_ptr");
+        assert(argv[0].V->getType() == getInt64Ty(ctx.builder.getContext()));
+        auto store = ctx.builder.CreateAlignedStore(argv[0].V, rng_ptr, Align(sizeof(void*)));
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        ai.decorateInst(store);
+        return ghostValue(ctx, jl_nothing_type);
     }
     else if (is_libjulia_func(jl_get_tls_world_age)) {
         bool toplevel = !(ctx.linfo && jl_is_method(ctx.linfo->def.method));
