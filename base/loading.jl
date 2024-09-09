@@ -528,7 +528,7 @@ function pkgdir(m::Module, paths::String...)
     path = pathof(rootmodule)
     path === nothing && return nothing
     original = path
-    path, base = splitdir(path)
+    path, base = splitdir(dirname(path))
     if base == "src"
         # package source in `../src/Foo.jl`
     elseif base == "ext"
