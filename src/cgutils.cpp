@@ -1102,6 +1102,7 @@ static bool allpointers(jl_datatype_t *typ)
 // compute the space required by split_value_into, by simulating it
 static std::pair<size_t,size_t> split_value_size(jl_datatype_t *typ)
 {
+    assert(jl_is_datatype(typ));
     size_t dst_off = 0;
     bool hasptr = typ->layout->first_ptr >= 0;
     size_t npointers = hasptr ? typ->layout->npointers : 0;
@@ -1188,11 +1189,8 @@ static std::pair<AllocaInst*, AllocaInst*> split_value(jl_codectx_t &ctx, const 
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     auto sizes = split_value_size(typ);
-    Type *i8 = getInt8Ty(ctx.builder.getContext());
     Type *T_prjlvalue = ctx.types().T_prjlvalue;
-    AllocaInst *bits = sizes.first > 0 ? emit_static_alloca(ctx, i8, Align(julia_alignment((jl_value_t*)typ))) : nullptr;
-    if (bits)
-        bits->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), sizes.first));
+    AllocaInst *bits = sizes.first > 0 ? emit_static_alloca(ctx, sizes.first, Align(julia_alignment((jl_value_t*)typ))) : nullptr;
     AllocaInst *roots = sizes.second > 0 ? emit_static_alloca(ctx, T_prjlvalue, Align(sizeof(void*))) : nullptr;
     if (roots)
         roots->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), sizes.second));
@@ -1201,7 +1199,7 @@ static std::pair<AllocaInst*, AllocaInst*> split_value(jl_codectx_t &ctx, const 
     return std::make_pair(bits, roots);
 }
 
-static std::pair<size_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned idx)
+static std::pair<ssize_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned idx)
 {
     size_t fldoff = jl_field_offset(typ, idx);
     size_t src_off = 0;
@@ -1211,8 +1209,12 @@ static std::pair<size_t,ssize_t> split_value_field(jl_datatype_t *typ, unsigned 
     bool nodata = allpointers(typ);
     for (size_t i = 0; i < npointers; i++) {
         size_t ptr = jl_ptr_offset(typ, i) * sizeof(void*);
-        if (ptr >= fldoff)
-            return std::make_pair(dst_off + fldoff - src_off, ptr >= fldoff + jl_field_size(typ, idx) ? -1 : i);
+        if (ptr >= fldoff) {
+            if (ptr >= fldoff + jl_field_size(typ, idx))
+                break;
+            bool onlyptr = jl_field_isptr(typ, idx) || allpointers((jl_datatype_t*)jl_field_type(typ, idx));
+            return std::make_pair(onlyptr ? -1 : dst_off + fldoff - src_off, i);
+        }
         dst_off += ptr - src_off;
         src_off = ptr + sizeof(void*);
         if (!nodata) {
@@ -2197,12 +2199,12 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (elty != realelty)
         instr = ctx.builder.CreateTrunc(instr, realelty);
     if (intcast) {
-        ctx.builder.CreateStore(instr, intcast);
+        ctx.builder.CreateAlignedStore(instr, intcast, Align(alignment));
         instr = nullptr;
     }
     if (maybe_null_if_boxed) {
         if (intcast)
-            instr = ctx.builder.CreateLoad(intcast->getAllocatedType(), intcast);
+            instr = ctx.builder.CreateAlignedLoad(intcast->getAllocatedType(), intcast, Align(alignment));
         Value *first_ptr = isboxed ? instr : extract_first_ptr(ctx, instr);
         if (first_ptr)
             null_pointer_check(ctx, first_ptr, nullcheck);
@@ -2215,7 +2217,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         //    ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
         //    ConstantAsMetadata::get(ConstantInt::get(T_int8, 2)) }));
         if (intcast)
-            instr = ctx.builder.CreateLoad(intcast->getAllocatedType(), intcast);
+            instr = ctx.builder.CreateAlignedLoad(intcast->getAllocatedType(), intcast, Align(alignment));
         instr = ctx.builder.CreateTrunc(instr, getInt1Ty(ctx.builder.getContext()));
     }
     if (instr)
@@ -2857,8 +2859,7 @@ static jl_cgval_t emit_unionload(jl_codectx_t &ctx, Value *addr, Value *ptindex,
     Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1), tindex0);
     if (fsz > 0 && mutabl) {
         // move value to an immutable stack slot (excluding tindex)
-        Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (fsz + al - 1) / al);
-        AllocaInst *lv = emit_static_alloca(ctx, AT, Align(al));
+        AllocaInst *lv = emit_static_alloca(ctx, fsz, Align(al));
         setName(ctx.emission_context, lv, "immutable_union");
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         emit_memcpy(ctx, lv, ai, addr, ai, fsz, Align(al), Align(al));
@@ -3046,7 +3047,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         if (jl_field_isptr(jt, idx)) {
             return mark_julia_type(ctx, first_ptr, true, jfty);
         }
-        Value *addr = offsets.first == 0 ? strct.V : emit_ptrgep(ctx, strct.V, offsets.first);
+        Value *addr = offsets.first < 0 ? nullptr : offsets.first == 0 ? strct.V : emit_ptrgep(ctx, strct.V, offsets.first);
         if (jl_is_uniontype(jfty)) {
             size_t fsz = 0, al = 0;
             int union_max = jl_islayout_inline(jfty, &fsz, &al);
@@ -3141,8 +3142,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 unsigned st_idx = convert_struct_offset(ctx, T, byte_offset);
                 IntegerType *ET = cast<IntegerType>(T->getStructElementType(st_idx));
                 unsigned align = (ET->getBitWidth() + 7) / 8;
-                lv = emit_static_alloca(ctx, ET, Align(align));
-                lv->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), (fsz + align - 1) / align));
+                lv = emit_static_alloca(ctx, fsz, Align(align));
                 // emit all of the align-sized words
                 unsigned i = 0;
                 for (; i < fsz / align; i++) {
@@ -3556,9 +3556,8 @@ static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, 
     union_alloca_type(ut, allunbox, nbytes, align, min_align);
     if (nbytes > 0) {
         // at least some of the values can live on the stack
-        // try to pick an Integer type size such that SROA will emit reasonable code
-        Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * min_align), (nbytes + min_align - 1) / min_align);
-        AllocaInst *lv = emit_static_alloca(ctx, AT, Align(align));
+        assert(align % min_align == 0);
+        AllocaInst *lv = emit_static_alloca(ctx, nbytes, Align(align));
         setName(ctx.emission_context, lv, "unionalloca");
         return lv;
     }
@@ -4120,8 +4119,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
                 ai.decorateInst(ctx.builder.CreateMemSet(inner_roots, ctx.builder.getInt8(0), tracked.second * sizeof(jl_value_t*), Align(sizeof(jl_value_t*))));
                 if (tracked.first) {
-                    AllocaInst *bits = emit_static_alloca(ctx, getInt8Ty(ctx.builder.getContext()), Align(julia_alignment((jl_value_t*)sty)));
-                    bits->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), tracked.first));
+                    AllocaInst *bits = emit_static_alloca(ctx, tracked.first, Align(julia_alignment((jl_value_t*)sty)));
                     //ai.decorateInst(ctx.builder.CreateMemSet(bits, ctx.builder.getInt8(0xfe), tracked.first, bits->getAlign()));
                     strct = bits;
                     setName(ctx.emission_context, bits, arg_typename);
@@ -4152,7 +4150,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     continue;
                 Instruction *dest = nullptr;
                 Instruction *roots = nullptr;
-                size_t offs = jl_field_offset(sty, i);
+                ssize_t offs = jl_field_offset(sty, i);
                 ssize_t ptrsoffs = -1;
                 if (inner_roots)
                     std::tie(offs, ptrsoffs) = split_value_field(sty, i);
@@ -4167,7 +4165,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (!init_as_value) {
                     // avoid unboxing the argument explicitly
                     // and use memcpy instead
-                    Instruction *inst = strct ? cast<Instruction>(emit_ptrgep(ctx, strct, offs)) : nullptr;
+                    Instruction *inst = strct && offs >= 0 ? cast<Instruction>(emit_ptrgep(ctx, strct, offs)) : nullptr;
                     roots = inner_roots && ptrsoffs >= 0 ? cast<Instruction>(emit_ptrgep(ctx, inner_roots, ptrsoffs * sizeof(jl_value_t*))) : nullptr;
                     dest = inst;
                     if (inst == nullptr)
@@ -4217,9 +4215,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         if (fsz1 > 0 && !fval_info.isghost) {
                             Type *ET = IntegerType::get(ctx.builder.getContext(), 8 * al);
                             assert(lt->getStructElementType(llvm_idx) == ET);
-                            AllocaInst *lv = emit_static_alloca(ctx, ET, Align(al));
+                            AllocaInst *lv = emit_static_alloca(ctx, fsz1, Align(al));
                             setName(ctx.emission_context, lv, "unioninit");
-                            lv->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), (fsz1 + al - 1) / al));
                             emit_unionmove(ctx, lv, ctx.tbaa().tbaa_stack, fval_info, nullptr);
                             // emit all of the align-sized words
                             unsigned i = 0;
@@ -4285,11 +4282,11 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             }
             for (size_t i = nargs; i < nf; i++) {
                 if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
-                    size_t offs = jl_field_offset(sty, i);
+                    ssize_t offs = jl_field_offset(sty, i);
                     ssize_t ptrsoffs = -1;
                     if (inner_roots)
                         std::tie(offs, ptrsoffs) = split_value_field(sty, i);
-                    assert(ptrsoffs < 0);
+                    assert(ptrsoffs < 0 && offs >= 0);
                     int fsz = jl_field_size(sty, i) - 1;
                     if (init_as_value) {
                         unsigned llvm_idx = convert_struct_offset(ctx, cast<StructType>(lt), offs + fsz);

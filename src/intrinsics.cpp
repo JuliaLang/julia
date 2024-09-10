@@ -482,24 +482,6 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         p = combined;
         ai = combined_ai;
     }
-    Type *ptype = to->getPointerTo();
-    if (p->getType() != ptype && isa<AllocaInst>(p)) {
-        // LLVM's mem2reg can't handle coercion if the load/store type does
-        // not match the type of the alloca. As such, it is better to
-        // perform the load using the alloca's type and then perform the
-        // appropriate coercion manually.
-        AllocaInst *AI = cast<AllocaInst>(p);
-        Type *AllocType = AI->getAllocatedType();
-        const DataLayout &DL = jl_Module->getDataLayout();
-        if (!AI->isArrayAllocation() &&
-                (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
-                (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
-                DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
-            Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
-            setName(ctx.emission_context, load, p->getName() + ".unbox");
-            return emit_unboxed_coercion(ctx, to, ai.decorateInst(load));
-        }
-    }
     Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
     setName(ctx.emission_context, load, p->getName() + ".unbox");
     return ai.decorateInst(load);

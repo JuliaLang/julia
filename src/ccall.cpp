@@ -441,22 +441,13 @@ static Value *llvm_type_rewrite(
     // we need to use this alloca copy trick instead
     // On ARM and AArch64, the ABI requires casting through memory to different
     // sizes.
-    Value *from;
-    Value *to;
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     Align align = std::max(DL.getPrefTypeAlign(target_type), DL.getPrefTypeAlign(from_type));
-    if (DL.getTypeAllocSize(target_type) >= DL.getTypeAllocSize(from_type)) {
-        to = emit_static_alloca(ctx, target_type, align);
-        setName(ctx.emission_context, to, "type_rewrite_buffer");
-        from = to;
-    }
-    else {
-        from = emit_static_alloca(ctx, from_type, align);
-        setName(ctx.emission_context, from, "type_rewrite_buffer");
-        to = from;
-    }
-    ctx.builder.CreateAlignedStore(v, from, align);
-    auto pun = ctx.builder.CreateAlignedLoad(target_type, to, align);
+    size_t nb = std::max(DL.getTypeAllocSize(target_type), DL.getTypeAllocSize(from_type));
+    AllocaInst *cast = emit_static_alloca(ctx, nb, align);
+    setName(ctx.emission_context, cast, "type_rewrite_buffer");
+    ctx.builder.CreateAlignedStore(v, cast, align);
+    auto pun = ctx.builder.CreateAlignedLoad(target_type, cast, align);
     setName(ctx.emission_context, pun, "type_rewrite");
     return pun;
 }
