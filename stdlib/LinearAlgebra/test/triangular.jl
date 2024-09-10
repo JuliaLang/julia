@@ -1092,6 +1092,15 @@ end
     end
 end
 
+@testset "kron with triangular matrices of mixed eltypes" begin
+    for T in (UpperTriangular, LowerTriangular)
+        U = T(Matrix{Union{Missing,Int}}(fill(2, 2, 2)))
+        U[1, 1] = missing
+        @test kron(U, U)[2, 3] == 0
+        @test kron(U, U)[3, 2] == 0
+    end
+end
+
 @testset "copyto! tests" begin
     @testset "copyto! with aliasing (#39460)" begin
         M = Matrix(reshape(1:36, 6, 6))
