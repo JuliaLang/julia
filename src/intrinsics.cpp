@@ -405,10 +405,11 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     }
     else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
         assert(DL.getTypeSizeInBits(ty) == DL.getTypeSizeInBits(to));
-        AllocaInst *cast = emit_static_alloca(ctx, ty);
+        Align align = std::max(DL.getPrefTypeAlign(ty), DL.getPrefTypeAlign(to));
+        AllocaInst *cast = emit_static_alloca(ctx, ty, align);
         setName(ctx.emission_context, cast, "coercion");
-        ctx.builder.CreateStore(unboxed, cast);
-        unboxed = ctx.builder.CreateLoad(to, cast);
+        ctx.builder.CreateAlignedStore(unboxed, cast, align);
+        unboxed = ctx.builder.CreateAlignedLoad(to, cast, align);
     }
     else if (frompointer) {
         Type *INTT_to = INTT(to, DL);
@@ -692,10 +693,11 @@ static jl_cgval_t generic_cast(
             // understood that everything is implicitly rounded to 23 bits,
             // but if we start looking at more bits we need to actually do the
             // rounding first instead of carrying around incorrect low bits.
-            Value *jlfloattemp_var = emit_static_alloca(ctx, from->getType());
+            Align align(julia_alignment((jl_value_t*)jlto));
+            Value *jlfloattemp_var = emit_static_alloca(ctx, from->getType(), align);
             setName(ctx.emission_context, jlfloattemp_var, "rounding_slot");
-            ctx.builder.CreateStore(from, jlfloattemp_var);
-            from  = ctx.builder.CreateLoad(from->getType(), jlfloattemp_var, /*force this to load from the stack*/true);
+            ctx.builder.CreateAlignedStore(from, jlfloattemp_var, align);
+            from = ctx.builder.CreateAlignedLoad(from->getType(), jlfloattemp_var, align, /*force this to load from the stack*/true);
             setName(ctx.emission_context, from, "rounded");
         }
     }
