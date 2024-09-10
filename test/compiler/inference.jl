@@ -6137,3 +6137,7 @@ end == TypeError
 @test Base.infer_exception_type((Char,)) do x
     invoke(f_invoke_exct, Tuple{Number}, x)
 end == TypeError
+
+@test Base.infer_exception_type((Vector{Any},)) do args
+    Core.throw_methoderror(args...)
+end == Union{MethodError,ArgumentError}
