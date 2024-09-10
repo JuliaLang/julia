@@ -913,7 +913,7 @@ function _triukron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = 1:(l-1)
-                    C[inB+l, jnB+k] = zero(C[1])
+                    C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
         end
@@ -945,7 +945,7 @@ function _trilkron!(C, A, B)
                     C[inB+k, jnB+l] = Aij * B[k, l]
                 end
                 for k = (l+1):n_B
-                    C[inB+l, jnB+k] = zero(C[1])
+                    C[inB+l, jnB+k] = zero(C[inB+k, jnB+l])
                 end
             end
         end
