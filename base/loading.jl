@@ -1203,7 +1203,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
-function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}, ignore_native::Union{Nothing,Bool}=nothing)
+function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}, ignore_native::Union{Nothing,Bool}=nothing; register::Bool=true)
     if isnothing(ignore_native)
         if JLOptions().code_coverage == 0 && JLOptions().malloc_log == 0
             ignore_native = false
@@ -1252,13 +1252,14 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     for M in restored
         M = M::Module
         if parentmodule(M) === M && PkgId(M) == pkg
+            register && register_root_module(M)
             if timing_imports
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
                 print(lpad(elapsed, 9), " ms  ")
-                parentid = get(EXT_PRIMED, pkg, nothing)
-                if parentid !== nothing
-                    print(parentid.name, " → ")
+                ext_parent = extension_parent_name(M)
+                if ext_parent !== nothing
+                    print(ext_parent::String, " → ")
                 end
                 print(pkg.name)
                 if comp_time > 0
@@ -1278,6 +1279,27 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     finally
         timing_imports && cumulative_compile_timing(false)
     end
+end
+
+# if M is an extension, return the string name of the parent. Otherwise return nothing
+function extension_parent_name(M::Module)
+    rootmodule = moduleroot(M)
+    src_path = pathof(rootmodule)
+    src_path === nothing && return nothing
+    pkgdir_parts = splitpath(src_path)
+    ext_pos = findlast(==("ext"), pkgdir_parts)
+    if ext_pos !== nothing && ext_pos >= length(pkgdir_parts) - 2
+        parent_package_root = joinpath(pkgdir_parts[1:ext_pos-1]...)
+        parent_package_project_file = locate_project_file(parent_package_root)
+        if parent_package_project_file isa String
+            d = parsed_toml(parent_package_project_file)
+            name = get(d, "name", nothing)
+            if name !== nothing
+                return name
+            end
+        end
+    end
+    return nothing
 end
 
 function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
@@ -1461,7 +1483,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
         id = PkgId(uuid5(parent.uuid::UUID, ext), ext)
-        if id in keys(EXT_PRIMED) || haskey(Base.loaded_modules, id)
+        if haskey(EXT_PRIMED, id) || haskey(Base.loaded_modules, id)
             continue  # extension is already primed or loaded, don't add it again
         end
         EXT_PRIMED[id] = parent
@@ -1890,8 +1912,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         depmods[i] = dep
     end
     # then load the file
-    loaded = _include_from_serialized(pkg, path, ocachepath, depmods, ignore_native)
-    loaded isa Module && register_root_module(loaded)
+    loaded = _include_from_serialized(pkg, path, ocachepath, depmods, ignore_native; register = true)
     return loaded
 end
 
@@ -1958,8 +1979,7 @@ end
                     if dep === nothing
                         try
                             set_pkgorigin_version_path(modkey, modpath)
-                            dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps)
-                            dep isa Module && stalecheck && register_root_module(dep)
+                            dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps; register = stalecheck)
                         finally
                             end_loading(modkey, dep)
                         end
@@ -1975,9 +1995,8 @@ end
             end
             restored = get(loaded_precompiles, pkg => newbuild_id, nothing)
             if !isa(restored, Module)
-                restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps)
+                restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps; register = stalecheck)
             end
-            isa(restored, Module) && stalecheck && register_root_module(restored)
             isa(restored, Module) && return restored
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
             @label check_next_path
