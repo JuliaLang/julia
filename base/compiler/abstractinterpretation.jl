@@ -2232,7 +2232,8 @@ function abstract_throw_methoderror(interp::AbstractInterpreter, argtypes::Vecto
     elseif !isvarargtype(argtypes[2])
         MethodError
     else
-        tmerge(𝕃ᵢ, MethodError, ArgumentError)
+        ⊔ = join(typeinf_lattice(interp))
+        MethodError ⊔ ArgumentError
     end
     return CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo())
 end
