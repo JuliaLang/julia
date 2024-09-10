@@ -292,6 +292,7 @@ ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
 endif
+LLVM_INSTALL += && cp $2$$(build_shlibdir)/lld$$(EXE) $2$$(build_depsbindir)
 
 $(eval $(call staged-install, \
 	llvm,$$(LLVM_SRC_DIR)/build_$$(LLVM_BUILDTYPE), \
