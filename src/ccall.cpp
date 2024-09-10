@@ -1854,8 +1854,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ctx.builder.SetInsertPoint(checkBB);
         auto signal_page_load = ctx.builder.CreateLoad(
                 ctx.types().T_size,
-                ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size,
-                    get_current_signal_page_from_ptls(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const), -1),
+                emit_ptrgep(ctx, get_current_signal_page_from_ptls(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const),
+                    -sizeof(size_t)),
                 true);
         setName(ctx.emission_context, signal_page_load, "signal_page_load");
         ctx.builder.CreateBr(contBB);
@@ -1870,8 +1870,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         auto obj = emit_pointer_from_objref(ctx, boxed(ctx, argv[0])); // T_pprjlvalue
         // The inbounds gep makes it more clear to LLVM that the resulting value is not
         // a null pointer.
-        auto strp = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, obj, 1);
-        setName(ctx.emission_context, strp, "string_ptr");
+        auto strp = emit_ptrgep(ctx, obj, ctx.types().sizeof_ptr, "string_ptr");
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
     }
@@ -1882,9 +1881,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         auto obj = emit_pointer_from_objref(ctx, boxed(ctx, argv[0])); // T_pprjlvalue
         // The inbounds gep makes it more clear to LLVM that the resulting value is not
         // a null pointer.
-        auto strp = ctx.builder.CreateConstInBoundsGEP1_32(
-            ctx.types().T_prjlvalue, obj, (sizeof(jl_sym_t) + sizeof(void*) - 1) / sizeof(void*));
-        setName(ctx.emission_context, strp, "symbol_name");
+        auto strp = emit_ptrgep(ctx, obj, sizeof(jl_sym_t), "symbol_name");
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
     }
