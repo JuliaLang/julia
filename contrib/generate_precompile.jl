@@ -39,6 +39,8 @@ precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
 precompile(Base._require, (Base.PkgId, Nothing))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+precompile(Tuple{typeof(Base.Threads.atomic_add!), Base.Threads.Atomic{Int}, Int})
+precompile(Tuple{typeof(Base.Threads.atomic_sub!), Base.Threads.Atomic{Int}, Int})
 
 # Pkg loading
 precompile(Tuple{typeof(Base.Filesystem.normpath), String, String, Vararg{String}})
@@ -161,6 +163,8 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     push!(Expr[], Expr(:return, false))
     vcat(String[], String[])
     k, v = (:hello => nothing)
+    Base.print_time_imports_report(Base, UInt(1), UInt(1), UInt(1))
+    Base.print_time_imports_report_init(Base, 1, UInt(1), UInt(1), UInt(1))
 
     # Preferences uses these
     get(Dict{String,Any}(), "missing", nothing)
