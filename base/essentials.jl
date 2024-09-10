@@ -874,7 +874,7 @@ end
     be `1` for all user defined types that subtype `AbstractArray`.
 
 !!! note
-    `@inbounds` eleminates bounds checks in methods called within a given block, but not
+    `@inbounds` eliminates bounds checks in methods called within a given block, but not
     those that are syntactically within the given block.
     However, keep in mind that the `@inbounds` context propagates only one function call
     layer deep. For example, if an `@inbounds` block includes a call to `f()`, which in turn
