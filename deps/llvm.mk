@@ -293,7 +293,7 @@ ifeq ($(OS),Darwin)
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
 endif
 ifeq ($(BUILD_LLD), 1)
-LLVM_INSTALL += && cp $2$$(build_shlibdir)/lld$$(EXE) $2$$(build_depsbindir)
+LLVM_INSTALL += && cp $2$$(build_bindir)/lld$$(EXE) $2$$(build_depsbindir)
 endif
 
 $(eval $(call staged-install, \
