@@ -118,15 +118,14 @@ Bidiagonal(A::Bidiagonal) = A
 Bidiagonal{T}(A::Bidiagonal{T}) where {T} = A
 Bidiagonal{T}(A::Bidiagonal) where {T} = Bidiagonal{T}(A.dv, A.ev, A.uplo)
 
-diagzero(::Bidiagonal{T}, i, j) where {T} = zero(T)
 function diagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
     Tel = eltype(eltype(A.dv))
     if i < j && A.uplo == 'U' #= top right zeros =#
-        return diagzero(Tel, axes(A.ev[i], 1), axes(A.ev[j-1], 2))
+        return zeroslike(Tel, axes(A.ev[i], 1), axes(A.ev[j-1], 2))
     elseif j < i && A.uplo == 'L' #= bottom left zeros =#
-        return diagzero(Tel, axes(A.ev[i-1], 1), axes(A.ev[j], 2))
+        return zeroslike(Tel, axes(A.ev[i-1], 1), axes(A.ev[j], 2))
     else
-        return diagzero(Tel, axes(A.dv[i], 1), axes(A.dv[j], 2))
+        return zeroslike(Tel, axes(A.dv[i], 1), axes(A.dv[j], 2))
     end
 end
 
