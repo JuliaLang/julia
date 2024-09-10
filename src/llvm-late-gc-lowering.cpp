@@ -1494,18 +1494,17 @@ SmallVector<Value*, 0> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, I
     return Ptrs;
 }
 
-unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
-    auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
-    for (unsigned i = 0; i < Ptrs.size(); ++i) {
-        Value *Elem = Ptrs[i];
-        Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(irbuilder.getInt8Ty(), Dst, i * sizeof(void*));
-        StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
-        shadowStore->setOrdering(AtomicOrdering::NotAtomic);
-        // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    }
-    return Ptrs.size();
-}
-
+//static unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
+//    auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
+//    for (unsigned i = 0; i < Ptrs.size(); ++i) {
+//        Value *Elem = Ptrs[i];
+//        Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(irbuilder.getInt8Ty(), Dst, i * sizeof(void*));
+//        StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
+//        shadowStore->setOrdering(AtomicOrdering::NotAtomic);
+//        // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
+//    }
+//    return Ptrs.size();
+//}
 
 // turn a memcpy into a set of loads
 void LateLowerGCFrame::MaybeTrackDst(State &S, MemTransferInst *MI) {

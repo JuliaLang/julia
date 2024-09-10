@@ -448,7 +448,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     }
 
     Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : NULL;
-    if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
+    if (!(x.inline_roots || x.ispointer()) || c) { // already unboxed, but sometimes need conversion
         Value *unboxed = c ? c : x.V;
         return emit_unboxed_coercion(ctx, to, unboxed);
     }
@@ -473,6 +473,15 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     }
 
     unsigned alignment = julia_alignment(jt);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
+    if (x.inline_roots) {
+        assert(x.typ == jt);
+        AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
+        auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+        recombine_value(ctx, x, combined, combined_ai, Align(alignment), false);
+        p = combined;
+        ai = combined_ai;
+    }
     Type *ptype = to->getPointerTo();
     if (p->getType() != ptype && isa<AllocaInst>(p)) {
         // LLVM's mem2reg can't handle coercion if the load/store type does
@@ -488,13 +497,11 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
                 DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
             Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
             setName(ctx.emission_context, load, p->getName() + ".unbox");
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
             return emit_unboxed_coercion(ctx, to, ai.decorateInst(load));
         }
     }
     Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
     setName(ctx.emission_context, load, p->getName() + ".unbox");
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     return ai.decorateInst(load);
 }
 
@@ -508,18 +515,25 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
         return;
     }
 
+    auto dest_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
+
+    if (x.inline_roots) {
+        recombine_value(ctx, x, dest, dest_ai, alignment, isVolatile);
+        return;
+    }
+
     if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
-        assert(x.V);
+        assert(x.V && !x.inline_roots);
         Value *unboxed = zext_struct(ctx, x.V);
         StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, alignment);
         store->setVolatile(isVolatile);
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
-        ai.decorateInst(store);
+        dest_ai.decorateInst(store);
         return;
     }
 
     Value *src = data_pointer(ctx, x);
-    emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest), src, jl_aliasinfo_t::fromTBAA(ctx, x.tbaa), jl_datatype_size(x.typ), Align(alignment), Align(julia_alignment(x.typ)), isVolatile);
+    auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
+    emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(alignment), Align(julia_alignment(x.typ)), isVolatile);
 }
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
@@ -832,10 +846,9 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
     Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(ctx.types().T_size, 1));
     setName(ctx.emission_context, im1, "pointerset_idx");
 
-    Value *thePtr;
+    Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
     if (ety == (jl_value_t*)jl_any_type) {
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
-        thePtr = emit_unbox(ctx, ctx.types().T_size->getPointerTo(), e, e.typ);
         auto gep = ctx.builder.CreateInBoundsGEP(ctx.types().T_size, thePtr, im1);
         setName(ctx.emission_context, gep, "pointerset_ptr");
         auto val = ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), ctx.types().T_size);
@@ -844,8 +857,10 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
+    else if (x.inline_roots) {
+        recombine_value(ctx, e, thePtr, jl_aliasinfo_t(), Align(align_nb), false);
+    }
     else if (x.ispointer()) {
-        thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
@@ -859,7 +874,6 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
-            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
             thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
             typed_store(ctx, thePtr, x, jl_cgval_t(), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
                         AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, nullptr, true, false, false, false, false, false, nullptr, "atomic_pointerset", nullptr, nullptr);
