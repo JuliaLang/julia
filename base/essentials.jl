@@ -850,7 +850,7 @@ end
 
 Eliminates bounds checking within the block.
 This macro can be used to improve performance by informing the compiler that accesses to
-array elemements or object fields are assuredly within bounds.
+array elements or object fields are assuredly within bounds.
 
 In the example below the in-range check for referencing element `i` of array `A` is skipped
 to improve performance.
