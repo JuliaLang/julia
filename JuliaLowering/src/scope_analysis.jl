@@ -413,6 +413,13 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
             end
         end
         makeleaf(ctx, ex, K"TOMBSTONE")
+    elseif k == K"const_if_global"
+        id = _resolve_scopes(ctx, ex[1])
+        if lookup_binding(ctx, id).kind == :global
+            @ast ctx ex [K"const" ex[1]]
+        else
+            makeleaf(ctx, ex, K"TOMBSTONE")
+        end
     else
         ex_mapped = mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
         maybe_update_bindings!(ctx, ex_mapped)

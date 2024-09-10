@@ -185,6 +185,7 @@ function refresh_ir_test_cases(filename)
     end
     # Write only at the end to ensure we don't write rubbish if we crash!
     write(filename, take!(io))
+    nothing
 end
 
 function refresh_all_ir_test_cases(test_dir=".")

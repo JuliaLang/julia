@@ -79,3 +79,12 @@ global xx::T = 10
 13  (= TestMod.xx %₁₂)
 14  (return 10)
 
+########################################
+# Type assert (TODO: move this?)
+x::T
+#---------------------
+1   TestMod.x
+2   TestMod.T
+3   (call core.typeassert %₁ %₂)
+4   (return %₃)
+

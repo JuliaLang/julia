@@ -119,6 +119,7 @@ function convert_assignment(ctx, ex)
             else
                 @ast ctx ex [K"block"
                     [K"=" tmp_rhs0 rhs0]
+                    assgn
                     tmp_rhs0
                 ]
             end
@@ -152,6 +153,12 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 _convert_closures(ctx, ex[2])
             ]
         end
+    elseif k == K"::"
+        _convert_closures(ctx,
+            @ast ctx ex [K"call"
+                "typeassert"::K"core"
+                children(ex)...
+        ])
     elseif k == K"lambda"
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod, ex.lambda_locals)
         mapchildren(e->_convert_closures(ctx2, e), ctx2, ex)

@@ -568,6 +568,11 @@ function Base.push!(v::SyntaxList, ex::SyntaxTree)
     push!(v.ids, ex._id)
 end
 
+function Base.pushfirst!(v::SyntaxList, ex::SyntaxTree)
+    check_same_graph(v, ex)
+    pushfirst!(v.ids, ex._id)
+end
+
 function Base.append!(v::SyntaxList, exs)
     for e in exs
         push!(v, e)

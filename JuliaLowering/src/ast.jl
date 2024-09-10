@@ -253,6 +253,11 @@ function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
     var, assign_var
 end
 
+function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
+    var = ssavar(ctx, ex, name)
+    push!(stmts, makenode(ctx, ex, K"=", var, ex))
+    var
+end
 
 #-------------------------------------------------------------------------------
 # @ast macro
@@ -513,6 +518,14 @@ function is_function_def(ex)
     return k == K"function" || k == K"->"
 end
 
+function has_parameters(ex)
+    numchildren(ex) >= 1 && kind(ex[end]) == K"parameters"
+end
+
+function any_assignment(exs)
+    any(kind(e) == K"=" for e in exs)
+end
+
 function is_valid_name(ex)
     n = identifier_name(ex).name_val
     n !== "ccall" && n !== "cglobal"
@@ -533,15 +546,5 @@ function remove_empty_parameters(args)
         i -= 1
     end
     args[1:i]
-end
-
-# given a complex assignment LHS, return the symbol that will ultimately be assigned to
-function assigned_name(ex)
-    k = kind(ex)
-    if (k == K"call" || k == K"curly" || k == K"where") || (k == K"::" && is_eventually_call(ex))
-        assigned_name(ex[1])
-    else
-        ex
-    end
 end
 

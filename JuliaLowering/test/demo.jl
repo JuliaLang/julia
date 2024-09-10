@@ -419,6 +419,57 @@ begin
 end
 """
 
+src = """
+let
+    A{S} = B{S}
+end
+"""
+
+src = """
+let
+    a = b = c = sin(1)
+    (a,b,c)
+end
+"""
+
+src = """
+a.b = c
+"""
+
+src = """
+a[i j] = c
+"""
+
+src = """
+let
+    as = [1,2,3,4]
+    (x,ys...,z) = as
+    (x,ys,z)
+end
+"""
+
+src = """
+let
+    x = (1,2)
+    (y,x) = x
+    (x,y)
+end
+"""
+
+src = """
+let
+    a = b = c = sin(1)
+    (a,b,c)
+end
+"""
+
+src = """
+begin
+    as = [(1,2), (3,4)]
+    ((x,y), (z,w)) = as
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)

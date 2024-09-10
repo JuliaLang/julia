@@ -48,3 +48,27 @@ end
 8   (goto label₁)
 9   (return core.nothing)
 
+########################################
+# Basic for loop
+for x in xs
+    body
+end
+#---------------------
+1   TestMod.xs
+2   (= slot₁/next (call top.iterate %₁))
+3   slot₁/next
+4   (call core.=== %₃ core.nothing)
+5   (call top.not_int %₄)
+6   (gotoifnot %₅ label₁₇)
+7   slot₁/next
+8   (= slot₂/x (call core.getfield %₇ 1))
+9   (call core.getfield %₇ 2)
+10  TestMod.body
+11  (= slot₁/next (call top.iterate %₁ %₉))
+12  slot₁/next
+13  (call core.=== %₁₂ core.nothing)
+14  (call top.not_int %₁₃)
+15  (gotoifnot %₁₄ label₁₇)
+16  (goto label₇)
+17  (return core.nothing)
+

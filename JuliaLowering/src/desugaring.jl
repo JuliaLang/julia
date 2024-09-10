@@ -31,10 +31,19 @@ function is_identifier_like(ex)
     k == K"Identifier" || k == K"BindingId" || k == K"Placeholder"
 end
 
-is_assignment(ex) = kind(ex) == K"="
+# Identify some expressions that are safe to repeat
+function is_effect_free(ex)
+    k = kind(ex)
+    is_literal(k) || is_identifier_like(ex) || k == K"Symbol" ||
+        k == K"inert" || k == K"top" || k == K"core" ||
+        (k == K"." && numchildren(ex) == 2 && is_identifier_like(ex[1]))  # `a.b` with simple `a`
+    # TODO: metas
+end
 
-function has_parameters(ex)
-    numchildren(ex) >= 1 && kind(ex[end]) == K"parameters"
+# Convert things like `(x,y,z) = (a,b,c)` to assignments, eliminating the
+# tuple. Includes support for slurping/splatting.
+function tuple_to_assignments(ctx, srcref, lhss, rhs)
+    TODO(srcref, "tuple-eliminating destructuring")
 end
 
 # Create an assignment `$lhs = $rhs` where `lhs` must be "simple". If `rhs` is
@@ -42,44 +51,371 @@ end
 # more expressions at top level. `rhs` should already be expanded.
 #
 # flisp: sink-assignment
-function simple_assignment(ctx, assign_srcref, lhs, rhs)
+function sink_assignment(ctx, srcref, lhs, rhs)
     @assert is_identifier_like(lhs)
     if kind(rhs) == K"block"
-        @ast ctx assign_srcref [K"block"
+        @ast ctx srcref [K"block"
             rhs[1:end-1]...
             [K"=" lhs rhs[end]]
         ]
     else
-        @ast ctx assign_srcref [K"=" lhs rhs]
+        @ast ctx srcref [K"=" lhs rhs]
     end
 end
 
+function _tuple_sides_match(lhs, rhs)
+    N = max(length(lhs), length(rhs))
+    for i = 1:N+1
+        if i > length(lhs)
+            # (x, y)        = (a, b)      # match
+            # (x,)          = (a, b)      # no match
+            return i > length(rhs)
+        elseif kind(lhs[i]) == K"..."
+            # (x, ys..., z) = (a, b)      # match
+            # (x, ys...)    = (a,)        # match
+            return true
+        elseif i > length(rhs)
+            # (x, y)        = (a,)        # no match
+            # (x, y, zs...) = (a,)        # no match
+            return false
+        elseif kind(rhs[i]) == K"..."
+            # (x, y)        = (as...,)    # match
+            # (x, y, z)     = (a, bs...)  # match
+            # (x, y)        = (as..., b)  # no match
+            return i == length(rhs)
+        end
+    end
+end
+
+function _in_assignment_lhs(lhss, x_rhs)
+    for e in lhss
+        x = kind(e) == K"..." ? e[1] : e
+        if kind(x_rhs) == K"Identifier" && kind(x) == K"Identifier"
+            if x_rhs.name_val == x.name_val
+                return true
+            end
+        elseif kind(x_rhs) == K"BindingId" && kind(x) == K"BindingId"
+            if x_rhs.var_id == x.var_id
+                return true
+            end
+        end
+    end
+    return false
+end
+
+# Lower `(lhss...) = rhs` in contexts where `rhs` must be a tuple at runtime
+# by assuming that `getfield(rhs, i)` works and is efficient.
+function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
+    stmts = SyntaxList(ctx)
+    tmp = emit_assign_tmp(stmts, ctx, rhs, "rhs_tmp")
+    for (i, lh) in enumerate(lhss)
+        push!(stmts, @ast ctx assignment_srcref [K"="
+            lh
+            [K"call" "getfield"::K"core" tmp i::K"Integer"]
+        ])
+    end
+    makenode(ctx, assignment_srcref, K"block", stmts)
+end
+
+# Implement destructuring with `lhs` a tuple expression (possibly with
+# slurping) and `rhs` a general expression.
+#
+# Destructuring in this context is done via the iteration interface, though
+# calls `Base.indexed_iterate()` to allow for a fast path in cases where the
+# right hand side is directly indexable.
+function _destructure(ctx, assignment_srcref, stmts, lhs, rhs)
+    n_lhs = numchildren(lhs)
+    if n_lhs > 0
+        iterstate = new_mutable_var(ctx, rhs, "iterstate")
+    end
+
+    end_stmts = SyntaxList(ctx)
+
+    i = 0
+    for lh in children(lhs)
+        i += 1
+        if kind(lh) == K"..."
+            lh1 = if is_identifier_like(lh[1])
+                lh[1]
+            else
+                lhs_tmp = ssavar(ctx, lh[1], "lhs_tmp")
+                push!(end_stmts, expand_forms_2(ctx, @ast ctx lh[1] [K"=" lh[1] lhs_tmp]))
+                lhs_tmp
+            end
+            if i == n_lhs
+                # Slurping as last lhs, eg, for `zs` in
+                #   (x, y, zs...) = rhs
+                if kind(lh1) != K"Placeholder"
+                    push!(stmts, expand_forms_2(ctx,
+                        @ast ctx assignment_srcref [K"="
+                            lh1
+                            [K"call"
+                                "rest"::K"top"
+                                rhs
+                                if i > 1
+                                    iterstate
+                                end
+                            ]
+                        ]
+                    ))
+                end
+            else
+                # Slurping before last lhs. Eg, for `xs` in
+                #   (xs..., y, z) = rhs
+                # For this we call
+                #   (xs, tail) = Base.split_rest(...)
+                # then continue iteration with `tail` as new rhs.
+                tail = ssavar(ctx, lh, "tail")
+                push!(stmts,
+                    expand_forms_2(ctx,
+                        lower_tuple_assignment(ctx,
+                            assignment_srcref,
+                            (lh1, tail),
+                            @ast ctx assignment_srcref [K"call"
+                                "split_rest"::K"top"
+                                rhs
+                                (n_lhs - i)::K"Integer"
+                                if i > 1
+                                    iterstate
+                                end
+                            ]
+                        )
+                    )
+                )
+                rhs = tail
+                n_lhs = n_lhs - i
+                i = 0
+            end
+        else
+            # Normal case, eg, for `y` in
+            #   (x, y, z) = rhs
+            lh1 = if is_identifier_like(lh)
+                lh
+            # elseif is_eventually_call(lh) (TODO??)
+            else
+                lhs_tmp = ssavar(ctx, lh, "lhs_tmp")
+                push!(end_stmts, expand_forms_2(ctx, @ast ctx lh [K"=" lh lhs_tmp]))
+                lhs_tmp
+            end
+            push!(stmts,
+                expand_forms_2(ctx,
+                    lower_tuple_assignment(ctx,
+                        assignment_srcref,
+                        i == n_lhs ? (lh1,) : (lh1, iterstate),
+                        @ast ctx assignment_srcref [K"call"
+                            "indexed_iterate"::K"top"
+                            rhs
+                            i::K"Integer"
+                            if i > 1
+                                iterstate
+                            end
+                        ]
+                    )
+                )
+            )
+        end
+    end
+    # Actual assignments must happen after the whole iterator is desctructured
+    # (https://github.com/JuliaLang/julia/issues/40574)
+    append!(stmts, end_stmts)
+    stmts
+end
+
+# Expands all cases of general tuple destructuring
 function expand_tuple_destruct(ctx, ex)
     lhs = ex[1]
     @assert kind(lhs) == K"tuple"
-    rhs = expand_forms_2(ctx, ex[2])
+    rhs = ex[2]
 
-    # FIXME: This is specialized to only the form produced by lowering of `for`.
-    @assert numchildren(lhs) == 2 && all(is_identifier_like, children(lhs))
-    @ast ctx ex [K"block"
-        r = rhs
-        [K"=" lhs[1] [K"call" "getindex"::K"top" r 1::K"Integer"]]
-        [K"=" lhs[2] [K"call" "getindex"::K"top" r 2::K"Integer"]]
-    ]
+    num_slurp = 0
+    for lh in children(lhs)
+        num_slurp += (kind(lh) == K"...")
+        if num_slurp > 1
+            throw(LoweringError(lh, "multiple `...` in destructuring assignment are ambiguous"))
+        end
+    end
+
+    if kind(rhs) == K"tuple" && !any_assignment(children(rhs)) &&
+            !has_parameters(rhs) && _tuple_sides_match(children(lhs), children(rhs))
+        return expand_forms_2(ctx, tuple_to_assignments(ctx, ex))
+    end
+
+    stmts = SyntaxList(ctx)
+    rhs1 = if is_ssa(ctx, rhs) || (is_identifier_like(rhs) &&
+                                   !_in_assignment_lhs(children(lhs), rhs))
+        rhs
+    else
+        emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
+    end
+    _destructure(ctx, ex, stmts, lhs, rhs1)
+    push!(stmts, @ast ctx rhs1 [K"unnecessary" rhs1])
+    makenode(ctx, ex, K"block", stmts)
 end
 
+function _arg_to_temp(ctx, stmts, ex, eq_is_kw=false)
+    k = kind(ex)
+    if is_effect_free(ex)
+        ex
+    elseif k == K"..."
+        @ast ctx ex [k _arg_to_temp(ctx, stmts, ex[1])]
+    elseif k == K"=" && eq_is_kw
+        @ast ctx ex [K"=" ex[1] _arg_to_temp(ex[2])]
+    else
+        emit_assign_tmp(stmts, ctx, ex)
+    end
+end
+
+# Make the *arguments* of an expression safe for multiple evaluation, for
+# example
+#
+#   a[f(x)] => (temp=f(x); a[temp])
+#
+# Any assignments are added to `stmts` and a result expression returned which
+# may be used in further desugaring.
+function remove_argument_side_effects(ctx, stmts, ex)
+    if is_literal(ex) || is_identifier_like(ex)
+        ex
+    else
+        k = kind(ex)
+        if k == K"let"
+            emit_assign_tmp(stmts, ctx, ex)
+        else
+            args = SyntaxList(ctx)
+            eq_is_kw = ((k == K"call" || k == K"dotcall") && is_prefix_call(ex)) || k == K"ref"
+            for (i,e) in enumerate(children(ex))
+                push!(args, _arg_to_temp(ctx, stmts, e, eq_is_kw && i > 1))
+            end
+            # TODO: Copy attributes?
+            @ast ctx ex [k args...]
+        end
+    end
+end
+
+# Expand general assignment syntax, including
+#   * UnionAll definitions
+#   * Chained assignments
+#   * Setting of structure fields
+#   * Assignments to array elements
+#   * Destructuring
+#   * Typed variable declarations
 function expand_assignment(ctx, ex)
     @chk numchildren(ex) == 2
     lhs = ex[1]
     rhs = ex[2]
     kl = kind(lhs)
-    if is_identifier_like(lhs)
-        simple_assignment(ctx, ex, lhs, expand_forms_2(ctx, rhs))
+    if kl == K"curly"
+        # Expand UnionAll definitions
+        if numchildren(lhs) <= 1
+            throw(LoweringError(lhs, "empty type parameter list in type alias"))
+        end
+        name = lhs[1]
+        unionall_def = @ast ctx ex [K"="
+            name 
+            [K"where" ex[2] lhs[2:end]...]
+        ]
+        @ast ctx ex [K"block"
+            [K"const_if_global" name]
+            expand_forms_2(ctx, unionall_def)
+        ]
+    elseif kind(rhs) == K"="
+        # Expand chains of assignments
+        # a = b = c  ==>  b=c; a=c
+        stmts = SyntaxList(ctx)
+        push!(stmts, lhs)
+        while kind(rhs) == K"="
+            push!(stmts, rhs[1])
+            rhs = rhs[2]
+        end
+        if is_identifier_like(rhs)
+            tmp_rhs = nothing
+            rr = rhs
+        else
+            tmp_rhs = ssavar(ctx, rhs, "rhs")
+            rr = tmp_rhs
+        end
+        for i in 1:length(stmts)
+            stmts[i] = @ast ctx ex [K"=" stmts[i] rr]
+        end
+        if !isnothing(tmp_rhs)
+            pushfirst!(stmts, @ast ctx ex [K"=" tmp_rhs rhs])
+        end
+        expand_forms_2(ctx,
+            @ast ctx ex [K"block"
+                stmts...
+                [K"unnecessary" rr]
+            ]
+        )
+    elseif is_identifier_like(lhs)
+        sink_assignment(ctx, ex, lhs, expand_forms_2(ctx, rhs))
+    elseif kl == K"."
+        # a.b = rhs  ==>  setproperty!(a, :b, rhs)
+        @chk numchildren(lhs) == 2
+        a = lhs[1]
+        b = lhs[2]
+        stmts = SyntaxList(ctx)
+        if !is_identifier_like(a)
+            a = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, a), "a_tmp")
+        end
+        if kind(b) == K"Identifier"
+            b = @ast ctx b b=>K"Symbol"
+        else
+            b = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, b), "b_tmp")
+        end
+        if !is_identifier_like(rhs) && !is_literal(rhs)
+            rhs = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs), "rhs_tmp")
+        end
+        @ast ctx ex [K"block"
+            stmts...
+            [K"call" "setproperty!"::K"top" a b rhs]
+            [K"unnecessary" rhs]
+        ]
     elseif kl == K"tuple"
         # TODO: has_parameters
-        expand_tuple_destruct(ctx, ex)
+        if has_parameters(lhs)
+            TODO(lhs, "Destructuring with named fields")
+        else
+            expand_tuple_destruct(ctx, ex)
+        end
+    elseif kl == K"ref"
+        # a[i1, i2] = rhs
+        TODO(lhs)
+    elseif kl == K"::" && numchildren(lhs) == 2
+        x = lhs[1]
+        T = lhs[2]
+        res = if is_identifier_like(x)
+            # Identifer in lhs[1] is a variable type declaration, eg
+            # x::T = rhs
+            @ast ctx ex [K"block"
+                [K"decl" lhs[1] lhs[2]]
+                [K"=" lhs[1] rhs]
+            ]
+        else
+            # Otherwise just a type assertion, eg
+            # a[i]::T = rhs  ==>  (a[i]::T; a[i] = rhs)
+            # a[f(x)]::T = rhs  ==>  (tmp = f(x); a[tmp]::T; a[tmp] = rhs)
+            stmts = SyntaxList(ctx)
+            l1 = remove_argument_side_effects(ctx, stmts, lhs[1])
+            # TODO: What about (f(z),y)::T = rhs? That's broken syntax and
+            # needs to be detected somewhere but won't be detected here. Maybe
+            # it shows that remove_argument_side_effects() is not the ideal
+            # solution here?
+            @ast ctx ex [K"block"
+                stmts...
+                [K"::" l1 lhs[2]]
+                [K"=" l1 rhs]
+            ]
+        end
+        expand_forms_2(ctx, res)
+    elseif kl == K"dotcall"
+        throw(LoweringError(lhs, "invalid dot call syntax on left hand side of assignment"))
+    elseif kl == K"typed_hcat"
+        throw(LoweringError(lhs, "invalid spacing in left side of indexed assignment"))
+    elseif kl == K"typed_vcat" || kl == K"typed_ncat"
+        throw(LoweringError(lhs, "unexpected `;` in left side of indexed assignment"))
+    elseif kl == K"vect" || kl == K"hcat" || kl == K"vcat" || kl == K"ncat"
+        throw(LoweringError(lhs, "use `(a, b) = ...` to assign multiple values"))
     else
-        TODO(ex)
+        throw(LoweringError(lhs, "invalid assignment location"))
     end
 end
 
@@ -288,7 +624,7 @@ function expand_for(ctx, ex)
         # Assign iteration vars and next state
         body = @ast ctx iterspec [K"block"
             lhs_local_defs...
-            [K"=" [K"tuple" lhs state] next]
+            lower_tuple_assignment(ctx, iterspec, (lhs, state), next)
             loop
         ]
 
@@ -444,7 +780,9 @@ function strip_decls!(ctx, stmts, declkind, declkind2, ex)
     end
 end
 
-# local x, (y=2), z => local x; local y; y = 2; local z
+# local x, (y=2), z ==> local x; local y; y = 2; local z
+# const x = 1       ==> const x; x = 1
+# global x::T = 1   ==> (block (global x) (decl x T) (x = 1))
 function expand_decls(ctx, ex)
     declkind = kind(ex)
     if numchildren(ex) == 1 && kind(ex[1]) ∈ KSet"const global local"

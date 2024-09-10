@@ -14,12 +14,14 @@ end
 local x::Int = 1.0
 """) === 1.0
 
-# TODO unadorned declarations
-# @test JuliaLowering.include_string(test_mod, """
-# let
-#     x::Int = 1.0
-# end
-# """) === 1
+# Unadorned declarations
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = 0.0
+    x::Int = a
+    x
+end
+""") === 0
 
 @test JuliaLowering.include_string(test_mod, """
 let
