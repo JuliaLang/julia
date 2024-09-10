@@ -634,24 +634,9 @@ const update_stackframes_callback = Ref{Function}(identity)
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
-function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
-    num_frames = length(trace)
-    ndigits_max = ndigits(num_frames)
-
-    println(io, "\nStacktrace:")
-
-    for (i, (frame, n)) in enumerate(trace)
-        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
-        if i < num_frames
-            println(io)
-            print_linebreaks && println(io)
-        end
-    end
-end
-
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function show_reduced_backtrace(io::IO, t::Vector)
+function _backtrace_find_and_remove_cycles(t)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
@@ -694,23 +679,25 @@ function show_reduced_backtrace(io::IO, t::Vector)
             push!(displayed_stackframes, (last_frame, n))
         end
     end
+    return displayed_stackframes, repeated_cycle
+end
 
-    try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
-
+function show_processed_backtrace(io::IO, trace::Vector, repeated_cycle::Vector{NTuple{3, Int}}, visible_frame_indexes; print_linebreaks::Bool)
     println(io, "\nStacktrace:")
 
-    ndigits_max = ndigits(length(t))
+    num_frames = length(trace)
+    ndigits_max = ndigits(num_frames)
 
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
     frame_counter = 1
-    for i in eachindex(displayed_stackframes)
-        (frame, n) = displayed_stackframes[i]
+    for i in eachindex(trace)
+        (frame, n) = trace[i]
 
         print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
 
-        if i < length(displayed_stackframes)
+        if i < length(trace)
             println(io)
-            stacktrace_linebreaks() && println(io)
+            print_linebreaks && println(io)
         end
 
         while repeated_cycle[1][1] == i # never empty because of the initial (0,0,0)
@@ -719,17 +706,16 @@ function show_reduced_backtrace(io::IO, t::Vector)
             popfirst!(repeated_cycle)
             printstyled(io,
                 "--- the above ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
-            if i < length(displayed_stackframes)
+                  repetitions, " more time", repetitions > 1 ? "s" : "", " ---", color = :light_black)
+            if i < length(trace)
                 println(io)
-                stacktrace_linebreaks() && println(io)
+                print_linebreaks && println(io)
             end
             frame_counter += cycle_length * repetitions
         end
         frame_counter += 1
     end
 end
-
 
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
@@ -809,16 +795,63 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
 end
 
+
+#=
+
+
+In Test, scrub_exc_stack > scrub_backtrace removes Test-related internal frames
+
+In client.jl, scrub_repl_backtrace removes REPL-related internal frames
+
+In show_backtrace:
+    - In process_backtrace:
+        - perform lookups if necessary
+        - decide whether to omit C frames
+        - omit kwcall frames
+        - stop processing if trace is larger than some value (e.g. typemax(Int) by default)
+        - record unique frames, recording a count for repeated frames
+        - filter out frames in `include` stack
+        - filter out some frames that have the same location
+    - don't print a lone top-level frame without location info
+    - if backtrace is "too big": In show_reduced_backtrace:
+        - Finds cycles in the trace and prints differently
+    - otherwise:
+        - allows one single function to be registered to update line info of the trace (for Revise; run inside show_reduced_backtrace as well)
+        - prints each line, except special display for repeated lines
+    - 
+
+
+Stacktrace processing pipeline:
+1. Raw traces extracted with `backtrace` or `catch_backtrace` as vector of instruction pointers.
+2. IP traces converted to frames with `stacktrace`, which may or may not include C frames.
+3. Originator trims frames related to itself (e.g. REPL removes REPL-specific frames)
+   - CapturedException only keeps a limit of 100 frames by processing before display
+4. Julia implementation detail frames are hidden and rewritten (e.g. kwcall)
+5. Repeated frames are removed and summarized with a count
+6. `include` stack frames are filtered out
+7. Some frames that have the same location info are merged
+8. During display, if a trace is too long it may be further abridged
+   - cycles found and summarized
+
+=#
+
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
 
-    # t is a pre-processed backtrace (ref #12856)
+    # Process backtrace if it has not yet been. A processed backtrace is a Vector{Any}
+    # with elements of type Tuple{StackFrame, Int}. (ref #12856)
     if t isa Vector{Any} && (length(t) == 0 || t[1] isa Tuple{StackFrame,Int})
         filtered = t
     else
-        filtered = process_backtrace(t)
+        # t is a raw trace requiring lookup
+        if t isa Vector{<:Union{Base.InterpreterIP,Core.Compiler.InterpreterIP,Ptr{Cvoid}}}
+            frametrace = stacktrace(t)
+        else
+            frametrace = t
+        end
+        filtered = process_backtrace(tracecounts)
     end
     isempty(filtered) && return
 
@@ -831,20 +864,62 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     if length(filtered) > BIG_STACKTRACE_SIZE
-        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
-        return
+        filtered, repeated_cycle = _backtrace_find_and_remove_cycles(filtered)
     else
-        try invokelatest(update_stackframes_callback[], filtered) catch end
-        # process_backtrace returns a Vector{Tuple{Frame, Int}}
-        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
+        repeated_cycle = NTuple{3, Int}[]
     end
+
+    visible_frame_indexes = _backtrace_display_filter[](filtered)
+
+    try invokelatest(update_stackframes_callback[], filtered) catch end
+
+    show_processed_backtrace(IOContext(io, :backtrace => true), filtered, repeated_cycle, visible_frame_indexes; print_linebreaks = stacktrace_linebreaks())
     nothing
 end
 
+function _backtrace_collapse_and_count_repeated_frames(frames::Vector{StackFrame})
+    n = 0
+    last_frame = StackTraces.UNKNOWN
+    tracecount = Tuple{StackFrame,Int}[]
+    for frame in frames
+        if frame.file != last_frame.file || frame.line != last_frame.line || frame.func != last_frame.func || frame.linfo !== last_frame.linfo
+            if n > 0
+                push!(tracecount, (last_frame, n))
+            end
+            n = 1
+            last_frame = frame
+        else
+            n += 1
+        end
+    end
+    if n > 0
+        push!(tracecount, (last_frame, n))
+    end
+    return tracecount
+end
+
+function _backtrace_remove_kwcall_frames!(trace)
+    todelete = findall(t) do frame, _
+        code = frame.linfo
+        if code isa MethodInstance
+            def = code.def
+            if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
+                # hide kwcall() methods, which are probably internal keyword sorter methods
+                # (we print the internal method instead, after demangling
+                # the argument list, since it has the right line number info)
+                return true
+            end
+        else
+            frame.func === :kwcall && return true
+        end
+        return false
+    end
+    deleteat!(t, todelete)
+end
 
 # For improved user experience, filter out frames for include() implementation
 # - see #33065. See also #35371 for extended discussion of internal frames.
-function _simplify_include_frames(trace)
+function _backtrace_simplify_include_frames!(trace)
     kept_frames = trues(length(trace))
     first_ignored = nothing
     for i in length(trace):-1:1
@@ -873,11 +948,11 @@ function _simplify_include_frames(trace)
     if first_ignored !== nothing
         kept_frames[1:first_ignored] .= false
     end
-    return trace[kept_frames]
+    keepat!(trace, kept_frames)
 end
 
 # Collapse frames that have the same location (in some cases)
-function _collapse_repeated_frames(trace)
+function _backtrace_collapse_repeated_locations!(trace)
     kept_frames = trues(length(trace))
     last_frame = nothing
     for i in eachindex(trace)
@@ -938,66 +1013,45 @@ function _collapse_repeated_frames(trace)
         end
         last_frame = frame
     end
-    return trace[kept_frames]
+    keepat!(trace, kept_frames)
 end
 
+const _backtrace_editors! = [
+    _backtrace_remove_kwcall_frames!,
+    _backtrace_simplify_include_frames!,
+    _backtrace_collapse_repeated_locations!
+]
 
-function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
-    n = 0
-    last_frame = StackTraces.UNKNOWN
-    count = 0
-    ret = Any[]
-    for i in eachindex(t)
-        lkups = t[i]
-        if lkups isa StackFrame
-            lkups = [lkups]
-        else
-            lkups = StackTraces.lookup(lkups)
-        end
-        for lkup in lkups
-            if lkup === StackTraces.UNKNOWN
-                continue
-            end
+"""
+    register_backtrace_editor(btfilter)
 
-            if (lkup.from_c && skipC)
-                continue
-            end
-            code = lkup.linfo
-            if code isa MethodInstance
-                def = code.def
-                if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
-                    # hide kwcall() methods, which are probably internal keyword sorter methods
-                    # (we print the internal method instead, after demangling
-                    # the argument list, since it has the right line number info)
-                    continue
-                end
-            elseif !lkup.from_c
-                lkup.func === :kwcall && continue
-            end
-            count += 1
-            if count > limit
-                break
-            end
-
-            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== last_frame.linfo
-                if n > 0
-                    push!(ret, (last_frame, n))
-                end
-                n = 1
-                last_frame = lkup
-            else
-                n += 1
-            end
-        end
-        count > limit && break
-    end
-    if n > 0
-        push!(ret, (last_frame, n))
-    end
-    trace = _simplify_include_frames(ret)
-    trace = _collapse_repeated_frames(trace)
-    return trace
+Provide a function that accepts a Vector{Any} with elements of type Tuple{Frame, Int}, and edits it in-place.
+"""
+function register_backtrace_editor(btfilter!)
+    push!(_backtrace_editors!, btfilter!)
+    nothing
 end
+
+function process_backtrace(t::Vector{StackFrame})
+    tracecounts = _backtrace_collapse_and_count_repeated_frames(t)
+    process_backtrace(tracecounts)
+end
+
+function process_backtrace(t::Vector{Any})
+    for trace_editor! ∈ _backtrace_editors!
+        trace_editor!(t)
+    end
+    return t
+end
+
+"""
+    _backtrace_display_filter[]
+
+Provide a function that accepts a Vector{Any} with elements of type Tuple{Frame, Int} and returns
+a Vector{Int} of indexes of frames to show.
+"""
+const _backtrace_display_filter = Ref{Function}(x -> eachindex(x))
+
 
 function show_exception_stack(io::IO, stack)
     # Display exception stack with the top of the stack first.  This ordering
