@@ -1394,11 +1394,12 @@ Prominent examples include [MKL.jl](https://github.com/JuliaLinearAlgebra/MKL.jl
 These are external packages, so we will not discuss them in detail here.
 Please refer to their respective documentations (especially because they have different behaviors than OpenBLAS with respect to multithreading).
 
-## Execution latency, loading and precompiling time
+## Execution latency, package loading and package precompiling time
 
 ### Reducing time to first plot etc.
 
-The first time a julia function is called it will be compiled. The [`@time`](@ref) macro family illustrates this.
+The first time a julia method is called it (and any methods it calls, or ones that can be statically determined) will be
+compiled. The [`@time`](@ref) macro family illustrates this.
 
 ```
 julia> foo() = rand(2,2) * rand(2,2)
@@ -1411,27 +1412,34 @@ julia> @time @eval foo();
   0.000156 seconds (63 allocations: 2.453 KiB)
 ```
 
-Note that `@time @eval ...` form is explained in the [`@time`](@ref) documentation.
+Note that `@time @eval` is better for measuring compilation time because without [@eval](@ref), some compilation may
+already be done before timing starts.
 
-When developing a package, it can be helpful to cache this compilation in the package caches that are "precompiled"
-during the `Pkg` installation process or before package load. To precompile package code effectively, it's recommended
-to use [`PrecompileTools.jl`](https://julialang.github.io/PrecompileTools.jl/stable/) to run a "precompile workload" during
-precompilation time that is representative of typical package usage, which will cache the native compiled code into the
-package `pkgimage` cache, greatly reducing "time to first ..." (often referred to as TTFX) for such usage.
+When developing a package, you may be able to improve the experience of your users with *precompilation*,
+so that when they use the package the code they use is already compiled. To precompile package code effectively, it's
+recommended to use [`PrecompileTools.jl`](https://julialang.github.io/PrecompileTools.jl/stable/) to run a
+"precompile workload" during precompilation time that is representative of typical package usage, which will cache the
+native compiled code into the package `pkgimage` cache, greatly reducing "time to first execution" (often referred to as
+TTFX) for such usage.
 
+Note that [`PrecompileTools.jl`](https://julialang.github.io/PrecompileTools.jl/stable/) workloads can be
+disabled and sometimes configured via Preferences if you do not want to spend the extra time precompiling, which
+may be the case during development of a package.
 
 ### Reducing package loading time
 
-When keeping the time taken to load the package down is usually helpful.
+Keeping the time taken to load the package down is usually helpful.
 General good practice for package developers includes:
 
-1. Balancing the need to depending on packages for functionality vs. their load times, including stdlibs which on newer
-   julia versions may not be loaded already as stdlibs are no longer always included in the default sysimage.
-2. Avoiding adding `__init__` functions to package modules unless unavoidable, especially those which might trigger a
-   lot of compilation, or just take a long time to execute.
-3. Watch out for invalidations in the dependency tree during load that could be causing significant recompilation downstream.
+1. Reduce your dependencies to those you really need.
+2. Consider organizing any extended package functionality that is dependent on particular dependencies into
+   [package extensions](@ref) that can serve optional functionality depending on whether the user's environment (or the
+   package depending on yours) has those particular dependencies.
+3. Avoid use of [`__init__()`](@ref) functions unless there is no alternative, especially those which might trigger a lot
+   of compilation, or just take a long time to execute.
+4. Where possible, fix [invalidations](@ref) among your dependencies and from your package code.
 
-The `InteractiveUtils` tool [`@time_imports`](@ref) can be useful in the REPL to review the above factors.
+The tool [`@time_imports`](@ref) can be useful in the REPL to review the above factors.
 
 ```julia-repl
 julia> @time @time_imports using Plots
@@ -1443,7 +1451,7 @@ julia> @time @time_imports using Plots
       0.9 ms  Serialization
                ┌ 39.8 ms SparseArrays.CHOLMOD.__init__() 99.47% compilation time (100% recompilation)
     166.9 ms  SparseArrays 23.74% compilation time (100% recompilation)
-      0.4 ms  SparseArraysExt
+      0.4 ms  Statistics → SparseArraysExt
       0.5 ms  TOML
       8.0 ms  Preferences
       0.3 ms  PrecompileTools
@@ -1461,7 +1469,11 @@ julia> @time @time_imports using Plots
 ```
 
 Notice that in this example there are multiple packages loaded, some with `__init__()` functions, some of which cause
-compilation of which some is recompilation.
+compilation of which some is recompilation. Recompilation is caused by earlier packages invalidating methods, then in
+these cases when the following packages run their `__init__()` function some hit recompilation before the code can be run.
+
+Further, note the `Statistics` extension `SparseArraysExt` has been activated because `SparseArrays` is in the dependency
+tree. i.e. see `0.4 ms  Statistics → SparseArraysExt`.
 
 This report gives a good opportunity to review whether the cost of dependency load time is worth the functionality it brings.
 Also the `Pkg` utility `why` can be used to report why a an indirect dependency exists.
