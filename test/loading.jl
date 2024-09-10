@@ -1034,6 +1034,16 @@ end
 end
 
 @testset "Extensions" begin
+    test_ext = """
+    function test_ext(parent::Module, ext::Symbol)
+        _ext = Base.get_extension(parent, ext)
+        _ext isa Module || error("expected extension \$ext to be loaded")
+        _pkgdir = pkgdir(_ext)
+        _pkgdir == pkgdir(parent) != nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
+        _pkgversion = pkgversion(_ext)
+        _pkgversion == pkgversion(parent) || error("unexpected extension \$ext version: \$_pkgversion")
+    end
+    """
     depot_path = mktempdir()
     try
         proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
@@ -1044,6 +1054,7 @@ end
             cmd = """
             $load_distr
             begin
+                $ew $test_ext
                 $ew push!(empty!(DEPOT_PATH), $(repr(depot_path)))
                 using HasExtensions
                 $ew using HasExtensions
@@ -1051,6 +1062,7 @@ end
                 $ew HasExtensions.ext_loaded && error("ext_loaded set")
                 using HasDepWithExtensions
                 $ew using HasDepWithExtensions
+                $ew test_ext(HasExtensions, :Extension)
                 $ew Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
                 $ew HasExtensions.ext_loaded || error("ext_loaded not set")
                 $ew HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
@@ -1102,13 +1114,14 @@ end
 
         test_ext_proj = """
         begin
+            $test_ext
             using HasExtensions
             using ExtDep
-            Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
+            test_ext(HasExtensions, :Extension)
             using ExtDep2
-            Base.get_extension(HasExtensions, :ExtensionFolder) isa Module || error("expected extension to load")
+            test_ext(HasExtensions, :ExtensionFolder)
             using ExtDep3
-            Base.get_extension(HasExtensions, :ExtensionDep) isa Module || error("expected extension to load")
+            test_ext(HasExtensions, :ExtensionDep)
         end
         """
         for compile in (`--compiled-modules=no`, ``)
