@@ -1030,6 +1030,7 @@ void gc_sweep_wait_for_all_stacks(void) JL_NOTSAFEPOINT
 void sweep_stack_pools(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     // initialize ptls index for parallel sweeping of stack pools
+    assert(gc_n_threads);
     int stack_free_idx = jl_atomic_load_relaxed(&gc_stack_free_idx);
     if (stack_free_idx + 1 == gc_n_threads)
         jl_atomic_store_relaxed(&gc_stack_free_idx, 0);

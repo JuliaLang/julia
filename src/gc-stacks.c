@@ -216,7 +216,6 @@ void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
     //            bufsz = t->bufsz
     //            if (stkbuf)
     //                push(free_stacks[sz], stkbuf)
-    assert(gc_n_threads);
     jl_atomic_fetch_add(&gc_n_threads_sweeping, 1);
     while (1) {
         int i = jl_atomic_fetch_add_relaxed(&gc_ptls_sweep_idx, -1);
