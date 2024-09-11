@@ -31,19 +31,71 @@ function is_identifier_like(ex)
     k == K"Identifier" || k == K"BindingId" || k == K"Placeholder"
 end
 
+# Return true when `x` and `y` are "the same identifier", but also works with
+# bindings (and hence ssa vars). See also `is_identifier_like()`
+function is_same_identifier_like(x, y)
+    return (kind(x) == K"Identifier" && kind(y) == K"Identifier" && NameKey(x) == NameKey(y)) ||
+           (kind(x) == K"BindingId"  && kind(y) == K"BindingId"  && x.var_id   == y.var_id)
+end
+
 # Identify some expressions that are safe to repeat
+#
+# TODO: Can we use this in more places?
 function is_effect_free(ex)
     k = kind(ex)
-    is_literal(k) || is_identifier_like(ex) || k == K"Symbol" ||
-        k == K"inert" || k == K"top" || k == K"core" ||
-        (k == K"." && numchildren(ex) == 2 && is_identifier_like(ex[1]))  # `a.b` with simple `a`
     # TODO: metas
+    is_literal(k) || is_identifier_like(ex) || k == K"Symbol" ||
+        k == K"inert" || k == K"top" || k == K"core"
+    # flisp also includes `a.b` with simple `a`, but this seems like a bug
+    # because this calls the user-defined getproperty?
 end
 
 # Convert things like `(x,y,z) = (a,b,c)` to assignments, eliminating the
 # tuple. Includes support for slurping/splatting.
-function tuple_to_assignments(ctx, srcref, lhss, rhs)
-    TODO(srcref, "tuple-eliminating destructuring")
+function tuple_to_assignments(ctx, ex)
+    lhs = ex[1]
+    rhs = ex[2]
+    stmts = SyntaxList(ctx)
+    end_stmts = SyntaxList(ctx)
+    elements = SyntaxList(ctx)
+    assigned = SyntaxList(ctx)
+
+    for i in 1:numchildren(lhs)
+        lh = lhs[i]
+        if kind(lh) == K"..."
+            # can be null iff lh is a vararg
+            rh = i <= numchildren(rhs) ? rhs[i] : nothing
+            TODO(lh, "... in tuple_to_assignments")
+            continue
+        end
+        rh = rhs[i] # In other cases `rhs[i]` must exist
+        if kind(rh) == K"..."
+            TODO(rh, "... in tuple_to_assignments")
+        else
+            if is_identifier_like(lh) && is_effect_free(rh) &&
+                    !any(is_same_identifier_like(lh, rhs[j]) for j in i+1:lastindex(rhs))
+                    !any(is_same_identifier_like(rh, a) for a in assigned)
+                # Overwrite `lh` directly if that won't cause conflicts with
+                # other symbols
+                push!(stmts, @ast ctx ex [K"=" lh rh])
+                push!(assigned, lh)
+                push!(elements, rh)
+            else
+                # In other cases we need a temporary and we'll overwrite `lh` at the end.
+                tmp = ssavar(ctx, rh)
+                push!(stmts,     @ast ctx ex [K"=" tmp rh])
+                # `push!(assigned, lh)` is not required when we assign `lh` later.
+                push!(end_stmts, @ast ctx ex [K"=" lh  tmp])
+                push!(elements, tmp)
+            end
+        end
+    end
+
+    @ast ctx ex [K"block"
+        stmts...
+        end_stmts...
+        [K"unnecessary" [K"tuple" elements...]]
+    ]
 end
 
 # Create an assignment `$lhs = $rhs` where `lhs` must be "simple". If `rhs` is
@@ -90,14 +142,8 @@ end
 function _in_assignment_lhs(lhss, x_rhs)
     for e in lhss
         x = kind(e) == K"..." ? e[1] : e
-        if kind(x_rhs) == K"Identifier" && kind(x) == K"Identifier"
-            if x_rhs.name_val == x.name_val
-                return true
-            end
-        elseif kind(x_rhs) == K"BindingId" && kind(x) == K"BindingId"
-            if x_rhs.var_id == x.var_id
-                return true
-            end
+        if is_same_identifier_like(x, x_rhs)
+            return true
         end
     end
     return false

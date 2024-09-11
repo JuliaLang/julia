@@ -132,3 +132,50 @@ end
 14  TestMod.as
 15  (return %₁₄)
 
+########################################
+# Destructuring with simple tuple elimination
+let
+    (x, y) = (a, b)
+end
+#---------------------
+1   TestMod.a
+2   (= slot₁/x %₁)
+3   TestMod.b
+4   (= slot₂/y %₃)
+5   TestMod.a
+6   TestMod.b
+7   (call core.tuple %₅ %₆)
+8   (return %₇)
+
+########################################
+# Destructuring with simple tuple elimination and non effect-free rhs
+let
+    (x, y) = (f(), b)
+end
+#---------------------
+1   TestMod.f
+2   (call %₁)
+3   TestMod.b
+4   (= slot₂/y %₃)
+5   (= slot₁/x %₂)
+6   TestMod.b
+7   (call core.tuple %₂ %₆)
+8   (return %₇)
+
+########################################
+# Destructuring with tuple elimination where variables are repeated
+let
+    (x, y, z) = (y, a, x)
+end
+#---------------------
+1   slot₂/y
+2   TestMod.a
+3   (= slot₂/y %₂)
+4   slot₁/x
+5   (= slot₃/z %₄)
+6   (= slot₁/x %₁)
+7   TestMod.a
+8   slot₁/x
+9   (call core.tuple %₁ %₇ %₈)
+10  (return %₉)
+

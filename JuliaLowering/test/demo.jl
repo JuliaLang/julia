@@ -39,6 +39,44 @@ end
 # end
 
 #-------------------------------------------------------------------------------
+# Module containing macros used in the demo.
+baremodule M
+    using Base
+
+    using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope, MacroExpansionError, makenode
+    using JuliaSyntax
+
+    macro K_str(str)
+        convert(JuliaSyntax.Kind, str)
+    end
+
+    function var"@inert"(__context__::JuliaLowering.MacroContext, ex)
+        @chk kind(ex) == K"quote"
+        @ast __context__ ex [K"inert" ex]
+    end
+
+    function var"@label"(__context__::JuliaLowering.MacroContext, ex)
+        @chk kind(ex) == K"Identifier"
+        @ast __context__ ex ex=>K"symbolic_label"
+    end
+
+    function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
+        @chk kind(ex) == K"Identifier"
+        @ast __context__ ex ex=>K"symbolic_goto"
+    end
+
+    function var"@islocal"(__context__::JuliaLowering.MacroContext, ex)
+        @chk kind(ex) == K"Identifier"
+        @ast __context__ ex [K"extension"
+            "islocal"::K"Symbol"
+            ex
+        ]
+    end
+
+    JuliaLowering.include(M, "demo_include.jl")
+end
+
+#-------------------------------------------------------------------------------
 # Demos of the prototype
 
 # src = """
@@ -103,35 +141,6 @@ begin
     end
 end
 """
-
-# JuliaLowering.include(Main, "demo_include.jl")
-#
-# Base.eval(M, quote
-#     function var"@inert"(__context__::JuliaLowering.MacroContext, ex)
-#         @chk kind(ex) == JuliaSyntax.K"quote"
-#         @ast __context__ ex [JuliaSyntax.K"inert" ex]
-#     end
-#
-#     function var"@label"(__context__::JuliaLowering.MacroContext, ex)
-#         @chk kind(ex) == JuliaSyntax.K"Identifier"
-#         @ast __context__ ex ex=>JuliaSyntax.K"symbolic_label"
-#     end
-#
-#     function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
-#         @chk kind(ex) == JuliaSyntax.K"Identifier"
-#         @ast __context__ ex ex=>JuliaSyntax.K"symbolic_goto"
-#     end
-# end)
-#
-# JuliaLowering.include_string(M, """
-# xx = "xx in M"
-# macro test_inert_quote()
-#     println(xx)
-#     @inert quote
-#         (\$xx, xx)
-#     end
-# end
-# """)
 
 function wrapscope(ex, scope_type)
     makenode(ex, ex, K"scope_block", ex; scope_type=scope_type)
@@ -467,6 +476,12 @@ src = """
 begin
     as = [(1,2), (3,4)]
     ((x,y), (z,w)) = as
+end
+"""
+
+src = """
+let
+(x, y) = (y,x)
 end
 """
 

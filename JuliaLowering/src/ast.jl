@@ -487,7 +487,7 @@ end
 # Predicates and accessors working on expression trees
 
 function is_quoted(ex)
-    kind(ex) in KSet"quote top core globalref outerref break inert
+    kind(ex) in KSet"Symbol quote top core globalref outerref break inert
                      meta inbounds inline noinline loopinfo"
 end
 
