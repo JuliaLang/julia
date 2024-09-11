@@ -2117,7 +2117,8 @@ jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
 }
 
 static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed = NULL);
-static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg);
+static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg,
+        ArrayRef<const char*> ArgNames=None, unsigned nreq=0);
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign, bool alloc);
@@ -7751,11 +7752,12 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlretty, j
         ctx.builder.CreateRet(boxed(ctx, retval));
 }
 
-static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg)
+static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg,
+        ArrayRef<const char*> ArgNames, unsigned nreq)
 {
     jl_returninfo_t props = {};
-    SmallVector<Type*, 8> fsig;
-    SmallVector<std::string, 4> argnames;
+    SmallVector<Type*,8> fsig;
+    SmallVector<std::string,4> argnames;
     Type *rt = NULL;
     Type *srt = NULL;
     if (jlrettype == (jl_value_t*)jl_bottom_type) {
@@ -7883,11 +7885,24 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         }
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         fsig.push_back(ty);
+        size_t argno = i < nreq ? i : nreq;
+        std::string genname;
+        if (!ArgNames.empty()) {
+            genname = ArgNames[argno];
+            if (genname.empty())
+                genname = (StringRef("#") + Twine(argno + 1)).str();
+            if (i >= nreq)
+                genname += (StringRef("[") + Twine(i - nreq + 1) + StringRef("]")).str();
+            const char *arg_typename = jl_is_datatype(jt) ? jl_symbol_name(((jl_datatype_t*)jt)->name->name) : "<unknown type>";
+            argnames.push_back((genname + StringRef("::") + arg_typename).str());
+        }
         if (et && et->isAggregateType()) {
             auto tracked = CountTrackedPointers(et);
             if (tracked.count && !tracked.all) {
                 attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
                 fsig.push_back(ctx.builder.getPtrTy(M->getDataLayout().getAllocaAddrSpace()));
+                if (!genname.empty())
+                    argnames.push_back((Twine(".roots.") + genname).str());
             }
         }
     }
@@ -8149,8 +8164,23 @@ static jl_llvm_functions_t
     Function *f = NULL;
     bool has_sret = false;
     if (specsig) { // assumes !va and !needsparams
+        SmallVector<const char*,0> ArgNames(0);
+        if (ctx.emission_context.debug_level >= 2) {
+            ArgNames.resize(ctx.nargs, "");
+            for (int i = 0; i < ctx.nargs; i++) {
+                jl_sym_t *argname = slot_symbol(ctx, i);
+                if (argname == jl_unused_sym)
+                    continue;
+                const char *name = jl_symbol_name(argname);
+                if (name[0] == '\0' && ctx.vaSlot == i)
+                    ArgNames[i] = "...";
+                else
+                    ArgNames[i] = name;
+            }
+        }
         returninfo = get_specsig_function(ctx, M, NULL, declarations.specFunctionObject, lam->specTypes,
-                                          jlrettype, ctx.is_opaque_closure, JL_FEAT_TEST(ctx,gcstack_arg));
+                                          jlrettype, ctx.is_opaque_closure, JL_FEAT_TEST(ctx,gcstack_arg),
+                                          ArgNames, nreq);
         f = cast<Function>(returninfo.decl.getCallee());
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
         jl_init_function(f, ctx.emission_context.TargetTriple);
