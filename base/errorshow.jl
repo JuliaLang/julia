@@ -851,26 +851,33 @@ function show_backtrace(io::IO, t::Vector)
         else
             frametrace = t
         end
-        filtered = process_backtrace(tracecounts)
+        filtered = process_backtrace(frametrace)
     end
     isempty(filtered) && return
 
+    # don't show a single top-level frame with no location info
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
         f = filtered[1][1]::StackFrame
-        if f.line == 0 && f.file === :var""
-            # don't show a single top-level frame with no location info
+        if f.line == 0 && f.file === :var"" 
             return
         end
     end
 
+    # Find repeated cycles if trace is too long
     if length(filtered) > BIG_STACKTRACE_SIZE
         filtered, repeated_cycle = _backtrace_find_and_remove_cycles(filtered)
     else
         repeated_cycle = NTuple{3, Int}[]
     end
 
-    visible_frame_indexes = _backtrace_display_filter[](filtered)
+    # Allow external code to determine frames to show and hide
+    visible_frame_indexes = try
+        invokelatest(_backtrace_display_filter[], filtered)
+    catch
+        collect(eachindex(filtered))
+    end
 
+    # Allow external code to edit information in the frames (e.g. line numbers with Revise)
     try invokelatest(update_stackframes_callback[], filtered) catch end
 
     show_processed_backtrace(IOContext(io, :backtrace => true), filtered, repeated_cycle, visible_frame_indexes; print_linebreaks = stacktrace_linebreaks())
@@ -880,7 +887,7 @@ end
 function _backtrace_collapse_and_count_repeated_frames(frames::Vector{StackFrame})
     n = 0
     last_frame = StackTraces.UNKNOWN
-    tracecount = Tuple{StackFrame,Int}[]
+    tracecount = Any[]
     for frame in frames
         if frame.file != last_frame.file || frame.line != last_frame.line || frame.func != last_frame.func || frame.linfo !== last_frame.linfo
             if n > 0
@@ -899,7 +906,7 @@ function _backtrace_collapse_and_count_repeated_frames(frames::Vector{StackFrame
 end
 
 function _backtrace_remove_kwcall_frames!(trace)
-    todelete = findall(t) do frame, _
+    todelete = findall(trace) do (frame, _)
         code = frame.linfo
         if code isa MethodInstance
             def = code.def
@@ -914,7 +921,7 @@ function _backtrace_remove_kwcall_frames!(trace)
         end
         return false
     end
-    deleteat!(t, todelete)
+    deleteat!(trace, todelete)
 end
 
 # For improved user experience, filter out frames for include() implementation
@@ -1016,32 +1023,16 @@ function _backtrace_collapse_repeated_locations!(trace)
     keepat!(trace, kept_frames)
 end
 
-const _backtrace_editors! = [
-    _backtrace_remove_kwcall_frames!,
-    _backtrace_simplify_include_frames!,
-    _backtrace_collapse_repeated_locations!
-]
-
-"""
-    register_backtrace_editor(btfilter)
-
-Provide a function that accepts a Vector{Any} with elements of type Tuple{Frame, Int}, and edits it in-place.
-"""
-function register_backtrace_editor(btfilter!)
-    push!(_backtrace_editors!, btfilter!)
-    nothing
-end
-
 function process_backtrace(t::Vector{StackFrame})
-    tracecounts = _backtrace_collapse_and_count_repeated_frames(t)
-    process_backtrace(tracecounts)
+    tracecount = _backtrace_collapse_and_count_repeated_frames(t)
+    process_backtrace(tracecount)
 end
 
-function process_backtrace(t::Vector{Any})
-    for trace_editor! ∈ _backtrace_editors!
-        trace_editor!(t)
-    end
-    return t
+function process_backtrace(tracecount::Vector{Any})
+    _backtrace_remove_kwcall_frames!(tracecount)
+    _backtrace_simplify_include_frames!(tracecount)
+    _backtrace_collapse_repeated_locations!(tracecount)
+    return tracecount
 end
 
 """
