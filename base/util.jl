@@ -508,7 +508,7 @@ unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_
 _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
     unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
 
-function _crc32c(a::DenseBytes, crc::UInt32=0x00000000)
+function _crc32c(a::DenseUInt8OrInt8, crc::UInt32=0x00000000)
     unsafe_crc32c(a, length(a) % Csize_t, crc)
 end
 
