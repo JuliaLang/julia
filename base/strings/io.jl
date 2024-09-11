@@ -816,12 +816,12 @@ function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
             end
         end
     end
-    annots = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    annots = RegionAnnotation[]
     point = 1
     for c in chars
         if c isa AnnotatedChar
             for annot in c.annotations
-                push!(annots, (point:point, annot))
+                push!(annots, (point:point, annot...))
             end
         end
         point += ncodeunits(c)
