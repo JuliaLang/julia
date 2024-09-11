@@ -420,7 +420,6 @@
     XX(jl_set_zero_subnormals) \
     XX(jl_sigatomic_begin) \
     XX(jl_sigatomic_end) \
-    XX(jl_sig_throw) \
     XX(jl_spawn) \
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
@@ -453,6 +452,8 @@
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
     XX(jl_threadpoolid) \
+    XX(jl_get_ptls_rng) \
+    XX(jl_set_ptls_rng) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \

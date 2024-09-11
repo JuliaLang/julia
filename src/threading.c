@@ -74,6 +74,16 @@ JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
 
 JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 {
+#ifdef _OS_DARWIN_
+    jl_task_t *ct = jl_get_current_task();
+    if (ct != NULL && ct->ptls) {
+        if (sr == NULL)
+            pthread_setspecific(jl_safe_restore_key, (void*)sr);
+        ct->ptls->safe_restore = sr;
+        if (sr == NULL)
+            return;
+    }
+#endif
     pthread_setspecific(jl_safe_restore_key, (void*)sr);
 }
 #endif
@@ -302,6 +312,18 @@ JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT
             return (int8_t)i;
     }
     return -1; // everything else uses threadpool -1 (does not belong to any threadpool)
+}
+
+// get thread local rng
+JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT
+{
+    return jl_current_task->ptls->rngseed;
+}
+
+// get thread local rng
+JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT
+{
+    jl_current_task->ptls->rngseed = new_seed;
 }
 
 jl_ptls_t jl_init_threadtls(int16_t tid)

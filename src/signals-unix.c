@@ -44,7 +44,7 @@ static const size_t sig_stack_size = 8 * 1024 * 1024;
 
 // helper function for returning the unw_context_t inside a ucontext_t
 // (also used by stackwalk.c)
-bt_context_t *jl_to_bt_context(void *sigctx)
+bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT
 {
 #ifdef __APPLE__
     return (bt_context_t*)&((ucontext64_t*)sigctx)->uc_mcontext64->__ss;
@@ -62,7 +62,11 @@ bt_context_t *jl_to_bt_context(void *sigctx)
 static int thread0_exit_count = 0;
 static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
 
-static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
+int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
+static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf);
+
+#if !defined(_OS_DARWIN_)
+static inline uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
 {
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
@@ -76,12 +80,6 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.arm_sp;
-#elif defined(_OS_DARWIN_) && defined(_CPU_X86_64_)
-    const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
-    return ctx->uc_mcontext64->__ss.__rsp;
-#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
-    const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
-    return ctx->uc_mcontext64->__ss.__sp;
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.mc_rsp;
@@ -97,7 +95,7 @@ static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *
 #endif
 }
 
-static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
+static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr) JL_NOTSAFEPOINT
 {
     // One guard page for signal_stack.
     return ptls->signal_stack == NULL ||
@@ -105,10 +103,8 @@ static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
             (char*)ptr <= (char*)ptls->signal_stack + (ptls->signal_stack_size ? ptls->signal_stack_size : sig_stack_size));
 }
 
-// Modify signal context `_ctx` so that `fptr` will execute when the signal
-// returns. `fptr` will execute on the signal stack, and must not return.
-// jl_call_in_ctx is also currently executing on that signal stack,
-// so be careful not to smash it
+// Modify signal context `_ctx` so that `fptr` will execute when the signal returns
+// The function `fptr` itself must not return.
 JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
 {
     // Modifying the ucontext should work but there is concern that
@@ -118,44 +114,36 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     // checks that the syscall is made in the signal handler and that
     // the ucontext address is valid. Hopefully the value of the ucontext
     // will not be part of the validation...
-    if (!ptls) {
-        sigset_t sset;
-        sigemptyset(&sset);
-        sigaddset(&sset, sig);
-        pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
-        fptr();
-        return;
-    }
     uintptr_t rsp = jl_get_rsp_from_ctx(_ctx);
-    if (is_addr_on_sigstack(ptls, (void*)rsp))
-        rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
-    else
-        rsp = (uintptr_t)ptls->signal_stack + (ptls->signal_stack_size ? ptls->signal_stack_size : sig_stack_size);
-    assert(rsp % 16 == 0);
-    rsp -= 16;
+    rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = 0;
     ctx->uc_mcontext.gregs[REG_RSP] = rsp;
     ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)fptr;
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = 0;
     ctx->uc_mcontext.mc_rsp = rsp;
     ctx->uc_mcontext.mc_rip = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = 0;
     ctx->uc_mcontext.gregs[REG_ESP] = rsp;
     ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)fptr;
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = 0;
     ctx->uc_mcontext.mc_esp = rsp;
     ctx->uc_mcontext.mc_eip = (uintptr_t)fptr;
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
     struct sigcontext *ctx = (struct sigcontext *)_ctx;
     rsp -= sizeof(void*);
+    *(uintptr_t*)rsp = 0;
     ctx->sc_rsp = rsp;
     ctx->sc_rip = fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
@@ -187,22 +175,6 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     ctx->uc_mcontext.arm_sp = rsp;
     ctx->uc_mcontext.arm_lr = 0; // Clear link register
     ctx->uc_mcontext.arm_pc = target;
-#elif defined(_OS_DARWIN_) && (defined(_CPU_X86_64_) || defined(_CPU_AARCH64_))
-    // Only used for SIGFPE.
-    // This doesn't seems to be reliable when the SIGFPE is generated
-    // from a divide-by-zero exception, which is now handled by
-    // `catch_exception_raise`. It works fine when a signal is received
-    // due to `kill`/`raise` though.
-    ucontext64_t *ctx = (ucontext64_t*)_ctx;
-#if defined(_CPU_X86_64_)
-    rsp -= sizeof(void*);
-    ctx->uc_mcontext64->__ss.__rsp = rsp;
-    ctx->uc_mcontext64->__ss.__rip = (uintptr_t)fptr;
-#else
-    ctx->uc_mcontext64->__ss.__sp = rsp;
-    ctx->uc_mcontext64->__ss.__pc = (uintptr_t)fptr;
-    ctx->uc_mcontext64->__ss.__lr = 0;
-#endif
 #else
 #pragma message("julia: throw-in-context not supported on this platform")
     // TODO Add support for PowerPC(64)?
@@ -213,22 +185,30 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     fptr();
 #endif
 }
+#endif
 
 static void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *e, int sig, void *sigctx)
 {
     jl_ptls_t ptls = ct->ptls;
-    if (!jl_get_safe_restore()) {
-        ptls->bt_size =
-            rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, jl_to_bt_context(sigctx),
-                              ct->gcstack);
-        ptls->sig_exception = e;
+    assert(!jl_get_safe_restore());
+    ptls->bt_size =
+        rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, jl_to_bt_context(sigctx),
+                            ct->gcstack);
+    ptls->sig_exception = e;
+    ptls->io_wait = 0;
+    jl_handler_t *eh = ct->eh;
+    if (eh != NULL) {
+        asan_unpoison_task_stack(ct, &eh->eh_ctx);
+        jl_longjmp_in_ctx(sig, sigctx, eh->eh_ctx);
     }
-    jl_call_in_ctx(ptls, &jl_sig_throw, sig, sigctx);
+    else {
+        jl_no_exc_handler(e, ct);
+    }
 }
 
 static pthread_t signals_thread;
 
-static int is_addr_on_stack(jl_task_t *ct, void *addr)
+static int is_addr_on_stack(jl_task_t *ct, void *addr) JL_NOTSAFEPOINT
 {
     if (ct->ctx.copy_stack) {
         jl_ptls_t ptls = ct->ptls;
@@ -379,7 +359,7 @@ int is_write_fault(void *context) {
 }
 #endif
 
-static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
+static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context) JL_NOTSAFEPOINT
 {
     return (ptls->signal_stack != NULL &&
             is_addr_on_sigstack(ptls, ptr) &&
@@ -389,8 +369,9 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
 JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     assert(sig == SIGSEGV || sig == SIGBUS);
-    if (jl_get_safe_restore()) { // restarting jl_ or profile
-        jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
+    jl_jmp_buf *saferestore = jl_get_safe_restore();
+    if (saferestore) { // restarting jl_ or profile
+        jl_longjmp_in_ctx(sig, context, *saferestore);
         return;
     }
     jl_task_t *ct = jl_get_current_task();
@@ -445,6 +426,7 @@ pthread_mutex_t in_signal_lock; // shared with jl_delete_thread
 static bt_context_t *signal_context; // protected by in_signal_lock
 static int exit_signal_cond = -1;
 static int signal_caught_cond = -1;
+static int signals_inflight = 0;
 
 int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
 {
@@ -457,7 +439,7 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
         pthread_mutex_unlock(&in_signal_lock);
         return 0;
     }
-    if (jl_atomic_load(&ptls2->signal_request) != 0) {
+    while (signals_inflight) {
         // something is wrong, or there is already a usr2 in flight elsewhere
         // try to wait for it to finish or wait for timeout
         struct pollfd event = {signal_caught_cond, POLLIN, 0};
@@ -469,25 +451,16 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
             pthread_mutex_unlock(&in_signal_lock);
             return 0;
         }
-    }
-    // check for  any stale signal_caught_cond events
-    struct pollfd event = {signal_caught_cond, POLLIN, 0};
-    do {
-        err = poll(&event, 1, 0);
-    } while (err == -1 && errno == EINTR);
-    if (err == -1) {
-        pthread_mutex_unlock(&in_signal_lock);
-        return 0;
-    }
-    if ((event.revents & POLLIN) != 0) {
         // consume it before continuing
         eventfd_t got;
         do {
             err = read(signal_caught_cond, &got, sizeof(eventfd_t));
         } while (err == -1 && errno == EINTR);
         if (err != sizeof(eventfd_t)) abort();
-        assert(got == 1); (void) got;
+        assert(signals_inflight >= got);
+        signals_inflight -= got;
     }
+    signals_inflight++;
     sig_atomic_t request = jl_atomic_exchange(&ptls2->signal_request, 1);
     assert(request == 0 || request == -1);
     request = 1;
@@ -504,6 +477,7 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
     if (err == -1) {
         // not ready after timeout: try to cancel this request
         if (jl_atomic_cmpswap(&ptls2->signal_request, &request, 0)) {
+            signals_inflight--;
             pthread_mutex_unlock(&in_signal_lock);
             return 0;
         }
@@ -513,7 +487,9 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
         err = read(signal_caught_cond, &got, sizeof(eventfd_t));
     } while (err == -1 && errno == EINTR);
     if (err != sizeof(eventfd_t)) abort();
-    assert(got == 1); (void) got;
+    assert(signals_inflight >= got);
+    signals_inflight -= got;
+    signals_inflight++;
     // Now the other thread is waiting on exit_signal_cond (verify that here by
     // checking it is 0, and add an acquire barrier for good measure)
     request = jl_atomic_load_acquire(&ptls2->signal_request);
@@ -540,6 +516,7 @@ static void jl_try_deliver_sigint(void)
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     pthread_mutex_lock(&in_signal_lock);
+    signals_inflight++;
     jl_atomic_store_release(&ptls2->signal_request, 2);
     // This also makes sure `sleep` is aborted.
     pthread_kill(ptls2->system_id, SIGUSR2);
@@ -630,7 +607,11 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
             // Force a throw
             jl_clear_force_sigint();
-            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, ctx);
+            jl_jmp_buf *saferestore = jl_get_safe_restore();
+            if (saferestore) // restarting jl_ or profile
+                jl_longjmp_in_ctx(sig, ctx, *saferestore);
+            else
+                jl_throw_in_ctx(ct, jl_interrupt_exception, sig, ctx);
         }
     }
     else if (request == 3) {
@@ -1100,8 +1081,9 @@ void restore_signals(void)
 static void fpe_handler(int sig, siginfo_t *info, void *context)
 {
     (void)info;
-    if (jl_get_safe_restore()) { // restarting jl_ or profile
-        jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
+    jl_jmp_buf *saferestore = jl_get_safe_restore();
+    if (saferestore) { // restarting jl_ or profile
+        jl_longjmp_in_ctx(sig, context, *saferestore);
         return;
     }
     jl_task_t *ct = jl_get_current_task();
@@ -1109,6 +1091,21 @@ static void fpe_handler(int sig, siginfo_t *info, void *context)
         sigdie_handler(sig, info, context);
     else
         jl_throw_in_ctx(ct, jl_diverror_exception, sig, context);
+}
+
+static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf)
+{
+#if defined(_OS_DARWIN_)
+    jl_longjmp_in_state((host_thread_state_t*)jl_to_bt_context(_ctx), jmpbuf);
+#else
+    if (jl_simulate_longjmp(jmpbuf, jl_to_bt_context(_ctx)))
+        return;
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, sig);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    jl_longjmp(jmpbuf, 1);
+#endif
 }
 
 static void sigint_handler(int sig)
