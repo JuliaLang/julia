@@ -485,6 +485,12 @@ let
 end
 """
 
+src = """
+let x = 1
+    M.@islocal x
+end
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)

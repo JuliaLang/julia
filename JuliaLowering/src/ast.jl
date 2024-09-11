@@ -491,11 +491,11 @@ function is_quoted(ex)
                      meta inbounds inline noinline loopinfo"
 end
 
-function is_assertion(ex, type)
-    kind(ex) == K"assert" || return false
+function extension_type(ex)
+    @assert kind(ex) == K"extension" || kind(ex) == K"assert"
     @chk numchildren(ex) >= 1
     @chk kind(ex[1]) == K"Symbol"
-    return ex[1].name_val == type
+    ex[1].name_val
 end
 
 function is_sym_decl(x)

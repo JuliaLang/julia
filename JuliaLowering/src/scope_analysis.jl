@@ -373,8 +373,6 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
     #     ex
     elseif k == K"local"
         makeleaf(ctx, ex, K"TOMBSTONE")
-    # elseif locals # return Dict of locals
-    # elseif islocal
     elseif k == K"lambda"
         lambda_info = ex.lambda_info
         scope = analyze_scope(ctx, ex, nothing, lambda_info)
@@ -398,19 +396,34 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
         body
         pop!(ctx.scope_stack)
         @ast ctx ex [K"block" body...]
+    elseif k == K"extension"
+        etype = extension_type(ex)
+        if etype == "islocal"
+            id = lookup_var(ctx, NameKey(ex[2]))
+            islocal = !isnothing(id) && var_kind(ctx, id) != :global
+            @ast ctx ex islocal::K"Bool"
+        elseif etype == "locals"
+            # return Dict of locals
+            TODO(ex, "@locals")
+        else
+            throw(LoweringError(ex, "Unknown syntax extension"))
+        end
     elseif k == K"assert"
-        if is_assertion(ex, "require_existing_locals")
+        etype = extension_type(ex)
+        if etype == "require_existing_locals"
             for v in ex[2:end]
                 vk = var_kind(ctx, NameKey(v))
                 if vk !== :local
                     throw(LoweringError(v, "`outer` annotations must match with a local variable in an outer scope but no such variable was found"))
                 end
             end
-        elseif is_assertion(ex, "global_toplevel_only")
+        elseif etype == "global_toplevel_only"
             if !ctx.scope_stack[end].is_toplevel_global_scope
                 e = ex[2][1]
                 throw(LoweringError(e, "$(kind(e)) is only allowed in global scope"))
             end
+        else
+            throw(LoweringError(ex, "Unknown syntax assertion"))
         end
         makeleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"const_if_global"

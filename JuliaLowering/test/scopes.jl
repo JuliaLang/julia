@@ -43,4 +43,6 @@ JuliaLowering.eval(test_mod, wrapscope(assign_z_2, :hard))
 JuliaLowering.eval(test_mod, wrapscope(wrapscope(assign_z_2, :neutral), :soft))
 @test test_mod.z == 2
 
+test_ir_cases(joinpath(@__DIR__, "scopes_ir.jl"))
+
 end
