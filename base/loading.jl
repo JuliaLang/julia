@@ -1254,22 +1254,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         if parentmodule(M) === M && PkgId(M) == pkg
             register && register_root_module(M)
             if timing_imports
-                elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
+                elapsed_time = time_ns() - t_before
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
-                print(lpad(elapsed, 9), " ms  ")
-                ext_parent = extension_parent_name(M)
-                if ext_parent !== nothing
-                    print(ext_parent::String, " → ")
-                end
-                print(pkg.name)
-                if comp_time > 0
-                    printstyled(" ", Ryu.writefixed(Float64(100 * comp_time / (elapsed * 1e6)), 2), "% compilation time", color = Base.info_color())
-                end
-                if recomp_time > 0
-                    perc = Float64(100 * recomp_time / comp_time)
-                    printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
-                end
-                println()
+                print_time_imports_report(M, elapsed_time, comp_time, recomp_time)
             end
             return M
         end
@@ -1279,6 +1266,52 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     finally
         timing_imports && cumulative_compile_timing(false)
     end
+end
+
+# printing functions for @time_imports
+# note that the time inputs are UInt64 on all platforms. Give default values here so that we don't have
+# confusing UInt64 types in generate_precompile.jl
+function print_time_imports_report(
+        mod::Module,
+        elapsed_time::UInt64=UInt64(1),
+        comp_time::UInt64=UInt64(1),
+        recomp_time::UInt64=UInt64(1)
+    )
+    print(lpad(round(elapsed_time / 1e6, digits=1), 9), " ms  ")
+    ext_parent = extension_parent_name(mod)
+    if ext_parent !== nothing
+        print(ext_parent::String, " → ")
+    end
+    print(string(mod))
+    if comp_time > 0
+        perc = Ryu.writefixed(Float64(100 * comp_time / (elapsed_time)), 2)
+        printstyled(" $perc% compilation time", color = Base.info_color())
+    end
+    if recomp_time > 0
+        perc = Float64(100 * recomp_time / comp_time)
+        perc_show = perc < 1 ? "<1" : Ryu.writefixed(perc, 0)
+        printstyled(" ($perc_show% recompilation)", color = Base.warn_color())
+    end
+    println()
+end
+function print_time_imports_report_init(
+        mod::Module, i::Int=1,
+        elapsed_time::UInt64=UInt64(1),
+        comp_time::UInt64=UInt64(1),
+        recomp_time::UInt64=UInt64(1)
+    )
+    connector = i > 1 ? "├" : "┌"
+    printstyled("               $connector ", color = :light_black)
+    print("$(round(elapsed_time / 1e6, digits=1)) ms $mod.__init__() ")
+    if comp_time > 0
+        perc = Ryu.writefixed(Float64(100 * (comp_time) / elapsed_time), 2)
+        printstyled("$perc% compilation time", color = Base.info_color())
+    end
+    if recomp_time > 0
+        perc = Float64(100 * recomp_time / comp_time)
+        printstyled(" ($(perc < 1 ? "<1" : Ryu.writefixed(perc, 0))% recompilation)", color = Base.warn_color())
+    end
+    println()
 end
 
 # if M is an extension, return the string name of the parent. Otherwise return nothing
@@ -1338,31 +1371,18 @@ function run_module_init(mod::Module, i::Int=1)
     # `i` informs ordering for the `@time_imports` report formatting
     if TIMING_IMPORTS[] == 0
         ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
-    else
-        if isdefined(mod, :__init__)
-            connector = i > 1 ? "├" : "┌"
-            printstyled("               $connector ", color = :light_black)
+    elseif isdefined(mod, :__init__)
+        elapsed_time = time_ns()
+        cumulative_compile_timing(true)
+        compile_elapsedtimes = cumulative_compile_time_ns()
 
-            elapsedtime = time_ns()
-            cumulative_compile_timing(true)
-            compile_elapsedtimes = cumulative_compile_time_ns()
+        ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
 
-            ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
+        elapsed_time = time_ns() - elapsed_time
+        cumulative_compile_timing(false);
+        comp_time, recomp_time = cumulative_compile_time_ns() .- compile_elapsedtimes
 
-            elapsedtime = (time_ns() - elapsedtime) / 1e6
-            cumulative_compile_timing(false);
-            comp_time, recomp_time = (cumulative_compile_time_ns() .- compile_elapsedtimes) ./ 1e6
-
-            print("$(round(elapsedtime, digits=1)) ms $mod.__init__() ")
-            if comp_time > 0
-                printstyled(Ryu.writefixed(Float64(100 * comp_time / elapsedtime), 2), "% compilation time", color = Base.info_color())
-            end
-            if recomp_time > 0
-                perc = Float64(100 * recomp_time / comp_time)
-                printstyled(" ($(perc < 1 ? "<1" : Ryu.writefixed(perc, 0))% recompilation)", color = Base.warn_color())
-            end
-            println()
-        end
+        print_time_imports_report_init(mod, i, elapsed_time, comp_time, recomp_time)
     end
 end
 
