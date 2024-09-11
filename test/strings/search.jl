@@ -602,7 +602,7 @@ end
 end
 
 # NOTE: The strange edge cases are tested for here, but that does not mean
-# they are intentional. Ideally, the behviour should be changed. See issue 54584
+# they are intentional. Ideally, the behaviour should be changed. See issue 54584
 @testset "Edge behaviours of findnext/last" begin
     # Empty haystack causes no errors
     @test isempty(findall(==('\x00'), ""))

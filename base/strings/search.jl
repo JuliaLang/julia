@@ -67,7 +67,7 @@ function Base.iterate(s::FwCharPosIter, i::Int=1)
 
     # By definition, if the last byte is a standalone byte, then the char
     # is a single-byte char where the byte can never be a subset of another char.
-    # Hence, we can simply search for the occurence of the byte itself.
+    # Hence, we can simply search for the occurrence of the byte itself.
     if is_standalone_byte(s.last_char_byte)
         i > scu && return nothing
         i = _search(s.string, s.last_char_byte, i)
