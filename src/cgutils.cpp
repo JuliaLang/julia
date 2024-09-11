@@ -1937,18 +1937,22 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
             ctx.builder.CreateFence(Order);
         return ghostValue(ctx, jltype);
     }
+    if (isboxed)
+        alignment = sizeof(void*);
+    else if (!alignment)
+        alignment = julia_alignment(jltype);
     unsigned nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
     // note that nb == jl_Module->getDataLayout().getTypeAllocSize(elty) or getTypeStoreSize, depending on whether it is a struct or primitive type
     AllocaInst *intcast = NULL;
     if (Order == AtomicOrdering::NotAtomic) {
         if (!isboxed && !aliasscope && elty->isAggregateType() && !CountTrackedPointers(elty).count) {
-            intcast = emit_static_alloca(ctx, elty);
+            intcast = emit_static_alloca(ctx, elty, Align(alignment));
             setName(ctx.emission_context, intcast, "aggregate_load_box");
         }
     }
     else {
         if (!isboxed && !elty->isIntOrPtrTy()) {
-            intcast = emit_static_alloca(ctx, elty);
+            intcast = emit_static_alloca(ctx, elty, Align(alignment));
             setName(ctx.emission_context, intcast, "atomic_load_box");
             elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
         }
@@ -1963,10 +1967,6 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     if (idx_0based)
         data = ctx.builder.CreateInBoundsGEP(elty, data, idx_0based);
     Value *instr = nullptr;
-    if (isboxed)
-        alignment = sizeof(void*);
-    else if (!alignment)
-        alignment = julia_alignment(jltype);
     if (intcast && Order == AtomicOrdering::NotAtomic) {
         emit_memcpy(ctx, intcast, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), data, jl_aliasinfo_t::fromTBAA(ctx, tbaa), nb, Align(alignment), intcast->getAlign());
     }
@@ -2053,6 +2053,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         ret = update_julia_type(ctx, ret, jltype);
         return ret;
     };
+    if (isboxed)
+        alignment = sizeof(void*);
+    else if (!alignment)
+        alignment = julia_alignment(jltype);
     Type *elty = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, jltype);
     if (type_is_ghost(elty) ||
             (issetfieldonce && !maybe_null_if_boxed) ||
@@ -2095,7 +2099,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         intcast_eltyp = elty;
         elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
         if (!issetfield) {
-            intcast = emit_static_alloca(ctx, elty);
+            intcast = emit_static_alloca(ctx, elty, Align(alignment));
             setName(ctx.emission_context, intcast, "atomic_store_box");
         }
     }
@@ -2121,10 +2125,6 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (realelty != elty)
             r = ctx.builder.CreateZExt(r, elty);
     }
-    if (isboxed)
-        alignment = sizeof(void*);
-    else if (!alignment)
-        alignment = julia_alignment(jltype);
     Value *instr = nullptr;
     Value *Compare = nullptr;
     Value *Success = nullptr;
@@ -2657,10 +2657,8 @@ static jl_cgval_t emit_unionload(jl_codectx_t &ctx, Value *addr, Value *ptindex,
     if (fsz > 0 && mutabl) {
         // move value to an immutable stack slot (excluding tindex)
         Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (fsz + al - 1) / al);
-        AllocaInst *lv = emit_static_alloca(ctx, AT);
+        AllocaInst *lv = emit_static_alloca(ctx, AT, Align(al));
         setName(ctx.emission_context, lv, "immutable_union");
-        if (al > 1)
-            lv->setAlignment(Align(al));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         emit_memcpy(ctx, lv, ai, addr, ai, fsz, Align(al), Align(al));
         addr = lv;
@@ -2903,7 +2901,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 unsigned st_idx = convert_struct_offset(ctx, T, byte_offset);
                 IntegerType *ET = cast<IntegerType>(T->getStructElementType(st_idx));
                 unsigned align = (ET->getBitWidth() + 7) / 8;
-                lv = emit_static_alloca(ctx, ET);
+                lv = emit_static_alloca(ctx, ET, Align(align));
                 lv->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), (fsz + align - 1) / align));
                 // emit all of the align-sized words
                 unsigned i = 0;
@@ -3324,10 +3322,8 @@ static AllocaInst *try_emit_union_alloca(jl_codectx_t &ctx, jl_uniontype_t *ut, 
         // at least some of the values can live on the stack
         // try to pick an Integer type size such that SROA will emit reasonable code
         Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * min_align), (nbytes + min_align - 1) / min_align);
-        AllocaInst *lv = emit_static_alloca(ctx, AT);
+        AllocaInst *lv = emit_static_alloca(ctx, AT, Align(align));
         setName(ctx.emission_context, lv, "unionalloca");
-        if (align > 1)
-            lv->setAlignment(Align(align));
         return lv;
     }
     return NULL;
@@ -3886,7 +3882,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 }
             }
             else {
-                strct = emit_static_alloca(ctx, lt);
+                strct = emit_static_alloca(ctx, lt, Align(julia_alignment(ty)));
                 setName(ctx.emission_context, strct, arg_typename);
                 if (tracked.count)
                     undef_derived_strct(ctx, strct, sty, ctx.tbaa().tbaa_stack);
@@ -3966,7 +3962,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         if (fsz1 > 0 && !fval_info.isghost) {
                             Type *ET = IntegerType::get(ctx.builder.getContext(), 8 * al);
                             assert(lt->getStructElementType(llvm_idx) == ET);
-                            AllocaInst *lv = emit_static_alloca(ctx, ET);
+                            AllocaInst *lv = emit_static_alloca(ctx, ET, Align(al));
                             setName(ctx.emission_context, lv, "unioninit");
                             lv->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), (fsz1 + al - 1) / al));
                             emit_unionmove(ctx, lv, ctx.tbaa().tbaa_stack, fval_info, nullptr);

@@ -446,15 +446,13 @@ static Value *llvm_type_rewrite(
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     Align align = std::max(DL.getPrefTypeAlign(target_type), DL.getPrefTypeAlign(from_type));
     if (DL.getTypeAllocSize(target_type) >= DL.getTypeAllocSize(from_type)) {
-        to = emit_static_alloca(ctx, target_type);
+        to = emit_static_alloca(ctx, target_type, align);
         setName(ctx.emission_context, to, "type_rewrite_buffer");
-        cast<AllocaInst>(to)->setAlignment(align);
         from = to;
     }
     else {
-        from = emit_static_alloca(ctx, from_type);
+        from = emit_static_alloca(ctx, from_type, align);
         setName(ctx.emission_context, from, "type_rewrite_buffer");
-        cast<AllocaInst>(from)->setAlignment(align);
         to = from;
     }
     ctx.builder.CreateAlignedStore(v, from, align);
@@ -555,9 +553,8 @@ static Value *julia_to_native(
 
     // pass the address of an alloca'd thing, not a box
     // since those are immutable.
-    Value *slot = emit_static_alloca(ctx, to);
     Align align(julia_alignment(jlto));
-    cast<AllocaInst>(slot)->setAlignment(align);
+    Value *slot = emit_static_alloca(ctx, to, align);
     setName(ctx.emission_context, slot, "native_convert_buffer");
     if (!jvinfo.ispointer()) {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, jvinfo.tbaa);
@@ -2090,7 +2087,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     if (sret) {
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
         if (jl_is_pointerfree(rt)) {
-            result = emit_static_alloca(ctx, lrt);
+            result = emit_static_alloca(ctx, lrt, Align(julia_alignment(rt)));
             setName(ctx.emission_context, result, "ccall_sret");
             sretty = lrt;
             argvals[0] = result;
@@ -2266,9 +2263,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 if (DL.getTypeStoreSize(resultTy) > rtsz) {
                     // ARM and AArch64 can use a LLVM type larger than the julia type.
                     // When this happens, cast through memory.
-                    auto slot = emit_static_alloca(ctx, resultTy);
+                    auto slot = emit_static_alloca(ctx, resultTy, boxalign);
                     setName(ctx.emission_context, slot, "type_pun_slot");
-                    slot->setAlignment(boxalign);
                     ctx.builder.CreateAlignedStore(result, slot, boxalign);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
                     emit_memcpy(ctx, strct, ai, slot, ai, rtsz, boxalign, boxalign);
