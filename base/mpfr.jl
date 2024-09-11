@@ -19,7 +19,8 @@ import
         isone, big, _string_n, decompose, minmax, _precision_with_base_2,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
         uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
-        RawBigIntRoundingIncrementHelper, truncated, RawBigInt
+        RawBigIntRoundingIncrementHelper, truncated, RawBigInt, RationalToFloat,
+        rational_to_floating_point
 
 
 using .Base.Libc
@@ -317,12 +318,51 @@ BigFloat(x::Union{UInt8,UInt16,UInt32}, r::MPFRRoundingMode=rounding_raw(BigFloa
 BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat)) =
     BigFloat(Float64(x), r; precision=precision)
 
-function BigFloat(x::Rational, r::MPFRRoundingMode=rounding_raw(BigFloat); precision::Integer=_precision_with_base_2(BigFloat))
-    setprecision(BigFloat, precision) do
-        setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x))::BigFloat
+function set_2exp!(z::BigFloat, n::BigInt, exp::Int, rm::MPFRRoundingMode)
+    ccall(
+        (:mpfr_set_z_2exp, libmpfr),
+        Int32,
+        (Ref{BigFloat}, Ref{BigInt}, Int, MPFRRoundingMode),
+        z, n, exp, rm,
+    )
+    nothing
+end
+
+function RationalToFloat.to_floating_point_impl(::Type{BigFloat}, ::Type{BigInt}, num, den, romo, prec)
+    num_is_zero = iszero(num)
+    den_is_zero = iszero(den)
+    s = Int8(sign(num))
+    sb = signbit(s)
+    is_zero = num_is_zero & !den_is_zero
+    is_inf = !num_is_zero & den_is_zero
+    is_regular = !num_is_zero & !den_is_zero
+
+    if is_regular
+        let rtfc = RationalToFloat.to_float_components
+            c = rtfc(BigInt, num, den, prec, nothing, romo, sb)
+            ret = BigFloat(precision = prec)
+            mpfr_romo = convert(MPFRRoundingMode, romo)
+            set_2exp!(ret, s * c.integral_significand, Int(c.exponent - prec + true), mpfr_romo)
+            ret
         end
-    end
+    else
+        if is_zero
+            BigFloat(false, MPFRRoundToZero, precision = prec)
+        elseif is_inf
+            BigFloat(s * Inf, MPFRRoundToZero, precision = prec)
+        else
+            BigFloat(precision = prec)
+        end
+    end::BigFloat
+end
+
+function BigFloat(x::Rational, r::RoundingMode; precision::Integer = DEFAULT_PRECISION[])
+    rational_to_floating_point(BigFloat, x, r, precision)
+end
+
+function BigFloat(x::Rational, r::MPFRRoundingMode = ROUNDING_MODE[];
+                  precision::Integer = DEFAULT_PRECISION[])
+    rational_to_floating_point(BigFloat, x, r, precision)
 end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=_precision_with_base_2(BigFloat), rounding::MPFRRoundingMode=rounding_raw(BigFloat))

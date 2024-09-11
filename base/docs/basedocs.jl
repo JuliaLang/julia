@@ -3122,6 +3122,25 @@ julia> 4/2
 julia> 4.5/2
 2.25
 ```
+
+This function may convert integer arguments to a floating-point number type
+([`AbstractFloat`](@ref)), potentially resulting in a loss of accuracy. To avoid this,
+instead construct a [`Rational`](@ref) from the arguments, then convert the resulting
+rational number to a specific floating-point type of your choice:
+
+```jldoctest
+julia> n = 100000000000000000
+100000000000000000
+
+julia> m = n + 6
+100000000000000006
+
+julia> n/m
+1.0
+
+julia> Float64(n//m)  # `//` constructs a `Rational`
+0.9999999999999999
+```
 """
 /(x, y)
 
