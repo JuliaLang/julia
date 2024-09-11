@@ -261,6 +261,7 @@ Base._reverse(A::Symmetric, ::Colon) = Symmetric(reverse(A.data), A.uplo == 'U' 
 @propagate_inbounds function setindex!(A::Symmetric, v, i::Integer, j::Integer)
     i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
     setindex!(A.data, v, i, j)
+    return A
 end
 
 Base._reverse(A::Hermitian, dims) = reverse!(Matrix(A); dims)
@@ -274,6 +275,7 @@ Base._reverse(A::Hermitian, ::Colon) = Hermitian(reverse(A.data), A.uplo == 'U' 
     else
         setindex!(A.data, v, i, j)
     end
+    return A
 end
 
 Base.dataids(A::HermOrSym) = Base.dataids(parent(A))
@@ -449,8 +451,8 @@ Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
 Base.copy(A::Transpose{<:Any,<:Hermitian}) =
     Hermitian(copy(transpose(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 
-tr(A::Symmetric) = tr(A.data) # to avoid AbstractMatrix fallback (incl. allocations)
-tr(A::Hermitian) = real(tr(A.data))
+tr(A::Symmetric{<:Number}) = tr(A.data) # to avoid AbstractMatrix fallback (incl. allocations)
+tr(A::Hermitian{<:Number}) = real(tr(A.data))
 
 Base.conj(A::Symmetric) = Symmetric(parentof_applytri(conj, A), sym_uplo(A.uplo))
 Base.conj(A::Hermitian) = Hermitian(parentof_applytri(conj, A), sym_uplo(A.uplo))

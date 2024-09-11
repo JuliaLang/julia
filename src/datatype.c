@@ -20,23 +20,21 @@ extern "C" {
 
 // allocating TypeNames -----------------------------------------------------------
 
-static int is10digit(char c) JL_NOTSAFEPOINT
-{
-    return (c >= '0' && c <= '9');
-}
-
 static jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
 {
     char *n = jl_symbol_name(s);
     if (n[0] != '#')
         return s;
-    char *end = strrchr(n, '#');
+    char *end = strchr(&n[1], '#');
+    // handle `#f...##...#...`
+    if (end != NULL && end[1] == '#')
+        end = strchr(&end[2], '#');
     int32_t len;
-    if (end == n || end == n+1)
+    if (end == NULL || end == n+1)
         len = strlen(n) - 1;
     else
         len = (end-n) - 1;  // extract `f` from `#f#...`
-    if (is10digit(n[1]))
+    if (isdigit(n[1]) || is_canonicalized_anonfn_typename(n))
         return _jl_symbol(n, len+1);
     return _jl_symbol(&n[1], len);
 }
@@ -357,6 +355,8 @@ int jl_struct_try_layout(jl_datatype_t *dt)
 
 int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
 {
+    if (jl_typeofbottom_type && ty == jl_typeofbottom_type->super)
+        ty = jl_typeofbottom_type;
     if (ty->name->mayinlinealloc && jl_struct_try_layout(ty)) {
         if (ty->layout->npointers > 0) {
             if (pointerfree)
@@ -1656,6 +1656,8 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 {
     jl_task_t *ct = jl_current_task;
     if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL || jl_is_layout_opaque(type->layout)) {
+        if (type == jl_typeofbottom_type->super)
+            return jl_bottom_type; // ::Type{Union{}} is an abstract type, but is also a singleton when used as a field type
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     }
     if (type->instance != NULL)
@@ -2188,7 +2190,7 @@ inline int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *parent, jl_valu
     }
     else {
         char *px = lock(p, parent, needlock, isatomic);
-        success = undefref_check(rty, (jl_value_t*)px) != NULL;
+        success = undefref_check(rty, (jl_value_t*)px) == NULL;
         if (success)
             memassign_safe(hasptr, px, rhs, fsz);
         unlock(p, parent, needlock, isatomic);

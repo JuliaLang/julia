@@ -770,26 +770,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
             user->replaceUsesOfWith(orig_i, replace);
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
-            #if JL_LLVM_VERSION >= 170000
-            #ifndef JL_NDEBUG
-            auto cast_t = PointerType::get(user->getType(), new_i->getType()->getPointerAddressSpace());
-            Type *new_t = new_i->getType();
-            assert(cast_t == new_t);
-            #endif
-            auto replace_i = new_i;
-            #else
-            auto cast_t = PointerType::getWithSamePointeeType(cast<PointerType>(user->getType()), new_i->getType()->getPointerAddressSpace());
-            auto replace_i = new_i;
-            Type *new_t = new_i->getType();
-            if (cast_t != new_t) {
-                // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-                assert(cast_t->getContext().supportsTypedPointers());
-                replace_i = new BitCastInst(replace_i, cast_t, "", user);
-                replace_i->setDebugLoc(user->getDebugLoc());
-                replace_i->takeName(user);
-            }
-            #endif
-            push_frame(user, replace_i);
+            push_frame(user, new_i);
         }
         else if (auto gep = dyn_cast<GetElementPtrInst>(user)) {
             SmallVector<Value *, 4> IdxOperands(gep->idx_begin(), gep->idx_end());

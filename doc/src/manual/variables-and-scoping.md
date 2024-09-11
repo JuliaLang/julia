@@ -743,7 +743,7 @@ ERROR: invalid redefinition of constant x
 julia> const y = 1.0
 1.0
 
-julia> y = 2.0
+julia> const y = 2.0
 WARNING: redefinition of constant y. This may fail, cause incorrect answers, or produce other errors.
 2.0
 ```
@@ -761,7 +761,7 @@ julia> const a = [1]
 1-element Vector{Int64}:
  1
 
-julia> a = [1]
+julia> const a = [1]
 WARNING: redefinition of constant a. This may fail, cause incorrect answers, or produce other errors.
 1-element Vector{Int64}:
  1
@@ -782,7 +782,7 @@ f (generic function with 1 method)
 julia> f()
 1
 
-julia> x = 2
+julia> const x = 2
 WARNING: redefinition of constant x. This may fail, cause incorrect answers, or produce other errors.
 2
 

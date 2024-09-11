@@ -24,7 +24,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
         end
         newirsv = IRInterpretationState(interp, ci, mi, argtypes, world)
         if newirsv !== nothing
-            newirsv.parent = parent
+            assign_parentchild!(newirsv, parent)
             return ir_abstract_constant_propagation(interp, newirsv)
         end
         return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
@@ -141,7 +141,8 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     rt = nothing
     if isa(stmt, Expr)
         head = stmt.head
-        if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined || head === :boundscheck
+        if (head === :call || head === :foreigncall || head === :new || head === :splatnew ||
+            head === :static_parameter || head === :isdefined || head === :boundscheck)
             (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
             add_flag!(inst, flags_for_effects(effects))
         elseif head === :invoke
@@ -438,6 +439,12 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
         store_backedges(frame_instance(irsv), irsv.edges)
+    end
+
+    if irsv.frameid != 0
+        callstack = irsv.callstack::Vector{AbsIntState}
+        @assert callstack[end] === irsv && length(callstack) == irsv.frameid
+        pop!(callstack)
     end
 
     return Pair{Any,Tuple{Bool,Bool}}(maybe_singleton_const(ultimate_rt), (nothrow, noub))
