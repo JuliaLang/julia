@@ -1268,7 +1268,15 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     end
 end
 
-function print_time_imports_report(mod::Module, elapsed_time::UInt, comp_time::UInt, recomp_time::UInt)
+# printing functions for @time_imports
+# note that the time inputs are UInt64 on all platforms. Give default values here so that we don't have
+# confusing UInt64 types in generate_precompile.jl
+function print_time_imports_report(
+        mod::Module,
+        elapsed_time::UInt64=UInt64(1),
+        comp_time::UInt64=UInt64(1),
+        recomp_time::UInt64=UInt64(1)
+    )
     print(lpad(round(elapsed_time / 1e6, digits=1), 9), " ms  ")
     ext_parent = extension_parent_name(mod)
     if ext_parent !== nothing
@@ -1286,8 +1294,12 @@ function print_time_imports_report(mod::Module, elapsed_time::UInt, comp_time::U
     end
     println()
 end
-
-function print_time_imports_report_init(mod::Module, i::Int, elapsed_time::UInt, comp_time::UInt, recomp_time::UInt)
+function print_time_imports_report_init(
+        mod::Module, i::Int=1,
+        elapsed_time::UInt64=UInt64(1),
+        comp_time::UInt64=UInt64(1),
+        recomp_time::UInt64=UInt64(1)
+    )
     connector = i > 1 ? "├" : "┌"
     printstyled("               $connector ", color = :light_black)
     print("$(round(elapsed_time / 1e6, digits=1)) ms $mod.__init__() ")

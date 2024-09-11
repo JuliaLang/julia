@@ -163,8 +163,8 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     push!(Expr[], Expr(:return, false))
     vcat(String[], String[])
     k, v = (:hello => nothing)
-    Base.print_time_imports_report(Base, UInt(1), UInt(1), UInt(1))
-    Base.print_time_imports_report_init(Base, 1, UInt(1), UInt(1), UInt(1))
+    Base.print_time_imports_report(Base)
+    Base.print_time_imports_report_init(Base)
 
     # Preferences uses these
     get(Dict{String,Any}(), "missing", nothing)
