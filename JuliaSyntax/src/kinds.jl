@@ -66,7 +66,7 @@ end
 # can be serialized and deserialized across different JuliaSyntax versions.
 function Base.write(io::IO, k::Kind)
     str = convert(String, k)
-    write(io, UInt8(length(str))) + write(io, str)
+    write(io, UInt8(sizeof(str))) + write(io, str)
 end
 function Base.read(io::IO, ::Type{Kind})
     len = read(io, UInt8)
