@@ -24,7 +24,9 @@ int jl_n_sweepthreads;
 // Number of threads currently running the GC mark-loop
 _Atomic(int) gc_n_threads_marking;
 // Number of threads sweeping
-_Atomic(int) gc_n_threads_sweeping;
+_Atomic(int) gc_n_threads_sweeping_pools;
+// Number of threads sweeping stacks
+_Atomic(int) gc_n_threads_sweeping_stacks;
 // Temporary for the `ptls->gc_tls.page_metadata_allocd` used during parallel sweeping (padded to avoid false sharing)
 _Atomic(jl_gc_padded_page_stack_t *) gc_allocd_scratch;
 // `tid` of mutator thread that triggered GC
@@ -1022,7 +1024,7 @@ void gc_sweep_wake_all_stacks(jl_ptls_t ptls) JL_NOTSAFEPOINT
 
 void gc_sweep_wait_for_all_stacks(void) JL_NOTSAFEPOINT
 {
-    while ((jl_atomic_load_acquire(&gc_ptls_sweep_idx)>= 0 ) || jl_atomic_load_acquire(&gc_n_threads_sweeping) != 0) {
+    while ((jl_atomic_load_acquire(&gc_ptls_sweep_idx) >= 0 ) || jl_atomic_load_acquire(&gc_n_threads_sweeping_stacks) != 0) {
         jl_cpu_pause();
     }
 }
@@ -1156,7 +1158,7 @@ void gc_sweep_wake_all_pages(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_a
 void gc_sweep_wait_for_all_pages(void)
 {
     jl_atomic_store(&gc_allocd_scratch, NULL);
-    while (jl_atomic_load_acquire(&gc_n_threads_sweeping) != 0) {
+    while (jl_atomic_load_acquire(&gc_n_threads_sweeping_pools) != 0) {
         jl_cpu_pause();
     }
 }
@@ -1164,7 +1166,7 @@ void gc_sweep_wait_for_all_pages(void)
 // sweep all pools
 void gc_sweep_pool_parallel(jl_ptls_t ptls)
 {
-    jl_atomic_fetch_add(&gc_n_threads_sweeping, 1);
+    jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, 1);
     jl_gc_padded_page_stack_t *allocd_scratch = jl_atomic_load(&gc_allocd_scratch);
     if (allocd_scratch != NULL) {
         gc_page_profiler_serializer_t serializer = gc_page_serializer_create();
@@ -1209,7 +1211,7 @@ void gc_sweep_pool_parallel(jl_ptls_t ptls)
         }
         gc_page_serializer_destroy(&serializer);
     }
-    jl_atomic_fetch_add(&gc_n_threads_sweeping, -1);
+    jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, -1);
 }
 
 // free all pages (i.e. through `madvise` on Linux) that were lazily freed

@@ -216,7 +216,7 @@ void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
     //            bufsz = t->bufsz
     //            if (stkbuf)
     //                push(free_stacks[sz], stkbuf)
-    jl_atomic_fetch_add(&gc_n_threads_sweeping, 1);
+    jl_atomic_fetch_add(&gc_n_threads_sweeping_stacks, 1);
     while (1) {
         int i = jl_atomic_fetch_add_relaxed(&gc_ptls_sweep_idx, -1);
         if (i < 0)
@@ -224,7 +224,7 @@ void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 == NULL)
             continue;
-
+        assert(gc_n_threads);
         // free half of stacks that remain unused since last sweep
         if (i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
             for (int p = 0; p < JL_N_STACK_POOLS; p++) {
@@ -293,7 +293,7 @@ void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
         }
         live_tasks->len -= ndel;
     }
-    jl_atomic_fetch_add(&gc_n_threads_sweeping, -1);
+    jl_atomic_fetch_add(&gc_n_threads_sweeping_stacks, -1);
 }
 
 JL_DLLEXPORT jl_array_t *jl_live_tasks(void)
