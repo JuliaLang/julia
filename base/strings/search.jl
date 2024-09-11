@@ -178,7 +178,7 @@ function findall(
     i = firstindex(s)
     while true
         i = _search(s, byte, i)
-        iszero(i) && return result
+        isnothing(i) && return result
         i += 1
         index = i - ncu
         # If the char is invalid, it's possible that its first byte is
