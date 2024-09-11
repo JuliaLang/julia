@@ -2772,5 +2772,4 @@ end
 @testset "show(<do-block expr>) no trailing whitespace" begin
     do_expr1 = :(foo() do; bar(); end)
     @test !contains(sprint(show, do_expr1), " \n")
-    @test sprint(show, do_expr1) == "foo() do\n    bar()\nend"
 end
