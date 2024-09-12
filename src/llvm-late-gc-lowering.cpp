@@ -1408,7 +1408,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
                 Type *ElT = AI->getAllocatedType();
                 if (AI->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked) {
-                    S.Allocas.push_back(AI);
+                    S.ArrayAllocas[AI] = cast<ConstantInt>(AI->getArraySize())->getZExtValue();
                 }
             }
         }
@@ -2325,7 +2325,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             MaxColor = C;
 
     // Insert instructions for the actual gc frame
-    if (MaxColor != -1 || !S.Allocas.empty() || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
+    if (MaxColor != -1 || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
         // Create and push a GC frame.
         auto gcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::newGCFrame),
@@ -2337,6 +2337,43 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
         pushGcframe->insertAfter(pgcstack);
+
+        // we don't run memsetopt after this, so run a basic approximation of it
+        // that removes any redundant memset calls in the prologue since getGCFrameSlot already includes the null store
+        Instruction *toerase = nullptr;
+        for (auto &I : F->getEntryBlock()) {
+            if (toerase)
+                toerase->eraseFromParent();
+            toerase = nullptr;
+            Value *ptr;
+            Value *value;
+            bool isvolatile;
+            if (auto *SI = dyn_cast<StoreInst>(&I)) {
+                ptr = SI->getPointerOperand();
+                value = SI->getValueOperand();
+                isvolatile = SI->isVolatile();
+            }
+            else if (auto *MSI = dyn_cast<MemSetInst>(&I)) {
+                ptr = MSI->getDest();
+                value = MSI->getValue();
+                isvolatile = MSI->isVolatile();
+            }
+            else {
+                continue;
+            }
+            ptr = ptr->stripInBoundsOffsets();
+            AllocaInst *AI = dyn_cast<AllocaInst>(ptr);
+            if (isa<GetElementPtrInst>(ptr))
+                break;
+            if (!S.ArrayAllocas.count(AI))
+                continue;
+            if (isvolatile || !isa<Constant>(value) || !cast<Constant>(value)->isNullValue())
+                break; // stop once we reach a pointer operation that couldn't be analyzed or isn't a null store
+            toerase = &I;
+        }
+        if (toerase)
+            toerase->eraseFromParent();
+        toerase = nullptr;
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
@@ -2371,11 +2408,6 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             AI->eraseFromParent();
             AI = NULL;
         };
-        for (AllocaInst *AI : S.Allocas) {
-            auto ns = cast<ConstantInt>(AI->getArraySize())->getZExtValue();
-            replace_alloca(AI);
-            AllocaSlot += ns;
-        }
         for (auto AI : S.ArrayAllocas) {
             replace_alloca(AI.first);
             AllocaSlot += AI.second;

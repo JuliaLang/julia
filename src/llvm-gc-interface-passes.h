@@ -312,7 +312,6 @@ struct State {
     SmallVector<SmallVector<int, 0>> CalleeRoots;
     // We don't bother doing liveness on Allocas that were not mem2reg'ed.
     // they just get directly sunk into the root array.
-    SmallVector<AllocaInst *, 0> Allocas;
     DenseMap<AllocaInst *, unsigned> ArrayAllocas;
     DenseMap<AllocaInst *, AllocaInst *> ShadowAllocas;
     SmallVector<std::pair<StoreInst *, unsigned>, 0> TrackedStores;

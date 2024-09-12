@@ -4650,7 +4650,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     // For tuples, we can emit code even if we don't know the exact
                     // type (e.g. because we don't know the length). This is possible
                     // as long as we know that all elements are of the same (leaf) type.
-                    jl_cgval_t ptrobj = value_to_pointer(ctx, obj);
+                    jl_cgval_t ptrobj = obj.isboxed ? obj : value_to_pointer(ctx, obj);
                     if (order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
                         emit_atomic_error(ctx, "getfield: non-atomic field cannot be accessed atomically");
                         *ret = jl_cgval_t(); // unreachable
@@ -5102,16 +5102,27 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(specTypes, i);
         // n.b.: specTypes is required to be a datatype by construction for specsig
-        jl_cgval_t arg = argv[i];
         if (is_opaque_closure && i == 0) {
             // Special implementation for opaque closures: their jt and thus
             // julia_type_to_llvm values are likely wrong, so override the
             // behavior here to directly pass the expected pointer based instead
             // just on passing arg as a pointer
-            arg = value_to_pointer(ctx, arg);
-            argvals[idx] = decay_derived(ctx, data_pointer(ctx, arg));
+            jl_cgval_t arg = argv[i];
+            if (arg.isghost) {
+                argvals[idx] = Constant::getNullValue(ctx.builder.getPtrTy(AddressSpace::Derived));
+            }
+            else {
+                if (!arg.isboxed)
+                    arg = value_to_pointer(ctx, arg);
+                argvals[idx] = decay_derived(ctx, data_pointer(ctx, arg));
+            }
+            idx++;
+            continue;
         }
-        else if (is_uniquerep_Type(jt)) {
+        jl_cgval_t arg = update_julia_type(ctx, argv[i], jt);
+        if (arg.typ == jl_bottom_type)
+            return jl_cgval_t();
+        if (is_uniquerep_Type(jt)) {
             continue;
         }
         else {
@@ -5135,7 +5146,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
                     argvals[idx] = roots;
                 }
                 else {
-                    arg = value_to_pointer(ctx, arg);
+                    if (!arg.isboxed)
+                        arg = value_to_pointer(ctx, arg);
                     argvals[idx] = decay_derived(ctx, data_pointer(ctx, arg));
                 }
             }
