@@ -8,7 +8,7 @@
  * based of compiler-specific pre-defined macros. It is based on the
  * information that can be found at the following address:
  *
- *     http://sourceforge.net/p/predef/wiki/Home/
+ *     https://sourceforge.net/p/predef/wiki/Home/
  *
  * Possible values include:
  *      Compiler:
@@ -16,6 +16,7 @@
  *          _COMPILER_GCC_
  *      OS:
  *          _OS_FREEBSD_
+ *          _OS_OPENBSD_
  *          _OS_LINUX_
  *          _OS_WINDOWS_
  *          _OS_DARWIN_
@@ -81,6 +82,8 @@
 
 #if defined(__FreeBSD__)
 #define _OS_FREEBSD_
+#elif defined(__OpenBSD__)
+#define _OS_OPENBSD_
 #elif defined(__linux__)
 #define _OS_LINUX_
 #elif defined(_WIN32) || defined(_WIN64)

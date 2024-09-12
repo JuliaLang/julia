@@ -49,9 +49,9 @@ ci(x) = CartesianIndex(x)
 @test @inferred(newindex(ci((2,2)), (true, false), (-1,-1)))  == ci((2,-1))
 @test @inferred(newindex(ci((2,2)), (false, true), (-1,-1)))  == ci((-1,2))
 @test @inferred(newindex(ci((2,2)), (false, false), (-1,-1))) == ci((-1,-1))
-@test @inferred(newindex(ci((2,2)), (true,), (-1,-1)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (false,), (-1,))) == ci((-1,))
+@test @inferred(newindex(ci((2,2)), (true,), (-1,-1))) == 2
+@test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == 2
+@test @inferred(newindex(ci((2,2)), (false,), (-1,)))  == -1
 @test @inferred(newindex(ci((2,2)), (), ())) == ci(())
 
 end
@@ -592,6 +592,16 @@ end
     end
 end
 
+@testset "convert behavior of logical broadcast" begin
+    a = mod.(1:4, 2)
+    @test !isa(a, BitArray)
+    for T in (Array{Bool}, BitArray)
+        la = T(a)
+        la .= mod.(0:3, 2)
+        @test la == [false; true; false; true]
+    end
+end
+
 # Test that broadcast treats type arguments as scalars, i.e. containertype yields Any,
 # even for subtypes of abstract array. (https://github.com/JuliaStats/DataArrays.jl/issues/229)
 @testset "treat type arguments as scalars, DataArrays issue 229" begin
@@ -798,8 +808,8 @@ let
 end
 
 let
-  bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
-  @test isbits(Broadcast.flatten(bc).f)
+    bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
+    @test isbits(Broadcast.flatten(bc).f)
 end
 
 # Issue #26127: multiple splats in a fused dot-expression
@@ -969,6 +979,10 @@ end
     @test sum(bc, dims=1, init=0) == [5]
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, ['a','b'], 'c'))
     @test prod(bc, dims=1, init="") == ["acbc"]
+
+    a = rand(-10:10,32,4); b = rand(-10:10,32,4)
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+,a,b))
+    @test sum(bc; dims = 1, init = 0.0) == sum(collect(bc); dims = 1, init = 0.0)
 end
 
 # treat Pair as scalar:
@@ -1165,3 +1179,22 @@ import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 
 f51129(v, x) = (1 .- (v ./ x) .^ 2)
 @test @inferred(f51129([13.0], 6.5)) == [-3.0]
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Broadcast)
+    @test_broken isempty(undoc)
+    @test undoc == [:dotview]
+end
+
+@testset "broadcast for `AbstractArray` without `CartesianIndex` support" begin
+    struct BVec52775 <: AbstractVector{Int}
+        a::Vector{Int}
+    end
+    Base.size(a::BVec52775) = size(a.a)
+    Base.getindex(a::BVec52775, i::Real) = a.a[i]
+    Base.getindex(a::BVec52775, i) = error("unsupported index!")
+    a = BVec52775([1,2,3])
+    bc = Base.broadcasted(identity, a)
+    @test bc[1] == bc[CartesianIndex(1)] == bc[1, CartesianIndex()]
+    @test a .+ [1 2] == a.a .+ [1 2]
+end

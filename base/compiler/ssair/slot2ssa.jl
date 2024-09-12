@@ -88,6 +88,9 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], false), Any))
         return UNDEF_TOKEN
+    elseif has_flag(ir.stmts[idx], IR_FLAG_NOTHROW)
+        # if the `isdefined`-ness of this slot is guaranteed by abstract interpretation,
+        # there is no need to form a `:throw_undef_if_not`
     elseif def_ssa !== true
         insert_node!(ir, idx, NewInstruction(
             Expr(:throw_undef_if_not, ci.slotnames[slot], def_ssa), Any))
@@ -153,46 +156,12 @@ end
 
 function fixup_uses!(ir::IRCode, ci::CodeInfo, code::Vector{Any}, uses::Vector{Int}, slot::Int, @nospecialize(ssa))
     for use in uses
-        code[use] = fixemup!(x::SlotNumber->slot_id(x)==slot, stmt::SlotNumber->(ssa, true), ir, ci, use, code[use])
+        code[use] = fixemup!(x::SlotNumber->slot_id(x)==slot, ::SlotNumber->Pair{Any,Any}(ssa, true), ir, ci, use, code[use])
     end
 end
 
 function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Pair{Any, Any}})
-    return fixemup!(stmt::SlotNumber->true, stmt::SlotNumber->renames[slot_id(stmt)], ir, ci, idx, stmt)
-end
-
-function strip_trailing_junk!(ci::CodeInfo, cfg::CFG, code::Vector{Any}, info::Vector{CallInfo})
-    # Remove `nothing`s at the end, we don't handle them well
-    # (we expect the last instruction to be a terminator)
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    (; codelocs, ssaflags) = ci
-    for i = length(code):-1:1
-        if code[i] !== nothing
-            resize!(code, i)
-            resize!(ssavaluetypes, i)
-            resize!(codelocs, i)
-            resize!(info, i)
-            resize!(ssaflags, i)
-            break
-        end
-    end
-    # If the last instruction is not a terminator, add one. This can
-    # happen for implicit return on dead branches.
-    term = code[end]
-    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
-        push!(code, ReturnNode())
-        push!(ssavaluetypes, Union{})
-        push!(codelocs, 0)
-        push!(info, NoCallInfo())
-        push!(ssaflags, IR_FLAG_NOTHROW)
-
-        # Update CFG to include appended terminator
-        old_range = cfg.blocks[end].stmts
-        new_range = StmtRange(first(old_range), last(old_range) + 1)
-        cfg.blocks[end] = BasicBlock(cfg.blocks[end], new_range)
-        (length(cfg.index) == length(cfg.blocks)) && (cfg.index[end] += 1)
-    end
-    nothing
+    return fixemup!(::SlotNumber->true, x::SlotNumber->renames[slot_id(x)], ir, ci, idx, stmt)
 end
 
 # maybe use expr_type?
@@ -229,7 +198,7 @@ Run iterated dominance frontier.
 The algorithm we have here essentially follows LLVM, which itself is a
 a cleaned up version of the linear-time algorithm described in [^SG95].
 
-The algorithm here, is quite straightforward. Suppose we have a CFG:
+The algorithm here is quite straightforward. Suppose we have a CFG:
 
     A -> B -> D -> F
      \\-> C ------>/
@@ -464,20 +433,18 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 # Add an explicit goto node in the next basic block (we accounted for this above)
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
             end
             result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
-            if isa(terminator, Expr)
-                if terminator.head === :enter
-                    terminator.args[1] = bb_rename[terminator.args[1]]
-                end
+            if isa(terminator, EnterNode)
+                result[inst_range[end]][:stmt] = EnterNode(terminator, terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest])
             end
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
                 nidx = inst_range[end] + 1
                 node = result[nidx]
-                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, 0
+                node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
                 inst_range = first(inst_range):(last(inst_range) + 1)
             end
         end
@@ -506,6 +473,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
         new_node[:stmt] = renumber_ssa!(new_node_inst, inst_rename, true)
     end
+    ir.debuginfo.codelocs = result.line
     new_ir = IRCode(ir, result, cfg, new_new_nodes)
     return new_ir
 end
@@ -576,15 +544,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     catch_entry_blocks = TryCatchRegion[]
     for idx in 1:length(code)
         stmt = code[idx]
-        if isexpr(stmt, :enter)
+        if isa(stmt, EnterNode)
             push!(catch_entry_blocks, TryCatchRegion(
                 block_for_inst(cfg, idx),
-                block_for_inst(cfg, stmt.args[1]::Int)))
+                block_for_inst(cfg, stmt.catch_dest)))
         end
     end
 
     # Record the correct exception handler for all critical sections
-    handler_at = compute_trycatch(code, BitSet())
+    handler_info = compute_trycatch(code)
 
     phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
     live_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
@@ -627,10 +595,12 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 # The slot is live-in into this block. We need to
                 # Create a PhiC node in the catch entry block and
                 # an upsilon node in the corresponding enter block
+                varstate = sv.bb_vartables[li]
+                if varstate === nothing
+                    continue
+                end
                 node = PhiCNode(Any[])
                 insertpoint = first_insert_for_bb(code, cfg, li)
-                varstate = sv.bb_vartables[li]
-                @assert varstate !== nothing
                 vt = varstate[idx]
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, insertpoint,
@@ -689,7 +659,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     visited = BitSet()
     new_nodes = ir.new_nodes
     @timeit "SSA Rename" while !isempty(worklist)
-        (item::Int, pred, incoming_vals) = pop!(worklist)
+        (item, pred, incoming_vals) = pop!(worklist)
+        if sv.bb_vartables[item] === nothing
+            continue
+        end
         # Rename existing phi nodes first, because their uses occur on the edge
         # TODO: This isn't necessary if inlining stops replacing arguments by slots.
         for idx in cfg.blocks[item].stmts
@@ -810,9 +783,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         incoming_vals[id] = Pair{Any, Any}(thisval, thisdef)
                         has_pinode[id] = false
                         enter_idx = idx
-                        while handler_at[enter_idx] != 0
-                            enter_idx = handler_at[enter_idx]
-                            leave_block = block_for_inst(cfg, code[enter_idx].args[1]::Int)
+                        while (handler = gethandler(handler_info, enter_idx)) !== nothing
+                            (; enter_idx) = handler
+                            leave_block = block_for_inst(cfg, (code[enter_idx]::EnterNode).catch_dest)
                             cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id, new_phic_nodes[leave_block])
                             if cidx !== nothing
                                 node = thisdef ? UpsilonNode(thisval) : UpsilonNode()
@@ -874,9 +847,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             else
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
-        elseif isexpr(stmt, :enter)
-            except_bb = block_for_inst(cfg, stmt.args[1]::Int)
-            new_code[idx] = Expr(:enter, except_bb)
+        elseif isa(stmt, EnterNode)
+            except_bb = stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest)
+            new_code[idx] = EnterNode(stmt, except_bb)
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)

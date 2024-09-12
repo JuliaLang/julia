@@ -82,7 +82,9 @@ STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem,
 STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
 {
     size_t nel;
-    if (jl_array_validate_dims(&nel, ndims, dims) || *(size_t*)jl_tparam1(atype) != ndims)
+    if (jl_array_validate_dims(&nel, ndims, dims))
+        jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions: too large for system address width");
+    if (*(size_t*)jl_tparam1(atype) != ndims)
         jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
     jl_value_t *mtype = jl_field_type_concrete((jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)atype, 0), 1);
     // extra byte for all julia allocated byte vectors
@@ -96,21 +98,6 @@ STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *d
 jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz);
 
 JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str);
-
-JL_DLLEXPORT jl_array_t *jl_string_to_array(jl_value_t *str)
-{
-    jl_task_t *ct = jl_current_task;
-    jl_genericmemory_t *mem = jl_string_to_genericmemory(str);
-    JL_GC_PUSH1(&mem);
-    int ndimwords = 1;
-    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
-    jl_array_t *a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, jl_array_uint8_type);
-    a->ref.mem = mem;
-    a->ref.ptr_or_offset = mem->ptr;
-    a->dimsize[0] = mem->length;
-    JL_GC_POP();
-    return a;
-}
 
 JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                                             size_t nel, int own_buffer)
@@ -132,7 +119,9 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     assert(is_ntuple_long(_dims));
     size_t *dims = (size_t*)_dims;
     size_t nel;
-    if (jl_array_validate_dims(&nel, ndims, dims) || *(size_t*)jl_tparam1(atype) != ndims)
+    if (jl_array_validate_dims(&nel, ndims, dims))
+        jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions: too large for system address width");
+    if (*(size_t*)jl_tparam1(atype) != ndims)
         jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
     jl_value_t *mtype = jl_field_type_concrete((jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)atype, 0), 1);
     jl_genericmemory_t *mem = jl_ptr_to_genericmemory(mtype, data, nel, own_buffer);
@@ -165,6 +154,18 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 JL_DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr)
 {
     return new_array(atype, 1, &nr);
+}
+
+JL_DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc)
+{
+    size_t dims[2] = {nr, nc};
+    return new_array(atype, 2, &dims[0]);
+}
+
+JL_DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc, size_t z)
+{
+    size_t dims[3] = {nr, nc, z};
+    return new_array(atype, 3, &dims[0]);
 }
 
 JL_DLLEXPORT jl_array_t *jl_alloc_array_nd(jl_value_t *atype, size_t *dims, size_t ndims)
@@ -303,22 +304,8 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
     jl_task_t *ct = jl_current_task;
     jl_value_t *s;
     jl_ptls_t ptls = ct->ptls;
-    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    if (sz <= GC_MAX_SZCLASS) {
-        int pool_id = jl_gc_szclass_align8(allocsz);
-        jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
-        int osize = jl_gc_sizeclasses[pool_id];
-        // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
-        // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
-        s = jl_gc_pool_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
-    }
-    else {
-        if (allocsz < sz) // overflow in adding offs, size was "negative"
-            jl_throw(jl_memory_exception);
-        s = jl_gc_big_alloc_noinline(ptls, allocsz);
-    }
+    s = (jl_value_t*)jl_gc_alloc(ptls, sz, jl_string_type);
     jl_set_typetagof(s, jl_string_tag, 0);
-    maybe_record_alloc_to_profile(s, len, jl_string_type);
     *(size_t*)s = len;
     jl_string_data(s)[len] = 0;
     return s;

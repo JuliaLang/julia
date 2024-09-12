@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base: copy, adjoint, getindex, show, transpose, one, zero, inv,
+import Base: copy, adjoint, getindex, show, transpose, one, zero, inv, float,
              hcat, vcat, hvcat, ^
 
 """
@@ -124,6 +124,8 @@ conj(J::UniformScaling) = UniformScaling(conj(J.λ))
 real(J::UniformScaling) = UniformScaling(real(J.λ))
 imag(J::UniformScaling) = UniformScaling(imag(J.λ))
 
+float(J::UniformScaling) = UniformScaling(float(J.λ))
+
 transpose(J::UniformScaling) = J
 adjoint(J::UniformScaling) = UniformScaling(conj(J.λ))
 
@@ -159,7 +161,7 @@ isposdef(J::UniformScaling) = isposdef(J.λ)
 (-)(A::AbstractMatrix, J::UniformScaling)   = A + (-J)
 
 # matrix functions
-for f in ( :exp,   :log,
+for f in ( :exp,   :log, :cis,
            :expm1, :log1p,
            :sqrt,  :cbrt,
            :sin,   :cos,   :tan,
@@ -171,6 +173,9 @@ for f in ( :exp,   :log,
            :csch,  :sech,  :coth,
            :acsch, :asech, :acoth )
     @eval Base.$f(J::UniformScaling) = UniformScaling($f(J.λ))
+end
+for f in (:sincos, :sincosd)
+    @eval Base.$f(J::UniformScaling) = map(UniformScaling, $f(J.λ))
 end
 
 # Unit{Lower/Upper}Triangular matrices become {Lower/Upper}Triangular under
@@ -270,6 +275,7 @@ end
 /(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) / J
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
+//(J::UniformScaling, x::Number) = UniformScaling(J.λ//x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
@@ -293,7 +299,7 @@ function mul!(out::AbstractMatrix{T}, a::Number, B::UniformScaling, α::Number, 
     end
     s = convert(T, a*B.λ*α)
     if !iszero(s)
-        @inbounds for i in diagind(out)
+        @inbounds for i in diagind(out, IndexStyle(out))
             out[i] += s
         end
     end

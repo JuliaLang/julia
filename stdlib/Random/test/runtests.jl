@@ -16,15 +16,30 @@ using Random: jump_128, jump_192, jump_128!, jump_192!
 import Future # randjump
 
 function test_uniform(xs::AbstractArray{T}) where {T<:AbstractFloat}
-    if precision(T) >= precision(Float32) # TODO: refine
-        @test allunique(xs)
+    # TODO: refine
+    prec = isempty(xs) ? precision(T) : precision(first(xs))
+    proba_nocollision = prod((1.0 - i/2.0^prec for i=1:length(xs)-1), init=1.0) # rough estimate
+    xsu = Set(xs)
+    if (1.0 - proba_nocollision) < 2.0^-64
+        @test length(xsu) == length(xs)
+    elseif prec > 52 && length(xs) < 3000
+        # if proba of collisions is high enough, allow at most one collision;
+        # with the constraints on precision and length, more than one collision would happen
+        # with proba less than 2.0^-62
+        @test length(xsu) >= length(xs)-1
     end
     @test all(x -> zero(x) <= x < one(x), xs)
 end
 
-function test_uniform(xs::AbstractArray{T}) where {T<:Integer}
-    if !Base.hastypemax(T) || widen(typemax(T)) - widen(typemin(T)) >= 2^30 # TODO: refine
-        @test allunique(xs)
+function test_uniform(xs::AbstractArray{T}) where {T<:Base.BitInteger}
+    # TODO: refine
+    prec = 8*sizeof(T)
+    proba_nocollision = prod((1.0 - i/2.0^prec for i=1:length(xs)-1), init=1.0)
+    xsu = Set(xs)
+    if (1.0 - proba_nocollision) < 2.0^-64
+        @test length(xsu) == length(xs)
+    elseif prec > 52 && length(xs) < 3000
+        @test length(xsu) >= length(xs)-1
     end
 end
 
@@ -512,6 +527,7 @@ end
     @test shuffle!(mta,Vector(1:10)) == shuffle!(mtb,Vector(1:10))
     @test shuffle(mta,Vector(2:11)) == shuffle(mtb,2:11)
     @test shuffle!(mta, rand(mta, 2, 3)) == shuffle!(mtb, rand(mtb, 2, 3))
+    @test shuffle!(mta, rand(mta, Bool, 2, 3)) == shuffle!(mtb, rand(mtb, Bool, 2, 3))
     @test shuffle(mta, rand(mta, 2, 3)) == shuffle(mtb, rand(mtb, 2, 3))
 
     @test randperm(mta,10) == randperm(mtb,10)
@@ -1230,4 +1246,8 @@ end
     xs = rand(sp, 3)
     @test xs isa Vector{Pair{Bool, Char}}
     @test length(xs) == 3
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Random))
 end

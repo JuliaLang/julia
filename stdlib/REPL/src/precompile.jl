@@ -1,11 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Precompile
-# Can't use this during incremental: `@eval Module() begin``
 
 import ..REPL
 
-# Ugly hack for our cache file to not have a dependency edge on FakePTYs.
+# Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
 Base._track_dependencies[] = false
 try
     Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
@@ -13,84 +12,72 @@ try
 finally
     Base._track_dependencies[] = true
 end
-using Base.Meta
 
-import Markdown
+let
+    ## Debugging options
+    # View the code sent to the repl by setting this to `stdout`
+    debug_output = devnull # or stdout
 
-## Debugging options
-# Disable parallel precompiles generation by setting `false`
-const PARALLEL_PRECOMPILATION = true
+    CTRL_C = '\x03'
+    CTRL_D = '\x04'
+    CTRL_R = '\x12'
+    UP_ARROW = "\e[A"
+    DOWN_ARROW = "\e[B"
 
-# View the code sent to the repl by setting this to `stdout`
-const debug_output = devnull # or stdout
+    repl_script = """
+    2+2
+    print("")
+    printstyled("a", "b")
+    display([1])
+    display([1 2; 3 4])
+    foo(x) = 1
+    @time @eval foo(1)
+    ; pwd
+    $CTRL_C
+    $CTRL_R$CTRL_C#
+    ? reinterpret
+    using Ra\t$CTRL_C
+    \\alpha\t$CTRL_C
+    \e[200~paste here ;)\e[201~"$CTRL_C
+    $UP_ARROW$DOWN_ARROW$CTRL_C
+    123\b\b\b$CTRL_C
+    \b\b$CTRL_C
+    f(x) = x03
+    f(1,2)
+    [][1]
+    Base.Iterators.minimum
+    cd("complete_path\t\t$CTRL_C
+    println("done")
+    """
 
-CTRL_C = '\x03'
-CTRL_D = '\x04'
-CTRL_R = '\x12'
-UP_ARROW = "\e[A"
-DOWN_ARROW = "\e[B"
+    JULIA_PROMPT = "julia> "
+    PKG_PROMPT = "pkg> "
+    SHELL_PROMPT = "shell> "
+    HELP_PROMPT = "help?> "
 
-repl_script = """
-2+2
-print("")
-printstyled("a", "b")
-display([1])
-display([1 2; 3 4])
-foo(x) = 1
-@time @eval foo(1)
-; pwd
-$CTRL_C
-$CTRL_R$CTRL_C#
-? reinterpret
-using Ra\t$CTRL_C
-\\alpha\t$CTRL_C
-\e[200~paste here ;)\e[201~"$CTRL_C
-$UP_ARROW$DOWN_ARROW$CTRL_C
-123\b\b\b$CTRL_C
-\b\b$CTRL_C
-f(x) = x03
-f(1,2)
-[][1]
-cd("complete_path\t\t$CTRL_C
-"""
+    blackhole = Sys.isunix() ? "/dev/null" : "nul"
 
-julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
-
-const JULIA_PROMPT = "julia> "
-const PKG_PROMPT = "pkg> "
-const SHELL_PROMPT = "shell> "
-const HELP_PROMPT = "help?> "
-
-blackhole = Sys.isunix() ? "/dev/null" : "nul"
-procenv = Dict{String,Any}(
-        "JULIA_HISTORY" => blackhole,
-        "JULIA_PROJECT" => nothing, # remove from environment
-        "JULIA_LOAD_PATH" => "@stdlib",
-        "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
-        "TERM" => "",
-        "JULIA_FALLBACK_REPL" => "0") # Turn REPL.jl on in subprocess
-
-generate_precompile_statements() = try
-    # Extract the precompile statements from the precompile file
-    statements_step = Channel{String}(Inf)
-
-    step = @async mktemp() do precompile_file, precompile_file_h
-        # Collect statements from running a REPL process and replaying our REPL script
-        touch(precompile_file)
-        pts, ptm = open_fake_pty()
-        cmdargs = `-e 'import REPL; REPL.Terminals.is_precompiling[] = true'`
-        p = run(addenv(addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file
-                --cpu-target=native --startup-file=no --compiled-modules=existing --color=yes -i $cmdargs```, procenv),
-                "JULIA_PKG_PRECOMPILE_AUTO" => "0"),
-            pts, pts, pts; wait=false)
-        Base.close_stdio(pts)
-        # Prepare a background process to copy output from process until `pts` is closed
+    withenv("JULIA_HISTORY" => blackhole,
+            "JULIA_PROJECT" => nothing, # remove from environment
+            "JULIA_LOAD_PATH" => "@stdlib",
+            "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
+            "TERM" => "",
+            "JULIA_FALLBACK_REPL" => "0" # Make sure REPL.jl is turned on
+            ) do
+        rawpts, ptm = open_fake_pty()
+        pts = open(rawpts)::Base.TTY
+        if Sys.iswindows()
+            pts.ispty = false
+        else
+            # workaround libuv bug where it leaks pts
+            Base._fd(pts) == rawpts || Base.close_stdio(rawpts)
+        end
+        # Prepare a background process to copy output from `ptm` until `pts` is closed
         output_copy = Base.BufferStream()
         tee = @async try
             while !eof(ptm)
                 l = readavailable(ptm)
                 write(debug_output, l)
-                Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
                 write(output_copy, l)
             end
             write(debug_output, "\n#### EOF ####\n")
@@ -103,9 +90,31 @@ generate_precompile_statements() = try
             close(ptm)
         end
         Base.errormonitor(tee)
-        repl_inputter = @async begin
+        orig_stdin = stdin
+        orig_stdout = stdout
+        orig_stderr = stderr
+        repltask = @task try
+            Base.run_std_repl(REPL, false, :yes, true)
+        finally
+            redirect_stdin(isopen(orig_stdin) ? orig_stdin : devnull)
+            redirect_stdout(isopen(orig_stdout) ? orig_stdout : devnull)
+            close(pts)
+        end
+        Base.errormonitor(repltask)
+        try
+            Base.REPL_MODULE_REF[] = REPL
+            redirect_stdin(pts)
+            redirect_stdout(pts)
+            redirect_stderr(pts)
+            try
+                REPL.print_qualified_access_warning(Base.Iterators, Base, :minimum) # trigger the warning while stderr is suppressed
+            finally
+                redirect_stderr(isopen(orig_stderr) ? orig_stderr : devnull)
+            end
+            schedule(repltask)
             # wait for the definitive prompt before start writing to the TTY
             readuntil(output_copy, JULIA_PROMPT)
+            write(debug_output, "\n#### REPL STARTED ####\n")
             sleep(0.1)
             readavailable(output_copy)
             # Input our script
@@ -137,77 +146,21 @@ generate_precompile_statements() = try
             end
             write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
             write(ptm, "$CTRL_D")
-            wait(tee)
-            success(p) || Base.pipeline_error(p)
-            close(ptm)
-            write(debug_output, "\n#### FINISHED ####\n")
+            wait(repltask)
+        finally
+            redirect_stdin(isopen(orig_stdin) ? orig_stdin : devnull)
+            redirect_stdout(isopen(orig_stdout) ? orig_stdout : devnull)
+            close(pts)
         end
-        Base.errormonitor(repl_inputter)
-
-        n_step = 0
-        precompile_copy = Base.BufferStream()
-        buffer_reader = @async for statement in eachline(precompile_copy)
-            push!(statements_step, statement)
-            n_step += 1
-        end
-
-        open(precompile_file, "r") do io
-            while true
-                # We need to always call eof(io) for bytesavailable(io) to work
-                eof(io) && istaskdone(repl_inputter) && eof(io) && break
-                if bytesavailable(io) == 0
-                    sleep(0.1)
-                    continue
-                end
-                write(precompile_copy, readavailable(io))
-            end
-        end
-        close(precompile_copy)
-        wait(buffer_reader)
-        close(statements_step)
-        return :ok
+        wait(tee)
     end
-    !PARALLEL_PRECOMPILATION && wait(step)
-
-    # Make statements unique
-    statements = Set{String}()
-    # Execute the precompile statements
-    for statement in statements_step
-        # Main should be completely clean
-        occursin("Main.", statement) && continue
-        Base.in!(statement, statements) && continue
-        try
-            ps = Meta.parse(statement)
-            if !isexpr(ps, :call)
-                # these are typically comments
-                @debug "skipping statement because it does not parse as an expression" statement
-                continue
-            end
-            push!(REPL.PRECOMPILE_STATEMENTS, statement)
-            popfirst!(ps.args) # precompile(...)
-            ps.head = :tuple
-            # println(ps)
-            ps = eval(ps)
-            if !precompile(ps...)
-                @warn "Failed to precompile expression" form=statement _module=nothing _file=nothing _line=0
-            end
-        catch ex
-            # See #28808
-            @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
-        end
-    end
-
-    fetch(step) == :ok || throw("Collecting precompiles failed.")
-    return nothing
-finally
-    GC.gc(true); GC.gc(false); # reduce memory footprint
+    write(debug_output, "\n#### FINISHED ####\n")
+    nothing
 end
 
-generate_precompile_statements()
+precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, Any, Int})
+precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, String})
+precompile(Tuple{typeof(Base.:(==)), Char, String})
+precompile(Tuple{typeof(Base.reseteof), Base.TTY})
 
-# As a last step in system image generation,
-# remove some references to build time environment for a more reproducible build.
-Base.Filesystem.temp_cleanup_purge(force=true)
-
-precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
 end # Precompile

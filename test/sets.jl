@@ -133,6 +133,31 @@ end
     @test pop!(s, 4) === 4.0
     @test_throws KeyError pop!(s, 5)
 end
+
+@testset "in!" begin
+    s = Set()
+    @test !(in!(0x01, s))
+    @test !(in!(Int32(2), s))
+    @test in!(1, s)
+    @test in!(2.0, s)
+    (a, b, c...) = sort!(collect(s))
+    @test a === 0x01
+    @test b === Int32(2)
+    @test isempty(c)
+
+    # in! will convert to the right type automatically
+    s = Set{Int32}()
+    @test !(in!(1, s))
+    @test only(s) === Int32(1)
+    @test_throws Exception in!("hello", s)
+
+    # Other set types
+    s = BitSet()
+    @test !(in!(13, s))
+    @test in!(UInt16(13), s)
+    @test only(s) === 13
+end
+
 @testset "copy" begin
     data_in = (1,2,9,8,4)
     s = Set(data_in)
@@ -580,6 +605,9 @@ end
     @test !allunique([1,1,2])
     @test !allunique([:a,:b,:c,:a])
     @test allunique(unique(randn(100)))  # longer than 32
+    @test allunique(collect(1:100)) # sorted/unique && longer than 32
+    @test allunique(collect(100:-1:1)) # sorted/unique && longer than 32
+    @test !allunique(fill(1,100)) # sorted/repeating && longer than 32
     @test allunique(collect('A':'z')) # 58-element Vector{Char}
     @test !allunique(repeat(1:99, 1, 2))
     @test !allunique(vcat(pi, randn(1998), pi))  # longer than 1000
@@ -614,21 +642,38 @@ end
     @test !allunique((1,2,3,4,3))
     @test allunique((0.0, -0.0))
     @test !allunique((NaN, NaN))
+    # Known length 1, need not evaluate:
+    @test allunique(error(x) for x in [1])
+end
+
+@testset "allunique(f, xs)" begin
+    @test allunique(sin, 1:3)
+    @test !allunique(sin, [1,2,3,1])
+    @test allunique(sin, (1, 2, pi, im))  # eltype Any
+    @test allunique(abs2, 1:100)
+    @test !allunique(abs, -10:10)
+    @test allunique(abs2, Vector{Any}(1:100))
+    # These cases don't call the function at all:
+    @test allunique(error, [])
+    @test allunique(error, [1])
 end
 
 @testset "allequal" begin
+    # sets & dictionaries
     @test allequal(Set())
     @test allequal(Set(1))
     @test !allequal(Set([1, 2]))
     @test allequal(Dict())
     @test allequal(Dict(:a => 1))
     @test !allequal(Dict(:a => 1, :b => 2))
+    # vectors
     @test allequal([])
     @test allequal([1])
     @test allequal([1, 1])
     @test !allequal([1, 1, 2])
     @test allequal([:a, :a])
     @test !allequal([:a, :b])
+    # ranges
     @test !allequal(1:2)
     @test allequal(1:1)
     @test !allequal(4.0:0.3:7.0)
@@ -642,6 +687,26 @@ end
     @test allequal(LinRange(1, 1, 1))
     @test allequal(LinRange(1, 1, 2))
     @test !allequal(LinRange(1, 2, 2))
+    # Known length 1, need not evaluate:
+    @test allequal(error(x) for x in [1])
+    # Empty, but !haslength:
+    @test allequal(error(x) for x in 1:3 if false)
+end
+
+@testset "allequal(f, xs)" begin
+    @test allequal(abs2, [3, -3])
+    @test allequal(x -> 1, rand(3))
+    @test !allequal(x -> rand(), [1,1,1])
+    # tuples
+    @test allequal(abs2, (3, -3))
+    @test allequal(x -> 1, Tuple(rand(3)))
+    @test !allequal(x -> rand(), (1,1,1))
+    # These cases don't call the function at all:
+    @test allequal(error, [])
+    @test allequal(error, ())
+    @test allequal(error, (x for x in 1:3 if false))
+    @test allequal(error, [1])
+    @test allequal(error, (1,))
 end
 
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
@@ -871,8 +936,8 @@ end
     b = [2, 3, 1, 3]
     ua = unique(a)
     ub = unique(b)
-    for TA in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
-        TB in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+    for TA in (Tuple, identity, Set, BitSet, IdSet{Int}),
+        TB in (Tuple, identity, Set, BitSet, IdSet{Int}),
         uA = false:true,
         uB = false:true
         A = TA(uA ? ua : a)
@@ -893,7 +958,7 @@ end
         @test !issetequal(B, A)
         @test !issetequal(B)(A)
         @test !issetequal(A)(B)
-        for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
+        for T = (Tuple, identity, Set, BitSet, IdSet{Int})
             @test issetequal(A, T(A))
             @test issetequal(B, T(B))
         end
@@ -954,7 +1019,7 @@ end
     c = [3]
     d = [4]
     e = [5]
-    A = Base.IdSet{Vector{Int}}([a, b, c, d])
+    A = IdSet{Vector{Int}}([a, b, c, d])
     @test !isempty(A)
     B = copy(A)
     @test A ⊆ B

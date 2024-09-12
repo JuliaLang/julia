@@ -48,15 +48,6 @@ anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
-function istopfunction(@nospecialize(f), name::Symbol)
-    tn = typeof(f).name
-    if tn.mt.name === name
-        top = _topmod(tn.module)
-        return isdefined(top, name) && isconst(top, name) && f === getglobal(top, name)
-    end
-    return false
-end
-
 #######
 # AST #
 #######
@@ -83,7 +74,27 @@ const MAX_INLINE_CONST_SIZE = 256
 
 function count_const_size(@nospecialize(x), count_self::Bool = true)
     (x isa Type || x isa Core.TypeName || x isa Symbol) && return 0
-    ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
+    if ismutable(x)
+        # No definite size
+        (isa(x, GenericMemory) || isa(x, String) || isa(x, SimpleVector)) &&
+            return MAX_INLINE_CONST_SIZE + 1
+        if isa(x, Module)
+            # We allow modules, because we already assume they are externally
+            # rooted, so we count their contents as 0 size.
+            return sizeof(Ptr{Cvoid})
+        end
+        # We allow mutable types with no mutable fields (i.e. those mutable
+        # types used for identity only). The intent of this function is to
+        # prevent the rooting of large amounts of data that may have been
+        # speculatively computed. If the struct can get mutated later, we
+        # cannot assess how much data we might end up rooting. However, if
+        # the struct is mutable only for identity, the query still works.
+        for i = 1:nfields(x)
+            if !isconst(typeof(x), i)
+                return MAX_INLINE_CONST_SIZE + 1
+            end
+        end
+    end
     isbits(x) && return Core.sizeof(x)
     dt = typeof(x)
     sz = count_self ? sizeof(dt) : 0
@@ -118,35 +129,56 @@ use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
 function get_staged(mi::MethodInstance, world::UInt)
     may_invoke_generator(mi) || return nothing
+    cache_ci = (mi.def::Method).generator isa Core.CachedGenerator ?
+        RefValue{CodeInstance}() : nothing
     try
-        # user code might throw errors – ignore them
-        ci = ccall(:jl_code_for_staged, Any, (Any, UInt), mi, world)::CodeInfo
-        return ci
-    catch
+        return call_get_staged(mi, world, cache_ci)
+    catch # user code might throw errors – ignore them
         return nothing
     end
 end
 
-function retrieve_code_info(linfo::MethodInstance, world::UInt)
-    m = linfo.def::Method
-    c = nothing
-    if isdefined(m, :generator)
-        # user code might throw errors – ignore them
-        c = get_staged(linfo, world)
+# enable caching of unoptimized generated code if the generator is `CachedGenerator`
+function call_get_staged(mi::MethodInstance, world::UInt, cache_ci::RefValue{CodeInstance})
+    token = @_gc_preserve_begin cache_ci
+    cache_ci_ptr = pointer_from_objref(cache_ci)
+    src = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{CodeInstance}), mi, world, cache_ci_ptr)
+    @_gc_preserve_end token
+    return src
+end
+function call_get_staged(mi::MethodInstance, world::UInt, ::Nothing)
+    return ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), mi, world, C_NULL)
+end
+
+function get_cached_uninferred(mi::MethodInstance, world::UInt)
+    ccall(:jl_cached_uninferred, Any, (Any, UInt), mi.cache, world)::CodeInstance
+end
+
+function retrieve_code_info(mi::MethodInstance, world::UInt)
+    def = mi.def
+    if !isa(def, Method)
+        ci = get_cached_uninferred(mi, world)
+        src = ci.inferred
+        # Inference may corrupt the src, which is fine, because this is a
+        # (short-lived) top-level thunk, but set it to NULL anyway, so we
+        # can catch it if somebody tries to read it again by accident.
+        # @atomic ci.inferred = C_NULL
+        return src
     end
-    if c === nothing && isdefined(m, :source)
-        src = m.source
+    c = hasgenerator(def) ? get_staged(mi, world) : nothing
+    if c === nothing && isdefined(def, :source)
+        src = def.source
         if src === nothing
             # can happen in images built with --strip-ir
             return nothing
         elseif isa(src, String)
-            c = _uncompressed_ir(m, src)
+            c = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), def, C_NULL, src)
         else
             c = copy(src::CodeInfo)
         end
     end
     if c isa CodeInfo
-        c.parent = linfo
+        c.parent = mi
         return c
     end
     return nothing
@@ -321,25 +353,6 @@ function iterate(iter::BackedgeIterator, i::Int=1)
     return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end
 
-"""
-    add_invalidation_callback!(callback, mi::MethodInstance)
-
-Register `callback` to be triggered upon the invalidation of `mi`.
-`callback` should a function taking two arguments, `callback(replaced::MethodInstance, max_world::UInt32)`,
-and it will be recursively invoked on `MethodInstance`s within the invalidation graph.
-"""
-function add_invalidation_callback!(@nospecialize(callback), mi::MethodInstance)
-    if !isdefined(mi, :callbacks)
-        callbacks = mi.callbacks = Any[callback]
-    else
-        callbacks = mi.callbacks::Vector{Any}
-        if !any(@nospecialize(cb)->cb===callback, callbacks)
-            push!(callbacks, callback)
-        end
-    end
-    return callbacks
-end
-
 #########
 # types #
 #########
@@ -415,15 +428,15 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
         if isa(e, SSAValue)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
-            find_ssavalue_uses(e, uses, line)
+            find_ssavalue_uses!(uses, e, line)
         elseif isa(e, PhiNode)
-            find_ssavalue_uses(e, uses, line)
+            find_ssavalue_uses!(uses, e, line)
         end
     end
     return uses
 end
 
-function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
+function find_ssavalue_uses!(uses::Vector{BitSet}, e::Expr, line::Int)
     head = e.head
     is_meta_expr_head(head) && return
     skiparg = (head === :(=))
@@ -433,78 +446,20 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
         elseif isa(a, SSAValue)
             push!(uses[a.id], line)
         elseif isa(a, Expr)
-            find_ssavalue_uses(a, uses, line)
+            find_ssavalue_uses!(uses, a, line)
         end
     end
 end
 
-function find_ssavalue_uses(e::PhiNode, uses::Vector{BitSet}, line::Int)
-    for val in e.values
+function find_ssavalue_uses!(uses::Vector{BitSet}, e::PhiNode, line::Int)
+    values = e.values
+    for i = 1:length(values)
+        isassigned(values, i) || continue
+        val = values[i]
         if isa(val, SSAValue)
             push!(uses[val.id], line)
         end
     end
-end
-
-function is_throw_call(e::Expr, code::Vector{Any})
-    if e.head === :call
-        f = e.args[1]
-        if isa(f, SSAValue)
-            f = code[f.id]
-        end
-        if isa(f, GlobalRef)
-            ff = abstract_eval_globalref_type(f)
-            if isa(ff, Const) && ff.val === Core.throw
-                return true
-            end
-        end
-    end
-    return false
-end
-
-function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Int})
-    for stmt in find_throw_blocks(src.code, handler_at)
-        src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
-    end
-    return nothing
-end
-
-function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
-    stmts = BitSet()
-    n = length(code)
-    for i in n:-1:1
-        s = code[i]
-        if isa(s, Expr)
-            if s.head === :gotoifnot
-                if i+1 in stmts && s.args[2]::Int in stmts
-                    push!(stmts, i)
-                end
-            elseif s.head === :return
-                # see `ReturnNode` handling
-            elseif is_throw_call(s, code)
-                if handler_at[i] == 0
-                    push!(stmts, i)
-                end
-            elseif i+1 in stmts
-                push!(stmts, i)
-            end
-        elseif isa(s, ReturnNode)
-            # NOTE: it potentially makes sense to treat unreachable nodes
-            # (where !isdefined(s, :val)) as `throw` points, but that can cause
-            # worse codegen around the call site (issue #37558)
-        elseif isa(s, GotoNode)
-            if s.label in stmts
-                push!(stmts, i)
-            end
-        elseif isa(s, GotoIfNot)
-            if i+1 in stmts && s.dest in stmts
-                push!(stmts, i)
-            end
-        elseif i+1 in stmts
-            push!(stmts, i)
-        end
-    end
-    return stmts
 end
 
 # using a function to ensure we can infer this
@@ -517,9 +472,8 @@ end
 # options #
 ###########
 
-is_root_module(m::Module) = false
-
 inlining_enabled() = (JLOptions().can_inline == 1)
+
 function coverage_enabled(m::Module)
     generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
@@ -533,9 +487,12 @@ function coverage_enabled(m::Module)
     end
     return false
 end
+
 function inbounds_option()
     opt_check_bounds = JLOptions().check_bounds
     opt_check_bounds == 0 && return :default
     opt_check_bounds == 1 && return :on
     return :off
 end
+
+is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1

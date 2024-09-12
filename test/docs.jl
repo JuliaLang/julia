@@ -2,6 +2,9 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
+# check that @doc can work before REPL is loaded
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc sin'`, String), "nothing")
+
 using Markdown
 using REPL
 
@@ -69,6 +72,37 @@ $$latex literal$$
 """
 function break_me_docs end
 
+
+# `hasdoc` returns `true` on a name with a docstring.
+@test Docs.hasdoc(Base, :map)
+# `hasdoc` returns `false` on a name without a docstring.
+@test !isdefined(Base, :_this_name_doesnt_exist_) && !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
+@test isdefined(Base, :_typed_vcat) && !Docs.hasdoc(Base, :_typed_vcat)
+
+"This module has names without documentation."
+module _ModuleWithUndocumentedNames
+export f
+public ⨳, @foo
+f() = 1
+g() = 2
+⨳(a,b) = a * b
+macro foo(); nothing; end
+⊕(a,b) = a + b
+end
+
+"This module has some documentation."
+module _ModuleWithSomeDocumentedNames
+export f
+"f() is 1."
+f() = 1
+g() = 2
+end
+
+@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f, :⨳]
+@test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:eval, :g, :include]
+
+
 # issue #11548
 
 module ModuleMacroDoc
@@ -89,7 +123,7 @@ module NoDocStrings end
 # General tests for docstrings.
 
 const LINE_NUMBER = @__LINE__() + 1
-"DocsTest"
+"DocsTest, evaluating $(K)"     # test that module docstring is evaluated within module
 module DocsTest
 
 using Markdown
@@ -234,7 +268,7 @@ fnospecialize(@nospecialize(x::AbstractArray)) = 2
 end
 
 let md = meta(DocsTest)[@var(DocsTest)]
-    @test docstrings_equal(md.docs[Union{}], doc"DocsTest")
+    @test docstrings_equal(md.docs[Union{}], doc"DocsTest, evaluating K")
     # Check that plain docstrings store a module reference.
     # https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
     @test md.docs[Union{}].data[:module] == DocsTest
@@ -1434,7 +1468,7 @@ end
 end
 
 struct t_docs_abc end
-@test "t_docs_abc" in accessible(@__MODULE__)
+@test "t_docs_abc" in string.(accessible(@__MODULE__))
 
 # Call overloading issues #20087 and #44889
 """
@@ -1525,3 +1559,21 @@ Base.@ccallable c51586_long()::Int = 3
 
 @test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
 @test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
+
+@testset "Docs docstrings" begin
+    undoc = Docs.undocumented_names(Docs)
+    @test_broken isempty(undoc)
+    @test undoc == [Symbol("@var")]
+end
+
+# Docing the macroception macro
+macro docmacroception()
+    Expr(:toplevel, macroexpand(__module__, :(@Base.__doc__ macro docmacrofoo() 1 end); recursive=false), :(@docmacrofoo))
+end
+
+"""
+This docmacroception has a docstring
+"""
+@docmacroception()
+
+@test Docs.hasdoc(@__MODULE__, :var"@docmacrofoo")

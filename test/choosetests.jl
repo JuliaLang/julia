@@ -29,7 +29,7 @@ const TESTNAMES = [
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
-        "scopedvalues",
+        "scopedvalues", "compileall"
 ]
 
 const INTERNET_REQUIRED_LIST = [
@@ -155,11 +155,10 @@ function choosetests(choices = [])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", [
-        "compiler/datastructures", "compiler/inference", "compiler/effects",
-        "compiler/validation", "compiler/ssair", "compiler/irpasses",
-        "compiler/codegen", "compiler/inline", "compiler/contextual",
-        "compiler/invalidation", "compiler/AbstractInterpreter",
-        "compiler/EscapeAnalysis/EscapeAnalysis"])
+        "compiler/datastructures", "compiler/inference", "compiler/effects", "compiler/compact",
+        "compiler/validation", "compiler/ssair", "compiler/irpasses", "compiler/tarjan",
+        "compiler/codegen", "compiler/inline", "compiler/contextual", "compiler/invalidation",
+        "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/EscapeAnalysis"])
     filtertests!(tests, "compiler/EscapeAnalysis", [
         "compiler/EscapeAnalysis/EscapeAnalysis"])
     filtertests!(tests, "stdlib", STDLIBS)

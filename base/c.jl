@@ -344,7 +344,7 @@ function ccall_macro_lower(convention, func, rettype, types, args, nreq)
         check = quote
             if !isa(func, Ptr{Cvoid})
                 name = $name
-                throw(ArgumentError("interpolated function `$name` was not a Ptr{Cvoid}, but $(typeof(func))"))
+                throw(ArgumentError(LazyString("interpolated function `", name, "` was not a Ptr{Cvoid}, but ", typeof(func))))
             end
         end
         push!(statements, check)
@@ -409,6 +409,6 @@ macro ccall(expr)
     return ccall_macro_lower(:ccall, ccall_macro_parse(expr)...)
 end
 
-macro ccall_effects(effects::UInt8, expr)
+macro ccall_effects(effects::UInt16, expr)
     return ccall_macro_lower((:ccall, effects), ccall_macro_parse(expr)...)
 end
