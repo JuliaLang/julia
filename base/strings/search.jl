@@ -44,7 +44,7 @@ is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
 last_byteindex(x::Union{String, SubString{String}}) = ncodeunits(x)
 last_byteindex(x::DenseUInt8OrInt8) = lastindex(x)
 
-"Internal type - lazy iterator over positions of char in string"
+# Internal type - lazy iterator over positions of char in string
 struct FwCharPosIter{S}
     string::S # S is assumed to be either String or SubString{String}
     char::Char
@@ -95,7 +95,7 @@ function Base.iterate(s::FwCharPosIter, i::Int=1)
     end
 end
 
-"Internal type - lazy iterator over positions of char in string, in reverse order"
+# Internal type - lazy iterator over positions of char in string, in reverse order
 struct RvCharPosIter{S}
     string::S # S is assumed to be either String or SubString{String}
     char::Char
