@@ -536,4 +536,17 @@ end
     @test v * S isa Matrix
 end
 
+@testset "Partly filled Hermitian and Diagonal algebra" begin
+    D = Diagonal([1,2])
+    for S in (Symmetric, Hermitian), uplo in (:U, :L)
+        M = Matrix{BigInt}(undef, 2, 2)
+        M[1,1] = M[2,2] = M[1+(uplo == :L), 1 + (uplo == :U)] = 3
+        H = S(M, uplo)
+        HM = Matrix(H)
+        @test H + D == D + H == HM + D
+        @test H - D == HM - D
+        @test D - H == D - HM
+    end
+end
+
 end # module TestSpecial
