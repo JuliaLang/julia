@@ -2196,8 +2196,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :do && nargs == 2
         iob = IOContext(io, beginsym=>false)
         show_unquoted(iob, args[1], indent, -1, quote_level)
-        print(io, " do ")
-        show_list(iob, (((args[2]::Expr).args[1])::Expr).args, ", ", 0, 0, quote_level)
+        print(io, " do")
+        do_args = (((args[2]::Expr).args[1])::Expr).args
+        if !isempty(do_args)
+            print(io, ' ')
+            show_list(iob, do_args, ", ", 0, 0, quote_level)
+        end
         for stmt in (((args[2]::Expr).args[2])::Expr).args
             print(io, '\n', " "^(indent + indent_width))
             show_unquoted(iob, stmt, indent + indent_width, -1, quote_level)
