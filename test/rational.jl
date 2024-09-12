@@ -779,6 +779,12 @@ end
     @test_throws InexactError Rational{Integer}(Int8(-1), UInt8(1))
 end
 
+struct Issue55756A <: Integer end
+struct Issue55756B <: Integer end
+@testset "inexact conversion to `Integer`, issue #55756" begin
+    @test_throws InexactError Union{Issue55756A,Issue55756B}(1//2)
+end
+
 @testset "issue #41489" begin
     @test Core.Compiler.return_type(+, NTuple{2, Rational}) == Rational
     @test Core.Compiler.return_type(-, NTuple{2, Rational}) == Rational
