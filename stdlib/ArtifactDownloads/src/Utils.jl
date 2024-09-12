@@ -8,7 +8,6 @@ end
 artifactserror(msg::String...) = throw(ArtifactsError(join(msg)))
 Base.showerror(io::IO, err::ArtifactsError) = print(io, err.msg)
 
-# 
 function pkg_server()
     server = get(ENV, "JULIA_PKG_SERVER", "https://pkg.julialang.org")
     isempty(server) && return nothing
@@ -130,6 +129,23 @@ function set_readonly(path)
     return nothing
 end
 set_readonly(::Nothing) = nothing
+
+"""
+    contains_files(root::AbstractString)
+
+Helper function to determine whether a directory contains files; e.g. it is a
+direct parent of a file or it contains some other directory that itself is a
+direct parent of a file. This is used to exclude directories from tree hashing.
+"""
+function contains_files(path::AbstractString)
+    st = lstat(path)
+    ispath(st) || throw(ArgumentError("non-existent path: $(repr(path))"))
+    isdir(st) || return true
+    for p in readdir(path)
+        contains_files(joinpath(path, p)) && return true
+    end
+    return false
+end
 
 # See loading.jl
 const TOML_CACHE = Base.TOMLCache(Base.TOML.Parser{Dates}())

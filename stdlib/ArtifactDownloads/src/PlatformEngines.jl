@@ -150,7 +150,7 @@ function get_auth_header(url::AbstractString; verbose::Bool = false)
         return auth_header
     end
     if !haskey(auth_info, "refresh_url") || !haskey(auth_info, "refresh_token")
-        if expires_at ≤ time_now
+        if expires_at ≤ time_now
             @warn "expired auth without refresh keys" file=auth_file
         end
         # try it anyway since we can't refresh
@@ -283,7 +283,7 @@ function download(
             (total, now) -> begin
                 bar.max = total
                 bar.current = now
-                # Downloads.download attatches the progress indicator to the header request too
+                # Downloads.download attaches the progress indicator to the header request too
                 # which is only ~100 bytes, and will report as 0 - 100% progress immediately
                 # then dip down to 0 before the actual download starts. So we only show the
                 # progress bar once the real download starts.

@@ -2,7 +2,7 @@ module ArtifactDownloads
 
 include("Utils.jl")
 include("MiniProgressBars.jl")
-include("GitTools.jl")
+include("GitTreeHashTools.jl")
 include("PlatformEngines.jl")
 
 import TOML
@@ -11,8 +11,8 @@ import SHA: sha256
 
 import ..Utils: set_readonly, pkg_server, can_fancyprint, stderr_f, printpkgstyle,
                 write_env_usage, can_symlink, parse_toml
-import ..GitTools
 import ..PlatformEngines: package, download_verify_unpack
+import ..GitTreeHashTools: git_tree_hash
 
 import Base.BinaryPlatforms: AbstractPlatform, HostPlatform, triplet
 import Artifacts: artifact_names, ARTIFACTS_DIR_OVERRIDE, ARTIFACT_OVERRIDES, artifact_path,
@@ -45,7 +45,7 @@ function create_artifact(f::Function)
         f(temp_dir)
 
         # Calculate the tree hash for this temporary directory
-        artifact_hash = SHA1(GitTools.tree_hash(temp_dir))
+        artifact_hash = SHA1(git_tree_hash(temp_dir))
 
         # If we created a dupe, just let the temp directory get destroyed. It's got the
         # same contents as whatever already exists after all, so it doesn't matter.  Only
@@ -135,7 +135,7 @@ function verify_artifact(hash::SHA1; honor_overrides::Bool=false)
     end
 
     # Otherwise actually run the verification
-    return all(hash.bytes .== GitTools.tree_hash(artifact_path(hash)))
+    return all(hash.bytes .== git_tree_hash(artifact_path(hash)))
 end
 
 """
@@ -179,7 +179,7 @@ Writes a mapping of `name` -> `hash` within the given `(Julia)Artifacts.toml` fi
 `platform` is not `nothing`, this artifact is marked as platform-specific, and will be
 a multi-mapping.  It is valid to bind multiple artifacts with the same name, but
 different `platform`s and `hash`'es within the same `artifacts_toml`.  If `force` is set
-to `true`, this will overwrite a pre-existant mapping, otherwise an error is raised.
+to `true`, this will overwrite a pre-existent mapping, otherwise an error is raised.
 
 `download_info` is an optional vector that contains tuples of URLs and a hash.  These
 URLs will be listed as possible locations where this artifact can be obtained.  If `lazy`
@@ -334,7 +334,7 @@ function download_artifact(
     try
         download_verify_unpack(tarball_url, tarball_hash, temp_dir, ignore_existence=true, verbose=verbose,
                 quiet_download=quiet_download, io=io)
-        calc_hash = SHA1(GitTools.tree_hash(temp_dir))
+        calc_hash = SHA1(git_tree_hash(temp_dir))
 
         # Did we get what we expected?  If not, freak out.
         if calc_hash.bytes != tree_hash.bytes

@@ -9,7 +9,7 @@ uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
 version = "1.1.2"
 
 [[deps.ArtifactDownloads]]
-deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Printf", "SHA", "TOML", "Tar", "p7zip_jll"]
+deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "Printf", "SHA", "TOML", "Tar", "p7zip_jll"]
 uuid = "6ee59702-05f1-4877-b811-03813c0d76c5"
 version = "1.11.0"
 
