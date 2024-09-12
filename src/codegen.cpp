@@ -2233,6 +2233,17 @@ static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align alig
     return emit_static_alloca(ctx, ArrayType::get(ctx.builder.getInt8Ty(), alignTo(nb, align)), align);
 }
 
+static AllocaInst *emit_static_roots(jl_codectx_t &ctx, unsigned nroots)
+{
+    AllocaInst *staticroots = emit_static_alloca(ctx, ctx.types().T_prjlvalue, Align(sizeof(void*)));
+    staticroots->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), nroots));
+    IRBuilder<> builder(ctx.topalloca);
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+    // make sure these are nullptr early from LLVM's perspective, in case it decides to SROA it
+    ai.decorateInst(builder.CreateMemSet(staticroots, builder.getInt8(0), nroots * sizeof(void*), staticroots->getAlign()));
+    return staticroots;
+}
+
 static void undef_derived_strct(jl_codectx_t &ctx, Value *ptr, jl_datatype_t *sty, MDNode *tbaa)
 {
     assert(ptr->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
@@ -5080,7 +5091,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     AllocaInst *return_roots = nullptr;
     if (returninfo.return_roots) {
         assert(returninfo.cc == jl_returninfo_t::SRet);
-        return_roots = emit_static_alloca(ctx, ArrayType::get(ctx.types().T_prjlvalue, returninfo.return_roots), Align(alignof(jl_value_t*)));
+        return_roots = emit_static_roots(ctx, returninfo.return_roots);
         argvals[idx] = return_roots;
         idx++;
     }
@@ -5958,12 +5969,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         auto tracked = CountTrackedPointers(vtype);
         if (tracked.count) {
             assert(tracked.count == split_value_size((jl_datatype_t*)phiType).second);
-            roots = emit_static_alloca(ctx, ctx.types().T_prjlvalue, Align(sizeof(void*)));
-            roots->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), tracked.count));
-            phiroots = cast<AllocaInst>(roots->clone());
-            phiroots->insertBefore(roots);
+            roots = emit_static_roots(ctx, tracked.count);
+            phiroots = emit_static_roots(ctx, tracked.count);
             ctx.builder.CreateMemCpy(phiroots, roots->getAlign(), roots, roots->getAlign(), tracked.count * sizeof(void*), false);
-            ctx.builder.CreateLifetimeEnd(roots);
         }
         if (!tracked.all) {
             unsigned nb = jl_datatype_size(phiType);
@@ -5972,13 +5980,6 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             phi->insertBefore(dest);
             ctx.builder.CreateMemCpy(phi, align, dest, align, nb, false);
             ctx.builder.CreateLifetimeEnd(dest);
-        }
-        else {
-            assert(tracked.count);
-            dest = roots;
-            phi = phiroots;
-            roots = nullptr;
-            phiroots = nullptr;
         }
         slot = mark_julia_slot(phi, phiType, NULL, ctx.tbaa().tbaa_stack, phiroots);
     }
@@ -9384,8 +9385,6 @@ static jl_llvm_functions_t
             }
             if (dest)
                 ctx.builder.CreateLifetimeStart(dest);
-            if (roots)
-                ctx.builder.CreateLifetimeStart(roots);
             jl_cgval_t val = emit_expr(ctx, value);
             if (val.constant)
                 val = mark_julia_const(ctx, val.constant); // be over-conservative at making sure `.typ` is set concretely, not tindex
@@ -9412,13 +9411,13 @@ static jl_llvm_functions_t
                     VN->addIncoming(V, ctx.builder.GetInsertBlock());
                     assert(!TindexN);
                 }
-                else if (dest && val.typ != (jl_value_t*)jl_bottom_type) {
+                else if ((dest || roots) && val.typ != (jl_value_t*)jl_bottom_type) {
                     // must be careful to emit undef here (rather than a bitcast or
                     // load of val) if the runtime type of val isn't phiType
                     auto tracked = split_value_size((jl_datatype_t*)phiType).second;
                     if (tracked) {
                         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-                        ai.decorateInst(ctx.builder.CreateMemSet(roots ? roots : dest, ctx.builder.getInt8(0), tracked * sizeof(jl_value_t*), Align(sizeof(jl_value_t*))));
+                        ai.decorateInst(ctx.builder.CreateMemSet(roots, ctx.builder.getInt8(0), tracked * sizeof(jl_value_t*), Align(sizeof(jl_value_t*))));
                     }
                     Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                     emit_guarded_test(ctx, isvalid, nullptr, [&] {
@@ -9530,12 +9529,9 @@ static jl_llvm_functions_t
                 TindexN->addIncoming(RTindex, FromBB);
             if (dest)
                 ctx.builder.CreateLifetimeStart(dest);
-            if (roots)
-                ctx.builder.CreateLifetimeStart(roots);
-            if (jl_is_datatype(phiType) && (roots || dest)) {
+            if (jl_is_datatype(phiType) && roots) {
                 auto tracked = split_value_size((jl_datatype_t*)phiType).second;
-                if (tracked)
-                    ai.decorateInst(ctx.builder.CreateMemSet(roots ? roots : dest, ctx.builder.getInt8(0), tracked * sizeof(jl_value_t*), Align(sizeof(jl_value_t*))));
+                ai.decorateInst(ctx.builder.CreateMemSet(roots, ctx.builder.getInt8(0), tracked * sizeof(jl_value_t*), Align(sizeof(jl_value_t*))));
             }
             ctx.builder.ClearInsertionPoint();
         }

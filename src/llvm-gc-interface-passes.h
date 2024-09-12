@@ -332,9 +332,9 @@ private:
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const ArrayRef<int> &SafepointsSoFar,
                       SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
-    void NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses);
-    void NoteUse(State &S, BBState &BBS, Value *V) {
-        NoteUse(S, BBS, V, BBS.UpExposedUses);
+    void NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses, Function &F);
+    void NoteUse(State &S, BBState &BBS, Value *V, Function &F) {
+        NoteUse(S, BBS, V, BBS.UpExposedUses, F);
     }
 
     void LiftPhi(State &S, PHINode *Phi);
@@ -348,7 +348,7 @@ private:
     SmallVector<int, 0> NumberAll(State &S, Value *V);
     SmallVector<int, 0> NumberAllBase(State &S, Value *Base);
 
-    void NoteOperandUses(State &S, BBState &BBS, User &UI);
+    void NoteOperandUses(State &S, BBState &BBS, Instruction &UI);
     void MaybeTrackDst(State &S, MemTransferInst *MI);
     void MaybeTrackStore(State &S, StoreInst *I);
     State LocalScan(Function &F);

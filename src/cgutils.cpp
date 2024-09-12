@@ -1189,11 +1189,8 @@ static std::pair<AllocaInst*, AllocaInst*> split_value(jl_codectx_t &ctx, const 
 {
     jl_datatype_t *typ = (jl_datatype_t*)x.typ;
     auto sizes = split_value_size(typ);
-    Type *T_prjlvalue = ctx.types().T_prjlvalue;
     AllocaInst *bits = sizes.first > 0 ? emit_static_alloca(ctx, sizes.first, Align(julia_alignment((jl_value_t*)typ))) : nullptr;
-    AllocaInst *roots = sizes.second > 0 ? emit_static_alloca(ctx, T_prjlvalue, Align(sizeof(void*))) : nullptr;
-    if (roots)
-        roots->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), sizes.second));
+    AllocaInst *roots = sizes.second > 0 ? emit_static_roots(ctx, sizes.second) : nullptr;
     auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
     split_value_into(ctx, x, x_alignment, bits, stack_ai, roots, stack_ai);
     return std::make_pair(bits, roots);
@@ -4114,13 +4111,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 }
             }
             else if (tracked.second) {
-                inner_roots = emit_static_alloca(ctx, ctx.types().T_prjlvalue, Align(sizeof(void*)));
-                inner_roots->setOperand(0, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), tracked.second));
-                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
-                ai.decorateInst(ctx.builder.CreateMemSet(inner_roots, ctx.builder.getInt8(0), tracked.second * sizeof(jl_value_t*), Align(sizeof(jl_value_t*))));
+                inner_roots = emit_static_roots(ctx, tracked.second);
                 if (tracked.first) {
-                    AllocaInst *bits = emit_static_alloca(ctx, tracked.first, Align(julia_alignment((jl_value_t*)sty)));
-                    //ai.decorateInst(ctx.builder.CreateMemSet(bits, ctx.builder.getInt8(0xfe), tracked.first, bits->getAlign()));
+                    AllocaInst *bits = emit_static_alloca(ctx, tracked.first, Align(julia_alignment(ty)));
                     strct = bits;
                     setName(ctx.emission_context, bits, arg_typename);
                 }

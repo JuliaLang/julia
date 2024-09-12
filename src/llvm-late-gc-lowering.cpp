@@ -695,8 +695,13 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, SmallVectorImpl<i
     return Number;
 }
 
-void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses) {
+void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses, Function &F) {
     // Short circuit to avoid having to deal with vectors of constants, etc.
+    if (isa<PointerType>(V->getType())) {
+        if (isSpecialPtr(V->getType()))
+            if (isa<UndefValue>(V) && !isa<PoisonValue>(V))
+                F.dump();
+    }
     if (isa<Constant>(V))
         return;
     if (isa<PointerType>(V->getType())) {
@@ -718,9 +723,9 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitV
     }
 }
 
-void LateLowerGCFrame::NoteOperandUses(State &S, BBState &BBS, User &UI) {
+void LateLowerGCFrame::NoteOperandUses(State &S, BBState &BBS, Instruction &UI) {
     for (Use &U : UI.operands()) {
-        NoteUse(S, BBS, U);
+        NoteUse(S, BBS, U, *UI.getFunction());
     }
 }
 
@@ -1377,7 +1382,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     unsigned nIncoming = Phi->getNumIncomingValues();
                     for (unsigned i = 0; i < nIncoming; ++i) {
                         BBState &IncomingBBS = S.BBStates[Phi->getIncomingBlock(i)];
-                        NoteUse(S, IncomingBBS, Phi->getIncomingValue(i), IncomingBBS.PhiOuts);
+                        NoteUse(S, IncomingBBS, Phi->getIncomingValue(i), IncomingBBS.PhiOuts, F);
                     }
                 } else if (tracked.count) {
                     // We need to insert extra phis for the GC roots

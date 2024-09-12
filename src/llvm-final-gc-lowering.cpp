@@ -28,6 +28,7 @@ void FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     // Zero out the GC frame.
     auto ptrsize = F.getParent()->getDataLayout().getPointerSize();
     builder.CreateMemSet(gcframe, Constant::getNullValue(Type::getInt8Ty(F.getContext())), ptrsize * (nRoots + 2), Align(16), tbaa_gcframe);
+    // TODO: walk all uses in the topbasic block and drop any other MemSet calls
 
     target->replaceAllUsesWith(gcframe);
     target->eraseFromParent();
