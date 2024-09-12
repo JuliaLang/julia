@@ -499,4 +499,12 @@ end
     end
 end
 
+@testset "lu!/rdiv! via lu/ldiv! (#55422)" begin
+    id(A,T) = T(Matrix{eltype(A)}(I, size(A)...))
+    A = randn(1000,1000);
+    @test inv(A) ≈ ldiv!(lu(A), id(A,Matrix)) ≈ rdiv!(id(A,Matrix), lu(A)) ≈ rdiv!(id(A,Symmetric), lu(A))
+    A = complex.(randn(1000,1000),randn(1000,1000));
+    @test inv(A) ≈ ldiv!(lu(A), id(A,Matrix)) ≈ rdiv!(id(A,Matrix), lu(A)) ≈ rdiv!(id(A,Hermitian), lu(A))
+end
+
 end # module TestLU
