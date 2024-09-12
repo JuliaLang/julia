@@ -521,6 +521,14 @@ function ldiv!(adjA::AdjointFactorization{<:Any,<:LU}, B::AbstractVecOrMat)
     _apply_inverse_ipiv_rows!(A, B)
 end
 
+# To enable rdiv! via ldiv!
+ldiv!(A::TransposeFactorization{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:Union{BlasFloat,BlasComplex}} =
+    LAPACK.getrs!('T', A.parent.factors, A.parent.ipiv, copy(B))
+ldiv!(A::TransposeFactorization{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:Hermitian{T,<:StridedMatrix}}) where {T<:BlasComplex} =
+    LAPACK.getrs!('T', A.parent.factors, A.parent.ipiv, Matrix(B))
+ldiv!(A::TransposeFactorization{T,<:LU{T,<:StridedMatrix}}, B::Symmetric{T,<:StridedMatrix}) where {T<:BlasFloat} =
+    LAPACK.getrs!('T', A.parent.factors, A.parent.ipiv, Matrix(B))
+
 (\)(A::AdjointFactorization{T,<:LU{T,<:StridedMatrix}}, B::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
     LAPACK.getrs!('C', A.parent.factors, A.parent.ipiv, copy(B))
 (\)(A::TransposeFactorization{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
