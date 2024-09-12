@@ -203,11 +203,10 @@
         end
     end
 
-    @testset "proper nextind/prevind/thisind for SubString{String}" begin
-        rng = MersenneTwister(1)
-        strs = ["∀∃∀"*String(rand(rng, UInt8, 40))*"∀∃∀",
-                                          String(rand(rng, UInt8, 50))]
-        for s in strs
+    rng = MersenneTwister(1)
+    strs = ["∀∃∀"*String(rand(rng, UInt8, 40))*"∀∃∀",
+                                      String(rand(rng, UInt8, 50))]
+    @testset "proper nextind/prevind/thisind for SubString{String}: $(repr(s))" for s in strs
             a = 0
             while a <= ncodeunits(s)
                 a = nextind(s, a)
