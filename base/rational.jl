@@ -541,7 +541,7 @@ function ^(z::Complex{<:Rational}, n::Integer)
     n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 end
 
-iszero(x::Rational) = iszero(numerator(x))
+iszero(x::Rational) = iszero(numerator(x)) && isone(denominator(x))
 isone(x::Rational) = isone(numerator(x)) & isone(denominator(x))
 
 function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
