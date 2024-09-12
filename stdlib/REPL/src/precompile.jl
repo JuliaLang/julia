@@ -25,6 +25,9 @@ let
     DOWN_ARROW = "\e[B"
 
     repl_script = """
+    module ThrowAway end
+    import REPL
+    REPL.activate(ThrowAway; interactive_utils=false) # Main is closed so we can't evaluate in it
     2+2
     print("")
     printstyled("a", "b")
