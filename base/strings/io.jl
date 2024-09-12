@@ -42,7 +42,7 @@ end
 function print(io::IO, xs...)
     lock(io)
     try
-        for x in xs
+        foreach(xs) do x
             print(io, x)
         end
     finally
@@ -144,7 +144,7 @@ function print_to_string(xs...)
     end
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
-    for x in xs
+    foreach(xs) do x
         print(s, x)
     end
     String(_unsafe_take!(s))
@@ -161,7 +161,7 @@ function string_with_env(env, xs...)
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
-    for x in xs
+    foreach(xs) do x
         print(env_io, x)
     end
     String(_unsafe_take!(s))
