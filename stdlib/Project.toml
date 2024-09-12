@@ -1,6 +1,7 @@
 [deps]
 ArgTools = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+ArtifactDownloads = "6ee59702-05f1-4877-b811-03813c0d76c5"
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 CRC32c = "8bf52ea8-c179-5cab-976a-9e18b702a9bc"
 CompilerSupportLibraries_jll = "e66e0078-7015-5450-92f7-15fbd957f2ae"

@@ -35,6 +35,7 @@ const TESTNAMES = [
 const INTERNET_REQUIRED_LIST = [
     "Artifacts",
     "Downloads",
+    "ArtifactDownloads",
     "LazyArtifacts",
     "LibCURL",
     "LibGit2",

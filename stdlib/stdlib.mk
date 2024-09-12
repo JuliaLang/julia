@@ -3,8 +3,8 @@ STDLIBS_WITHIN_SYSIMG := \
 	LinearAlgebra Sockets
 
 INDEPENDENT_STDLIBS := \
-	ArgTools Base64 CRC32c Dates DelimitedFiles Distributed Downloads Future \
-	InteractiveUtils JuliaSyntaxHighlighting LazyArtifacts LibGit2 LibCURL Logging \
+	ArtifactDownloads ArgTools Base64 CRC32c Dates DelimitedFiles Distributed Downloads \
+	Future InteractiveUtils JuliaSyntaxHighlighting LazyArtifacts LibGit2 LibCURL Logging \
 	Markdown Mmap NetworkOptions Profile Printf Pkg REPL Serialization SharedArrays \
 	SparseArrays Statistics StyledStrings SuiteSparse_jll Tar Test TOML Unicode UUIDs \
 	dSFMT_jll GMP_jll libLLVM_jll LLD_jll LLVMLibUnwind_jll LibUnwind_jll LibUV_jll \
