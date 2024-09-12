@@ -6168,6 +6168,14 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
                              ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x01),
                 vi.pTIndex, Align(1), true);
         }
+        else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
+            assert(vi.value.ispointer());
+            Type *T = cast<AllocaInst>(vi.value.V)->getAllocatedType();
+            if (CountTrackedPointers(T).count) {
+                // memory optimization: make gc pointers re-initialized to NULL
+                ctx.builder.CreateStore(Constant::getNullValue(T), vi.value.V, true);
+            }
+        }
     }
 }
 
