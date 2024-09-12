@@ -1415,8 +1415,8 @@ julia> @time @eval foo();
 Note that `@time @eval` is better for measuring compilation time because without [@eval](@ref), some compilation may
 already be done before timing starts.
 
-When developing a package, you may be able to improve the experience of your users with *precompilation*,
-so that when they use the package the code they use is already compiled. To precompile package code effectively, it's
+When developing a package, you may be able to improve the experience of your users with *precompilation*
+so that when they use the package, the code they use is already compiled. To precompile package code effectively, it's
 recommended to use [`PrecompileTools.jl`](https://julialang.github.io/PrecompileTools.jl/stable/) to run a
 "precompile workload" during precompilation time that is representative of typical package usage, which will cache the
 native compiled code into the package `pkgimage` cache, greatly reducing "time to first execution" (often referred to as
@@ -1431,10 +1431,7 @@ may be the case during development of a package.
 Keeping the time taken to load the package down is usually helpful.
 General good practice for package developers includes:
 
-1. Reduce your dependencies to those you really need.
-2. Consider organizing any extended package functionality that is dependent on particular dependencies into
-   [package extensions](@ref) that can serve optional functionality depending on whether the user's environment (or the
-   package depending on yours) has those particular dependencies.
+1. Reduce your dependencies to those you really need. Consider using [package extensions](@ref) to support interoperability with other packages without bloating your essential dependencies.
 3. Avoid use of [`__init__()`](@ref) functions unless there is no alternative, especially those which might trigger a lot
    of compilation, or just take a long time to execute.
 4. Where possible, fix [invalidations](@ref) among your dependencies and from your package code.
