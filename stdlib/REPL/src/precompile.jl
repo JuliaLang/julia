@@ -38,7 +38,7 @@ let
     DOWN_ARROW = "\e[B"
 
     repl_script = """
-    module ThrowAway end
+    module ThrowAway; import REPL; end
     import REPL
     REPL.activate(ThrowAway; interactive_utils=false) # Main is closed so we can't evaluate in it
     2+2
@@ -63,6 +63,7 @@ let
     [][1]
     Base.Iterators.minimum
     cd("complete_path\t\t$CTRL_C
+    REPL.activate(parentmodule(ThrowAway); interactive_utils=false)
     println("done")
     """
 
