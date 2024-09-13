@@ -2546,8 +2546,8 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
         jl_printf(s_precompile, ")");
-        if (is_recompile && s_precompile == JL_STDERR) {
-            if (jl_options.color != JL_OPTIONS_COLOR_OFF) {
+        if (is_recompile) {
+            if (s_precompile == JL_STDERR && jl_options.color != JL_OPTIONS_COLOR_OFF) {
                 jl_printf(s_precompile, "\e[0m");
             }
             else {
