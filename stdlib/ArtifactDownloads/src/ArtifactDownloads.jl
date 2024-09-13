@@ -156,9 +156,6 @@ function archive_artifact(hash::SHA1, tarball_path::String; honor_overrides::Boo
         error("Unable to archive artifact $(bytes2hex(hash.bytes)): does not exist!")
     end
 
-    # TODO: We may not need this...
-    #  (removes `PlatformEngines.package`)
-
     # Package it up
     package(artifact_path(hash), tarball_path)
 
