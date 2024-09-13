@@ -24,7 +24,7 @@ u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
     @test_throws BoundsError findnext(isequal(0x1),b"\x1\x2",0)
 end
 
-@testset "ascii forward search $str" for str in [astr, GenericString(astr)]
+@testset "ascii forward search $(typeof(str))" for str in [astr, GenericString(astr)]
     @test_throws BoundsError findnext(isequal('z'), str, 0)
     @test_throws BoundsError findnext(isequal('∀'), str, 0)
     @test findfirst(isequal('x'), str) === nothing
@@ -99,7 +99,7 @@ end
     @test findlast('\n', str) == 14
 end
 
-@testset "utf-8 forward search $str" for str in (u8str, GenericString(u8str))
+@testset "utf-8 forward search $(typeof(str))" for str in (u8str, GenericString(u8str))
     @test_throws BoundsError findnext(isequal('z'), str, 0)
     @test_throws BoundsError findnext(isequal('∀'), str, 0)
     @test findfirst(isequal('z'), str) === nothing
