@@ -3975,3 +3975,13 @@ module UsingFailedExplicit
     using .A: x as x
     @test x === 1
 end
+
+# issue #45494
+begin
+  local b::Tuple{<:Any} = (0,)
+  function f45494()
+    b = b
+    b
+  end
+end
+@test f45494() === (0,)
