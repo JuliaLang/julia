@@ -134,14 +134,15 @@ function _str_sizehint(x)
     end
 end
 
+function _str_sizehints(xs...)
+    mapreduce(_str_sizehint, +, xs; init = 0)
+end
+
 function print_to_string(xs...)
     if isempty(xs)
         return ""
     end
-    siz::Int = 0
-    for x in xs
-        siz += _str_sizehint(x)
-    end
+    siz = _str_sizehints(xs...)
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     foreach(xs) do x
@@ -154,10 +155,7 @@ function string_with_env(env, xs...)
     if isempty(xs)
         return ""
     end
-    siz::Int = 0
-    for x in xs
-        siz += _str_sizehint(x)
-    end
+    siz = _str_sizehints(xs...)
     # specialized for performance reasons
     s = IOBuffer(sizehint=siz)
     env_io = IOContext(s, env)
