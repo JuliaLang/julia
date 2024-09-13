@@ -283,7 +283,8 @@ Generate an incremental output file (rather than complete)
 
 .TP
 --trace-compile={stderr|name}
-Print precompile statements for methods compiled during execution or save to a path
+Print precompile statements for methods compiled during execution or save to stderr or a path.
+Methods that were recompiled are printed in yellow or with a trailing comment if color is not supported
 
 .TP
 --trace-compile-timing=
