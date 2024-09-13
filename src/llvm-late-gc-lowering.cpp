@@ -1159,58 +1159,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 else {
                     MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
                 }
-                if (CI->hasStructRetAttr()) {
-                    Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
-                    #if JL_LLVM_VERSION < 170000
-                    assert(cast<PointerType>(CI->getArgOperand(0)->getType())->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
-                    #endif
-                    auto tracked = CountTrackedPointers(ElT, true);
-                    if (tracked.count) {
-                        AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
-                        assert(SRet);
-                        {
-                            if (!(SRet->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                assert(!tracked.derived);
-                                if (tracked.all) {
-                                    S.ArrayAllocas[SRet] = tracked.count * cast<ConstantInt>(SRet->getArraySize())->getZExtValue();
-                                }
-                                else {
-                                    Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
-                                    AllocaInst *SRet_gc = nullptr;
-                                    if (PHINode *Phi = dyn_cast<PHINode>(arg1)) {
-                                        for (Value *V : Phi->incoming_values()) {
-                                            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
-                                                if (SRet_gc == nullptr) {
-                                                    SRet_gc = Alloca;
-                                                } else if (SRet_gc == Alloca) {
-                                                    continue;
-                                                } else {
-                                                    llvm_dump(Alloca);
-                                                    llvm_dump(SRet_gc);
-                                                    assert(false && "Allocas in Phi node should match");
-                                                }
-                                            } else {
-                                                llvm_dump(V->stripInBoundsOffsets());
-                                                assert(false && "Expected alloca");
-                                            }
-                                        }
-                                    } else {
-                                        SRet_gc = dyn_cast<AllocaInst>(arg1);
-                                    }
-                                    if (!SRet_gc) {
-                                        llvm_dump(CI);
-                                        llvm_dump(arg1);
-                                        assert(false && "Expected alloca");
-                                    }
-                                    Type *ElT = SRet_gc->getAllocatedType();
-                                    if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                        S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
                 NoteOperandUses(S, BBS, I);
                 if (CI->canReturnTwice()) {
                     S.ReturnsTwice.push_back(CI);
@@ -1262,9 +1210,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         continue;
                     }
 #endif
-                    if (MemTransferInst *MI = dyn_cast<MemTransferInst>(CI)) {
-                        MaybeTrackDst(S, MI);
-                    }
                 }
 #if JL_LLVM_VERSION >= 160000
                 if (isa<IntrinsicInst>(CI) ||
@@ -1337,14 +1282,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     MaybeNoteDef(S, BBS, LI, BBS.Safepoints);
                 }
                 NoteOperandUses(S, BBS, I);
-                // TODO: do we need MaybeTrackStore(S, LI);
             } else if (auto *LI = dyn_cast<AtomicRMWInst>(&I)) {
                 Type *Ty = LI->getType()->getScalarType();
                 if (!Ty->isPointerTy() || Ty->getPointerAddressSpace() != AddressSpace::Loaded) {
                     MaybeNoteDef(S, BBS, LI, BBS.Safepoints);
                 }
                 NoteOperandUses(S, BBS, I);
-                // TODO: do we need MaybeTrackStore(S, LI);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
                 auto tracked = CountTrackedPointers(SI->getType());
                 if (tracked.count && !tracked.derived) {
@@ -1388,9 +1331,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // We need to insert extra phis for the GC roots
                     LiftPhi(S, Phi);
                 }
-            } else if (StoreInst *SI = dyn_cast<StoreInst>(&I)) {
+            } else if (isa<StoreInst>(&I)) {
                 NoteOperandUses(S, BBS, I);
-                MaybeTrackStore(S, SI);
             } else if (isa<ReturnInst>(&I)) {
                 NoteOperandUses(S, BBS, I);
             } else if (auto *ASCI = dyn_cast<AddrSpaceCastInst>(&I)) {
@@ -1406,9 +1348,16 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints, std::move(RefinedPtr));
                 }
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
-                Type *ElT = AI->getAllocatedType();
-                if (AI->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked) {
-                    S.ArrayAllocas[AI] = cast<ConstantInt>(AI->getArraySize())->getZExtValue();
+                if (AI->isStaticAlloca()) {
+                    // TODO: relying on getAllocatedType may stop working at some point for identifying memory kind provenance
+                    // we may want to switch to an algorithm that instead identifies all stores and their target behavior
+                    // and then does coloring of the alloca lifetimes as well
+                    auto tracked = CountTrackedPointers(AI->getAllocatedType());
+                    if (tracked.count) {
+                        assert(!tracked.derived);
+                        if (tracked.all)
+                            S.ArrayAllocas[AI] = tracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
+                    }
                 }
             }
         }
@@ -1497,80 +1446,6 @@ SmallVector<Value*, 0> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, I
             Ptrs.push_back(Elem);
     }
     return Ptrs;
-}
-
-//static unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
-//    auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
-//    for (unsigned i = 0; i < Ptrs.size(); ++i) {
-//        Value *Elem = Ptrs[i];
-//        Value *Slot = irbuilder.CreateConstInBoundsGEP1_32(irbuilder.getInt8Ty(), Dst, i * sizeof(void*));
-//        StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
-//        shadowStore->setOrdering(AtomicOrdering::NotAtomic);
-//        // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-//    }
-//    return Ptrs.size();
-//}
-
-// turn a memcpy into a set of loads
-void LateLowerGCFrame::MaybeTrackDst(State &S, MemTransferInst *MI) {
-    //Value *Dst = MI->getRawDest()->stripInBoundsOffsets();
-    //if (AllocaInst *AI = dyn_cast<AllocaInst>(Dst)) {
-    //    Type *STy = AI->getAllocatedType();
-    //    if (!AI->isStaticAlloca() || (isa<PointerType>(STy) && STy->getPointerAddressSpace() == AddressSpace::Tracked) || S.ArrayAllocas.count(AI))
-    //        return; // already numbered this
-    //    auto tracked = CountTrackedPointers(STy);
-    //    unsigned nroots = tracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
-    //    if (nroots) {
-    //        assert(!tracked.derived);
-    //        if (!tracked.all) {
-    //            // materialize shadow LoadInst and StoreInst ops to make a copy of just the tracked values inside
-    //            //assert(MI->getLength() == DL.getTypeAllocSize(AI->getAllocatedType()) && !AI->isArrayAllocation()); // XXX: handle partial copy
-    //            Value *Src = MI->getSource();
-    //            Src = new BitCastInst(Src, STy->getPointerTo(MI->getSourceAddressSpace()), "", MI);
-    //            auto &Shadow = S.ShadowAllocas[AI];
-    //            if (!Shadow)
-    //                Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, nroots), 0, "", MI);
-    //            AI = Shadow;
-    //            unsigned count = TrackWithShadow(Src, STy, true, AI, IRBuilder<>(MI));
-    //            assert(count == tracked.count); (void)count;
-    //        }
-    //        S.ArrayAllocas[AI] = nroots;
-    //    }
-    //}
-    //// TODO: else???
-}
-
-void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
-    Value *PtrBase = I->getPointerOperand()->stripInBoundsOffsets();
-    auto tracked = CountTrackedPointers(I->getValueOperand()->getType());
-    if (!tracked.count)
-        return; // nothing to track is being stored
-    if (AllocaInst *AI = dyn_cast<AllocaInst>(PtrBase)) {
-        Type *STy = AI->getAllocatedType();
-        if (!AI->isStaticAlloca() || (isa<PointerType>(STy) && STy->getPointerAddressSpace() == AddressSpace::Tracked) || S.ArrayAllocas.count(AI))
-            return; // already numbered this
-        auto tracked = CountTrackedPointers(STy);
-        if (tracked.count) {
-            assert(!tracked.derived);
-            if (tracked.all) {
-                // track the Alloca directly
-                S.ArrayAllocas[AI] = tracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
-                return;
-            }
-        }
-    }
-    else {
-        return; // assume it is rooted--TODO: should we be more conservative?
-    }
-    // track the Store with a Shadow
-    //auto &Shadow = S.ShadowAllocas[AI];
-    //if (!Shadow)
-    //    Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, tracked.count), 0, "", MI);
-    //AI = Shadow;
-    //Value *Src = I->getValueOperand();
-    //unsigned count = TrackWithShadow(Src, Src->getType(), false, AI, MI, TODO which slots are we actually clobbering?);
-    //assert(count == tracked.count); (void)count;
-    S.TrackedStores.push_back(std::make_pair(I, tracked.count));
 }
 
 /*
@@ -2325,7 +2200,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             MaxColor = C;
 
     // Insert instructions for the actual gc frame
-    if (MaxColor != -1 || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
+    if (MaxColor != -1 || !S.ArrayAllocas.empty()) {
         // Create and push a GC frame.
         auto gcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::newGCFrame),
@@ -2338,7 +2213,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
             {gcframe, ConstantInt::get(T_int32, 0)});
         pushGcframe->insertAfter(pgcstack);
 
-        // we don't run memsetopt after this, so run a basic approximation of it
+        // we don't currently run memsetopt after this, so run a basic approximation of it
         // that removes any redundant memset calls in the prologue since getGCFrameSlot already includes the null store
         Instruction *toerase = nullptr;
         for (auto &I : F->getEntryBlock()) {
@@ -2411,26 +2286,6 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, St
         for (auto AI : S.ArrayAllocas) {
             replace_alloca(AI.first);
             AllocaSlot += AI.second;
-        }
-        for (auto Store : S.TrackedStores) {
-            auto SI = Store.first;
-            auto Base = SI->getValueOperand();
-            //auto Tracked = TrackCompositeType(Base->getType());
-            for (unsigned i = 0; i < Store.second; ++i) {
-                auto slotAddress = CallInst::Create(
-                    getOrDeclare(jl_intrinsics::getGCFrameSlot),
-                    {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)}, "gc_slot_addr" + StringRef(std::to_string(AllocaSlot - 2)));
-                slotAddress->insertAfter(gcframe);
-                auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
-                auto Elem = MaybeExtractScalar(S, ValExpr, SI);
-                assert(Elem->getType() == T_prjlvalue);
-                //auto Idxs = ArrayRef<unsigned>(Tracked[i]);
-                //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
-                Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
-                (void)shadowStore;
-                // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-                AllocaSlot++;
-            }
         }
         auto NRoots = ConstantInt::get(T_int32, MaxColor + 1 + AllocaSlot - 2);
         gcframe->setArgOperand(0, NRoots);
