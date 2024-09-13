@@ -2539,15 +2539,22 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
         }
     }
     if (!jl_has_free_typevars(mi->specTypes)) {
-        if (is_recompile && s_precompile == JL_STDERR)
+        if (is_recompile && s_precompile == JL_STDERR && jl_options.color != JL_OPTIONS_COLOR_OFF)
             jl_printf(s_precompile, "\e[33m");
         if (jl_options.trace_compile_timing)
             jl_printf(s_precompile, "#= %6.1f ms =# ", compilation_time / 1e6);
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
-        jl_printf(s_precompile, ")\n");
-        if (is_recompile && s_precompile == JL_STDERR)
-            jl_printf(s_precompile, "\e[0m");
+        jl_printf(s_precompile, ")");
+        if (is_recompile && s_precompile == JL_STDERR) {
+            if (jl_options.color != JL_OPTIONS_COLOR_OFF) {
+                jl_printf(s_precompile, "\e[0m");
+            }
+            else {
+                jl_printf(s_precompile, " # recompile");
+            }
+        }
+        jl_printf(s_precompile, "\n");
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
     }
