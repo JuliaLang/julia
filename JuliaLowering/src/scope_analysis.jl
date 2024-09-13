@@ -207,15 +207,19 @@ function analyze_scope(ctx, ex, scope_type, lambda_info)
     var_ids = Dict{NameKey,IdTag}()
 
     # Add lambda arguments
+    function add_lambda_args(args, var_kind)
+        for a in args
+            if kind(a) == K"Identifier"
+                varkey = NameKey(a)
+                var_ids[varkey] = init_binding(ctx, varkey, var_kind)
+            elseif kind(a) != K"BindingId"
+                throw(LoweringError(a, "Unexpected lambda arg kind"))
+            end
+        end
+    end
     if !isnothing(lambda_info)
-        for a in lambda_info.args
-            varkey = NameKey(a)
-            var_ids[varkey] = init_binding(ctx, varkey, :argument)
-        end
-        for a in lambda_info.static_parameters
-            varkey = NameKey(a)
-            var_ids[varkey] = init_binding(ctx, varkey, :static_parameter)
-        end
+        add_lambda_args(lambda_info.args, :argument)
+        add_lambda_args(lambda_info.static_parameters, :static_parameter)
     end
 
     global_keys = Set(first(g) for g in globals)
@@ -403,8 +407,39 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
             islocal = !isnothing(id) && var_kind(ctx, id) != :global
             @ast ctx ex islocal::K"Bool"
         elseif etype == "locals"
-            # return Dict of locals
-            TODO(ex, "@locals")
+            stmts = SyntaxList(ctx)
+            locals_dict = ssavar(ctx, ex, "locals_dict")
+            push!(stmts, @ast ctx ex [K"="
+                locals_dict
+                [K"call"
+                    [K"call"
+                        "apply_type"::K"core"
+                        "Dict"::K"top"
+                        "Symbol"::K"core" 
+                        "Any"::K"core" 
+                    ]
+                ]
+            ])
+            for scope in ctx.scope_stack
+                for id in values(scope.var_ids)
+                    binfo = lookup_binding(ctx, id)
+                    if binfo.kind == :global || binfo.is_internal
+                        continue
+                    end
+                    binding = @ast ctx (@ast ctx ex binfo.name::K"Identifier") id::K"BindingId"
+                    push!(stmts, @ast ctx ex [K"if"
+                        [K"isdefined" binding]
+                        [K"call"
+                            "setindex!"::K"top"
+                            locals_dict
+                            binding
+                            binfo.name::K"Symbol"
+                        ]
+                    ])
+                end
+            end
+            push!(stmts, locals_dict)
+            makenode(ctx, ex, K"block", stmts)
         else
             throw(LoweringError(ex, "Unknown syntax extension"))
         end

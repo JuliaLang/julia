@@ -936,7 +936,7 @@ function expand_function_def(ctx, ex, docs)
         if kind(name) == K"::"
             if numchildren(name) == 1
                 farg = @ast ctx name [K"::"
-                    "#self#"::K"Identifier"
+                    new_mutable_var(ctx, name, "#self#")
                     name[1]
                 ]
             else
@@ -949,7 +949,7 @@ function expand_function_def(ctx, ex, docs)
                 throw(LoweringError(name, "Invalid function name"))
             end
             farg = @ast ctx name [K"::"
-                "#self#"::K"Identifier"
+                new_mutable_var(ctx, name, "#self#")
                 [K"call"
                     "Typeof"::K"core"
                     name
@@ -971,7 +971,7 @@ function expand_function_def(ctx, ex, docs)
             push!(arg_names, aname)
             atype = !isnothing(info.type) ? info.type : Any_type(ctx, arg)
             @assert !info.is_nospecialize # TODO
-            @assert !isnothing(info.name) && kind(info.name) == K"Identifier" # TODO
+            @assert !isnothing(info.name) && is_identifier_like(info.name) # TODO
             if info.is_slurp
                 if i != length(args)
                     throw(LoweringError(arg, "`...` may only be used for the last function argument"))

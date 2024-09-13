@@ -430,10 +430,13 @@ function _value_string(ex)
     end
     if k == K"slot" || k == K"BindingId"
         p = provenance(ex)[1]
-        while kind(p) != K"Identifier"
+        while p isa SyntaxTree
+            if kind(p) == K"Identifier"
+                str = "$(str)/$(p.name_val)"
+                break
+            end
             p = provenance(p)[1]
         end
-        str = "$(str)/$(p.name_val)"
     end
     return str
 end
@@ -555,7 +558,7 @@ function Base.getindex(v::SyntaxList, r::UnitRange)
 end
 
 function Base.setindex!(v::SyntaxList, ex::SyntaxTree, i::Int)
-    check_same_graph(v, ex)
+    check_compatible_graph(v, ex)
     v.ids[i] = ex._id
 end
 
@@ -564,12 +567,12 @@ function Base.setindex!(v::SyntaxList, id::NodeId, i::Int)
 end
 
 function Base.push!(v::SyntaxList, ex::SyntaxTree)
-    check_same_graph(v, ex)
+    check_compatible_graph(v, ex)
     push!(v.ids, ex._id)
 end
 
 function Base.pushfirst!(v::SyntaxList, ex::SyntaxTree)
-    check_same_graph(v, ex)
+    check_compatible_graph(v, ex)
     pushfirst!(v.ids, ex._id)
 end
 
@@ -581,7 +584,7 @@ function Base.append!(v::SyntaxList, exs)
 end
 
 function Base.append!(v::SyntaxList, exs::SyntaxList)
-    check_same_graph(v, exs)
+    check_compatible_graph(v, exs)
     append!(v.ids, exs.ids)
     v
 end

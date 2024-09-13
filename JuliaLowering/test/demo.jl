@@ -73,6 +73,10 @@ baremodule M
         ]
     end
 
+    function var"@locals"(__context__::JuliaLowering.MacroContext)
+        @ast __context__ __context__.macroname [K"extension" "locals"::K"Symbol"]
+    end
+
     JuliaLowering.include(M, "demo_include.jl")
 end
 
@@ -488,6 +492,13 @@ end
 src = """
 let x = 1
     M.@islocal x
+end
+"""
+
+src = """
+let x = 1
+    local y
+    M.@locals
 end
 """
 

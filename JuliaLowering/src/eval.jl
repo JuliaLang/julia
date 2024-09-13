@@ -252,6 +252,7 @@ function to_lowered_expr(mod, bindings, ex)
                k == K"const"  ? :const  :
                k == K"leave"  ? :leave  :
                k == K"pop_exception"  ? :pop_exception  :
+               k == K"isdefined"  ? :isdefined  :
                nothing
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")

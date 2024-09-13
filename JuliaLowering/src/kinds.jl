@@ -37,6 +37,7 @@ function _register_kinds()
             "lambda"
             "toplevel_butfirst"
             "const_if_global"
+            "isdefined"
             "moved_local"
             "foreigncall"
             "new"
